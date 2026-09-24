@@ -122,6 +122,10 @@ type AuditLogRow = Omit<
   changes: AuditChanges | null;
   channel: AuditChannel;
   user: AuditLogUser;
+  identity: {
+    shortcode: string | null;
+    canonical: { shortcode: string | null } | null;
+  } | null;
   device: { shortcode: string; name: string } | null;
   run: { shortcode: string } | null;
 };
@@ -432,6 +436,10 @@ export async function getAuditLog(
     orderBy: [desc(auditLog.createdAt), desc(auditLog.id)],
     limit: params.limit + 1, // Fetch one extra to determine if there's more
     with: {
+      identity: {
+        columns: { shortcode: true },
+        with: { canonical: { columns: { shortcode: true } } },
+      },
       user: {
         columns: {
           id: true,
@@ -486,7 +494,7 @@ export async function getAuditLog(
       ),
       identityShortcodes(
         db,
-        [...entryRefs, ...changeRefs].map((ref) => ref.id),
+        changeRefs.map((ref) => ref.id),
       ),
     ]);
   const shortcodeByRef = new Map(
@@ -510,6 +518,7 @@ export async function getAuditLog(
       ({
         id,
         entityId,
+        identity,
         changes,
         oauthClientId,
         deviceId: _deviceId,
@@ -531,8 +540,8 @@ export async function getAuditLog(
         runId: run ? parseShortcodeFor("importRun", run.shortcode) : null,
         entryKey: encodeAuditCursor({ id, createdAt: entry.createdAt }),
         // `Entity` still knows a hard-deleted payload's code.
-        entityId: identities.get(entityId)?.shortcode ?? null,
-        canonicalEntityId: identities.get(entityId)?.canonicalShortcode ?? null,
+        entityId: identity?.shortcode ?? null,
+        canonicalEntityId: identity?.canonical?.shortcode ?? null,
         entityName:
           nameByRef.get(entityRefKey(entry.entityType, entityId)) ?? null,
         displayImage:
