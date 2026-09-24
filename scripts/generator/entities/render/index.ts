@@ -20,6 +20,7 @@ import { renderFieldExplanationReference } from "./field-explanations-reference.
 import { renderRecord } from "./record.ts";
 import { browserRoutes, lowerCamelCase } from "./routes.ts";
 import { kernelEntitiesFor } from "./shared.ts";
+import { hasGenericListOperation } from "../list-capabilities.ts";
 import { renderSwiftEntityCatalog } from "./swift-catalog.ts";
 import { renderDataQualityArtifacts } from "./data-quality.ts";
 import { renderImagePolicyArtifacts } from "./image-policy.ts";
@@ -50,9 +51,7 @@ export const entityProjectionMaps = (
   const detail = schema.filter(
     ({ contract }) => contract.create !== null && contract.update !== null,
   );
-  const list = detail.filter(
-    ({ descriptor }) => descriptor.browserRoutes !== false,
-  );
+  const list = schema.filter(hasGenericListOperation);
   return {
     schema,
     detail,
