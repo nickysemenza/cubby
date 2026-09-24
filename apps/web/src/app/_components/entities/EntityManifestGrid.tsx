@@ -256,17 +256,21 @@ type RelationDetailStatus =
   | "declared"
   | "derived"
   | "omitted"
+  | "custom-list"
   | "no-list"
   | "one";
 
-/** Compiler auto-omit reasons end with this sentence — the target simply has
- * no list page to render as a table, distinct from a hand-declared omission. */
+/** Compiler reasons distinguish a list outside the inline-table operation
+ * from an absent list page and from a hand-declared omission. */
+const CUSTOM_LIST_SUFFIX =
+  "has a list page, but its list cannot be used as an inline relation table.";
 const NO_LIST_SUFFIX = "has no list page to render as a table.";
 
 const DETAIL_STATUS_LABEL = {
   declared: "declared",
   derived: "derived",
   omitted: "omitted",
+  "custom-list": "custom list",
   "no-list": "no list",
   one: "—",
 } satisfies Record<RelationDetailStatus, string>;
@@ -282,8 +286,8 @@ type RelationDetail = {
  * `one`-cardinality relations never get a table (only `inverseOmit` explains
  * why no inverse exists); a `many` relation is `declared` when a hand-written
  * `kind:"relation"` section names it, `derived` when the compiler generated
- * that section, or `omitted`/`no-list` when `detail.omitRelations` records
- * why no section exists at all.
+ * that section, or an omitted status when `detail.omitRelations` records why
+ * no section exists at all.
  */
 function relationDetailStatus(
   entity: Entity,
@@ -306,7 +310,11 @@ function relationDetailStatus(
   const reason = omitRelations[relation.key];
   if (reason) {
     return {
-      status: reason.endsWith(NO_LIST_SUFFIX) ? "no-list" : "omitted",
+      status: reason.endsWith(CUSTOM_LIST_SUFFIX)
+        ? "custom-list"
+        : reason.endsWith(NO_LIST_SUFFIX)
+          ? "no-list"
+          : "omitted",
       reason,
     };
   }
@@ -346,6 +354,7 @@ function matrixStatusClass(status: RelationDetailStatus): string {
       return "text-primary";
     case "omitted":
       return "text-destructive";
+    case "custom-list":
     case "no-list":
       return "text-muted-foreground/50";
     case "one":
@@ -357,6 +366,7 @@ const MATRIX_LEGEND: readonly [RelationDetailStatus, string][] = [
   ["declared", "declared detail table"],
   ["derived", "compiler-derived detail table"],
   ["omitted", "explicitly omitted"],
+  ["custom-list", "custom list; no inline relation table"],
   ["no-list", "target has no list page"],
   ["one", "one-cardinality (no table)"],
 ];

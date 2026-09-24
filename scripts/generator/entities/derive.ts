@@ -6,6 +6,10 @@ import {
   EntityDeclarationError,
   objectValue,
 } from "./declarations.ts";
+import {
+  hasBrowserListPage,
+  hasGenericListOperation,
+} from "./list-capabilities.ts";
 
 /**
  * Relationship coverage is opt-out. Two passes close the gaps a hand-kept
@@ -349,15 +353,16 @@ type RelationSection = Extract<
   { kind: "relation" }
 >;
 
-/** A list entity: the generic list contract the relation table renders. */
-const hasEntityList = (entity: CompiledEntity) =>
-  entity.contract !== null &&
-  entity.contract.create !== null &&
-  entity.contract.update !== null &&
-  entity.descriptor.browserRoutes !== false;
-
 const hasGenericDetail = (entity: CompiledEntity) =>
   entity.route !== null && entity.route.detail !== null;
+
+const missingRelationTableReason = (
+  target: CompiledEntity | undefined,
+  targetKey: string,
+): string =>
+  target !== undefined && hasBrowserListPage(target)
+    ? `${targetKey} has a list page, but its list cannot be used as an inline relation table.`
+    : `${targetKey} has no list page to render as a table.`;
 
 /**
  * The target descriptor that scopes `relation` to one source record: the
@@ -447,9 +452,11 @@ export const deriveRelationSections = (
       if (relation.cardinality !== "many") continue;
       if (declared.has(relation.key) || relation.key in omitRelations) continue;
       const target = byKey.get(relation.target);
-      if (target === undefined || !hasEntityList(target)) {
-        omitRelations[relation.key] =
-          `${relation.target} has no list page to render as a table.`;
+      if (target === undefined || !hasGenericListOperation(target)) {
+        omitRelations[relation.key] = missingRelationTableReason(
+          target,
+          relation.target,
+        );
         continue;
       }
       const id = kebab(relation.key);

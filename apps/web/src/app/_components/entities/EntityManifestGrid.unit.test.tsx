@@ -134,6 +134,29 @@ describe("EntityManifestGrid mega table: relations sub-row", () => {
       0,
     );
   });
+
+  it.each([
+    ["product", "images", "image"],
+    ["vendor", "runs", "importRun"],
+  ] as const)(
+    "shows %s.%s as a custom list when %s has a separate list source",
+    (entity, relation, target) => {
+      renderGrid({ selected: entity, onSelect: noop });
+
+      const row = screen
+        .getAllByRole("row")
+        .find((candidate) =>
+          within(candidate).queryByText(relation, { exact: true }),
+        );
+      if (row === undefined)
+        throw new Error(`${entity}.${relation} row missing`);
+      expect(within(row).getByText(target)).toBeInTheDocument();
+      expect(within(row).getByText("custom list")).toHaveAttribute(
+        "title",
+        `${target} has a list page, but its list cannot be used as an inline relation table.`,
+      );
+    },
+  );
 });
 
 describe("EntityManifestGrid mega table: baseline rendering", () => {
