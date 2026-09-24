@@ -50,4 +50,21 @@ describe("purchase-agent queue dispatch", () => {
       .parse(send.mock.calls[0]?.[0].message);
     expect(message.body).not.toContain(runId);
   });
+
+  it("routes photo inventory to its existing durable conversation", async () => {
+    const send = vi.fn<PurchaseAgentDispatch>(async () => undefined);
+    const event = parsePurchaseAgentEvent({
+      type: "start_or_resume",
+      runId,
+      purpose: "photo_inventory",
+      eventId: "photo-start",
+    });
+
+    await dispatchPurchaseAgentEvent(event, send);
+
+    expect(send.mock.calls[0]?.[0]).toMatchObject({
+      id: `photo-inventory:${runId}`,
+      initialData: { runId, purpose: "photo_inventory" },
+    });
+  });
 });

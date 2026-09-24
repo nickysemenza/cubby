@@ -29,7 +29,11 @@ export const runWithExecutionCtx = <T>(
   ctx: WaitUntilContext,
   fn: () => Promise<T>,
   origin?: string,
-): Promise<T> => executionCtxStore.run({ ...ctx, origin }, fn);
+): Promise<T> =>
+  executionCtxStore.run(
+    { waitUntil: (task) => ctx.waitUntil(task), origin },
+    fn,
+  );
 
 /** Undefined outside a CF request (queue/cron invocations, the Node dev server). */
 export const getExecutionCtx = (): WaitUntilContext | undefined =>

@@ -2,6 +2,7 @@ import { tradeSchema } from "./task-fields";
 import { z } from "zod";
 import { productCategoryShortcode } from "./identifier-fields";
 import { externalIdKind, externalIdSource } from "./external-id";
+import { flueImportRunPurpose } from "./import-run-agent";
 
 import { money } from "./money";
 import {
@@ -674,22 +675,29 @@ export const browserBridgeServerMessage = z.discriminatedUnion("type", [
 
 export const importCoordinatorModel = z.literal("gpt-6-sol");
 
-export const purchaseAgentEvent = z.object({
+const agentEventBase = z.object({
   version: z.literal(1),
   runId: z.uuid(),
-  purpose: importRunPurpose.optional(),
+  purpose: flueImportRunPurpose.optional(),
   coordinatorModel: importCoordinatorModel.optional(),
   eventId: z.string().trim().min(1).max(256),
-  type: z.enum([
-    "start_or_resume",
-    "browser_connected",
-    "browser_result",
-    "retry",
-  ]),
-  commandId: z.uuid().optional(),
-  connectionId: z.string().trim().min(1).max(256).optional(),
-  retryOf: z.string().trim().min(1).max(256).optional(),
 });
+const agentEventId = z.string().trim().min(1).max(256);
+export const purchaseAgentEvent = z.discriminatedUnion("type", [
+  agentEventBase.extend({ type: z.literal("start_or_resume") }),
+  agentEventBase.extend({
+    type: z.literal("browser_connected"),
+    connectionId: agentEventId.optional(),
+  }),
+  agentEventBase.extend({
+    type: z.literal("browser_result"),
+    commandId: agentEventId,
+  }),
+  agentEventBase.extend({
+    type: z.literal("retry"),
+    retryOf: agentEventId.optional(),
+  }),
+]);
 export type PurchaseAgentEvent = z.infer<typeof purchaseAgentEvent>;
 
 export const importRunScope = z.object({

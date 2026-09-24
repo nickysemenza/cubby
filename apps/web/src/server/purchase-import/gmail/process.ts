@@ -1,4 +1,5 @@
 import { parseEntityId, importRunId } from "@cubby/schemas/identifiers";
+import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
 
@@ -189,7 +190,7 @@ export async function processOrderMails(
           actorLedgerPartyKind: actorSnapshot.actorLedgerPartyKind,
           trigger: "discovery",
           status: "needs_review",
-          agentSessionId: `import-run:${runId}`,
+          agentSessionId: importRunAgentIdentity(runId, "account_sync"),
           endedAt: new Date(),
         });
         await database.insert(importFinding).values({

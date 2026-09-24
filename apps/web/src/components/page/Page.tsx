@@ -13,6 +13,7 @@ import { type PageLayout, PageWrapper } from "~/components/layout/page-wrapper";
 import {
   type DetailHeroActions,
   type DetailHeroStat,
+  type DetailWayfinding,
   PageHeader,
 } from "~/components/layouts/page-hero";
 import { useRouteEntity } from "~/hooks/useRouteEntity";
@@ -143,6 +144,7 @@ interface PageListProps extends PageBaseProps {
 interface PageDetailProps extends PageBaseProps {
   variant: "detail";
   entity: Entity;
+  wayfinding?: DetailWayfinding;
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
   heroStats?: DetailHeroStat[];
   heroNo?: string;

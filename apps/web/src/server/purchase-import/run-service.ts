@@ -16,6 +16,10 @@ import {
   type VendorId,
 } from "@cubby/schemas/identifiers";
 import {
+  flueImportRunPurpose,
+  importRunAgentIdentity,
+} from "@cubby/schemas/import-run-agent";
+import {
   browserBridgeOperation,
   browserBridgeRequest,
   browserCapture,
@@ -396,7 +400,7 @@ export async function startOrResumeImportRun(
           coordinatorModel: "gpt-6-sol",
           skillRevision: input.skillRevision ?? "purchase-import@1",
           runtimeRevision: input.runtimeRevision ?? "flue@1",
-          agentSessionId: `import-run:${id}`,
+          agentSessionId: importRunAgentIdentity(id, "account_sync"),
           dispatchEventId,
         })
         .onConflictDoNothing()
@@ -520,7 +524,10 @@ export async function startTargetedImportRun(
         trigger,
         dispatchEventId: eventId,
         coordinatorModel: "gpt-6-sol",
-        agentSessionId: `import-run:${id}`,
+        agentSessionId: importRunAgentIdentity(
+          id,
+          flueImportRunPurpose.parse(purpose),
+        ),
       })
       .returning({
         id: importRun.id,
@@ -632,7 +639,7 @@ export async function startPhotoInventoryRun(
         purpose: importRunPurpose.enum.photo_inventory,
         trigger: importRunTrigger.enum.manual,
         notes: input.notes ?? null,
-        agentSessionId: `photo-inventory:${id}`,
+        agentSessionId: importRunAgentIdentity(id, "photo_inventory"),
       })
       .returning({
         id: importRun.id,
@@ -3344,7 +3351,10 @@ export async function controlImportRun(
             skillRevision: locked.skillRevision,
             runtimeRevision: locked.runtimeRevision,
             decisionRevision: locked.decisionRevision + 1,
-            agentSessionId: `import-run:${successorId}`,
+            agentSessionId: importRunAgentIdentity(
+              successorId,
+              "purchase_validation",
+            ),
           })
           .returning({
             publicId: importRun.shortcode,
@@ -3445,7 +3455,10 @@ export async function controlImportRun(
             skillRevision: locked.skillRevision,
             runtimeRevision: locked.runtimeRevision,
             decisionRevision: locked.decisionRevision + 1,
-            agentSessionId: `import-run:${successorId}`,
+            agentSessionId: importRunAgentIdentity(
+              successorId,
+              flueImportRunPurpose.parse(locked.purpose),
+            ),
           })
           .returning({
             publicId: importRun.shortcode,

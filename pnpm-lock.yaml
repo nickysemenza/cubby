@@ -278,6 +278,9 @@ importers:
 
   apps/purchase-agent:
     dependencies:
+      '@cubby/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
       '@cubby/worker-tracing':
         specifier: workspace:*
         version: link:../../packages/worker-tracing

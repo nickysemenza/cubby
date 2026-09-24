@@ -1,5 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { importRunId, vendorAccountId } from "@cubby/schemas/identifiers";
+import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import {
   listReceiptHuntsOut,
   submitReceiptEvidenceInput,
@@ -236,7 +237,7 @@ export async function submitReceiptEvidence(
           : null,
         trigger: "discovery",
         coordinatorModel: "gpt-6-sol",
-        agentSessionId: `import-run:${runId}`,
+        agentSessionId: importRunAgentIdentity(runId, "account_sync"),
         dispatchEventId,
       })
       .returning({ id: importRun.id });

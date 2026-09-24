@@ -178,16 +178,6 @@ private struct PhotoLibraryBrowser: View {
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: minimumTileWidth, maximum: max(160, minimumTileWidth)), spacing: 3)]
     }
-    /// `.bottomBar` is iOS/tvOS/watchOS-only; macOS has no equivalent placement, so this bar's
-    /// items fall back to the window toolbar there.
-    private static var selectionBarPlacement: ToolbarItemPlacement {
-        #if os(iOS)
-            .bottomBar
-        #else
-            .automatic
-        #endif
-    }
-
     private var library: PhotoLibraryStore { appModel.photoLibrary }
     private var matches: PhotoMatchStore { appModel.photoMatches }
     private var ids: [String] { picker ? pickerIDs : library.selectedIDs }
@@ -266,6 +256,34 @@ private struct PhotoLibraryBrowser: View {
         }
         .navigationTitle("Photos")
         .porcelainScreen()
+        #if os(iOS)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if library.hasFullAccess && !ids.isEmpty {
+                    HStack(spacing: PorcelainTokens.Space.md) {
+                        Text("\(ids.count) selected")
+                        .font(.porcelainLabel)
+                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        Spacer(minLength: 8)
+                        if loadingSelection {
+                            ProgressView(value: library.selectionProgress)
+                            .frame(width: 70)
+                            .accessibilityLabel("Downloading selected photos")
+                            Button("Cancel") {
+                                loading?.cancel(); loadingSelection = false
+                            }
+                        } else {
+                            Button(picker ? "Choose photos" : "Add to…") { prepareSelection() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(ids.isEmpty || (!picker && analysisStore == nil))
+                            .accessibilityIdentifier(picker ? "photos.choose" : "photos.addTo")
+                        }
+                    }
+                    .padding(.horizontal, PorcelainTokens.Space.md)
+                    .padding(.vertical, PorcelainTokens.Space.sm)
+                    .background(.regularMaterial)
+                }
+            }
+        #endif
         .toolbar {
             // The `if` must gate the whole `ToolbarItem`, not sit inside its content: a
             // conditional inside `ToolbarItem` still renders the item's Liquid Glass background
@@ -287,22 +305,24 @@ private struct PhotoLibraryBrowser: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Clear") { clearSelection() }
                 }
-                ToolbarItemGroup(placement: Self.selectionBarPlacement) {
-                    Text("\(ids.count) selected").foregroundStyle(.secondary)
-                    Spacer()
-                    if loadingSelection {
-                        ProgressView(value: library.selectionProgress).frame(width: 70)
-                            .accessibilityLabel("Downloading selected photos")
-                        Button("Cancel") {
-                            loading?.cancel(); loadingSelection = false
+                #if os(macOS)
+                    ToolbarItemGroup(placement: .automatic) {
+                        Text("\(ids.count) selected").foregroundStyle(.secondary)
+                        Spacer()
+                        if loadingSelection {
+                            ProgressView(value: library.selectionProgress).frame(width: 70)
+                                .accessibilityLabel("Downloading selected photos")
+                            Button("Cancel") {
+                                loading?.cancel(); loadingSelection = false
+                            }
+                        } else {
+                            Button(picker ? "Choose photos" : "Add to…") { prepareSelection() }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(ids.isEmpty || (!picker && analysisStore == nil))
+                                .accessibilityIdentifier(picker ? "photos.choose" : "photos.addTo")
                         }
-                    } else {
-                        Button(picker ? "Choose photos" : "Add to…") { prepareSelection() }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(ids.isEmpty || (!picker && analysisStore == nil))
-                            .accessibilityIdentifier(picker ? "photos.choose" : "photos.addTo")
                     }
-                }
+                #endif
             }
         }
         .task {

@@ -27,7 +27,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     page.getByText("Waiting for an agent to propose groups."),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Ask agent to group photos" }),
+    page.getByRole("button", { name: "Start grouping" }),
   ).toBeVisible();
   if (recording) await page.waitForTimeout(1_500);
   const proposed = await page.request.post(
@@ -43,7 +43,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Ask agent to group photos" }),
+    page.getByRole("button", { name: "Start grouping" }),
   ).toHaveCount(0);
 
   const g1Card = page.locator('[data-slot="card"]').filter({

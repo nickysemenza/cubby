@@ -359,6 +359,8 @@ public final class PhotoImportRunSession {
 
     private let uploader: PhotoImportRunUploader
     private var task: Task<Void, Never>?
+    private var targetRunID: ImportRunShortcode?
+    private var createRunInput: PhotoImportCreateRunInput?
 
     public init(uploader: PhotoImportRunUploader) {
         self.uploader = uploader
@@ -378,8 +380,13 @@ public final class PhotoImportRunSession {
         createRun: PhotoImportCreateRunInput? = nil
     ) {
         guard task == nil else { return }
+        if let runID { targetRunID = runID }
+        if let createRun { createRunInput = createRun }
+        progress.total = photos.count
         phase = .running
         let uploader = uploader
+        let targetRunID = targetRunID
+        let createRunInput = createRunInput
         // Strong `self` here (bounded lifetime: this task always clears `self.task` before
         // finishing, so it cannot outlive its own reference). The progress callback takes its own
         // `[weak self]` — nesting a weak capture inside an already-weak outer capture is what the
@@ -387,7 +394,9 @@ public final class PhotoImportRunSession {
         // must stay strong for the inner one to be legal.
         task = Task { [self] in
             do {
-                let resolved = try await uploader.upload(photos, runID: runID, createRun: createRun) {
+                let resolved = try await uploader.upload(
+                    photos, runID: targetRunID, createRun: createRunInput
+                ) {
                     [weak self] update in
                     Task { @MainActor in self?.progress = update }
                 }

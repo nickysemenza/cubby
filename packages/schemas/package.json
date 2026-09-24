@@ -113,6 +113,7 @@
     "./vendor-account-fields": "./src/vendor-account-fields.ts",
     "./import-run-fields": "./src/import-run-fields.ts",
     "./import-run": "./src/import-run.ts",
+    "./import-run-agent": "./src/import-run-agent.ts",
     "./photo-import-run": "./src/photo-import-run.ts",
     "./purchase": "./src/purchase.ts",
     "./purchase-import": "./src/purchase-import.ts",

@@ -31,6 +31,7 @@ private final class RunUploaderScript: @unchecked Sendable {
 
     private let seenBox = Mutex<[Seen]>([])
     private let failNextFinalize = Mutex<Bool>(false)
+    private let failNextCreateRun = Mutex<Bool>(false)
     private let analysisCalls = Mutex<[String: Int]>([:])
 
     var seen: [Seen] { seenBox.withLock { $0 } }
@@ -45,6 +46,7 @@ private final class RunUploaderScript: @unchecked Sendable {
     /// reports every requested id in `alreadyFinalized` rather than `finalized`, exercising the
     /// idempotent-replay path a retry after a transport error relies on.
     func failNextFinalizeCall() { failNextFinalize.withLock { $0 = true } }
+    func failNextCreateRunCall() { failNextCreateRun.withLock { $0 = true } }
 
     var handler: StubNetworking.Handler {
         { [self] request in
@@ -55,6 +57,11 @@ private final class RunUploaderScript: @unchecked Sendable {
             seenBox.withLock { $0.append(Seen(path: path, fields: fields)) }
 
             if path.hasSuffix("/photoImport/createRun") {
+                let shouldFail = failNextCreateRun.withLock { pending in
+                    defer { pending = false }
+                    return pending
+                }
+                if shouldFail { return (500, Data(#"{"code":"INTERNAL","message":"try again"}"#.utf8)) }
                 return (200, Data(#"{"runId": "RUN-TEST"}"#.utf8))
             }
             if path.hasSuffix("/photoImport/stage") {
@@ -141,6 +148,29 @@ struct PhotoImportRunUploaderTests {
             classifications: [], recognizedText: [],
             featurePrint: PhotoFeaturePrint(revision: "1", data: Data()),
             provenance: PhotoAnalysisProvenance(source: .files, filename: "\(id).jpg"))
+    }
+
+    @Test @MainActor func sessionRetryRetainsNewRunDetailsAfterCreationFails() async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        script.failNextCreateRunCall()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        let photos = try [photo("retry")]
+        let session = PhotoImportRunSession(
+            uploader: PhotoImportRunUploader(
+                client: try makeClient(), put: { _, _, _ in },
+                analyze: { input in fakeAnalysis(for: input.id) }))
+
+        session.start(photos, createRun: PhotoImportCreateRunInput())
+        #expect(session.progress.total == 1)
+        while session.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(session.canRetry)
+
+        session.start(photos)
+        while session.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(session.phase == .complete)
+        #expect(session.runID == "RUN-TEST")
+        #expect(script.requests(matching: "/photoImport/createRun").count == 2)
     }
 
     /// The server caps `finalize` at 100 images per call; the uploader must chunk the ordered

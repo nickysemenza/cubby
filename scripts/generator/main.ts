@@ -14,6 +14,7 @@ import {
   loadEntityDeclarationBundle,
 } from "./entities/declarations.ts";
 import { renderOverrideComparisonArtifact } from "./entities/override-comparisons.ts";
+import { renderAgentPromptArtifact } from "./agent-prompts.ts";
 import type { EntityArtifacts } from "./entities/declarations.ts";
 import { renderBrowserRouteArtifacts } from "./entities/render/browser-routes.ts";
 import { renderFilterArtifacts } from "./entities/render/filters.ts";
@@ -117,6 +118,7 @@ const main = async () => {
 
   const { entities, declarations } = await loadEntityDeclarationBundle();
   validateConnectedViews(entities);
+  await settle([await renderAgentPromptArtifact(ROOT)]);
   await settle([
     ...renderEntityArtifacts(entities),
     renderOverrideComparisonArtifact(declarations, entities),

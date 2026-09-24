@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 
 import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
 import { Stack } from "~/components/layout";
@@ -54,6 +55,21 @@ export const ProductImportRuns: DetailSlotComponent<"product"> = ({
   return (
     <Stack gap="sm">
       {launch}
+      <p className="text-sm text-muted-foreground">
+        To match this item to a purchase, open the purchase and choose
+        <strong className="font-medium text-foreground">
+          {" "}
+          Attach products
+        </strong>
+        . Retailer and Gmail imports can also match an existing Product when an
+        order is processed.
+      </p>
+      <Link
+        to="/purchases"
+        className="w-fit text-sm font-medium text-primary hover:underline"
+      >
+        Find a purchase
+      </Link>
       {runs.data?.length ? (
         <div className="grid gap-3">
           {runs.data.map((run) => (

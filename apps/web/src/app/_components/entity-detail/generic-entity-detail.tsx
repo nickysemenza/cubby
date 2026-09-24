@@ -530,6 +530,17 @@ function detailFiles<E extends GenericDetailEntity>(
   return { images, documents };
 }
 
+function detailWayfinding<E extends GenericDetailEntity>(
+  entity: E,
+  record: DetailRecordOf<E>,
+) {
+  if (entity !== "importRun") return undefined;
+  return readRecordField(record, "purpose", z.string().optional()) ===
+    "photo_inventory"
+    ? { label: "Photos", domain: null }
+    : undefined;
+}
+
 /**
  * The one detail page: every section, the hero and the edit affordance come
  * from `entitySummary[entity].detail`; a slot is the only hand-written fill
@@ -659,6 +670,7 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
     <Page
       variant="detail"
       entity={entity}
+      wayfinding={detailWayfinding(entity, record)}
       title={title}
       rawData={record}
       heroImages={heroImages}

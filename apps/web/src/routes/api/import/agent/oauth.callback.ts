@@ -127,7 +127,7 @@ async function dispatchResumedRuns(
             .parse(run.purpose),
           coordinatorModel: "gpt-6-sol",
           eventId: run.eventId,
-          type: "retry",
+          type: "start_or_resume",
         });
       } catch (error) {
         failed = true;

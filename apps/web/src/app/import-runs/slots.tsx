@@ -22,6 +22,10 @@ export function RunAiUsage({ record }: { record: ImportRunOut }) {
   const usageQuery = useQuery({
     ...run.aiUsage.queryOptions(input),
     placeholderData: keepPreviousData,
+    refetchInterval:
+      record.status === "running" || record.status.startsWith("paused")
+        ? 3_000
+        : false,
   });
   if (usageQuery.isLoading) return <StatusText>Loading AI usage…</StatusText>;
   if (usageQuery.isError)

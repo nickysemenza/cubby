@@ -11,6 +11,7 @@ import { createTestHarness, type TestHarness } from "wrangler";
 import { z } from "zod";
 
 import {
+  aiUsage,
   auditLog,
   entityAttachment,
   expense,
@@ -112,7 +113,12 @@ function workerdWebConfig(databaseUrl: string) {
     localConnectionString: databaseUrl,
   }));
   const queues = config.queues as Record<string, unknown> | undefined;
-  if (queues) queues.consumers = [];
+  if (queues)
+    queues.consumers = (
+      (queues.consumers ?? []) as Array<Record<string, unknown>>
+    )
+      .filter((consumer) => consumer.queue === "cubby-telemetry")
+      .map((consumer) => ({ ...consumer, max_batch_timeout: 0 }));
   // `configPath` resolves this relative to dist/server; the inline config is
   // rooted at apps/web, so retain the compiled entrypoint explicitly.
   config.main = `dist/server/${config.main ?? "index.js"}`;
@@ -218,46 +224,57 @@ async function waitFor(predicate: () => Promise<boolean>, message: string) {
 }
 
 async function workerdDiagnostic(db: TestDbContext["db"], runId: string) {
-  const [run, operations, findings, progress] = await Promise.all([
-    getDb(db)
-      .select({
-        status: importRun.status,
-        failureCode: importRun.failureCode,
-        dispatchError: importRun.dispatchError,
-        dispatchAttempts: importRun.dispatchAttempts,
-        coordinatorStartedAt: importRun.coordinatorStartedAt,
-      })
-      .from(importRun)
-      .where(eq(importRun.id, importRunId.parse(runId))),
-    getDb(db)
-      .select({
-        operationId: importRunOperation.operationId,
-        kind: importRunOperation.kind,
-        state: importRunOperation.state,
-        result: importRunOperation.result,
-        error: importRunOperation.error,
-      })
-      .from(importRunOperation)
-      .where(eq(importRunOperation.runId, runId)),
-    // The review reason lives on the finding and the last progress report,
-    // not on the run row.
-    getDb(db)
-      .select({ kind: importFinding.kind, summary: importFinding.summary })
-      .from(importFinding)
-      .where(eq(importFinding.importRunId, runId)),
-    getDb(db)
-      .select({
-        phase: importRunProgress.phase,
-        detail: importRunProgress.detail,
-      })
-      .from(importRunProgress)
-      .where(eq(importRunProgress.runId, runId)),
-  ]);
+  const [run, operations, findings, progress, proposals, usage] =
+    await Promise.all([
+      getDb(db)
+        .select({
+          status: importRun.status,
+          failureCode: importRun.failureCode,
+          dispatchError: importRun.dispatchError,
+          dispatchAttempts: importRun.dispatchAttempts,
+          coordinatorStartedAt: importRun.coordinatorStartedAt,
+        })
+        .from(importRun)
+        .where(eq(importRun.id, importRunId.parse(runId))),
+      getDb(db)
+        .select({
+          operationId: importRunOperation.operationId,
+          kind: importRunOperation.kind,
+          state: importRunOperation.state,
+          result: importRunOperation.result,
+          error: importRunOperation.error,
+        })
+        .from(importRunOperation)
+        .where(eq(importRunOperation.runId, runId)),
+      // The review reason lives on the finding and the last progress report,
+      // not on the run row.
+      getDb(db)
+        .select({ kind: importFinding.kind, summary: importFinding.summary })
+        .from(importFinding)
+        .where(eq(importFinding.importRunId, runId)),
+      getDb(db)
+        .select({
+          phase: importRunProgress.phase,
+          detail: importRunProgress.detail,
+        })
+        .from(importRunProgress)
+        .where(eq(importRunProgress.runId, runId)),
+      getDb(db)
+        .select({ state: photoGroupProposal.state })
+        .from(photoGroupProposal)
+        .where(eq(photoGroupProposal.runId, importRunId.parse(runId))),
+      getDb(db)
+        .select({ id: aiUsage.id })
+        .from(aiUsage)
+        .where(eq(aiUsage.runId, importRunId.parse(runId))),
+    ]);
   return JSON.stringify({
     run,
     operations,
     findings,
     progress,
+    proposals,
+    usage,
     logs: harness?.getLogs(),
   });
 }
@@ -407,7 +424,8 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
               version: 1,
               type: "start_or_resume",
               runId: run.id,
-              purpose: "photo_inventory",
+              // The persisted run, not a stale queue hint, selects the Flue workflow.
+              purpose: "account_sync",
               eventId: started.eventId,
             }),
           })
@@ -415,24 +433,45 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
       ).toBe(202);
       try {
         await waitFor(async () => {
-          const [proposal, progress] = await Promise.all([
-            getDb(ctx.db)
-              .select({ state: photoGroupProposal.state })
-              .from(photoGroupProposal)
-              .where(eq(photoGroupProposal.runId, run.id))
-              .limit(1),
-            getDb(ctx.db)
-              .select({ phase: importRunProgress.phase })
-              .from(importRunProgress)
-              .where(
-                and(
-                  eq(importRunProgress.runId, run.id),
-                  eq(importRunProgress.phase, "awaiting_approval"),
-                ),
-              )
-              .limit(1),
-          ]);
-          return proposal[0]?.state === "proposed" && progress.length === 1;
+          const [proposal, progress, startedProgress, usage] =
+            await Promise.all([
+              getDb(ctx.db)
+                .select({ state: photoGroupProposal.state })
+                .from(photoGroupProposal)
+                .where(eq(photoGroupProposal.runId, run.id))
+                .limit(1),
+              getDb(ctx.db)
+                .select({ phase: importRunProgress.phase })
+                .from(importRunProgress)
+                .where(
+                  and(
+                    eq(importRunProgress.runId, run.id),
+                    eq(importRunProgress.phase, "awaiting_approval"),
+                  ),
+                )
+                .limit(1),
+              getDb(ctx.db)
+                .select({ id: importRunProgress.id })
+                .from(importRunProgress)
+                .where(
+                  and(
+                    eq(importRunProgress.runId, run.id),
+                    eq(importRunProgress.detail, "Coordinator started"),
+                  ),
+                )
+                .limit(1),
+              getDb(ctx.db)
+                .select({ id: aiUsage.id })
+                .from(aiUsage)
+                .where(eq(aiUsage.runId, run.id))
+                .limit(1),
+            ]);
+          return (
+            proposal[0]?.state === "proposed" &&
+            progress.length === 1 &&
+            startedProgress.length === 1 &&
+            usage.length === 1
+          );
         }, "Photo agent did not propose a group and wait for approval");
       } catch (error) {
         throw new Error(
