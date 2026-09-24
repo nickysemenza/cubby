@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { globSync } from "node:fs";
 import { test } from "node:test";
-import { resolve } from "node:path";
-import { bundledMarkdown, classifyCiChanges } from "./ci-change-scope.ts";
+import { classifyCiChanges } from "./ci-change-scope.ts";
 
 const active = (files: string[], full = false) =>
   Object.entries(classifyCiChanges(files, full))
@@ -17,33 +14,23 @@ test("routes docs and native changes without code tests", () => {
   assert.deepEqual(active(["apps/apple/project.yml"]), ["apple", "format"]);
 });
 
-test("routes bundled and generated documents to their consumers", () => {
+test("routes the docs tree and generated documents to the web app", () => {
   assert.deepEqual(active(["docs/inventory-audit.md"]), [
     "web",
     "docs",
     "format",
   ]);
+  assert.deepEqual(active(["docs/adr/0001-entity-relationship-authority.md"]), [
+    "web",
+    "docs",
+    "format",
+  ]);
   assert.deepEqual(active(["docs/how-values-are-determined.md"]), [
+    "web",
     "docs",
     "format",
     "generator",
   ]);
-});
-
-test("keeps bundled Markdown classification in sync with raw imports", () => {
-  const webSource = resolve("apps/web/src");
-  const imported = globSync("**/*.{ts,tsx}", { cwd: webSource })
-    .flatMap((file) => {
-      const source = readFileSync(resolve(webSource, file), "utf8");
-      return Array.from(source.matchAll(/from\s+["']([^"']+\.mdx?\?raw)["']/g))
-        .map((match) => match[1]!)
-        .map((relative) =>
-          resolve(webSource, file, "..", relative.slice(0, -4)),
-        );
-    })
-    .map((absolute) => absolute.slice(resolve(".").length + 1))
-    .sort();
-  assert.deepEqual(imported, [...bundledMarkdown].sort());
 });
 
 test("routes web, shared, auxiliary, Rust, and Apple dependencies", () => {
