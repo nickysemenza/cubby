@@ -8,6 +8,7 @@ import { GitMergeIcon } from "@phosphor-icons/react/dist/csr/GitMerge";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
 import {
@@ -121,12 +122,20 @@ function ProductMatchCard({
   operations: ProductMatchQueueOperations;
 }) {
   const [merging, setMerging] = useState(false);
+  const navigate = useNavigate();
   const dismiss = useMutation(operations.dismissProductMatch.mutationOptions());
   const merge = useActionMutation({
     mutationFn: () => operations.mergeProductMatch.mutationOptions(),
     success: "Products merged",
     error: "Merge failed",
-    onSuccess: () => setMerging(false),
+    onSuccess: () => {
+      setMerging(false);
+      void navigate({
+        to: "/recommendations/workbench",
+        search: { kind: "product-match" },
+        replace: true,
+      });
+    },
   });
 
   return (

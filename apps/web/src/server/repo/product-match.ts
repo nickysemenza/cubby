@@ -29,6 +29,7 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
 import { loadInheritedProductOwners } from "~/server/repo/inventory";
 
 /*
@@ -40,11 +41,17 @@ const HAS_LIVE_INVENTORY = sql.raw(`EXISTS (
   SELECT 1 FROM "InventoryEntry" pm_inv
   WHERE pm_inv."productId" = "Product"."id" AND pm_inv."deletedAt" IS NULL
 )`);
-const HAS_LIVE_PURCHASE_LINK = sql.raw(`EXISTS (
+const HAS_LIVE_PURCHASE_LINK = sql.raw(`(EXISTS (
   SELECT 1 FROM "PurchaseProduct" pm_pp
   JOIN "Purchase" pm_pu ON pm_pu."id" = pm_pp."purchaseId" AND pm_pu."deletedAt" IS NULL
   WHERE pm_pp."productId" = "Product"."id" AND pm_pp."deletedAt" IS NULL
-)`);
+) OR EXISTS (
+  SELECT 1 FROM "Expense" pm_e
+  JOIN "Purchase" pm_pu ON pm_pu."id" = pm_e."purchaseId" AND pm_pu."deletedAt" IS NULL
+  WHERE pm_e."productId" = "Product"."id"
+    AND pm_e."deletedAt" IS NULL AND pm_e."future" = false
+    AND ${expenseAcquisitionSql("pm_e")}
+))`);
 const HAS_LIVE_EXPENSE = sql.raw(`EXISTS (
   SELECT 1 FROM "Expense" pm_e
   WHERE pm_e."productId" = "Product"."id" AND pm_e."deletedAt" IS NULL
@@ -141,6 +148,17 @@ type MatchParty = {
   name: string;
 };
 
+function latestPurchaseByProduct<
+  T extends { productId: ProductId; date: string },
+>(links: readonly T[], expenses: readonly T[]): Map<ProductId, T> {
+  const latest = new Map(links.map((row) => [row.productId, row]));
+  for (const row of expenses) {
+    const existing = latest.get(row.productId);
+    if (!existing || row.date > existing.date) latest.set(row.productId, row);
+  }
+  return latest;
+}
+
 const sideRole = (
   purchased: boolean,
   stockEntries: number,
@@ -187,107 +205,144 @@ export async function loadProductMatchSides(
   const ids = uniq(productIds);
   if (ids.length === 0) return new Map();
   const client = getDb(db);
-  const [products, stock, latestPurchases, lines, spend, externalIds, roots] =
-    await Promise.all([
-      client
-        .select({
-          id: product.id,
-          shortcode: product.shortcode,
-          name: product.name,
-          categoryId: product.categoryId,
-          categoryName: productCategory.name,
-        })
-        .from(product)
-        .leftJoin(
-          productCategory,
-          and(
-            eq(productCategory.id, product.categoryId),
-            notDeleted(productCategory),
-          ),
-        )
-        .where(and(inArray(product.id, ids), notDeleted(product))),
-      client
-        .select({
-          productId: inventoryEntry.productId,
-          ownershipMode: inventoryEntry.ownershipMode,
-          ownerLedgerPartyId: inventoryEntry.ownerLedgerPartyId,
-        })
-        .from(inventoryEntry)
-        .where(
-          and(
-            inArray(inventoryEntry.productId, ids),
-            notDeleted(inventoryEntry),
-          ),
+  const [
+    products,
+    stock,
+    latestPurchases,
+    expensePurchases,
+    lines,
+    spend,
+    externalIds,
+    roots,
+  ] = await Promise.all([
+    client
+      .select({
+        id: product.id,
+        shortcode: product.shortcode,
+        name: product.name,
+        categoryId: product.categoryId,
+        categoryName: productCategory.name,
+      })
+      .from(product)
+      .leftJoin(
+        productCategory,
+        and(
+          eq(productCategory.id, product.categoryId),
+          notDeleted(productCategory),
         ),
-      client
-        .selectDistinctOn([purchaseProduct.productId], {
-          productId: purchaseProduct.productId,
-          purchaseId: purchase.id,
-          shortcode: purchase.shortcode,
-          date: purchase.date,
-          vendor: vendor.name,
-          buyerPartyId: vendorAccount.ledgerPartyId,
-        })
-        .from(purchaseProduct)
-        .innerJoin(
-          purchase,
-          and(
-            eq(purchase.id, purchaseProduct.purchaseId),
-            notDeleted(purchase),
-          ),
-        )
-        .leftJoin(vendor, eq(vendor.id, purchase.vendorId))
-        .leftJoin(
-          vendorAccount,
-          and(
-            eq(vendorAccount.id, purchase.vendorAccountId),
-            notDeleted(vendorAccount),
-          ),
-        )
-        .where(
-          and(
-            inArray(purchaseProduct.productId, ids),
-            notDeleted(purchaseProduct),
-          ),
-        )
-        .orderBy(purchaseProduct.productId, desc(purchase.date)),
-      client
-        .select({
-          productId: expense.productId,
-          purchaseId: expense.purchaseId,
-          name: expense.name,
-        })
-        .from(expense)
-        .where(
-          and(
-            inArray(expense.productId, ids),
-            isNotNull(expense.purchaseId),
-            notDeleted(expense),
-          ),
+      )
+      .where(and(inArray(product.id, ids), notDeleted(product))),
+    client
+      .select({
+        productId: inventoryEntry.productId,
+        ownershipMode: inventoryEntry.ownershipMode,
+        ownerLedgerPartyId: inventoryEntry.ownerLedgerPartyId,
+      })
+      .from(inventoryEntry)
+      .where(
+        and(inArray(inventoryEntry.productId, ids), notDeleted(inventoryEntry)),
+      ),
+    client
+      .selectDistinctOn([purchaseProduct.productId], {
+        productId: purchaseProduct.productId,
+        purchaseId: purchase.id,
+        shortcode: purchase.shortcode,
+        date: purchase.date,
+        vendor: vendor.name,
+        buyerPartyId: vendorAccount.ledgerPartyId,
+      })
+      .from(purchaseProduct)
+      .innerJoin(
+        purchase,
+        and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
+      )
+      .leftJoin(vendor, eq(vendor.id, purchase.vendorId))
+      .leftJoin(
+        vendorAccount,
+        and(
+          eq(vendorAccount.id, purchase.vendorAccountId),
+          notDeleted(vendorAccount),
         ),
-      client
-        .select({ productId: expense.productId })
-        .from(expense)
-        .where(and(inArray(expense.productId, ids), notDeleted(expense)))
-        .groupBy(expense.productId),
-      client
-        .select({
-          productId: productExternalId.productId,
-          source: productExternalId.source,
-          externalId: productExternalId.externalId,
-        })
-        .from(productExternalId)
-        .where(
-          and(
-            inArray(productExternalId.productId, ids),
-            notDeleted(productExternalId),
-          ),
+      )
+      .where(
+        and(
+          inArray(purchaseProduct.productId, ids),
+          notDeleted(purchaseProduct),
         ),
-      loadCategoryRoots(db),
-    ]);
+      )
+      .orderBy(purchaseProduct.productId, desc(purchase.date)),
+    client
+      .selectDistinctOn([product.id], {
+        productId: product.id,
+        purchaseId: purchase.id,
+        shortcode: purchase.shortcode,
+        date: purchase.date,
+        vendor: vendor.name,
+        buyerPartyId: vendorAccount.ledgerPartyId,
+      })
+      .from(expense)
+      .innerJoin(product, eq(product.id, expense.productId))
+      .innerJoin(
+        purchase,
+        and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+      )
+      .leftJoin(vendor, eq(vendor.id, purchase.vendorId))
+      .leftJoin(
+        vendorAccount,
+        and(
+          eq(vendorAccount.id, purchase.vendorAccountId),
+          notDeleted(vendorAccount),
+        ),
+      )
+      .where(
+        and(
+          inArray(product.id, ids),
+          notDeleted(expense),
+          eq(expense.future, false),
+          sql.raw(expenseAcquisitionSql('"Expense"')),
+        ),
+      )
+      .orderBy(product.id, desc(purchase.date)),
+    client
+      .select({
+        productId: expense.productId,
+        purchaseId: expense.purchaseId,
+        name: expense.name,
+      })
+      .from(expense)
+      .where(
+        and(
+          inArray(expense.productId, ids),
+          isNotNull(expense.purchaseId),
+          notDeleted(expense),
+          eq(expense.future, false),
+          sql.raw(expenseAcquisitionSql('"Expense"')),
+        ),
+      ),
+    client
+      .select({ productId: expense.productId })
+      .from(expense)
+      .where(and(inArray(expense.productId, ids), notDeleted(expense)))
+      .groupBy(expense.productId),
+    client
+      .select({
+        productId: productExternalId.productId,
+        source: productExternalId.source,
+        externalId: productExternalId.externalId,
+      })
+      .from(productExternalId)
+      .where(
+        and(
+          inArray(productExternalId.productId, ids),
+          notDeleted(productExternalId),
+        ),
+      ),
+    loadCategoryRoots(db),
+  ]);
 
-  const purchaseByProduct = new Map(
-    latestPurchases.map((row) => [row.productId, row]),
+  const purchaseByProduct = latestPurchaseByProduct(
+    latestPurchases,
+    expensePurchases,
   );
   const inherited = await loadInheritedProductOwners(db, [
     ...purchaseByProduct.keys(),
@@ -300,7 +355,7 @@ export async function loadProductMatchSides(
     ),
   );
   const buyerIds = uniq(
-    latestPurchases.flatMap((row) =>
+    [...purchaseByProduct.values()].flatMap((row) =>
       row.buyerPartyId ? [row.buyerPartyId] : [],
     ),
   );

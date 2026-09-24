@@ -40,6 +40,7 @@
     "dev:sim:watch": "pnpm --dir apps/web exec tsx tooling/sim-e2e.ts --watch",
     "test:e2e:headless": "pnpm --dir apps/web exec tsx tooling/sim-e2e.ts --headless",
     "test:e2e:headless:photo": "pnpm --dir apps/web exec tsx tooling/sim-e2e.ts --headless --photo",
+    "test:e2e:headless:wardrobe": "pnpm --dir apps/web exec tsx tooling/sim-e2e.ts --headless --photo --purchase",
     "test:e2e:headless:watch": "pnpm --dir apps/web exec tsx tooling/sim-e2e.ts --headless --watch",
     "test:e2e:postgres": "pnpm --filter @cubby/web test:e2e:postgres",
     "test:all": "pnpm test && node scripts/test-services.ts -- sh -c 'pnpm test:postgres && pnpm test:e2e'",

@@ -29,29 +29,35 @@ const kitRoot = path.join(repoRoot, "apps/apple/CubbyKit");
 const appleRoot = path.join(repoRoot, "apps/apple");
 const headless = process.argv.slice(2).includes("--headless");
 const photo = process.argv.slice(2).includes("--photo");
+const purchase = process.argv.slice(2).includes("--purchase");
 const watch = process.argv.slice(2).includes("--watch");
 const video = process.argv.slice(2).includes("--video");
 if (
   (watch && video) ||
   (video && headless) ||
   (photo && (!headless || watch)) ||
+  (purchase && !photo) ||
   process.argv
     .slice(2)
     .some(
       (argument) =>
-        !["--headless", "--watch", "--video", "--photo"].includes(argument),
+        !["--headless", "--watch", "--video", "--photo", "--purchase"].includes(
+          argument,
+        ),
     )
 )
   throw new Error(
-    "Usage: sim-e2e.ts [--video | --watch | --headless [--watch | --photo]]",
+    "Usage: sim-e2e.ts [--video | --watch | --headless [--watch | --photo [--purchase]]]",
   );
-const lane = photo
-  ? "headless-photo-e2e"
-  : headless
-    ? "headless-e2e"
-    : watch
-      ? "sim-dev"
-      : "sim-e2e";
+const lane = purchase
+  ? "headless-wardrobe-e2e"
+  : photo
+    ? "headless-photo-e2e"
+    : headless
+      ? "headless-e2e"
+      : watch
+        ? "sim-dev"
+        : "sim-e2e";
 dotenv.config({ path: path.join(webRoot, ".env") });
 for (const [key, value] of Object.entries({
   R2_ACCESS_KEY_ID: "cubby-sim",
@@ -1101,8 +1107,19 @@ async function main(): Promise<void> {
     );
 
     if (headless) {
-      if (photo) await runHeadlessPhotoScenario(url, objectStorage.url, userId);
-      else await runHeadlessProductScenario(url, productId, userId);
+      if (photo) {
+        await runHeadlessPhotoScenario(url, objectStorage.url, userId);
+        if (purchase) {
+          const { runWardrobeConvergenceScenario } =
+            await import("./scenarios/wardrobe-convergence");
+          await runWardrobeConvergenceScenario({
+            databaseURL,
+            origin: url.origin,
+            artifacts,
+            userId,
+          });
+        }
+      } else await runHeadlessProductScenario(url, productId, userId);
     } else {
       const device = await simulator();
       if (device.state !== "Booted")
