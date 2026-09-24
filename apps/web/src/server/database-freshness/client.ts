@@ -3,12 +3,43 @@ import {
   type DashboardLocalCounts,
 } from "@cubby/schemas/dashboard";
 import type { ProblemsCount } from "@cubby/schemas/problems";
+import { problemsCountSchema } from "@cubby/schemas/problems";
 
-import { getDatabaseFreshnessNamespace } from "~/server/cf-env";
+import {
+  getDatabaseFreshnessNamespace,
+  getExecutionCtx,
+} from "~/server/cf-env";
 
 import type { DatabaseFreshness } from "./state";
 
 const DATABASE_FRESHNESS_RPC_TIMEOUT_MS = 1000;
+// Only the authenticated workflow reads this internal cache. Keep the TTL short:
+// DO refreshes can publish in another data center without an edge-wide purge.
+const PROBLEM_COUNTS_EDGE_TTL_SECONDS = 10;
+const PROBLEM_COUNTS_EDGE_KEY = "/__internal/cache/problem-counts-v1";
+
+interface EdgeCache {
+  match(request: RequestInfo | URL): Promise<Response | undefined>;
+  put(request: RequestInfo | URL, response: Response): Promise<void>;
+}
+
+interface EdgeCacheStorage extends CacheStorage {
+  default: EdgeCache;
+}
+
+const hasDefaultCache = (
+  storage: CacheStorage | undefined,
+): storage is EdgeCacheStorage => storage !== undefined && "default" in storage;
+
+const problemCountsEdgeCache = (): { cache: EdgeCache; key: string } | null => {
+  const origin = getExecutionCtx()?.origin;
+  const storage = globalThis.caches;
+  if (!origin || !hasDefaultCache(storage)) return null;
+  return {
+    cache: storage.default,
+    key: new URL(PROBLEM_COUNTS_EDGE_KEY, origin).toString(),
+  };
+};
 export interface DatabaseFreshnessPort {
   readFreshness(): Promise<DatabaseFreshness>;
   recordWrite(): Promise<DatabaseFreshness>;
@@ -76,12 +107,45 @@ export async function recordDatabaseWrite(
 export async function readProblemCountsFromDurableObject(
   port?: ProblemCountsSnapshotPort,
 ): Promise<ProblemsCount | null> {
+  const edge = problemCountsEdgeCache();
+  if (edge) {
+    try {
+      const hit = await edge.cache.match(edge.key);
+      if (hit) {
+        const parsed = problemsCountSchema.safeParse(await hit.json());
+        if (parsed.success) return parsed.data;
+      }
+    } catch (error) {
+      // SILENT: a cache lookup failure falls back to the durable snapshot.
+      console.warn("Problem-count edge cache lookup failed", error);
+    }
+  }
   const target = port ?? getPort();
   if (!target) return null;
   try {
     // A cold snapshot runs the detector pass, so it must not inherit the
     // one-second latency bound used by the tiny freshness RPCs.
-    return await target.getProblemCounts();
+    const counts = problemsCountSchema.parse(await target.getProblemCounts());
+    if (edge) {
+      const write = edge.cache
+        .put(
+          edge.key,
+          new Response(JSON.stringify(counts), {
+            headers: {
+              "Content-Type": "application/json",
+              "Cache-Control": `public, max-age=${PROBLEM_COUNTS_EDGE_TTL_SECONDS}`,
+            },
+          }),
+        )
+        .catch((error) => {
+          // SILENT: a cache write cannot fail an otherwise successful read.
+          console.warn("Problem-count edge cache write failed", error);
+        });
+      const execution = getExecutionCtx();
+      if (execution) execution.waitUntil(write);
+      else await write;
+    }
+    return counts;
   } catch (error) {
     console.error("Problem-count snapshot RPC failed", error);
     throw error;
