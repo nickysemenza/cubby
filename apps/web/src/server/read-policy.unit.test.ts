@@ -5,6 +5,7 @@ import { Database } from "~/server/db";
 
 import {
   applyReadPolicy,
+  mutationChangesHouseholdData,
   readPolicyFor,
   STRONG_QUERY_OPERATIONS,
 } from "./read-policy";
@@ -29,14 +30,12 @@ describe("shared read policy", () => {
   it("uses bounded-stale context for representative display reads", () => {
     for (const operation of [
       "ai.usageRecent",
-      "auditLog.list",
       "meal.getShoppingList",
       "problems.getByType",
       "suggestions.getRecipeAvailability",
       "calendar.range",
       "collection.detail",
       "cookbook.detail",
-      "dashboard.counts",
       "expense.analytics",
       "image.projectSummaries",
       "ingredient.recipeUsages",
@@ -54,6 +53,13 @@ describe("shared read policy", () => {
   it("makes every mutation strong regardless of its operation family", () => {
     expect(readPolicyFor("entity.mutate", "mutation")).toBe("strong");
     expect(readPolicyFor("calendar.rotateFeed", "mutation")).toBe("strong");
+  });
+
+  it("does not mark the maintenance cooldown claim as a data mutation", () => {
+    expect(mutationChangesHouseholdData("maintenance.requestCatchUp")).toBe(
+      false,
+    );
+    expect(mutationChangesHouseholdData("entity.mutate")).toBe(true);
   });
 
   it("exposes only the selected database to an operation", () => {

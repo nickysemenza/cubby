@@ -3584,7 +3584,10 @@ export const auditLog = pgTable(
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
-    index("AuditLog_createdAt_idx").on(table.createdAt.desc()),
+    index("AuditLog_createdAt_id_idx").on(
+      table.createdAt.desc(),
+      table.id.desc(),
+    ),
     // Real identity FK (ADR 0006): the row names an entity that exists, of
     // the kind it claims. History keeps the identity that received the event.
     foreignKey({

@@ -21,6 +21,11 @@ export const STRONG_QUERY_OPERATIONS = [
   "calendar.getCredential",
   "calendar.getFeed",
   "maintenance.awaitingWork",
+  // The dashboard's local snapshot owns its write revision; a failed snapshot
+  // falls back to a strong query without paying a separate freshness RPC.
+  "dashboard.counts",
+  // Audit activity reads live and bypasses the freshness RPC before PostgreSQL.
+  "auditLog.list",
   "calendar.inspectFeed",
   "oauth.countOrphanedClients",
   "oauth.listConnectedApps",
@@ -57,6 +62,13 @@ export function readPolicyFor(
   return kind === "mutation" || strongQueryOperations.has(operation)
     ? "strong"
     : "context";
+}
+
+/** This maintenance request changes only its strong-read cooldown claim. */
+export function mutationChangesHouseholdData(
+  operation: StartOperationId,
+): boolean {
+  return operation !== "maintenance.requestCatchUp";
 }
 
 /**

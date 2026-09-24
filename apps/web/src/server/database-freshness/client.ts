@@ -1,3 +1,7 @@
+import {
+  dashboardLocalCounts,
+  type DashboardLocalCounts,
+} from "@cubby/schemas/dashboard";
 import type { ProblemsCount } from "@cubby/schemas/problems";
 
 import { getDatabaseFreshnessNamespace } from "~/server/cf-env";
@@ -12,6 +16,10 @@ export interface DatabaseFreshnessPort {
 
 export interface ProblemCountsSnapshotPort {
   getProblemCounts(): Promise<ProblemsCount>;
+}
+
+export interface ReadSnapshotPort {
+  getDashboardCounts(): Promise<DashboardLocalCounts | null>;
 }
 
 const getPort = () =>
@@ -77,5 +85,19 @@ export async function readProblemCountsFromDurableObject(
   } catch (error) {
     console.error("Problem-count snapshot RPC failed", error);
     throw error;
+  }
+}
+
+export async function readDashboardCountsSnapshot(
+  port?: Pick<ReadSnapshotPort, "getDashboardCounts">,
+): Promise<DashboardLocalCounts | null> {
+  const target = port ?? getPort();
+  if (!target) return null;
+  try {
+    const snapshot = await target.getDashboardCounts();
+    return snapshot ? dashboardLocalCounts.parse(snapshot) : null;
+  } catch (error) {
+    console.error("Dashboard-count snapshot unavailable", error);
+    return null;
   }
 }

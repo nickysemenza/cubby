@@ -30,7 +30,11 @@ import {
   observeOperation,
   parseObservedFailure,
 } from "~/server/observed-request";
-import { type ReadPolicy, readPolicyFor } from "~/server/read-policy";
+import {
+  type ReadPolicy,
+  mutationChangesHouseholdData,
+  readPolicyFor,
+} from "~/server/read-policy";
 import {
   createRequestContext,
   requireActor,
@@ -414,7 +418,9 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
             throwIfStartOperationAborted(options.request.signal);
 
             stage = "run";
-            mutationStarted = options.type === "mutation";
+            mutationStarted =
+              options.type === "mutation" &&
+              mutationChangesHouseholdData(options.operation);
             const rawOutput = await options.run(context, input);
             throwIfStartOperationAborted(options.request.signal);
 
@@ -424,7 +430,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
               : options.outputSchema;
             const data = outputSchema.parse(rawOutput);
             throwIfStartOperationAborted(options.request.signal);
-            if (options.type === "mutation") {
+            if (mutationStarted) {
               runtime.markCalendarDirty(
                 context,
                 options.request.headers,

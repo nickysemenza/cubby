@@ -852,11 +852,17 @@
         }
       },
       "indexes": {
-        "AuditLog_createdAt_idx": {
-          "name": "AuditLog_createdAt_idx",
+        "AuditLog_createdAt_id_idx": {
+          "name": "AuditLog_createdAt_id_idx",
           "columns": [
             {
               "expression": "createdAt",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
               "isExpression": false,
               "asc": false,
               "nulls": "last"

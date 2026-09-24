@@ -1,6 +1,9 @@
+import { dashboardLocalCounts } from "@cubby/schemas/dashboard";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
+import { setCfEnv } from "~/server/cf-env";
 import { getEntityCounts } from "~/server/repo/dashboard";
 import {
   createLedgerParty,
@@ -15,6 +18,7 @@ import { getDashboardCounts } from "./dashboard";
 
 describe("dashboard count workflow", () => {
   const ctx = withTestDb();
+  afterEach(() => setCfEnv(undefined));
 
   it("preserves local counts when the external USDA service fails", async () => {
     await createProductFixture(
@@ -68,5 +72,36 @@ describe("dashboard count workflow", () => {
     });
     const result = await getEntityCounts(ctx.db);
     expect(result.ledgerParty).toBe(list.count);
+  });
+
+  it("uses a valid local snapshot while USDA remains a parallel live read", async () => {
+    const snapshot = dashboardLocalCounts.parse({
+      ...(await getEntityCounts(ctx.db)),
+      product: 17,
+    });
+    setCfEnv(
+      fromPartial<Env>({
+        DB_FRESHNESS: {
+          getByName: () => ({ getDashboardCounts: async () => snapshot }),
+        },
+      }),
+    );
+
+    const result = await getDashboardCounts({
+      db: ctx.db,
+      usdaClient: {
+        getCounts: async () => ({
+          usda_food: 42,
+          usda_branded_food: 0,
+          usda_nutrient: 0,
+          usda_food_nutrient: 0,
+          usda_measure_unit: 0,
+          usda_food_portion: 0,
+          usda_sr_legacy_food: 0,
+        }),
+      },
+    });
+    expect(result.product).toBe(17);
+    expect(result.usdaFoods).toBe(42);
   });
 });

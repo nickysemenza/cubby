@@ -242,6 +242,21 @@ describe("runStartOperation", () => {
     expect(recordDatabaseWrite).toHaveBeenCalledOnce();
   });
 
+  it("does not mark a catch-up claim as a household data write", async () => {
+    await runStartOperation({
+      operation: "maintenance.requestCatchUp",
+      type: "mutation",
+      input: undefined,
+      inputSchema: z.undefined(),
+      outputSchema: z.object({ status: z.literal("recent") }),
+      request: request(),
+      run: async () => ({ status: "recent" as const }),
+    });
+
+    expect(recordDatabaseWrite).not.toHaveBeenCalled();
+    expect(markCalendarDirty).not.toHaveBeenCalled();
+  });
+
   it("does not record freshness for a pure read", async () => {
     await expect(
       runStartOperation({
