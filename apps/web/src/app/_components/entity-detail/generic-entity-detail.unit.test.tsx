@@ -268,7 +268,7 @@ describe("GenericEntityDetail", () => {
     ).toHaveAttribute("href", "/products?manufacturer=Milwaukee");
     expect(
       screen.getByRole("link", {
-        name: "Show all products with classification Tools",
+        name: "Show all products with category Tools",
       }),
     ).toHaveAttribute("href", "/products?category=CAT-2224");
     expect(
@@ -277,7 +277,7 @@ describe("GenericEntityDetail", () => {
     // The category record and cohort action remain separate links.
     const categoryRecord = screen.getByRole("link", { name: "Tools" });
     const categoryFilter = screen.getByRole("link", {
-      name: "Show all products with classification Tools",
+      name: "Show all products with category Tools",
     });
     expect(categoryRecord.contains(categoryFilter)).toBe(false);
   });
@@ -305,12 +305,12 @@ describe("GenericEntityDetail", () => {
     expect(screen.queryByText("UPC", { exact: true })).not.toBeInTheDocument();
     const labels = Array.from(
       container.querySelectorAll(
-        '#basic-information .basic-info-ledger [data-slot="basic-info-label"]',
+        '#overview .basic-info-ledger [data-slot="basic-info-label"]',
       ),
       (element) => element.textContent,
     );
     const section = entitySummary.product.detail.sections.find(
-      (candidate) => candidate.id === "basic-information",
+      (candidate) => candidate.id === "overview",
     );
     const declared = (section?.kind === "fields" ? section.fields : []).map(
       (key) =>

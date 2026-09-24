@@ -49,7 +49,9 @@ const EXPENSE_FACET_IDS = [
 ] as const;
 
 const FACET_COLUMN_IDS = {
-  productPresence: "product",
+  project: "projectId",
+  productPresence: "productId",
+  vendor: "purchaseId",
   orderIdPresence: "orderId",
 } as const;
 
@@ -165,6 +167,7 @@ export const expenseListOverride = defineListOverride<
           );
           add(
             createProjectLinkColumn(columnHelper, {
+              id: "projectId",
               className: "w-40",
               mobile: { slot: "meta", priority: 40, interactive: true },
               editable: {
@@ -181,6 +184,7 @@ export const expenseListOverride = defineListOverride<
           );
           add(
             createProductLinkColumn(columnHelper, {
+              id: "productId",
               className: "w-40",
               mobile: { slot: "meta", priority: 45, interactive: true },
               editable: {
@@ -235,6 +239,7 @@ export const expenseListOverride = defineListOverride<
                 });
               },
               {
+                id: "purchaseId",
                 asPurchase: true,
                 mobile: { slot: "meta", priority: 70, interactive: true },
               },

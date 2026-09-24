@@ -97,7 +97,7 @@ describe("declared entity displays", () => {
     render(
       <EntityBasicInfo
         entity="project"
-        fields={entitySectionFields("project", "resources")}
+        fields={entitySectionFields("project", "resource-links")}
         record={{
           name: "Fixture project",
           googleDriveFolderUrl: "https://example.com/folder",
@@ -105,8 +105,8 @@ describe("declared entity displays", () => {
         }}
       />,
     );
-    expect(screen.getByText("Google Drive folder")).toBeVisible();
-    expect(screen.getByText("Notion page")).toBeVisible();
+    expect(screen.getByText("Google drive folder URL")).toBeVisible();
+    expect(screen.getByText("Notion page URL")).toBeVisible();
     expect(screen.queryByText("Name")).not.toBeInTheDocument();
     expect(screen.queryByText("Fixture project")).not.toBeInTheDocument();
   });
@@ -116,7 +116,7 @@ describe("declared entity displays", () => {
       render(
         <EntityBasicInfo
           entity="project"
-          fields={entitySectionFields("project", "resources")}
+          fields={entitySectionFields("project", "resource-links")}
           record={{ name: "Fixture project" }}
           overrides={{ name: (record) => ({ value: record.name }) }}
         />,
@@ -412,7 +412,7 @@ describe("declared entity displays", () => {
     };
     const helper = createCubbyColumnHelper<PurchaseRow>();
     const declared = createEntityDisplayColumns("purchase", helper, undefined, {
-      only: ["vendor", "displayLabel", "date", "statedTotal"],
+      only: ["vendorId", "displayLabel", "date", "statedTotal"],
     });
     const { result } = renderHook(() =>
       useStandardColumns({
@@ -428,7 +428,7 @@ describe("declared entity displays", () => {
     expect(result.current.visit((column) => column.id).slice(0, 6)).toEqual([
       "image",
       "displayName",
-      "vendor",
+      "vendorId",
       "displayLabel",
       "date",
       "statedTotal",
@@ -446,7 +446,7 @@ describe("declared entity displays", () => {
     expect(ids).toContain("notes");
   });
 
-  it("preserves declared legacy column ids for specialized computed values", () => {
+  it("attaches reference provenance to declared specialized columns", () => {
     const helper = createCubbyColumnHelper<{
       fromPartyId: string;
       toPartyId: string;
@@ -455,18 +455,23 @@ describe("declared entity displays", () => {
       "ledgerTransfer",
       helper,
       createCubbyColumnCollection((add) => {
-        for (const id of ["fromPartyId", "toPartyId", "evidenceCount"]) {
+        for (const id of [
+          "fromPartyId",
+          "toPartyId",
+          "evidenceTransactionIds",
+        ]) {
           add(helper.display({ id, header: "Specialized", cell: () => null }));
         }
       }),
     );
-    expect(columns.visit((column) => column.id)).toContain("evidenceCount");
-    expect(columns.visit((column) => column.id)).not.toContain(
+    expect(columns.visit((column) => column.id)).toContain(
       "evidenceTransactionIds",
     );
     const evidenceProvenance = columns
       .visit((column) =>
-        column.id === "evidenceCount" ? column.meta?.provenance : undefined,
+        column.id === "evidenceTransactionIds"
+          ? column.meta?.provenance
+          : undefined,
       )
       .find((provenance) => provenance !== undefined);
     expect(evidenceProvenance).toEqual({
@@ -481,8 +486,7 @@ describe("declared entity displays", () => {
     // Most of `product`'s `list: true` roster is plain scalars, exercised
     // here with zero overrides — the cleanest surface for the generic
     // mapping itself. Two fields still force an override regardless
-    // (`servingAsLocations` and the `ledgerExpectedQuantity` field aliased
-    // to the "expectedQuantity" column id are both nested under
+    // (`servingAsLocations` and `ledgerExpectedQuantity` are nested under
     // `quantityLedger` on the list row, so `readKey: null`), matching
     // `apps/web/src/app/products/productlist.tsx`; `dataQuality` comes from
     // its manifest-declared renderer.
@@ -518,7 +522,7 @@ describe("declared entity displays", () => {
       helper: ReturnType<typeof createCubbyColumnHelper<TRecord>>,
     ) {
       return createCubbyColumnCollection<TRecord>((add) => {
-        for (const id of ["servingAsLocations", "expectedQuantity"]) {
+        for (const id of ["servingAsLocations", "ledgerExpectedQuantity"]) {
           add(helper.display({ id, cell: () => null }));
         }
       });
@@ -579,13 +583,13 @@ describe("declared entity displays", () => {
       );
       // width: "sm" -> "w-28", width: "md" -> "w-40"
       expect(byId.fdc_id?.className).toBe("w-28");
-      expect(byId.category?.className).toBe("w-40");
+      expect(byId.categoryId?.className).toBe("w-40");
       expect(byId.stockTracked?.className).toBe("w-28");
       expect(byId.manufacturer?.className).toBe("w-40");
       expect(byId.model?.className).toBe("w-40");
       expect(byId.notes?.className).toBe("w-40");
-      // No declared width (e.g. expectedQuantity, usdaUnavailable) stays unset.
-      expect(byId.expectedQuantity?.className).toBeUndefined();
+      // No declared width (e.g. ledgerExpectedQuantity, usdaUnavailable) stays unset.
+      expect(byId.ledgerExpectedQuantity?.className).toBeUndefined();
     });
 
     it("passes declared mobile placement straight through as column meta", () => {
@@ -597,7 +601,7 @@ describe("declared entity displays", () => {
         priority: 20,
         interactive: undefined,
       });
-      expect(byId.category?.mobile).toEqual({
+      expect(byId.categoryId?.mobile).toEqual({
         slot: "subtitle",
         priority: 30,
         interactive: undefined,
@@ -648,9 +652,8 @@ describe("declared entity displays", () => {
         helper,
         createCubbyColumnCollection((add) => {
           // Required: these are reference fields, which the auto-render
-          // path always rejects. Their column ids are the declared
-          // `display.columnId` aliases, not the field keys.
-          for (const id of ["project", "subjectProduct", "parentTask"]) {
+          // path always rejects. Their column ids are the field keys.
+          for (const id of ["projectId", "subjectProductId", "parentTaskId"]) {
             add(helper.display({ id, cell: () => null }));
           }
           // "trade" IS in `generatedEntitySort.task.fields`, but this
@@ -692,8 +695,8 @@ describe("declared entity displays", () => {
       // An override whose declared column id is a roster sort id sorts;
       // one outside the roster is filled in as unsortable (false), not left
       // `undefined`.
-      expect(byId.project?.enableSorting).toBe(true);
-      expect(byId.parentTask?.enableSorting).toBe(false);
+      expect(byId.projectId?.enableSorting).toBe(true);
+      expect(byId.parentTaskId?.enableSorting).toBe(false);
       // The explicit override on "trade" survives despite the roster saying
       // true for that column id.
       expect(byId.trade?.enableSorting).toBe(false);

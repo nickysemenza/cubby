@@ -28,68 +28,14 @@ export default defineEntity({
     },
     icons: { phosphor: "Storefront", sfSymbol: "storefront", emoji: "🏪" },
     detail: {
-      sectionOverrides: [
-        {
-          kind: "fields",
-          id: "overview",
-          title: "Overview",
-          placement: "supporting",
-          fields: [
-            "name",
-            "website",
-            "orderUrlTemplate",
-            "orderEvidence",
-            "orderEmailSenders",
-            "browserDomains",
-            "returnWindowDays",
-            "agentHints",
-            "notes",
-            "purchaseCount",
-            "spend",
-            "latestPurchaseDate",
-            "createdAt",
-            "updatedAt",
-          ],
-        },
-        {
-          kind: "relation",
-          id: "purchases",
-          title: "Purchases",
-          relation: "purchases",
-          filter: { descriptor: "vendor" },
-          columns: [
-            "displayLabel",
-            "orderId",
-            "date",
-            "statedTotal",
-            "expenseCount",
-          ],
-          sort: { field: "date", direction: "desc" },
-        },
+      additionalSectionOverrides: [
         {
           kind: "relation",
           id: "purchased-products",
           title: "Purchased products",
           relation: "products",
           filter: { descriptor: "related:product.vendors" },
-          columns: ["name", "manufacturer", "category", "expenseTotal"],
-        },
-        {
-          kind: "relation",
-          id: "projects",
-          title: "Projects",
-          relation: "projects",
-          filter: { descriptor: "vendorId" },
-          columns: ["name", "status", "kind"],
-        },
-        {
-          kind: "relation",
-          id: "expenses",
-          title: "Expenses",
-          relation: "expenses",
-          filter: { descriptor: "vendor" },
-          columns: ["name", "cost", "date", "project"],
-          sort: { field: "date", direction: "desc" },
+          columns: ["name", "manufacturer", "categoryId", "expenseTotal"],
         },
       ],
     },
@@ -130,7 +76,6 @@ export default defineEntity({
         key: "orderUrlTemplate",
         kind: "text",
         nullable: true,
-        labelOverride: "Order URL",
         control: { kind: "text", renderer: "url", sectionOverride: "details" },
         display: { detail: true },
         validation: {
@@ -172,7 +117,6 @@ export default defineEntity({
         key: "orderEvidence",
         kind: "enum",
         nullable: true,
-        labelOverride: "Order evidence",
         control: {
           kind: "select",
           sectionOverride: "details",
@@ -192,7 +136,6 @@ export default defineEntity({
       {
         key: "orderEmailSenders",
         kind: "text-array",
-        labelOverride: "Order email senders",
         control: {
           kind: "specialized",
           renderer: "tag-list",
@@ -208,7 +151,6 @@ export default defineEntity({
       {
         key: "browserDomains",
         kind: "text-array",
-        labelOverride: "Browser domains",
         control: {
           kind: "specialized",
           renderer: "tag-list",
@@ -224,7 +166,6 @@ export default defineEntity({
       {
         key: "agentHints",
         kind: "json",
-        labelOverride: "Import hints",
         control: {
           kind: "specialized",
           renderer: "structured-field",
@@ -246,7 +187,6 @@ export default defineEntity({
         key: "returnWindowDays",
         kind: "number",
         nullable: true,
-        labelOverride: "Return window",
         control: {
           kind: "number",
           sectionOverride: "details",
@@ -271,7 +211,6 @@ export default defineEntity({
       {
         key: "purchaseCount",
         kind: "number",
-        labelOverride: "Purchases",
         display: {
           list: true,
           detail: true,
@@ -387,18 +326,16 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:VendorId",
       },
       { key: "shortcode", specialized: "shortcode" },
@@ -408,27 +345,24 @@ export default defineEntity({
       "orderEvidence",
       {
         key: "orderEmailSenders",
-        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
       {
         key: "browserDomains",
-        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
       {
         key: "agentHints",
-        defaultOverride: "literal",
         defaultValue:
           '\'{"ordersListUrl":null,"pagination":null,"orderLinkPattern":null,"notes":[]}\'::jsonb',
         specialized: "json:agentHints",
       },
       "returnWindowDays",
       "notes",
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [
@@ -467,9 +401,9 @@ export default defineEntity({
     ],
     sort: {
       fields: [
+        "spend",
         "name",
         "purchaseCount",
-        "spend",
         "latestPurchaseDate",
         "createdAt",
         "updatedAt",
@@ -478,7 +412,6 @@ export default defineEntity({
       // question this roster exists to answer. Used to be a browser-registry
       // `list.defaultSort` override on top of a generated "name" default;
       // the product decision now lives on the declaration itself.
-      defaultOverride: "spend",
     },
     intents: {
       fields: {

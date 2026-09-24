@@ -28,14 +28,7 @@ export default defineEntity({
           "The Candidate alternatives section edits candidates in place with its own renderer.",
       },
       hero: { actionOverrides: ["edit", "markPurchased"] },
-      sectionOverrides: [
-        {
-          kind: "fields",
-          id: "overview",
-          title: "Overview",
-          placement: "supporting",
-          fields: ["name", "notes", "acquiredAt", "createdAt", "updatedAt"],
-        },
+      additionalSectionOverrides: [
         {
           kind: "fields",
           id: "candidates",
@@ -74,8 +67,6 @@ export default defineEntity({
       {
         key: "candidateProductIds",
         kind: "identifier",
-        labelOverride: "Candidate Product IDs",
-        readKeyOverride: null,
         reference: { entity: "product", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
@@ -87,8 +78,7 @@ export default defineEntity({
       {
         key: "acquired",
         kind: "boolean",
-        readKeyOverride: null,
-        control: { kind: "checkbox", sectionOverride: "details" },
+        control: { kind: "checkbox" },
         provenance: {
           kind: "relation",
           sources: [{ entity: "product", relation: "candidates" }],
@@ -112,9 +102,7 @@ export default defineEntity({
         key: "acquiredAt",
         kind: "timestamp",
         nullable: true,
-        // `acquired` is the persisted column id the status cell and the
-        // boolean filter spec hang on.
-        display: { list: true, detail: true, columnIdOverride: "acquired" },
+        display: { list: true, detail: true },
         validation: {
           read: z.date().nullable(),
           create: null,
@@ -212,26 +200,24 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:WishId",
       },
       { key: "shortcode", specialized: "shortcode" },
       "name",
       "notes",
       "acquiredAt",
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: ["name", "notes", "candidateProductIds"],
@@ -284,7 +270,10 @@ export default defineEntity({
         schemaFromRead: true,
       },
       {
-        columnId: "acquired",
+        columnId: "acquiredAt",
+        field: "acquired",
+        urlKey: "acquired",
+        wire: { kind: "param", name: "acquired" },
         kind: "boolean",
         placeholder: "Filter by status...",
         deriveSchema: true,

@@ -80,6 +80,7 @@ export function readReferenceField<TRecord extends object>(
   if (reference === null) return null;
   const base = field.key.replace(/Ids?$/u, "");
   const nested = readRecordField(record, base, z.unknown());
+  if (z.number().safeParse(nested).success) return null;
   const nestedName =
     readRecordField(record, `${base}Name`, z.string().nullish()) ?? null;
   const raw =
@@ -87,7 +88,7 @@ export function readReferenceField<TRecord extends object>(
       ? undefined
       : readRecordField(record, field.readKey, z.unknown());
   // A reference whose read key carries a count (recipe `meals` reads
-  // `mealCount`) names related records without listing them; it renders as
+  // `meals`) names related records without listing them; it renders as
   // the scalar it is.
   const parsedIds = referenceIds.safeParse(raw);
   const parsedObject = referenceObjectValue.safeParse(raw);

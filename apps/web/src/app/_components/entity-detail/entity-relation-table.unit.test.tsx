@@ -164,7 +164,7 @@ describe("EntityRelationTable", () => {
     const [input] = inputs;
     expect(input?.entity).toBe("task");
     expect(input?.filters).toMatchObject({ projectId: "PRJ-TEST" });
-    expect(input?.sort).toEqual([{ orderBy: "createdAt", direction: "desc" }]);
+    expect(input?.sort).toEqual([{ orderBy: "name", direction: "asc" }]);
   });
 
   it("renders the empty sentence and a create action once the read resolves empty", async () => {

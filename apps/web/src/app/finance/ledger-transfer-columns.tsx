@@ -98,7 +98,7 @@ export function createLedgerTransferEvidenceCountColumn(
   className = "w-24",
 ) {
   return helper.accessor((row) => row.evidenceTransactionIds.length, {
-    id: "evidenceCount",
+    id: "evidenceTransactionIds",
     header: "Evidence",
     meta: { numeric: true, className, mobile: { slot: "hidden" } },
   });

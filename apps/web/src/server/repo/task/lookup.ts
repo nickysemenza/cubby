@@ -146,10 +146,10 @@ const joinedNameSort = (
 };
 
 const resolveTaskSort = (sort: SortParams) => {
-  if (sort.orderBy === "project") {
+  if (sort.orderBy === "projectId") {
     return joinedNameSort(sort, "Project", effectiveTaskProjectSql("task"));
   }
-  if (sort.orderBy === "subjectProduct") {
+  if (sort.orderBy === "subjectProductId") {
     return joinedNameSort(
       sort,
       "Product",

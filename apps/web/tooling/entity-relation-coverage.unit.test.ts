@@ -97,6 +97,30 @@ describe("relation coverage across the catalog", () => {
     return new Map(entities.map((entity) => [entity.key, entity]));
   };
 
+  it("selects only readable fields for inferred relation tables", async () => {
+    const entities = await load();
+    for (const entity of entities.values()) {
+      for (const section of entity.inspector.detail.sections) {
+        if (section.kind !== "relation" || !section.derived) continue;
+        const relation = entity.relations.find(
+          (candidate) => candidate.key === section.relation,
+        );
+        const target = relation && entities.get(relation.target);
+        expect(target).toBeDefined();
+        expect(section.columns?.length).toBeGreaterThan(0);
+        for (const column of section.columns ?? []) {
+          const field = target?.fieldModel.fields.find(
+            (candidate) =>
+              (candidate.display.columnId ?? candidate.key) === column,
+          );
+          expect(
+            field?.readKey !== null || field?.display.renderer?.list != null,
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
   // Regression: detail tables were opt-in, so a Task page never listed the
   // Plantings whose `taskId` points at it. Every `many` relation on a generic
   // detail page now renders a table or carries a written reason.
@@ -140,12 +164,17 @@ describe("relation coverage across the catalog", () => {
     const entities = await load();
     const product = entities.get("product");
     if (product === undefined) throw new Error("Expected a product entity");
+    const relationFilterOverrides = {
+      ...product.inspector.detail.relationFilterOverrides,
+    };
+    delete relationFilterOverrides["containing-kits"];
     const withoutKits: CompiledEntity = {
       ...product,
       inspector: {
         ...product.inspector,
         detail: {
           ...product.inspector.detail,
+          relationFilterOverrides,
           sections: product.inspector.detail.sections.filter(
             (section) =>
               section.kind !== "relation" ||

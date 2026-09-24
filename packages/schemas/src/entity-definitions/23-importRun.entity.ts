@@ -69,29 +69,8 @@ export default defineEntity({
         // slot renders them, so AI runs don't show four zeros.
         stats: [],
         breadcrumb: "vendorAccountId",
-        actionOverrides: [],
       },
-      sectionOverrides: [
-        {
-          kind: "fields",
-          id: "overview",
-          title: "Overview",
-          placement: "supporting",
-          fields: [
-            "status",
-            "purpose",
-            "trigger",
-            "vendorAccountId",
-            "vendorId",
-            "ledgerPartyId",
-            "actorName",
-            "startedAt",
-            "endedAt",
-            "failureCode",
-            "notes",
-          ],
-        },
-        // Each slot's web fill decides by `purpose` whether it applies.
+      additionalSectionOverrides: [
         { kind: "slot", id: "import-workflow", title: "Import" },
         { kind: "slot", id: "photo-batch", title: "Photos" },
         { kind: "slot", id: "ai-usage", title: "AI usage" },
@@ -118,7 +97,7 @@ export default defineEntity({
         },
       ],
     },
-    list: { actionOverrides: [] },
+    list: {},
   },
   model: {
     fields: [
@@ -185,29 +164,25 @@ export default defineEntity({
       {
         key: "vendorAccountId",
         kind: "identifier",
-        labelOverride: "Vendor account",
         nullable: true,
         reference: { entity: "vendorAccount" },
         display: {
           list: true,
           detail: true,
-          columnIdOverride: "vendorAccountLabel",
         },
         validation: readOnly(vendorAccountShortcode.nullable()),
       },
       {
         key: "vendorId",
         kind: "identifier",
-        labelOverride: "Vendor",
         nullable: true,
         reference: { entity: "vendor" },
-        display: { list: true, detail: true, columnIdOverride: "vendorName" },
+        display: { list: true, detail: true },
         validation: readOnly(vendorShortcode.nullable()),
       },
       {
         key: "ledgerPartyId",
         kind: "identifier",
-        labelOverride: "Member",
         // Null only on runs that group AI work (see `ensureRun`); import
         // purposes always carry the member scope (`ImportRun_import_party_check`).
         nullable: true,
@@ -215,14 +190,12 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          columnIdOverride: "ledgerPartyName",
         },
         validation: readOnly(ledgerPartyShortcode.nullable()),
       },
       {
         key: "actorName",
         kind: "text",
-        labelOverride: "Actor",
         display: { detail: true },
         validation: readOnly(z.string()),
       },
@@ -331,7 +304,6 @@ export default defineEntity({
       {
         key: "predecessorRunId",
         kind: "identifier",
-        labelOverride: "Predecessor",
         nullable: true,
         reference: { entity: "importRun" },
         display: { detail: true },
@@ -373,12 +345,11 @@ export default defineEntity({
         display: { detail: true },
         validation: readOnly(z.date()),
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     // The actor snapshot, dispatch fencing and history walk columns stay
@@ -387,7 +358,6 @@ export default defineEntity({
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:ImportRunId",
       },
       { key: "shortcode", specialized: "shortcode" },
@@ -397,47 +367,42 @@ export default defineEntity({
       { key: "vendorId", reference: "vendor" },
       {
         key: "purpose",
-        defaultOverride: "literal",
         defaultValue: "account_sync",
         specialized: "enum:purpose",
       },
       { key: "trigger", specialized: "enum:trigger" },
       {
         key: "status",
-        defaultOverride: "literal",
         defaultValue: "running",
         specialized: "enum:status",
       },
       {
         key: "coordinatorModel",
-        defaultOverride: "literal",
         defaultValue: "gpt-6-sol",
       },
       {
         key: "skillRevision",
-        defaultOverride: "literal",
         defaultValue: "purchase-import@1",
       },
       {
         key: "runtimeRevision",
-        defaultOverride: "literal",
         defaultValue: "flue@1",
       },
-      { key: "decisionRevision", defaultOverride: "literal", defaultValue: 1 },
+      { key: "decisionRevision", defaultValue: 1 },
       { key: "startedAt", defaultOverride: "now" },
       "endedAt",
-      { key: "ordersSeen", defaultOverride: "literal", defaultValue: 0 },
-      { key: "imported", defaultOverride: "literal", defaultValue: 0 },
-      { key: "updated", defaultOverride: "literal", defaultValue: 0 },
-      { key: "skipped", defaultOverride: "literal", defaultValue: 0 },
+      { key: "ordersSeen", defaultValue: 0 },
+      { key: "imported", defaultValue: 0 },
+      { key: "updated", defaultValue: 0 },
+      { key: "skipped", defaultValue: 0 },
       "auditedAt",
       "failureCode",
       "notes",
-      { key: "dispatchAttempts", defaultOverride: "literal", defaultValue: 0 },
+      { key: "dispatchAttempts", defaultValue: 0 },
       "dispatchError",
       "coordinatorStartedAt",
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [],
@@ -659,14 +624,6 @@ export default defineEntity({
     auditable: false,
     images: {
       storage: false,
-      displaySourceOverrides: [
-        {
-          relationPath: ["vendor"],
-          priority: 0,
-          ordering: "declared",
-          identityEvidence: false,
-        },
-      ],
     },
     countable: true,
     softDelete: false,

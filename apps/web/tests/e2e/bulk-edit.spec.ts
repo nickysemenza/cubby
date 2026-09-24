@@ -96,7 +96,7 @@ test("plantings list bulk-edits status finished plus a date in one write", async
 
   await dialog.getByRole("combobox", { name: "Status", exact: true }).click();
   await page.getByRole("option", { name: "Finished", exact: true }).click();
-  await dialog.getByLabel("Finished", { exact: true }).fill("2026-06-01");
+  await dialog.getByLabel("Finished on", { exact: true }).fill("2026-06-01");
 
   await dialog.getByRole("button", { name: "Update", exact: true }).click();
   await expect(dialog).not.toBeVisible();

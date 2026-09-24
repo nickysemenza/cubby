@@ -206,8 +206,8 @@ describe("HTTP contract", () => {
     const products = listQueryOf("/api/v1/products");
     expect(products.groupBy).toMatchObject({
       type: "string",
-      enum: ["category"],
-      description: "Group rows by one field. One of: category",
+      enum: ["categoryId"],
+      description: "Group rows by one field. One of: categoryId",
     });
     expect(products.sort).toMatchObject({ type: "string" });
     expect(products.sort?.description).toContain("Fields: ");
@@ -216,9 +216,9 @@ describe("HTTP contract", () => {
     // Empty `groupable` means every sortable field groups, as in the kernel.
     expect(listQueryOf("/api/v1/vendors").groupBy).toMatchObject({
       enum: [
+        "spend",
         "name",
         "purchaseCount",
-        "spend",
         "latestPurchaseDate",
         "createdAt",
         "updatedAt",
@@ -229,7 +229,7 @@ describe("HTTP contract", () => {
         (parameter) => parameter.name === name,
       );
     expect(documented("groupBy")).toMatchObject({
-      schema: { type: "string", enum: ["category"] },
+      schema: { type: "string", enum: ["categoryId"] },
     });
     expect(documented("sort")).toMatchObject({
       schema: { type: "string" },

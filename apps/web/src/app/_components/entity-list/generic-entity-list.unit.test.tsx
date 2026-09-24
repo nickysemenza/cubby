@@ -250,6 +250,18 @@ describe("listPage", () => {
 });
 
 describe("GenericEntityList", () => {
+  it.each(
+    browserRoutedEntities.filter(
+      (entity) => entity !== "location" && entity !== "meal",
+    ),
+  )(
+    "compiles the %s list columns from its manifest field keys",
+    async (entity) => {
+      await renderListPage(entity, entities[entity].routes.list, []);
+      expect(await screen.findByRole("table")).toBeInTheDocument();
+    },
+  );
+
   it("keeps the primary search in a generic list request", () => {
     // Cards and Compact use the same transport parser as List. If this is
     // absent, Zod strips the typed search before the server can filter it.
@@ -365,6 +377,23 @@ describe("GenericEntityList", () => {
     expect(screen.getByText("Dinner")).toBeVisible();
     expect(screen.getByText("Cooked")).toBeVisible();
     expect(screen.getByText("$18.50")).toBeVisible();
+  });
+
+  it("table: shows an image sighting's related image from the shared preview projection", async () => {
+    const rows = [
+      {
+        id: testShortcode("imageSighting", "IMS-4K7M"),
+        assetKey: "Fixture asset",
+        displayImages: [
+          { id: "IMG-4K7M", url: "https://example.invalid/sighting.jpg" },
+        ],
+      },
+    ];
+    await renderListPage("imageSighting", "/image-sightings?view=table", rows);
+    expect(await screen.findByRole("img", { name: "Image" })).toHaveAttribute(
+      "src",
+      expect.stringContaining("sighting.jpg"),
+    );
   });
 
   it("shelf: captions each card from the declared `shelf.subtitle` fields", async () => {

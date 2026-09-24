@@ -115,7 +115,7 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   );
   await dialog.getByRole("combobox", { name: "Kind", exact: true }).click();
   await page.getByRole("option", { name: "Harvest", exact: true }).click();
-  await dialog.getByLabel("Observed", { exact: true }).fill("2026-08-20");
+  await dialog.getByLabel("Observed on", { exact: true }).fill("2026-08-20");
   await dialog.getByLabel("Harvest amount", { exact: true }).fill("A handful");
   await dialog.getByLabel("Note").fill("First harvest from this planting");
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
@@ -177,7 +177,9 @@ test("a bought seedling (transplantedOn only, no sowedOn) gets an inferred inter
   );
   // No Sowed fill — only Transplanted, the nursery-bought-plant case decision
   // #1 covers: `lifecycle.start` falls back from `sowedOn` to `transplantedOn`.
-  await dialog.getByLabel("Transplanted", { exact: true }).fill("2026-03-01");
+  await dialog
+    .getByLabel("Transplanted on", { exact: true })
+    .fill("2026-03-01");
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(dialog).not.toBeVisible();
 

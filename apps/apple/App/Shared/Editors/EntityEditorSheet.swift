@@ -126,9 +126,15 @@ struct EntityEditorSheet: View {
             ForEach(model.sections) { section in
                 let fields = section.fields.compactMap(descriptor.field).filter { renders($0) }
                 if !fields.isEmpty {
-                    Section(section.title) {
+                    if model.sections.count == 1 && section.id == "main" {
                         ForEach(fields, id: \.key) { field in
                             EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
+                        }
+                    } else {
+                        Section(section.title) {
+                            ForEach(fields, id: \.key) { field in
+                                EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
+                            }
                         }
                     }
                 }

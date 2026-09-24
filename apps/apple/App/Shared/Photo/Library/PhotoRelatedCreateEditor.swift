@@ -134,17 +134,11 @@ struct PhotoRelatedCreateEditor: View {
                             ForEach(model.sections) { section in
                                 let fields = section.fields.compactMap(descriptor.field).filter(renders)
                                 if !fields.isEmpty {
-                                    Section(section.title) {
-                                        ForEach(fields, id: \.key) { field in
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                EntityFieldControl(
-                                                    field: field, model: model, pickedTitles: $pickedTitles)
-                                                if let caption = provenanceCaption(for: field, model: model) {
-                                                    Text(caption)
-                                                        .font(.caption)
-                                                        .foregroundStyle(.secondary)
-                                                }
-                                            }
+                                    if model.sections.count == 1 && section.id == "main" {
+                                        editorFields(fields, model: model)
+                                    } else {
+                                        Section(section.title) {
+                                            editorFields(fields, model: model)
                                         }
                                     }
                                 }
@@ -201,6 +195,17 @@ struct PhotoRelatedCreateEditor: View {
 
     /// The caption under a capture-date-bound field once there's a date to attribute it to and
     /// the person hasn't overridden it — never keys off the field or entity's name (A2).
+    private func editorFields(_ fields: [FieldDescriptor], model: GenericEntityEditModel) -> some View {
+        ForEach(fields, id: \.key) { field in
+            VStack(alignment: .leading, spacing: 2) {
+                EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
+                if let caption = provenanceCaption(for: field, model: model) {
+                    Text(caption).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
     private func provenanceCaption(for field: FieldDescriptor, model: GenericEntityEditModel) -> String? {
         guard let captureDate, captureDateBoundKeys.contains(field.key), !model.isEdited(field.key)
         else { return nil }

@@ -200,7 +200,7 @@ export const dbRecipeToTopLevel = (
 
 type RecipeShallowOut = Omit<
   RecipeListItem,
-  "mealCount" | "sectionCount" | "displayImages" | "dataQuality"
+  "meals" | "sectionCount" | "displayImages" | "dataQuality"
 >;
 
 export const dbRecipeToAPIShallow: (
@@ -225,7 +225,7 @@ export const dbRecipeToListAPI = (
     ...dbRecipeToAPIShallow(rest),
     // count() returns bigint (string over the wire), so coerce — mirrors the
     // ingredient list's appearsInRecipes/recipeCount handling.
-    mealCount: Number(mealCount),
+    meals: Number(mealCount),
     sectionCount: Number(sectionCount),
     displayImages,
     dataQuality,

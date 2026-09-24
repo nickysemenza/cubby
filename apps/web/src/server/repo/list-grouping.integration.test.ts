@@ -35,7 +35,7 @@ const groupedProducts = (
   sort: Parameters<typeof productList>[2],
   pageIndex: number,
   pageSize: number,
-) => productList(ctx.db, {}, sort, { pageIndex, pageSize }, "category");
+) => productList(ctx.db, {}, sort, { pageIndex, pageSize }, "categoryId");
 async function category(name: string, sortOrder: number) {
   return createProductCategory(
     ctx.db,
@@ -105,7 +105,7 @@ describe("server list grouping", () => {
     const result = await groupedProducts(
       [
         { orderBy: "name", direction: "asc" },
-        { orderBy: "category", direction: "desc" },
+        { orderBy: "categoryId", direction: "desc" },
       ],
       0,
       3,
@@ -130,7 +130,7 @@ describe("server list grouping", () => {
       action: "list",
       entity: "product",
       filters: {},
-      groupBy: "category",
+      groupBy: "categoryId",
       pagination: { pageIndex: 0, pageSize: 1 },
     });
     expect(grouped.meta.groups).toEqual(groups(pages[0]!));
@@ -138,7 +138,7 @@ describe("server list grouping", () => {
       action: "list",
       entity: "product",
       filters: { ids: [betaProduct.id] },
-      groupBy: "category",
+      groupBy: "categoryId",
       pagination: { pageIndex: 0, pageSize: 1 },
     });
     expect(restricted.meta.groups).toBeUndefined();

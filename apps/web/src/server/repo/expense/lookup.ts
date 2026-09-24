@@ -422,7 +422,7 @@ const resolveExpenseSort = (sort: SortParams) => {
   const dirSql =
     sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
 
-  if (sort.orderBy === "project") {
+  if (sort.orderBy === "projectId") {
     const direction =
       sort.direction === "asc" ? sql`asc nulls last` : sql`desc nulls last`;
     return [
@@ -432,7 +432,7 @@ const resolveExpenseSort = (sort: SortParams) => {
     ];
   }
 
-  if (sort.orderBy === "product") {
+  if (sort.orderBy === "productId") {
     return [
       sql.raw(
         `(SELECT pr."name" FROM "Product" pr ` +
@@ -443,7 +443,7 @@ const resolveExpenseSort = (sort: SortParams) => {
 
   // Both hop expense → Purchase → Vendor. The `deletedAt IS NULL` guards on each
   // hop are what keep a soft-deleted charge from sorting under its old vendor.
-  if (sort.orderBy === "vendor") {
+  if (sort.orderBy === "purchaseId") {
     return [
       sql.raw(
         `(SELECT v."name" FROM "Purchase" pu ` +

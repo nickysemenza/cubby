@@ -79,7 +79,7 @@ describe("entity field provenance", () => {
     );
   });
 
-  it("rejects a reference field without a label", () => {
+  it("derives a reference label when no override is declared", () => {
     const declaration = {
       ...purchaseDeclaration,
       model: {
@@ -92,9 +92,11 @@ describe("entity field provenance", () => {
       },
     };
 
-    expect(() => compileEntity(declaration, 0)).toThrow(
-      /is a reference field and must declare a sentence-case label/u,
-    );
+    expect(
+      compileEntity(declaration, 0).fieldModel.fields.find(
+        (field) => field.key === "vendorId",
+      )?.label,
+    ).toBe("Vendor");
   });
 
   it("rejects an inspectable source whose relation targets another entity", () => {

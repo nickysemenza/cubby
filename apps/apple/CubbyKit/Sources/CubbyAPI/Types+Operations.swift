@@ -1794,17 +1794,17 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, lastSeenAt, updatedAt, dataQuality. Default: -lastSeenAt
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: lastSeenAt, name, updatedAt, dataQuality. Default: -lastSeenAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/sort`.
                 public var sort: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/groupBy`.
                 @frozen public enum GroupByPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case name = "name"
                     case lastSeenAt = "lastSeenAt"
+                    case name = "name"
                     case updatedAt = "updatedAt"
                 }
-                /// Group rows by one field. One of: name, lastSeenAt, updatedAt
+                /// Group rows by one field. One of: lastSeenAt, name, updatedAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/groupBy`.
                 public var groupBy: Operations.Resources_device_list.Input.Query.GroupByPayload?
@@ -1826,8 +1826,8 @@ public enum Operations {
                 ///   - dataGap:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, lastSeenAt, updatedAt, dataQuality. Default: -lastSeenAt
-                ///   - groupBy: Group rows by one field. One of: name, lastSeenAt, updatedAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: lastSeenAt, name, updatedAt, dataQuality. Default: -lastSeenAt
+                ///   - groupBy: Group rows by one field. One of: lastSeenAt, name, updatedAt
                 public init(
                     createdFrom: Swift.String? = nil,
                     createdTo: Swift.String? = nil,
@@ -3922,7 +3922,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, cost, lineKind, productQuantity, date, costType, trade, project, product, vendor, orderId, createdAt, updatedAt, dataQuality. Default: -date
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, name, cost, lineKind, productQuantity, costType, trade, projectId, productId, purchaseId, orderId, createdAt, updatedAt, dataQuality. Default: -date
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/sort`.
                 public var sort: Swift.String?
@@ -3986,7 +3986,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, cost, lineKind, productQuantity, date, costType, trade, project, product, vendor, orderId, createdAt, updatedAt, dataQuality. Default: -date
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, name, cost, lineKind, productQuantity, costType, trade, projectId, productId, purchaseId, orderId, createdAt, updatedAt, dataQuality. Default: -date
                 ///   - groupBy: Group rows by one field. One of: costType
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -23554,17 +23554,17 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, sortOrder, updatedAt, dataQuality. Default: -sortOrder
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: sortOrder, name, updatedAt, dataQuality. Default: -sortOrder
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/sort`.
                 public var sort: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/groupBy`.
                 @frozen public enum GroupByPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case name = "name"
                     case sortOrder = "sortOrder"
+                    case name = "name"
                     case updatedAt = "updatedAt"
                 }
-                /// Group rows by one field. One of: name, sortOrder, updatedAt
+                /// Group rows by one field. One of: sortOrder, name, updatedAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/groupBy`.
                 public var groupBy: Operations.Resources_productCategory_list.Input.Query.GroupByPayload?
@@ -23581,8 +23581,8 @@ public enum Operations {
                 ///   - dataGap:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, sortOrder, updatedAt, dataQuality. Default: -sortOrder
-                ///   - groupBy: Group rows by one field. One of: name, sortOrder, updatedAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: sortOrder, name, updatedAt, dataQuality. Default: -sortOrder
+                ///   - groupBy: Group rows by one field. One of: sortOrder, name, updatedAt
                 public init(
                     createdFrom: Swift.String? = nil,
                     createdTo: Swift.String? = nil,
@@ -25281,15 +25281,15 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, manufacturer, model, primaryGtin, category, fdc_id, price, notes, location, ingredient, expenseTotal, expenses, expectedQuantity, quantityVariance, purchaseDate, related:product.projects, related:product.vendors, related:product.purchases, dataQuality. Default: -createdAt
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, manufacturer, model, primaryGtin, categoryId, fdc_id, price, notes, location, ingredient, expenseTotal, expenseCount, ledgerExpectedQuantity, quantityVariance, purchaseDate, related:product.projects, related:product.vendors, related:product.purchases, dataQuality. Default: -createdAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/sort`.
                 public var sort: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/groupBy`.
                 @frozen public enum GroupByPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case category = "category"
+                    case categoryId = "categoryId"
                 }
-                /// Group rows by one field. One of: category
+                /// Group rows by one field. One of: categoryId
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/groupBy`.
                 public var groupBy: Operations.Resources_product_list.Input.Query.GroupByPayload?
@@ -25386,8 +25386,8 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, manufacturer, model, primaryGtin, category, fdc_id, price, notes, location, ingredient, expenseTotal, expenses, expectedQuantity, quantityVariance, purchaseDate, related:product.projects, related:product.vendors, related:product.purchases, dataQuality. Default: -createdAt
-                ///   - groupBy: Group rows by one field. One of: category
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, manufacturer, model, primaryGtin, categoryId, fdc_id, price, notes, location, ingredient, expenseTotal, expenseCount, ledgerExpectedQuantity, quantityVariance, purchaseDate, related:product.projects, related:product.vendors, related:product.purchases, dataQuality. Default: -createdAt
+                ///   - groupBy: Group rows by one field. One of: categoryId
                 public init(
                     createdFrom: Swift.String? = nil,
                     createdTo: Swift.String? = nil,
@@ -27632,7 +27632,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/projects/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, kind, startDate, costEstimate, createdAt, updatedAt, dataQuality. Default: -createdAt
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, kind, startDate, costEstimate, createdAt, updatedAt, dataQuality. Default: -name
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/projects/GET/query/sort`.
                 public var sort: Swift.String?
@@ -27696,7 +27696,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, kind, startDate, costEstimate, createdAt, updatedAt, dataQuality. Default: -createdAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, kind, startDate, costEstimate, createdAt, updatedAt, dataQuality. Default: -name
                 ///   - groupBy: Group rows by one field. One of: name, status, kind, startDate, costEstimate, createdAt, updatedAt
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -29283,17 +29283,17 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt, dataQuality. Default: -date
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, orderId, displayLabel, statedTotal, vendorId, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt, dataQuality. Default: -date
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/sort`.
                 public var sort: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/groupBy`.
                 @frozen public enum GroupByPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case date = "date"
                     case orderId = "orderId"
                     case displayLabel = "displayLabel"
-                    case date = "date"
                     case statedTotal = "statedTotal"
-                    case vendor = "vendor"
+                    case vendorId = "vendorId"
                     case expenseCount = "expenseCount"
                     case expenseTotal = "expenseTotal"
                     case reconciliationGap = "reconciliationGap"
@@ -29301,7 +29301,7 @@ public enum Operations {
                     case createdAt = "createdAt"
                     case updatedAt = "updatedAt"
                 }
-                /// Group rows by one field. One of: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt
+                /// Group rows by one field. One of: date, orderId, displayLabel, statedTotal, vendorId, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/groupBy`.
                 public var groupBy: Operations.Resources_purchase_list.Input.Query.GroupByPayload?
@@ -29344,8 +29344,8 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt, dataQuality. Default: -date
-                ///   - groupBy: Group rows by one field. One of: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, orderId, displayLabel, statedTotal, vendorId, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt, dataQuality. Default: -date
+                ///   - groupBy: Group rows by one field. One of: date, orderId, displayLabel, statedTotal, vendorId, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt
                 public init(
                     createdFrom: Swift.String? = nil,
                     createdTo: Swift.String? = nil,
@@ -30332,7 +30332,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, cookbook, costTotal, caloriesTotal, source, yield, tags, totalMinutes, dataQuality. Default: -createdAt
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, cookbook, costTotal, caloriesTotal, source, servings, tags, totalMinutes, dataQuality. Default: -createdAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/sort`.
                 public var sort: Swift.String?
@@ -30377,7 +30377,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, cookbook, costTotal, caloriesTotal, source, yield, tags, totalMinutes, dataQuality. Default: -createdAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, cookbook, costTotal, caloriesTotal, source, servings, tags, totalMinutes, dataQuality. Default: -createdAt
                 ///   - groupBy: Group rows by one field. One of: name
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -32104,7 +32104,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, dueDate, trade, project, subjectProduct, createdAt, updatedAt, dataQuality. Default: -createdAt
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, dueDate, trade, projectId, subjectProductId, createdAt, updatedAt, dataQuality. Default: -name
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/sort`.
                 public var sort: Swift.String?
@@ -32155,7 +32155,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, dueDate, trade, project, subjectProduct, createdAt, updatedAt, dataQuality. Default: -createdAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, dueDate, trade, projectId, subjectProductId, createdAt, updatedAt, dataQuality. Default: -name
                 ///   - groupBy: Group rows by one field. One of: status
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -35196,20 +35196,20 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt, dataQuality. Default: -spend
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: spend, name, purchaseCount, latestPurchaseDate, createdAt, updatedAt, dataQuality. Default: -spend
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/sort`.
                 public var sort: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/groupBy`.
                 @frozen public enum GroupByPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case spend = "spend"
                     case name = "name"
                     case purchaseCount = "purchaseCount"
-                    case spend = "spend"
                     case latestPurchaseDate = "latestPurchaseDate"
                     case createdAt = "createdAt"
                     case updatedAt = "updatedAt"
                 }
-                /// Group rows by one field. One of: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt
+                /// Group rows by one field. One of: spend, name, purchaseCount, latestPurchaseDate, createdAt, updatedAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/groupBy`.
                 public var groupBy: Operations.Resources_vendor_list.Input.Query.GroupByPayload?
@@ -35249,8 +35249,8 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt, dataQuality. Default: -spend
-                ///   - groupBy: Group rows by one field. One of: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: spend, name, purchaseCount, latestPurchaseDate, createdAt, updatedAt, dataQuality. Default: -spend
+                ///   - groupBy: Group rows by one field. One of: spend, name, purchaseCount, latestPurchaseDate, createdAt, updatedAt
                 public init(
                     createdFrom: Swift.String? = nil,
                     createdTo: Swift.String? = nil,
@@ -36097,7 +36097,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/wishes/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, acquiredAt, priceRange, createdAt, updatedAt, dataQuality. Default: -createdAt
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, acquiredAt, priceRange, createdAt, updatedAt, dataQuality. Default: -name
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/wishes/GET/query/sort`.
                 public var sort: Swift.String?
@@ -36131,7 +36131,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, acquiredAt, priceRange, createdAt, updatedAt, dataQuality. Default: -createdAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, acquiredAt, priceRange, createdAt, updatedAt, dataQuality. Default: -name
                 ///   - groupBy: Group rows by one field. One of: name, acquiredAt, priceRange, createdAt, updatedAt
                 public init(
                     createdFrom: Swift.String? = nil,

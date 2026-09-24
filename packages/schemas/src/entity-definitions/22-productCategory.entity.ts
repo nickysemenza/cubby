@@ -24,36 +24,7 @@ export default defineEntity({
       actionLabel: "Add product category",
     },
     icons: { phosphor: "Tag", sfSymbol: "tag", emoji: "🏷️" },
-    detail: {
-      sectionOverrides: [
-        {
-          kind: "fields",
-          id: "overview",
-          title: "Overview",
-          placement: "supporting",
-          fields: [
-            "name",
-            "aliases",
-            "description",
-            "parentId",
-            "sortOrder",
-            "feature",
-            "path",
-            "productCount",
-            "createdAt",
-            "updatedAt",
-          ],
-        },
-        {
-          kind: "relation",
-          id: "products",
-          title: "Products",
-          relation: "products",
-          filter: { descriptor: "category" },
-          columns: ["name", "manufacturer", "category", "onHandUnits"],
-        },
-      ],
-    },
+    detail: {},
     list: {
       viewOverrides: [
         "table",
@@ -111,13 +82,11 @@ export default defineEntity({
         key: "parentId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Parent category",
         reference: { entity: "productCategory" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
           list: true,
           detail: true,
-          columnIdOverride: "parentName",
           // The declared tree already shows each row under its parent.
           listHidden: true,
         },
@@ -278,7 +247,6 @@ export default defineEntity({
       {
         key: "productCount",
         kind: "number",
-        labelOverride: "Products",
         display: {
           list: true,
           detail: true,
@@ -322,33 +290,30 @@ export default defineEntity({
         display: { detail: true },
         validation: { read: z.date(), create: null, update: null },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:ProductCategoryId",
       },
       { key: "shortcode", specialized: "shortcode" },
       "name",
       {
         key: "aliases",
-        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
       },
       "description",
       { key: "parentId", reference: "productCategory" },
-      { key: "sortOrder", defaultOverride: "literal", defaultValue: 0 },
+      { key: "sortOrder", defaultValue: 0 },
       { key: "feature", specialized: "enum:feature" },
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [
@@ -377,8 +342,7 @@ export default defineEntity({
       "feature",
     ],
     sort: {
-      fields: ["name", "sortOrder", "updatedAt"],
-      defaultOverride: "sortOrder",
+      fields: ["sortOrder", "name", "updatedAt"],
       directionOverride: "asc",
     },
     intents: {

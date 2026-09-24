@@ -1025,7 +1025,7 @@ extension EntityDescriptor {
                 case "platform": ["ios", "macos"]
                 case "dataStatus": ["complete", "needs_data", "defect"]
                 case "dataGap": ["device_owner_missing", "device_stale"]
-                case "groupBy": ["name", "lastSeenAt", "updatedAt"]
+                case "groupBy": ["lastSeenAt", "name", "updatedAt"]
                 default: nil
             }
         case .expense:
@@ -1220,14 +1220,14 @@ extension EntityDescriptor {
                 case "imagePresenceFilter": ["has", "none"]
                 case "unitMappingPresenceFilter": ["has", "none"]
                 case "componentPresenceFilter": ["has", "none"]
-                case "groupBy": ["category"]
+                case "groupBy": ["categoryId"]
                 default: nil
             }
         case .productCategory:
             switch wireKey {
                 case "dataStatus": ["complete", "needs_data", "defect"]
                 case "dataGap": ["category_description", "category_feature"]
-                case "groupBy": ["name", "sortOrder", "updatedAt"]
+                case "groupBy": ["sortOrder", "name", "updatedAt"]
                 default: nil
             }
         case .project:
@@ -1263,7 +1263,7 @@ extension EntityDescriptor {
                 case "reconciliation": ["unknown", "match", "refund_adjusted", "mismatch"]
                 case "financialReconciliation": ["mismatch"]
                 case "documentPresenceFilter": ["has", "none"]
-                case "groupBy": ["orderId", "displayLabel", "date", "statedTotal", "vendor", "expenseCount", "expenseTotal", "reconciliationGap", "documentCount", "createdAt", "updatedAt"]
+                case "groupBy": ["date", "orderId", "displayLabel", "statedTotal", "vendorId", "expenseCount", "expenseTotal", "reconciliationGap", "documentCount", "createdAt", "updatedAt"]
                 default: nil
             }
         case .recipe:
@@ -1310,7 +1310,7 @@ extension EntityDescriptor {
                 case "dataGap": ["vendor_order_evidence", "vendor_logo", "vendor_website"]
                 case "latestPurchaseDatePresenceFilter": ["has", "none"]
                 case "logoPresenceFilter": ["has", "none"]
-                case "groupBy": ["name", "purchaseCount", "spend", "latestPurchaseDate", "createdAt", "updatedAt"]
+                case "groupBy": ["spend", "name", "purchaseCount", "latestPurchaseDate", "createdAt", "updatedAt"]
                 default: nil
             }
         case .vendorAccount:

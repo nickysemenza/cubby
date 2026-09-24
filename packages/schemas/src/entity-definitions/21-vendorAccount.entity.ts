@@ -48,10 +48,9 @@ export default defineEntity({
       {
         key: "vendorId",
         kind: "identifier",
-        labelOverride: "Vendor",
         reference: { entity: "vendor" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true, columnIdOverride: "vendorName" },
+        display: { list: true, detail: true },
         validation: {
           read: vendorShortcode,
           create: vendorShortcode,
@@ -61,13 +60,11 @@ export default defineEntity({
       {
         key: "ledgerPartyId",
         kind: "identifier",
-        labelOverride: "Member",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
           list: true,
           detail: true,
-          columnIdOverride: "ledgerPartyName",
         },
         validation: {
           read: ledgerPartyShortcode,
@@ -78,7 +75,6 @@ export default defineEntity({
       {
         key: "inventoryOwnerDefaultEnabled",
         kind: "boolean",
-        labelOverride: "Use as inventory owner default",
         control: { kind: "checkbox" },
         display: { detail: true },
         validation: {
@@ -185,18 +181,16 @@ export default defineEntity({
         display: { detail: true },
         validation: { read: z.date(), create: null, update: null },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:VendorAccountId",
       },
       { key: "shortcode", specialized: "shortcode" },
@@ -205,32 +199,28 @@ export default defineEntity({
       { key: "ledgerPartyId", reference: "ledgerParty" },
       {
         key: "inventoryOwnerDefaultEnabled",
-        defaultOverride: "literal",
         defaultValue: false,
       },
       {
         key: "status",
-        defaultOverride: "literal",
         defaultValue: "active",
         specialized: "enum:status",
       },
       {
         key: "browser",
-        defaultOverride: "literal",
         defaultValue: "chrome",
         specialized: "enum:browser",
       },
       {
         key: "cursor",
-        defaultOverride: "literal",
         defaultValue:
           '\'{"newestOrderAt":null,"orderIdsOnNewestDate":[],"backfillBeforeOrderAt":null,"earliestAvailableOrderAt":null}\'::jsonb',
         specialized: "json:cursor",
       },
       "lastRunAt",
       "lastSuccessAt",
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [

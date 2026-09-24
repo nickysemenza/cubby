@@ -138,8 +138,8 @@ export const viewManifest = defineViewManifest({
           id: "status",
           value: taskStatusValues.filter((status) => status !== "done"),
         },
-        { id: "project", value: [FILTER_NONE] },
-        { id: "parentTask", value: [FILTER_NONE] },
+        { id: "projectId", value: [FILTER_NONE] },
+        { id: "parentTaskId", value: [FILTER_NONE] },
       ],
     },
     {
@@ -166,7 +166,7 @@ export const viewManifest = defineViewManifest({
       description: "Spend never attributed to a project",
       // The `(none)` sentinel of the Project column's own picklist — the same
       // value a user gets by picking it by hand.
-      filters: [{ id: "project", value: [FILTER_NONE] }],
+      filters: [{ id: "projectId", value: [FILTER_NONE] }],
     },
     {
       id: "unclassified",
@@ -181,9 +181,8 @@ export const viewManifest = defineViewManifest({
       id: "unattached",
       label: "Unattached",
       description: "Expenses with no Purchase attached",
-      // The Purchase column retains the historical `vendor` id so existing
-      // vendor URLs, sorting, and mixed vendor-or-none filters keep working.
-      filters: [{ id: "vendor", value: [FILTER_NONE] }],
+      // The Purchase column keeps the vendor URL filter despite its new field ID.
+      filters: [{ id: "purchaseId", value: [FILTER_NONE] }],
     },
     {
       id: "goods-no-product",
@@ -204,7 +203,7 @@ export const viewManifest = defineViewManifest({
         { id: "lineKind", value: ["principal"] },
         { id: "lineBasis", value: ["item_line"] },
         { id: "costType", value: ["materials", "tools"] },
-        { id: "product", value: "none" },
+        { id: "productId", value: "none" },
       ],
       sort: [{ id: "cost", desc: true }],
     },
@@ -220,8 +219,8 @@ export const viewManifest = defineViewManifest({
         { id: "lineKind", value: ["principal"] },
         { id: "lineBasis", value: ["item_line"] },
         { id: "costType", value: ["materials", "tools"] },
-        { id: "product", value: "none" },
-        { id: "vendor", value: [FILTER_NONE] },
+        { id: "productId", value: "none" },
+        { id: "purchaseId", value: [FILTER_NONE] },
       ],
       sort: [{ id: "cost", desc: true }],
     },
@@ -242,7 +241,7 @@ export const viewManifest = defineViewManifest({
       // Expense in the ledger is `principal`). Restating it would imply a
       // distinction the data doesn't have.
       filters: [
-        { id: "product", value: "has" },
+        { id: "productId", value: "has" },
         { id: "productQuantity", value: "none" },
         // A planned line has no count yet by construction, not by omission —
         // and the `+N?` cue skips it for the same reason.
@@ -287,7 +286,7 @@ export const viewManifest = defineViewManifest({
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
         columnVisibility: {
-          expectedQuantity: true,
+          ledgerExpectedQuantity: true,
           quantityVariance: true,
           servingAsLocations: true,
         },
@@ -300,10 +299,10 @@ export const viewManifest = defineViewManifest({
       // The data-entry backlog behind the `+N?` cue: a receipt that proves the
       // cost but not the count leaves the expected quantity understated, and
       // nothing infers one (a nullable quantity is never read as 1).
-      filters: [{ id: "expectedQuantity", value: "unknown" }],
+      filters: [{ id: "ledgerExpectedQuantity", value: "unknown" }],
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
-        columnVisibility: { expectedQuantity: true },
+        columnVisibility: { ledgerExpectedQuantity: true },
       },
     },
     {
@@ -347,7 +346,7 @@ export const viewManifest = defineViewManifest({
       // Verified on production: all 25 kit parents leave, and every genuinely
       // unaccounted component stays.
       filters: [
-        { id: "expectedQuantity", value: "positive" },
+        { id: "ledgerExpectedQuantity", value: "positive" },
         { id: "location", value: [FILTER_NONE] },
         { id: "servingAsLocations", value: "none" },
         { id: "stockTracked", value: "none" },
@@ -362,7 +361,7 @@ export const viewManifest = defineViewManifest({
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
         columnVisibility: {
-          expectedQuantity: true,
+          ledgerExpectedQuantity: true,
           location: true,
           servingAsLocations: true,
           stockTracked: true,
@@ -385,7 +384,7 @@ export const viewManifest = defineViewManifest({
       // consumables this view exists to exclude, and doing so lands you back at
       // ~1,600 rows. When a count here looks reassuring, check `unlocated`.
       filters: [
-        { id: "expectedQuantity", value: "positive" },
+        { id: "ledgerExpectedQuantity", value: "positive" },
         { id: "location", value: [FILTER_NONE] },
         { id: "servingAsLocations", value: "none" },
         { id: "stockTracked", value: "none" },
@@ -399,12 +398,12 @@ export const viewManifest = defineViewManifest({
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
         columnVisibility: {
-          expectedQuantity: true,
+          ledgerExpectedQuantity: true,
           location: true,
           servingAsLocations: true,
           stockTracked: true,
           components: true,
-          category: true,
+          categoryId: true,
           categoryFeature: true,
         },
       },
@@ -433,7 +432,7 @@ export const viewManifest = defineViewManifest({
       // column expands to `projectPresenceFilter: "has"`, which
       // `relatedWhereConditions` already implements generically.
       filters: [
-        { id: "expectedQuantity", value: "positive" },
+        { id: "ledgerExpectedQuantity", value: "positive" },
         { id: "location", value: [FILTER_NONE] },
         { id: "servingAsLocations", value: "none" },
         { id: "stockTracked", value: "none" },
@@ -447,7 +446,7 @@ export const viewManifest = defineViewManifest({
         // registry, and a filtered column that cannot be seen reads as an
         // unexplained row count.
         columnVisibility: {
-          expectedQuantity: true,
+          ledgerExpectedQuantity: true,
           location: true,
           servingAsLocations: true,
           stockTracked: true,
@@ -476,7 +475,7 @@ export const viewManifest = defineViewManifest({
         // is what gives every component its cost basis and its units.
         columnVisibility: {
           components: true,
-          expectedQuantity: true,
+          ledgerExpectedQuantity: true,
           price: true,
         },
       },
@@ -558,7 +557,7 @@ export const viewManifest = defineViewManifest({
           price: true,
           food: true,
           unitMappingQuality: true,
-          category: true,
+          categoryId: true,
           categoryFeature: true,
         },
       },
@@ -586,7 +585,7 @@ export const viewManifest = defineViewManifest({
       // count almost certainly explains the gap), while a fully quantified
       // ledger is a genuine contradiction. Reporting the bare number would
       // flatten those into the same red row.
-      filters: [{ id: "expectedQuantity", value: "negative" }],
+      filters: [{ id: "ledgerExpectedQuantity", value: "negative" }],
       problem: {
         key: "negativeExpectedQuantity",
         title: "Exits exceed recorded acquisitions",
@@ -596,7 +595,7 @@ export const viewManifest = defineViewManifest({
       },
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
-        columnVisibility: { expectedQuantity: true },
+        columnVisibility: { ledgerExpectedQuantity: true },
       },
     },
   ],
@@ -888,7 +887,7 @@ export const viewManifest = defineViewManifest({
       id: "hide-acquired",
       label: "Hide acquired",
       description: "Only items still on the list",
-      filters: [{ id: "acquired", value: "false" }],
+      filters: [{ id: "acquiredAt", value: "false" }],
     },
   ],
 });
@@ -1039,7 +1038,7 @@ const standaloneEntityProblems = [
         { id: "costSign", value: "negative" },
         { id: "lineKind", value: ["principal"] },
         { id: "lineBasis", value: ["item_line"] },
-        { id: "product", value: "none" },
+        { id: "productId", value: "none" },
         { id: "disposalPurchasePresenceFilter", value: "has" },
       ],
       sort: [{ id: "date", desc: true }],
@@ -1061,8 +1060,8 @@ const standaloneEntityProblems = [
       filters: [
         { id: "future", value: "false" },
         { id: "costSign", value: "negative" },
-        { id: "product", value: "none" },
-        { id: "vendor", value: [FILTER_NONE] },
+        { id: "productId", value: "none" },
+        { id: "purchaseId", value: [FILTER_NONE] },
         { id: "lineKind", value: ["principal"] },
         { id: "lineBasis", value: ["item_line"] },
       ],
@@ -1128,7 +1127,7 @@ const standaloneEntityProblems = [
         { id: "inventoryMultiplicity", value: "duplicate_within_placement" },
       ],
       sort: [{ id: "name", desc: false }],
-      columnVisibility: { expectedQuantity: true, location: true },
+      columnVisibility: { ledgerExpectedQuantity: true, location: true },
     },
   }),
   defineProblem({
@@ -1148,7 +1147,7 @@ const standaloneEntityProblems = [
         { id: "ownershipReconciliation", value: "disposed_still_on_hand" },
       ],
       sort: [{ id: "updatedAt", desc: true }],
-      columnVisibility: { expectedQuantity: true, location: true },
+      columnVisibility: { ledgerExpectedQuantity: true, location: true },
     },
   }),
   defineProblem({
@@ -1167,7 +1166,7 @@ const standaloneEntityProblems = [
       filters: [{ id: "kitAccounting", value: "double_counted" }],
       sort: [{ id: "updatedAt", desc: true }],
       columnVisibility: {
-        expectedQuantity: true,
+        ledgerExpectedQuantity: true,
         location: true,
         components: true,
       },

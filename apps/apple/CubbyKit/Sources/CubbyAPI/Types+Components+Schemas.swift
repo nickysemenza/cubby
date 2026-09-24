@@ -31872,8 +31872,8 @@ extension Components {
             public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/RecipeListItem/totals`.
             public var totals: Components.Schemas.MealTotals?
-            /// - Remark: Generated from `#/components/schemas/RecipeListItem/mealCount`.
-            public var mealCount: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/RecipeListItem/meals`.
+            public var meals: Swift.Int
             /// - Remark: Generated from `#/components/schemas/RecipeListItem/sectionCount`.
             public var sectionCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/RecipeListItem/displayImages`.
@@ -31895,7 +31895,7 @@ extension Components {
             ///   - forkedFromRecipeName:
             ///   - dataQuality:
             ///   - totals:
-            ///   - mealCount:
+            ///   - meals:
             ///   - sectionCount:
             ///   - displayImages:
             public init(
@@ -31913,7 +31913,7 @@ extension Components {
                 forkedFromRecipeName: Swift.String? = nil,
                 dataQuality: Components.Schemas.DataQuality,
                 totals: Components.Schemas.MealTotals? = nil,
-                mealCount: Swift.Int,
+                meals: Swift.Int,
                 sectionCount: Swift.Int,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
@@ -31931,7 +31931,7 @@ extension Components {
                 self.forkedFromRecipeName = forkedFromRecipeName
                 self.dataQuality = dataQuality
                 self.totals = totals
-                self.mealCount = mealCount
+                self.meals = meals
                 self.sectionCount = sectionCount
                 self.displayImages = displayImages
             }
@@ -31950,7 +31950,7 @@ extension Components {
                 case forkedFromRecipeName
                 case dataQuality
                 case totals
-                case mealCount
+                case meals
                 case sectionCount
                 case displayImages
             }

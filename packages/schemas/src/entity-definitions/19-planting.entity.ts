@@ -110,7 +110,6 @@ export default defineEntity({
         key: "plantId",
         kind: "identifier",
         reference: { entity: "plant" },
-        labelOverride: "Plant",
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true },
         validation: {
@@ -142,7 +141,6 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "product" },
-        labelOverride: "Seed source",
         control: { kind: "specialized", renderer: "entity-select" },
         display: { detail: true },
         validation: {
@@ -156,7 +154,6 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "location" },
-        labelOverride: "Location",
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true },
         validation: {
@@ -170,7 +167,6 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "task" },
-        labelOverride: "Task",
         control: { kind: "specialized", renderer: "entity-select" },
         display: { detail: true },
         validation: {
@@ -226,7 +222,6 @@ export default defineEntity({
         key: "plannedWindow",
         kind: "text",
         nullable: true,
-        labelOverride: "Planned window",
         control: { kind: "text" },
         display: { detail: true },
         validation: {
@@ -239,7 +234,6 @@ export default defineEntity({
         key: "sowedOn",
         kind: "date",
         nullable: true,
-        labelOverride: "Sowed",
         control: { kind: "date" },
         display: {
           list: true,
@@ -256,7 +250,6 @@ export default defineEntity({
         key: "transplantedOn",
         kind: "date",
         nullable: true,
-        labelOverride: "Transplanted",
         control: { kind: "date" },
         display: { list: true, detail: true, format: "plainDate" },
         validation: {
@@ -269,7 +262,6 @@ export default defineEntity({
         key: "finishedOn",
         kind: "date",
         nullable: true,
-        labelOverride: "Finished",
         control: { kind: "date" },
         display: {
           list: true,
@@ -312,7 +304,6 @@ export default defineEntity({
         key: "guideSowWindow",
         kind: "text",
         nullable: true,
-        labelOverride: "Guide sow window",
         display: { detail: true },
         provenance: {
           kind: "derived",
@@ -331,7 +322,6 @@ export default defineEntity({
         key: "guideTransplantWindow",
         kind: "text",
         nullable: true,
-        labelOverride: "Guide transplant window",
         display: { detail: true },
         provenance: {
           kind: "derived",
@@ -353,7 +343,6 @@ export default defineEntity({
         key: "expectedHarvestStart",
         kind: "date",
         nullable: true,
-        labelOverride: "Expected harvest from",
         display: { list: true, format: "plainDate" },
         provenance: {
           kind: "derived",
@@ -376,7 +365,6 @@ export default defineEntity({
         key: "expectedHarvestEnd",
         kind: "date",
         nullable: true,
-        labelOverride: "Expected harvest until",
         validation: { read: plainDate.nullable(), create: null, update: null },
       },
       {
@@ -385,7 +373,6 @@ export default defineEntity({
         key: "expectedHarvest",
         kind: "text",
         nullable: true,
-        labelOverride: "Expected harvest",
         display: { detail: true },
         provenance: {
           kind: "derived",
@@ -421,18 +408,16 @@ export default defineEntity({
         kind: "timestamp",
         validation: { read: z.date(), create: null, update: null },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:PlantingId",
       },
       { key: "shortcode", specialized: "shortcode" },
@@ -444,7 +429,6 @@ export default defineEntity({
       {
         key: "status",
         specialized: "enum:status",
-        defaultOverride: "literal",
         defaultValue: "planned",
       },
       "quantity",
@@ -453,8 +437,8 @@ export default defineEntity({
       "sowedOn",
       "transplantedOn",
       "finishedOn",
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [

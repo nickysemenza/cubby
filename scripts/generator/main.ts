@@ -11,8 +11,9 @@ import {
 } from "./artifacts.ts";
 import {
   EntityDeclarationError,
-  loadEntityDeclarations,
+  loadEntityDeclarationBundle,
 } from "./entities/declarations.ts";
+import { renderOverrideComparisonArtifact } from "./entities/override-comparisons.ts";
 import type { EntityArtifacts } from "./entities/declarations.ts";
 import { renderBrowserRouteArtifacts } from "./entities/render/browser-routes.ts";
 import { renderFilterArtifacts } from "./entities/render/filters.ts";
@@ -114,10 +115,11 @@ const main = async () => {
     written.push(...artifacts);
   };
 
-  const entities = await loadEntityDeclarations();
+  const { entities, declarations } = await loadEntityDeclarationBundle();
   validateConnectedViews(entities);
   await settle([
     ...renderEntityArtifacts(entities),
+    renderOverrideComparisonArtifact(declarations, entities),
     ...renderRelationArtifacts(entities),
     ...renderKernelBindingsArtifacts(entities),
     ...renderFilterArtifacts(entities),

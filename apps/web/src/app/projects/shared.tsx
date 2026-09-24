@@ -253,6 +253,7 @@ export function expenseVendorColumn(
   helper: ColumnHelper<ExpenseOut>,
   save: (vendor: string | null, expense: ExpenseOut) => Promise<void>,
   opts?: {
+    id?: string;
     mobile?: MobileColumnMeta;
     vendorOptions?: FilterableComboboxItem[];
     /** Render the charge identity/link while retaining vendor editing/filtering. */
@@ -268,7 +269,7 @@ export function expenseVendorColumn(
   );
 
   return helper.accessor((row) => row.vendor, {
-    id: "vendor",
+    id: opts?.id ?? "vendor",
     header: opts?.asPurchase ? "Purchase" : "Vendor",
     filterFn: vendorIdFilterFn,
     meta: attachCubbyColumnMeta({
@@ -276,7 +277,7 @@ export function expenseVendorColumn(
       mobile: opts?.mobile,
       filterConfig: manifestFilterConfig(
         "expense",
-        "vendor",
+        opts?.id ?? "vendor",
         opts?.vendorOptions ? { vendor: opts.vendorOptions } : undefined,
       ),
       cellData,

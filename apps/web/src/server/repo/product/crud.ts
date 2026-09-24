@@ -248,11 +248,11 @@ const resolveProductSort = (sort: SortParams) => {
   // `expenses` is the COLUMN id; `expenseCount` is the row field. See the note
   // on the column in app/products/productlist.tsx for why the id is the half
   // that cannot move.
-  if (sort.orderBy === "expenses") {
+  if (sort.orderBy === "expenseCount") {
     return [sql`${productExpenseCountSql()} ${sql.raw(dirSql)}`];
   }
 
-  if (sort.orderBy === "expectedQuantity") {
+  if (sort.orderBy === "ledgerExpectedQuantity") {
     return [sql.raw(`${expectedQuantitySql()} ${dirSql}`)];
   }
 
@@ -294,7 +294,7 @@ const resolveProductSort = (sort: SortParams) => {
     ];
   }
 
-  if (sort.orderBy === "category")
+  if (sort.orderBy === "categoryId")
     return [
       sql`${categorySummarySql(sql`${product.categoryId}`)}::jsonb->'path' ${sql.raw(dirSql)}`,
     ];
@@ -339,7 +339,7 @@ const loadProductCategoryGroups = async (
     .groupBy(product.categoryId);
   const summaries = await loadCategorySummaries(db);
   const direction =
-    sorts.find((sort) => sort.orderBy === "category")?.direction ?? "asc";
+    sorts.find((sort) => sort.orderBy === "categoryId")?.direction ?? "asc";
   const groups: Array<{
     key: string;
     label: string;
@@ -1073,7 +1073,7 @@ export const productList = async (
   }
 
   const groups =
-    groupBy === "category" && readIntent === "page"
+    groupBy === "categoryId" && readIntent === "page"
       ? await loadProductCategoryGroups(db, whereClause, sorts)
       : null;
   const groupOrder = groups ? productCategoryGroupOrder(groups) : null;
@@ -1081,7 +1081,7 @@ export const productList = async (
     ...(groupOrder ? [groupOrder] : []),
     ...productListOrderBy(
       sorts,
-      groupBy === "category" ? undefined : groupBy,
+      groupBy === "categoryId" ? undefined : groupBy,
       filters,
     ),
   ];

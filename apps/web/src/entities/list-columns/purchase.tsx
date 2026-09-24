@@ -102,7 +102,7 @@ export const purchaseListOverride = defineListOverride<
         createCubbyColumnCollection<PurchaseOut>((add) => {
           add(
             columnHelper.accessor((row) => row.vendorName, {
-              id: "vendor",
+              id: "vendorId",
               header: "Vendor",
               meta: {
                 className: "w-48",
@@ -213,7 +213,7 @@ export const purchaseListOverride = defineListOverride<
           );
           add(
             columnHelper.display({
-              id: "financialSettlement",
+              id: "financialReconciliation",
               header: "Settlement",
               meta: {
                 provenanceWorkbenchHandled: true,

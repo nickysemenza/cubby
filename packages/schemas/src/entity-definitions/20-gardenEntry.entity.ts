@@ -34,25 +34,8 @@ export default defineEntity({
       sfSymbol: "text.badge.plus",
       emoji: "📓",
     },
-    detail: {
-      sectionOverrides: [
-        {
-          kind: "fields",
-          id: "entry",
-          title: "Entry",
-          fields: [
-            "kind",
-            "observedOn",
-            "locationId",
-            "plantings",
-            "note",
-            "harvestAmount",
-          ],
-        },
-      ],
-    },
+    detail: {},
     list: {
-      viewOverrides: ["table", "timeline"],
       timeline: { fields: ["observedOn"] },
     },
   },
@@ -61,7 +44,6 @@ export default defineEntity({
       {
         key: "locationId",
         kind: "identifier",
-        labelOverride: "Location",
         reference: { entity: "location" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true },
@@ -74,7 +56,6 @@ export default defineEntity({
       {
         key: "plantingIds",
         kind: "identifier",
-        labelOverride: "Plantings",
         reference: {
           entity: "planting",
           multiple: true,
@@ -111,7 +92,6 @@ export default defineEntity({
       {
         key: "observedOn",
         kind: "date",
-        labelOverride: "Observed",
         control: { kind: "date", initial: "today" },
         display: {
           list: true,
@@ -140,7 +120,6 @@ export default defineEntity({
         key: "harvestAmount",
         kind: "text",
         nullable: true,
-        labelOverride: "Harvest amount",
         control: { kind: "text" },
         display: { list: true, detail: true },
         validation: {
@@ -152,8 +131,6 @@ export default defineEntity({
       {
         key: "pendingImageIds",
         kind: "identifier",
-        labelOverride: "Pending image IDs",
-        readKeyOverride: null,
         reference: { entity: "image", multiple: true },
         validation: {
           read: null,
@@ -164,8 +141,6 @@ export default defineEntity({
       {
         key: "removeImageIds",
         kind: "identifier",
-        labelOverride: "Remove image IDs",
-        readKeyOverride: null,
         reference: { entity: "image", multiple: true },
         validation: {
           read: null,
@@ -176,7 +151,6 @@ export default defineEntity({
       {
         key: "imageOrder",
         kind: "text",
-        readKeyOverride: null,
         validation: {
           read: null,
           create: null,
@@ -186,7 +160,7 @@ export default defineEntity({
       {
         key: "images",
         kind: "json",
-        display: { list: true, standard: "image", columnIdOverride: "image" },
+        display: { list: true, standard: "image" },
         provenance: {
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],
@@ -214,10 +188,8 @@ export default defineEntity({
       {
         key: "plantings",
         kind: "identifier",
-        labelOverride: "Plantings",
-        readKeyOverride: "plantings",
         reference: { entity: "planting", multiple: true },
-        display: { list: true, detail: true, columnIdOverride: "plantings" },
+        display: { list: true, detail: true },
         validation: {
           read: z.array(z.object({ id: plantingShortcode, name: z.string() })),
           create: null,
@@ -247,18 +219,16 @@ export default defineEntity({
         kind: "timestamp",
         validation: { read: z.date(), create: null, update: null },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:GardenEntryId",
       },
       { key: "shortcode", specialized: "shortcode" },
@@ -266,14 +236,13 @@ export default defineEntity({
       {
         key: "kind",
         specialized: "enum:kind",
-        defaultOverride: "literal",
         defaultValue: "note",
       },
       "observedOn",
       "note",
       "harvestAmount",
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [
@@ -307,7 +276,6 @@ export default defineEntity({
     ],
     sort: {
       fields: ["observedOn", "createdAt", "updatedAt", "kind"],
-      defaultOverride: "observedOn",
     },
     intents: {
       fields: {

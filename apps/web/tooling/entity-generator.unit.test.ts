@@ -1260,7 +1260,7 @@ describe("typed entity compiler", () => {
         },
       ])[0]?.fieldModel.fields[0]?.display.listOrder;
     expect(withListOrder(2)).toBe(2);
-    expect(withListOrder(undefined)).toBeNull();
+    expect(withListOrder(undefined)).toBe(0);
     expect(() => withListOrder(-1)).toThrow("Too small");
     expect(() => withListOrder(1.5)).toThrow("expected int");
   });

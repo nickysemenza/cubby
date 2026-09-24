@@ -51,7 +51,7 @@ describe("resource list query", () => {
   it("maps 1-based pages and a sort stack to existing list inputs", () => {
     expect(
       decode(
-        "page=2&pageSize=25&sort=name,-createdAt&groupBy=category&nameFilter=soup",
+        "page=2&pageSize=25&sort=name,-createdAt&groupBy=categoryId&nameFilter=soup",
       ),
     ).toEqual({
       filters: { nameFilter: "soup" },
@@ -60,7 +60,7 @@ describe("resource list query", () => {
         { orderBy: "name", direction: "asc" },
         { orderBy: "createdAt", direction: "desc" },
       ],
-      groupBy: "category",
+      groupBy: "categoryId",
     });
     expect(decode("pageSize=2")).toEqual({
       filters: {},
@@ -156,9 +156,9 @@ describe("resource list query", () => {
 
   describe("with an entity sort roster", () => {
     const roster = {
-      fields: ["name", "createdAt", "category"],
+      fields: ["name", "createdAt", "categoryId"],
       default: "createdAt",
-      groupable: ["category"],
+      groupable: ["categoryId"],
     } as const;
     const rostered = resourceListQuery(
       z.object({ nameFilter: z.string().optional() }),
@@ -169,8 +169,10 @@ describe("resource list query", () => {
 
     it("accepts sortable fields in either direction and a groupable field", () => {
       expect(
-        rostered.parse(asRouterQuery("sort=name,-createdAt&groupBy=category")),
-      ).toEqual({ sort: "name,-createdAt", groupBy: "category" });
+        rostered.parse(
+          asRouterQuery("sort=name,-createdAt&groupBy=categoryId"),
+        ),
+      ).toEqual({ sort: "name,-createdAt", groupBy: "categoryId" });
     });
 
     it("rejects an unsupported sort field by name on the sort path", () => {
@@ -178,7 +180,7 @@ describe("resource list query", () => {
         expect.objectContaining({
           path: ["sort"],
           message:
-            'Unsupported sort field "bogus"; expected one of name, createdAt, category',
+            'Unsupported sort field "bogus"; expected one of name, createdAt, categoryId',
         }),
       ]);
       expect(issuesOf("sort=name,bogus")).toEqual([
@@ -200,7 +202,7 @@ describe("resource list query", () => {
     it("treats an empty groupable set as every sortable field, like the kernel", () => {
       const open = { ...roster, groupable: [] };
       expect(groupableFieldsOf(open)).toEqual(roster.fields);
-      expect(groupableFieldsOf(roster)).toEqual(["category"]);
+      expect(groupableFieldsOf(roster)).toEqual(["categoryId"]);
       const schema = resourceListQuery(z.object({}), open);
       expect(schema.parse(asRouterQuery("groupBy=name"))).toEqual({
         groupBy: "name",
@@ -211,10 +213,10 @@ describe("resource list query", () => {
       if (!(rostered instanceof z.ZodObject))
         throw new Error("resource query is an object schema");
       expect(rostered.shape.sort?.description).toContain(
-        "Fields: name, createdAt, category. Default: -createdAt",
+        "Fields: name, createdAt, categoryId. Default: -createdAt",
       );
       expect(rostered.shape.groupBy?.description).toBe(
-        "Group rows by one field. One of: category",
+        "Group rows by one field. One of: categoryId",
       );
     });
   });

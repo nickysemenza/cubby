@@ -2,7 +2,9 @@ import {
   isSlotListView,
   listViewId,
 } from "@cubby/schemas/entity-definitions/definition";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { entityManifest } from "@cubby/schemas/entity-manifest";
 import {
   type EntityListView,
   entitySummary,
@@ -19,10 +21,17 @@ import {
 import type { ReactNode } from "react";
 import { z } from "zod";
 
+import {
+  createImageColumn,
+  hasDisplayImages,
+} from "~/app/_components/data-table/columnHelpers";
 import { DataTablePagination } from "~/app/_components/data-table/data-table-pagination";
 import { DataTableToolbar } from "~/app/_components/data-table/data-table-toolbar";
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import { identityListConfig } from "~/app/_components/entity-list/identity-list-config";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useDeferredReferenceFilterOptions } from "~/app/_components/hooks/useDeferredReferenceFilterOptions";
@@ -210,9 +219,31 @@ function useListColumns(
     const declared = createEntityDisplayColumns(entity, helper, overrides, {
       onSaveField,
     });
-    return compose
+    const composed = compose
       ? assertSpecialistColumnProvenance(entity, declared, compose(declared))
       : declared;
+    const policy = entityManifest[entity].images;
+    if (policy.storage === false && policy.displaySources.length === 0)
+      return composed;
+    const imageId = entityFieldModels[entity].fields.some(
+      (field) => field.key === "images" && field.display.list,
+    )
+      ? "images"
+      : "image";
+    const hasImageColumn = composed
+      .visit((column) => column.id === "image" || column.id === "images")
+      .some(Boolean);
+    if (hasImageColumn) return composed;
+    return createCubbyColumnCollection<BaseListRow>((add) => {
+      add(
+        createImageColumn(helper, {
+          entity,
+          id: imageId,
+          getImages: (row) => (hasDisplayImages(row) ? row.displayImages : []),
+        }),
+      );
+      composed.visit(add);
+    });
   }, [entity, helper, overrides, compose, onSaveField]);
   // The generic column collection is kept separate from the identity adapter
   // so client/custom-source lists can still share the same column compiler.

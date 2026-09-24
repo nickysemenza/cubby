@@ -90,7 +90,7 @@ function buildTaskColumns() {
     createCubbyColumnCollection<TaskRow>((add) => {
       add(
         helper.display({
-          id: "project",
+          id: "projectId",
           cell: ({ row }) => (
             <span>{row.original.projectName ?? "No project"}</span>
           ),
@@ -98,13 +98,13 @@ function buildTaskColumns() {
       );
       add(
         helper.display({
-          id: "subjectProduct",
+          id: "subjectProductId",
           cell: ({ row }) => <span>{row.original.subjectProductName}</span>,
         }),
       );
       add(
         helper.display({
-          id: "parentTask",
+          id: "parentTaskId",
           cell: ({ row }) => <span>{row.original.parentTaskName}</span>,
         }),
       );
@@ -144,9 +144,9 @@ describe("task list display columns", () => {
     const ids = buildTaskColumnMeta().map((d) => d.id);
     expect(ids).toEqual([
       "status",
-      "project",
-      "subjectProduct",
-      "parentTask",
+      "projectId",
+      "subjectProductId",
+      "parentTaskId",
       "dueDate",
       "dueEndDate",
       "trade",
@@ -161,13 +161,13 @@ describe("task list display columns", () => {
     );
     expect(byId).toEqual({
       status: "Status",
-      project: "Project",
-      subjectProduct: "For",
-      parentTask: "Parent Task",
-      dueDate: "Due",
-      dueEndDate: "Due end",
+      projectId: "Project",
+      subjectProductId: "Subject product",
+      parentTaskId: "Parent task",
+      dueDate: "Due date",
+      dueEndDate: "Due end date",
       trade: "Trade",
-      sortOrder: "Sort Order",
+      sortOrder: "Sort order",
       dataQuality: "Data quality",
     });
   });
@@ -178,12 +178,12 @@ describe("task list display columns", () => {
     );
     // In `generatedEntitySort.task.fields`.
     expect(byId.status).toBe(true);
-    expect(byId.project).toBe(true);
-    expect(byId.subjectProduct).toBe(true);
+    expect(byId.projectId).toBe(true);
+    expect(byId.subjectProductId).toBe(true);
     expect(byId.dueDate).toBe(true);
     expect(byId.trade).toBe(true);
     // Not in the roster.
-    expect(byId.parentTask).toBe(false);
+    expect(byId.parentTaskId).toBe(false);
     expect(byId.dueEndDate).toBe(false);
     expect(byId.sortOrder).toBe(false);
   });
@@ -230,7 +230,7 @@ describe("task list display columns", () => {
   });
 
   it("renders the project override's own cell against the row", () => {
-    render(<>{renderTaskCell("project", TASK_ROW)}</>);
+    render(<>{renderTaskCell("projectId", TASK_ROW)}</>);
     expect(screen.getByText("Kitchen remodel")).toBeVisible();
   });
 
@@ -245,19 +245,19 @@ describe("task list display columns", () => {
         createCubbyColumnCollection((add) => {
           add(
             helper.display({
-              id: "project",
+              id: "projectId",
               cell: () => null,
             }),
           );
           add(
             helper.display({
-              id: "subjectProduct",
+              id: "subjectProductId",
               cell: () => null,
             }),
           );
           add(
             helper.display({
-              id: "parentTask",
+              id: "parentTaskId",
               cell: () => null,
             }),
           );

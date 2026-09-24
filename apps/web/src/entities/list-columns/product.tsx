@@ -315,6 +315,7 @@ export const productListOverride = defineListOverride<
         createCubbyColumnCollection<ProductTreeRow>((add) => {
           add(
             columnHelper.accessor("category", {
+              id: "categoryId",
               header: "Classification",
               meta: {
                 className: "w-48",
@@ -388,7 +389,6 @@ export const productListOverride = defineListOverride<
           );
           add(
             createExternalLinkColumn(columnHelper, "fdc_id", "/usda/$id", {
-              header: "FDC",
               className: "w-32",
               editable: {
                 onSave: async (newValue, product) => {
@@ -542,7 +542,7 @@ export const productListOverride = defineListOverride<
           );
           add(
             columnHelper.accessor((row) => row.componentCount, {
-              id: "components",
+              id: "componentCount",
               header: "Components",
               meta: {
                 numeric: true,
@@ -556,7 +556,7 @@ export const productListOverride = defineListOverride<
             columnHelper.accessor(
               (row) => row.quantityLedger.expectedQuantity,
               {
-                id: "expectedQuantity",
+                id: "ledgerExpectedQuantity",
                 header: "Expected",
                 meta: {
                   numeric: true,
@@ -659,7 +659,7 @@ export const productListOverride = defineListOverride<
           );
           add(
             columnHelper.accessor("expenseCount", {
-              id: "expenses",
+              id: "expenseCount",
               header: "Expenses",
               // The column id is `expenses` while the row field is
               // `expenseCount`: the id is persisted per-user in the
@@ -700,7 +700,7 @@ export const productListOverride = defineListOverride<
           // presence flags, a derived food projection, a second projection
           // hosting a filter control), so they stay explicit `add()`s per
           // docs/entities.md's third bucket.
-          place("category");
+          place("categoryId");
           add(
             createSingleEntityInlineLinkColumn(
               columnHelper,
@@ -869,8 +869,8 @@ export const productListOverride = defineListOverride<
           );
           place("expenseTotal");
           place("servingAsLocations");
-          place("components");
-          place("expectedQuantity");
+          place("componentCount");
+          place("ledgerExpectedQuantity");
           place("quantityVariance");
           place("purchaseDate");
           add(
@@ -925,7 +925,7 @@ export const productListOverride = defineListOverride<
             ),
           );
           place("tags");
-          place("expenses");
+          place("expenseCount");
           rest();
         }),
       [createInventoryMutation, updateInventoryMutation, updateProductMutation],

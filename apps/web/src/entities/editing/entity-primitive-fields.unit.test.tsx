@@ -136,24 +136,16 @@ function RepeatedCheckboxes() {
   );
 }
 
-function IngredientSections() {
+function IngredientFlatFields() {
   const form = useForm({ defaultValues: { name: "", usuallyOnHand: false } });
   return (
     <FormProvider {...form}>
-      <section aria-label="Identity fields">
-        <EntityPrimitiveFields
-          entity="ingredient"
-          mode="create"
-          section="identity"
-        />
-      </section>
-      <section aria-label="Planning fields">
-        <EntityPrimitiveFields
-          entity="ingredient"
-          mode="create"
-          section="main"
-        />
-      </section>
+      <EntityPrimitiveFields
+        entity="ingredient"
+        mode="create"
+        section="main"
+        include={["name", "usuallyOnHand"]}
+      />
     </FormProvider>
   );
 }
@@ -283,20 +275,20 @@ describe("EntityPrimitiveFields", () => {
     harness.dispose();
   });
 
-  it("selects declared sections without duplicating controls or guessing specialized renderers", () => {
-    render(<IngredientSections />);
+  it("renders ingredient controls once in a flat editor", () => {
+    render(<IngredientFlatFields />);
     expect(screen.getAllByRole("textbox", { name: "Name" })).toHaveLength(1);
     expect(
       screen.getAllByRole("checkbox", { name: "Usually on hand" }),
     ).toHaveLength(1);
     expect(
-      screen.getByRole("region", { name: "Identity fields" }),
-    ).toContainElement(screen.getByRole("textbox", { name: "Name" }));
+      screen.getByRole("textbox", { name: "Name" }).closest("section"),
+    ).toBeNull();
     expect(
-      screen.getByRole("region", { name: "Planning fields" }),
-    ).toContainElement(
-      screen.getByRole("checkbox", { name: "Usually on hand" }),
-    );
+      screen
+        .getByRole("checkbox", { name: "Usually on hand" })
+        .closest("section"),
+    ).toBeNull();
     expect(screen.queryByText("Aliases")).not.toBeInTheDocument();
   });
 
@@ -705,7 +697,7 @@ describe("EntityIntentFields", () => {
 
     expect(screen.getByLabelText("Label")).toBeInTheDocument();
     expect(screen.getByLabelText("Vendor")).toBeInTheDocument();
-    expect(screen.getByLabelText("Member")).toBeInTheDocument();
+    expect(screen.getByLabelText("Ledger party")).toBeInTheDocument();
     expect(screen.getByLabelText("Browser")).toBeInTheDocument();
   });
 
@@ -714,10 +706,10 @@ describe("EntityIntentFields", () => {
 
     const details = screen.getByRole("region", { name: "Details" });
     expect(details).toContainElement(
-      screen.getByRole("textbox", { name: "Order URL" }),
+      screen.getByRole("textbox", { name: "Order URL template" }),
     );
     expect(details).toContainElement(
-      screen.getByRole("spinbutton", { name: "Return window" }),
+      screen.getByRole("spinbutton", { name: "Return window days" }),
     );
     // `name`/`notes` have no declared `control.section` (the flat `main`
     // bucket) and render with no section wrapper at all — not even one of

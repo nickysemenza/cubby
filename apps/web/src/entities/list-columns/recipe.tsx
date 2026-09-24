@@ -209,8 +209,7 @@ export const recipeListOverride = defineListOverride<
         // Accessor (not display) so it sorts server-side on `servings`.
         add(
           columnHelper.accessor((row) => row.servings ?? undefined, {
-            id: "yield",
-            header: "Yield",
+            id: "servings",
             meta: attachCubbyColumnMeta({
               numeric: true,
               className: "w-24",
@@ -333,7 +332,7 @@ export const recipeListOverride = defineListOverride<
         );
         // A live MealRecipe under a soft-deleted Meal doesn't count.
         add(
-          columnHelper.accessor("mealCount", {
+          columnHelper.accessor("meals", {
             id: "meals",
             header: "Meals",
             meta: {

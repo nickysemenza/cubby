@@ -28,37 +28,13 @@ export default defineEntity({
         "A device registers itself the first time its companion app connects.",
     },
     icons: { phosphor: "DeviceMobile", sfSymbol: "iphone", emoji: "📱" },
-    detail: {
-      sectionOverrides: [
-        {
-          kind: "fields",
-          id: "overview",
-          title: "Overview",
-          placement: "supporting",
-          fields: [
-            "name",
-            "platform",
-            "appVersion",
-            "osVersion",
-            "lastSeenAt",
-            "automaticWork",
-            "remotePaused",
-            "ledgerPartyId",
-            "productId",
-            "installationId",
-            "createdAt",
-            "updatedAt",
-          ],
-        },
-      ],
-    },
+    detail: {},
   },
   model: {
     fields: [
       {
         key: "installationId",
         kind: "text",
-        labelOverride: "Installation ID",
         control: { kind: "text", placeholder: "Installation identifier" },
         display: { detail: true },
         validation: {
@@ -99,7 +75,6 @@ export default defineEntity({
         key: "appVersion",
         kind: "text",
         nullable: true,
-        labelOverride: "App version",
         display: { detail: true },
         validation: {
           read: z.string().nullable(),
@@ -111,7 +86,6 @@ export default defineEntity({
         key: "osVersion",
         kind: "text",
         nullable: true,
-        labelOverride: "OS version",
         display: { detail: true },
         validation: {
           read: z.string().nullable(),
@@ -123,7 +97,6 @@ export default defineEntity({
         key: "lastSeenAt",
         kind: "timestamp",
         nullable: true,
-        labelOverride: "Last seen",
         display: { list: true, detail: true, format: "timestamp" },
         validation: {
           read: z.date().nullable(),
@@ -134,7 +107,6 @@ export default defineEntity({
       {
         key: "automaticWork",
         kind: "boolean",
-        labelOverride: "Automatic work",
         control: { kind: "checkbox" },
         display: { list: true, detail: true },
         validation: {
@@ -146,7 +118,6 @@ export default defineEntity({
       {
         key: "remotePaused",
         kind: "boolean",
-        labelOverride: "Remotely paused",
         control: { kind: "checkbox" },
         display: { list: true, detail: true },
         validation: {
@@ -159,13 +130,11 @@ export default defineEntity({
         key: "ledgerPartyId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Owner",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
           list: true,
           detail: true,
-          columnIdOverride: "ledgerPartyName",
         },
         validation: {
           read: ledgerPartyShortcode.nullable(),
@@ -177,10 +146,9 @@ export default defineEntity({
         key: "productId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Hardware",
         reference: { entity: "product" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { detail: true, columnIdOverride: "productName" },
+        display: { detail: true },
         validation: {
           read: productShortcode.nullable(),
           create: productShortcode.nullable().optional(),
@@ -237,18 +205,16 @@ export default defineEntity({
         display: { detail: true },
         validation: { read: z.date(), create: null, update: null },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:DeviceId",
       },
       { key: "shortcode", specialized: "shortcode" },
@@ -258,12 +224,12 @@ export default defineEntity({
       "appVersion",
       "osVersion",
       "lastSeenAt",
-      { key: "automaticWork", defaultOverride: "literal", defaultValue: true },
-      { key: "remotePaused", defaultOverride: "literal", defaultValue: false },
+      { key: "automaticWork", defaultValue: true },
+      { key: "remotePaused", defaultValue: false },
       { key: "ledgerPartyId", reference: "ledgerParty" },
       { key: "productId", reference: "product" },
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [
@@ -299,8 +265,7 @@ export default defineEntity({
       "productId",
     ],
     sort: {
-      fields: ["name", "lastSeenAt", "updatedAt"],
-      defaultOverride: "lastSeenAt",
+      fields: ["lastSeenAt", "name", "updatedAt"],
     },
     intents: {
       fields: {

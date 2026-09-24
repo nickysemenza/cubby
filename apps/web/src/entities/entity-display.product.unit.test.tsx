@@ -113,7 +113,7 @@ function buildProductColumns() {
     createCubbyColumnCollection<ProductRow>((add) => {
       add(
         helper.display({
-          id: "category",
+          id: "categoryId",
           cell: ({ row }) => <span>{row.original.category?.name}</span>,
         }),
       );
@@ -161,10 +161,6 @@ function buildProductColumns() {
       );
       add(
         helper.display({
-          // A header FUNCTION, not a plain string — the one shape
-          // `createEntityDisplayColumns` lets through unreplaced by the
-          // declared label (which stays "Valuation price", for the detail
-          // page's sake). Matches productlist.tsx's own override exactly.
           id: "price",
           header: () => "Price",
           cell: ({ row }) => <span>{row.original.price}</span>,
@@ -184,13 +180,13 @@ function buildProductColumns() {
       );
       add(
         helper.display({
-          id: "components",
+          id: "componentCount",
           cell: ({ row }) => <span>{row.original.componentCount}</span>,
         }),
       );
       add(
         helper.display({
-          id: "expectedQuantity",
+          id: "ledgerExpectedQuantity",
           cell: ({ row }) => <span>{row.original.expectedQuantity}</span>,
         }),
       );
@@ -214,7 +210,7 @@ function buildProductColumns() {
       );
       add(
         helper.display({
-          id: "expenses",
+          id: "expenseCount",
           enableSorting: true,
           cell: ({ row }) => <span>{row.original.expenseCount}</span>,
         }),
@@ -280,25 +276,25 @@ describe("product list display columns", () => {
   it("builds exactly the declared columns, in listOrder", () => {
     const ids = buildProductColumnMeta().map((d) => d.id);
     expect(ids).toEqual([
-      "category",
-      "manufacturer",
-      "primaryGtin",
+      "tags",
       "fdc_id",
+      "manufacturer",
+      "dataQuality",
       "model",
       "notes",
-      "stockTracked",
-      "dataQuality",
-      "externalIds",
+      "categoryId",
       "price",
+      "externalIds",
+      "usdaUnavailable",
+      "stockTracked",
+      "primaryGtin",
       "expenseTotal",
+      "componentCount",
       "servingAsLocations",
-      "components",
-      "expectedQuantity",
+      "ledgerExpectedQuantity",
       "quantityVariance",
       "purchaseDate",
-      "tags",
-      "expenses",
-      "usdaUnavailable",
+      "expenseCount",
       "onHandUnits",
     ]);
   });
@@ -308,36 +304,26 @@ describe("product list display columns", () => {
       buildProductColumnMeta().map((d) => [d.id, d.header]),
     );
     expect(byId).toEqual({
-      category: "Classification",
+      categoryId: "Category",
       manufacturer: "Manufacturer",
-      // Was "UPC" — the list column has always headed this "Barcode / ISBN".
-      primaryGtin: "Barcode / ISBN",
-      // Was "USDA FDC ID" — the list column has always headed this "FDC".
-      fdc_id: "FDC",
+      primaryGtin: "Primary GTIN",
+      fdc_id: "FDC ID",
       model: "Model",
       notes: "Notes",
-      // Was "Stock Tracked" (the key-derived default) — the list column has
-      // always headed this "Stock tracking".
-      stockTracked: "Stock tracking",
-      // Was "Data Quality" (the key-derived default, different case) — the
-      // list column has always headed this "Data quality".
+      stockTracked: "Stock tracked",
       dataQuality: "Data quality",
       externalIds: "External IDs",
-      // The declared label is "Valuation price" (the detail page's own
-      // label for this field), but the list has always headed this "Price"
-      // — the override opts out via a header FUNCTION, the one shape this
-      // substitution leaves alone.
       price: "Price",
-      expenseTotal: "Net basis",
-      servingAsLocations: "In service",
-      components: "Components",
-      expectedQuantity: "Expected",
-      quantityVariance: "Variance",
+      expenseTotal: "Expense total",
+      servingAsLocations: "Serving as locations",
+      componentCount: "Component count",
+      ledgerExpectedQuantity: "Ledger expected quantity",
+      quantityVariance: "Quantity variance",
       purchaseDate: "Purchase date",
       tags: "Tags",
-      expenses: "Expenses",
-      usdaUnavailable: "Usda Unavailable",
-      onHandUnits: "On Hand Units",
+      expenseCount: "Expense count",
+      usdaUnavailable: "USDA unavailable",
+      onHandUnits: "On hand units",
     });
   });
 
@@ -346,7 +332,7 @@ describe("product list display columns", () => {
       buildProductColumnMeta().map((d) => [d.id, d.enableSorting]),
     );
     // In `generatedEntitySort.product.fields`.
-    expect(byId.category).toBe(true);
+    expect(byId.categoryId).toBe(true);
     expect(byId.manufacturer).toBe(true);
     expect(byId.primaryGtin).toBe(true);
     expect(byId.fdc_id).toBe(true);
@@ -354,19 +340,19 @@ describe("product list display columns", () => {
     expect(byId.notes).toBe(true);
     expect(byId.price).toBe(true);
     expect(byId.expenseTotal).toBe(true);
-    expect(byId.expectedQuantity).toBe(true);
+    expect(byId.ledgerExpectedQuantity).toBe(true);
     expect(byId.quantityVariance).toBe(true);
     expect(byId.purchaseDate).toBe(true);
     // The override's own `enableSorting: true` survives even though
-    // "expenses" is also in the roster (belt-and-suspenders in the page).
-    expect(byId.expenses).toBe(true);
+    // "expenseCount" is also in the roster (belt-and-suspenders in the page).
+    expect(byId.expenseCount).toBe(true);
     // Not in the roster.
     expect(byId.stockTracked).toBe(false);
     // The manifest renderer's column sorts by score; its id is the sort field.
     expect(byId.dataQuality).toBe(true);
     expect(byId.externalIds).toBe(false);
     expect(byId.servingAsLocations).toBe(false);
-    expect(byId.components).toBe(false);
+    expect(byId.componentCount).toBe(false);
     expect(byId.tags).toBe(false);
     expect(byId.usdaUnavailable).toBe(false);
     expect(byId.onHandUnits).toBe(false);
@@ -387,12 +373,12 @@ describe("product list display columns", () => {
   });
 
   it("renders the category override's own cell against the row", () => {
-    render(<>{renderProductCell("category", PRODUCT_ROW)}</>);
+    render(<>{renderProductCell("categoryId", PRODUCT_ROW)}</>);
     expect(screen.getByText("Tools")).toBeVisible();
   });
 
   it("renders the expectedQuantity override (the ledgerExpectedQuantity alias) against the row", () => {
-    render(<>{renderProductCell("expectedQuantity", PRODUCT_ROW)}</>);
+    render(<>{renderProductCell("ledgerExpectedQuantity", PRODUCT_ROW)}</>);
     expect(screen.getByText("3")).toBeVisible();
   });
 
@@ -406,7 +392,7 @@ describe("product list display columns", () => {
         helper,
         createCubbyColumnCollection((add) => {
           for (const id of [
-            "category",
+            "categoryId",
             "manufacturer",
             "primaryGtin",
             "fdc_id",
@@ -417,12 +403,12 @@ describe("product list display columns", () => {
             "price",
             "expenseTotal",
             "servingAsLocations",
-            "components",
-            "expectedQuantity",
+            "componentCount",
+            "ledgerExpectedQuantity",
             "quantityVariance",
             "purchaseDate",
             "tags",
-            "expenses",
+            "expenseCount",
           ]) {
             add(helper.display({ id, cell: () => null }));
           }

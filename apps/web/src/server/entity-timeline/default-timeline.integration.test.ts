@@ -110,7 +110,7 @@ describe("default entity timeline", () => {
     expect(desc.groups[1]!.events).toEqual([
       expect.objectContaining({
         kind: "field:dueDate",
-        detail: "Due",
+        detail: "Due date",
         link: { entity: "task", id: second },
       }),
     ]);

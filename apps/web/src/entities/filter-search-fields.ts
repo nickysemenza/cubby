@@ -41,14 +41,17 @@ export const problemFilterSemantics = {
       nullable: { field: "categoryPresenceFilter", label: "classification" },
     },
     {
-      columnId: "category",
+      columnId: "categoryId",
+      urlKey: "category",
       field: "categoryFilter",
       kind: "idMulti",
       brand: (value) => parseEntityId("productCategory", value),
       nullable: { field: "categoryPresenceFilter", label: "classification" },
     },
     {
-      columnId: "expectedQuantity",
+      columnId: "ledgerExpectedQuantity",
+      urlKey: "expectedQuantity",
+      field: "expectedQuantity",
       kind: "range",
       expand: (value) =>
         value === "negative" ? { expectedQuantityMax: -1 } : {},
@@ -149,9 +152,15 @@ export const problemFilterSemantics = {
     { columnId: "future", kind: "boolean" },
     { columnId: "costSign", kind: "select" },
     { columnId: "dateRelative", kind: "select" },
-    { columnId: "product", field: "productPresenceFilter", kind: "presence" },
     {
-      columnId: "vendor",
+      columnId: "productId",
+      urlKey: "product",
+      field: "productPresenceFilter",
+      kind: "presence",
+    },
+    {
+      columnId: "purchaseId",
+      urlKey: "vendor",
       field: "vendorId",
       kind: "idMulti",
       brand: (value) => parseEntityId("vendor", value),
@@ -199,7 +208,8 @@ export const problemFilterSemantics = {
     { columnId: "dueRelative", kind: "select" },
     { columnId: "completion", kind: "select" },
     {
-      columnId: "parentTask",
+      columnId: "parentTaskId",
+      urlKey: "parentTask",
       field: "parentTaskId",
       kind: "idMulti",
       brand: (value) => parseEntityId("task", value),
