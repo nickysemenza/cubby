@@ -32,25 +32,7 @@ export default defineEntity({
       description: "Search for a food to pull in its nutrition details.",
     },
     icons: { phosphor: "BowlFood", sfSymbol: "leaf.fill", emoji: "🍎" },
-    detail: {
-      sectionOverrides: [
-        {
-          kind: "fields",
-          id: "overview",
-          title: "Overview",
-          fields: [
-            "fdc_id",
-            "brandedFoodInfo",
-            "foodInfo",
-            "legacyFoodInfo",
-            "nutritionInfo",
-            "portionInfoRaw",
-            "inferredUnitMappings",
-            "linkedProducts",
-          ],
-        },
-      ],
-    },
+    detail: {},
     list: {
       primarySearch: {
         key: "nameFilter",
@@ -63,7 +45,6 @@ export default defineEntity({
       {
         key: "fdc_id",
         kind: "identifier",
-        labelOverride: "FDC ID",
         display: { list: true, detail: true },
         provenance: {
           kind: "derived",
@@ -90,7 +71,6 @@ export default defineEntity({
         // `description` sort) can read it without knowing the JSON shape.
         key: "description",
         kind: "text",
-        labelOverride: "Description",
         validation: {
           read: z.string(),
           create: null,
@@ -101,7 +81,6 @@ export default defineEntity({
         key: "brandedFoodInfo",
         kind: "json",
         nullable: true,
-        labelOverride: "Branded food information",
         display: { detail: true },
         provenance: {
           kind: "derived",
@@ -128,7 +107,6 @@ export default defineEntity({
       {
         key: "foodInfo",
         kind: "json",
-        labelOverride: "Food information",
         display: { list: true, detail: true },
         provenance: {
           kind: "derived",
@@ -153,7 +131,6 @@ export default defineEntity({
         key: "legacyFoodInfo",
         kind: "json",
         nullable: true,
-        labelOverride: "Legacy food information",
         display: { detail: true },
         provenance: {
           kind: "derived",
@@ -180,7 +157,6 @@ export default defineEntity({
       {
         key: "nutritionInfo",
         kind: "json",
-        labelOverride: "Nutrition",
         display: { detail: true },
         provenance: {
           kind: "derived",
@@ -204,7 +180,6 @@ export default defineEntity({
       {
         key: "portionInfoRaw",
         kind: "json",
-        labelOverride: "Portions",
         display: { detail: true },
         provenance: {
           kind: "derived",
@@ -228,7 +203,6 @@ export default defineEntity({
       {
         key: "inferredUnitMappings",
         kind: "json",
-        labelOverride: "Inferred unit mappings",
         display: { detail: true },
         provenance: {
           kind: "derived",
@@ -252,7 +226,6 @@ export default defineEntity({
       {
         key: "linkedProducts",
         kind: "json",
-        labelOverride: "Linked products",
         reference: { entity: "product", multiple: true },
         display: { list: true, detail: true },
         explanation: {

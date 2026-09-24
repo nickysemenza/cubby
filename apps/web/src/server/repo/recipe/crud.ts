@@ -524,7 +524,7 @@ export const recipeList = async (
       ];
     if (s.orderBy === "source")
       return [dir(recipe.SourceType), dir(recipe.SourceData)];
-    if (s.orderBy === "yield") return [dir(recipe.servings)];
+    if (s.orderBy === "servings") return [dir(recipe.servings)];
     if (s.orderBy === "tags")
       return [
         isAsc

@@ -54,29 +54,7 @@ export default defineEntity({
         transactions:
           "The settlement slot renders the transactions that settle this expense.",
       },
-      sectionOverrides: [
-        {
-          kind: "fields",
-          id: "overview",
-          title: "Overview",
-          fields: [
-            "name",
-            "cost",
-            "date",
-            "lineKind",
-            "costType",
-            "trade",
-            "future",
-            "url",
-            "notes",
-            "vendor",
-            "orderId",
-            "projectId",
-            "productId",
-            "lineBasis",
-            "productQuantity",
-          ],
-        },
+      additionalSectionOverrides: [
         {
           kind: "fields",
           id: "purchase",
@@ -147,7 +125,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 10,
           standard: "name",
         },
         validation: {
@@ -168,7 +145,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 20,
           format: "currency",
           mobile: { slot: "trailing", priority: 1 },
         },
@@ -187,7 +163,7 @@ export default defineEntity({
           sectionOverride: "schedule",
           initial: "today",
         },
-        display: { list: true, detail: true, detailOrderOverride: 30 },
+        display: { list: true, detail: true },
         validation: {
           read: plainDate.nullable(),
           create: plainDate.nullable(),
@@ -197,7 +173,6 @@ export default defineEntity({
       {
         key: "lineKind",
         kind: "enum",
-        labelOverride: "Line kind",
         control: {
           kind: "select",
           sectionOverride: "details",
@@ -206,7 +181,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 40,
           width: "md",
           mobile: { slot: "meta", priority: 18 },
         },
@@ -221,12 +195,10 @@ export default defineEntity({
       {
         key: "lineBasis",
         kind: "enum",
-        labelOverride: "Itemization",
         control: { kind: "select", sectionOverride: "details" },
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 140,
           listHidden: true,
           width: "md",
         },
@@ -249,7 +221,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 50,
           width: "sm",
           mobile: { slot: "meta", priority: 20 },
         },
@@ -273,7 +244,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 60,
           width: "sm",
           mobile: { slot: "meta", priority: 60 },
         },
@@ -312,9 +282,8 @@ export default defineEntity({
         key: "url",
         kind: "text",
         nullable: true,
-        labelOverride: "URL",
         control: { kind: "text", renderer: "url", sectionOverride: "details" },
-        display: { list: true, detail: true, detailOrderOverride: 80 },
+        display: { list: true, detail: true },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -326,7 +295,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea", sectionOverride: "details" },
-        display: { list: true, detail: true, detailOrderOverride: 90 },
+        display: { list: true, detail: true },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -336,9 +305,8 @@ export default defineEntity({
       {
         key: "future",
         kind: "boolean",
-        labelOverride: "Planned",
         control: { kind: "checkbox", sectionOverride: "details" },
-        display: { list: true, detail: true, detailOrderOverride: 70 },
+        display: { list: true, detail: true },
         validation: {
           read: z.boolean(),
           create: z.boolean().default(false),
@@ -349,7 +317,6 @@ export default defineEntity({
         key: "projectId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Project",
         reference: { entity: "project" },
         control: {
           kind: "specialized",
@@ -360,8 +327,6 @@ export default defineEntity({
           list: true,
           detail: true,
           renderer: { detail: "expense-project" },
-          detailOrderOverride: 120,
-          columnIdOverride: "project",
         },
         resolution: {
           reset: { projectId: null },
@@ -401,7 +366,6 @@ export default defineEntity({
         key: "productId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Product",
         reference: { entity: "product" },
         control: {
           kind: "specialized",
@@ -411,8 +375,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 130,
-          columnIdOverride: "product",
         },
         validation: {
           read: productShortcode
@@ -428,9 +390,8 @@ export default defineEntity({
         key: "productQuantity",
         kind: "number",
         nullable: true,
-        labelOverride: "Product quantity",
         control: { kind: "number", sectionOverride: "details" },
-        display: { list: true, detail: true, detailOrderOverride: 150 },
+        display: { list: true, detail: true },
         validation: {
           read: signedProductQuantity
             .describe(
@@ -456,7 +417,7 @@ export default defineEntity({
           sectionOverride: "details",
           suggest: { basis: ["name", "notes", "orderId"] },
         },
-        display: { detail: true, detailOrderOverride: 100 },
+        display: { detail: true },
         provenance: { kind: "relation", sources: [{ entity: "vendor" }] },
         explanation: {
           ruleId: "expense.vendor",
@@ -477,12 +438,10 @@ export default defineEntity({
         key: "orderId",
         kind: "text",
         nullable: true,
-        labelOverride: "Order #",
         control: { kind: "text", sectionOverride: "details" },
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 110,
           listHidden: true,
         },
         provenance: {
@@ -508,14 +467,11 @@ export default defineEntity({
         key: "purchaseId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Purchase",
         reference: { entity: "purchase" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 160,
-          columnIdOverride: "vendor",
         },
         validation: {
           read: purchaseShortcode.nullable(),
@@ -627,7 +583,6 @@ export default defineEntity({
         key: "vendorId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Vendor ID",
         reference: { entity: "vendor" },
         validation: {
           read: vendorShortcode.nullable(),
@@ -693,25 +648,21 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "notionPageId",
         kind: "text",
         nullable: true,
-        labelOverride: "Notion Page ID",
-        readKeyOverride: null,
       },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:ExpenseId",
       },
       { key: "shortcode", specialized: "shortcode" },
@@ -720,13 +671,11 @@ export default defineEntity({
       "date",
       {
         key: "lineKind",
-        defaultOverride: "literal",
         defaultValue: "'principal'",
         specialized: "enum:lineKind",
       },
       {
         key: "lineBasis",
-        defaultOverride: "literal",
         defaultValue: "'item_line'",
         specialized: "enum:lineBasis",
       },
@@ -734,14 +683,14 @@ export default defineEntity({
       { key: "trade", specialized: "enum:trade" },
       "url",
       "notes",
-      { key: "future", defaultOverride: "literal", defaultValue: false },
+      { key: "future", defaultValue: false },
       { key: "projectId", reference: "project" },
       { key: "productId", reference: "product" },
       { key: "productQuantity", specialized: "double-precision" },
       { key: "purchaseId", reference: "purchase" },
       "notionPageId",
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [
@@ -805,22 +754,21 @@ export default defineEntity({
     ],
     sort: {
       fields: [
+        "date",
         "name",
         "cost",
         "lineKind",
         "productQuantity",
-        "date",
         "costType",
         "trade",
-        "project",
-        "product",
-        "vendor",
+        "projectId",
+        "productId",
+        "purchaseId",
         "orderId",
         "createdAt",
         "updatedAt",
       ],
-      defaultOverride: "date",
-      computed: ["project", "product"],
+      computed: ["projectId", "productId"],
       groupable: ["costType"],
     },
     intents: {
@@ -1187,7 +1135,8 @@ export default defineEntity({
         stored: { columns: ["url"] },
       },
       {
-        columnId: "project",
+        columnId: "projectId",
+        urlKey: "project",
         field: "projectId",
         kind: "idMulti",
         placeholder: "Filter by project...",
@@ -1203,14 +1152,18 @@ export default defineEntity({
         urlOnly: true,
       },
       {
-        columnId: "productId",
+        columnId: "productIdFilter",
+        field: "productId",
+        urlKey: "productId",
+        wire: { kind: "param", name: "productId" },
         kind: "id",
         placeholder: "Filter by product id...",
         brandRef: { entity: "product" },
         urlOnly: true,
       },
       {
-        columnId: "product",
+        columnId: "productId",
+        urlKey: "product",
         field: "productPresenceFilter",
         kind: "presence",
         placeholder: "Filter by product...",
@@ -1220,7 +1173,8 @@ export default defineEntity({
         ],
       },
       {
-        columnId: "vendor",
+        columnId: "purchaseId",
+        urlKey: "vendor",
         field: "vendorId",
         kind: "idMulti",
         placeholder: "Filter by vendor...",
@@ -1256,7 +1210,10 @@ export default defineEntity({
         urlOnly: true,
       },
       {
-        columnId: "purchaseId",
+        columnId: "purchaseIdFilter",
+        field: "purchaseId",
+        urlKey: "purchaseId",
+        wire: { kind: "param", name: "purchaseId" },
         kind: "id",
         placeholder: "Filter by purchase id...",
         brandRef: { entity: "purchase" },

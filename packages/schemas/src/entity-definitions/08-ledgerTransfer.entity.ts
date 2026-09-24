@@ -37,23 +37,7 @@ export default defineEntity({
       emoji: "🔁",
     },
     detail: {
-      sectionOverrides: [
-        {
-          kind: "fields",
-          id: "overview",
-          title: "Overview",
-          placement: "supporting",
-          fields: [
-            "fromPartyId",
-            "toPartyId",
-            "amount",
-            "date",
-            "notes",
-            "classification",
-            "createdAt",
-            "updatedAt",
-          ],
-        },
+      additionalSectionOverrides: [
         {
           kind: "fields",
           id: "evidence",
@@ -68,7 +52,6 @@ export default defineEntity({
       {
         key: "fromPartyId",
         kind: "identifier",
-        labelOverride: "From",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true },
@@ -81,7 +64,6 @@ export default defineEntity({
       {
         key: "toPartyId",
         kind: "identifier",
-        labelOverride: "To",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true },
@@ -166,13 +148,11 @@ export default defineEntity({
       {
         key: "evidenceTransactionIds",
         kind: "identifier",
-        labelOverride: "Evidence",
         reference: { entity: "financialTransaction", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         display: {
           list: true,
           detail: true,
-          columnIdOverride: "evidenceCount",
         },
         validation: {
           read: z.array(financialTransactionShortcode),
@@ -237,18 +217,16 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:LedgerTransferId",
       },
       { key: "shortcode", specialized: "shortcode" },
@@ -257,8 +235,8 @@ export default defineEntity({
       { key: "amount", specialized: "double-precision" },
       "date",
       "notes",
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [
@@ -291,7 +269,6 @@ export default defineEntity({
     ],
     sort: {
       fields: ["date", "amount", "createdAt", "updatedAt"],
-      defaultOverride: "date",
     },
     intents: {
       fields: {

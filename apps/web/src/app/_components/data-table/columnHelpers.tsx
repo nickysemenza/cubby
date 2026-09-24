@@ -497,6 +497,8 @@ export function createUpdatedAtColumn<T extends BaseRow>(
 interface CreateImageColumnOptions<T> {
   /** Entity type for colored placeholder icon when no image */
   entity: Entity;
+  /** Field-key id when an entity declares an images column. */
+  id?: string;
   /** How this row resolves its thumbnail. Defaults to `row.displayImages` —
    *  the server-resolved list contract (own gallery/cover, or a borrowed
    *  entity's photos) that every `displayImages` manifest entity's list row
@@ -561,7 +563,7 @@ export function createImageColumn<T extends BaseRow>(
     ((row: T) => (hasDisplayImages(row) ? row.displayImages : []));
 
   return columnHelper.accessor((row) => getImages(row), {
-    id: "image",
+    id: options.id ?? "image",
     header: () => <ImageIcon className="size-3 text-muted-foreground" />,
     enableSorting: false,
     enableHiding: false,
@@ -2299,6 +2301,7 @@ interface ProjectRefRow {
 export function createProjectLinkColumn<T extends ProjectRefRow>(
   columnHelper: ColumnHelper<T>,
   options?: {
+    id?: string;
     header?: string;
     className?: string;
     mobile?: MobileColumnMeta;
@@ -2344,7 +2347,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
       : undefined,
   );
   const columnOptions = {
-    id: "project",
+    id: options?.id ?? "project",
     header: options?.header ?? "Project",
     sortFn: entityRefSortingFn,
     meta: attachCubbyColumnMeta({
@@ -2437,6 +2440,7 @@ interface SubjectProductRefRow {
 export function createProductLinkColumn<T extends ProductRefRow>(
   columnHelper: ColumnHelper<T>,
   options?: {
+    id?: string;
     header?: string;
     className?: string;
     mobile?: MobileColumnMeta;
@@ -2466,7 +2470,7 @@ export function createProductLinkColumn<T extends ProductRefRow>(
       name: row.productName,
     }),
     {
-      id: "product",
+      id: options?.id ?? "product",
       header: options?.header ?? "Product",
       sortFn: entityRefSortingFn,
       meta: attachCubbyColumnMeta({
@@ -2521,6 +2525,7 @@ export function createProductLinkColumn<T extends ProductRefRow>(
 export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
   columnHelper: ColumnHelper<T>,
   options?: {
+    id?: string;
     className?: string;
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
@@ -2550,7 +2555,7 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
       name: row.subjectProductName,
     }),
     {
-      id: "subjectProduct",
+      id: options?.id ?? "subjectProduct",
       header: "For",
       sortFn: entityRefSortingFn,
       meta: attachCubbyColumnMeta({

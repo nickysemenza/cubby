@@ -40,37 +40,6 @@ export default defineEntity({
         purchases:
           "Two joins through transactions; the Transactions table links each transaction's purchase.",
       },
-      sectionOverrides: [
-        {
-          kind: "fields",
-          id: "overview",
-          title: "Overview",
-          placement: "supporting",
-          fields: [
-            "name",
-            "identity",
-            "provisional",
-            "sourceAliases",
-            "cardNumbers",
-            "providerVendorId",
-            "ledgerPartyId",
-            "inventoryOwnerDefaultEnabled",
-            "notes",
-            "transactionCount",
-            "createdAt",
-            "updatedAt",
-          ],
-        },
-        {
-          kind: "relation",
-          id: "transactions",
-          title: "Transactions",
-          relation: "transactions",
-          filter: { descriptor: "accountId" },
-          columns: ["merchant", "amount", "kind", "status", "postedDate"],
-          sort: { field: "postedDate", direction: "desc" },
-        },
-      ],
     },
   },
   model: {
@@ -115,12 +84,10 @@ export default defineEntity({
       {
         key: "sourceAliases",
         kind: "json",
-        labelOverride: "Aliases",
         control: { kind: "specialized", renderer: "source-aliases" },
         display: {
           list: true,
           detail: true,
-          columnIdOverride: "aliases",
           renderer: { detail: "financial-account-source-aliases" },
         },
         validation: {
@@ -132,7 +99,6 @@ export default defineEntity({
       {
         key: "cardNumbers",
         kind: "json",
-        labelOverride: "Card numbers",
         description:
           "Every last four this account has presented, dated: the primary card the statement labels it with (a reissue is an older primary with validTo), wallet device numbers, sibling cards, or gift-card instances.",
         control: { kind: "specialized", renderer: "structured-field" },
@@ -150,7 +116,6 @@ export default defineEntity({
         key: "providerVendorId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Provider",
         description:
           "The vendor that owes a gift card or store-credit balance. Stored-value accounts only; one live account per provider and owner.",
         reference: { entity: "vendor" },
@@ -158,7 +123,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          columnIdOverride: "providerVendorName",
         },
         validation: {
           read: vendorShortcode.nullable(),
@@ -170,13 +134,11 @@ export default defineEntity({
         key: "ledgerPartyId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Owner",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
           list: true,
           detail: true,
-          columnIdOverride: "ledgerPartyName",
         },
         validation: {
           read: ledgerPartyShortcode.nullable(),
@@ -187,7 +149,6 @@ export default defineEntity({
       {
         key: "inventoryOwnerDefaultEnabled",
         kind: "boolean",
-        labelOverride: "Use as inventory owner default",
         control: { kind: "checkbox", sectionOverride: "details" },
         display: { detail: true },
         validation: {
@@ -240,7 +201,6 @@ export default defineEntity({
       {
         key: "transactionCount",
         kind: "number",
-        labelOverride: "Transactions",
         display: { list: true, detail: true },
         provenance: {
           kind: "derived",
@@ -280,33 +240,29 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:FinancialAccountId",
       },
       { key: "shortcode", specialized: "shortcode" },
       "name",
       { key: "identity", specialized: "json:identity" },
-      { key: "provisional", defaultOverride: "literal", defaultValue: false },
+      { key: "provisional", defaultValue: false },
       {
         key: "sourceAliases",
-        defaultOverride: "literal",
         defaultValue: "'[]'::jsonb",
         specialized: "json:sourceAliases",
       },
       {
         key: "cardNumbers",
-        defaultOverride: "literal",
         defaultValue: "'[]'::jsonb",
         specialized: "json:cardNumbers",
       },
@@ -314,12 +270,11 @@ export default defineEntity({
       { key: "ledgerPartyId", reference: "ledgerParty" },
       {
         key: "inventoryOwnerDefaultEnabled",
-        defaultOverride: "literal",
         defaultValue: false,
       },
       "notes",
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [
@@ -364,7 +319,6 @@ export default defineEntity({
         "createdAt",
         "updatedAt",
       ],
-      defaultOverride: "name",
       // A name roster reads A→Z; the table's blanket descending default was
       // opening the account list backwards.
     },
@@ -497,7 +451,8 @@ export default defineEntity({
         ],
       },
       {
-        columnId: "aliases",
+        columnId: "sourceAliases",
+        urlKey: "aliases",
         field: "sourceAliasPresenceFilter",
         kind: "presence",
         placeholder: "Filter aliases...",

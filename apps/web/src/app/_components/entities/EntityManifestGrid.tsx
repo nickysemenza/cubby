@@ -37,6 +37,7 @@ import { authClient } from "~/lib/auth-client";
 import { ENTITY_NATIVE_COVERAGE } from "~/lib/generated/entity-native-coverage.gen";
 import { cn } from "~/lib/utils";
 
+import { EntityOverrideTable } from "./EntityOverrideTable";
 import { EntityReferenceGraph } from "./EntityReferenceGraph";
 
 const mono = "font-mono tabular-nums";
@@ -833,6 +834,8 @@ export function EntityManifestGrid({
       </div>
 
       <MegaTable selected={selected} counts={counts} onSelect={onSelect} />
+
+      <EntityOverrideTable />
 
       <Section title="Relations matrix">
         <RelationsMatrix />

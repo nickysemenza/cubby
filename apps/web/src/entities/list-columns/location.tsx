@@ -91,6 +91,7 @@ export const locationListOverride = defineListOverride<
           add(
             createImageColumn(columnHelper, {
               entity: "location",
+              id: "images",
               provenance: relationshipFieldProvenance("location", "images"),
             }),
           );

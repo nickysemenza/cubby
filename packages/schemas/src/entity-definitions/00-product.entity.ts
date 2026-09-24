@@ -45,36 +45,21 @@ export default defineEntity({
     },
     icons: { phosphor: "Barcode", sfSymbol: "shippingbox", emoji: "📦" },
     detail: {
+      relationFilterOverrides: {
+        "project-uses": { descriptor: "usedToolId" },
+        "purchased-projects": { descriptor: "purchasedProductId" },
+        wishes: { descriptor: "related:wish.candidates" },
+        components: { descriptor: "kitId" },
+        "containing-kits": { descriptor: "componentId" },
+      },
       omitRelations: {
         eaters:
           "Who ate it is per-portion meal data; the Meals table on this page shows each meal and its eaters.",
       },
       hero: {
-        imagesOverride: true,
         actionOverrides: ["edit", "addToInventory", "recordSale", "discard"],
       },
-      sectionOverrides: [
-        {
-          kind: "fields",
-          id: "basic-information",
-          title: "Basic information",
-          placement: "supporting",
-          fields: [
-            "name",
-            "id",
-            "manufacturer",
-            "model",
-            "price",
-            "categoryId",
-            "primaryGtin",
-            "fdc_id",
-            "ingredientId",
-            "growsPlantId",
-            "externalIds",
-            "tags",
-            "notes",
-          ],
-        },
+      additionalSectionOverrides: [
         {
           kind: "relation",
           id: "plantings",
@@ -93,80 +78,12 @@ export default defineEntity({
         },
         {
           kind: "relation",
-          id: "expense-history",
-          title: "Expense history",
-          relation: "expenses",
-          filter: { descriptor: "productId" },
-          columns: ["name", "cost", "date", "lineKind", "project"],
-          sort: { field: "date", direction: "desc" },
-        },
-        {
-          kind: "relation",
-          id: "purchases",
-          title: "Purchases",
-          relation: "purchases",
-          filter: { descriptor: "productId" },
-          columns: ["vendor", "displayLabel", "date", "statedTotal"],
-          sort: { field: "date", direction: "desc" },
-        },
-        {
-          kind: "relation",
-          id: "kit-components",
-          title: "Kit components",
-          relation: "components",
-          filter: { descriptor: "kitId" },
-          columns: ["name", "manufacturer", "onHandUnits"],
-        },
-        {
-          kind: "relation",
-          id: "vendors",
-          title: "Vendors",
-          relation: "vendors",
-          filter: { descriptor: "productId" },
-          columns: ["name", "purchaseCount", "spend", "latestPurchaseDate"],
-        },
-        {
-          kind: "relation",
-          id: "project-uses",
-          title: "Used on projects",
-          relation: "project-uses",
-          filter: { descriptor: "usedToolId" },
-          columns: ["name", "status", "kind", "startDate"],
-        },
-        {
-          kind: "relation",
           id: "tasks",
           title: "Tasks",
           relation: "tasks",
-          filter: { descriptor: "subjectProduct" },
+          filter: { descriptor: "subjectProductId" },
           columns: ["name", "status", "dueDate", "trade"],
           sort: { field: "dueDate", direction: "desc" },
-        },
-        {
-          kind: "relation",
-          id: "purchased-for-projects",
-          title: "Purchased for projects",
-          relation: "purchased-projects",
-          filter: { descriptor: "purchasedProductId" },
-          columns: ["name", "status", "kind"],
-          collapseWhenEmpty: true,
-        },
-        {
-          kind: "relation",
-          id: "wishes",
-          title: "Wishlist",
-          relation: "wishes",
-          filter: { descriptor: "related:wish.candidates" },
-          collapseWhenEmpty: true,
-        },
-        {
-          kind: "relation",
-          id: "containing-kits",
-          title: "Part of kits",
-          relation: "containing-kits",
-          filter: { descriptor: "componentId" },
-          columns: ["name", "manufacturer"],
-          collapseWhenEmpty: true,
         },
         {
           kind: "timeline",
@@ -176,9 +93,6 @@ export default defineEntity({
         },
         { kind: "slot", id: "labels", title: "Labels" },
         { kind: "slot", id: "nutrition", title: "Nutrition" },
-        // `unitMappings` is composed onto the detail read beside the generated
-        // read map (it is not a read-projection field), so it cannot be a
-        // `fields` section.
         { kind: "slot", id: "unit-mappings", title: "Unit mappings" },
         { kind: "slot", id: "fits-with", title: "Fits with" },
         { kind: "slot", id: "cookbooks", title: "Cookbooks" },
@@ -187,7 +101,6 @@ export default defineEntity({
       ],
     },
     list: {
-      viewOverrides: ["table", "shelf", "timeline"],
       shelfSubtitleOverride: ["price", "category"],
       actionOverrides: [
         "addToInventory",
@@ -256,7 +169,6 @@ export default defineEntity({
           list: true,
           detail: true,
           standard: "name",
-          detailOrderOverride: 0,
         },
         validation: {
           read: z
@@ -303,9 +215,7 @@ export default defineEntity({
         },
         display: {
           list: true,
-          listOrderOverride: 16,
           detail: true,
-          detailOrderOverride: 10,
           listHidden: true,
           renderer: { detail: "product-tags" },
         },
@@ -329,8 +239,6 @@ export default defineEntity({
         key: "upc",
         kind: "text",
         nullable: true,
-        labelOverride: "UPC",
-        readKeyOverride: null,
         control: { kind: "specialized", renderer: "upc-lookup", width: "half" },
         provenance: {
           kind: "relation",
@@ -346,8 +254,6 @@ export default defineEntity({
         key: "isbn",
         kind: "text",
         nullable: true,
-        labelOverride: "ISBN",
-        readKeyOverride: null,
         control: { kind: "text", width: "half" },
         provenance: {
           kind: "relation",
@@ -368,15 +274,10 @@ export default defineEntity({
         key: "fdc_id",
         kind: "number",
         nullable: true,
-        // Was "USDA FDC ID"; the list column has always headed this "FDC" —
-        // declaration wins, so the detail label follows the list now too.
-        labelOverride: "FDC",
         control: { kind: "specialized", renderer: "usda-food" },
         display: {
           list: true,
-          listOrderOverride: 3,
           detail: true,
-          detailOrderOverride: 7,
           width: "sm",
           renderer: { detail: "product-fdc-id" },
           format: "external-link",
@@ -394,9 +295,7 @@ export default defineEntity({
         control: { kind: "text", width: "half" },
         display: {
           list: true,
-          listOrderOverride: 1,
           detail: true,
-          detailOrderOverride: 2,
           width: "md",
           mobile: { slot: "subtitle", priority: 20 },
           listHidden: true,
@@ -417,9 +316,7 @@ export default defineEntity({
         control: { kind: "text", width: "half" },
         display: {
           list: true,
-          listOrderOverride: 4,
           detail: true,
-          detailOrderOverride: 3,
           width: "md",
           listHidden: true,
         },
@@ -437,7 +334,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          listOrderOverride: 5,
           width: "md",
           listHidden: true,
         },
@@ -465,7 +361,6 @@ export default defineEntity({
       {
         key: "categoryId",
         kind: "identifier",
-        labelOverride: "Classification",
         nullable: true,
         reference: { entity: "productCategory" },
         control: {
@@ -484,9 +379,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          columnIdOverride: "category",
-          listOrderOverride: 0,
-          detailOrderOverride: 5,
           width: "md",
           renderer: { detail: "product-category" },
           mobile: { slot: "subtitle", priority: 30 },
@@ -534,13 +426,10 @@ export default defineEntity({
         key: "ingredientId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Ingredient",
-        readKeyOverride: null,
         reference: { entity: "ingredient" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
           detail: true,
-          detailOrderOverride: 8,
           renderer: { detail: "product-ingredient" },
         },
         validation: {
@@ -553,7 +442,6 @@ export default defineEntity({
         key: "growsPlantId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Grows",
         reference: { entity: "plant" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: { detail: true },
@@ -567,24 +455,12 @@ export default defineEntity({
         key: "price",
         kind: "number",
         nullable: true,
-        // Stays "Valuation price": the detail page's `EntityBasicInfo`
-        // override for this field supplies no label of its own (unlike
-        // `primaryGtin`'s dynamic ISBN/UPC label), so this declared label is
-        // still its detail label — asserted by
-        // product-basic-info-filter.unit.test.tsx, a file outside this
-        // migration's ownership. The list column has always headed this
-        // "Price" instead; since an override's plain-string header is always
-        // replaced by this label, productlist.tsx's override supplies a
-        // header FUNCTION for this one column to opt out of that
-        // substitution and keep "Price" on the list without touching the
-        // detail label.
+        // The detail distinguishes effective valuation from an entered price.
         labelOverride: "Valuation price",
         control: { kind: "number", renderer: "money", width: "half" },
         display: {
           list: true,
-          listOrderOverride: 9,
           detail: true,
-          detailOrderOverride: 4,
           format: "currency",
         },
         explanation: {
@@ -619,7 +495,6 @@ export default defineEntity({
       {
         key: "unitMappings",
         kind: "json",
-        readKeyOverride: null,
         control: { kind: "specialized", renderer: "unit-mappings" },
         provenance: {
           kind: "relation",
@@ -635,7 +510,6 @@ export default defineEntity({
         key: "labelNutrition",
         kind: "json",
         nullable: true,
-        labelOverride: "Label nutrition",
         // No `display` — same as `unitMappings`, this keeps the generic
         // detail/form renderer from touching it; a bespoke section owns the
         // UI. Unlike `unitMappings` this has a real `readKey`/`read` schema
@@ -657,7 +531,6 @@ export default defineEntity({
         // strings here — the `external-ids` renderer owns the real
         // `ExternalIdInput[]` shape end to end.
         kind: "text-array",
-        labelOverride: "External IDs",
         control: { kind: "specialized", renderer: "external-ids" },
         provenance: {
           kind: "relation",
@@ -674,9 +547,7 @@ export default defineEntity({
         },
         display: {
           list: true,
-          listOrderOverride: 8,
           detail: true,
-          detailOrderOverride: 9,
           renderer: { detail: "product-external-ids" },
           listHidden: true,
         },
@@ -694,7 +565,7 @@ export default defineEntity({
         // Hidden by default via the page's `initialColumnVisibility` — this
         // was already declared `list: true` before this migration, but the
         // page never wired `createEntityDisplayColumns` up to render it.
-        display: { list: true, listOrderOverride: 18, listHidden: true },
+        display: { list: true, listHidden: true },
         validation: {
           read: z.boolean().nullable(),
           create: z.boolean().nullable().optional(),
@@ -705,13 +576,9 @@ export default defineEntity({
         key: "stockTracked",
         kind: "boolean",
         nullable: true,
-        // Default label would be "Stock Tracked"; the list column has always
-        // headed this "Stock tracking".
-        labelOverride: "Stock tracking",
         control: { kind: "checkbox" },
         display: {
           list: true,
-          listOrderOverride: 6,
           width: "sm",
           listHidden: true,
         },
@@ -728,8 +595,6 @@ export default defineEntity({
         // meal/location's `pendingImageIds`.
         key: "pendingImageIds",
         kind: "identifier",
-        labelOverride: "Pending Image IDs",
-        readKeyOverride: null,
         reference: { entity: "image", multiple: true },
         validation: {
           read: null,
@@ -740,7 +605,6 @@ export default defineEntity({
       {
         key: "pendingImagePurposes",
         kind: "json",
-        readKeyOverride: null,
         validation: {
           read: null,
           create: z
@@ -754,8 +618,6 @@ export default defineEntity({
       {
         key: "removeImageIds",
         kind: "identifier",
-        labelOverride: "Remove Image IDs",
-        readKeyOverride: null,
         reference: { entity: "image", multiple: true },
         validation: {
           read: null,
@@ -766,7 +628,6 @@ export default defineEntity({
       {
         key: "imageOrder",
         kind: "text",
-        readKeyOverride: null,
         control: { kind: "specialized", renderer: "image-order" },
         provenance: {
           kind: "relation",
@@ -781,10 +642,8 @@ export default defineEntity({
       {
         key: "id",
         kind: "identifier",
-        labelOverride: "Shortcode",
         display: {
           detail: true,
-          detailOrderOverride: 1,
           renderer: { detail: "product-id" },
         },
         validation: {
@@ -797,15 +656,9 @@ export default defineEntity({
         key: "primaryGtin",
         kind: "text",
         nullable: true,
-        // Was "UPC" — the list column has always headed this "Barcode /
-        // ISBN" (it edits either an ISBN or a UPC). The detail page's own
-        // "UPC"/"ISBN-13" label is a dynamic override, so it is unaffected.
-        labelOverride: "Barcode / ISBN",
         display: {
           list: true,
-          listOrderOverride: 2,
           detail: true,
-          detailOrderOverride: 6,
           width: "sm",
           renderer: { detail: "product-primary-gtin" },
         },
@@ -841,7 +694,7 @@ export default defineEntity({
       {
         key: "images",
         kind: "json",
-        display: { list: true, standard: "image", columnIdOverride: "image" },
+        display: { list: true, standard: "image" },
         provenance: {
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],
@@ -878,7 +731,6 @@ export default defineEntity({
         key: "unitPrice",
         kind: "json",
         nullable: true,
-        readKeyOverride: null,
         provenance: {
           kind: "derived",
           sources: [{ label: "Product price and unit mappings" }],
@@ -905,7 +757,6 @@ export default defineEntity({
         key: "food",
         kind: "json",
         nullable: true,
-        readKeyOverride: null,
         provenance: {
           kind: "derived",
           sources: [{ entity: "usda-food" }],
@@ -924,7 +775,6 @@ export default defineEntity({
       {
         key: "modelPresence",
         kind: "boolean",
-        readKeyOverride: null,
         provenance: { kind: "derived", sources: [{ entity: "product" }] },
         explanation: {
           ruleId: "product.model-presence",
@@ -937,7 +787,6 @@ export default defineEntity({
       {
         key: "upcPresence",
         kind: "boolean",
-        readKeyOverride: null,
         provenance: {
           kind: "derived",
           sources: [{ label: "Product identifiers" }],
@@ -955,7 +804,6 @@ export default defineEntity({
       {
         key: "notesPresence",
         kind: "boolean",
-        readKeyOverride: null,
         provenance: { kind: "derived", sources: [{ entity: "product" }] },
         explanation: {
           ruleId: "product.notes-presence",
@@ -972,8 +820,7 @@ export default defineEntity({
       {
         key: "expenseTotal",
         kind: "number",
-        labelOverride: "Net basis",
-        display: { list: true, listOrderOverride: 10, listHidden: true },
+        display: { list: true, listHidden: true },
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
@@ -996,11 +843,8 @@ export default defineEntity({
       {
         key: "componentCount",
         kind: "number",
-        labelOverride: "Components",
         display: {
           list: true,
-          listOrderOverride: 12,
-          columnIdOverride: "components",
         },
         provenance: {
           kind: "derived",
@@ -1021,12 +865,10 @@ export default defineEntity({
       {
         key: "servingAsLocations",
         kind: "number",
-        labelOverride: "In service",
         // Nested under `quantityLedger.locationCount` on the list row — no
         // flat readKey can reach it, so this needs the override
         // `productlist.tsx` supplies.
-        readKeyOverride: null,
-        display: { list: true, listOrderOverride: 11 },
+        display: { list: true },
         provenance: {
           kind: "derived",
           sources: [{ entity: "location", relation: "locations" }],
@@ -1051,16 +893,9 @@ export default defineEntity({
       {
         key: "ledgerExpectedQuantity",
         kind: "number",
-        labelOverride: "Expected",
         // Nested under `quantityLedger.expectedQuantity` on the list row.
-        // Aliased to the "expectedQuantity" column id — the stored
-        // `expectedQuantity` field above no longer renders a list column, so
-        // this is the sole claimant of that (persisted) column id now.
-        readKeyOverride: null,
         display: {
           list: true,
-          listOrderOverride: 13,
-          columnIdOverride: "expectedQuantity",
           listHidden: true,
         },
         provenance: {
@@ -1085,8 +920,7 @@ export default defineEntity({
         key: "quantityVariance",
         kind: "number",
         nullable: true,
-        labelOverride: "Variance",
-        display: { list: true, listOrderOverride: 14, listHidden: true },
+        display: { list: true, listHidden: true },
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
@@ -1117,8 +951,7 @@ export default defineEntity({
         nullable: true,
         // Default label would be "Purchase Date"; the list column has
         // always headed this "Purchase date".
-        labelOverride: "Purchase date",
-        display: { list: true, listOrderOverride: 15 },
+        display: { list: true },
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
@@ -1141,11 +974,8 @@ export default defineEntity({
       {
         key: "expenseCount",
         kind: "number",
-        labelOverride: "Expenses",
         display: {
           list: true,
-          listOrderOverride: 17,
-          columnIdOverride: "expenses",
         },
         provenance: {
           kind: "derived",
@@ -1172,7 +1002,6 @@ export default defineEntity({
         nullable: true,
         display: {
           list: true,
-          listOrderOverride: 19,
           listHidden: true,
           mobile: { slot: "trailing", priority: 0 },
         },
@@ -1214,25 +1043,22 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:ProductId",
       },
       { key: "shortcode", specialized: "shortcode" },
       "name",
       {
         key: "aliases",
-        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
@@ -1241,15 +1067,14 @@ export default defineEntity({
       "model",
       "expectedQuantity",
       "notes",
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
       { key: "ingredientId", reference: "ingredient" },
       { key: "growsPlantId", reference: "plant" },
       { key: "categoryId", reference: "productCategory" },
       {
         key: "tags",
-        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
@@ -1330,15 +1155,15 @@ export default defineEntity({
         "manufacturer",
         "model",
         "primaryGtin",
-        "category",
+        "categoryId",
         "fdc_id",
         "price",
         "notes",
         "location",
         "ingredient",
         "expenseTotal",
-        "expenses",
-        "expectedQuantity",
+        "expenseCount",
+        "ledgerExpectedQuantity",
         "quantityVariance",
         "purchaseDate",
         "related:product.projects",
@@ -1346,18 +1171,18 @@ export default defineEntity({
         "related:product.purchases",
       ],
       computed: [
-        "category",
+        "categoryId",
         "location",
         "ingredient",
         "expenseTotal",
-        "expenses",
+        "expenseCount",
         "quantityVariance",
         "purchaseDate",
         "related:product.projects",
         "related:product.vendors",
         "related:product.purchases",
       ],
-      groupable: ["category"],
+      groupable: ["categoryId"],
     },
     intents: {
       fields: {
@@ -1567,7 +1392,8 @@ export default defineEntity({
         nullable: { field: "categoryPresenceFilter", label: "classification" },
       },
       {
-        columnId: "category",
+        columnId: "categoryId",
+        urlKey: "category",
         field: "categoryFilter",
         kind: "idMulti",
         placeholder: "Filter classification...",
@@ -1611,7 +1437,8 @@ export default defineEntity({
         brandRef: { entity: "plant" },
       },
       {
-        columnId: "expenses",
+        columnId: "expenseCount",
+        urlKey: "expenses",
         kind: "range",
         wire: {
           kind: "range",
@@ -1649,7 +1476,14 @@ export default defineEntity({
         },
       },
       {
-        columnId: "expectedQuantity",
+        columnId: "ledgerExpectedQuantity",
+        field: "expectedQuantity",
+        urlKey: "expectedQuantity",
+        wire: {
+          kind: "range",
+          from: "expectedQuantityMin",
+          to: "expectedQuantityMax",
+        },
         kind: "range",
         placeholder: "Filter expected quantity...",
         deriveSchema: true,

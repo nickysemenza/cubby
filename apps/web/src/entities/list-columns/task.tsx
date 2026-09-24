@@ -36,8 +36,7 @@ const subtaskCountSuffix = (row: TaskOut): ReactNode =>
 /**
  * The status / due / trade columns come from the shared factories also used
  * by the embedded task table on the project detail page, so the two can't
- * drift. `project` / `subjectProduct` / `parentTask` keep those column ids
- * via `display.columnId`.
+ * drift. Their table ids are the manifest field keys.
  */
 export const taskListOverride = defineListOverride<TaskOut, TaskFilters>({
   use() {
@@ -58,6 +57,7 @@ export const taskListOverride = defineListOverride<TaskOut, TaskFilters>({
         createCubbyColumnCollection<TaskOut>((add) => {
           add(
             createProjectLinkColumn(columnHelper, {
+              id: "projectId",
               className: "w-40",
               mobile: { slot: "meta", priority: 30, interactive: true },
               editable: {
@@ -73,6 +73,7 @@ export const taskListOverride = defineListOverride<TaskOut, TaskFilters>({
           );
           add(
             createSubjectProductLinkColumn(columnHelper, {
+              id: "subjectProductId",
               className: "w-40",
               mobile: { slot: "meta", priority: 35, interactive: true },
               editable: {
@@ -92,7 +93,8 @@ export const taskListOverride = defineListOverride<TaskOut, TaskFilters>({
               "parentTaskId",
               "parentTaskName",
               {
-                filterConfig: manifestFilterConfig("task", "parentTask", {
+                id: "parentTaskId",
+                filterConfig: manifestFilterConfig("task", "parentTaskId", {
                   parentTask: parentOptions,
                 }),
               },

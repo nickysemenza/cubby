@@ -25,7 +25,7 @@ External IDs are the current live identifier records attached to this product, w
 - Value paths: Default `externalIds`
 - Source dependencies: Product identifier records (`externalIds`)
 
-### Barcode / ISBN (`primaryGtin`)
+### Primary GTIN (`primaryGtin`)
 
 The primary barcode is selected from this product's normalized external identifiers.
 
@@ -44,7 +44,7 @@ Product images are the current live Image attachments in canonical attachment or
 - Value paths: List `displayImages`; Detail `images`; Summary `displayImages`
 - Source dependencies: Selected product images (`displayImages`)
 
-### Unit Price (`unitPrice`)
+### Unit price (`unitPrice`)
 
 Comparable unit price converts one natural unit through the product's complete current conversion graph, including label or USDA-derived mappings and the effective price edge.
 
@@ -62,7 +62,7 @@ USDA food is the current lookup result for this product's explicit FDC identifie
 - Value paths: List `food`; Summary `food`
 - Source dependencies: Explicit FDC identifier (`fdc_id`); Primary normalized barcode (`primaryGtin`)
 
-### Model Presence (`modelPresence`)
+### Model presence (`modelPresence`)
 
 Model present reports whether this product has a non-empty model value.
 
@@ -71,7 +71,7 @@ Model present reports whether this product has a non-empty model value.
 - Value paths: List `modelPresence`; Summary `modelPresence`
 - Source dependencies: Product model (`model`)
 
-### Upc Presence (`upcPresence`)
+### UPC presence (`upcPresence`)
 
 UPC present reports whether the product has a primary normalized barcode.
 
@@ -80,7 +80,7 @@ UPC present reports whether the product has a primary normalized barcode.
 - Value paths: List `upcPresence`; Summary `upcPresence`
 - Source dependencies: Product identifiers (`externalIds`)
 
-### Notes Presence (`notesPresence`)
+### Notes presence (`notesPresence`)
 
 Notes present reports whether this product has non-empty notes.
 
@@ -89,7 +89,7 @@ Notes present reports whether this product has non-empty notes.
 - Value paths: List `notesPresence`; Summary `notesPresence`
 - Source dependencies: Product notes (`notes`)
 
-### Net basis (`expenseTotal`)
+### Expense total (`expenseTotal`)
 
 Net basis is the sum of cost across this product's live expenses, including negative refund lines.
 
@@ -98,7 +98,7 @@ Net basis is the sum of cost across this product's live expenses, including nega
 - Value paths: List `expenseTotal`; Summary `expenseTotal`
 - Source dependencies: Live expense count (`expenseCount`)
 
-### Components (`componentCount`)
+### Component count (`componentCount`)
 
 The component count is the number of live component relationships for this product.
 
@@ -106,7 +106,7 @@ The component count is the number of live component relationships for this produ
 - Resolver: Declared field projection
 - Value paths: List `componentCount`; Summary `componentCount`
 
-### In service (`servingAsLocations`)
+### Serving as locations (`servingAsLocations`)
 
 In service counts live locations whose installed product is this product.
 
@@ -115,7 +115,7 @@ In service counts live locations whose installed product is this product.
 - Value paths: List `quantityLedger.locationCount`; Summary `quantityLedger.locationCount`
 - Source dependencies: Installed location count (`quantityLedger.locationCount`)
 
-### Expected (`ledgerExpectedQuantity`)
+### Ledger expected quantity (`ledgerExpectedQuantity`)
 
 Expected quantity is the signed sum of product quantities on live expenses; incomplete quantity evidence is retained in the ledger status.
 
@@ -124,7 +124,7 @@ Expected quantity is the signed sum of product quantities on live expenses; inco
 - Value paths: List `quantityLedger.expectedQuantity`; Summary `quantityLedger.expectedQuantity`
 - Source dependencies: Expense quantity ledger (`quantityLedger`)
 
-### Variance (`quantityVariance`)
+### Quantity variance (`quantityVariance`)
 
 Variance is counted inventory minus expected expense-ledger quantity when both quantities are known.
 
@@ -142,7 +142,7 @@ Purchase date is the earliest acquisition date among this product's live positiv
 - Value paths: List `purchaseDate`; Summary `purchaseDate`
 - Source dependencies: Live expense count (`expenseCount`)
 
-### Expenses (`expenseCount`)
+### Expense count (`expenseCount`)
 
 Expense count is the number of live expenses linked to this product.
 
@@ -150,7 +150,7 @@ Expense count is the number of live expenses linked to this product.
 - Resolver: Declared field projection
 - Value paths: List `expenseCount`; Summary `expenseCount`
 
-### On Hand Units (`onHandUnits`)
+### On hand units (`onHandUnits`)
 
 On-hand units are the sum of live inventory quantities after applying each entry's unit mapping; unknown mappings make the result unavailable.
 
@@ -179,7 +179,7 @@ Data gaps are the current checks reported by this entity's data-quality evaluati
 
 ## Recipes (`recipe`)
 
-### Cost (`costTotal`)
+### Cost total (`costTotal`)
 
 Recipe cost is the stored costing result for the current recipe inputs, including its range and coverage state.
 
@@ -188,7 +188,7 @@ Recipe cost is the stored costing result for the current recipe inputs, includin
 - Value paths: List `totals.cost`; Summary `totals.cost`
 - Source dependencies: Computed cost result (`totals.cost`)
 
-### Calories (`caloriesTotal`)
+### Calories total (`caloriesTotal`)
 
 Recipe calories are the stored nutrition result for the current recipe inputs, including its range and coverage state.
 
@@ -203,7 +203,7 @@ Meal count is the number of live meal-recipe links that currently include this r
 
 - Rule: `recipe.meal-count`, version 1
 - Resolver: Declared field projection
-- Value paths: Default `mealCount`
+- Value paths: Default `meals`
 
 ### Sections (`sections`)
 
@@ -241,7 +241,7 @@ Recipe images are the current live Image attachments in canonical attachment ord
 - Value paths: List `displayImages`; Detail `images`; Summary `displayImages`
 - Source dependencies: Selected recipe images (`displayImages`)
 
-### Time (`totalMinutes`)
+### Total minutes (`totalMinutes`)
 
 The time cell shows the recipe source's time text together with its normalized total-minute value when available.
 
@@ -290,7 +290,7 @@ Data gaps are the current checks reported by this entity's data-quality evaluati
 
 ## Cookbooks (`cookbook`)
 
-### Recipes (`recipeCount`)
+### Recipe count (`recipeCount`)
 
 Recipe count is the number of live recipes imported from this cookbook.
 
@@ -298,7 +298,7 @@ Recipe count is the number of live recipes imported from this cookbook.
 - Resolver: Declared field projection
 - Value paths: Default `recipeCount`
 
-### Cover (`coverUrl`)
+### Cover URL (`coverUrl`)
 
 The cover uses the cookbook's current cover image attachment when one is available.
 
@@ -307,7 +307,7 @@ The cover uses the cookbook's current cover image attachment when one is availab
 - Value paths: Default `coverUrl`
 - Source dependencies: Selected cookbook cover (`displayImages`)
 
-### Source recipes (`sourceRecipeCount`)
+### Source recipe count (`sourceRecipeCount`)
 
 Source recipes counts recipe entries present in the cookbook's imported source data.
 
@@ -315,7 +315,7 @@ Source recipes counts recipe entries present in the cookbook's imported source d
 - Resolver: Declared field projection
 - Value paths: Default `sourceRecipeCount`
 
-### Needs re-extraction (`needsReextract`)
+### Needs reextract (`needsReextract`)
 
 A cookbook needs re-extraction when its stored import payload uses the legacy shape.
 
@@ -391,7 +391,7 @@ Data gaps are the current checks reported by this entity's data-quality evaluati
 
 ## Inventory (`inventory`)
 
-### Effective owner (`effectiveOwnership`)
+### Effective ownership (`effectiveOwnership`)
 
 Explicit ownership wins; otherwise one recorded acquisition may supply an unambiguous beneficiary or enabled account default.
 
@@ -456,7 +456,7 @@ Meal totals combine the current recipe servings and their available cost and nut
 - Value paths: Default `totals`
 - Source dependencies: Recipe servings (`recipes`)
 
-### Cost Total (`costTotal`)
+### Cost total (`costTotal`)
 
 Meal cost combines the current serving count with each recipe's available computed cost range.
 
@@ -465,7 +465,7 @@ Meal cost combines the current serving count with each recipe's available comput
 - Value paths: List `totals.cost`; Summary `totals.cost`
 - Source dependencies: Recipe servings (`recipes`); Computed meal cost (`totals.cost`)
 
-### Recipes (`recipeNames`)
+### Recipe names (`recipeNames`)
 
 Recipe names are projected from the meal's current recipe composition.
 
@@ -561,7 +561,7 @@ A project trade override wins; otherwise the nearest parent project with a defau
 - Value paths: List `fieldResolutions.defaultTrade.value`; Detail `fieldResolutions.defaultTrade.value`; Summary `fieldResolutions.defaultTrade.value`
 - Source dependencies: Source (`fieldResolutions.defaultTrade.sourceEntity`); Stored override (`fieldResolutions.defaultTrade.storedValue`); Inherited value (`fieldResolutions.defaultTrade.fallbackValue`)
 
-### Parent Project Name (`parentProjectName`)
+### Parent project name (`parentProjectName`)
 
 The parent project name is read from the current live parent project selected by this project's parent link.
 
@@ -599,7 +599,7 @@ An explicit project choice wins; otherwise the task follows its parent.
 - Value paths: List `fieldResolutions.projectId.value`; Detail `fieldResolutions.projectId.value`; Summary `fieldResolutions.projectId.value`
 - Source dependencies: Source (`fieldResolutions.projectId.sourceEntity`); Stored override (`fieldResolutions.projectId.storedValue`); Inherited value (`fieldResolutions.projectId.fallbackValue`)
 
-### For (`subjectProductId`)
+### Subject product (`subjectProductId`)
 
 An explicit product choice wins; otherwise the task follows its parent.
 
@@ -646,7 +646,7 @@ Data gaps are the current checks reported by this entity's data-quality evaluati
 
 ## Vendors (`vendor`)
 
-### Purchases (`purchaseCount`)
+### Purchase count (`purchaseCount`)
 
 Purchase count is the number of live purchases linked to this vendor.
 
@@ -663,7 +663,7 @@ Vendor spend is the sum of cost across live expenses whose purchase belongs to t
 - Value paths: Default `spend`
 - Source dependencies: Live purchase count (`purchaseCount`)
 
-### Latest Purchase Date (`latestPurchaseDate`)
+### Latest purchase date (`latestPurchaseDate`)
 
 Latest purchase date is the most recent date among this vendor's live purchases.
 
@@ -692,7 +692,7 @@ Data gaps are the current checks reported by this entity's data-quality evaluati
 
 ## Purchases (`purchase`)
 
-### Expense Count (`expenseCount`)
+### Expense count (`expenseCount`)
 
 Expense count is the number of live expense lines linked to this purchase.
 
@@ -700,7 +700,7 @@ Expense count is the number of live expense lines linked to this purchase.
 - Resolver: Declared field projection
 - Value paths: Default `expenseCount`
 
-### Expense Total (`expenseTotal`)
+### Expense total (`expenseTotal`)
 
 Expense total is the sum of cost across this purchase's live expense lines, including refunds.
 
@@ -718,7 +718,7 @@ Expense reconciliation compares the stated total with the live expense total and
 - Value paths: Default `reconciliation`
 - Source dependencies: Stated total (`statedTotal`); Live expense total (`expenseTotal`); Unpriced expense count (`unpricedExpenseCount`)
 
-### Financial Reconciliation (`financialReconciliation`)
+### Financial reconciliation (`financialReconciliation`)
 
 Financial reconciliation compares the purchase total with confirmed settlement allocations; it does not change purchase spend.
 
@@ -727,7 +727,7 @@ Financial reconciliation compares the purchase total with confirmed settlement a
 - Value paths: Default `financialReconciliation`
 - Source dependencies: Stated purchase total (`statedTotal`); Settlement allocation summary (`financialReconciliation`)
 
-### Document Count (`documentCount`)
+### Document count (`documentCount`)
 
 Document count is the number of live images attached to this purchase.
 
@@ -744,7 +744,7 @@ Purchase images are the current live document attachments in canonical attachmen
 - Value paths: List `displayImages`; Detail `images`; Summary `displayImages`
 - Source dependencies: Selected purchase images (`displayImages`)
 
-### Transaction Count (`transactionCount`)
+### Transaction count (`transactionCount`)
 
 Transaction count is the number of confirmed financial transactions included in this purchase's settlement reconciliation.
 
@@ -773,7 +773,7 @@ Data gaps are the current checks reported by this entity's data-quality evaluati
 
 ## Accounts (`financialAccount`)
 
-### Transactions (`transactionCount`)
+### Transaction count (`transactionCount`)
 
 Transaction count is the number of live financial transactions linked to this account.
 
@@ -810,7 +810,7 @@ Allocations are the current confirmed links that assign this transaction to purc
 - Value paths: Default `allocations`
 - Source dependencies: Confirmed allocations (`allocations`)
 
-### Possible vendor (`vendorInference`)
+### Vendor inference (`vendorInference`)
 
 Possible vendors come from prior settled transactions with the same normalized merchant label; confirmed allocations, transfers, and void transactions suppress the suggestion.
 
@@ -848,7 +848,7 @@ Candidates are the live product relationships currently recorded for this wish.
 - Value paths: Default `candidates`
 - Source dependencies: Candidate products (`candidates`)
 
-### Candidate Count (`candidateCount`)
+### Candidate count (`candidateCount`)
 
 Option count is the number of live candidate products currently attached to this wish.
 
@@ -857,7 +857,7 @@ Option count is the number of live candidate products currently attached to this
 - Value paths: Default `candidateCount`
 - Source dependencies: Candidate products (`candidates`)
 
-### Price Range (`priceRange`)
+### Price range (`priceRange`)
 
 Price range is the low and high effective price across priced live candidates; unpriced candidates are counted separately and excluded from the range.
 
@@ -913,7 +913,7 @@ Vendor is resolved from the live purchase linked to this expense.
 - Value paths: Default `vendor`
 - Source dependencies: Linked purchase (`purchaseId`)
 
-### Order # (`orderId`)
+### Order ID (`orderId`)
 
 Order number is resolved from the live purchase linked to this expense.
 
@@ -942,7 +942,7 @@ Funders are the live funder attributions recorded for this expense; deleted part
 - Source dependencies: Funder attributions (`funders`)
 - Available actions: Edit source
 
-### Source Claims (`sourceClaims`)
+### Source claims (`sourceClaims`)
 
 Source claims preserve the imported or recorded evidence attached to this expense.
 
@@ -981,7 +981,7 @@ This identifier comes from the current USDA food record.
 - Value paths: Default `fdc_id`
 - Source dependencies: USDA food identifier (`fdc_id`)
 
-### Branded food information (`brandedFoodInfo`)
+### Branded food info (`brandedFoodInfo`)
 
 Branded food information is normalized from the current USDA food record when the record is branded.
 
@@ -990,7 +990,7 @@ Branded food information is normalized from the current USDA food record when th
 - Value paths: Default `brandedFoodInfo`
 - Source dependencies: Current USDA branded food record (`brandedFoodInfo`)
 
-### Food information (`foodInfo`)
+### Food info (`foodInfo`)
 
 Food information is normalized from the current USDA food record returned by the USDA reader.
 
@@ -999,7 +999,7 @@ Food information is normalized from the current USDA food record returned by the
 - Value paths: Default `foodInfo`
 - Source dependencies: Current USDA food record (`foodInfo`)
 
-### Legacy food information (`legacyFoodInfo`)
+### Legacy food info (`legacyFoodInfo`)
 
 Legacy food information is normalized from the current USDA food record when that legacy shape is present.
 
@@ -1008,7 +1008,7 @@ Legacy food information is normalized from the current USDA food record when tha
 - Value paths: Default `legacyFoodInfo`
 - Source dependencies: Current USDA legacy food record (`legacyFoodInfo`)
 
-### Nutrition (`nutritionInfo`)
+### Nutrition info (`nutritionInfo`)
 
 Nutrition is normalized from the nutrient values in the current USDA food record.
 
@@ -1017,7 +1017,7 @@ Nutrition is normalized from the nutrient values in the current USDA food record
 - Value paths: Default `nutritionInfo`
 - Source dependencies: Current USDA nutrient values (`nutritionInfo`)
 
-### Portions (`portionInfoRaw`)
+### Portion info raw (`portionInfoRaw`)
 
 Portions are the serving measures supplied by the current USDA food record.
 
@@ -1063,7 +1063,7 @@ The public image URL is generated from this Image record's current object-storag
 - Value paths: Default `url`
 - Source dependencies: Image storage key (`key`)
 
-### Captured by (`capturedByPartyId`)
+### Captured by party (`capturedByPartyId`)
 
 The capturing member is derived by scoring the image's photo-library sightings, falling back to embedded EXIF evidence when there are none, and can always be set manually.
 
@@ -1071,7 +1071,7 @@ The capturing member is derived by scoring the image's photo-library sightings, 
 - Resolver: Image capture provenance
 - Value paths: Default `capturedByPartyId`
 
-### Captured By Name (`capturedByName`)
+### Captured by name (`capturedByName`)
 
 The current name of the derived capturing member, if set.
 
@@ -1116,7 +1116,7 @@ The transplanting window comes from this planting's plant's crop guide adjusted 
 - Value paths: Default `guideTransplantWindow`
 - Source dependencies: Plant (`plantId`)
 
-### Expected harvest from (`expectedHarvestStart`)
+### Expected harvest start (`expectedHarvestStart`)
 
 The transplant or sow date plus the plant's days to maturity, from its packet when recorded, else the crop estimate.
 
@@ -1183,7 +1183,7 @@ Data gaps are the current checks reported by this entity's data-quality evaluati
 
 ## Product Categories (`productCategory`)
 
-### Parent Name (`parentName`)
+### Parent name (`parentName`)
 
 The current name of this category's immediate parent.
 
@@ -1197,7 +1197,7 @@ The root-to-category classification path, including this category.
 - Rule: `productCategory.path`, version 1
 - Resolver: Declared field projection
 
-### Products (`productCount`)
+### Product count (`productCount`)
 
 Live products in this category or any category below it.
 
@@ -1225,14 +1225,14 @@ Data gaps are the current checks reported by this entity's data-quality evaluati
 
 ## Devices (`device`)
 
-### Ledger Party Name (`ledgerPartyName`)
+### Ledger party name (`ledgerPartyName`)
 
 The current name of this device's owner, if set.
 
 - Rule: `device.ledgerPartyName`, version 1
 - Resolver: Declared field projection
 
-### Product Name (`productName`)
+### Product name (`productName`)
 
 The current name of this device's linked hardware Product, if set.
 
@@ -1277,7 +1277,7 @@ The transplanting window comes from this plant's crop guide adjusted to the hous
 - Value paths: Default `guideTransplantWindow`
 - Source dependencies: Crop (`gardenGuideKey`)
 
-### Start routes (`routes`)
+### Routes (`routes`)
 
 Each way the household starts this crop, read against this month's guide windows.
 

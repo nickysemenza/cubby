@@ -595,7 +595,7 @@ export const buildPurchaseWhereClause = async (
 
 const resolvePurchaseSort = (sort: SortParams) => {
   const dir = sort.direction === "asc" ? asc : desc;
-  if (sort.orderBy === "vendor") return [dir(purchaseVendorName)];
+  if (sort.orderBy === "vendorId") return [dir(purchaseVendorName)];
   if (sort.orderBy === "expenseCount") return [dir(purchaseExpenseCount)];
   if (sort.orderBy === "expenseTotal") return [dir(purchaseExpenseTotal)];
   if (sort.orderBy === "reconciliationGap") {

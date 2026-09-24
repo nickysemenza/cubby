@@ -858,6 +858,28 @@ const metadataSchemas = () => {
             ),
           /** Omitted: one Overview section for all detail fields; [] opts out. */
           sectionOverrides: z.array(detailSectionSchema).optional(),
+          /** Extra field groups, slots and timelines appended to inferred sections. */
+          additionalSectionOverrides: z
+            .array(detailSectionSchema)
+            .optional()
+            .default([]),
+          /** Ambiguous relation back-filters, keyed by relation name. */
+          relationFilterOverrides: z
+            .record(
+              nonEmptyString(),
+              z
+                .object({
+                  descriptor: nonEmptyString(),
+                  prefill: z
+                    .object({ field: nonEmptyString() })
+                    .strict()
+                    .nullable()
+                    .optional(),
+                })
+                .strict(),
+            )
+            .optional()
+            .default({}),
           /**
            * `many` relations this page deliberately renders no table for,
            * each with the reason. Every other `many` relation onto a list
@@ -872,10 +894,19 @@ const metadataSchemas = () => {
         .strict()
         .prefault({})
         .transform(
-          ({ sectionOverrides, variantOverride, hero, omitRelations }) => ({
+          ({
+            sectionOverrides,
+            additionalSectionOverrides,
+            relationFilterOverrides,
+            variantOverride,
+            hero,
+            omitRelations,
+          }) => ({
             variant: variantOverride,
             hero,
             sections: sectionOverrides,
+            additionalSections: additionalSectionOverrides,
+            relationFilterOverrides,
             omitRelations,
           }),
         ),

@@ -203,7 +203,7 @@ export const recipeListItemOut = z.object({
   totals: recipeTotals.nullish(),
   // Live MealRecipe rows under a live Meal — a soft-deleted Meal's plan
   // doesn't count. Backs the list's "Meals" column.
-  mealCount: z.number().int(),
+  meals: z.number().int(),
   /** Live sections. Cheap correlated scalar — the section GRAPH is not on the
    *  list path (dropping it was the ~4.7s over-fetch fix). */
   sectionCount: z.number().int(),

@@ -43,8 +43,8 @@ export default defineEntity({
         recipes:
           "The composition slot renders served recipes with their portions.",
       },
-      hero: { imagesOverride: true },
-      sectionOverrides: [
+      hero: {},
+      additionalSectionOverrides: [
         {
           kind: "slot",
           id: "composition",
@@ -56,22 +56,6 @@ export default defineEntity({
           id: "nutrition",
           title: "Nutrition",
           explanationField: "totals",
-        },
-        {
-          kind: "fields",
-          id: "meal-details",
-          title: "Meal details",
-          placement: "supporting",
-          fields: [
-            "date",
-            "name",
-            "mealType",
-            "mealKind",
-            "recipeNames",
-            "sortOrder",
-            "createdAt",
-            "updatedAt",
-          ],
         },
       ],
     },
@@ -101,7 +85,6 @@ export default defineEntity({
         kind: "date",
         control: {
           kind: "date",
-          sectionOverride: "schedule",
           initial: "today",
         },
         display: { list: true, detail: true },
@@ -127,7 +110,7 @@ export default defineEntity({
         key: "sortOrder",
         kind: "number",
         nullable: true,
-        control: { kind: "number", sectionOverride: "ordering" },
+        control: { kind: "number" },
         display: { list: true, detail: true },
         validation: {
           read: z.number().int().nullable(),
@@ -215,8 +198,6 @@ export default defineEntity({
       {
         key: "pendingImageIds",
         kind: "identifier",
-        labelOverride: "Pending image IDs",
-        readKeyOverride: null,
         reference: { entity: "image", multiple: true },
         validation: {
           read: null,
@@ -227,8 +208,6 @@ export default defineEntity({
       {
         key: "removeImageIds",
         kind: "identifier",
-        labelOverride: "Remove image IDs",
-        readKeyOverride: null,
         reference: { entity: "image", multiple: true },
         validation: {
           read: null,
@@ -239,7 +218,6 @@ export default defineEntity({
       {
         key: "imageOrder",
         kind: "text",
-        readKeyOverride: null,
         validation: {
           read: null,
           create: null,
@@ -249,7 +227,7 @@ export default defineEntity({
       {
         key: "images",
         kind: "json",
-        display: { list: true, standard: "image", columnIdOverride: "image" },
+        display: { list: true, standard: "image" },
         provenance: {
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],
@@ -307,7 +285,6 @@ export default defineEntity({
         key: "costTotal",
         kind: "json",
         nullable: true,
-        readKeyOverride: null,
         provenance: {
           kind: "derived",
           sources: [{ entity: "recipe", relation: "recipes" }],
@@ -332,7 +309,6 @@ export default defineEntity({
         // show what the meal is without decoding the composition.
         key: "recipeNames",
         kind: "text-array",
-        labelOverride: "Recipes",
         display: { detail: true },
         provenance: {
           kind: "derived",
@@ -369,18 +345,16 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:MealId",
       },
       { key: "shortcode", specialized: "shortcode" },
@@ -390,12 +364,11 @@ export default defineEntity({
       { key: "mealType", specialized: "enum:mealType" },
       {
         key: "mealKind",
-        defaultOverride: "literal",
         defaultValue: "'cooked'",
         specialized: "enum:mealKind",
       },
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [
@@ -421,7 +394,6 @@ export default defineEntity({
     audit: [],
     sort: {
       fields: ["date", "name", "mealType", "createdAt", "updatedAt"],
-      defaultOverride: "date",
     },
     intents: {
       fields: {

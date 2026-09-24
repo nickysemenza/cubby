@@ -27,47 +27,8 @@ export default defineEntity({
         eaters:
           "Who ate it is per-portion meal data; the Meals table on this page shows each meal and its eaters.",
       },
-      sectionOverrides: [
-        {
-          kind: "fields",
-          id: "basic-information",
-          title: "Basic information",
-          placement: "supporting",
-          fields: [
-            "name",
-            "aliases",
-            "usuallyOnHand",
-            "createdAt",
-            "updatedAt",
-          ],
-        },
+      additionalSectionOverrides: [
         { kind: "slot", id: "nutrition-product", title: "Nutrition" },
-        {
-          kind: "relation",
-          id: "products",
-          title: "Products",
-          relation: "products",
-          filter: { descriptor: "ingredient" },
-          columns: ["name", "manufacturer", "category", "onHandUnits"],
-        },
-        {
-          kind: "relation",
-          id: "plants",
-          title: "Plants",
-          relation: "plants",
-          filter: { descriptor: "ingredientId" },
-          columns: ["name", "gardenGuideKey", "verdict"],
-          hideWhenEmpty: true,
-          placement: "supporting",
-        },
-        {
-          kind: "relation",
-          id: "recipes",
-          title: "Appears in recipes",
-          relation: "recipes",
-          filter: { descriptor: "related:recipe.ingredients" },
-          columns: ["name", "tags", "meals"],
-        },
       ],
     },
     list: {
@@ -83,7 +44,7 @@ export default defineEntity({
       {
         key: "name",
         kind: "text",
-        control: { kind: "text", sectionOverride: "identity" },
+        control: { kind: "text" },
         display: { list: true, detail: true },
         validation: {
           read: z
@@ -127,7 +88,6 @@ export default defineEntity({
       {
         key: "naKinds",
         kind: "text-array",
-        labelOverride: "Enrichment exclusions",
         control: { kind: "specialized", renderer: "tag-list" },
         validation: {
           read: z.array(baseKind),
@@ -138,7 +98,6 @@ export default defineEntity({
       {
         key: "usuallyOnHand",
         kind: "boolean",
-        labelOverride: "Usually on hand",
         description:
           "Assume I have enough for recipe planning. Recorded inventory stays separate.",
         control: { kind: "checkbox" },
@@ -178,45 +137,39 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
       {
         key: "recipeId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Recipe ID",
-        readKeyOverride: null,
         reference: { entity: "recipe" },
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:IngredientId",
       },
       { key: "shortcode", specialized: "shortcode" },
       "name",
       {
         key: "aliases",
-        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
       {
         key: "naKinds",
-        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
-      { key: "usuallyOnHand", defaultOverride: "literal", defaultValue: false },
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "usuallyOnHand", defaultValue: false },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
       { key: "recipeId", reference: "recipe" },
     ],

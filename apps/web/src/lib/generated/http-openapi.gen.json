@@ -2299,7 +2299,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, lastSeenAt, updatedAt, dataQuality. Default: -lastSeenAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: lastSeenAt, name, updatedAt, dataQuality. Default: -lastSeenAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -2310,12 +2310,12 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: name, lastSeenAt, updatedAt",
+            "description": "Group rows by one field. One of: lastSeenAt, name, updatedAt",
             "schema": {
               "type": "string",
               "enum": [
-                "name",
                 "lastSeenAt",
+                "name",
                 "updatedAt"
               ]
             },
@@ -3913,7 +3913,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, cost, lineKind, productQuantity, date, costType, trade, project, product, vendor, orderId, createdAt, updatedAt, dataQuality. Default: -date",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, name, cost, lineKind, productQuantity, costType, trade, projectId, productId, purchaseId, orderId, createdAt, updatedAt, dataQuality. Default: -date",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -15590,7 +15590,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, sortOrder, updatedAt, dataQuality. Default: -sortOrder",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: sortOrder, name, updatedAt, dataQuality. Default: -sortOrder",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -15601,12 +15601,12 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: name, sortOrder, updatedAt",
+            "description": "Group rows by one field. One of: sortOrder, name, updatedAt",
             "schema": {
               "type": "string",
               "enum": [
-                "name",
                 "sortOrder",
+                "name",
                 "updatedAt"
               ]
             },
@@ -18000,7 +18000,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, manufacturer, model, primaryGtin, category, fdc_id, price, notes, location, ingredient, expenseTotal, expenses, expectedQuantity, quantityVariance, purchaseDate, related:product.projects, related:product.vendors, related:product.purchases, dataQuality. Default: -createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, manufacturer, model, primaryGtin, categoryId, fdc_id, price, notes, location, ingredient, expenseTotal, expenseCount, ledgerExpectedQuantity, quantityVariance, purchaseDate, related:product.projects, related:product.vendors, related:product.purchases, dataQuality. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -18011,11 +18011,11 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: category",
+            "description": "Group rows by one field. One of: categoryId",
             "schema": {
               "type": "string",
               "enum": [
-                "category"
+                "categoryId"
               ]
             },
             "style": "form",
@@ -20865,7 +20865,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, kind, startDate, costEstimate, createdAt, updatedAt, dataQuality. Default: -createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, kind, startDate, costEstimate, createdAt, updatedAt, dataQuality. Default: -name",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -21949,7 +21949,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt, dataQuality. Default: -date",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, orderId, displayLabel, statedTotal, vendorId, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt, dataQuality. Default: -date",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -21960,15 +21960,15 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt",
+            "description": "Group rows by one field. One of: date, orderId, displayLabel, statedTotal, vendorId, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt",
             "schema": {
               "type": "string",
               "enum": [
+                "date",
                 "orderId",
                 "displayLabel",
-                "date",
                 "statedTotal",
-                "vendor",
+                "vendorId",
                 "expenseCount",
                 "expenseTotal",
                 "reconciliationGap",
@@ -23449,7 +23449,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, cookbook, costTotal, caloriesTotal, source, yield, tags, totalMinutes, dataQuality. Default: -createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, cookbook, costTotal, caloriesTotal, source, servings, tags, totalMinutes, dataQuality. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -26329,7 +26329,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, dueDate, trade, project, subjectProduct, createdAt, updatedAt, dataQuality. Default: -createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, dueDate, trade, projectId, subjectProductId, createdAt, updatedAt, dataQuality. Default: -name",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -28207,7 +28207,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt, dataQuality. Default: -spend",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: spend, name, purchaseCount, latestPurchaseDate, createdAt, updatedAt, dataQuality. Default: -spend",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -28218,13 +28218,13 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt",
+            "description": "Group rows by one field. One of: spend, name, purchaseCount, latestPurchaseDate, createdAt, updatedAt",
             "schema": {
               "type": "string",
               "enum": [
+                "spend",
                 "name",
                 "purchaseCount",
-                "spend",
                 "latestPurchaseDate",
                 "createdAt",
                 "updatedAt"
@@ -28629,7 +28629,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, acquiredAt, priceRange, createdAt, updatedAt, dataQuality. Default: -createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, acquiredAt, priceRange, createdAt, updatedAt, dataQuality. Default: -name",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -50185,46 +50185,6 @@
         "pattern": "^PLANT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "plant shortcode, e.g. PLANT-4K7M"
       },
-      "InputShared825239969A06DE8B": {
-        "type": "object",
-        "properties": {
-          "orderBy": {
-            "default": "name",
-            "type": "string",
-            "enum": [
-              "createdAt",
-              "updatedAt",
-              "name",
-              "manufacturer",
-              "model",
-              "primaryGtin",
-              "category",
-              "fdc_id",
-              "price",
-              "notes",
-              "location",
-              "ingredient",
-              "expenseTotal",
-              "expenses",
-              "expectedQuantity",
-              "quantityVariance",
-              "purchaseDate",
-              "related:product.projects",
-              "related:product.vendors",
-              "related:product.purchases",
-              "dataQuality"
-            ]
-          },
-          "direction": {
-            "default": "asc",
-            "type": "string",
-            "enum": [
-              "asc",
-              "desc"
-            ]
-          }
-        }
-      },
       "InputShared84B27245F080C408": {
         "anyOf": [
           {
@@ -50268,6 +50228,46 @@
         "type": "string",
         "pattern": "^VEN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "vendor shortcode, e.g. VEN-4K7M"
+      },
+      "InputShared9936527B223B3FC0": {
+        "type": "object",
+        "properties": {
+          "orderBy": {
+            "default": "name",
+            "type": "string",
+            "enum": [
+              "createdAt",
+              "updatedAt",
+              "name",
+              "manufacturer",
+              "model",
+              "primaryGtin",
+              "categoryId",
+              "fdc_id",
+              "price",
+              "notes",
+              "location",
+              "ingredient",
+              "expenseTotal",
+              "expenseCount",
+              "ledgerExpectedQuantity",
+              "quantityVariance",
+              "purchaseDate",
+              "related:product.projects",
+              "related:product.vendors",
+              "related:product.purchases",
+              "dataQuality"
+            ]
+          },
+          "direction": {
+            "default": "asc",
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          }
+        }
       },
       "InputShared9CAD91B537BB6937": {
         "type": "object",
@@ -64236,14 +64236,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/InputShared825239969A06DE8B"
+                "$ref": "#/components/schemas/InputShared9936527B223B3FC0"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/InputShared825239969A06DE8B"
+                  "$ref": "#/components/schemas/InputShared9936527B223B3FC0"
                 }
               }
             ]
@@ -64264,15 +64264,15 @@
               "manufacturer",
               "model",
               "primaryGtin",
-              "category",
+              "categoryId",
               "fdc_id",
               "price",
               "notes",
               "location",
               "ingredient",
               "expenseTotal",
-              "expenses",
-              "expectedQuantity",
+              "expenseCount",
+              "ledgerExpectedQuantity",
               "quantityVariance",
               "purchaseDate",
               "related:product.projects",
@@ -71023,7 +71023,7 @@
           "totals": {
             "$ref": "#/components/schemas/MealTotals"
           },
-          "mealCount": {
+          "meals": {
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
@@ -71045,7 +71045,7 @@
           "meta",
           "forkedFromRecipeName",
           "dataQuality",
-          "mealCount",
+          "meals",
           "sectionCount",
           "displayImages"
         ]

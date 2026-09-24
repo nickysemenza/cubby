@@ -91,6 +91,7 @@ export const financialAccountListOverride = defineListOverride<
           // report cannot attribute.
           add(
             accountHelper.accessor("ledgerPartyName", {
+              id: "ledgerPartyId",
               header: "Owner",
               meta: { className: "w-36" },
               cell: (i) => {
@@ -150,7 +151,7 @@ export const financialAccountListOverride = defineListOverride<
           );
           add(
             accountHelper.accessor((r) => r.sourceAliases.length, {
-              id: "aliases",
+              id: "sourceAliases",
               header: "Aliases",
               meta: { numeric: true, className: "w-24" },
             }),
@@ -212,9 +213,6 @@ export const financialTransactionListOverride = defineListOverride<
       ),
       entity: "financialTransaction",
     });
-    // `vendorInference` / `sourceRefs` keep their `possibleVendor` / `source`
-    // column ids via `display.columnId` (persisted layouts, filter bindings
-    // and sort ids can't silently rename).
     const overrides = useMemo(
       () =>
         createCubbyColumnCollection<FinancialTransactionOut>((add) => {
@@ -242,7 +240,7 @@ export const financialTransactionListOverride = defineListOverride<
           );
           add(
             transactionHelper.accessor("vendorInference", {
-              id: "possibleVendor",
+              id: "vendorInference",
               header: "Possible vendor",
               enableSorting: false,
               meta: { className: "w-48", mobile: { slot: "hidden" } },
@@ -258,7 +256,7 @@ export const financialTransactionListOverride = defineListOverride<
             transactionHelper.accessor(
               (r) => r.sourceRefs.map((ref) => ref.source).join(", "),
               {
-                id: "source",
+                id: "sourceRefs",
                 header: "Source",
                 enableSorting: false,
                 meta: { className: "w-32" },

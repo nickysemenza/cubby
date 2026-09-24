@@ -27,7 +27,7 @@ describe("manifestFilterConfig", () => {
     ["task", "trade"],
     ["expense", "trade"],
     ["expense", "costType"],
-    ["purchase", "vendor"],
+    ["purchase", "vendorId"],
   ] as const)("%s.%s is multiselect", (entity, columnId) => {
     expect(manifestFilterConfig(entity, columnId)?.filterType).toBe(
       "multiselect",
@@ -35,11 +35,11 @@ describe("manifestFilterConfig", () => {
   });
 
   it.each([
-    ["expense", "product"],
+    ["expense", "productId"],
     // The cross-entity presence filters. These also pin the exact `columnId`
     // each one hangs on: a spec whose id matches no column renders NOTHING,
     // silently (the bug recorded on `task.dueDate` in the manifest).
-    ["product", "expenses"],
+    ["product", "expenseCount"],
     ["product", "food"],
     ["product", "image"],
     ["product", "unitMappingQuality"],
@@ -71,10 +71,10 @@ describe("manifestFilterConfig", () => {
     ];
     const injected = [{ value: "p1", label: "Kitchen" }];
     expect(
-      manifestFilterConfig("expense", "project", { project: injected })
+      manifestFilterConfig("expense", "projectId", { project: injected })
         ?.options,
     ).toEqual([...sentinels, ...injected]);
-    expect(manifestFilterConfig("expense", "project")?.options).toEqual(
+    expect(manifestFilterConfig("expense", "projectId")?.options).toEqual(
       sentinels,
     );
   });
@@ -354,7 +354,7 @@ describe("expense vendor filter", () => {
 
   it("is a multiselect whose runtime roster resolves under the `vendor` key", () => {
     const injected = [{ value: VENDOR_ONE, label: "Home Depot" }];
-    const config = manifestFilterConfig("expense", "vendor", {
+    const config = manifestFilterConfig("expense", "purchaseId", {
       vendor: injected,
     });
     expect(config?.filterType).toBe("multiselect");
@@ -396,11 +396,11 @@ describe("purchase filters", () => {
 
   it("offers no vendor sentinels — Purchase.vendorId is NOT NULL", () => {
     const spec = getEntityFilters("purchase").find(
-      (s) => s.columnId === "vendor",
+      (s) => s.columnId === "vendorId",
     );
     expect(spec?.nullable).toBeUndefined();
     const injected = [{ value: VENDOR_ONE, label: "Home Depot" }];
-    const config = manifestFilterConfig("purchase", "vendor", {
+    const config = manifestFilterConfig("purchase", "vendorId", {
       vendor: injected,
     });
     expect(config?.filterType).toBe("multiselect");
@@ -462,7 +462,7 @@ describe("purchase filters", () => {
 
     const decoded = decodeFilters(specs, url);
     expect(decoded).toEqual([
-      { id: "vendor", value: ["VEN-4K7M", "VEN-2ABC"] },
+      { id: "vendorId", value: ["VEN-4K7M", "VEN-2ABC"] },
     ]);
 
     const state = new Map(decoded.map((f) => [f.id, f.value]));

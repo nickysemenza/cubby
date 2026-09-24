@@ -15,7 +15,11 @@ import { describe, expect, it } from "vitest";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { computeRecipeUsages, dbRecipeToAPIShallow } from "./recipe";
-import { dbRecipeToAPI, dbRecipeToAPIGraph } from "./recipe/helpers";
+import {
+  dbRecipeToAPI,
+  dbRecipeToAPIGraph,
+  dbRecipeToListAPI,
+} from "./recipe/helpers";
 import type { RecipeDeepDB, RecipeGraphDB } from "./recipe/internal-types";
 
 const RECIPE_ID = testEntityId(
@@ -162,16 +166,28 @@ const fullRecipeRow = {
 // dbRecipeToAPIShallow produces the shared topLevel+totals base that
 // dbRecipeToAPI/dbRecipeToAPIGraph/dbRecipeToListAPI each layer their own
 // remaining fields on top of — it deliberately omits the list-only
-// `mealCount`/`sectionCount`/`displayImages` extras (see dbRecipeToListAPI),
+// `meals`/`sectionCount`/`displayImages` extras (see dbRecipeToListAPI),
 // so validate its output against recipeListItemOut minus those three.
 const recipeShallowOut = recipeListItemOut.omit({
-  mealCount: true,
+  meals: true,
   sectionCount: true,
   displayImages: true,
   dataQuality: true,
 });
 
 describe("recipe repository helpers", () => {
+  it("returns the declared meals count without the former mealCount field", () => {
+    const result = dbRecipeToListAPI(
+      { ...baseRecipe, mealCount: "3", sectionCount: "2" },
+      [],
+      testCompleteDataQuality(),
+    );
+
+    expect(result.meals).toBe(3);
+    expect(result).not.toHaveProperty("mealCount");
+    expect(recipeListItemOut.parse(result)).toEqual(result);
+  });
+
   describe("dbRecipeToAPIShallow", () => {
     it("converts website recipe with URL without leaking DB-only fields", () => {
       const result = dbRecipeToAPIShallow(baseRecipe);

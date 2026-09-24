@@ -95,7 +95,7 @@ function buildRecipeColumns() {
       );
       add(
         helper.accessor("servings", {
-          id: "yield",
+          id: "servings",
           cell: ({ row }) => <span>{row.original.servings} servings</span>,
         }),
       );
@@ -159,14 +159,14 @@ describe("recipe list display columns", () => {
   it("builds exactly the declared columns, in listOrder", () => {
     const ids = buildRecipeColumnMeta().map((d) => d.id);
     expect(ids).toEqual([
+      "servings",
       "tags",
-      "yield",
+      "notes",
       "costTotal",
       "caloriesTotal",
-      "totalMinutes",
-      "source",
       "meals",
-      "notes",
+      "source",
+      "totalMinutes",
       "dataQuality",
     ]);
   });
@@ -177,10 +177,10 @@ describe("recipe list display columns", () => {
     );
     expect(byId).toEqual({
       tags: "Tags",
-      yield: "Yield",
-      costTotal: "Cost",
-      caloriesTotal: "Calories",
-      totalMinutes: "Time",
+      servings: "Servings",
+      costTotal: "Cost total",
+      caloriesTotal: "Calories total",
+      totalMinutes: "Total minutes",
       source: "Source",
       meals: "Meals",
       notes: "Notes",
@@ -194,7 +194,7 @@ describe("recipe list display columns", () => {
     );
     // In `generatedEntitySort.recipe.fields`.
     expect(byId.tags).toBe(true);
-    expect(byId.yield).toBe(true);
+    expect(byId.servings).toBe(true);
     expect(byId.costTotal).toBe(true);
     expect(byId.caloriesTotal).toBe(true);
     expect(byId.totalMinutes).toBe(true);
@@ -276,7 +276,7 @@ describe("recipe list display columns", () => {
         helper,
         createCubbyColumnCollection((add) => {
           add(helper.display({ id: "tags", cell: () => null }));
-          add(helper.display({ id: "yield", cell: () => null }));
+          add(helper.display({ id: "servings", cell: () => null }));
           add(helper.display({ id: "costTotal", cell: () => null }));
           add(helper.display({ id: "caloriesTotal", cell: () => null }));
           add(helper.display({ id: "totalMinutes", cell: () => null }));

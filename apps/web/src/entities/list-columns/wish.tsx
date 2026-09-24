@@ -133,7 +133,7 @@ export const wishListOverride = defineListOverride<
     const overrides = useMemo(
       () =>
         createCubbyColumnCollection<WishRow>((add) => {
-          // `id: "acquired"` matches the manifest's boolean spec, so the
+          // `id: "acquiredAt"` matches the manifest's boolean spec, so the
           // header filter control attaches. Derived, so read-only: a wish's
           // state comes from `acquiredAt`, a candidate's from whether the
           // Product is on a shelf.
@@ -141,7 +141,7 @@ export const wishListOverride = defineListOverride<
             columnHelper.accessor(
               (row) => (row.kind === "wish" ? row.wish.acquiredAt : null),
               {
-                id: "acquired",
+                id: "acquiredAt",
                 header: "Status",
                 meta: {
                   className: "w-28",

@@ -232,4 +232,11 @@ struct GenericEntityEditModelTests {
         #expect(placed == Set(model.visibleFields.map(\.key)))
         #expect(model.visibleFields.allSatisfy { $0.inCreate && $0.controlKind != nil })
     }
+
+    @Test(arguments: [EntityKey.ingredient, .wish, .meal])
+    func smallEditorsUseOneMainSection(key: EntityKey) throws {
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[key], mode: .create(prefill: [:]), client: try makeClient())
+        #expect(model.sections.map(\.id) == ["main"])
+    }
 }

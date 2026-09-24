@@ -37,25 +37,7 @@ export default defineEntity({
       actionLabel: "Add to Inventory",
     },
     icons: { phosphor: "Package", sfSymbol: "cube.box", emoji: "🗃️" },
-    detail: {
-      sectionOverrides: [
-        {
-          kind: "fields",
-          id: "inventory-details",
-          title: "Inventory item details",
-          fields: [
-            "productId",
-            "locationId",
-            "amount",
-            "placement",
-            "ownershipMode",
-            "ownerLedgerPartyId",
-            "effectiveOwnership",
-            "verifiedAt",
-          ],
-        },
-      ],
-    },
+    detail: {},
     list: {
       actionOverrides: ["moveTo", "delete"],
       links: [
@@ -70,11 +52,9 @@ export default defineEntity({
       {
         key: "productId",
         kind: "identifier",
-        labelOverride: "Product",
-        readKeyOverride: null,
         reference: { entity: "product" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { detail: true, detailOrderOverride: 2 },
+        display: { detail: true },
         validation: {
           read: null,
           create: productShortcode,
@@ -84,15 +64,13 @@ export default defineEntity({
       {
         key: "locationId",
         kind: "identifier",
-        labelOverride: "Location",
-        readKeyOverride: null,
         reference: { entity: "location" },
         control: {
           kind: "specialized",
           renderer: "entity-select",
           suggest: { basis: ["productId"] },
         },
-        display: { detail: true, detailOrderOverride: 1 },
+        display: { detail: true },
         validation: {
           read: null,
           create: locationShortcode,
@@ -106,7 +84,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 0,
           format: "amount",
           mobile: { slot: "trailing", priority: 0 },
         },
@@ -126,7 +103,7 @@ export default defineEntity({
             { value: "installed", label: "Installed" },
           ],
         },
-        display: { list: true, detail: true, detailOrderOverride: 4 },
+        display: { list: true, detail: true },
         validation: {
           read: inventoryPlacement.describe(
             "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
@@ -146,7 +123,6 @@ export default defineEntity({
       {
         key: "ownershipMode",
         kind: "enum",
-        labelOverride: "Ownership",
         control: {
           kind: "select",
           options: [
@@ -158,7 +134,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 5,
           renderer: { detail: "ownershipMode" },
         },
         validation: {
@@ -171,7 +146,6 @@ export default defineEntity({
         key: "ownerLedgerPartyId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Explicit owner",
         reference: {
           entity: "ledgerParty",
           filters: [{ field: "kind", values: ["member", "guest"] }],
@@ -179,7 +153,6 @@ export default defineEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
           detail: true,
-          detailOrderOverride: 6,
           renderer: { detail: "ownerLedgerPartyId" },
         },
         validation: {
@@ -191,7 +164,6 @@ export default defineEntity({
       {
         key: "effectiveOwnership",
         kind: "json",
-        labelOverride: "Effective owner",
         explanation: {
           ruleId: "inventory.effective-owner",
           version: 1,
@@ -203,7 +175,6 @@ export default defineEntity({
         },
         display: {
           detail: true,
-          detailOrderOverride: 7,
           renderer: { detail: "effectiveOwnership" },
         },
         provenance: {
@@ -274,8 +245,7 @@ export default defineEntity({
         key: "verifiedAt",
         kind: "timestamp",
         nullable: true,
-        labelOverride: "Verified",
-        display: { list: true, detail: true, detailOrderOverride: 3 },
+        display: { list: true, detail: true },
         validation: {
           read: z
             .date()
@@ -303,38 +273,34 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:InventoryItemId",
       },
       { key: "shortcode", specialized: "shortcode" },
       { key: "productId", reference: "product" },
       { key: "amount", specialized: "json:amount" },
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
       { key: "locationId", reference: "location" },
       { key: "valuation", kindOverride: "number", specialized: "real" },
       "verifiedAt",
       {
         key: "placement",
-        defaultOverride: "literal",
         defaultValue: "'stock'",
         specialized: "enum:InventoryPlacement",
       },
       {
         key: "ownershipMode",
-        defaultOverride: "literal",
         defaultValue: "inherit",
         specialized: "enum:ownershipMode",
       },

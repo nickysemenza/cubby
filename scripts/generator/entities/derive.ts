@@ -419,6 +419,16 @@ export const deriveRelationSections = (
     );
     const sectionIds = new Set(detail.sections.map(({ id }) => id));
     const omitRelations = { ...detail.omitRelations };
+    for (const key of Object.keys(detail.relationFilterOverrides)) {
+      if (
+        !entity.relations.some(
+          (relation) => relation.key === key && relation.cardinality === "many",
+        )
+      )
+        gaps.push(
+          `${entity.key}.presentation.detail.relationFilterOverrides.${key} names no many relation.`,
+        );
+    }
     for (const [key, reason] of Object.entries(omitRelations)) {
       const relation = entity.relations.find(
         (candidate) => candidate.key === key,
@@ -458,7 +468,11 @@ export const deriveRelationSections = (
             : [],
         ),
       );
-      const filter = backFilter(entity, relation, target, used);
+      const filterOverride = detail.relationFilterOverrides[relation.key];
+      const filter =
+        filterOverride === undefined
+          ? backFilter(entity, relation, target, used)
+          : { descriptor: filterOverride.descriptor };
       if ("gap" in filter) {
         gaps.push(filter.gap);
         continue;
@@ -473,7 +487,7 @@ export const deriveRelationSections = (
         relation: relation.key,
         filter,
         columns: null,
-        prefill: null,
+        prefill: filterOverride?.prefill ?? null,
         sort: null,
         limit: null,
         hideWhenEmpty: false,

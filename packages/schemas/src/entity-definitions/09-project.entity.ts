@@ -34,6 +34,11 @@ export default defineEntity({
     },
     icons: { phosphor: "Hammer", sfSymbol: "hammer", emoji: "🛠️" },
     detail: {
+      relationFilterOverrides: {
+        purchases: { descriptor: "related:purchase.projects" },
+        "purchased-products": { descriptor: "related:product.projects" },
+        resources: { descriptor: "usedOnProjectId" },
+      },
       omitRelations: {
         "blocked-by":
           "The Dependencies section edits Blocked by and Blocking in place.",
@@ -47,7 +52,7 @@ export default defineEntity({
         stats: ["costEstimate"],
         actionOverrides: ["edit", "setStatus"],
       },
-      sectionOverrides: [
+      additionalSectionOverrides: [
         { kind: "slot", id: "budget", title: "Budget" },
         { kind: "slot", id: "schedule", title: "Schedule", placement: "full" },
         {
@@ -57,43 +62,8 @@ export default defineEntity({
           placement: "supporting",
         },
         {
-          kind: "relation",
-          id: "tasks",
-          title: "Tasks",
-          relation: "tasks",
-          filter: { descriptor: "project" },
-          columns: ["name", "status", "dueDate", "trade"],
-        },
-        {
           kind: "fields",
-          id: "overview",
-          title: "Overview",
-          placement: "supporting",
-          fields: [
-            "name",
-            "icon",
-            "status",
-            "kind",
-            "startDate",
-            "endDate",
-            "costEstimate",
-            "parentProjectId",
-            "locations",
-            "defaultTrade",
-            "updatedAt",
-          ],
-        },
-        {
-          kind: "relation",
-          id: "reusable-resources",
-          title: "Reusable resources",
-          relation: "resources",
-          filter: { descriptor: "usedOnProjectId" },
-          columns: ["name", "manufacturer", "category"],
-        },
-        {
-          kind: "fields",
-          id: "resources",
+          id: "resource-links",
           title: "Resources",
           placement: "supporting",
           fields: ["googleDriveFolderUrl", "notionPageUrl"],
@@ -104,48 +74,6 @@ export default defineEntity({
           title: "Dependencies",
           placement: "supporting",
           fields: ["blockedByIds", "blockingIds"],
-        },
-        {
-          kind: "relation",
-          id: "sub-projects",
-          title: "Sub-projects",
-          relation: "sub-projects",
-          filter: { descriptor: "parent" },
-          columns: ["name", "status", "kind", "costEstimate"],
-        },
-        {
-          kind: "relation",
-          id: "expenses",
-          title: "Expenses",
-          relation: "expenses",
-          filter: { descriptor: "project" },
-          columns: ["name", "cost", "date", "costType", "trade", "product"],
-          sort: { field: "date", direction: "desc" },
-        },
-        {
-          kind: "relation",
-          id: "purchases",
-          title: "Purchases",
-          relation: "purchases",
-          filter: { descriptor: "related:purchase.projects" },
-          columns: ["vendor", "displayLabel", "date", "statedTotal"],
-          sort: { field: "date", direction: "desc" },
-        },
-        {
-          kind: "relation",
-          id: "purchased-products",
-          title: "Purchased products",
-          relation: "purchased-products",
-          filter: { descriptor: "related:product.projects" },
-          columns: ["name", "manufacturer", "category", "expenseTotal"],
-        },
-        {
-          kind: "relation",
-          id: "vendors",
-          title: "Vendors",
-          relation: "vendors",
-          filter: { descriptor: "projectId" },
-          columns: ["name", "purchaseCount", "spend"],
         },
         {
           kind: "fields",
@@ -203,7 +131,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 10,
           standard: "name",
         },
         validation: {
@@ -219,7 +146,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 30,
         },
         validation: {
           read: projectStatusSchema,
@@ -235,7 +161,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 40,
         },
         validation: {
           read: projectKindSchema.nullable(),
@@ -247,7 +172,7 @@ export default defineEntity({
         key: "locations",
         kind: "text-array",
         control: { kind: "specialized", renderer: "tag-list" },
-        display: { detail: true, detailOrderOverride: 90 },
+        display: { detail: true },
         resolution: {
           reset: { locationsMode: "inherit", locations: [] },
           none: { locationsMode: "explicit", locations: [] },
@@ -286,7 +211,6 @@ export default defineEntity({
       {
         key: "locationsMode",
         kind: "enum",
-        readKeyOverride: null,
         validation: {
           read: null,
           create: inheritanceModeSchema.optional(),
@@ -297,7 +221,6 @@ export default defineEntity({
         key: "defaultTrade",
         kind: "enum",
         nullable: true,
-        labelOverride: "Default trade",
         control: {
           kind: "select",
           // Project has no vendor field, unlike `expense.trade`/
@@ -305,7 +228,7 @@ export default defineEntity({
           // signal available.
           suggest: { basis: ["name", "notes", "kind"] },
         },
-        display: { detail: true, detailOrderOverride: 95 },
+        display: { detail: true },
         resolution: {
           reset: { defaultTrade: null },
           redundancy: "eligible",
@@ -344,12 +267,10 @@ export default defineEntity({
         key: "costEstimate",
         kind: "number",
         nullable: true,
-        labelOverride: "Estimate",
         control: { kind: "number", renderer: "money", placeholder: "e.g. 500" },
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 70,
         },
         validation: {
           read: positiveMoneyNullable
@@ -363,13 +284,11 @@ export default defineEntity({
         key: "parentProjectId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Parent project",
         reference: { entity: "project" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 80,
         },
         validation: {
           read: projectShortcode.nullable(),
@@ -381,12 +300,10 @@ export default defineEntity({
         key: "startDate",
         kind: "date",
         nullable: true,
-        labelOverride: "Start date",
         control: { kind: "date", sectionOverride: "schedule" },
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 50,
         },
         validation: {
           read: plainDate
@@ -400,12 +317,10 @@ export default defineEntity({
         key: "endDate",
         kind: "date",
         nullable: true,
-        labelOverride: "End date",
         control: { kind: "date", sectionOverride: "schedule" },
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 60,
         },
         validation: {
           read: plainDate
@@ -423,7 +338,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 20,
         },
         validation: {
           read: z.string().describe("Emoji shown next to the name").nullable(),
@@ -447,12 +361,10 @@ export default defineEntity({
         key: "googleDriveFolderUrl",
         kind: "text",
         nullable: true,
-        labelOverride: "Google Drive folder",
         control: { kind: "text", renderer: "url", sectionOverride: "details" },
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 10,
         },
         validation: {
           read: googleDriveFolderUrl,
@@ -464,12 +376,10 @@ export default defineEntity({
         key: "notionPageUrl",
         kind: "text",
         nullable: true,
-        labelOverride: "Notion page",
         control: { kind: "text", renderer: "url", sectionOverride: "details" },
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 20,
         },
         validation: {
           read: notionPageUrl,
@@ -480,7 +390,6 @@ export default defineEntity({
       {
         key: "blockedByIds",
         kind: "identifier",
-        labelOverride: "Blocked By IDs",
         reference: { entity: "task", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         display: { list: true, detail: true },
@@ -529,7 +438,6 @@ export default defineEntity({
       {
         key: "childProjectIds",
         kind: "identifier",
-        labelOverride: "Child Project IDs",
         reference: { entity: "project", multiple: true },
         display: { list: true },
         validation: {
@@ -541,7 +449,6 @@ export default defineEntity({
       {
         key: "blockingIds",
         kind: "identifier",
-        labelOverride: "Blocking IDs",
         reference: { entity: "task", multiple: true },
         display: { list: true, detail: true },
         validation: {
@@ -562,8 +469,7 @@ export default defineEntity({
       {
         key: "updatedAt",
         kind: "timestamp",
-        labelOverride: "Last updated",
-        display: { detail: true, detailOrderOverride: 100 },
+        display: { detail: true },
         validation: {
           read: z.date(),
           create: null,
@@ -588,45 +494,38 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "notionPageId",
         kind: "text",
         nullable: true,
-        labelOverride: "Notion Page ID",
-        readKeyOverride: null,
       },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:ProjectId",
       },
       { key: "shortcode", specialized: "shortcode" },
       "name",
       {
         key: "status",
-        defaultOverride: "literal",
         defaultValue: "'planning'",
         specialized: "enum:status",
       },
       { key: "kind", specialized: "enum:kind" },
       {
         key: "locations",
-        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
       {
         key: "locationsMode",
-        defaultOverride: "literal",
         defaultValue: "'inherit'",
         specialized: "enum:locationsMode",
       },
@@ -640,8 +539,8 @@ export default defineEntity({
       "googleDriveFolderUrl",
       "notionPageUrl",
       "notionPageId",
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [

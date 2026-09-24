@@ -368,9 +368,16 @@ export const compilePresentation = (
   const detailFields = fieldModel.fields
     .filter((field) => field.display.detail)
     .map((field) => field.key);
-  const sections =
-    detail.sections ??
-    (detailFields.length === 0
+  const additionalFields = new Set(
+    detail.additionalSections.flatMap((section) =>
+      section.kind === "fields" ? section.fields : [],
+    ),
+  );
+  const overviewFields = detailFields.filter(
+    (key) => !additionalFields.has(key),
+  );
+  const sections = detail.sections ?? [
+    ...(overviewFields.length === 0
       ? []
       : [
           {
@@ -379,9 +386,11 @@ export const compilePresentation = (
             title: "Overview",
             placement: "supporting" as const,
             collapsed: false,
-            fields: detailFields,
+            fields: overviewFields,
           },
-        ]);
+        ]),
+    ...detail.additionalSections,
+  ];
   checkHero(detail.hero, lookup);
   const timelineSection = checkSections(
     sections,
@@ -418,13 +427,20 @@ export const compilePresentation = (
       },
       sections,
       omitRelations: detail.omitRelations,
+      additionalSections: detail.additionalSections,
+      relationFilterOverrides: detail.relationFilterOverrides,
     },
     list: {
       // Cards are a universal alternate renderer. Stored images improve the
       // card, but their absence resolves through the entity icon fallback.
-      views: list.views.includes("shelf")
-        ? list.views
-        : [...list.views, "shelf"],
+      views: [
+        ...(list.views.includes("shelf")
+          ? list.views
+          : [...list.views, "shelf" as const]),
+        ...(capabilities.timeline !== null && !list.views.includes("timeline")
+          ? ["timeline" as const]
+          : []),
+      ],
       viewAliases: list.viewAliases,
       shelf: { subtitle: shelfSubtitle },
       primarySearch: list.primarySearch,

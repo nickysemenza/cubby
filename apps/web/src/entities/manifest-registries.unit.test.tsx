@@ -8,6 +8,7 @@ import type { GenericDetailEntity } from "~/app/_components/entity-detail/detail
 import { detailSlots } from "~/app/_components/entity-detail/detail-slots";
 import { listSlotCoverage } from "~/app/_components/entity-list/list-slots";
 import { detailEntities } from "~/entities/generated/entity-details.gen";
+import { entityOverrideComparisons } from "~/entities/generated/entity-override-comparisons.gen";
 
 import {
   detailFieldRenderersFor,
@@ -111,6 +112,25 @@ describe("manifest registries", () => {
     );
     expect(labels.guideSowWindow).toBe("Guide sow window");
     expect(labels.guideTransplantWindow).toBe("Guide transplant window");
+  });
+
+  it("infers shared identifier labels and explains invalid relation defaults", () => {
+    const labelsFor = (entity: "product" | "usda-food") =>
+      Object.fromEntries(
+        entityFieldModels[entity].fields.map((field) => [
+          field.key,
+          field.label,
+        ]),
+      );
+    expect(labelsFor("product").fdc_id).toBe("FDC ID");
+    expect(labelsFor("usda-food").fdc_id).toBe("FDC ID");
+    expect(labelsFor("product").isbn).toBe("ISBN");
+
+    const comparison = entityOverrideComparisons.product.find(
+      (item) => item.path === "presentation.detail.relationFilterOverrides",
+    );
+    expect(comparison).toMatchObject({ status: "invalid", without: null });
+    expect(comparison?.reason).toContain("renders no detail table");
   });
 
   it("names only registered verbs in every detail hero and list action roster", () => {

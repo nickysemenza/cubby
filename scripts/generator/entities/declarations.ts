@@ -399,35 +399,9 @@ export const declarationModules = new Map<
   { path: string; enumExports: string[] }
 >();
 
-export const loadEntityDeclarations = async (): Promise<CompiledEntity[]> => {
-  const entries = (await readdir(SPEC_DIRECTORY, { withFileTypes: true }))
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".entity.ts"))
-    .sort((left, right) => left.name.localeCompare(right.name));
-  if (entries.length === 0)
-    throw new EntityDeclarationError(
-      `${SPEC_DIRECTORY} has no entity declarations.`,
-    );
-  const loaded = await Promise.all(
-    entries.map(async (entry) => {
-      const module = await import(
-        pathToFileURL(resolve(SPEC_DIRECTORY, entry.name)).href
-      );
-      const raw = objectValue(module.default, entry.name);
-      // Filter schemas are generated from descriptors (`deriveSchema`); a
-      // hand-written map would silently shadow them.
-      if (module.filterSchemas !== undefined || "filterSchemas" in raw)
-        throw new EntityDeclarationError(
-          `${entry.name} exports filterSchemas; declare filters as descriptors with deriveSchema instead.`,
-        );
-      declarationModules.set(String(raw.key), {
-        path: `../entity-definitions/${entry.name.replace(/\.ts$/, "")}`,
-        enumExports: Object.keys(module).filter((key) =>
-          key.startsWith("generated"),
-        ),
-      });
-      return raw;
-    }),
-  );
+export const compileLoadedEntityDeclarations = (
+  loaded: readonly DeclarationObject[],
+): CompiledEntity[] => {
   const declaredOverrides = new Map(
     loaded.map((raw) => [String(raw.key), collectEntityOverrides(raw)]),
   );
@@ -456,3 +430,44 @@ export const loadEntityDeclarations = async (): Promise<CompiledEntity[]> => {
   }
   return entities;
 };
+
+export const loadEntityDeclarationBundle = async (): Promise<{
+  entities: CompiledEntity[];
+  declarations: DeclarationObject[];
+}> => {
+  const entries = (await readdir(SPEC_DIRECTORY, { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".entity.ts"))
+    .sort((left, right) => left.name.localeCompare(right.name));
+  if (entries.length === 0)
+    throw new EntityDeclarationError(
+      `${SPEC_DIRECTORY} has no entity declarations.`,
+    );
+  const loaded = await Promise.all(
+    entries.map(async (entry) => {
+      const module = await import(
+        pathToFileURL(resolve(SPEC_DIRECTORY, entry.name)).href
+      );
+      const raw = objectValue(module.default, entry.name);
+      // Filter schemas are generated from descriptors (`deriveSchema`); a
+      // hand-written map would silently shadow them.
+      if (module.filterSchemas !== undefined || "filterSchemas" in raw)
+        throw new EntityDeclarationError(
+          `${entry.name} exports filterSchemas; declare filters as descriptors with deriveSchema instead.`,
+        );
+      declarationModules.set(String(raw.key), {
+        path: `../entity-definitions/${entry.name.replace(/\.ts$/, "")}`,
+        enumExports: Object.keys(module).filter((key) =>
+          key.startsWith("generated"),
+        ),
+      });
+      return raw;
+    }),
+  );
+  return {
+    entities: compileLoadedEntityDeclarations(loaded),
+    declarations: loaded,
+  };
+};
+
+export const loadEntityDeclarations = async (): Promise<CompiledEntity[]> =>
+  (await loadEntityDeclarationBundle()).entities;

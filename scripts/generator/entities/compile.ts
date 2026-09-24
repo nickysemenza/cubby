@@ -60,6 +60,40 @@ const entityPorts = (
 
 const filterKinds = FILTER_KINDS;
 
+const FIELD_ACRONYMS = new Set([
+  "AI",
+  "API",
+  "FDC",
+  "GTIN",
+  "ID",
+  "IDS",
+  "ISBN",
+  "MCP",
+  "OS",
+  "QR",
+  "SKU",
+  "UPC",
+  "URL",
+  "USDA",
+]);
+
+const inferredFieldLabel = (key: string, isReference: boolean): string => {
+  const source = isReference ? key.replace(/Id$/u, "") : key;
+  const words = source
+    .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
+    .replace(/[_-]+/gu, " ")
+    .split(/\s+/u)
+    .filter(Boolean);
+  return words
+    .map((word, index) => {
+      const upper = word.toUpperCase();
+      if (FIELD_ACRONYMS.has(upper)) return upper === "IDS" ? "IDs" : upper;
+      const lower = word.toLowerCase();
+      return index === 0 ? lower[0]!.toUpperCase() + lower.slice(1) : lower;
+    })
+    .join(" ");
+};
+
 /** Preserve the explicitly named declaration exceptions for the catalog. */
 export function collectEntityOverrides(
   raw: DeclarationObject,
@@ -278,13 +312,13 @@ const compileFieldProvenance = (
   };
 };
 
-// Field compilation deliberately keeps cross-property invariants in one pass.
-// eslint-disable-next-line complexity
+// oxlint-disable-next-line eslint/complexity -- Field compilation enforces cross-property model invariants in one pass.
 const compileFieldModel = (
   value: EntityFieldModelMetadata | undefined,
   context: string,
   relations: EntityDeclarationMetadata["relations"],
   entityKey: string,
+  titleField: string,
 ): EntityFieldModel => {
   if (value === undefined) {
     return {
@@ -300,6 +334,7 @@ const compileFieldModel = (
     };
   }
   const model = value;
+  // oxlint-disable-next-line eslint/complexity -- This pass validates and compiles interdependent field properties together.
   const fields = model.fields.map((field, index): EntityField => {
     const fieldContext = `${context}.fields[${index}]`;
     const key = field.key;
@@ -315,24 +350,19 @@ const compileFieldModel = (
       throw new EntityDeclarationError(
         `${fieldContext} cannot declare provenance for a reference field.`,
       );
-    // The humanised-key fallback reads "Location Id" for a reference; the
-    // editor and facts grid need the target's sentence-case name.
-    if (field.reference !== null && field.label === undefined)
-      throw new EntityDeclarationError(
-        `${fieldContext} is a reference field and must declare a sentence-case label.`,
-      );
     const provenance = compileFieldProvenance(field, fieldContext, relations);
     return {
       key,
       kind: field.kind,
       nullable: field.nullable,
-      label:
-        field.label ??
-        key
-          .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-          .replace(/^./, (letter) => letter.toUpperCase()),
+      label: field.label ?? inferredFieldLabel(key, field.reference !== null),
       description: field.description,
-      readKey: field.readKey === undefined ? key : field.readKey,
+      readKey:
+        field.readKey === undefined
+          ? field.validation.read === null
+            ? null
+            : key
+          : field.readKey,
       reference: field.reference,
       provenance,
       explanation:
@@ -356,8 +386,10 @@ const compileFieldModel = (
         format: field.display.format ?? null,
         renderer: field.display.renderer ?? null,
         mobile: field.display.mobile ?? null,
-        detailOrder: field.display.detailOrder,
-        listOrder: field.display.listOrder,
+        detailOrder:
+          field.display.detailOrder ?? (key === titleField ? 0 : index + 1),
+        listOrder:
+          field.display.listOrder ?? (key === titleField ? 0 : index + 1),
         list: field.display.list,
         detail: field.display.detail,
         listHidden: field.display.listHidden ?? false,
@@ -386,7 +418,8 @@ const compileFieldModel = (
       (!field.display.list ||
         field.kind !== (standard === "name" ? "text" : "json") ||
         field.readKey !== (standard === "name" ? "name" : "images") ||
-        (field.display.columnId ?? field.key) !== standard)
+        (field.display.columnId ?? field.key) !==
+          (standard === "image" ? "images" : standard))
     ) {
       throw new EntityDeclarationError(
         `${context}.${field.key} has an incompatible standard display column.`,
@@ -410,7 +443,15 @@ const compileFieldModel = (
       throw new EntityDeclarationError(
         `${fieldContext} references undeclared field ${key}.`,
       );
-    const defaultKind = field.default ?? "none";
+    const defaultKind =
+      field.default ??
+      (key === "id"
+        ? "generated"
+        : key === "createdAt" || key === "updatedAt"
+          ? "now"
+          : field.defaultValue !== undefined
+            ? "literal"
+            : "none");
     const defaultValue = field.defaultValue ?? null;
     if (defaultKind === "literal" && field.defaultValue === undefined)
       throw new EntityDeclarationError(
@@ -462,9 +503,7 @@ const compileFieldModel = (
           const [first, ...rest] = sortValue.fields;
           if (first === undefined)
             throw new EntityDeclarationError(`${sortContext}.fields is empty.`);
-          const defaultField =
-            sortValue.default ??
-            (sortValue.fields.includes("createdAt") ? "createdAt" : first);
+          const defaultField = sortValue.default ?? first;
           for (const key of sortValue.fields) {
             if (computed.includes(key)) continue;
             if (!fieldKeys.includes(key))
@@ -1269,6 +1308,7 @@ export const compileEntity = (
     `${context}.model`,
     declaration.relations,
     key,
+    declaration.presentation.titleField,
   );
   const operationOwners = {
     delete: declaration.capabilities.operationOwners.delete,
@@ -1309,8 +1349,11 @@ export const compileEntity = (
   );
   const descriptorColumns = filterDescriptors.map(({ columnId }) => columnId);
   if (new Set(descriptorColumns).size !== descriptorColumns.length) {
+    const repeated = descriptorColumns.filter(
+      (columnId, index) => descriptorColumns.indexOf(columnId) !== index,
+    );
     throw new EntityDeclarationError(
-      `${context}.filters.descriptors contains duplicate columnId values.`,
+      `${context}.filters.descriptors contains duplicate columnId values: ${repeated.join(", ")}.`,
     );
   }
   if (

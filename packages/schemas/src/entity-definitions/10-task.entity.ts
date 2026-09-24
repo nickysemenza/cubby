@@ -29,6 +29,9 @@ export default defineEntity({
     },
     icons: { phosphor: "ListChecks", sfSymbol: "checklist", emoji: "✅" },
     detail: {
+      relationFilterOverrides: {
+        subtasks: { descriptor: "parentTaskId" },
+      },
       omitRelations: {
         "blocked-by":
           "The Dependencies section edits Blocked by and Blocking in place.",
@@ -37,37 +40,13 @@ export default defineEntity({
         chip: "status",
         actionOverrides: ["edit", "bulkEdit", "delete"],
       },
-      sectionOverrides: [
-        {
-          kind: "fields",
-          id: "overview",
-          title: "Overview",
-          placement: "supporting",
-          fields: [
-            "name",
-            "status",
-            "trade",
-            "dueDate",
-            "dueEndDate",
-            "projectId",
-            "subjectProductId",
-            "parentTaskId",
-          ],
-        },
+      additionalSectionOverrides: [
         {
           kind: "fields",
           id: "dependencies",
           title: "Dependencies",
           placement: "supporting",
           fields: ["blockedByIds", "blockingIds"],
-        },
-        {
-          kind: "relation",
-          id: "subtasks",
-          title: "Subtasks",
-          relation: "subtasks",
-          filter: { descriptor: "parentTask" },
-          columns: ["name", "status", "dueDate"],
         },
       ],
     },
@@ -113,7 +92,6 @@ export default defineEntity({
           list: true,
           detail: true,
           standard: "name",
-          detailOrderOverride: 0,
         },
         validation: {
           read: z.string().min(1),
@@ -128,7 +106,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 1,
           width: "sm",
           mobile: { slot: "subtitle", priority: 10 },
         },
@@ -142,7 +119,6 @@ export default defineEntity({
         key: "projectId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Project",
         reference: { entity: "project" },
         control: {
           kind: "specialized",
@@ -152,8 +128,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 5,
-          columnIdOverride: "project",
         },
         resolution: {
           reset: { projectMode: "inherit", projectId: null },
@@ -193,7 +167,6 @@ export default defineEntity({
       {
         key: "projectMode",
         kind: "enum",
-        readKeyOverride: null,
         validation: {
           read: null,
           create: inheritanceModeSchema.optional(),
@@ -204,7 +177,6 @@ export default defineEntity({
         key: "subjectProductId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "For",
         reference: { entity: "product" },
         control: {
           kind: "specialized",
@@ -214,8 +186,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 6,
-          columnIdOverride: "subjectProduct",
         },
         resolution: {
           reset: { subjectProductMode: "inherit", subjectProductId: null },
@@ -255,7 +225,6 @@ export default defineEntity({
       {
         key: "subjectProductMode",
         kind: "enum",
-        readKeyOverride: null,
         validation: {
           read: null,
           create: inheritanceModeSchema.optional(),
@@ -266,14 +235,11 @@ export default defineEntity({
         key: "parentTaskId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Parent Task",
         reference: { entity: "task" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 7,
-          columnIdOverride: "parentTask",
         },
         validation: {
           read: taskShortcode.nullable(),
@@ -285,12 +251,10 @@ export default defineEntity({
         key: "dueDate",
         kind: "date",
         nullable: true,
-        labelOverride: "Due",
         control: { kind: "date", sectionOverride: "schedule" },
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 3,
           width: "sm",
           format: "plainDate",
           mobile: { slot: "meta", priority: 40, interactive: true },
@@ -305,12 +269,10 @@ export default defineEntity({
         key: "dueEndDate",
         kind: "date",
         nullable: true,
-        labelOverride: "Due end",
         control: { kind: "date", sectionOverride: "schedule" },
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 4,
           listHidden: true,
         },
         validation: {
@@ -338,7 +300,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrderOverride: 2,
           width: "sm",
           mobile: { slot: "meta", priority: 50 },
         },
@@ -388,7 +349,6 @@ export default defineEntity({
       {
         key: "blockedByIds",
         kind: "identifier",
-        labelOverride: "Blocked by",
         reference: { entity: "task", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         display: { detail: true },
@@ -401,8 +361,6 @@ export default defineEntity({
       {
         key: "pendingImageIds",
         kind: "identifier",
-        labelOverride: "Pending image IDs",
-        readKeyOverride: null,
         reference: { entity: "image", multiple: true },
         validation: {
           read: null,
@@ -413,8 +371,6 @@ export default defineEntity({
       {
         key: "removeImageIds",
         kind: "identifier",
-        labelOverride: "Remove image IDs",
-        readKeyOverride: null,
         reference: { entity: "image", multiple: true },
         validation: {
           read: null,
@@ -425,7 +381,6 @@ export default defineEntity({
       {
         key: "imageOrder",
         kind: "text",
-        readKeyOverride: null,
         validation: {
           read: null,
           create: null,
@@ -435,7 +390,7 @@ export default defineEntity({
       {
         key: "images",
         kind: "json",
-        display: { list: true, standard: "image", columnIdOverride: "image" },
+        display: { list: true, standard: "image" },
         provenance: {
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],
@@ -497,7 +452,6 @@ export default defineEntity({
       {
         key: "blockingIds",
         kind: "identifier",
-        labelOverride: "Blocks",
         reference: { entity: "task", multiple: true },
         display: { detail: true },
         validation: {
@@ -542,46 +496,39 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "notionPageId",
         kind: "text",
         nullable: true,
-        labelOverride: "Notion Page ID",
-        readKeyOverride: null,
       },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:TaskId",
       },
       { key: "shortcode", specialized: "shortcode" },
       "name",
       {
         key: "status",
-        defaultOverride: "literal",
         defaultValue: "'not_started'",
         specialized: "enum:status",
       },
       { key: "projectId", reference: "project" },
       {
         key: "projectMode",
-        defaultOverride: "literal",
         defaultValue: "'inherit'",
         specialized: "enum:projectMode",
       },
       { key: "subjectProductId", reference: "product" },
       {
         key: "subjectProductMode",
-        defaultOverride: "literal",
         defaultValue: "'inherit'",
         specialized: "enum:subjectProductMode",
       },
@@ -591,8 +538,8 @@ export default defineEntity({
       { key: "trade", specialized: "enum:trade" },
       { key: "sortOrder", specialized: "double-precision" },
       "notionPageId",
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [
@@ -652,12 +599,12 @@ export default defineEntity({
         "status",
         "dueDate",
         "trade",
-        "project",
-        "subjectProduct",
+        "projectId",
+        "subjectProductId",
         "createdAt",
         "updatedAt",
       ],
-      computed: ["project", "subjectProduct"],
+      computed: ["projectId", "subjectProductId"],
       groupable: ["status"],
     },
     intents: {
@@ -824,7 +771,8 @@ export default defineEntity({
         urlOnly: true,
       },
       {
-        columnId: "project",
+        columnId: "projectId",
+        urlKey: "project",
         field: "projectId",
         kind: "idMulti",
         placeholder: "Filter by project...",
@@ -842,7 +790,8 @@ export default defineEntity({
         urlOnly: true,
       },
       {
-        columnId: "subjectProduct",
+        columnId: "subjectProductId",
+        urlKey: "subjectProduct",
         field: "subjectProductId",
         kind: "idMulti",
         placeholder: "Filter by product...",
@@ -851,7 +800,8 @@ export default defineEntity({
         nullable: { field: "subjectProductPresenceFilter", label: "product" },
       },
       {
-        columnId: "parentTask",
+        columnId: "parentTaskId",
+        urlKey: "parentTask",
         field: "parentTaskId",
         kind: "idMulti",
         placeholder: "Filter by parent task...",
@@ -887,7 +837,10 @@ export default defineEntity({
         placeholder: "Search related parent task...",
       },
       {
-        columnId: "parentTaskId",
+        columnId: "relatedParentTaskId",
+        field: "parentTaskId",
+        urlKey: "parentTaskId",
+        wire: { kind: "param", name: "parentTaskId" },
         kind: "idMulti",
         placeholder: "Filter by related parent task id...",
         brandRef: { entity: "task" },

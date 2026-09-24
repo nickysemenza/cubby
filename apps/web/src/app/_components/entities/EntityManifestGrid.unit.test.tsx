@@ -154,7 +154,7 @@ describe("EntityManifestGrid mega table: baseline rendering", () => {
     const recipe = within(findEntityRow("recipe")).getByRole("button");
 
     expect(product).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("Declaration overrides")).not.toBeInTheDocument();
+    expect(screen.queryByText("Effective behavior")).not.toBeInTheDocument();
     fireEvent.click(product);
     expect(onSelect).toHaveBeenLastCalledWith("product");
 
@@ -166,11 +166,13 @@ describe("EntityManifestGrid mega table: baseline rendering", () => {
       />,
     );
     expect(product).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("Declaration overrides")).toBeInTheDocument();
+    expect(screen.getAllByText("Declaration overrides").length).toBeGreaterThan(
+      0,
+    );
     expect(screen.getByText("Effective behavior")).toBeInTheDocument();
     expect(screen.getByText("Storage table")).toBeInTheDocument();
     expect(
-      screen.getByText("presentation.detail.sectionOverrides"),
+      screen.getAllByText("presentation.detail.relationFilterOverrides")[0],
     ).toBeInTheDocument();
     fireEvent.click(product);
     expect(onSelect).toHaveBeenLastCalledWith(null);

@@ -50,11 +50,10 @@ describe("readReferenceField", () => {
     });
   });
 
-  // Regression: recipe `meals` references meal but reads `mealCount`; parsing
-  // that number as shortcodes crashed every ingredient page listing a recipe.
+  // A count under a relation field must not be parsed as shortcodes.
   it("yields no reference for a count-bearing read key so it renders as a scalar", () => {
     expect(
-      readReferenceField({ mealCount: 3 }, field("recipe", "meals")),
+      readReferenceField({ meals: 3 }, field("recipe", "meals")),
     ).toBeNull();
   });
 });

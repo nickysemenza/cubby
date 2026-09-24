@@ -10,12 +10,12 @@ import { z } from "zod";
 
 const optionalText = z.string().trim().min(1).nullable();
 const optionalDays = z.number().int().positive().nullable();
-const daysField = <const K extends string>(key: K, label: string) =>
+const daysField = <const K extends string>(key: K, _label: string) =>
   ({
     key,
     kind: "number",
     nullable: true,
-    labelOverride: label,
+
     control: { kind: "number" },
     display: { detail: true },
     validation: {
@@ -26,13 +26,13 @@ const daysField = <const K extends string>(key: K, label: string) =>
   }) as const;
 const derivedText = <const K extends string>(
   key: K,
-  label: string,
+  _label: string,
   description: string,
 ) => ({
   key,
   kind: "text" as const,
   nullable: true as const,
-  labelOverride: label,
+
   display: { detail: true as const },
   provenance: {
     kind: "derived" as const,
@@ -67,57 +67,7 @@ export default defineEntity({
       actionLabel: "New Plant",
     },
     icons: { phosphor: "Leaf", sfSymbol: "leaf.circle", emoji: "🌿" },
-    detail: {
-      sectionOverrides: [
-        {
-          kind: "relation",
-          id: "plantings",
-          title: "Plantings",
-          relation: "plantings",
-          filter: { descriptor: "plantId" },
-          columns: [
-            "status",
-            "locationId",
-            "sowedOn",
-            "transplantedOn",
-            "outcome",
-          ],
-          sort: { field: "createdAt", direction: "desc" },
-          hideWhenEmpty: true,
-        },
-        {
-          kind: "relation",
-          id: "products",
-          title: "Seeds and plants",
-          relation: "products",
-          filter: { descriptor: "growsPlant" },
-          columns: ["name", "manufacturer", "onHandUnits"],
-          hideWhenEmpty: true,
-        },
-        {
-          kind: "fields",
-          id: "overview",
-          title: "Plant details",
-          placement: "supporting",
-          fields: [
-            "name",
-            "gardenGuideKey",
-            "verdict",
-            "ingredientId",
-            "latinName",
-            "breeding",
-            "daysFromSowMin",
-            "daysFromSowMax",
-            "daysFromTransplantMin",
-            "daysFromTransplantMax",
-            "routes",
-            "guideSowWindow",
-            "guideTransplantWindow",
-            "notes",
-          ],
-        },
-      ],
-    },
+    detail: {},
     list: {
       links: [{ label: "Garden workbench", path: "/garden-workbench" }],
     },
@@ -139,7 +89,6 @@ export default defineEntity({
         key: "gardenGuideKey",
         kind: "text",
         nullable: true,
-        labelOverride: "Crop",
         control: {
           kind: "select",
           options: gardenCropKeys.map((key) => ({
@@ -178,7 +127,6 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "ingredient" },
-        labelOverride: "Ingredient",
         control: { kind: "specialized", renderer: "entity-select" },
         display: { detail: true },
         validation: {
@@ -191,7 +139,6 @@ export default defineEntity({
         key: "latinName",
         kind: "text",
         nullable: true,
-        labelOverride: "Latin name",
         control: { kind: "text" },
         display: { detail: true },
         validation: {
@@ -279,18 +226,16 @@ export default defineEntity({
         kind: "timestamp",
         validation: { read: z.date(), create: null, update: null },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:PlantId",
       },
       { key: "shortcode", specialized: "shortcode" },
@@ -305,8 +250,8 @@ export default defineEntity({
       "daysFromTransplantMin",
       "daysFromTransplantMax",
       "notes",
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [
@@ -339,7 +284,6 @@ export default defineEntity({
     audit: ["name", "gardenGuideKey", "verdict", "ingredientId", "notes"],
     sort: {
       fields: ["name", "createdAt", "updatedAt"],
-      defaultOverride: "name",
     },
     intents: {
       fields: {

@@ -23,41 +23,8 @@ export default defineEntity({
         "recipes-eaten":
           "Reachable through the Meals table on this page; the recipe rollup is three joins deep.",
       },
-      sectionOverrides: [
+      additionalSectionOverrides: [
         { kind: "slot", id: "wardrobe", title: "Wardrobe" },
-        {
-          kind: "fields",
-          id: "overview",
-          title: "Overview",
-          placement: "supporting",
-          fields: ["name", "kind", "notes", "createdAt", "updatedAt"],
-        },
-        {
-          kind: "relation",
-          id: "financial-accounts",
-          title: "Financial accounts",
-          relation: "financial-accounts",
-          filter: { descriptor: "ledgerPartyId" },
-          columns: ["name", "identity", "transactionCount"],
-        },
-        {
-          kind: "relation",
-          id: "outgoing-transfers",
-          title: "Outgoing transfers",
-          relation: "outgoing-transfers",
-          filter: { descriptor: "fromPartyId" },
-          columns: ["toPartyId", "amount", "date"],
-          sort: { field: "date", direction: "desc" },
-        },
-        {
-          kind: "relation",
-          id: "incoming-transfers",
-          title: "Incoming transfers",
-          relation: "incoming-transfers",
-          filter: { descriptor: "toPartyId" },
-          columns: ["fromPartyId", "amount", "date"],
-          sort: { field: "date", direction: "desc" },
-        },
       ],
     },
     // Merge is a kernel capability with no browser operation yet.
@@ -131,26 +98,24 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKeyOverride: null },
+      { key: "shortcode", kind: "text" },
       {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        readKeyOverride: null,
       },
     ],
     storage: [
       {
         key: "id",
-        defaultOverride: "generated",
         specialized: "primary-key:LedgerPartyId",
       },
       { key: "shortcode", specialized: "shortcode" },
       "name",
       { key: "kind", specialized: "enum:kind" },
       "notes",
-      { key: "createdAt", defaultOverride: "now" },
-      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
+      { key: "createdAt" },
+      { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: ["name", "kind", "notes"],
@@ -159,7 +124,6 @@ export default defineEntity({
     audit: ["name", "kind", "notes"],
     sort: {
       fields: ["name", "kind", "createdAt", "updatedAt"],
-      defaultOverride: "name",
       // A name roster reads A→Z, unlike the blanket descending default.
     },
     intents: {
