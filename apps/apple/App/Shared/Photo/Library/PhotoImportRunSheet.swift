@@ -215,8 +215,11 @@ struct PhotoImportRunSheet: View {
                 Button {
                     flow.startNewRun(items: items, client: appModel.client)
                 } label: {
-                    Label("Import \(items.count) photo\(items.count == 1 ? "" : "s")", systemImage: "square.and.arrow.up")
-                        .frame(maxWidth: .infinity)
+                    Label(
+                        "Import \(items.count) photo\(items.count == 1 ? "" : "s")",
+                        systemImage: "square.and.arrow.up"
+                    )
+                    .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
