@@ -1,9 +1,25 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 
+import { forgeWearEvidence } from "../../../tests/fixtures/product-identity-evidence";
 import { rankPhotoProductCandidates } from "./photo-product-candidates";
 
 describe("photo product candidate ranking", () => {
+  it("keeps the observed color and size ahead of another variant's photo gap", () => {
+    const ranked = rankPhotoProductCandidates(
+      forgeWearEvidence.observedName,
+      forgeWearEvidence.brand,
+      forgeWearEvidence.products.map((product) => ({
+        id: parseEntityId("product", crypto.randomUUID()),
+        ...product,
+        manufacturer: forgeWearEvidence.brand,
+      })),
+    );
+    expect(ranked[0]?.shortcode).toBe(
+      forgeWearEvidence.expected.matchedProduct,
+    );
+  });
+
   it("finds a compact vendor title and favors the purchase variant without an own photo", () => {
     const candidate = (
       shortcode: string,

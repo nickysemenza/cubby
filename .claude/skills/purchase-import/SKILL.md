@@ -31,6 +31,11 @@ through Cubby's prepare/commit writer rather than generic entity mutation.
 - Public identifiers are shortcodes. Never expose private UUIDs to the user.
 - A source row is replay-safe only when its kind, external key, and checksum are
   stable. If the same source key changes, stop on the conflict.
+- A try-before-you-buy order is trial custody, not item ownership or a paid
+  purchase. Stop for review until final keep/charge evidence identifies the
+  retained lines; its initial displayed total cannot be committed as spend.
+  A final charge for retained items does not make the order page's returned
+  items purchased.
 
 ## Vendor export
 
@@ -38,6 +43,9 @@ through Cubby's prepare/commit writer rather than generic entity mutation.
 2. Collect one preparation payload per order: stable source identity, header, printed
    grand total and currency, item and adjustment lines, shipment state,
    transaction evidence, and finalized document image shortcodes.
+   De-duplicate saved snapshots by stable order id. A generic mail subject may
+   omit the brand and variant; search sender, order id, and time window, then
+   inspect the order page for itemization.
 3. Call `prepare_purchase_import` in batches of at most 50 orders. Preserve its
    preparation revision and stable line ids.
 4. Resolve every principal line. Prefer exact retailer SKU, ASIN, UPC/GTIN, or
