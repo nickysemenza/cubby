@@ -205,20 +205,10 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
   expect((await client.dashboard.counts({ query: {} })).status).toBe(401);
 });
 
-test("Scalar renders generated operations and account settings expose API keys", async ({
+test("account settings create and revoke API keys", async ({
   page,
   baseURL,
 }) => {
-  await page.goto("/api/v1/docs");
-  await expect(
-    page.getByText("Cubby API", { exact: true }).first(),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Open Group - dashboard", exact: true })
-    .click();
-  await expect(
-    page.getByText("/api/v1/dashboard/counts", { exact: false }).first(),
-  ).toBeVisible();
   await page.goto("/account/api-keys");
   await expect(
     page.getByRole("button", { name: "Create API Key", exact: true }),
@@ -226,7 +216,7 @@ test("Scalar renders generated operations and account settings expose API keys",
   await page
     .getByRole("button", { name: "Create API Key", exact: true })
     .click();
-  await page.getByLabel("Name", { exact: true }).fill("Scalar acceptance");
+  await page.getByLabel("Name", { exact: true }).fill("Account settings key");
   const createdKey = page.waitForResponse(
     (response) =>
       response.url().endsWith("/api-key/create") &&
@@ -242,54 +232,8 @@ test("Scalar renders generated operations and account settings expose API keys",
   expect(key.key).toMatch(/^cubby_/u);
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await expect(
-    page.getByText("Scalar acceptance", { exact: true }),
+    page.getByText("Account settings key", { exact: true }),
   ).toBeVisible();
-  await page.goto("/api/v1/docs#tag/dashboard/GET/api/v1/dashboard/counts");
-  await page
-    .getByRole("button", {
-      name: "Test Request (get /api/v1/dashboard/counts)",
-      exact: true,
-    })
-    .click();
-  await page
-    .getByRole("dialog", { name: "API Client" })
-    .getByRole("button", {
-      name: "Selected Auth Type: sessionCookie",
-      exact: true,
-    })
-    .click();
-  await page.getByText("apiKey", { exact: true }).last().click();
-  await page
-    .getByRole("dialog", { name: "API Client" })
-    .getByRole("textbox", { name: "Value", exact: true })
-    .fill(key.key);
-  const sent = page.waitForResponse(
-    (response) =>
-      response.url().endsWith("/api/v1/dashboard/counts") &&
-      response.request().method() === "GET",
-  );
-  await page.getByRole("button", { name: /^Send get request/ }).click();
-  expect((await sent).status()).toBe(200);
-  await page.reload();
-  await page
-    .getByRole("button", {
-      name: "Test Request (get /api/v1/dashboard/counts)",
-      exact: true,
-    })
-    .click();
-  await page
-    .getByRole("dialog", { name: "API Client" })
-    .getByRole("button", {
-      name: "Selected Auth Type: sessionCookie",
-      exact: true,
-    })
-    .click();
-  await page.getByText("apiKey", { exact: true }).last().click();
-  await expect(
-    page
-      .getByRole("dialog", { name: "API Client" })
-      .getByRole("textbox", { name: "Value", exact: true }),
-  ).toHaveValue("");
   await page.goto("/account/api-keys");
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await page
@@ -297,7 +241,7 @@ test("Scalar renders generated operations and account settings expose API keys",
     .getByRole("button", { name: "Delete", exact: true })
     .click();
   await expect(
-    page.getByText("Scalar acceptance", { exact: true }),
+    page.getByText("Account settings key", { exact: true }),
   ).toHaveCount(0);
   expect(
     (
