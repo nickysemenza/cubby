@@ -15,7 +15,11 @@ import { createImageFixture } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { productionPhotoImportCommitPorts } from "~/server/services/photo-import-commit.service";
 
-import { finalizePhotoImportRun, startPhotoInventoryRun } from "./run-service";
+import {
+  finalizePhotoImportRun,
+  startPhotoInventoryCoordinator,
+  startPhotoInventoryRun,
+} from "./run-service";
 
 describe("photo import finalize", () => {
   const ctx = withTestDb();
@@ -60,6 +64,16 @@ describe("photo import finalize", () => {
       storageStatus: "available" as const,
       verifiedAt: new Date(),
     }),
+  });
+
+  it("starts grouping only after a photo is finalized", async () => {
+    const run = await startRun();
+    await expect(
+      startPhotoInventoryCoordinator(ctx.db, {
+        publicId: run.publicId,
+        actorUserId: ctx.actor.userId,
+      }),
+    ).rejects.toThrow("Upload and finalize photos");
   });
 
   it("finalizes a staged image: creates a target, activates it, and schedules processing", async () => {

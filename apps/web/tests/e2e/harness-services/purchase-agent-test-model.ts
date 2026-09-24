@@ -7,12 +7,21 @@ type ResponsesFunctionCall = {
   arguments: string;
 };
 
-type ModelFixture = {
-  runId: string;
-  productShortcode: string;
-  sourceExternalKey: string;
-  evidenceChecksum: string;
-};
+type ModelFixture =
+  | {
+      mode?: "purchase";
+      runId: string;
+      productShortcode: string;
+      sourceExternalKey: string;
+      evidenceChecksum: string;
+    }
+  | {
+      mode: "photo";
+      runId: string;
+      runShortcode: string;
+      imageShortcode: string;
+      productName: string;
+    };
 
 let fixture: ModelFixture | undefined;
 
@@ -104,6 +113,50 @@ export default {
 
     const body = await request.json();
     const requestBody = JSON.stringify(body);
+    if (fixture.mode === "photo") {
+      if (!requestBody.includes("photo-claim"))
+        return toolResponse(
+          call("photo-claim", "claim_next_import_work", {
+            operationId: "photo-claim",
+          }),
+        );
+      if (!requestBody.includes("photo-propose"))
+        return toolResponse(
+          call("photo-propose", "mcp__cubby__propose_photo_groups", {
+            runId: fixture.runShortcode,
+            _runExecution: {
+              runId: fixture.runId,
+              operationId: "photo-propose",
+            },
+            groups: [
+              {
+                groupKey: "synthetic-wardrobe-item",
+                images: [{ id: fixture.imageShortcode, purpose: "item" }],
+                product: {
+                  kind: "create",
+                  create: { name: fixture.productName },
+                },
+                evidence:
+                  "Synthetic item photo; review the proposed identity before creating a Product.",
+              },
+            ],
+          }),
+        );
+      if (!requestBody.includes("photo-list"))
+        return toolResponse(
+          call("photo-list", "mcp__cubby__list_photo_group_proposals", {
+            runId: fixture.runShortcode,
+          }),
+        );
+      return toolResponse(
+        call("photo-await", "report_agent_progress", {
+          operationId: "photo-await",
+          phase: "awaiting_approval",
+          awaitingApproval: true,
+          detail: "One synthetic item is ready for review",
+        }),
+      );
+    }
     if (!requestBody.includes("claim-initial")) {
       return toolResponse(
         call("claim-initial", "claim_next_import_work", {

@@ -10,6 +10,7 @@ import {
   productShortcode,
 } from "./identifier-fields";
 import { importRunStatus } from "./import-run-fields";
+import { purchaseImportRunExecution } from "./purchase-import";
 import { productImagePurpose } from "./image";
 import { imageProcessingJobState } from "./image-processing";
 import { inventoryOwnershipMode } from "./inventory-ownership";
@@ -129,9 +130,9 @@ function refineGroupImageRoster(value: GroupImageRoster, ctx: z.RefinementCtx) {
   }
 }
 
-export const commitPhotoGroupInput = commitPhotoGroupInputBase.superRefine(
-  refineGroupImageRoster,
-);
+export const commitPhotoGroupInput = commitPhotoGroupInputBase
+  .extend({ _runExecution: purchaseImportRunExecution.optional() })
+  .superRefine(refineGroupImageRoster);
 export type CommitPhotoGroupInput = z.infer<typeof commitPhotoGroupInput>;
 
 export const commitPhotoGroupOutcome = z.enum([
@@ -197,6 +198,7 @@ export type PhotoGroupProposalGroup = z.infer<typeof photoGroupProposalGroup>;
 export const proposePhotoGroupsInput = z
   .object({
     runId: importRunShortcode,
+    _runExecution: purchaseImportRunExecution.optional(),
     groups: z.array(photoGroupProposalGroup).max(200).default([]),
     /** Proposed groups to drop entirely (their images become unassigned). */
     removeGroupKeys: z

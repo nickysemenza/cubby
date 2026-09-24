@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { importRunId } from "@cubby/schemas/identifiers";
+import { importRunId, parseEntityId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import { type TestDbContext, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
@@ -22,15 +22,19 @@ import {
   importRunMutation,
   importRunOperation,
   importRunProgress,
+  importRunTarget,
   importSourceClaim,
   oauthRefreshToken,
   product,
+  photoGroupProposal,
   purchase,
   purchasePaymentEvidence,
   session,
 } from "~/server/db/schema";
+import { approvePhotoGroupProposals } from "~/server/photo-import-run/proposals";
 import { getDb } from "~/server/repo/database-helpers";
 import {
+  createImageFixture,
   createProductFixture,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
@@ -40,7 +44,11 @@ import {
   ensurePurchaseAgentOAuthClient,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "./agent-auth";
-import { startTargetedImportRun } from "./run-service";
+import {
+  startPhotoInventoryCoordinator,
+  startPhotoInventoryRun,
+  startTargetedImportRun,
+} from "./run-service";
 
 const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -299,6 +307,174 @@ afterEach(async () => {
 
 describe("purchase-agent coupled two-Worker workerd harness", () => {
   const ctx = withTestDb();
+
+  it("dispatches a photo run through Flue and MCP, waits for review, then commits only on approval", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic wardrobe member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const run = await startPhotoInventoryRun(ctx.db, {
+      actorUserId: ctx.actor.userId,
+    });
+    const imageFixture = await createImageFixture(
+      ctx.db,
+      `synthetic-wardrobe-${crypto.randomUUID()}`,
+    );
+    await getDb(ctx.db)
+      .insert(importRunTarget)
+      .values({
+        runId: importRunId.parse(run.id),
+        imageId: parseEntityId("image", imageFixture.id),
+        position: 0,
+        state: "pending",
+        targetFingerprint: `synthetic-${crypto.randomUUID()}`,
+      });
+    const started = await startPhotoInventoryCoordinator(ctx.db, {
+      publicId: run.publicId,
+      actorUserId: ctx.actor.userId,
+    });
+    expect(started.created).toBe(true);
+    expect(
+      (
+        await startPhotoInventoryCoordinator(ctx.db, {
+          publicId: run.publicId,
+          actorUserId: ctx.actor.userId,
+        })
+      ).eventId,
+    ).toBe(started.eventId);
+
+    await ensurePurchaseAgentOAuthClient(ctx.db);
+    const now = new Date();
+    const sessionId = `photo-workerd-${crypto.randomUUID()}`;
+    await getDb(ctx.db)
+      .insert(session)
+      .values({
+        id: sessionId,
+        token: `${sessionId}-token`,
+        userId: ctx.actor.userId,
+        expiresAt: new Date(now.getTime() + 60 * 60_000),
+        createdAt: now,
+        updatedAt: now,
+      });
+    await getDb(ctx.db)
+      .insert(oauthRefreshToken)
+      .values({
+        id: `${sessionId}-grant`,
+        token: `${sessionId}-refresh`,
+        clientId: PURCHASE_AGENT_OAUTH_CLIENT_ID,
+        sessionId,
+        userId: ctx.actor.userId,
+        expiresAt: new Date(now.getTime() + 60 * 60_000),
+        createdAt: now,
+        authTime: now,
+        scopes: ["openid", "profile", "email", "offline_access"],
+      });
+    const productName = `Synthetic wardrobe item ${crypto.randomUUID()}`;
+    const previousHyperdrive = new Map(
+      [
+        "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE",
+        "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
+      ].map((key) => [key, process.env[key]]),
+    );
+    for (const key of previousHyperdrive.keys())
+      process.env[key] = ctx.databaseUrl;
+    try {
+      harness = createWorkerdHarness(ctx.databaseUrl);
+      const { url } = await harness.listen();
+      const model = harness.getWorker("cubby-test-model");
+      expect(
+        (
+          await model.fetch("https://model.test/configure", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              mode: "photo",
+              runId: run.id,
+              runShortcode: run.publicId,
+              imageShortcode: imageFixture.shortcode,
+              productName,
+            }),
+          })
+        ).status,
+      ).toBe(204);
+      expect(
+        (
+          await fetch(new URL("/dispatch", url), {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              version: 1,
+              type: "start_or_resume",
+              runId: run.id,
+              purpose: "photo_inventory",
+              eventId: started.eventId,
+            }),
+          })
+        ).status,
+      ).toBe(202);
+      try {
+        await waitFor(async () => {
+          const [proposal, progress] = await Promise.all([
+            getDb(ctx.db)
+              .select({ state: photoGroupProposal.state })
+              .from(photoGroupProposal)
+              .where(eq(photoGroupProposal.runId, run.id))
+              .limit(1),
+            getDb(ctx.db)
+              .select({ phase: importRunProgress.phase })
+              .from(importRunProgress)
+              .where(
+                and(
+                  eq(importRunProgress.runId, run.id),
+                  eq(importRunProgress.phase, "awaiting_approval"),
+                ),
+              )
+              .limit(1),
+          ]);
+          return proposal[0]?.state === "proposed" && progress.length === 1;
+        }, "Photo agent did not propose a group and wait for approval");
+      } catch (error) {
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)}\n${await workerdDiagnostic(ctx.db, run.id)}`,
+          { cause: error },
+        );
+      }
+      expect(
+        await getDb(ctx.db)
+          .select({ id: product.id })
+          .from(product)
+          .where(eq(product.name, productName)),
+      ).toHaveLength(0);
+      const [waitingRun] = await getDb(ctx.db)
+        .select({ status: importRun.status })
+        .from(importRun)
+        .where(eq(importRun.id, run.id));
+      expect(waitingRun?.status).toBe("running");
+      const approval = await approvePhotoGroupProposals(
+        ctx.db,
+        { runId: run.publicId },
+        ctx.actor,
+      );
+      expect(approval.results[0]?.outcome).toBe("committed");
+      expect(
+        await getDb(ctx.db)
+          .select({ id: product.id })
+          .from(product)
+          .where(eq(product.name, productName)),
+      ).toHaveLength(1);
+      const [settled] = await getDb(ctx.db)
+        .select({ status: importRun.status })
+        .from(importRun)
+        .where(eq(importRun.id, run.id));
+      expect(settled?.status).toBe("completed");
+    } finally {
+      for (const [key, value] of previousHyperdrive) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  }, 60_000);
 
   it("uses the production service to fence, pause for browser evidence, resume, and complete without business writes", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {

@@ -15,6 +15,7 @@ import {
 import * as v from "valibot";
 
 import productEnrichmentSkill from "../../../.claude/skills/product-enrichment/SKILL.md";
+import photoInventorySkill from "../../../.claude/skills/photo-inventory-import/SKILL.md";
 import purchaseImportSkill from "../../../.claude/skills/purchase-import/SKILL.md";
 import { serviceForCurrentRun } from "./cloudflare-service";
 import { purchaseImportAgentIdentity } from "./contracts";
@@ -31,14 +32,18 @@ export { cloudflare } from "./sentry";
 type ImportRunInitialData = {
   runId: string;
   coordinatorModel?: string;
-  purpose?: "account_sync" | "purchase_validation" | "product_enrichment";
+  purpose?:
+    | "account_sync"
+    | "purchase_validation"
+    | "product_enrichment"
+    | "photo_inventory";
 };
 
 /** One durable Flue conversation per authoritative ImportRun. */
 export function PurchaseImportRun({ id }: AgentProps) {
   const { runId, purpose = "account_sync" } =
     useInitialData<ImportRunInitialData>();
-  if (id !== purchaseImportAgentIdentity(runId)) {
+  if (id !== purchaseImportAgentIdentity(runId, purpose)) {
     throw new Error(
       "Purchase import agent identity does not match its ImportRun",
     );
@@ -48,7 +53,9 @@ export function PurchaseImportRun({ id }: AgentProps) {
   // exist for Flue internals and future bounded operations, not dynamic routing.
   useModel("openai/gpt-6-sol", { thinkingLevel: "high" });
   useMcpConnection(cubbyMcpConnection(runId, serviceForCurrentRun));
-  useSkill(purchaseImportSkill);
+  useSkill(
+    purpose === "photo_inventory" ? photoInventorySkill : purchaseImportSkill,
+  );
   useSkill(productEnrichmentSkill);
 
   // The run is named by its private id everywhere the agent speaks: the
@@ -70,6 +77,7 @@ export function PurchaseImportRun({ id }: AgentProps) {
     -1,
   );
   useAgentFinish(({ response, append }) => {
+    if (purpose === "photo_inventory") return;
     const calls = response.toolCalls.length;
     if (calls === nudgedAt) return;
     setNudgedAt(calls);
@@ -93,6 +101,11 @@ export function PurchaseImportRun({ id }: AgentProps) {
   useTool(tools[9]);
   useTool(tools[10]);
 
+  if (purpose === "photo_inventory")
+    return `You coordinate exactly one photo_inventory ImportRun (runId ${runId}) using Cubby MCP.
+
+Activate the photo-inventory-import skill before work. Report preparing and call claim_next_import_work. Its public run code is the identifier to pass as runId to MCP entity and photo tools. Read the run, pending image list, analysis summaries, and only the photo representations needed to resolve uncertainty. Follow the skill's product matching, grouping, ownership, and location rules. Propose every pending image exactly once with propose_photo_groups; include _runExecution { runId: "${runId}", operationId: a stable group-proposal id } on this mutation. Never call commit_photo_group. Read list_photo_group_proposals to check conflicts and uncovered photos. Only after a successful proposal and complete coverage, call report_agent_progress with phase awaiting_approval and awaitingApproval true, then end this submission for human review. If evidence prevents a safe proposal, call stop_import_run_for_review with the exact open question. A photo run completes automatically when the human approves or discards the last group. Do not browse retailers or infer purchases from photos. Shell, SQL, scripts, and arbitrary browser evaluation are forbidden.`;
+
   return `You coordinate exactly one ${purpose} purchase-import run (runId ${runId}) with the complete Cubby MCP tool catalog.
 
 Workflow:
@@ -112,7 +125,12 @@ PurchaseImportRun.initialData = v.object({
   runId: v.pipe(v.string(), v.uuid()),
   coordinatorModel: v.optional(v.string()),
   purpose: v.optional(
-    v.picklist(["account_sync", "purchase_validation", "product_enrichment"]),
+    v.picklist([
+      "account_sync",
+      "purchase_validation",
+      "product_enrichment",
+      "photo_inventory",
+    ]),
   ),
 });
 PurchaseImportRun.durability = { maxAttempts: 8, timeoutMs: 55 * 60 * 1_000 };

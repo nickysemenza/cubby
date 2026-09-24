@@ -572,14 +572,17 @@ function ActiveAgentSurface({ run }: { run: ImportRunDetail }) {
       </div>
       {agent.phase === "absent" ? (
         <p className="text-sm text-muted-foreground">
-          The agent conversation is not available yet. Connect the vendor
-          account, then refresh this run.
-          <a
-            className="ml-1 text-primary hover:underline"
-            href="/api/import/agent/oauth/start"
-          >
-            Connect agent
-          </a>
+          {run.purpose === "photo_inventory"
+            ? "The photo agent conversation is starting. Refresh this run if it does not appear."
+            : "The agent conversation is not available yet. Connect the vendor account, then refresh this run."}
+          {run.purpose === "photo_inventory" ? null : (
+            <a
+              className="ml-1 text-primary hover:underline"
+              href="/api/import/agent/oauth/start"
+            >
+              Connect agent
+            </a>
+          )}
         </p>
       ) : null}
       <form
@@ -1089,14 +1092,20 @@ export function RunImportWorkflow({ record }: { record: ImportRunOut }) {
 }
 
 /**
- * Run detail slot: a photo-inventory batch has no vendor agent, order or
- * purchase — it is a worklist of uploaded images, not an account-sync
- * transcript, so it gets its own view.
+ * Run detail slot for an agent-proposed photo review.
  */
 export function RunPhotoBatch({ record }: { record: ImportRunOut }) {
   return (
     <ImportRunGate record={record}>
-      {(run) => <PhotoImportRunView run={run} />}
+      {(run) => (
+        <>
+          {run.dispatch?.eventId && !run.dispatch.coordinatorStartedAt ? (
+            <DispatchRecoveryControls run={run} />
+          ) : null}
+          <PhotoImportRunView run={run} />
+          {run.dispatch?.eventId ? <AgentSurface run={run} /> : null}
+        </>
+      )}
     </ImportRunGate>
   );
 }

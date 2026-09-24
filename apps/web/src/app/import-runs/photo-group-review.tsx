@@ -105,7 +105,7 @@ async function postReview(runId: string, action: ReviewPhotoGroupsAction) {
 }
 
 /** Photos and proposals poll while the run is live, like the run itself. */
-function usePhotoRunReview(runId: string, runStatus: string) {
+export function usePhotoRunReview(runId: string, runStatus: string) {
   return useQuery({
     queryKey: reviewQueryKey(runId),
     queryFn: () => fetchReview(runId),
