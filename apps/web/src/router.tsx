@@ -64,6 +64,10 @@ export const getRouter = () => {
     const isProd = import.meta.env.PROD;
     Sentry.init({
       dsn: SENTRY_DSN,
+      // E2E uses the production bundle but installs this flag before client
+      // scripts run. Disabling the SDK here keeps test events out of Sentry
+      // without Playwright routing, which disables the browser HTTP cache.
+      enabled: !("__CUBBY_E2E_DISABLE_SENTRY__" in window),
       sendDefaultPii: false,
       release: `cubby@${__GIT_COMMIT__}`,
       environment: sentryEnvironment(
