@@ -402,6 +402,19 @@ only about **2s**. The control waited **34–51s** for the tested web bundle;
 the PR waited **12–18s**. The apparent gate gain came from artifact timing,
 so this test-cost experiment was closed and is not a natural product sample.
 
+[#1331](https://github.com/nickysemenza/cubby/pull/1331) tried three
+PostgreSQL Vitest workers on the same standard runner without sharding the
+suite. All **701** PostgreSQL tests and **61** desktop tests passed at
+[exact head](https://github.com/nickysemenza/cubby/actions/runs/35957266943),
+but the PostgreSQL job took **3:38**, its test step **142s**, and Vitest
+**140.59s**. The clean four-worker
+[#1330 PR run](https://github.com/nickysemenza/cubby/actions/runs/35956357844)
+took **3:38**, **140s**, and **138.51s** respectively. `Web checks` took
+**4:12** with three workers versus **4:01** in that control. A later main
+run was broadly slower without this change, showing runner variance rather
+than a repeatable worker-count gain. The experiment was closed; four
+PostgreSQL workers remain, and #1331 is excluded from natural product samples.
+
 In the HTTP/2 comparison, desktop runner queue time was **14–15s** in both
 runs. Total desktop runner time rose from **9:49** to **10:14**, so the unchanged
 `Web checks` time did not hide a runner-minute saving.
