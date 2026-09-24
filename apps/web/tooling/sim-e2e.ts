@@ -4,6 +4,7 @@ import {
   appendFileSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   statSync,
   writeFileSync,
@@ -27,19 +28,30 @@ const repoRoot = path.resolve(webRoot, "../..");
 const kitRoot = path.join(repoRoot, "apps/apple/CubbyKit");
 const appleRoot = path.join(repoRoot, "apps/apple");
 const headless = process.argv.slice(2).includes("--headless");
+const photo = process.argv.slice(2).includes("--photo");
 const watch = process.argv.slice(2).includes("--watch");
 const video = process.argv.slice(2).includes("--video");
 if (
   (watch && video) ||
   (video && headless) ||
+  (photo && (!headless || watch)) ||
   process.argv
     .slice(2)
     .some(
-      (argument) => !["--headless", "--watch", "--video"].includes(argument),
+      (argument) =>
+        !["--headless", "--watch", "--video", "--photo"].includes(argument),
     )
 )
-  throw new Error("Usage: sim-e2e.ts [--video | --headless] [--watch]");
-const lane = headless ? "headless-e2e" : watch ? "sim-dev" : "sim-e2e";
+  throw new Error(
+    "Usage: sim-e2e.ts [--video | --watch | --headless [--watch | --photo]]",
+  );
+const lane = photo
+  ? "headless-photo-e2e"
+  : headless
+    ? "headless-e2e"
+    : watch
+      ? "sim-dev"
+      : "sim-e2e";
 dotenv.config({ path: path.join(webRoot, ".env") });
 for (const [key, value] of Object.entries({
   R2_ACCESS_KEY_ID: "cubby-sim",
@@ -124,6 +136,47 @@ async function assertNativeEdit(
       );
     }
     console.log(`[${lane}] Native edit verified in ${simName}`);
+  } finally {
+    await checkPool.end();
+  }
+}
+
+async function assertNativePhotoImport(
+  runID: string,
+  objectStorageUrl: string,
+  expectedCount: number,
+): Promise<void> {
+  const checkPool = new Pool({ connectionString: databaseURL });
+  try {
+    const result = await checkPool.query<{ key: string; size: number }>(
+      `SELECT i.key, i.size
+       FROM "ImportRunTarget" t
+       JOIN "ImportRun" r ON r.id = t."runId"
+       JOIN "Image" i ON i.id = t."imageId"
+       WHERE r.shortcode = $1 AND r.purpose = 'photo_inventory'
+         AND t.state = 'pending'
+       ORDER BY t.position`,
+      [runID],
+    );
+    if (result.rows.length !== expectedCount)
+      throw new Error(
+        `Native photo import created ${result.rows.length} pending targets, expected ${expectedCount}`,
+      );
+    for (const row of result.rows) {
+      const response = await fetch(
+        `${objectStorageUrl}/e2e-bucket/${encodeURIComponent(row.key)}`,
+      );
+      if (
+        !response.ok ||
+        (await response.arrayBuffer()).byteLength !== row.size
+      )
+        throw new Error(
+          `Native uploaded photo bytes are unavailable for ${runID}`,
+        );
+    }
+    console.log(
+      `[${lane}] ${expectedCount} native photo uploads verified in ${simName}`,
+    );
   } finally {
     await checkPool.end();
   }
@@ -469,6 +522,122 @@ function startDatabaseWatchdog(): void {
   watchdog.unref();
 }
 
+async function runHeadlessPhotoScenario(
+  url: URL,
+  objectStorageUrl: string,
+  userId: string,
+): Promise<void> {
+  const pool = new Pool({ connectionString: databaseURL });
+  try {
+    const { seedSimulatorPhotoActor } = await import("./scenarios/simulator");
+    await seedSimulatorPhotoActor(pool, userId);
+  } finally {
+    await pool.end();
+  }
+  const imagePaths = ["shirt", "label", "boots"].map((label) =>
+    path.join(webRoot, "tests/e2e/fixtures", `synthetic-wardrobe-${label}.png`),
+  );
+  const nativeOutput = path.join(artifacts, "native-photo-output.txt");
+  await run(
+    "pnpm",
+    [
+      "apple",
+      "cli",
+      "headless-photo-import",
+      "--base-url",
+      url.origin,
+      ...imagePaths,
+    ],
+    repoRoot,
+    nativeOutput,
+  );
+  const match = readFileSync(nativeOutput, "utf8").match(
+    /Headless native photo import verified: (RUN-[A-Z0-9]+)/u,
+  );
+  const runID = match?.[1];
+  if (!runID)
+    throw new Error("Native photo importer did not report its run id");
+  await assertNativePhotoImport(runID, objectStorageUrl, imagePaths.length);
+}
+
+async function runHeadlessProductScenario(
+  url: URL,
+  productId: string,
+  userId: string,
+): Promise<void> {
+  const { SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME } =
+    await import("./scenarios/simulator");
+  let builtVersion: string | undefined;
+  const runNative = async (
+    id: string,
+    originalName: string,
+    updatedName: string,
+  ) => {
+    const started = performance.now();
+    const args = [
+      "headless-product-edit",
+      "--base-url",
+      url.origin,
+      "--product-id",
+      id,
+      "--original-name",
+      originalName,
+      "--updated-name",
+      updatedName,
+    ];
+    const sourceVersion = swiftSourceVersion();
+    if (sourceVersion === builtVersion) {
+      await run(path.join(kitRoot, ".build/debug/cubby"), args);
+    } else {
+      await run("pnpm", ["apple", "cli", ...args]);
+      builtVersion = sourceVersion;
+    }
+    await assertNativeEdit(id, updatedName);
+    console.log(
+      `[${lane}] Native scenario ${(performance.now() - started).toFixed(0)}ms`,
+    );
+  };
+  await runNative(productId, SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME);
+  if (watch) {
+    const input = createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+    input.on("SIGINT", () => {
+      interrupted = "SIGINT";
+      activeChild?.kill("SIGTERM");
+      input.close();
+    });
+    stopWatch = () => input.close();
+    let iteration = 0;
+    console.log(
+      `[${lane}] Press Enter to seed a fresh product and rerun; Ctrl-C drops ${simName}`,
+    );
+    try {
+      for await (const _ of input) {
+        if (interrupted) break;
+        iteration += 1;
+        const originalName = `${SIM_PRODUCT_NAME} ${iteration}`;
+        const updatedName = `${SIM_PRODUCT_UPDATED_NAME} ${iteration}`;
+        const nextPool = new Pool({ connectionString: databaseURL });
+        let nextID: string;
+        try {
+          const { seedSimulatorScenario } =
+            await import("./scenarios/simulator");
+          nextID = await seedSimulatorScenario(nextPool, userId, originalName);
+        } finally {
+          await nextPool.end();
+        }
+        await runNative(nextID, originalName, updatedName);
+        console.log(`[${lane}] Press Enter to rerun; Ctrl-C drops ${simName}`);
+      }
+    } finally {
+      stopWatch = undefined;
+      input.close();
+    }
+  }
+}
+
 async function main(): Promise<void> {
   assertSimulatorAdminUrl(adminURL);
   if (process.env.CUBBY_SIM_DB_EXTERNAL !== "1")
@@ -602,83 +771,8 @@ async function main(): Promise<void> {
     );
 
     if (headless) {
-      const { SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME } =
-        await import("./scenarios/simulator");
-      let builtVersion: string | undefined;
-      const runNative = async (
-        id: string,
-        originalName: string,
-        updatedName: string,
-      ) => {
-        const started = performance.now();
-        const args = [
-          "headless-product-edit",
-          "--base-url",
-          url.origin,
-          "--product-id",
-          id,
-          "--original-name",
-          originalName,
-          "--updated-name",
-          updatedName,
-        ];
-        const sourceVersion = swiftSourceVersion();
-        if (sourceVersion === builtVersion) {
-          await run(path.join(kitRoot, ".build/debug/cubby"), args);
-        } else {
-          await run("pnpm", ["apple", "cli", ...args]);
-          builtVersion = sourceVersion;
-        }
-        await assertNativeEdit(id, updatedName);
-        console.log(
-          `[${lane}] Native scenario ${(performance.now() - started).toFixed(0)}ms`,
-        );
-      };
-      await runNative(productId, SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME);
-      if (watch) {
-        const input = createInterface({
-          input: process.stdin,
-          output: process.stdout,
-        });
-        input.on("SIGINT", () => {
-          interrupted = "SIGINT";
-          activeChild?.kill("SIGTERM");
-          input.close();
-        });
-        stopWatch = () => input.close();
-        let iteration = 0;
-        console.log(
-          `[${lane}] Press Enter to seed a fresh product and rerun; Ctrl-C drops ${simName}`,
-        );
-        try {
-          for await (const _ of input) {
-            if (interrupted) break;
-            iteration += 1;
-            const originalName = `${SIM_PRODUCT_NAME} ${iteration}`;
-            const updatedName = `${SIM_PRODUCT_UPDATED_NAME} ${iteration}`;
-            const nextPool = new Pool({ connectionString: databaseURL });
-            let nextID: string;
-            try {
-              const { seedSimulatorScenario } =
-                await import("./scenarios/simulator");
-              nextID = await seedSimulatorScenario(
-                nextPool,
-                userId,
-                originalName,
-              );
-            } finally {
-              await nextPool.end();
-            }
-            await runNative(nextID, originalName, updatedName);
-            console.log(
-              `[${lane}] Press Enter to rerun; Ctrl-C drops ${simName}`,
-            );
-          }
-        } finally {
-          stopWatch = undefined;
-          input.close();
-        }
-      }
+      if (photo) await runHeadlessPhotoScenario(url, objectStorage.url, userId);
+      else await runHeadlessProductScenario(url, productId, userId);
     } else {
       const device = await simulator();
       if (device.state !== "Booted")
