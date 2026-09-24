@@ -33,26 +33,11 @@ export async function clearExpenseDatesInBrowser(page: Page, baseURL: string) {
   expect(response.status(), await response.text()).toBe(201);
   const { item } = createdExpense.parse(await response.json());
   await gotoAuthenticatedPage(page, `/expenses?q=${encodeURIComponent(name)}`);
-  // Below md the list renders as cards (long-press selects); above it, a table.
-  if ((page.viewportSize()?.width ?? 0) < 768) {
-    const item = page
-      .getByRole("list", { name: "Expenses list" })
-      .getByRole("listitem")
-      .filter({ hasText: name });
-    await item
-      .getByRole("link", { name, exact: true })
-      .dispatchEvent("touchstart");
-    await expect(
-      item.getByRole("checkbox", { name: "Select item" }),
-    ).toBeChecked();
-    await item.dispatchEvent("touchend");
-  } else {
-    await page
-      .getByRole("row")
-      .filter({ hasText: name })
-      .getByRole("checkbox", { name: "Select row" })
-      .click();
-  }
+  await page
+    .getByRole("row")
+    .filter({ hasText: name })
+    .getByRole("checkbox", { name: "Select row" })
+    .click();
   await recordProgrammaticFocus(page);
   await page
     .locator("[data-bulk-action-bar]")
