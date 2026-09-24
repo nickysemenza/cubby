@@ -367,6 +367,19 @@ Playwright test steps changed only **156s + 162s → 155s + 160s**, while
 desktop job walls rose **3:33 + 3:36 → 3:42 + 3:43**, adding **16s** of desktop
 runner time. Two workers per shard remain.
 
+The first eligible natural product PR after #1321 was
+[#1320](https://github.com/nickysemenza/cubby/pull/1320): its final tested head
+contains the two-worker merge, and its successful
+[CI run](https://github.com/nickysemenza/cubby/actions/runs/35951187116)
+reached `Web checks` in **4:43** and completed the CI workflow in **5:34** from
+creation. Desktop job walls were **2:51 + 3:46**, PostgreSQL **3:48**, and
+Apple checks **5:13** after generated native client changes. The sum of
+non-skipped CI job walls was **26:03**. Browser jobs queued about **2s** after
+creation; the `Web checks` aggregate queued **38s** after its dependencies
+finished. [#1318](https://github.com/nickysemenza/cubby/pull/1318) merged later,
+but its final tested head did not contain #1321, so it is excluded. This is
+**one of five** natural PRs needed for a post-change median.
+
 In the HTTP/2 comparison, desktop runner queue time was **14–15s** in both
 runs. Total desktop runner time rose from **9:49** to **10:14**, so the unchanged
 `Web checks` time did not hide a runner-minute saving.
