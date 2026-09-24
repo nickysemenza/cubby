@@ -23,7 +23,12 @@ import {
 
 import { getDb } from "./database-helpers";
 import { createLedgerParty } from "./ledger-party";
-import { addRecipeToMeal, createMealWithEntityId } from "./meal/crud";
+import {
+  addRecipeToMeal,
+  createMealWithEntityId,
+  getMealsByDateRange,
+  getUpcomingMealSummary,
+} from "./meal/crud";
 import {
   getMealPreparations,
   saveMealRecipePreparation,
@@ -86,6 +91,61 @@ describe("meal recipe preparations", () => {
   });
   const createTestMeal = async (data: MealCreateInput) =>
     (await createMealWithEntityId(ctx.db, data, ctx.actor)).output;
+
+  it("keeps the compact Home totals equal to the full Meal read", async () => {
+    const included = await createRecipeFixture(
+      ctx.db,
+      makeRecipeInput({ name: "Synthetic lunch" }),
+      ctx.actor,
+    );
+    const removed = await createRecipeFixture(
+      ctx.db,
+      makeRecipeInput({ name: "Synthetic retired side" }),
+      ctx.actor,
+    );
+    await createTestMeal(
+      mealCreateInput.parse({
+        date: "2026-09-24",
+        name: "Synthetic lunch plan",
+        recipes: [
+          { recipeId: included.id, scale: 2 },
+          { recipeId: removed.id, scale: 1 },
+        ],
+      }),
+    );
+    await getDb(ctx.db)
+      .update(recipe)
+      .set({ totals: recipeTotals(), totalsComputedAt: new Date() })
+      .where(eq(recipe.id, included.entityId));
+    await getDb(ctx.db)
+      .update(recipe)
+      .set({ deletedAt: new Date() })
+      .where(eq(recipe.id, removed.entityId));
+
+    const [full] = await getMealsByDateRange(
+      ctx.db,
+      "2026-09-24",
+      "2026-09-24",
+    );
+    const [summary] = await getUpcomingMealSummary(
+      ctx.db,
+      "2026-09-24",
+      "2026-09-24",
+    );
+    expect(full).toBeDefined();
+    expect(summary).toEqual({
+      id: full?.id,
+      date: full?.date,
+      name: full?.name,
+      mealType: full?.mealType,
+      mealKind: full?.mealKind,
+      totals: full?.totals,
+    });
+    expect(summary?.totals.cost).toMatchObject({
+      status: "complete",
+      lower: 20,
+    });
+  });
 
   it("returns distinct occurrence handles for repeated recipes and preserves shopping contributions", async () => {
     const ingredient = await seedIngredientWithStock(

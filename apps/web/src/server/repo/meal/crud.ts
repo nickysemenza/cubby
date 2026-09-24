@@ -5,6 +5,7 @@ import type {
   MealId,
   MealRecipeId,
 } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   MealCreateInput,
   MealFilters,
@@ -59,7 +60,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { dbMealToAPI } from "./helpers";
+import { dbMealToAPI, rollupMealTotals } from "./helpers";
 
 type MealMutationResult = { output: MealOut; entityId: MealId };
 
@@ -171,25 +172,37 @@ export const getUpcomingMealSummary = async (
     where: and(gte(meal.date, from), lte(meal.date, to), notDeleted(meal)),
     orderBy: (m, { asc }) => [asc(m.date), asc(m.sortOrder), asc(m.createdAt)],
     limit,
-    ...relations.meal.full,
+    columns: {
+      shortcode: true,
+      date: true,
+      name: true,
+      mealType: true,
+      mealKind: true,
+    },
+    with: {
+      recipes: {
+        where: notDeleted(mealRecipe),
+        columns: { scale: true, deletedAt: true },
+        with: {
+          recipe: {
+            columns: {
+              totals: true,
+              totalsComputedAt: true,
+              deletedAt: true,
+            },
+          },
+        },
+      },
+    },
   });
-  const qualities = await loadDataQualities(
-    db,
-    "meal",
-    rows.map((row) => row.id),
-  );
-  return rows.map((row) => {
-    // SAFETY: `row` came from `rows`, which `qualities` was loaded for.
-    const full = dbMealToAPI(row, qualities.get(row.id)!);
-    return {
-      id: full.id,
-      date: full.date,
-      name: full.name,
-      mealType: full.mealType,
-      mealKind: full.mealKind,
-      totals: full.totals,
-    };
-  });
+  return rows.map((row) => ({
+    id: parseShortcodeFor("meal", row.shortcode),
+    date: row.date,
+    name: row.name,
+    mealType: row.mealType,
+    mealKind: row.mealKind,
+    totals: rollupMealTotals(row.recipes),
+  }));
 };
 
 const mealScaffold = listScaffold("meal", meal);
