@@ -1,7 +1,11 @@
 import { readdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { compileEntity, validateEntityIdentities } from "./compile.ts";
+import {
+  collectEntityOverrides,
+  compileEntity,
+  validateEntityIdentities,
+} from "./compile.ts";
 import { validateDataQualityDeclarations } from "./data-quality.ts";
 import {
   deriveImageDisplaySources,
@@ -261,6 +265,7 @@ export type EntityFieldModel = Readonly<{
 export type CompiledPresentation = CompiledEntityPresentation;
 export type CompiledEntity = Readonly<{
   key: string;
+  overrides: readonly Readonly<{ path: string; value: string }>[];
   shortcode: string | null;
   /** Names plus the declaration's `presentation` block, passed through as one unit. */
   inspector: Readonly<
@@ -423,9 +428,15 @@ export const loadEntityDeclarations = async (): Promise<CompiledEntity[]> => {
       return raw;
     }),
   );
+  const declaredOverrides = new Map(
+    loaded.map((raw) => [String(raw.key), collectEntityOverrides(raw)]),
+  );
   const compiled = deriveInverseRelations(
     deriveImageDisplaySources(loaded),
-  ).map((raw) => compileEntity(raw, 0));
+  ).map((raw) => ({
+    ...compileEntity(raw, 0),
+    overrides: declaredOverrides.get(String(raw.key)) ?? [],
+  }));
   const entities = deriveRelationSections(
     validateDataQualityDeclarations(compiled),
   );

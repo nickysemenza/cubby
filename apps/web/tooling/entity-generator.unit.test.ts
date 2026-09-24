@@ -25,6 +25,7 @@ import {
   generatedHeader,
 } from "../../../scripts/generator/artifacts";
 import {
+  collectEntityOverrides,
   compileEntityDeclarations,
   validatePhotoCategoryLabels,
 } from "../../../scripts/generator/entities/compile";
@@ -46,6 +47,41 @@ import {
 import { renderSearchArtifacts } from "../../../scripts/generator/entities/render/search";
 
 const temporaryRoots: string[] = [];
+
+it("catalogs every named declaration override with keyed paths and preserves opt-outs", () => {
+  expect(
+    collectEntityOverrides({
+      model: {
+        fields: [
+          { key: "name", labelOverride: "Display name" },
+          { key: "image", display: { listOrderOverride: 0 } },
+        ],
+      },
+      route: { detailOverride: null },
+      presentation: { detail: { sectionOverrides: [{ id: "facts" }] } },
+    }),
+  ).toEqual([
+    { path: "model.fields[name].labelOverride", value: '"Display name"' },
+    { path: "model.fields[image].display.listOrderOverride", value: "0" },
+    { path: "route.detailOverride", value: "null" },
+    {
+      path: "presentation.detail.sectionOverrides",
+      value: '[{"id":"facts"}]',
+    },
+  ]);
+});
+
+it("keeps inferred image sources out of the explicit override catalog", async () => {
+  const imageSighting = (await loadEntityDeclarations()).find(
+    (entity) => entity.key === "imageSighting",
+  );
+  expect(imageSighting?.imagePolicy.displaySources.length).toBeGreaterThan(0);
+  expect(
+    imageSighting?.overrides.some((entry) =>
+      entry.path.endsWith("displaySourceOverrides"),
+    ),
+  ).toBe(false);
+});
 afterEach(async () => {
   await Promise.all(
     temporaryRoots
