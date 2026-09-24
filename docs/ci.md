@@ -415,6 +415,30 @@ run was broadly slower without this change, showing runner variance rather
 than a repeatable worker-count gain. The experiment was closed; four
 PostgreSQL workers remain, and #1331 is excluded from natural product samples.
 
+[#1334](https://github.com/nickysemenza/cubby/pull/1334) split two long browser
+flows into five smaller tests, preserving their assertions. Its
+[exact-head run](https://github.com/nickysemenza/cubby/actions/runs/35958513545)
+passed **64** desktop tests and **701** PostgreSQL tests. Desktop job walls
+were **3:33 + 3:10**, versus **3:41 + 3:05** in the clean #1330 control:
+only **3s** of total desktop runner time saved. PostgreSQL took **3:45** and
+`Web checks` took **4:01**, matching the control's Web gate. The split was
+closed because it did not improve the required critical path.
+
+[#1335](https://github.com/nickysemenza/cubby/pull/1335) tried Vitest's
+thread pool for the same four-worker, unsharded PostgreSQL suite. All **701**
+tests and both desktop shards passed at
+[exact head](https://github.com/nickysemenza/cubby/actions/runs/35959324940),
+but the PostgreSQL job took **3:47**, its test step **144s**, Vitest
+**142.96s**, and `Web checks` **4:07**. The fork-pool control took **3:38**,
+**140s**, **138.51s**, and **4:01** respectively. Forks remain.
+
+Product [#1333](https://github.com/nickysemenza/cubby/pull/1333) merged after
+its [CI run](https://github.com/nickysemenza/cubby/actions/runs/35958536951)
+passed on attempt **2**: the first attempt's Node job failed and only failed
+jobs were rerun. Its creation-to-gate duration includes the retry delay and
+cannot be compared with single-attempt green runs, so it is excluded from the
+natural cohort. The comparable sample count remains **two of five**.
+
 In the HTTP/2 comparison, desktop runner queue time was **14–15s** in both
 runs. Total desktop runner time rose from **9:49** to **10:14**, so the unchanged
 `Web checks` time did not hide a runner-minute saving.
