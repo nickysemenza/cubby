@@ -303,6 +303,16 @@ queue time **13–14s → 11–12s**. Desktop jobs fell from **5:09 + 5:41** to
 passed. This is one controlled pair, not the five naturally occurring PR runs
 needed for a new median; the roughly three-minute target remains open.
 
+The follow-up [#1311](https://github.com/nickysemenza/cubby/pull/1311)
+removed two browser tests that checked only the unused opt-in corpus harness.
+Every E2E database checkout now asserts that no corpus products leaked into its
+fresh database, preserving that isolation check for both shards. Its successful
+[exact-head run](https://github.com/nickysemenza/cubby/actions/runs/35944513955)
+completed **61 desktop tests** and PostgreSQL, with `Web checks` at **4:59**
+from creation versus **5:20** for #1308. Desktop job walls were
+**4:15 + 4:38**, down from **4:19 + 5:02**. This is one further sample; the
+five-run post-change median is still pending.
+
 In the HTTP/2 comparison, desktop runner queue time was **14–15s** in both
 runs. Total desktop runner time rose from **9:49** to **10:14**, so the unchanged
 `Web checks` time did not hide a runner-minute saving.
