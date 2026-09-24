@@ -16,6 +16,7 @@ export const expenseContract = defineContract("expense", {
     output: z.array(schemas.expenseOut),
   }),
   analytics: query({
+    native: "Expense analytics",
     input: schemas.expenseFiltersSchema,
     output: schemas.expenseAnalyticsOut,
   }),

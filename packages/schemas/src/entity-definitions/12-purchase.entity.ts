@@ -1,4 +1,5 @@
 import { defineEntity } from "./definition.js";
+import { selectControlOptions } from "./select-control-options.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import { financialReconciliationSummary } from "@cubby/schemas/financial-reconciliation";
 import {
@@ -88,6 +89,7 @@ export default defineEntity({
         nullable: true,
         control: {
           kind: "select",
+          options: selectControlOptions.trade,
           sectionOverride: "details",
           // Purchase has no "name" field — `displayLabel` is its closest
           // equivalent (the operator-facing text for the purchase).

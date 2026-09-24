@@ -4,6 +4,7 @@ import { projectShortcode } from "./identifier-fields";
 export const fieldResolutionSourceSchema = z.object({
   entityType: z.enum(["project", "task", "purchase", "productCategory"]),
   entityId: z.string(),
+  name: z.string().nullable(),
 });
 
 /** Assignment intent is independent of the value currently selected by a rule. */

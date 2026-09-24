@@ -19,6 +19,7 @@ enum Route: Hashable {
     case audit(locationID: LocationCode?)
     /// The products-without-a-photo queue, optionally narrowed to a location.
     case needsPhoto(locationID: LocationCode?)
+    case locationPhotoPass(scope: LocationCode?)
     /// Product-photo matching, pushed from Capture so it stays part of the capture workflow.
     case identify
     /// Dev is a pushed screen on iOS (see `AppSection.tabs`), reached via `Navigator.openDev()`.

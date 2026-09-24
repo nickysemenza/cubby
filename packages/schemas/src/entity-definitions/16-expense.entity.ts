@@ -1,4 +1,5 @@
 import { defineEntity } from "./definition.js";
+import { selectControlOptions } from "./select-control-options.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
   costTypeSchema,
@@ -175,6 +176,7 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
+          options: selectControlOptions.expenseLineKind,
           sectionOverride: "details",
           suggest: { basis: ["name", "cost", "notes"] },
         },
@@ -195,7 +197,11 @@ export default defineEntity({
       {
         key: "lineBasis",
         kind: "enum",
-        control: { kind: "select", sectionOverride: "details" },
+        control: {
+          kind: "select",
+          options: selectControlOptions.expenseLineBasis,
+          sectionOverride: "details",
+        },
         display: {
           list: true,
           detail: true,
@@ -215,6 +221,7 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
+          options: selectControlOptions.costType,
           sectionOverride: "details",
           suggest: { basis: ["name", "productId", "vendor"] },
         },
@@ -236,6 +243,7 @@ export default defineEntity({
         nullable: true,
         control: {
           kind: "select",
+          options: selectControlOptions.trade,
           sectionOverride: "details",
           suggest: {
             basis: ["name", "notes", "productId", "vendor", "projectId"],

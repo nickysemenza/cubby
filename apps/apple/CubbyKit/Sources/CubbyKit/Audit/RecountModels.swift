@@ -129,7 +129,7 @@ public enum RecountResolution: Sendable, Hashable {
     }
 }
 
-public struct RecountSummary: Sendable, Hashable {
+public struct RecountSummary: Sendable, Hashable, Codable {
     public var verified = 0
     public var adjusted = 0
     public var removed = 0

@@ -956,6 +956,329 @@ public enum Operations {
             }
         }
     }
+    /// - Remark: HTTP `GET /api/v1/calendar/range`.
+    /// - Remark: Generated from `#/paths//api/v1/calendar/range/get(calendar.range)`.
+    public enum Calendar_range {
+        public static let id: Swift.String = "calendar.range"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/startDate`.
+                public var startDate: Swift.String
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/endDateExclusive`.
+                public var endDateExclusive: Swift.String
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/KindsPayload`.
+                @frozen public enum KindsPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case meal = "meal"
+                    case task = "task"
+                    case expense = "expense"
+                    case project = "project"
+                    case planting = "planting"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/kinds`.
+                public typealias KindsPayload = [Operations.Calendar_range.Input.Query.KindsPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/kinds`.
+                public var kinds: Operations.Calendar_range.Input.Query.KindsPayload?
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/projectId`.
+                public var projectId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/projectPresenceFilter`.
+                @frozen public enum ProjectPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/projectPresenceFilter`.
+                public var projectPresenceFilter: Operations.Calendar_range.Input.Query.ProjectPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/includeSubProjects`.
+                public var includeSubProjects: Swift.Bool?
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/TaskStatusPayload`.
+                @frozen public enum TaskStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case notStarted = "not_started"
+                    case later = "later"
+                    case inProgress = "in_progress"
+                    case blocked = "blocked"
+                    case done = "done"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/taskStatus`.
+                public typealias TaskStatusPayload = [Operations.Calendar_range.Input.Query.TaskStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/taskStatus`.
+                public var taskStatus: Operations.Calendar_range.Input.Query.TaskStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/TaskTradePayload`.
+                @frozen public enum TaskTradePayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case planning = "planning"
+                    case demolition = "demolition"
+                    case building = "building"
+                    case drywall = "drywall"
+                    case electrical = "electrical"
+                    case plumbing = "plumbing"
+                    case mechanical = "mechanical"
+                    case cabinetry = "cabinetry"
+                    case countertop = "countertop"
+                    case flooring = "flooring"
+                    case millwork = "millwork"
+                    case finishes = "finishes"
+                    case appliances = "appliances"
+                    case landscaping = "landscaping"
+                    case logistics = "logistics"
+                    case metalworking = "metalworking"
+                    case crafts = "crafts"
+                    case auto = "auto"
+                    case other = "other"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/taskTrade`.
+                public typealias TaskTradePayload = [Operations.Calendar_range.Input.Query.TaskTradePayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/taskTrade`.
+                public var taskTrade: Operations.Calendar_range.Input.Query.TaskTradePayload?
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/expenseVendorId`.
+                public var expenseVendorId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/expenseVendorPresenceFilter`.
+                @frozen public enum ExpenseVendorPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/expenseVendorPresenceFilter`.
+                public var expenseVendorPresenceFilter: Operations.Calendar_range.Input.Query.ExpenseVendorPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/expenseFuture`.
+                public var expenseFuture: Swift.Bool?
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/ProjectStatusPayload`.
+                @frozen public enum ProjectStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case planning = "planning"
+                    case notStarted = "not_started"
+                    case inProgress = "in_progress"
+                    case done = "done"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/projectStatus`.
+                public typealias ProjectStatusPayload = [Operations.Calendar_range.Input.Query.ProjectStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/projectStatus`.
+                public var projectStatus: Operations.Calendar_range.Input.Query.ProjectStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/ProjectKindPayload`.
+                @frozen public enum ProjectKindPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case furniture = "furniture"
+                    case workshop = "workshop"
+                    case household = "household"
+                    case renovation = "renovation"
+                    case garden = "garden"
+                    case trip = "trip"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/projectKind`.
+                public typealias ProjectKindPayload = [Operations.Calendar_range.Input.Query.ProjectKindPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/projectKind`.
+                public var projectKind: Operations.Calendar_range.Input.Query.ProjectKindPayload?
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/projectKindPresenceFilter`.
+                @frozen public enum ProjectKindPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/query/projectKindPresenceFilter`.
+                public var projectKindPresenceFilter: Operations.Calendar_range.Input.Query.ProjectKindPresenceFilterPayload?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - startDate: Calendar day as "YYYY-MM-DD"
+                ///   - endDateExclusive: Calendar day as "YYYY-MM-DD"
+                ///   - kinds:
+                ///   - projectId:
+                ///   - projectPresenceFilter:
+                ///   - includeSubProjects:
+                ///   - taskStatus:
+                ///   - taskTrade:
+                ///   - expenseVendorId:
+                ///   - expenseVendorPresenceFilter:
+                ///   - expenseFuture:
+                ///   - projectStatus:
+                ///   - projectKind:
+                ///   - projectKindPresenceFilter:
+                public init(
+                    startDate: Swift.String,
+                    endDateExclusive: Swift.String,
+                    kinds: Operations.Calendar_range.Input.Query.KindsPayload? = nil,
+                    projectId: [Swift.String]? = nil,
+                    projectPresenceFilter: Operations.Calendar_range.Input.Query.ProjectPresenceFilterPayload? = nil,
+                    includeSubProjects: Swift.Bool? = nil,
+                    taskStatus: Operations.Calendar_range.Input.Query.TaskStatusPayload? = nil,
+                    taskTrade: Operations.Calendar_range.Input.Query.TaskTradePayload? = nil,
+                    expenseVendorId: [Swift.String]? = nil,
+                    expenseVendorPresenceFilter: Operations.Calendar_range.Input.Query.ExpenseVendorPresenceFilterPayload? = nil,
+                    expenseFuture: Swift.Bool? = nil,
+                    projectStatus: Operations.Calendar_range.Input.Query.ProjectStatusPayload? = nil,
+                    projectKind: Operations.Calendar_range.Input.Query.ProjectKindPayload? = nil,
+                    projectKindPresenceFilter: Operations.Calendar_range.Input.Query.ProjectKindPresenceFilterPayload? = nil
+                ) {
+                    self.startDate = startDate
+                    self.endDateExclusive = endDateExclusive
+                    self.kinds = kinds
+                    self.projectId = projectId
+                    self.projectPresenceFilter = projectPresenceFilter
+                    self.includeSubProjects = includeSubProjects
+                    self.taskStatus = taskStatus
+                    self.taskTrade = taskTrade
+                    self.expenseVendorId = expenseVendorId
+                    self.expenseVendorPresenceFilter = expenseVendorPresenceFilter
+                    self.expenseFuture = expenseFuture
+                    self.projectStatus = projectStatus
+                    self.projectKind = projectKind
+                    self.projectKindPresenceFilter = projectKindPresenceFilter
+                }
+            }
+            public var query: Operations.Calendar_range.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Calendar_range.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Calendar_range.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Calendar_range.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.Calendar_range.Input.Query,
+                headers: Operations.Calendar_range.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.CalendarRangeOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.CalendarRangeOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Calendar_range.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Calendar_range.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/calendar/range/get(calendar.range)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Calendar_range.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Calendar_range.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/calendar/range/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Calendar_range.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Calendar_range.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/calendar/range/get(calendar.range)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Calendar_range.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Calendar_range.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `POST /api/v1/collection/referenceDetail`.
     /// - Remark: Generated from `#/paths//api/v1/collection/referenceDetail/post(collection.referenceDetail)`.
     public enum Collection_referenceDetail {
@@ -3383,6 +3706,172 @@ public enum Operations {
             /// - Throws: An error if `self` is not `.`default``.
             /// - SeeAlso: `.`default``.
             public var `default`: Operations.Entity_graphPaths.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `POST /api/v1/expense/analytics`.
+    /// - Remark: Generated from `#/paths//api/v1/expense/analytics/post(expense.analytics)`.
+    public enum Expense_analytics {
+        public static let id: Swift.String = "expense.analytics"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/expense/analytics/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Expense_analytics.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Expense_analytics.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Expense_analytics.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/expense/analytics/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/expense/analytics/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.ExpenseFilters)
+            }
+            public var body: Operations.Expense_analytics.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.Expense_analytics.Input.Headers = .init(),
+                body: Operations.Expense_analytics.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/expense/analytics/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/expense/analytics/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ExpenseAnalyticsOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ExpenseAnalyticsOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Expense_analytics.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Expense_analytics.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/expense/analytics/post(expense.analytics)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Expense_analytics.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Expense_analytics.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/expense/analytics/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/expense/analytics/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Expense_analytics.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Expense_analytics.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/expense/analytics/post(expense.analytics)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Expense_analytics.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Expense_analytics.Output.Default {
                 get throws {
                     switch self {
                     case let .`default`(_, response):
@@ -9535,6 +10024,172 @@ public enum Operations {
             /// - Throws: An error if `self` is not `.`default``.
             /// - SeeAlso: `.`default``.
             public var `default`: Operations.Image_analysis.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `POST /api/v1/image/bulkSightings`.
+    /// - Remark: Generated from `#/paths//api/v1/image/bulkSightings/post(image.bulkSightings)`.
+    public enum Image_bulkSightings {
+        public static let id: Swift.String = "image.bulkSightings"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/image/bulkSightings/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Image_bulkSightings.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Image_bulkSightings.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Image_bulkSightings.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/image/bulkSightings/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/image/bulkSightings/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.ImageSightingBulkInput)
+            }
+            public var body: Operations.Image_bulkSightings.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.Image_bulkSightings.Input.Headers = .init(),
+                body: Operations.Image_bulkSightings.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/image/bulkSightings/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/image/bulkSightings/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ImageSightingBulkOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ImageSightingBulkOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Image_bulkSightings.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Image_bulkSightings.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/image/bulkSightings/post(image.bulkSightings)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Image_bulkSightings.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Image_bulkSightings.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/image/bulkSightings/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/image/bulkSightings/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Image_bulkSightings.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Image_bulkSightings.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/image/bulkSightings/post(image.bulkSightings)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Image_bulkSightings.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Image_bulkSightings.Output.Default {
                 get throws {
                     switch self {
                     case let .`default`(_, response):
@@ -27374,6 +28029,464 @@ public enum Operations {
             }
         }
     }
+    /// - Remark: HTTP `GET /api/v1/project/dashboardSummary`.
+    /// - Remark: Generated from `#/paths//api/v1/project/dashboardSummary/get(project.dashboardSummary)`.
+    public enum Project_dashboardSummary {
+        public static let id: Swift.String = "project.dashboardSummary"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/query/StatusScopePayload`.
+                @frozen public enum StatusScopePayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case planning = "planning"
+                    case notStarted = "not_started"
+                    case inProgress = "in_progress"
+                    case done = "done"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/query/statusScope`.
+                public typealias StatusScopePayload = [Operations.Project_dashboardSummary.Input.Query.StatusScopePayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/query/statusScope`.
+                public var statusScope: Operations.Project_dashboardSummary.Input.Query.StatusScopePayload?
+                /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/query/KindsPayload`.
+                @frozen public enum KindsPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case furniture = "furniture"
+                    case workshop = "workshop"
+                    case household = "household"
+                    case renovation = "renovation"
+                    case garden = "garden"
+                    case trip = "trip"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/query/kinds`.
+                public typealias KindsPayload = [Operations.Project_dashboardSummary.Input.Query.KindsPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/query/kinds`.
+                public var kinds: Operations.Project_dashboardSummary.Input.Query.KindsPayload?
+                /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/query/locations`.
+                public var locations: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/query/search`.
+                public var search: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/query/dateFrom`.
+                public var dateFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/query/dateTo`.
+                public var dateTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/query/completionYear`.
+                public var completionYear: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - statusScope:
+                ///   - kinds:
+                ///   - locations:
+                ///   - search:
+                ///   - dateFrom: Calendar day as "YYYY-MM-DD"
+                ///   - dateTo: Calendar day as "YYYY-MM-DD"
+                ///   - completionYear:
+                public init(
+                    statusScope: Operations.Project_dashboardSummary.Input.Query.StatusScopePayload? = nil,
+                    kinds: Operations.Project_dashboardSummary.Input.Query.KindsPayload? = nil,
+                    locations: [Swift.String]? = nil,
+                    search: Swift.String? = nil,
+                    dateFrom: Swift.String? = nil,
+                    dateTo: Swift.String? = nil,
+                    completionYear: Swift.String? = nil
+                ) {
+                    self.statusScope = statusScope
+                    self.kinds = kinds
+                    self.locations = locations
+                    self.search = search
+                    self.dateFrom = dateFrom
+                    self.dateTo = dateTo
+                    self.completionYear = completionYear
+                }
+            }
+            public var query: Operations.Project_dashboardSummary.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Project_dashboardSummary.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Project_dashboardSummary.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Project_dashboardSummary.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.Project_dashboardSummary.Input.Query = .init(),
+                headers: Operations.Project_dashboardSummary.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ProjectDashboardSummaryOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ProjectDashboardSummaryOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Project_dashboardSummary.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Project_dashboardSummary.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/project/dashboardSummary/get(project.dashboardSummary)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Project_dashboardSummary.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Project_dashboardSummary.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/project/dashboardSummary/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Project_dashboardSummary.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Project_dashboardSummary.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/project/dashboardSummary/get(project.dashboardSummary)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Project_dashboardSummary.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Project_dashboardSummary.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/project/portfolioAnalytics`.
+    /// - Remark: Generated from `#/paths//api/v1/project/portfolioAnalytics/get(project.portfolioAnalytics)`.
+    public enum Project_portfolioAnalytics {
+        public static let id: Swift.String = "project.portfolioAnalytics"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/query/StatusScopePayload`.
+                @frozen public enum StatusScopePayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case planning = "planning"
+                    case notStarted = "not_started"
+                    case inProgress = "in_progress"
+                    case done = "done"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/query/statusScope`.
+                public typealias StatusScopePayload = [Operations.Project_portfolioAnalytics.Input.Query.StatusScopePayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/query/statusScope`.
+                public var statusScope: Operations.Project_portfolioAnalytics.Input.Query.StatusScopePayload?
+                /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/query/KindsPayload`.
+                @frozen public enum KindsPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case furniture = "furniture"
+                    case workshop = "workshop"
+                    case household = "household"
+                    case renovation = "renovation"
+                    case garden = "garden"
+                    case trip = "trip"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/query/kinds`.
+                public typealias KindsPayload = [Operations.Project_portfolioAnalytics.Input.Query.KindsPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/query/kinds`.
+                public var kinds: Operations.Project_portfolioAnalytics.Input.Query.KindsPayload?
+                /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/query/locations`.
+                public var locations: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/query/search`.
+                public var search: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/query/dateFrom`.
+                public var dateFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/query/dateTo`.
+                public var dateTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/query/completionYear`.
+                public var completionYear: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - statusScope:
+                ///   - kinds:
+                ///   - locations:
+                ///   - search:
+                ///   - dateFrom: Calendar day as "YYYY-MM-DD"
+                ///   - dateTo: Calendar day as "YYYY-MM-DD"
+                ///   - completionYear:
+                public init(
+                    statusScope: Operations.Project_portfolioAnalytics.Input.Query.StatusScopePayload? = nil,
+                    kinds: Operations.Project_portfolioAnalytics.Input.Query.KindsPayload? = nil,
+                    locations: [Swift.String]? = nil,
+                    search: Swift.String? = nil,
+                    dateFrom: Swift.String? = nil,
+                    dateTo: Swift.String? = nil,
+                    completionYear: Swift.String? = nil
+                ) {
+                    self.statusScope = statusScope
+                    self.kinds = kinds
+                    self.locations = locations
+                    self.search = search
+                    self.dateFrom = dateFrom
+                    self.dateTo = dateTo
+                    self.completionYear = completionYear
+                }
+            }
+            public var query: Operations.Project_portfolioAnalytics.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Project_portfolioAnalytics.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Project_portfolioAnalytics.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Project_portfolioAnalytics.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.Project_portfolioAnalytics.Input.Query = .init(),
+                headers: Operations.Project_portfolioAnalytics.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ProjectPortfolioAnalyticsOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ProjectPortfolioAnalyticsOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Project_portfolioAnalytics.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Project_portfolioAnalytics.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/project/portfolioAnalytics/get(project.portfolioAnalytics)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Project_portfolioAnalytics.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Project_portfolioAnalytics.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/project/portfolioAnalytics/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Project_portfolioAnalytics.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Project_portfolioAnalytics.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/project/portfolioAnalytics/get(project.portfolioAnalytics)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Project_portfolioAnalytics.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Project_portfolioAnalytics.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/projects`.
@@ -31531,6 +32644,338 @@ public enum Operations {
             /// - Throws: An error if `self` is not `.`default``.
             /// - SeeAlso: `.`default``.
             public var `default`: Operations.Search_find.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `POST /api/v1/task/board`.
+    /// - Remark: Generated from `#/paths//api/v1/task/board/post(task.board)`.
+    public enum Task_board {
+        public static let id: Swift.String = "task.board"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/task/board/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Task_board.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Task_board.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Task_board.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/task/board/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/task/board/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.TaskFilters)
+            }
+            public var body: Operations.Task_board.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.Task_board.Input.Headers = .init(),
+                body: Operations.Task_board.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/task/board/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/task/board/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.TaskBoardOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.TaskBoardOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Task_board.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Task_board.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/task/board/post(task.board)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Task_board.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Task_board.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/task/board/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/task/board/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Task_board.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Task_board.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/task/board/post(task.board)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Task_board.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Task_board.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `POST /api/v1/task/bulkReorder`.
+    /// - Remark: Generated from `#/paths//api/v1/task/bulkReorder/post(task.bulkReorder)`.
+    public enum Task_bulkReorder {
+        public static let id: Swift.String = "task.bulkReorder"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/task/bulkReorder/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Task_bulkReorder.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Task_bulkReorder.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Task_bulkReorder.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/task/bulkReorder/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/task/bulkReorder/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.TaskBulkReorderInput)
+            }
+            public var body: Operations.Task_bulkReorder.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.Task_bulkReorder.Input.Headers = .init(),
+                body: Operations.Task_bulkReorder.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/task/bulkReorder/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/task/bulkReorder/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.TaskBulkMutationOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.TaskBulkMutationOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Task_bulkReorder.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Task_bulkReorder.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/task/bulkReorder/post(task.bulkReorder)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Task_bulkReorder.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Task_bulkReorder.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/task/bulkReorder/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/task/bulkReorder/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Task_bulkReorder.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Task_bulkReorder.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/task/bulkReorder/post(task.bulkReorder)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Task_bulkReorder.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Task_bulkReorder.Output.Default {
                 get throws {
                     switch self {
                     case let .`default`(_, response):

@@ -62,9 +62,8 @@ struct EntityListView: View {
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
-    /// Table, shelf and timeline; qualified `.slot` views remain web-owned until a native list
-    /// slot is registered. Filtering by the coverage registry keeps an entity-qualified id from
-    /// being mistaken for a built-in view during initial selection or picker changes.
+    /// Filtering by the coverage registry keeps an entity-qualified slot from being mistaken
+    /// for a built-in view during initial selection or picker changes.
     private var renderableViews: [ListView] {
         descriptor.presentation.listViews.filter {
             guard case .slot(let id, _, _) = $0 else { return true }
@@ -298,6 +297,27 @@ struct EntityListView: View {
     }
 
     @ViewBuilder
+    private func specialistSlot(_ id: String, model: GenericEntityListModel) -> some View {
+        let filters = specialistFilters(model)
+        switch id {
+        case "meal.calendar": MealCalendarListView(client: appModel.client, filters: filters)
+        case "task.board": TaskBoardListView(client: appModel.client, filters: filters)
+        case "location.gallery": LocationGalleryListView(client: appModel.client, filters: filters)
+        case "project.analytics": ProjectAnalyticsListView(client: appModel.client, filters: filters)
+        case "expense.analytics": ExpenseAnalyticsListView(client: appModel.client, filters: filters)
+        default: ContentUnavailableView("View unavailable", systemImage: "square.dashed")
+        }
+    }
+
+    private func specialistFilters(_ model: GenericEntityListModel) -> EntityFilterState {
+        var filters = model.filters
+        if let query = model.searchModel?.query, !query.isEmpty {
+            filters.set(.single(query), for: "search")
+        }
+        return filters
+    }
+
+    @ViewBuilder
     private func presentationPicker(_ model: GenericEntityListModel) -> some View {
         let selection = Binding(
             get: {
@@ -344,7 +364,9 @@ struct EntityListView: View {
 
     @ViewBuilder
     private func content(_ model: GenericEntityListModel) -> some View {
-        if model.isSearching {
+        if case .slot(let id, _, _) = model.view {
+            specialistSlot(id, model: model)
+        } else if model.isSearching {
             searchContent(model)
         } else if model.view == .timeline {
             timeline(model)

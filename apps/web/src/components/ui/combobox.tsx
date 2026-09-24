@@ -54,6 +54,8 @@ export interface FilterableComboboxItem {
   /** Distance from the root of a hierarchical roster (0 = root) — indents
    * the row so a tree reads as a tree. */
   depth?: number;
+  /** Compact row text when `label` contains the complete ancestry path. */
+  rowLabel?: string;
 }
 
 interface FilterableComboboxProps {

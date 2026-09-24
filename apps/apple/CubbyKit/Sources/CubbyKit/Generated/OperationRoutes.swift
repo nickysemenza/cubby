@@ -70,6 +70,7 @@ extension OperationRoute {
         OperationRoute(operationID: "householdContribution.project", method: .get, path: "/api/v1/householdContribution/project", pathParameters: [], queryParameters: ["includeSubprojects", "projectId"], hasBody: false),
         OperationRoute(operationID: "image.analysis", method: .get, path: "/api/v1/image/analysis", pathParameters: [], queryParameters: ["id"], hasBody: false),
         OperationRoute(operationID: "image.attachExisting", method: .post, path: "/api/v1/image/attachExisting", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "image.bulkSightings", method: .post, path: "/api/v1/image/bulkSightings", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "image.cullPendingImages", method: .post, path: "/api/v1/image/cullPendingImages", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "image.delete", method: .post, path: "/api/v1/image/delete", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "image.detail", method: .get, path: "/api/v1/image/detail", pathParameters: [], queryParameters: ["id"], hasBody: false),

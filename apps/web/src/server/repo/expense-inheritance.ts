@@ -197,6 +197,8 @@ export type ExpenseFieldDraft = {
 
 type DraftResolutionRow = {
   effectiveProjectShortcode: string | null;
+  effectiveProjectName: string | null;
+  purchaseName: string | null;
   fallbackProjectShortcode: string | null;
   effectiveTrade: Trade | null;
   fallbackTrade: Trade | null;
@@ -212,12 +214,17 @@ const draftProjectResolution = (
   hasExplicitProject: boolean,
 ): FieldResolution => {
   const purchaseRef = draft.purchaseId
-    ? { entityType: "purchase" as const, entityId: draft.purchaseId }
+    ? {
+        entityType: "purchase" as const,
+        entityId: draft.purchaseId,
+        name: row.purchaseName,
+      }
     : null;
   const projectRef = row.effectiveProjectShortcode
     ? {
         entityType: "project" as const,
         entityId: row.effectiveProjectShortcode,
+        name: row.effectiveProjectName,
       }
     : null;
   let mode: FieldResolution["mode"] = "inherit";
@@ -255,12 +262,17 @@ const draftTradeResolution = (
   lineKind: ExpenseLineKind,
 ): FieldResolution => {
   const purchaseRef = draft.purchaseId
-    ? { entityType: "purchase" as const, entityId: draft.purchaseId }
+    ? {
+        entityType: "purchase" as const,
+        entityId: draft.purchaseId,
+        name: row.purchaseName,
+      }
     : null;
   const projectRef = row.effectiveProjectShortcode
     ? {
         entityType: "project" as const,
         entityId: row.effectiveProjectShortcode,
+        name: row.effectiveProjectName,
       }
     : null;
   const source = trade
@@ -334,6 +346,8 @@ export async function resolveDraftExpenseFields(
     )
     SELECT
       effective_project."shortcode" AS "effectiveProjectShortcode",
+      effective_project."name" AS "effectiveProjectName",
+      coalesce(live_purchase."displayLabel", live_purchase."orderId") AS "purchaseName",
       fallback_project."shortcode" AS "fallbackProjectShortcode",
       resolved.effective_trade AS "effectiveTrade",
       resolved.fallback_trade AS "fallbackTrade",

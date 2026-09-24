@@ -27,19 +27,6 @@ history is the archive. Permanent product constraints live in the
 
 ## Easy fixes
 
-- **Name field-resolution sources on the server.** `FieldResolution.sourceEntity`
-  carries only `{ entityType, entityId }`, so every provenance caption and
-  field-explanation link (`EntityInlineLinkById` → `EntityReferenceLink`)
-  fetches the source's full detail just to read its `titleField` and cover,
-  and shows the bare shortcode until that lands. The builders already hold
-  the rows (`server/repo/task-project-inheritance.ts` loads project names,
-  `server/repo/expense/helpers.ts` has `purchaseRow`,
-  `server/repo/expense-inheritance.ts`, `server/repo/product-category.ts`):
-  add a nullable `name` to `fieldResolutionSourceSchema` and pass it through
-  as `EntityReferenceLink`'s `name`, keeping the fetch only as a fallback.
-  Also removes the per-row detail fetch the AI usage page now makes for
-  project/task/purchase entries.
-
 - **CalDAV feed dirty-mark can fail silently.** The dirty-mark in
   `server/calendar/client.ts` (annotated `SILENT:`, guarded by the
   `cubby/no-swallowed-catch` rule) runs after the response is committed, so a
@@ -71,42 +58,16 @@ history is the archive. Permanent product constraints live in the
   - The canvas's NEXT SESSION note still describes this pass; retire it on
     the next canvas edit.
 
-- **Declare `control.options` on enum fields that lack them.** Product
-  `category` and inventory `placement` now declare theirs. Thirteen select
-  controls still do not: `location.type`, `meal.mealType`/`mealKind`,
-  `ledgerParty.kind`, `project.status`/`kind`/`defaultTrade`,
-  `task.status`/`trade`, `purchase.defaultTrade`, and
-  `expense.lineKind`/`lineBasis`/`costType`/`trade`. Their labels live only
-  in web option modules (`ENTITY_SELECT_OPTIONS` in
-  `apps/web/src/entities/editing/select-options.ts`, built from
-  `capitalize`, `PROJECT_STATUS_LABELS`, `ledgerPartyLabel`, and similar), so
-  the native editor falls back to the list filter's bare enum values
-  (`filterValues(for:)` in `EntityOperations.swift`). Move each value→label
-  table into `packages/schemas`, declare it on the manifest control, add a
-  compiler check that fails an option-less `select` enum, then drop the
-  Swift fallback. The web rich options (icons, colors) stay layered on top.
-
 - **Photo-flow leftovers from #1084/#1086.** Small, independent:
   - `PhotoRelatedCreateEditor.renders(_:)` hides `pendingImageIds`,
     `removeImageIds`, `imageOrder` by literal; emit the image-field key set
     from `image-policy.gen.ts` into `PhotoImportCatalog` and read it there.
-  - `PhotoImportManifest.startAnalysis` cancels and relaunches, but the
-    cancelled task's handler skips the `.idle` reset and the new `analyze()`
-    returns early on `isRunning`, so a `.task` re-fire mid-run can leave the
-    state stuck at "running". Reset on cancellation, or gate on a generation
-    token instead of the flag (plausible, not reproduced).
-  - `PhotoImportFullScreenViewer` decodes full resolution per page with an
-    un-cancelled `Task.detached`; a fast swipe queues one ~190 MB decode per
-    page. Cancel on page change and cap in-flight decodes at one.
   - `EntityDetailView.swift:25` `body` sits at ~207 ms against the 200 ms
     type-check limit and flickers in and out of the warning; split it like
     `PhotoImportHero`/`PhotoLibraryCell`.
   - The classification sweep and the review sheet's `LocalPhotoAnalyzer` share no Vision
     gate (sweep 2 concurrent, analyzer 4); if a review-sheet analysis measurably slows while the
     sweep runs, add a `PhotoVisionGate` actor both acquire, with the sheet yielding the sweep.
-  - `PhotoLibraryStore.refresh` reads analysis snapshots for the whole library on every
-    PHPhotoLibrary change; scope it to visible months (the `MonthCachingCoordinator` already
-    knows them) and load the rest lazily per section.
   - `query(_:preloaded:)` still does one `hash(for:)` actor round trip per never-hashed asset
     on first run; batch the misses once the batch read can say "looked up, absent".
   - The `createSelf` compile check verifies "target is creatable" via
@@ -114,22 +75,6 @@ history is the archive. Permanent product constraints live in the
     `createInput` (the generator runs before that file exists); if the two
     ever disagree the route fails at commit time with `CONSTRAINT_VIOLATION`
     instead of at generation.
-
-- **Classification list filter has no tree grouping.** The `idMulti`
-  `productCategory` column filter renders through `MultiselectEditor`, not
-  `FilterableCombobox` — the group-header + depth rendering `tree-items.ts`'s
-  `treePickerItems` now feeds `EntityPicker`/`FilterableCombobox` (single-value
-  filters) needs a parallel `group`/`depth` on `FilterableComboboxItem` there
-  too, plus `useFilterOptions`'s hashing to key on the tree shape, not just
-  the flat option list.
-
-- **Location search hits carry no structured ancestor path.** The blank-query
-  location picker groups by root and indents by depth now
-  (`buildLocationComboboxItem`, `combobox-builders.tsx`), because it carries
-  `ancestors: [{id,name}]`. A typed-query search hit only has
-  `searchHitSchema`'s flat title/subtitle string — parsing that back into a
-  path is out of scope. Add a structured `path` to location search hits so
-  the typed-query picker can read as a tree too.
 
 - **`location.tags` has no redundant-token prune target.** `product.tags`
   gets `control.suggest.mode: "prune"` (`redundant-tokens.ts`); the mechanism
@@ -166,15 +111,8 @@ history is the archive. Permanent product constraints live in the
 
 ## Ready projects
 
-- **Complete native parity for web fieldwork.** Before retiring the web
-  workflows, restore an unfinished native recount after relaunch with its
-  staged decisions and completed/skipped stops; bring the location photo pass
-  (scoped queue, scan-to-stop, and resume) to native; add the web sweep's
-  missing-item review; and accept recipe links from the iOS Share Sheet in the
-  native recipe flow. Capture, Recount, and Needs Photo already cover parts of
-  these jobs, so extend them rather than duplicate their screens. Use
-  `docs/inventory-audit.md`, `apps/web/src/app/locations/photo-pass`, and
-  `apps/apple/App/Shared` for the behavior and ownership boundaries.
+- **Accept recipe links from the iOS Share Sheet.** Route incoming recipe URLs
+  into the native recipe flow before retiring the remaining web intake.
 
 - **Backfill image descriptions as a paced, visible sweep.** Product
   classification evidence is built from `image-description` analyses, but
@@ -186,22 +124,6 @@ history is the archive. Permanent product constraints live in the
   existing pause, and a coverage readout (described / eligible). Decide whether
   to turn automatic scheduling on for new uploads. Measured cost is about
   $1.10 per 1,000 images at ~7 s each, so parallelism sets wall time.
-
-- **Batch the image-sighting backfill.** `LibraryMetadataSync` writes one
-  `resources.imageSighting.create` per sighting at four concurrent requests, and
-  the generated routes expose only create/get/list/update/delete for the entity,
-  so a first backfill on a large member library is thousands of round trips. A
-  bulk create route would cut that to one request per page; the adapter already
-  upserts on the unique key, so batch semantics match the single write. The
-  client side is ready — the sync plans a whole pass before sending, so it has
-  the full pending list in hand.
-
-- **Native clients follow merge redirects and show connections.** The API now
-  returns `redirectedFrom` and `previousShortcodes` on every detail read and
-  serves `entityGraph.connections`, but CubbyKit ignores all three: a merged
-  code opens the survivor without saying so, and the Relations surface has no
-  physical-connections section or delete impact preview. Mirror the web
-  behavior (a "was X" banner, the connections list, the advisory preview).
 
 - **Post-import shelf triage.** After a vendor purchase import every new
   product lands in the `unlocated` saved view (`entities/view-manifest.ts`:
@@ -220,12 +142,6 @@ onHandUnits`; `product-hero-presence.ts` computes the presentation and is
   (`problem-actions.ts` `start-recount`), optionally scoped to one import run
   (`product-import-runs.tsx` already knows it). Receiving stays explicit
   (purchase-import plan decision 15).
-
-- **Native slot list views are hidden from the view picker.** Calendar,
-  board, gallery, and analytics `list.views` slot entries exist in the
-  manifest, but `EntityListView.swift`'s view picker does not surface `slot`
-  kind views yet, so they are unreachable on Apple platforms even where a
-  native slot component exists.
 
 - **`resolve_ingredients` suggests product links.** A newly resolved ingredient
   can remain unlinked to an existing matching product. Products with

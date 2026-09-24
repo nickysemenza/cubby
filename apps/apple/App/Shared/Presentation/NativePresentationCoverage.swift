@@ -151,23 +151,19 @@ enum NativePresentationCoverage {
         }
     }
 
-    /// List slots are deliberately web-owned. Native list selection filters them out, while this
-    /// explicit roster keeps qualified ids from being treated as ordinary table identifiers.
+    /// Only slots with dedicated native views are selectable.
     static func listSlot(_ id: String) -> Status {
         switch id {
-        case "location.gallery",
-            "location.visualizations",
-            "meal.calendar",
+        case "location.gallery", "meal.calendar", "project.analytics", "task.board", "expense.analytics":
+            .implemented
+        case "location.visualizations",
             "meal.nutrition",
             "productCategory.hierarchy",
             "project.overview",
-            "project.analytics",
             "project.schedule",
             "project.gallery",
             "planting.schedule",
-            "task.agenda",
-            "task.board",
-            "expense.analytics":
+            "task.agenda":
             .ownedElsewhere
         default:
             .unsupported("Unknown native list slot.")

@@ -256,6 +256,17 @@ public actor CubbyClient {
 
     // MARK: - Entity relationships
 
+    /// Physical graph edges and the advisory disposition for delete or merge.
+    public func physicalConnections(id: String, previewDelete: Bool = false) async throws
+        -> EntityConnectionsOut
+    {
+        try await perform {
+            try await api.entity_connections(
+                query: .init(id: id, operation: previewDelete ? .delete : nil)
+            ).ok.body.json
+        }
+    }
+
     public func connectedRecords(
         source: EntityRef, viewKey: String, offset: Int = 0, limit: Int = 20,
         targetIDs: [String]? = nil
@@ -341,6 +352,14 @@ public actor CubbyClient {
     }
 
     // MARK: - Images
+
+    /// One bounded, transactional library sighting page; the server upserts by image/owner/asset.
+    public func bulkImageSightings(_ items: [ImageSightingCreateInput]) async throws {
+        guard !items.isEmpty else { return }
+        _ = try await perform {
+            try await api.image_bulkSightings(.init(body: .json(.init(items: items)))).ok.body.json
+        }
+    }
 
     /// Attaches already-uploaded images to any entity whose update body takes `pendingImageIds`.
     public func attachImages(_ ids: [ImageCode], to descriptor: EntityDescriptor, id: String) async throws {
@@ -780,6 +799,92 @@ public actor CubbyClient {
         try await perform {
             LocationTree(roots: try await api.location_makeTree().ok.body.json)
         }
+    }
+
+    // MARK: - Specialist list presentations
+
+    public func mealCalendar(from start: String, to end: String) async throws -> CalendarRangeOut {
+        try await perform {
+            try await api.calendar_range(
+                query: .init(
+                    startDate: start, endDateExclusive: end, kinds: [.meal])
+            ).ok.body.json
+        }
+    }
+
+    public func taskBoard(filters: EntityFilterState) async throws -> TaskBoardOut {
+        let input = try Self.decodeFilters(TaskFilters.self, filters: filters)
+        return try await perform {
+            try await api.task_board(body: .json(input)).ok.body.json
+        }
+    }
+
+    public func reorderTask(_ id: String, rank: Double) async throws {
+        try await reorderTasks([(id, rank)])
+    }
+
+    public func reorderTasks(_ ranks: [(String, Double)]) async throws {
+        let input = TaskBulkReorderInput(
+            ranks: ranks.map { .init(id: .init($0.0), sortOrder: $0.1) })
+        _ = try await perform {
+            try await api.task_bulkReorder(body: .json(input)).ok.body.json
+        }
+    }
+
+    public func projectAnalytics(filters: EntityFilterState) async throws
+        -> (ProjectDashboardSummaryOut, ProjectPortfolioAnalyticsOut)
+    {
+        let search = filters["search"]?.strings.first
+        let from = filters["dateFrom"]?.strings.first
+        let to = filters["dateTo"]?.strings.first
+        let locations = filters["location"]?.strings
+        let completionYear = filters["completionYear"]?.strings.first
+        let dashboardStatuses = filters["status"]?.strings.compactMap {
+            Operations.Project_dashboardSummary.Input.Query.StatusScopePayloadPayload(rawValue: $0)
+        }
+        let dashboardKinds = filters["kind"]?.strings.compactMap {
+            Operations.Project_dashboardSummary.Input.Query.KindsPayloadPayload(rawValue: $0)
+        }
+        let portfolioStatuses = filters["status"]?.strings.compactMap {
+            Operations.Project_portfolioAnalytics.Input.Query.StatusScopePayloadPayload(rawValue: $0)
+        }
+        let portfolioKinds = filters["kind"]?.strings.compactMap {
+            Operations.Project_portfolioAnalytics.Input.Query.KindsPayloadPayload(rawValue: $0)
+        }
+        return try await perform {
+            let summary = try await api.project_dashboardSummary(
+                query: .init(
+                    statusScope: dashboardStatuses, kinds: dashboardKinds,
+                    locations: locations, search: search, dateFrom: from, dateTo: to,
+                    completionYear: completionYear)
+            )
+            .ok.body.json
+            let analytics = try await api.project_portfolioAnalytics(
+                query: .init(
+                    statusScope: portfolioStatuses, kinds: portfolioKinds,
+                    locations: locations, search: search, dateFrom: from, dateTo: to,
+                    completionYear: completionYear)
+            )
+            .ok.body.json
+            return (summary, analytics)
+        }
+    }
+
+    public func expenseAnalytics(filters: EntityFilterState) async throws -> ExpenseAnalyticsOut {
+        let input = try Self.decodeFilters(ExpenseFilters.self, filters: filters)
+        return try await perform {
+            try await api.expense_analytics(body: .json(input)).ok.body.json
+        }
+    }
+
+    private static func decodeFilters<T: Decodable>(_ type: T.Type, filters: EntityFilterState) throws -> T {
+        let fields = filters.values.mapValues { value -> JSONValue in
+            switch value {
+            case .single(let text): .string(text)
+            case .many(let texts): .array(texts.map(JSONValue.string))
+            }
+        }
+        return try JSONDecoder().decode(T.self, from: JSONEncoder().encode(JSONValue.object(fields)))
     }
 
     /// Every location, by name, for the sweep's bin picker.

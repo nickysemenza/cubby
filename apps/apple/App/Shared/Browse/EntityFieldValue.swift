@@ -70,8 +70,7 @@ nonisolated enum EntityFieldValue {
     }
 
     static func enumLabel(_ raw: String, field: FieldDescriptor) -> String {
-        field.controlOptions?.first { $0.value == raw }?.label
-            ?? raw.replacingOccurrences(of: "_", with: " ").capitalized
+        field.controlOptions?.first { $0.value == raw }?.label ?? "Unknown option"
     }
 
     // MARK: - Value readers

@@ -44,6 +44,7 @@ struct RouteDestinationView: View {
         case .entityList(let key, let filters): EntityListView(key: key, filters: filters)
         case .audit(let id): AuditRootView(locationID: id)
         case .needsPhoto(let id): NeedsPhotoView(locationID: id)
+        case .locationPhotoPass(let scope): LocationPhotoPassView(scope: scope)
         case .identify: IdentifyView()
         case .dev: DevView()
         }

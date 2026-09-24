@@ -56,6 +56,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     @ObservationIgnored private var fetchResult: PHFetchResult<PHAsset>?
     @ObservationIgnored private var clients: [UUID: (PhotoMatchStore, CubbyClient)] = [:]
     @ObservationIgnored private var generation = UUID()
+    @ObservationIgnored private var analysisBadgeMonths: Set<Date> = []
+    @ObservationIgnored private var loadingAnalysisBadgeMonths: Set<Date> = []
     @ObservationIgnored private var observing = false
     /// The server host saved match results are keyed by (`AppModel.host`), set by `AppModel` on
     /// install and on every host change. `nil` keeps matching in memory only.
@@ -360,13 +362,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             }
         await refreshTask.value
         guard generation == token, !Task.isCancelled else { return }
-        // One batch read for the whole library's dot status, rather than a fetch per cell; the
-        // sweep republishes individual ids afterward as it classifies them.
-        if let snapshots = try? await analysisStore.snapshots(
-            for: Array(index.assetsByID.keys), includeFullAnalysis: false)
-        {
-            matches.markAnalysis(snapshots)
-        }
+        // Badges are loaded by visible month below; a whole-library snapshot read makes a warm
+        // launch proportional to the entire photo library even when only one month is on screen.
         let unchecked = months.flatMap(\.assets).filter { !checked.contains($0.localIdentifier) }
         let retryDeferredCloud = forceRematch
         let remaining = await seedSavedMatches(
@@ -389,6 +386,32 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         startScan(
             remaining: remaining.filter { !deferredCloudIDs.contains($0.localIdentifier) },
             matches: matches, token: token)
+    }
+
+    /// Load badges for visible months and one neighbor on each side. A month is fetched once per
+    /// library generation; the classification sweep publishes new badge results as it works.
+    func loadAnalysisBadges(visible: [Date], matches: PhotoMatchStore) async {
+        guard let analysisStore else { return }
+        let token = generation
+        var wanted: Set<Date> = []
+        for id in visible {
+            guard let position = months.firstIndex(where: { $0.id == id }) else { continue }
+            for neighbor in max(0, position - 1)...min(months.count - 1, position + 1) {
+                wanted.insert(months[neighbor].id)
+            }
+        }
+        let missing = wanted.subtracting(analysisBadgeMonths).subtracting(loadingAnalysisBadgeMonths)
+        guard !missing.isEmpty else { return }
+        loadingAnalysisBadgeMonths.formUnion(missing)
+        defer { if generation == token { loadingAnalysisBadgeMonths.subtract(missing) } }
+        let ids = months.filter { missing.contains($0.id) }
+            .flatMap { $0.assets.map(\.localIdentifier) }
+        guard
+            let snapshots = try? await analysisStore.snapshots(
+                for: ids, includeFullAnalysis: false), generation == token, !Task.isCancelled
+        else { return }
+        matches.markAnalysis(snapshots)
+        analysisBadgeMonths.formUnion(missing)
     }
 
     /// Installs saved match results for every unedited photo, brought up to date with only the
@@ -791,6 +814,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     private func stopWork() {
         libraryChangeTask?.cancel(); libraryChangeTask = nil
         generation = UUID()
+        analysisBadgeMonths = []
+        loadingAnalysisBadgeMonths = []
         scanTask?.cancel(); scanTask = nil
         for task in visibleWork.values { task.cancel() }
         visibleWork = [:]

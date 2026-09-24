@@ -25,6 +25,7 @@ import {
   setImagePerceptualHashes,
   attachExistingImageToEntity,
 } from "~/server/repo/image";
+import { upsertImageSightingPage } from "~/server/repo/image-sighting";
 import {
   getLocalImageAnalysis,
   getImportImageRows,
@@ -256,6 +257,8 @@ async function loadProjectImageSummaries(
 }
 
 export const imageHandlers = implementOperationDomain(imageContract, {
+  bulkSightings: (context, input) =>
+    upsertImageSightingPage(context.db, input.items, context.actorContext),
   list: {
     run: (context, input) => productionImageBrowserPorts.list(context, input),
   },

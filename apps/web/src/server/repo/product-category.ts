@@ -253,7 +253,11 @@ const inheritedFeatureResolution = (
       value: feature,
       fallbackValue: feature,
       source: source.name,
-      sourceEntity: { entityType: "productCategory", entityId: source.id },
+      sourceEntity: {
+        entityType: "productCategory",
+        entityId: source.id,
+        name: source.name,
+      },
       matchesFallback: true,
       canReset: false,
     },

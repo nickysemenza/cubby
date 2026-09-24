@@ -1,4 +1,5 @@
 import { defineEntity } from "./definition.js";
+import { selectControlOptions } from "./select-control-options.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
   imageShortcode,
@@ -102,7 +103,7 @@ export default defineEntity({
       {
         key: "status",
         kind: "enum",
-        control: { kind: "select" },
+        control: { kind: "select", options: selectControlOptions.taskStatus },
         display: {
           list: true,
           detail: true,
@@ -295,6 +296,7 @@ export default defineEntity({
         nullable: true,
         control: {
           kind: "select",
+          options: selectControlOptions.trade,
           suggest: { basis: ["name", "projectId"] },
         },
         display: {

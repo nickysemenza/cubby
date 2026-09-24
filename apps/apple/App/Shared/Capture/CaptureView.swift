@@ -76,6 +76,7 @@ private struct CaptureContent: View {
                 manualEntry
                 tally
                 chips
+                missingReview
             }
             .padding(PorcelainTokens.Space.lg)
             .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)
@@ -91,6 +92,11 @@ private struct CaptureContent: View {
             ToolbarItem {
                 NavigationLink(value: Route.identify) {
                     Label("Identify a photo", systemImage: "camera.metering.center.weighted")
+                }
+            }
+            ToolbarItem {
+                NavigationLink(value: Route.locationPhotoPass(scope: capture.location?.id)) {
+                    Label("Location photo pass", systemImage: "camera.on.rectangle")
                 }
             }
             ToolbarItem {
@@ -248,6 +254,54 @@ private struct CaptureContent: View {
             }
             .font(.porcelainData)
             .foregroundStyle(PorcelainTokens.graphite)
+        }
+    }
+
+    @ViewBuilder
+    private var missingReview: some View {
+        if capture.location != nil {
+            VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+                Button("I got everything") { Task { await capture.checkMissing() } }
+                    .disabled(capture.checkingMissing)
+                if let error = capture.missingError {
+                    Text(error).foregroundStyle(PorcelainTokens.destructive)
+                }
+                if let missing = capture.missingBins {
+                    Panel {
+                        Eyebrow("Bins not seen")
+                        Text(
+                            missing.isEmpty
+                                ? "Every movable bin was accounted for. Items are checked in a recount."
+                                : "These bins are still recorded here. Review each one; unscanned items are not marked missing."
+                        )
+                        .font(.porcelainBody)
+                        ForEach(missing, id: \.id) { bin in
+                            VStack(alignment: .leading) {
+                                Text(bin.name).font(.porcelainTitle)
+                                HStack {
+                                    Button("Move to Unknown") {
+                                        Task { await capture.sendMissingToUnknown(bin.id) }
+                                    }
+                                    Menu("Move to…") {
+                                        ForEach(
+                                            capture.locations.filter {
+                                                $0.id != capture.location?.id && $0.id != bin.id
+                                            }
+                                        ) { target in
+                                            Button(target.name) {
+                                                Task { await capture.moveMissing(bin.id, to: target.id) }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        NavigationLink(value: Route.audit(locationID: capture.location?.id)) {
+                            Label("Recount the items too", systemImage: "checklist")
+                        }
+                    }
+                }
+            }
         }
     }
 

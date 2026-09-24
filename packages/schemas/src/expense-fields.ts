@@ -4,6 +4,12 @@ export const costTypeValues = ["materials", "tools", "services"] as const;
 export const costTypeSchema = z.enum(costTypeValues);
 export type CostType = z.infer<typeof costTypeSchema>;
 
+export const COST_TYPE_LABELS = {
+  materials: "Materials",
+  tools: "Tools",
+  services: "Services",
+} as const satisfies Record<CostType, string>;
+
 export const EXPENSE_DATE_REQUIRED_MESSAGE =
   "A date is required unless the cost is $0. Set the cost to $0 or enter a date.";
 

@@ -1,4 +1,5 @@
 import { defineEntity } from "./definition.js";
+import { selectControlOptions } from "./select-control-options.js";
 import {
   imageShortcode,
   locationShortcode,
@@ -155,7 +156,11 @@ export default defineEntity({
         // Auto-suggest is manifest-driven (`control.suggest`) now, not the
         // hand-rendered AI-suggest widget; `type` still disappears once a
         // product link supplies the form factor — see `intents.fields` below.
-        control: { kind: "select", suggest: { basis: ["name"] } },
+        control: {
+          kind: "select",
+          options: selectControlOptions.locationType,
+          suggest: { basis: ["name"] },
+        },
         display: {
           list: true,
           detail: true,

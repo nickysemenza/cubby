@@ -6948,6 +6948,47 @@
         }
       }
     },
+    "/api/v1/image/bulkSightings": {
+      "post": {
+        "tags": [
+          "image"
+        ],
+        "parameters": [],
+        "operationId": "image.bulkSightings",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageSightingBulkInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageSightingBulkOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/image/cullPendingImages": {
       "post": {
         "tags": [
@@ -40758,11 +40799,18 @@
           },
           "entityId": {
             "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
           "entityType",
-          "entityId"
+          "entityId",
+          "name"
         ]
       },
       "FilterOptionEntity": {
@@ -46755,6 +46803,41 @@
         "type": "string",
         "pattern": "^IMG-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "image shortcode, e.g. IMG-4K7M"
+      },
+      "ImageSightingBulkInput": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageSightingCreateInput"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "ImageSightingBulkOut": {
+        "type": "object",
+        "properties": {
+          "processed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "created": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "processed",
+          "created"
+        ]
       },
       "ImageSightingCamera": {
         "type": "object",
@@ -73913,6 +73996,24 @@
               "string",
               "null"
             ]
+          },
+          "locationPath": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            }
           },
           "matchKind": {
             "$ref": "#/components/schemas/SearchMatchKind"

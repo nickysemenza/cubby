@@ -40,7 +40,7 @@ import {
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { projectKindSchema, projectStatusSchema } from "./project-fields";
 import { taskStatusSchema, tradeSchema } from "./task-fields";
-import type { Trade } from "./task-fields";
+export { TRADE_LABELS } from "./task-fields";
 import type { ShortcodeEntity } from "./entity-manifest";
 import {
   anyShortcodeSchema,
@@ -109,28 +109,6 @@ export type { CostType } from "./expense-fields";
 
 export { tradeSchema, tradeValues } from "./task-fields";
 export type { Trade } from "./task-fields";
-
-export const TRADE_LABELS = {
-  planning: "Planning",
-  demolition: "Demo & Cleanup",
-  building: "Building & Framing",
-  drywall: "Drywall",
-  electrical: "Electrical & Lighting",
-  plumbing: "Plumbing",
-  mechanical: "Mechanical / HVAC",
-  cabinetry: "Cabinetry",
-  countertop: "Countertops",
-  flooring: "Flooring",
-  millwork: "Trim & Millwork",
-  finishes: "Paint & Finishes",
-  appliances: "Appliances & Furniture",
-  landscaping: "Landscaping",
-  logistics: "Logistics & Moving",
-  metalworking: "Metalworking",
-  crafts: "Arts & Crafts",
-  auto: "Auto",
-  other: "Other",
-} as const satisfies Record<Trade, string>;
 
 export const UNASSIGNED_TRADE_LABEL = "No trade signal";
 export const UNKNOWN_MANUFACTURER_LABEL = "Unknown manufacturer";

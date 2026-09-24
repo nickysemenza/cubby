@@ -1,4 +1,5 @@
 import { defineEntity } from "./definition.js";
+import { selectControlOptions } from "./select-control-options.js";
 import { ledgerPartyShortcode } from "../identifier-fields.js";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party-fields";
 import { z } from "zod";
@@ -49,7 +50,10 @@ export default defineEntity({
       {
         key: "kind",
         kind: "enum",
-        control: { kind: "select" },
+        control: {
+          kind: "select",
+          options: selectControlOptions.ledgerPartyKind,
+        },
         display: { list: true, detail: true },
         validation: {
           read: ledgerPartyKind,

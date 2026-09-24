@@ -154,6 +154,55 @@ describe("FilterBar", () => {
     ]);
   });
 
+  it("keeps category tree groups and depth while filtering and selecting", async () => {
+    const onChange = vi.fn();
+    render(
+      <FilterBar
+        filters={[]}
+        onChange={onChange}
+        fields={[
+          {
+            key: "category",
+            label: "Category",
+            type: "multiselect",
+            options: [
+              {
+                value: "produce",
+                label: "Produce",
+                rowLabel: "Produce",
+                group: { id: "food", label: "Food", order: 0 },
+                depth: 0,
+              },
+              {
+                value: "citrus",
+                label: "Produce / Citrus",
+                rowLabel: "Citrus",
+                group: { id: "food", label: "Food", order: 0 },
+                depth: 1,
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Category: any" }));
+    expect(screen.getByText("Food")).toBeInTheDocument();
+    const citrus = screen.getByRole("button", { name: "Produce / Citrus" });
+    expect(citrus).toHaveStyle({ paddingInlineStart: "20px" });
+    expect(citrus).toHaveTextContent("Citrus");
+    fireEvent.click(citrus);
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(onChange).toHaveBeenLastCalledWith([
+      {
+        id: "filter-category",
+        field: "category",
+        operator: "is_any_of",
+        values: ["citrus"],
+      },
+    ]);
+  });
+
   it("clears a single field from its own editor's Clear action", async () => {
     const { onChange } = renderBar([
       {

@@ -70,12 +70,30 @@ function SearchPickerIcon({
   );
 }
 
+const buildSearchLocationHitComboboxItem = <E extends SearchableEntity>(
+  hit: SearchHit,
+  shortcode: ShortcodeFor<E>,
+  path: NonNullable<SearchHit["locationPath"]>,
+): ComboboxItem<ShortcodeFor<E>> => {
+  const item = buildLocationComboboxItem({
+    id: parseShortcodeFor("location", hit.id),
+    name: hit.title,
+    type: locationType.safeParse(hit.typeHint).data ?? null,
+    ancestors: path,
+    coverImage: hit.imageUrl ? { url: hit.imageUrl } : null,
+  });
+  return { ...item, id: shortcode, shortcode };
+};
+
 /** Maps compact indexed-search hits into the picker contract. */
 export function buildSearchHitComboboxItem<E extends SearchableEntity>(
   hit: SearchHit,
   entity: E,
 ): ComboboxItem<ShortcodeFor<E>> {
   const shortcode = parseShortcodeFor(entity, hit.id);
+  if (entity === "location" && hit.locationPath) {
+    return buildSearchLocationHitComboboxItem(hit, shortcode, hit.locationPath);
+  }
   const locationKind =
     entity === "location" ? locationType.safeParse(hit.typeHint).data : null;
   const fallback =

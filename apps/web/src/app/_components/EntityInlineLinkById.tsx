@@ -48,6 +48,7 @@ const isFetchableInlineEntity = (
 interface EntityInlineLinkByIdProps {
   entityType: AuditEntityType;
   entityId: string;
+  name?: string | null;
   /** Compact mode: truncates long names with max-width */
   compact?: boolean;
 }
@@ -59,6 +60,7 @@ interface EntityInlineLinkByIdProps {
 export function EntityInlineLinkById({
   entityType,
   entityId,
+  name,
   compact,
 }: EntityInlineLinkByIdProps) {
   // Resolve the name via the shared entity-detail mapping for every named
@@ -67,10 +69,10 @@ export function EntityInlineLinkById({
   // receives a non-object arg — v5 throws "only the Object form is allowed".
   const queryOptions = useMemo(
     () =>
-      isNamedEntity(entityType)
+      isNamedEntity(entityType) && !name
         ? entityPreviewQueryOptions(entityType, entityId)
         : { queryKey: ["invalid"] as const, queryFn: skipToken },
-    [entityType, entityId],
+    [entityType, entityId, name],
   );
 
   // SAFETY: the options union is narrowed by the named entity guard, but
@@ -92,6 +94,12 @@ export function EntityInlineLinkById({
       <a href="/cookbooks" className="text-sm font-medium hover:underline">
         Cookbook
       </a>
+    );
+  }
+
+  if (name && isNamedEntity(entityType)) {
+    return (
+      <EntityReferenceLink entity={entityType} id={entityId} name={name} />
     );
   }
 

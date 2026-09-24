@@ -1,8 +1,13 @@
+import { COST_TYPE_LABELS as costTypeLabels } from "@cubby/schemas/expense-fields";
 import {
   type ExpenseLineBasis,
   type ExpenseLineKind,
   expenseLineBasisValues,
   expenseLineKindValues,
+} from "@cubby/schemas/expense-line-kind";
+import {
+  EXPENSE_LINE_BASIS_LABELS as expenseLineBasisLabels,
+  EXPENSE_LINE_KIND_LABELS as expenseLineKindLabels,
 } from "@cubby/schemas/expense-line-kind";
 import type { CostType } from "@cubby/schemas/project";
 import { costTypeValues } from "@cubby/schemas/project";
@@ -15,11 +20,7 @@ import { booleanCellOptions, buildSelectOptions } from "~/lib/select-options";
 import { getCostTypeColor } from "~/lib/status-colors";
 
 /** Human labels for the fixed cost-type enum. */
-export const costTypeLabels = {
-  materials: "Materials",
-  tools: "Tools",
-  services: "Services",
-} satisfies Record<(typeof costTypeValues)[number], string>;
+export { COST_TYPE_LABELS as costTypeLabels } from "@cubby/schemas/expense-fields";
 
 /**
  * Badge tone per cost-type — the chip twin of `COST_TYPE_COLORS`
@@ -49,15 +50,7 @@ export const costTypeOptions: FilterableComboboxItem[] = costTypeValues.map(
   }),
 );
 
-export const expenseLineKindLabels = {
-  principal: "Item or service",
-  tax: "Tax",
-  shipping: "Shipping or delivery",
-  discount: "Discount",
-  fee: "Fee",
-  tip: "Tip",
-  other_adjustment: "Other adjustment",
-} satisfies Record<ExpenseLineKind, string>;
+export { EXPENSE_LINE_KIND_LABELS as expenseLineKindLabels } from "@cubby/schemas/expense-line-kind";
 
 export const expenseLineKindBadgeVariant = {
   principal: "outline",
@@ -82,10 +75,7 @@ export const expenseLineKindOptions: FilterableComboboxItem[] =
  * "Line basis" would read as one taxonomy split across two controls. The
  * control is labelled "Itemization" wherever it renders.
  */
-export const expenseLineBasisLabels = {
-  item_line: "Line item",
-  allocation: "Share of a lump sum",
-} satisfies Record<ExpenseLineBasis, string>;
+export { EXPENSE_LINE_BASIS_LABELS as expenseLineBasisLabels } from "@cubby/schemas/expense-line-kind";
 
 export const expenseLineBasisBadgeVariant = {
   item_line: "outline",

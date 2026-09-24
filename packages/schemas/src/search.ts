@@ -142,6 +142,9 @@ export const searchHitSchema = z.object({
   subtitle: z.string().nullable(),
   typeHint: z.string().nullable(),
   imageUrl: z.string().nullable(),
+  locationPath: z
+    .array(z.object({ id: z.string(), name: z.string() }))
+    .optional(),
   matchKind: searchMatchKindSchema,
   matchField: searchMatchFieldSchema,
   matchReason: z.string(),

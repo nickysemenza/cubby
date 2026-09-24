@@ -391,6 +391,7 @@ export function FieldResolutionStatus({
           <EntityInlineLinkById
             entityType={sourceEntity.data}
             entityId={resolution.sourceEntity.entityId}
+            name={resolution.sourceEntity.name}
           />
         </span>
       ) : null}
