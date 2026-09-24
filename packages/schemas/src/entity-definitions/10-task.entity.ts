@@ -27,7 +27,7 @@ export default defineEntity({
         "Break a project down into steps, or jot down a one-off to get to later.",
       actionLabel: "New Task",
     },
-    icons: { lucide: "ListChecks", sfSymbol: "checklist", emoji: "✅" },
+    icons: { phosphor: "ListChecks", sfSymbol: "checklist", emoji: "✅" },
     detail: {
       omitRelations: {
         "blocked-by":

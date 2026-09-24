@@ -3,7 +3,8 @@ import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
 
 import { useHydrationGate } from "~/hooks/useHydrated";
 import { cn } from "~/lib/utils";
-import { CheckIcon, MinusIcon } from "lucide-react";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus";
 
 function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
   const gate = useHydrationGate(props.disabled);

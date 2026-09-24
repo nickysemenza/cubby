@@ -1,7 +1,7 @@
 import { parseShortcode } from "@cubby/shared";
+import { BugIcon as Bug } from "@phosphor-icons/react/dist/csr/Bug";
 import type { RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
-import { Bug } from "lucide-react";
 import {
   type FocusEvent,
   type MouseEvent,

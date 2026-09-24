@@ -1,16 +1,14 @@
-import {
-  Apple,
-  Carrot,
-  ChefHat,
-  CookingPot,
-  Milk,
-  Package,
-  Salad,
-  Sandwich,
-  UtensilsCrossed,
-  Warehouse,
-  Wheat,
-} from "lucide-react";
+import { BowlFoodIcon as Apple } from "@phosphor-icons/react/dist/csr/BowlFood";
+import { BowlFoodIcon as Salad } from "@phosphor-icons/react/dist/csr/BowlFood";
+import { CarrotIcon as Carrot } from "@phosphor-icons/react/dist/csr/Carrot";
+import { ChefHatIcon as ChefHat } from "@phosphor-icons/react/dist/csr/ChefHat";
+import { CookingPotIcon as CookingPot } from "@phosphor-icons/react/dist/csr/CookingPot";
+import { ForkKnifeIcon as UtensilsCrossed } from "@phosphor-icons/react/dist/csr/ForkKnife";
+import { GrainsIcon as Wheat } from "@phosphor-icons/react/dist/csr/Grains";
+import { HamburgerIcon as Sandwich } from "@phosphor-icons/react/dist/csr/Hamburger";
+import { PackageIcon as Package } from "@phosphor-icons/react/dist/csr/Package";
+import { PintGlassIcon as Milk } from "@phosphor-icons/react/dist/csr/PintGlass";
+import { WarehouseIcon as Warehouse } from "@phosphor-icons/react/dist/csr/Warehouse";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "~/lib/utils";

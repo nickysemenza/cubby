@@ -55,7 +55,7 @@ export default defineEntity({
       description:
         "Add photos to attach them to recipes, products, and places.",
     },
-    icons: { lucide: "Image", sfSymbol: "photo", emoji: "🖼️" },
+    icons: { phosphor: "Image", sfSymbol: "photo", emoji: "🖼️" },
     detail: {
       sectionOverrides: [
         {

@@ -1,6 +1,6 @@
 import type { AiCacheMetadata, Confidence } from "@cubby/schemas/ai";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import { Eye } from "lucide-react";
+import { EyeIcon as Eye } from "@phosphor-icons/react/dist/csr/Eye";
 import type { FC } from "react";
 
 import { VerbButton } from "~/app/_components/actions/action-verb-ui";

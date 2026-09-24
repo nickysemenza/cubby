@@ -1,11 +1,9 @@
 import { Toaster as Sonner, type ToasterProps } from "sonner";
-import {
-  CircleCheckIcon,
-  InfoIcon,
-  TriangleAlertIcon,
-  OctagonXIcon,
-  Loader2Icon,
-} from "lucide-react";
+import { CheckCircleIcon as CircleCheckIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
+import { WarningIcon as TriangleAlertIcon } from "@phosphor-icons/react/dist/csr/Warning";
+import { WarningOctagonIcon as OctagonXIcon } from "@phosphor-icons/react/dist/csr/WarningOctagon";
+import { CircleNotchIcon as Loader2Icon } from "@phosphor-icons/react/dist/csr/CircleNotch";
 
 const Toaster = ({ ...props }: ToasterProps) => {
   return (

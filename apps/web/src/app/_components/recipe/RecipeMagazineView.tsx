@@ -5,8 +5,9 @@ import {
   type StoredNutritionTotals,
 } from "@cubby/schemas/nutrition";
 import type { RecipeOut } from "@cubby/schemas/recipe";
+import { EyeIcon as Eye } from "@phosphor-icons/react/dist/csr/Eye";
+import { EyeSlashIcon as EyeOff } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { sumBy } from "es-toolkit";
-import { Eye, EyeOff } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 
 import { Row, Stack } from "~/components/layout";

@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+import type { Icon } from "@phosphor-icons/react/lib";
 
 import {
   Empty,
@@ -11,13 +11,7 @@ import {
  * Compact empty state for chart cards. Uses Empty's minimal variant so it
  * sits inside an existing Card without doubling borders/padding.
  */
-export function ChartEmpty({
-  icon,
-  title,
-}: {
-  icon?: LucideIcon;
-  title: string;
-}) {
+export function ChartEmpty({ icon, title }: { icon?: Icon; title: string }) {
   return (
     <Empty variant="minimal" className="py-6">
       <EmptyHeader>

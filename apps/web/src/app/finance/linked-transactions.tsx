@@ -3,7 +3,8 @@ import type {
   FinancialTransactionOut,
 } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { Pencil, Plus } from "lucide-react";
+import { PencilIcon as Pencil } from "@phosphor-icons/react/dist/csr/Pencil";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
 import { useCallback, useMemo } from "react";
 
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";

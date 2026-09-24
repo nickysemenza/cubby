@@ -1,5 +1,5 @@
+import { LightningIcon as Zap } from "@phosphor-icons/react/dist/csr/Lightning";
 import { Link } from "@tanstack/react-router";
-import { Zap } from "lucide-react";
 import { useId } from "react";
 
 import { Grid, Row } from "~/components/layout";

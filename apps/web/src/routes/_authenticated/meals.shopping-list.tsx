@@ -1,9 +1,10 @@
+import { GridNineIcon as Grid3x3 } from "@phosphor-icons/react/dist/csr/GridNine";
+import { ListIcon as List } from "@phosphor-icons/react/dist/csr/List";
 import {
   createFileRoute,
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
-import { Grid3x3, List } from "lucide-react";
 
 import {
   parseExcludedMeals,

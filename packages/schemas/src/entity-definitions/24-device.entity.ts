@@ -27,7 +27,7 @@ export default defineEntity({
       description:
         "A device registers itself the first time its companion app connects.",
     },
-    icons: { lucide: "Smartphone", sfSymbol: "iphone", emoji: "📱" },
+    icons: { phosphor: "DeviceMobile", sfSymbol: "iphone", emoji: "📱" },
     detail: {
       sectionOverrides: [
         {

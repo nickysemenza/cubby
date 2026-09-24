@@ -31,7 +31,7 @@ export default defineEntity({
       title: "Nothing found in the USDA database",
       description: "Search for a food to pull in its nutrition details.",
     },
-    icons: { lucide: "Apple", sfSymbol: "leaf.fill", emoji: "🍎" },
+    icons: { phosphor: "BowlFood", sfSymbol: "leaf.fill", emoji: "🍎" },
     detail: {
       sectionOverrides: [
         {

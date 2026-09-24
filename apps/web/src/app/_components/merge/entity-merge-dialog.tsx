@@ -1,6 +1,6 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
 import { useQuery } from "@tanstack/react-query";
-import { Check } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 
 import {

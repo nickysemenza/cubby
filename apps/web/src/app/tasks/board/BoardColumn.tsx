@@ -1,6 +1,6 @@
 import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { TRADE_LABELS } from "@cubby/schemas/project";
-import { Plus } from "lucide-react";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
 import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
 

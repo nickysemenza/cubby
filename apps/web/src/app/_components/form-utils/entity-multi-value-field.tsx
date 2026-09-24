@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import type { ReactNode } from "react";
 import {
   Controller,

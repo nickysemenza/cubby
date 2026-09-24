@@ -70,7 +70,7 @@ export function getSearchResultHref(item: SearchDestination): string {
  * and rendering `<undefined />` is React error #130, which takes down the whole
  * command menu. Searching "quarter" did exactly that. `noUncheckedIndexedAccess`
  * cannot catch it: a finite-key Record is not an index signature, so the lookup
- * types as `LucideIcon`, and the `as` is what makes the claim false.
+ * types as `Icon`, and the `as` is what makes the claim false.
  *
  * Narrowing by membership keeps the Records exhaustive (their compile-time
  * guarantee is load-bearing) while letting an unrecognized hint fall through to

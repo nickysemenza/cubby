@@ -1,5 +1,7 @@
+import { ArrowDownIcon as ArrowDown } from "@phosphor-icons/react/dist/csr/ArrowDown";
+import { ArrowUpIcon as ArrowUp } from "@phosphor-icons/react/dist/csr/ArrowUp";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
 import type { RowData } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, Check } from "lucide-react";
 
 import { Row, Stack } from "~/components/layout";
 import { Eyebrow } from "~/components/ui/eyebrow";

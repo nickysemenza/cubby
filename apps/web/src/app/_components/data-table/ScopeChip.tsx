@@ -1,5 +1,5 @@
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
-import { X } from "lucide-react";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 
 import { Badge } from "~/components/ui/badge";
 

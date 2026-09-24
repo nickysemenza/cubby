@@ -4,8 +4,10 @@ import type {
 } from "@cubby/schemas/nutrition";
 import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import type { RecipeOut } from "@cubby/schemas/recipe";
+import { ChefHatIcon as ChefHat } from "@phosphor-icons/react/dist/csr/ChefHat";
+import { EqualsIcon as Equal } from "@phosphor-icons/react/dist/csr/Equals";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
-import { ChefHat, Equal, X } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 
 import { stickyRowHeaderCard } from "~/components/matrix/matrix-chrome";

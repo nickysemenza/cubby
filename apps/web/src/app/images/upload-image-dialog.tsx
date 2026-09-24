@@ -1,5 +1,7 @@
+import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
+import { UploadIcon as Upload } from "@phosphor-icons/react/dist/csr/Upload";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link as LinkIcon, Upload, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 

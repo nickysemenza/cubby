@@ -1,7 +1,8 @@
 import type { CandidateEquivalence } from "@cubby/schemas/equivalences";
+import { ArrowClockwiseIcon as RefreshCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, RefreshCw } from "lucide-react";
 import { useMemo } from "react";
 
 import {

@@ -1,5 +1,5 @@
+import type { Icon } from "@phosphor-icons/react/lib";
 import { Link, type LinkComponentProps } from "@tanstack/react-router";
-import type { LucideIcon } from "lucide-react";
 
 import {
   Card,
@@ -35,7 +35,7 @@ export function CardActionLink({
 }
 
 interface DashboardCardProps {
-  icon: LucideIcon;
+  icon: Icon;
   title: string;
   description?: string;
   /** Optional action element (e.g., "View all" link) displayed in header */

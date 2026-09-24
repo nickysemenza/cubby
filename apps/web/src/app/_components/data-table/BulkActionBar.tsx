@@ -1,5 +1,5 @@
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import type { RowData } from "@tanstack/react-table";
-import { X } from "lucide-react";
 
 import { Row as LayoutRow } from "~/components/layout";
 import { Button } from "~/components/ui/button";

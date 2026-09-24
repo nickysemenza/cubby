@@ -1,7 +1,7 @@
 import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut } from "@cubby/schemas/project";
+import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { sumBy } from "es-toolkit";
-import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 
 import { CategoryDonut } from "~/app/_components/charts/kit";

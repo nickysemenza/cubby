@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { relatedViewRegistry } from "@cubby/schemas/related-view";
-import { ChevronRight, Network } from "lucide-react";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { NetworkIcon as Network } from "@phosphor-icons/react/dist/csr/Network";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";

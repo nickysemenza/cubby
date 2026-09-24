@@ -1,5 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
-import { RefreshCw } from "lucide-react";
+import { ArrowClockwiseIcon as RefreshCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";

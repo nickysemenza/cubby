@@ -2,8 +2,10 @@ import type {
   CalendarCredential,
   CalendarRotateCredential,
 } from "@cubby/schemas/calendar";
+import { ArrowsClockwiseIcon as CalendarSync } from "@phosphor-icons/react/dist/csr/ArrowsClockwise";
+import { CopyIcon as Copy } from "@phosphor-icons/react/dist/csr/Copy";
+import { KeyIcon as KeyRound } from "@phosphor-icons/react/dist/csr/Key";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarSync, Copy, KeyRound } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 

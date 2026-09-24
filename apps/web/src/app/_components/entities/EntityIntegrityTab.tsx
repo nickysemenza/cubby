@@ -8,8 +8,10 @@ import type {
   RelationshipProvenance,
 } from "@cubby/schemas/entity-integrity";
 import { humanize } from "@cubby/shared";
+import { DatabaseIcon as Database } from "@phosphor-icons/react/dist/csr/Database";
+import { HeartbeatIcon as HeartPulse } from "@phosphor-icons/react/dist/csr/Heartbeat";
+import { PathIcon as Waypoints } from "@phosphor-icons/react/dist/csr/Path";
 import { useQuery } from "@tanstack/react-query";
-import { Database, HeartPulse, Waypoints } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 
@@ -274,7 +276,7 @@ function EntityChip({
   onClick: () => void;
 }) {
   const def = isBrowserRoutedEntity(entity) ? entities[entity] : null;
-  const Icon = def?.lucideIcon ?? Waypoints;
+  const Icon = def?.phosphorIcon ?? Waypoints;
   const label = entityLabel(entity);
   return (
     <Badge
@@ -476,7 +478,7 @@ function EntityDetailPanel({
   }
 
   const def = isBrowserRoutedEntity(entity) ? entities[entity] : null;
-  const Icon = def?.lucideIcon ?? Waypoints;
+  const Icon = def?.phosphorIcon ?? Waypoints;
   const label = entityLabel(entity);
 
   return (

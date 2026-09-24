@@ -6,13 +6,11 @@ import {
   type FieldResolution,
 } from "@cubby/schemas/field-resolution";
 import { parseShortcode } from "@cubby/shared";
-import {
-  CircleSlash,
-  CornerDownRight,
-  PieChart,
-  RotateCcw,
-  TriangleAlert,
-} from "lucide-react";
+import { ArrowBendDownRightIcon as CornerDownRight } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { ChartPieIcon as PieChart } from "@phosphor-icons/react/dist/csr/ChartPie";
+import { ProhibitIcon as CircleSlash } from "@phosphor-icons/react/dist/csr/Prohibit";
+import { WarningIcon as TriangleAlert } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { z } from "zod";

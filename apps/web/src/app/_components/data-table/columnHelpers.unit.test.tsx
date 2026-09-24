@@ -960,12 +960,16 @@ describe("Product pricing cell (explicit vs derived legibility)", () => {
       <div>{renderProductPriceValue(explicitPricing)}</div>,
     );
     expect(screen.getByText("$20.00")).toBeInTheDocument();
-    expect(document.querySelector("svg.lucide-pin")).not.toBeNull();
+    expect(
+      screen.getByText("$20.00").parentElement?.querySelector("svg"),
+    ).not.toBeNull();
     unmount();
 
     render(<div>{renderProductPriceValue(derivedPricing)}</div>);
     expect(screen.getByText("$12.00")).toBeInTheDocument();
-    expect(document.querySelector("svg.lucide-pin")).toBeNull();
+    expect(
+      screen.getByText("$12.00").parentElement?.querySelector("svg"),
+    ).toBeNull();
   });
 
   it("renders the muted dash when there is no price at all", () => {
@@ -993,7 +997,9 @@ describe("Product pricing cell (explicit vs derived legibility)", () => {
     );
 
     expect(screen.getByText("$12.00")).toBeInTheDocument();
-    expect(document.querySelector("svg.lucide-pin")).toBeNull();
+    expect(
+      screen.getByText("$12.00").parentElement?.querySelector("svg"),
+    ).toBeNull();
 
     fireEvent.click(screen.getByRole("button"));
     const input = await screen.findByRole("spinbutton");

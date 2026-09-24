@@ -1,5 +1,5 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
-import { Hammer } from "lucide-react";
+import { HammerIcon as Hammer } from "@phosphor-icons/react/dist/csr/Hammer";
 import { useMemo } from "react";
 
 import { formatCurrency } from "~/lib/utils";

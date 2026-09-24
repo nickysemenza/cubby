@@ -1,10 +1,10 @@
 import { nutritionBasis as nutritionBasisSchema } from "@cubby/schemas/nutrition";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import {
   createFileRoute,
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
-import { X } from "lucide-react";
 import { z } from "zod";
 
 import { GenericEntityDetail } from "~/app/_components/entity-detail/generic-entity-detail";

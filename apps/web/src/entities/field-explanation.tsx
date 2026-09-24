@@ -6,8 +6,8 @@ import {
 } from "@cubby/schemas/field-explanation";
 import { inventoryShortcode } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
+import { InfoIcon as Info } from "@phosphor-icons/react/dist/csr/Info";
 import { useQuery } from "@tanstack/react-query";
-import { Info } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 

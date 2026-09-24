@@ -12,8 +12,11 @@ import {
   type PhotoRunReview,
   type ReviewPhotoGroupsAction,
 } from "@cubby/schemas/photo-import-run";
+import { ArrowsMergeIcon as Merge } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { DotsThreeIcon as Ellipsis } from "@phosphor-icons/react/dist/csr/DotsThree";
+import { TrashIcon as Trash2 } from "@phosphor-icons/react/dist/csr/Trash";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Ellipsis, Merge, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 

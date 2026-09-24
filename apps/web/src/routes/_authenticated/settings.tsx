@@ -1,6 +1,10 @@
+import { ArrowClockwiseIcon as RefreshCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CopyIcon as Copy } from "@phosphor-icons/react/dist/csr/Copy";
+import { EnvelopeIcon as Mail } from "@phosphor-icons/react/dist/csr/Envelope";
+import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronDown, Copy, Mail, RefreshCw, Wrench } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 

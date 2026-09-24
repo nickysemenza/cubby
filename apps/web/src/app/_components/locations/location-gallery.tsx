@@ -3,9 +3,9 @@ import type {
   InventoryItemForTree,
   LocationType,
 } from "@cubby/schemas/location";
+import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ChevronLeft } from "lucide-react";
 import {
   type RefCallback,
   useCallback,

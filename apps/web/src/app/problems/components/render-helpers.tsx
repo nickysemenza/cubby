@@ -1,5 +1,5 @@
+import { CalendarIcon as Calendar } from "@phosphor-icons/react/dist/csr/Calendar";
 import { formatDistanceToNow } from "date-fns";
-import { Calendar } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Row } from "~/components/layout";

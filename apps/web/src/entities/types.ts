@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+import type { Icon } from "@phosphor-icons/react/lib";
 import type { ReactNode } from "react";
 
 import type { ListQueryPlan } from "~/app/_components/hooks/usePaginatedTableCore";
@@ -116,7 +116,7 @@ export interface EntityDefinition {
   label: string;
   basePath: string;
   pluralLabel: string;
-  lucideIcon: LucideIcon;
+  phosphorIcon: Icon;
   color: EntityColor;
   routes: EntityRoutes;
   list?: EntityListConfig;

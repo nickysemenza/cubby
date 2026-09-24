@@ -3,15 +3,13 @@ import type {
   RecipeFlowArtifact,
   RecipeFlowOperation,
 } from "@cubby/schemas/recipe-flow";
+import { ArrowClockwiseIcon as RefreshCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/dist/csr/BookOpen";
+import { GitBranchIcon as GitBranch } from "@phosphor-icons/react/dist/csr/GitBranch";
+import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { TableIcon as Table2 } from "@phosphor-icons/react/dist/csr/Table";
+import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  BookOpen,
-  GitBranch,
-  RefreshCw,
-  Sparkles,
-  Table2,
-} from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 

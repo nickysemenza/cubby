@@ -55,7 +55,7 @@ export default defineEntity({
       actionLabel: "New Transaction",
     },
     icons: {
-      lucide: "CreditCard",
+      phosphor: "CreditCard",
       sfSymbol: "arrow.left.arrow.right",
       emoji: "💳",
     },

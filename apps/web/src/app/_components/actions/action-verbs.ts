@@ -1,32 +1,30 @@
-import type { LucideIcon } from "lucide-react";
-import {
-  ArrowRightLeft,
-  Camera,
-  CheckCircle2,
-  ClipboardCopy,
-  Copy,
-  FolderInput,
-  HandCoins,
-  Images,
-  ListChecks,
-  Merge,
-  NotebookPen,
-  Package,
-  PackageCheck,
-  PackageMinus,
-  PackagePlus,
-  PanelRight,
-  Pencil,
-  Printer,
-  Scale,
-  ScanBarcode,
-  Sparkles,
-  Split,
-  SquarePen,
-  Trash,
-  Wrench,
-  X,
-} from "lucide-react";
+import { ArrowsLeftRightIcon as ArrowRightLeft } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
+import { ArrowsMergeIcon as Merge } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
+import { ArrowsSplitIcon as Split } from "@phosphor-icons/react/dist/csr/ArrowsSplit";
+import { BarcodeIcon as ScanBarcode } from "@phosphor-icons/react/dist/csr/Barcode";
+import { CameraIcon as Camera } from "@phosphor-icons/react/dist/csr/Camera";
+import { CheckCircleIcon as CheckCircle2 } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { ClipboardIcon as ClipboardCopy } from "@phosphor-icons/react/dist/csr/Clipboard";
+import { CopyIcon as Copy } from "@phosphor-icons/react/dist/csr/Copy";
+import { FolderSimplePlusIcon as FolderInput } from "@phosphor-icons/react/dist/csr/FolderSimplePlus";
+import { HandCoinsIcon as HandCoins } from "@phosphor-icons/react/dist/csr/HandCoins";
+import { ImagesIcon as Images } from "@phosphor-icons/react/dist/csr/Images";
+import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { NotePencilIcon as NotebookPen } from "@phosphor-icons/react/dist/csr/NotePencil";
+import { NotePencilIcon as SquarePen } from "@phosphor-icons/react/dist/csr/NotePencil";
+import { PackageIcon as Package } from "@phosphor-icons/react/dist/csr/Package";
+import { PencilIcon as Pencil } from "@phosphor-icons/react/dist/csr/Pencil";
+import { PrinterIcon as Printer } from "@phosphor-icons/react/dist/csr/Printer";
+import { ScalesIcon as Scale } from "@phosphor-icons/react/dist/csr/Scales";
+import { SealCheckIcon as PackageCheck } from "@phosphor-icons/react/dist/csr/SealCheck";
+import { SidebarSimpleIcon as PanelRight } from "@phosphor-icons/react/dist/csr/SidebarSimple";
+import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { StackMinusIcon as PackageMinus } from "@phosphor-icons/react/dist/csr/StackMinus";
+import { StackPlusIcon as PackagePlus } from "@phosphor-icons/react/dist/csr/StackPlus";
+import { TrashIcon as Trash } from "@phosphor-icons/react/dist/csr/Trash";
+import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import type { Icon } from "@phosphor-icons/react/lib";
 
 /**
  * The canonical presentation of a user-visible action verb: one label, one
@@ -67,7 +65,7 @@ import {
  */
 export interface ActionVerb {
   label: string;
-  icon: LucideIcon;
+  icon: Icon;
   /** Renders destructive. Only for actions that remove or unlink a record. */
   tone?: "destructive";
 }

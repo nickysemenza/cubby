@@ -1,6 +1,7 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
+import { ArrowsOutIcon as Scaling } from "@phosphor-icons/react/dist/csr/ArrowsOut";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
-import { Scaling, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { StaticPicker } from "~/app/_components/combobox/static-picker";

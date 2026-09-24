@@ -2,7 +2,7 @@ import type {
   FieldSuggestion,
   FieldSuggestionOutcome,
 } from "@cubby/schemas/ai";
-import { Sparkle } from "lucide-react";
+import { SparkleIcon as Sparkle } from "@phosphor-icons/react/dist/csr/Sparkle";
 
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";

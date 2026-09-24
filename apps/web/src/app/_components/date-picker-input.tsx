@@ -1,7 +1,8 @@
 "use client";
 
+import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { format } from "date-fns";
-import { CalendarIcon, X } from "lucide-react";
 import {
   type FocusEvent,
   lazy,

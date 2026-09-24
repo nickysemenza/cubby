@@ -1,6 +1,6 @@
 import type { AllProblems } from "@cubby/schemas/problems";
+import { MagicWandIcon as Wand2 } from "@phosphor-icons/react/dist/csr/MagicWand";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Wand2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 

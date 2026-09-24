@@ -1,5 +1,5 @@
+import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { Link } from "@tanstack/react-router";
-import { ImageIcon } from "lucide-react";
 import { type FC, useState } from "react";
 
 import { Row } from "~/components/layout";

@@ -2,7 +2,10 @@
 
 import type { Amount } from "@cubby/schemas/codec";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import { Check, Pencil, RotateCcw, X } from "lucide-react";
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { PencilIcon as Pencil } from "@phosphor-icons/react/dist/csr/Pencil";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import type React from "react";
 import {
   createContext,
@@ -628,6 +631,7 @@ function EditableInputEditor<T>({
         variant="ghost"
         onClick={() => void handleSave()}
         disabled={isPending}
+        aria-label="Save value"
       >
         <Check className="size-3.5" />
       </Button>
@@ -636,6 +640,7 @@ function EditableInputEditor<T>({
         variant="ghost"
         onClick={onCancel}
         disabled={isPending}
+        aria-label="Cancel editing"
       >
         <X className="size-3.5" />
       </Button>
@@ -778,6 +783,7 @@ function EditableSelectEditor({
           variant="ghost"
           onClick={onCancel}
           disabled={isPending}
+          aria-label="Cancel editing"
         >
           <X className="size-3.5" />
         </Button>
@@ -1066,6 +1072,7 @@ export function EditableAmountCell({
               variant="ghost"
               onClick={() => void save()}
               disabled={isPending}
+              aria-label="Save value"
             >
               <Check className="size-3.5" />
             </Button>
@@ -1074,6 +1081,7 @@ export function EditableAmountCell({
               variant="ghost"
               onClick={edit.cancel}
               disabled={isPending}
+              aria-label="Cancel editing"
             >
               <X className="size-3.5" />
             </Button>

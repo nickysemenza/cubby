@@ -4,8 +4,9 @@ import type {
   InventoryItemForTree,
 } from "@cubby/schemas/location";
 import { useDraggable } from "@dnd-kit/core";
+import { DotsSixVerticalIcon as GripVertical } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
+import { PackageIcon as Package } from "@phosphor-icons/react/dist/csr/Package";
 import { Link } from "@tanstack/react-router";
-import { GripVertical, Package } from "lucide-react";
 import { useMemo } from "react";
 
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";

@@ -1,6 +1,7 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type { UnitMapping, UnitMappingInput } from "@cubby/schemas/unitmapping";
-import { ChevronRight, Network } from "lucide-react";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { NetworkIcon as Network } from "@phosphor-icons/react/dist/csr/Network";
 import { lazy, Suspense, useId, useMemo, useState } from "react";
 
 import { Row, Stack } from "~/components/layout";

@@ -10,8 +10,8 @@
 
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { WarningIcon as TriangleAlert } from "@phosphor-icons/react/dist/csr/Warning";
 import { useQuery } from "@tanstack/react-query";
-import { TriangleAlert } from "lucide-react";
 import { type FC, useMemo } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { z } from "zod";

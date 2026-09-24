@@ -4,7 +4,7 @@ import {
   type ExpenseTradeCostAggregate,
   type Trade,
 } from "@cubby/schemas/project";
-import { ShoppingBag } from "lucide-react";
+import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { useMemo } from "react";
 
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";

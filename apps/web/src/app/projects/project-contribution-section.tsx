@@ -1,7 +1,9 @@
 import type { ProjectContributionOut } from "@cubby/schemas/household-contribution";
+import { UsersIcon as UsersRound } from "@phosphor-icons/react/dist/csr/Users";
+import { WalletIcon as WalletCards } from "@phosphor-icons/react/dist/csr/Wallet";
+import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import type { Icon } from "@phosphor-icons/react/lib";
 import { useQuery } from "@tanstack/react-query";
-import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, UsersRound, WalletCards } from "lucide-react";
 import { useId } from "react";
 
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
@@ -211,7 +213,7 @@ function CompactEmpty({
   title,
   detail,
 }: {
-  icon: LucideIcon;
+  icon: Icon;
   title: string;
   detail: string;
 }) {

@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
 
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";

@@ -1,5 +1,5 @@
 import type { ExpenseCumulativePoint } from "@cubby/schemas/project";
-import { TrendingUp } from "lucide-react";
+import { TrendUpIcon as TrendingUp } from "@phosphor-icons/react/dist/csr/TrendUp";
 import { useMemo } from "react";
 
 import { SpendTrend } from "~/app/_components/charts/kit";

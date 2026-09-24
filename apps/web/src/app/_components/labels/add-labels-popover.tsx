@@ -1,9 +1,11 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { UsersIcon as Users } from "@phosphor-icons/react/dist/csr/Users";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
-import { Plus, Search, Users } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 

@@ -2,7 +2,7 @@ import {
   projectStatusSchema,
   projectStatusValues,
 } from "@cubby/schemas/project";
-import { ListFilter } from "lucide-react";
+import { FunnelIcon as ListFilter } from "@phosphor-icons/react/dist/csr/Funnel";
 import { type ReactNode, useId, useState } from "react";
 
 import { Row, Stack } from "~/components/layout";

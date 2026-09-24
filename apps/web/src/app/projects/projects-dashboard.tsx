@@ -3,9 +3,12 @@ import type {
   ProjectOut,
   TaskOut,
 } from "@cubby/schemas/project";
+import { CalendarIcon as Calendar } from "@phosphor-icons/react/dist/csr/Calendar";
+import { CurrencyDollarIcon as DollarSign } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
+import { HammerIcon as Hammer } from "@phosphor-icons/react/dist/csr/Hammer";
+import { WalletIcon as Wallet } from "@phosphor-icons/react/dist/csr/Wallet";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
-import { Calendar, DollarSign, Hammer, Wallet } from "lucide-react";
 import {
   lazy,
   type MouseEvent,

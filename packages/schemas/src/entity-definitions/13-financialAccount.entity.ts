@@ -28,7 +28,11 @@ export default defineEntity({
         "Add an account to retain statement and receipt evidence for settlement.",
       actionLabel: "New Account",
     },
-    icons: { lucide: "CreditCard", sfSymbol: "building.columns", emoji: "🏦" },
+    icons: {
+      phosphor: "CreditCard",
+      sfSymbol: "building.columns",
+      emoji: "🏦",
+    },
     detail: {
       omitRelations: {
         vendors:

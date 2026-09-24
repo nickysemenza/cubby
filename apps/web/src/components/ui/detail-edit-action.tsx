@@ -1,4 +1,4 @@
-import { Pencil } from "lucide-react";
+import { PencilIcon as Pencil } from "@phosphor-icons/react/dist/csr/Pencil";
 import type { ComponentProps } from "react";
 import { Button } from "~/components/ui/button";
 

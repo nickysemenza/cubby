@@ -1,6 +1,6 @@
 import type { PurchaseProductOut } from "@cubby/schemas/purchase";
+import { LinkIcon as Link2 } from "@phosphor-icons/react/dist/csr/Link";
 import { useQuery } from "@tanstack/react-query";
-import { Link2 } from "lucide-react";
 import { useState } from "react";
 
 import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";

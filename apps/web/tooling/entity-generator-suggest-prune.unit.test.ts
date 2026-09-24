@@ -13,7 +13,7 @@ const presentation = {
   domain: null,
   description: "Widgets.",
   emptyState: { title: "No widgets", description: "Add one." },
-  icons: { lucide: "Box", sfSymbol: "cube", emoji: "🧊" },
+  icons: { phosphor: "Cube", sfSymbol: "cube", emoji: "🧊" },
 } as const;
 
 const base = {

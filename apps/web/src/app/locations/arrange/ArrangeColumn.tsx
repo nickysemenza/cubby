@@ -3,7 +3,8 @@ import type {
   InfLocation,
   InventoryItemForTree,
 } from "@cubby/schemas/location";
-import { HelpCircle, Home } from "lucide-react";
+import { HouseIcon as Home } from "@phosphor-icons/react/dist/csr/House";
+import { QuestionIcon as HelpCircle } from "@phosphor-icons/react/dist/csr/Question";
 
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { cn } from "~/lib/utils";

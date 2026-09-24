@@ -1,16 +1,14 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/dist/csr/BookOpen";
+import { BowlFoodIcon as Apple } from "@phosphor-icons/react/dist/csr/BowlFood";
+import { ClipboardTextIcon as ClipboardList } from "@phosphor-icons/react/dist/csr/ClipboardText";
+import { CoffeeIcon as Coffee } from "@phosphor-icons/react/dist/csr/Coffee";
+import { GitBranchIcon as GitBranch } from "@phosphor-icons/react/dist/csr/GitBranch";
+import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
+import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { PrinterIcon as Printer } from "@phosphor-icons/react/dist/csr/Printer";
+import { TableIcon as Table2 } from "@phosphor-icons/react/dist/csr/Table";
 import { Link } from "@tanstack/react-router";
-import {
-  Apple,
-  BookOpen,
-  ClipboardList,
-  Coffee,
-  GitBranch,
-  ImageIcon,
-  ListChecks,
-  Printer,
-  Table2,
-} from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { match } from "ts-pattern";

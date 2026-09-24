@@ -1,6 +1,6 @@
 import type { ImageWithEntity } from "@cubby/schemas/image";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
-import { ImageIcon } from "lucide-react";
+import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 
 import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";

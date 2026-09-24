@@ -1,7 +1,9 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
+import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { MapPinIcon as MapPin } from "@phosphor-icons/react/dist/csr/MapPin";
 import { Link } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";

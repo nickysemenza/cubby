@@ -1,19 +1,17 @@
 import type { ProductCategory } from "@cubby/shared";
 import { getLocationTypeColor, type LocationType } from "@cubby/shared";
-import {
-  Box,
-  FileBox,
-  Flower2,
-  Home,
-  Layers,
-  LayoutGrid,
-  type LucideIcon,
-  Package,
-  ShoppingBag,
-  ShoppingCart,
-  Sprout,
-  Table2,
-} from "lucide-react";
+import { CubeIcon as Box } from "@phosphor-icons/react/dist/csr/Cube";
+import { FileArchiveIcon as FileBox } from "@phosphor-icons/react/dist/csr/FileArchive";
+import { FlowerIcon as Flower2 } from "@phosphor-icons/react/dist/csr/Flower";
+import { HouseIcon as Home } from "@phosphor-icons/react/dist/csr/House";
+import { PackageIcon as Package } from "@phosphor-icons/react/dist/csr/Package";
+import { PlantIcon as Sprout } from "@phosphor-icons/react/dist/csr/Plant";
+import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/dist/csr/ShoppingBag";
+import { ShoppingCartIcon as ShoppingCart } from "@phosphor-icons/react/dist/csr/ShoppingCart";
+import { SquaresFourIcon as LayoutGrid } from "@phosphor-icons/react/dist/csr/SquaresFour";
+import { StackIcon as Layers } from "@phosphor-icons/react/dist/csr/Stack";
+import { TableIcon as Table2 } from "@phosphor-icons/react/dist/csr/Table";
+import type { Icon } from "@phosphor-icons/react/lib";
 
 import { getCategoryIcon } from "../products/category-theme";
 
@@ -86,12 +84,12 @@ const locationIcons = {
   box: Box,
   bed: Sprout,
   planter: Flower2,
-} satisfies Record<LocationType, LucideIcon>;
+} satisfies Record<LocationType, Icon>;
 
 /**
  * Get the icon component for a location type
  */
-export const getLocationIcon = (type: LocationType | null): LucideIcon =>
+export const getLocationIcon = (type: LocationType | null): Icon =>
   // safe: complete Record keyed by the enum. Null means the location is an
   // instance of a Product; callers holding that Product should prefer
   // `getLocationGlyph`, which resolves the SKU's category icon instead.
@@ -109,7 +107,7 @@ export const getLocationIcon = (type: LocationType | null): LucideIcon =>
 export const getLocationGlyph = (location: {
   type: LocationType | null;
   product?: { category: ProductCategory | null } | null;
-}): LucideIcon => {
+}): Icon => {
   if (location.type) return locationIcons[location.type];
   const category = location.product?.category;
   return category ? getCategoryIcon(category.feature) : Package;

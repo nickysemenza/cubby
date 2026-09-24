@@ -11,7 +11,8 @@
  */
 
 import type { ScanStrayOut } from "@cubby/schemas/scan";
-import { ArrowDownToLine, X } from "lucide-react";
+import { ArrowLineDownIcon as ArrowDownToLine } from "@phosphor-icons/react/dist/csr/ArrowLineDown";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { useState } from "react";
 
 import { LocationIcon } from "~/app/_components/locations/location-icons";

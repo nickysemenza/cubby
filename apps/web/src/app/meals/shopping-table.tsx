@@ -1,7 +1,8 @@
 import type { ShoppingListItem } from "@cubby/schemas/meal";
+import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
-import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 import { Row } from "~/components/layout";

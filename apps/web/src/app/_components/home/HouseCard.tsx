@@ -2,9 +2,9 @@ import type {
   TaskTodayBriefingItemOut,
   TaskTodayBriefingOut,
 } from "@cubby/schemas/project";
+import { HammerIcon as Hammer } from "@phosphor-icons/react/dist/csr/Hammer";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Hammer } from "lucide-react";
 import { useId, useMemo } from "react";
 
 import {

@@ -1,5 +1,6 @@
+import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { WarningIcon as TriangleAlert } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, TriangleAlert } from "lucide-react";
 import { useEffect } from "react";
 import { match } from "ts-pattern";
 

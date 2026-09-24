@@ -6,19 +6,17 @@ import type {
   ProductQuantitySummariesOut,
   ProductQuantitySummaryOut,
 } from "@cubby/schemas/product";
+import { ArrowsLeftRightIcon as ArrowRightLeft } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
+import { ArrowUUpLeftIcon as Undo2 } from "@phosphor-icons/react/dist/csr/ArrowUUpLeft";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { FolderSimplePlusIcon as FolderInput } from "@phosphor-icons/react/dist/csr/FolderSimplePlus";
+import { MinusIcon as Minus } from "@phosphor-icons/react/dist/csr/Minus";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { SkipForwardIcon as SkipForward } from "@phosphor-icons/react/dist/csr/SkipForward";
+import { SlidersHorizontalIcon as SlidersHorizontal } from "@phosphor-icons/react/dist/csr/SlidersHorizontal";
+import { StackPlusIcon as PackagePlus } from "@phosphor-icons/react/dist/csr/StackPlus";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
-import {
-  ArrowRightLeft,
-  Check,
-  FolderInput,
-  Minus,
-  PackagePlus,
-  Plus,
-  SkipForward,
-  SlidersHorizontal,
-  Undo2,
-  X,
-} from "lucide-react";
 import { useState } from "react";
 import { match } from "ts-pattern";
 

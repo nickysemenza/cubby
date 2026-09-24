@@ -1,5 +1,5 @@
 import { cn } from "~/lib/utils";
-import { Loader2Icon } from "lucide-react";
+import { CircleNotchIcon as Loader2Icon } from "@phosphor-icons/react/dist/csr/CircleNotch";
 
 const sizeClasses = {
   sm: "size-3",

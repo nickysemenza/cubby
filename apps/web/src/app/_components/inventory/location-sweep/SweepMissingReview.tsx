@@ -11,7 +11,7 @@
  */
 
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import { CircleHelp } from "lucide-react";
+import { QuestionIcon as CircleHelp } from "@phosphor-icons/react/dist/csr/Question";
 
 import {
   DestinationLocationField,

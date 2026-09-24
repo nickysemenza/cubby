@@ -68,7 +68,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip"
-import { PlusIcon, MinusIcon, ChevronRightIcon, ChevronLeftIcon } from "lucide-react"
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus";
+import { CaretRightIcon as ChevronRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CaretLeftIcon as ChevronLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 
 /** Current time, refreshed on an interval and on tab focus. */
 function useNow(intervalMs = 30_000): Date {

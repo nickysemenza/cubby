@@ -3,7 +3,9 @@ import {
   type LocationType,
   locationType,
 } from "@cubby/schemas/location";
-import { Plus, Search, X } from "lucide-react";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { useId, useState } from "react";
 import { z } from "zod";
 

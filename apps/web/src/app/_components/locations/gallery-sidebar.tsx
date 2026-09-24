@@ -1,10 +1,8 @@
 import type { InfLocation } from "@cubby/schemas/location";
-import {
-  ChevronRight,
-  ImageIcon,
-  PanelLeft,
-  PanelLeftClose,
-} from "lucide-react";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
+import { SidebarIcon as PanelLeft } from "@phosphor-icons/react/dist/csr/Sidebar";
+import { SidebarSimpleIcon as PanelLeftClose } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { locationTypeNoun } from "~/app/inventory/session/session-utils";

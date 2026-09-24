@@ -2,7 +2,8 @@ import type { Entity } from "@cubby/schemas/entity";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import { parseShortcode } from "@cubby/shared";
-import { RotateCcw, TriangleAlert } from "lucide-react";
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { WarningIcon as TriangleAlert } from "@phosphor-icons/react/dist/csr/Warning";
 import type { ReactNode } from "react";
 import { z } from "zod";
 

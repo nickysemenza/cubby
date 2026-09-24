@@ -1,5 +1,8 @@
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
-import { ListChecks, MapPin, PieChart, Share2 } from "lucide-react";
+import { ChartPieIcon as PieChart } from "@phosphor-icons/react/dist/csr/ChartPie";
+import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { MapPinIcon as MapPin } from "@phosphor-icons/react/dist/csr/MapPin";
+import { ShareNetworkIcon as Share2 } from "@phosphor-icons/react/dist/csr/ShareNetwork";
 import { useState } from "react";
 
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";

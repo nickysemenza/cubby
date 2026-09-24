@@ -1,3 +1,4 @@
+import { InfoIcon as Info } from "@phosphor-icons/react/dist/csr/Info";
 /**
  * Real-browser layout invariants for the shared table cell anatomy.
  *
@@ -10,7 +11,6 @@
  * via `pnpm test:preview`.
  */
 import { render } from "@testing-library/react";
-import { Info } from "lucide-react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { page } from "vitest/browser";

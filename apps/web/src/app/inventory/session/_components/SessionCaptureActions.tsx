@@ -5,8 +5,11 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { ALLOWED_IMAGE_TYPES } from "@cubby/schemas/image";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { BarcodeIcon as Barcode } from "@phosphor-icons/react/dist/csr/Barcode";
+import { CameraIcon as Camera } from "@phosphor-icons/react/dist/csr/Camera";
+import { CameraPlusIcon as ImagePlus } from "@phosphor-icons/react/dist/csr/CameraPlus";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
 import { useMutation } from "@tanstack/react-query";
-import { Barcode, Camera, ImagePlus, Plus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";

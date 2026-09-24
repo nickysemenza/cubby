@@ -2,8 +2,10 @@ import type {
   MealFoodAmount,
   MealPreparationYieldBasis,
 } from "@cubby/schemas/meal";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { TrashIcon as Trash2 } from "@phosphor-icons/react/dist/csr/Trash";
 import { format, parseISO } from "date-fns";
-import { Check, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { StaticPicker } from "~/app/_components/combobox/static-picker";

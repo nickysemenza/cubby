@@ -1,7 +1,7 @@
 import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut, Trade } from "@cubby/schemas/project";
+import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { sumBy } from "es-toolkit";
-import { ShoppingBag } from "lucide-react";
 import { Fragment, type ReactElement, useMemo } from "react";
 
 import {

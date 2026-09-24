@@ -1,4 +1,4 @@
-import { PanelRight } from "lucide-react";
+import { SidebarSimpleIcon as PanelRight } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import { describe, expect, it } from "vitest";
 
 import {

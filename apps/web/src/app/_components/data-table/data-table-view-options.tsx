@@ -1,5 +1,5 @@
+import { GearSixIcon as Settings2 } from "@phosphor-icons/react/dist/csr/GearSix";
 import type { RowData } from "@tanstack/react-table";
-import { Settings2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";

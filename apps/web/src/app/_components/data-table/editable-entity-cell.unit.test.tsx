@@ -46,15 +46,10 @@ const renderValue = (v: ComboboxItem<string> | null) => (
   <span data-testid="display">{v?.name ?? "None"}</span>
 );
 
-/** The ✗ cancel action is icon-only; find it by its lucide svg class, matching
- * the pattern used in editable-cell.unit.test.tsx. (Commit-on-pick removed the
+/** The ✗ cancel action is icon-only; find it by its accessible name. (Commit-on-pick removed the
  * ✓ confirm button — picking a row saves immediately.) */
 const getCancelButton = () => {
-  const cancelButton = screen
-    .getAllByRole("button")
-    .find((btn) => btn.querySelector("svg.lucide-x"));
-  if (!cancelButton) throw new Error("cancel button was not rendered");
-  return cancelButton;
+  return screen.getByRole("button", { name: "Cancel editing" });
 };
 
 const enterEditMode = () => {

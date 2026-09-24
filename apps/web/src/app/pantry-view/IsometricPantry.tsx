@@ -4,8 +4,10 @@
  * interaction live in use-isometric-pantry.
  */
 import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
+import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { ArrowsOutSimpleIcon as Maximize2 } from "@phosphor-icons/react/dist/csr/ArrowsOutSimple";
+import { CircleNotchIcon as Loader2 } from "@phosphor-icons/react/dist/csr/CircleNotch";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Loader2, Maximize2 } from "lucide-react";
 
 import { createActionFor } from "~/app/_components/actions/action-items";
 import { Button } from "~/components/ui/button";

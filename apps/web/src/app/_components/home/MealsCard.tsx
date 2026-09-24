@@ -1,8 +1,8 @@
 import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
+import { ForkKnifeIcon as UtensilsCrossed } from "@phosphor-icons/react/dist/csr/ForkKnife";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format, isSameDay, parseISO } from "date-fns";
-import { UtensilsCrossed } from "lucide-react";
 import { useId } from "react";
 
 import { formatMealCost, mealListLabel } from "~/app/meals/meal-format";

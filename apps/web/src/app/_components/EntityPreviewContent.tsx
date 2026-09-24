@@ -15,9 +15,9 @@ import {
   TIER1_NUTRIENTS,
   dataTypeLabel,
 } from "@cubby/usda-schemas";
+import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
-import { ListChecks } from "lucide-react";
 import { type ComponentType, type ReactNode, useEffect } from "react";
 
 import type { EntityActionRow } from "~/app/_components/actions/entity-actions";

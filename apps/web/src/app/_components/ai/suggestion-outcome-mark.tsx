@@ -4,8 +4,9 @@ import type {
   FieldSuggestionOutcome,
   FieldSuggestionRemoval,
 } from "@cubby/schemas/ai";
+import { SparkleIcon as Sparkle } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { WarningCircleIcon as CircleAlert } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { ClassicV2 } from "loading-dev";
-import { CircleAlert, Sparkle } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
 
 import { Stack } from "~/components/layout";

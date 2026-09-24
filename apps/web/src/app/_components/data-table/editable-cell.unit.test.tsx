@@ -150,13 +150,7 @@ describe("EditableCell component", () => {
       target: { value: "New" },
     });
 
-    const buttons = screen.getAllByRole("button");
-    const saveButton = buttons.find((btn) =>
-      btn.querySelector("svg.lucide-check"),
-    );
-    if (saveButton) {
-      fireEvent.click(saveButton);
-    }
+    fireEvent.click(screen.getByRole("button", { name: "Save value" }));
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith("New");
@@ -180,13 +174,7 @@ describe("EditableCell component", () => {
       expect(screen.getByRole("textbox")).toBeInTheDocument();
     });
 
-    const buttons = screen.getAllByRole("button");
-    const cancelButton = buttons.find((btn) =>
-      btn.querySelector("svg.lucide-x"),
-    );
-    if (cancelButton) {
-      fireEvent.click(cancelButton);
-    }
+    fireEvent.click(screen.getByRole("button", { name: "Cancel editing" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("display")).toHaveTextContent("Original");
@@ -341,11 +329,14 @@ describe("EditableCell select editor (commit-on-pick)", () => {
     fireEvent.click(screen.getByRole("button"));
     await screen.findByRole("combobox");
 
-    const buttons = screen.getAllByRole("button", { hidden: true });
-    expect(buttons.some((b) => b.querySelector("svg.lucide-check"))).toBe(
-      false,
-    );
-    expect(buttons.some((b) => b.querySelector("svg.lucide-x"))).toBe(true);
+    expect(screen.queryByRole("button", { name: "Save value" })).toBeNull();
+    expect(
+      screen
+        .getAllByRole("button", { hidden: true })
+        .some(
+          (button) => button.getAttribute("aria-label") === "Cancel editing",
+        ),
+    ).toBe(true);
   });
 
   it("saves null through the clear affordance when clearable", async () => {

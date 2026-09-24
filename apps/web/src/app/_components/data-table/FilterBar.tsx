@@ -1,13 +1,11 @@
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
+import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { FunnelIcon as ListFilter } from "@phosphor-icons/react/dist/csr/Funnel";
+import { GearSixIcon as Settings2 } from "@phosphor-icons/react/dist/csr/GearSix";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import type { RowData } from "@tanstack/react-table";
-import {
-  Check as CheckIcon,
-  ChevronDown,
-  ListFilter,
-  Search,
-  Settings2,
-  X,
-} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "~/components/ui/button";

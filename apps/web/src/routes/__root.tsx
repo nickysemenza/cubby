@@ -2,6 +2,7 @@
 // Porcelain Transit type system: Inter carries headings and UI prose while
 // JetBrains Mono is reserved for aligned data, measures, dates, and codes.
 import "../fonts.css";
+import { IconContext } from "@phosphor-icons/react/dist/lib/context";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   createRootRouteWithContext,
@@ -40,6 +41,7 @@ import appCss from "../styles.css?url";
 // Lazy: the command menu pulls in cmdk + react-markdown + the agent stream,
 // none of which is needed for first paint. Loaded on first ⌘K / search click.
 const GlobalCommandMenu = React.lazy(loadCommandMenu);
+const iconDefaults = { size: 24, weight: "regular" as const };
 
 // Keep production devtools out of the initial client path. The `devtools`
 // flag still controls whether this lazy chunk is requested and mounted.
@@ -277,54 +279,56 @@ function RootComponent() {
   );
 
   return (
-    <Provider queryClient={queryClient}>
-      <a
-        href={`#${mainContentId}`}
-        className="fixed start-2 top-0 z-[100] -translate-y-full border border-foreground bg-card px-4 py-2 text-sm font-medium text-foreground transition-transform focus:top-[calc(env(safe-area-inset-top)+0.5rem)] focus:translate-y-0"
-      >
-        Skip to main content
-      </a>
-      {authed && isWorkspaceRoute ? (
-        <AuthenticatedAppShell
-          footer={footer}
-          mainContentId={mainContentId}
-          onSearchClick={openCommandMenu}
-          navigationProgress={<NavigationProgress />}
+    <IconContext.Provider value={iconDefaults}>
+      <Provider queryClient={queryClient}>
+        <a
+          href={`#${mainContentId}`}
+          className="fixed start-2 top-0 z-[100] -translate-y-full border border-foreground bg-card px-4 py-2 text-sm font-medium text-foreground transition-transform focus:top-[calc(env(safe-area-inset-top)+0.5rem)] focus:translate-y-0"
         >
-          {routeContent}
-        </AuthenticatedAppShell>
-      ) : (
-        <div className="flex min-h-dvh flex-col">
-          <div className="safe-top sticky top-0 z-40 border-b bg-card print:hidden">
-            <div className="mx-auto flex h-12 w-full max-w-7xl items-center px-2 md:px-6">
-              <MainNav className="mx-0" onSearchClick={openCommandMenu} />
-            </div>
-            <NavigationProgress />
-          </div>
-          <main
-            id={mainContentId}
-            tabIndex={-1}
-            className="w-full flex-1 px-2 pt-4 pb-20 md:px-6 md:pb-4"
+          Skip to main content
+        </a>
+        {authed && isWorkspaceRoute ? (
+          <AuthenticatedAppShell
+            footer={footer}
+            mainContentId={mainContentId}
+            onSearchClick={openCommandMenu}
+            navigationProgress={<NavigationProgress />}
           >
             {routeContent}
-          </main>
-          {footer}
-        </div>
-      )}
-      <BottomNav />
-      {commandMenuMounted && (
-        <React.Suspense fallback={null}>
-          <GlobalCommandMenu
-            open={commandMenuOpen}
-            onOpenChange={setCommandMenuOpen}
-          />
-        </React.Suspense>
-      )}
-      <Toaster />
-      <ErrorDetailsDialogHost />
-      <PerfOverlayMount />
-      <DevtoolsWrapper />
-    </Provider>
+          </AuthenticatedAppShell>
+        ) : (
+          <div className="flex min-h-dvh flex-col">
+            <div className="safe-top sticky top-0 z-40 border-b bg-card print:hidden">
+              <div className="mx-auto flex h-12 w-full max-w-7xl items-center px-2 md:px-6">
+                <MainNav className="mx-0" onSearchClick={openCommandMenu} />
+              </div>
+              <NavigationProgress />
+            </div>
+            <main
+              id={mainContentId}
+              tabIndex={-1}
+              className="w-full flex-1 px-2 pt-4 pb-20 md:px-6 md:pb-4"
+            >
+              {routeContent}
+            </main>
+            {footer}
+          </div>
+        )}
+        <BottomNav />
+        {commandMenuMounted && (
+          <React.Suspense fallback={null}>
+            <GlobalCommandMenu
+              open={commandMenuOpen}
+              onOpenChange={setCommandMenuOpen}
+            />
+          </React.Suspense>
+        )}
+        <Toaster />
+        <ErrorDetailsDialogHost />
+        <PerfOverlayMount />
+        <DevtoolsWrapper />
+      </Provider>
+    </IconContext.Provider>
   );
 }
 

@@ -1,7 +1,9 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { formatDistanceToNow } from "date-fns";
-import { ChevronRight, Search, X } from "lucide-react";
 import pluralize from "pluralize";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";

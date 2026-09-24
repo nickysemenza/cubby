@@ -10,8 +10,8 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { locationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
+import { QrCodeIcon as QrCode } from "@phosphor-icons/react/dist/csr/QrCode";
 import { useQueryClient } from "@tanstack/react-query";
-import { QrCode } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 

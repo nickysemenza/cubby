@@ -1,5 +1,5 @@
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { Link } from "@tanstack/react-router";
-import { Search } from "lucide-react";
 import type * as React from "react";
 
 import { preloadCommandMenu } from "~/app/_components/command-menu-loader";

@@ -9,7 +9,7 @@
  */
 
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
-import { Check } from "lucide-react";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
 import { useEffect, useState } from "react";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";

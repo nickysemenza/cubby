@@ -1,6 +1,6 @@
 import type { EmptyLocation } from "@cubby/schemas/problems";
+import { CalendarIcon as Calendar } from "@phosphor-icons/react/dist/csr/Calendar";
 import { formatDistanceToNow } from "date-fns";
-import { Calendar } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import { CardThumbnail } from "~/components/entity/card-thumbnail";

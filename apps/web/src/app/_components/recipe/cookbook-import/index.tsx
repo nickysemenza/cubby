@@ -11,9 +11,9 @@ import {
   ALLOWED_IMAGE_TYPES,
   type AllowedImageType,
 } from "@cubby/schemas/image";
+import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQueries } from "@tanstack/react-query";
 import { useBlocker } from "@tanstack/react-router";
-import { AlertTriangle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";

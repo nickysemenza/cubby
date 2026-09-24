@@ -5,8 +5,12 @@ import {
   type SmartCollectionSummary,
 } from "@cubby/schemas/collection";
 import { TRADE_LABELS, tradeSchema, tradeValues } from "@cubby/schemas/project";
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { TrashIcon as Trash2 } from "@phosphor-icons/react/dist/csr/Trash";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 
 import { Stack } from "~/components/layout";

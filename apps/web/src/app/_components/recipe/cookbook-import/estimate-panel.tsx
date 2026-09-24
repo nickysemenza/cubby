@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
 
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";

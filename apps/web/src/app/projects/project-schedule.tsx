@@ -2,9 +2,10 @@ import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import type { EntityRef } from "@cubby/schemas/entity";
 import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import type { ProjectOut, TaskOut } from "@cubby/schemas/project";
+import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { NetworkIcon as Network } from "@phosphor-icons/react/dist/csr/Network";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, Network } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 

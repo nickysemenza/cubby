@@ -1,4 +1,6 @@
-import { ChevronDown, ChevronUp, Trash } from "lucide-react";
+import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretUpIcon as ChevronUp } from "@phosphor-icons/react/dist/csr/CaretUp";
+import { TrashIcon as Trash } from "@phosphor-icons/react/dist/csr/Trash";
 import type { FC } from "react";
 
 import { Button } from "~/components/ui/button";

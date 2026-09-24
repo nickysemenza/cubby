@@ -1,5 +1,5 @@
 import type { RecipeUsage } from "@cubby/schemas/recipe";
-import { AlertCircle } from "lucide-react";
+import { WarningCircleIcon as AlertCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useMemo } from "react";
 
 import {

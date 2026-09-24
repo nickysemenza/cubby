@@ -1,7 +1,7 @@
 import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut, Trade } from "@cubby/schemas/project";
 import { ResponsiveLine } from "@nivo/line";
-import { TrendingUp } from "lucide-react";
+import { TrendUpIcon as TrendingUp } from "@phosphor-icons/react/dist/csr/TrendUp";
 import { useMemo, useState } from "react";
 
 import { Row, Stack } from "~/components/layout";

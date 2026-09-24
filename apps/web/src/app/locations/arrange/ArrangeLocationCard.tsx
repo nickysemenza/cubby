@@ -1,6 +1,7 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import { useDraggable } from "@dnd-kit/core";
-import { ChevronRight, GripVertical } from "lucide-react";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { DotsSixVerticalIcon as GripVertical } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
 
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { resolveLocationPrimaryVisual } from "~/app/_components/locations/location-visual-resolver";

@@ -1,5 +1,7 @@
 import type { CookbookRunReport } from "@cubby/schemas/cookbook";
-import { AlertCircle, ChevronDown, RotateCcw } from "lucide-react";
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { WarningCircleIcon as AlertCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useMemo } from "react";
 
 import { Row, Stack } from "~/components/layout";

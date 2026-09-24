@@ -4,9 +4,11 @@ import type {
   CalendarItemKind,
   CalendarRangeInput,
 } from "@cubby/schemas/calendar";
+import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { addDays, format } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import {
   type CSSProperties,
   lazy,

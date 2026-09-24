@@ -1,10 +1,8 @@
-import {
-  Book,
-  type LucideIcon,
-  Tag,
-  User,
-  UtensilsCrossed,
-} from "lucide-react";
+import { BookIcon as Book } from "@phosphor-icons/react/dist/csr/Book";
+import { ForkKnifeIcon as UtensilsCrossed } from "@phosphor-icons/react/dist/csr/ForkKnife";
+import { TagIcon as Tag } from "@phosphor-icons/react/dist/csr/Tag";
+import { UserIcon as User } from "@phosphor-icons/react/dist/csr/User";
+import type { Icon } from "@phosphor-icons/react/lib";
 
 /**
  * Known tag prefixes with their display info
@@ -76,7 +74,7 @@ export const getTagTint = (prefix: TagPrefix): string =>
 /**
  * Get the icon component for a tag prefix
  */
-export const getTagIcon = (prefix: TagPrefix): LucideIcon => {
+export const getTagIcon = (prefix: TagPrefix): Icon => {
   switch (prefix) {
     case "cuisine":
       return UtensilsCrossed;

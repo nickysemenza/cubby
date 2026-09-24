@@ -1,5 +1,6 @@
 import type { Progress } from "@cubby/recipebridge";
-import { AlertCircle, Ban } from "lucide-react";
+import { ProhibitIcon as Ban } from "@phosphor-icons/react/dist/csr/Prohibit";
+import { WarningCircleIcon as AlertCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
 
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";

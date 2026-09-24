@@ -1,5 +1,6 @@
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { CodeIcon as Code } from "@phosphor-icons/react/dist/csr/Code";
 import { JsonEditor, type JsonData } from "json-edit-react";
-import { Code, RotateCcw } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 

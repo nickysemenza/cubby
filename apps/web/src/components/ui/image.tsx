@@ -1,4 +1,4 @@
-import { ImageOff } from "lucide-react";
+import { ImageBrokenIcon as ImageOff } from "@phosphor-icons/react/dist/csr/ImageBroken";
 import {
   type ComponentProps,
   type ReactNode,

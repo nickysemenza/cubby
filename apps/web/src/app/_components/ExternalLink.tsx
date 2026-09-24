@@ -1,4 +1,4 @@
-import { ExternalLink as ExternalLinkGlyph } from "lucide-react";
+import { ArrowSquareOutIcon as ExternalLinkGlyph } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";

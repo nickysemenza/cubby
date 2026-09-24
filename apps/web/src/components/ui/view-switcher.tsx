@@ -1,11 +1,11 @@
-import type { LucideIcon } from "lucide-react";
+import type { Icon } from "@phosphor-icons/react/lib";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { cn } from "~/lib/utils";
 
 interface ChoiceSwitcherOption<T extends string = string> {
   value: T;
   label: string;
-  icon?: LucideIcon;
+  icon?: Icon;
 }
 
 interface ChoiceSwitcherProps<T extends string> {
@@ -62,6 +62,7 @@ export function ChoiceSwitcher<T extends string>({
             {Icon && (
               <Icon
                 className={cn("size-4", compactOnMobile ? "mr-2 md:hidden" : "mr-2")}
+                weight={opt.value === value ? "fill" : "regular"}
               />
             )}
             <span

@@ -1,5 +1,6 @@
+import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { ClockIcon as Clock } from "@phosphor-icons/react/dist/csr/Clock";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, Clock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { DashboardCard } from "~/components/layout/dashboard-card";

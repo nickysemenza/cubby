@@ -1,5 +1,5 @@
 import type { AiCacheStatus, Confidence } from "@cubby/schemas/ai";
-import { Sparkles } from "lucide-react";
+import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { type KeyboardEvent, type ReactNode, useEffect, useRef } from "react";
 
 import { formatCompactRelative } from "~/app/_components/HoverableTimestamp";

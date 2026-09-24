@@ -1,5 +1,8 @@
+import { GearIcon as Settings } from "@phosphor-icons/react/dist/csr/Gear";
+import { PlugIcon as Plug } from "@phosphor-icons/react/dist/csr/Plug";
+import { SignOutIcon as LogOut } from "@phosphor-icons/react/dist/csr/SignOut";
+import { UserIcon as User } from "@phosphor-icons/react/dist/csr/User";
 import { Link } from "@tanstack/react-router";
-import { LogOut, Plug, Settings, User } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Description } from "~/components/ui/description";

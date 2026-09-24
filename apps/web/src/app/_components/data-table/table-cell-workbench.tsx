@@ -1,4 +1,4 @@
-import { Network } from "lucide-react";
+import { NetworkIcon as Network } from "@phosphor-icons/react/dist/csr/Network";
 import type { MouseEvent, ReactNode } from "react";
 import { useState } from "react";
 

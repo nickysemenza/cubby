@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { SidebarSimpleIcon as PanelRight } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
-import { PanelRight } from "lucide-react";
 import type { ReactNode } from "react";
 import {
   useCallback,

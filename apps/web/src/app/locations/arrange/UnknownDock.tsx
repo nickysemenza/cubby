@@ -1,5 +1,5 @@
 import type { InfLocation } from "@cubby/schemas/location";
-import { HelpCircle } from "lucide-react";
+import { QuestionIcon as HelpCircle } from "@phosphor-icons/react/dist/csr/Question";
 
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";

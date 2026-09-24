@@ -6,35 +6,31 @@ import type {
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { displayGtin } from "@cubby/schemas/external-id";
-import {
-  Apple,
-  ArrowLeftRight,
-  Barcode,
-  BookOpen,
-  Bot,
-  CalendarDays,
-  Carrot,
-  ChefHat,
-  CreditCard,
-  Eye,
-  Hammer,
-  Heart,
-  Image,
-  KeyRound,
-  ListChecks,
-  type LucideIcon,
-  type LucideProps,
-  MapPin,
-  Package,
-  Receipt,
-  ReceiptText,
-  Leaf,
-  Smartphone,
-  Sprout,
-  Store,
-  Tags,
-  Users,
-} from "lucide-react";
+import { ArrowsLeftRightIcon as ArrowLeftRight } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
+import { BarcodeIcon as Barcode } from "@phosphor-icons/react/dist/csr/Barcode";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/dist/csr/BookOpen";
+import { BowlFoodIcon as Apple } from "@phosphor-icons/react/dist/csr/BowlFood";
+import { CalendarDotsIcon as CalendarDays } from "@phosphor-icons/react/dist/csr/CalendarDots";
+import { CarrotIcon as Carrot } from "@phosphor-icons/react/dist/csr/Carrot";
+import { ChefHatIcon as ChefHat } from "@phosphor-icons/react/dist/csr/ChefHat";
+import { CreditCardIcon as CreditCard } from "@phosphor-icons/react/dist/csr/CreditCard";
+import { DeviceMobileIcon as Smartphone } from "@phosphor-icons/react/dist/csr/DeviceMobile";
+import { EyeIcon as Eye } from "@phosphor-icons/react/dist/csr/Eye";
+import { HammerIcon as Hammer } from "@phosphor-icons/react/dist/csr/Hammer";
+import { HeartIcon as Heart } from "@phosphor-icons/react/dist/csr/Heart";
+import { ImageIcon as Image } from "@phosphor-icons/react/dist/csr/Image";
+import { KeyIcon as KeyRound } from "@phosphor-icons/react/dist/csr/Key";
+import { LeafIcon as Leaf } from "@phosphor-icons/react/dist/csr/Leaf";
+import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { MapPinIcon as MapPin } from "@phosphor-icons/react/dist/csr/MapPin";
+import { PackageIcon as Package } from "@phosphor-icons/react/dist/csr/Package";
+import { PlantIcon as Sprout } from "@phosphor-icons/react/dist/csr/Plant";
+import { ReceiptIcon as Receipt } from "@phosphor-icons/react/dist/csr/Receipt";
+import { RobotIcon as Bot } from "@phosphor-icons/react/dist/csr/Robot";
+import { StorefrontIcon as Store } from "@phosphor-icons/react/dist/csr/Storefront";
+import { TagIcon as Tags } from "@phosphor-icons/react/dist/csr/Tag";
+import { UsersIcon as Users } from "@phosphor-icons/react/dist/csr/Users";
+import type { Icon, IconProps } from "@phosphor-icons/react/lib";
 
 import {
   domainForEntity,
@@ -171,7 +167,7 @@ const INK = {
  * The other twelve coincide with a naive plural, which is exactly the trap —
  * `pluralize` is already a dependency and gets all four of those wrong.
  *
- * Names and the lucide icon (from `presentation.icons.lucide`) are stamped
+ * Names and the Phosphor icon (from `presentation.icons.phosphor`) are stamped
  * BEFORE the definition spreads in, so an entity that has a genuine reason to
  * depart can still say so and win.
  */
@@ -181,41 +177,40 @@ type EntityDefinitionSeed = Pick<
 >;
 
 /**
- * The `lucide-react` icons the declarations name in `presentation.icons.lucide`.
+ * The Phosphor icons the declarations name in `presentation.icons.phosphor`.
  * Keyed by that literal union, so a declaration naming an icon this map does
- * not import fails to compile here — the compiler cannot import lucide, this
+ * not import fails to compile here — the compiler cannot import an unknown glyph, this
  * is where the name is checked. Imports stay explicit so the bundle carries
  * only these glyphs.
  */
-type DeclaredLucideIcon =
-  (typeof entitySummary)[BrowserRoutedEntity]["icons"]["lucide"];
-const LUCIDE_ICONS = {
-  Apple,
-  ArrowLeftRight,
-  Barcode,
-  BookOpen,
-  Bot,
-  CalendarDays,
-  Carrot,
-  ChefHat,
-  CreditCard,
-  Eye,
-  Hammer,
-  Heart,
-  Image,
-  KeyRound,
-  ListChecks,
-  MapPin,
-  Package,
-  Receipt,
-  ReceiptText,
-  Leaf,
-  Smartphone,
-  Sprout,
-  Store,
-  Tags,
-  Users,
-} satisfies Record<DeclaredLucideIcon, LucideIcon>;
+type DeclaredPhosphorIcon =
+  (typeof entitySummary)[BrowserRoutedEntity]["icons"]["phosphor"];
+const PHOSPHOR_ICONS = {
+  BowlFood: Apple,
+  ArrowsLeftRight: ArrowLeftRight,
+  Barcode: Barcode,
+  BookOpen: BookOpen,
+  Robot: Bot,
+  CalendarDots: CalendarDays,
+  Carrot: Carrot,
+  ChefHat: ChefHat,
+  CreditCard: CreditCard,
+  Eye: Eye,
+  Hammer: Hammer,
+  Heart: Heart,
+  Image: Image,
+  Key: KeyRound,
+  ListChecks: ListChecks,
+  MapPin: MapPin,
+  Package: Package,
+  Receipt: Receipt,
+  Leaf: Leaf,
+  DeviceMobile: Smartphone,
+  Plant: Sprout,
+  Storefront: Store,
+  Tag: Tags,
+  Users: Users,
+} satisfies Record<DeclaredPhosphorIcon, Icon>;
 const isBrowserEntityKey = (value: string): value is BrowserRoutedEntity =>
   Object.hasOwn(entitySummary, value);
 
@@ -227,7 +222,7 @@ const withEntityNames = <
   [Entity in keyof Definitions & BrowserRoutedEntity]: {
     label: (typeof entitySummary)[Entity]["singular"];
     pluralLabel: (typeof entitySummary)[Entity]["plural"];
-    lucideIcon: LucideIcon;
+    phosphorIcon: Icon;
   } & Definitions[Entity];
 } =>
   // SAFETY: the runtime key guard preserves every entity key, while
@@ -241,7 +236,7 @@ const withEntityNames = <
         {
           label: entitySummary[entity].singular,
           pluralLabel: entitySummary[entity].plural,
-          lucideIcon: LUCIDE_ICONS[entitySummary[entity].icons.lucide],
+          phosphorIcon: PHOSPHOR_ICONS[entitySummary[entity].icons.phosphor],
           ...definition,
         },
       ];
@@ -632,7 +627,7 @@ export const entityDetailLink = (
 export type EntityDetailParams = ReturnType<typeof entityDetailParams>;
 
 /**
- * Render an entity's lucide icon. Useful for entities where you need
+ * Render an entity's Phosphor icon. Useful for entities where you need
  * dynamic icon selection based on entity type.
  *
  * Use `colored` prop to apply the entity's text color for visual identification.
@@ -642,7 +637,7 @@ export const EntityIcon = ({
   colored,
   className,
   ...props
-}: { entity: Entity; colored?: boolean } & LucideProps) => {
+}: { entity: Entity; colored?: boolean } & IconProps) => {
   if (!isBrowserRoutedEntity(entity)) return null;
   const def = entities[entity];
   const domain = colored ? domainForEntity(entity) : null;
@@ -652,7 +647,7 @@ export const EntityIcon = ({
   const style = { ...props.style };
   if (domainColor) style.color = domainColor;
   return (
-    <def.lucideIcon
+    <def.phosphorIcon
       {...props}
       className={cn(colored && !domainColor && def.color.text, className)}
       style={style}

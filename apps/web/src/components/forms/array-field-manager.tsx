@@ -1,4 +1,5 @@
-import { Plus, X } from "lucide-react";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import type * as React from "react";
 import { type Control, type FieldValues, useFieldArray } from "react-hook-form";
 

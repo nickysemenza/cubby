@@ -3,10 +3,10 @@ import type {
   TaskFilters,
   TaskOut,
 } from "@cubby/schemas/project";
+import { ListChecksIcon as ListTodo } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import { ListTodo } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 

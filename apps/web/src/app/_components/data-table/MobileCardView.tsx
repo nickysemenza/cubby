@@ -1,8 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { BugIcon as Bug } from "@phosphor-icons/react/dist/csr/Bug";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { Bug, ChevronRight } from "lucide-react";
 import {
   type CSSProperties,
   Fragment,

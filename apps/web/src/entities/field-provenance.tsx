@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import { localRelationshipByKey } from "@cubby/schemas/entity-manifest";
-import { Link2 } from "lucide-react";
+import { LinkIcon as Link2 } from "@phosphor-icons/react/dist/csr/Link";
 import type React from "react";
 
 import { EntityIcon, entityLabel, entityPluralLabel } from "./entities";

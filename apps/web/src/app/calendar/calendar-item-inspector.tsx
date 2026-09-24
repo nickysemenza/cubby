@@ -1,6 +1,6 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
+import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { Link } from "@tanstack/react-router";
-import { ExternalLink } from "lucide-react";
 import { useState } from "react";
 
 import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";

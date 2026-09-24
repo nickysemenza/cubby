@@ -1,4 +1,7 @@
-import { ClipboardList, Code, Import, Link2 } from "lucide-react";
+import { ClipboardTextIcon as ClipboardList } from "@phosphor-icons/react/dist/csr/ClipboardText";
+import { CodeIcon as Code } from "@phosphor-icons/react/dist/csr/Code";
+import { DownloadSimpleIcon as Import } from "@phosphor-icons/react/dist/csr/DownloadSimple";
+import { LinkIcon as Link2 } from "@phosphor-icons/react/dist/csr/Link";
 import { type Control, Controller } from "react-hook-form";
 
 import { Row, Stack } from "~/components/layout";

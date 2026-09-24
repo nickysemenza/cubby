@@ -1,5 +1,7 @@
+import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
 import { Link } from "@tanstack/react-router";
-import { ChevronLeft, Search, Wrench } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { actionItems } from "~/app/_components/actions/action-items";

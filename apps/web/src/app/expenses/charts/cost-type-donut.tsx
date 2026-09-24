@@ -1,6 +1,6 @@
 import type { ExpenseCostTypeAggregate } from "@cubby/schemas/project";
+import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { sumBy } from "es-toolkit";
-import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 
 import { CategoryDonut } from "~/app/_components/charts/kit";

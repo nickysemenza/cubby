@@ -1,6 +1,6 @@
 import type { GalleryEntity } from "@cubby/schemas/entity-manifest";
 import type { ImageOut } from "@cubby/schemas/image";
-import { ImagePlus } from "lucide-react";
+import { CameraPlusIcon as ImagePlus } from "@phosphor-icons/react/dist/csr/CameraPlus";
 import { useRef } from "react";
 import { toast } from "sonner";
 

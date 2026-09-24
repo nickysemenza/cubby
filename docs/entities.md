@@ -72,7 +72,7 @@ export default defineEntity({
       description: "…",
       actionLabel: "New Example",
     },
-    icons: { lucide: "Box", sfSymbol: "cube" },
+    icons: { phosphor: "Cube", sfSymbol: "cube" },
     detail: {
       hero: { chip: "status", actionOverrides: ["edit"] },
       sectionOverrides: [
@@ -178,7 +178,7 @@ points `titleField` at that field. `planting`, `gardenEntry`, `meal`,
 `financialTransaction`, `purchase`, and `inventory` all use this pattern
 today. `domain` (a `WAYFINDING_DOMAINS` line or
 `null` for an entity on no line), `description`, `emptyState` copy, and icon
-names (`lucide` is checked against the browser registry's icon map at compile
+names (`phosphor` is checked against the browser registry's icon map at compile
 time; `sfSymbol` reaches the native catalog verbatim). The generator emits it
 as part of `entitySummary` (`packages/schemas/src/generated/entity-summary.gen.ts`,
 data only, safe for eagerly-loaded client code), spreads it into the inspector,

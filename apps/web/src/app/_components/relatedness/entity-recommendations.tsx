@@ -5,8 +5,9 @@ import type {
   ExpenseProjectProposal,
 } from "@cubby/schemas/entity-recommendations";
 import type { InventoryPlacementProposal } from "@cubby/schemas/entity-recommendations";
+import { ArrowClockwiseIcon as RotateCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { LightbulbIcon as Lightbulb } from "@phosphor-icons/react/dist/csr/Lightbulb";
 import { useQuery } from "@tanstack/react-query";
-import { Lightbulb, RotateCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import {

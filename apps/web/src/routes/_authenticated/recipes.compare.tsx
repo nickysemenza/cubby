@@ -1,3 +1,4 @@
+import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { useQueries } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -6,7 +7,6 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
-import { ArrowLeft } from "lucide-react";
 import { useMemo } from "react";
 import { z } from "zod";
 

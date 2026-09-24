@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { CircleIcon as Circle } from "@phosphor-icons/react/dist/csr/Circle";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { Circle } from "lucide-react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 

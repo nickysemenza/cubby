@@ -22,7 +22,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip"
-import { CheckIcon } from "lucide-react"
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 
 interface GanttBarProps<TData = unknown> extends Omit<
   useRender.ComponentProps<"div">,

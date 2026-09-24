@@ -6,8 +6,8 @@ import {
   type FlueConversationMessage,
   type FlueConversationPart,
 } from "@flue/sdk";
+import { ArrowSquareOutIcon as SquareArrowOutUpRight } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { SquareArrowOutUpRight } from "lucide-react";
 import {
   type ReactNode,
   useEffect,

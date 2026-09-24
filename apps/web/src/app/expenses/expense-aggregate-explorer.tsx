@@ -7,14 +7,12 @@ import type {
   ExpenseAnalyzeRowDimension,
   ExpenseFilters,
 } from "@cubby/schemas/project";
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { ArrowsLeftRightIcon as ArrowLeftRight } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
+import { ClipboardIcon as ClipboardCopy } from "@phosphor-icons/react/dist/csr/Clipboard";
+import { DownloadIcon as Download } from "@phosphor-icons/react/dist/csr/Download";
 import { useQuery } from "@tanstack/react-query";
 import type { CellData, SortingState } from "@tanstack/react-table";
-import {
-  ArrowLeftRight,
-  ClipboardCopy,
-  Download,
-  RotateCcw,
-} from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 

@@ -32,7 +32,7 @@ export default defineEntity({
         "A transfer records money moving between ledger parties after the fact, with its own evidence \u2014 logged from the household contribution ledger.",
     },
     icons: {
-      lucide: "ArrowLeftRight",
+      phosphor: "ArrowsLeftRight",
       sfSymbol: "arrow.left.arrow.right.circle",
       emoji: "🔁",
     },

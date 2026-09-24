@@ -52,7 +52,7 @@ const renderIndexRoute = (entity: RoutedEntity, listed: boolean): string => {
     ...(entity.route.create === "page"
       ? [
           'import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";',
-          'import { Plus } from "lucide-react";',
+          'import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";',
         ]
       : [
           'import { createFileRoute, stripSearchParams } from "@tanstack/react-router";',

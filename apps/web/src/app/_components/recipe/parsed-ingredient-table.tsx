@@ -1,5 +1,6 @@
 import type { WAmount } from "@cubby/recipebridge";
-import { AlertCircle, Plus } from "lucide-react";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { WarningCircleIcon as AlertCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { Fragment, useMemo } from "react";
 import type { ReadonlyDeep } from "type-fest";
 

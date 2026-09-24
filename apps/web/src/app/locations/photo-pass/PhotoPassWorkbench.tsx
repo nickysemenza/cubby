@@ -23,9 +23,12 @@ import type {
  * shared with the recount session and the ingredient review queue.
  */
 import type { InfLocation } from "@cubby/schemas/location";
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { CameraIcon as Camera } from "@phosphor-icons/react/dist/csr/Camera";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { HouseIcon as Home } from "@phosphor-icons/react/dist/csr/House";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Camera, Check, Home, RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";

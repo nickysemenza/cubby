@@ -1,6 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
-import { ExternalLink, type LucideIcon, Wrench, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import { MobileCard } from "~/components/entity/mobile-card";
@@ -80,9 +83,9 @@ const routeNoun = (route: RoutePattern): string => {
   return ROUTE_NOUN.get(path.split("/").filter(Boolean)[0] ?? "") ?? "record";
 };
 
-// Icon can be either a LucideIcon component or an entity key
+// Icon can be either a Icon component or an entity key
 export type IconProp =
-  | { icon: LucideIcon; entity?: never }
+  | { icon: Icon; entity?: never }
   | { entity: Entity; icon?: never };
 
 /** What a section's `renderItem` returns for a single card. */

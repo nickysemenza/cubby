@@ -3,7 +3,8 @@ import type {
   RecipeFlowInstructionRef,
   RecipeFlowPlan,
 } from "@cubby/schemas/recipe-flow";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { useRef, useState } from "react";
 
 import { Row, Stack } from "~/components/layout";

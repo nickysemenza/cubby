@@ -3,6 +3,8 @@ import type {
   RelatedSummaryOutput,
   RelatedSummaryRelationKey,
 } from "@cubby/schemas/related-view";
+import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import type {
   CellData,
@@ -10,7 +12,6 @@ import type {
   SortingState,
   Updater,
 } from "@tanstack/react-table";
-import { ImageIcon, Search } from "lucide-react";
 import { type FC, useCallback, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 

@@ -1,6 +1,6 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { MACRO_KEYS } from "@cubby/usda-schemas";
-import { Check } from "lucide-react";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
 
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";

@@ -10,9 +10,10 @@ import {
   type Trade,
 } from "@cubby/schemas/project";
 import { MAX_SPLIT_EXPENSE_PARTS } from "@cubby/schemas/purchase";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { useNavigate } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
-import { Plus, X } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { FieldSuggestionApply } from "~/app/_components/ai/field-suggestion-apply";

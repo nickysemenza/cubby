@@ -7,7 +7,9 @@ import {
   gardenPractice,
   gardenPracticeSources,
 } from "@cubby/schemas/garden-practice";
-import { CalendarRange, ListChecks, Sprout } from "lucide-react";
+import { CalendarBlankIcon as CalendarRange } from "@phosphor-icons/react/dist/csr/CalendarBlank";
+import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { PlantIcon as Sprout } from "@phosphor-icons/react/dist/csr/Plant";
 import { useMemo } from "react";
 
 import {

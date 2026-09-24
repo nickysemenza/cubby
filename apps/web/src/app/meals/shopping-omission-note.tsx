@@ -1,8 +1,9 @@
 import type { ShoppingListOut, UnexpandedSubRecipe } from "@cubby/schemas/meal";
 import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
+import { InfoIcon as Info } from "@phosphor-icons/react/dist/csr/Info";
+import { WarningIcon as TriangleAlert } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
-import { Info, TriangleAlert } from "lucide-react";
 
 import { Row, Stack } from "~/components/layout";
 import { entityDetailLink } from "~/entities/entities";

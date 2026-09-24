@@ -5,8 +5,11 @@ import type {
   ToolGalleryItemOut,
 } from "@cubby/schemas/project";
 import { toolGalleryGroupBy } from "@cubby/schemas/project";
+import { ArrowClockwiseIcon as RotateCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { SquaresFourIcon as LayoutGrid } from "@phosphor-icons/react/dist/csr/SquaresFour";
+import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
-import { LayoutGrid, RotateCw, Search, Wrench } from "lucide-react";
 import {
   type RefObject,
   useCallback,

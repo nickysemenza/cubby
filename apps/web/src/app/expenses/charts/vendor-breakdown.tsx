@@ -1,5 +1,5 @@
 import type { ExpenseVendorAggregate } from "@cubby/schemas/project";
-import { Store } from "lucide-react";
+import { StorefrontIcon as Store } from "@phosphor-icons/react/dist/csr/Storefront";
 
 import { RankedBarBreakdown } from "~/app/_components/charts/kit";
 

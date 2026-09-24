@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ListGroupSummary } from "@cubby/schemas/pagination";
+import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { Link } from "@tanstack/react-router";
-import { ArrowUpRight } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { ErrorDisplay } from "~/components/feedback/error-display";

@@ -6,27 +6,26 @@ import {
   WAYFINDING_DOMAINS,
   entitySummary,
 } from "@cubby/schemas/entity-summary";
+import { ArrowsLeftRightIcon as ArrowLeftRight } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
+import { BarcodeIcon as ScanBarcode } from "@phosphor-icons/react/dist/csr/Barcode";
+import { BookOpenTextIcon as BookOpenCheck } from "@phosphor-icons/react/dist/csr/BookOpenText";
+import { CalendarBlankIcon as CalendarRange } from "@phosphor-icons/react/dist/csr/CalendarBlank";
+import { CameraIcon as Camera } from "@phosphor-icons/react/dist/csr/Camera";
+import { ChefHatIcon as ChefHat } from "@phosphor-icons/react/dist/csr/ChefHat";
+import { ClipboardTextIcon as ClipboardCheck } from "@phosphor-icons/react/dist/csr/ClipboardText";
+import { CreditCardIcon as CreditCard } from "@phosphor-icons/react/dist/csr/CreditCard";
+import { CubeFocusIcon as PackageSearch } from "@phosphor-icons/react/dist/csr/CubeFocus";
+import { CurrencyCircleDollarIcon as CircleDollarSign } from "@phosphor-icons/react/dist/csr/CurrencyCircleDollar";
+import { LayoutIcon as PanelsTopLeft } from "@phosphor-icons/react/dist/csr/Layout";
+import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { PlantIcon as Sprout } from "@phosphor-icons/react/dist/csr/Plant";
+import { QrCodeIcon as QrCode } from "@phosphor-icons/react/dist/csr/QrCode";
+import { ShoppingCartIcon as ShoppingCart } from "@phosphor-icons/react/dist/csr/ShoppingCart";
+import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { WarehouseIcon as Warehouse } from "@phosphor-icons/react/dist/csr/Warehouse";
+import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
+import type { Icon } from "@phosphor-icons/react/lib";
 import type { LinkProps } from "@tanstack/react-router";
-import {
-  ArrowLeftRight,
-  BookOpenCheck,
-  CalendarRange,
-  Camera,
-  ChefHat,
-  CircleDollarSign,
-  ClipboardCheck,
-  CreditCard,
-  ListChecks,
-  PackageSearch,
-  PanelsTopLeft,
-  QrCode,
-  ScanBarcode,
-  ShoppingCart,
-  Sparkles,
-  Sprout,
-  Warehouse,
-  Wrench,
-} from "lucide-react";
 
 import { entities } from "~/entities/entities";
 
@@ -42,14 +41,14 @@ export interface ApplicationDestination {
   readonly entity?: BrowserRoutedEntity;
   readonly label: string;
   readonly description: string;
-  readonly icon: React.ComponentType<{ className?: string }>;
+  readonly icon: Icon;
 }
 
 /** A household activity family. Domain order is the shell's reading order. */
 export interface ActivityViewDefinition {
   readonly key: WayfindingDomain;
   readonly label: string;
-  readonly icon: React.ComponentType<{ className?: string }>;
+  readonly icon: Icon;
   readonly destinations: readonly ApplicationDestination[];
 }
 
@@ -67,7 +66,7 @@ const recordDestination = (
   entity,
   label: entities[entity].pluralLabel,
   description,
-  icon: entities[entity].lucideIcon,
+  icon: entities[entity].phosphorIcon,
 });
 
 /**
@@ -257,7 +256,7 @@ const recordView = (entity: BrowserRoutedEntity): RecordViewDefinition => ({
   to: entities[entity].routes.list,
   label: entities[entity].pluralLabel,
   description: entitySummary[entity].description,
-  icon: entities[entity].lucideIcon,
+  icon: entities[entity].phosphorIcon,
 });
 
 /**

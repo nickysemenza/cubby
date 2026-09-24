@@ -1,4 +1,4 @@
-import { Clock } from "lucide-react";
+import { ClockIcon as Clock } from "@phosphor-icons/react/dist/csr/Clock";
 import type { FC } from "react";
 
 import { cn } from "~/lib/utils";

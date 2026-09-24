@@ -1,5 +1,8 @@
+import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
+import { DatabaseIcon as Database } from "@phosphor-icons/react/dist/csr/Database";
+import { FlowArrowIcon as Workflow } from "@phosphor-icons/react/dist/csr/FlowArrow";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { Link } from "@tanstack/react-router";
-import { ArrowUpRight, Database, Search, Workflow } from "lucide-react";
 import { useId } from "react";
 
 import { Grid, Row, Stack } from "~/components/layout";

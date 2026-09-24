@@ -1,6 +1,6 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
+import { WalletIcon as Wallet } from "@phosphor-icons/react/dist/csr/Wallet";
 import { useNavigate } from "@tanstack/react-router";
-import { Wallet } from "lucide-react";
 import { useMemo } from "react";
 
 import { RankedBarBreakdown } from "~/app/_components/charts/kit";

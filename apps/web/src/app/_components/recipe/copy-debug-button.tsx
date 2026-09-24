@@ -1,4 +1,5 @@
-import { Check, ClipboardCopy } from "lucide-react";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { ClipboardIcon as ClipboardCopy } from "@phosphor-icons/react/dist/csr/Clipboard";
 import { useState } from "react";
 import { toast } from "sonner";
 

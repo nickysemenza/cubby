@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { type ReactNode, useId, useState } from "react";
 
 import { Row } from "~/components/layout";

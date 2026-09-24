@@ -1,5 +1,5 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
-import { DollarSign } from "lucide-react";
+import { CurrencyDollarIcon as DollarSign } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
 import { useMemo } from "react";
 
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";

@@ -1,7 +1,8 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { useDraggable } from "@dnd-kit/core";
-import { Focus, GripVertical } from "lucide-react";
+import { CrosshairIcon as Focus } from "@phosphor-icons/react/dist/csr/Crosshair";
+import { DotsSixVerticalIcon as GripVertical } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
 import { useEffect, useRef } from "react";
 
 import { LocationIcon } from "~/app/_components/locations/location-icons";

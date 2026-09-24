@@ -1,7 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { ClipboardIcon as ClipboardCopy } from "@phosphor-icons/react/dist/csr/Clipboard";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { cva, type VariantProps } from "class-variance-authority";
-import { Check, ClipboardCopy } from "lucide-react";
 import { type CSSProperties, type ReactNode, useState } from "react";
 import { z } from "zod";
 

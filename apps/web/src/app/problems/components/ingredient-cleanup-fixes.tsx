@@ -1,4 +1,4 @@
-import { Trash2 } from "lucide-react";
+import { TrashIcon as Trash2 } from "@phosphor-icons/react/dist/csr/Trash";
 import { type ReactNode, useState } from "react";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";

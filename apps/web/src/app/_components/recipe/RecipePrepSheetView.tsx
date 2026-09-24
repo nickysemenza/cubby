@@ -1,4 +1,5 @@
-import { Grid3x3, ShoppingCart } from "lucide-react";
+import { GridNineIcon as Grid3x3 } from "@phosphor-icons/react/dist/csr/GridNine";
+import { ShoppingCartIcon as ShoppingCart } from "@phosphor-icons/react/dist/csr/ShoppingCart";
 import { memo, useMemo, useState } from "react";
 
 import { Row, Stack } from "~/components/layout";
