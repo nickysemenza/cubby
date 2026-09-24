@@ -48,9 +48,10 @@
   // MCP App documents are hashed Vite assets; the Worker reads them through
   // this binding on the first `resources/read` and keeps the result in-isolate.
   "assets": { "binding": "ASSETS", "html_handling": "none" },
-  // Place Worker near the database rather than the user (SSR-heavy app)
+  // Home and list reads make sequential Hyperdrive queries. Run near Neon;
+  // Smart placement left observed requests local to the user.
   "placement": {
-    "mode": "smart"
+    "region": "aws:us-west-2"
   },
   // Worker-to-worker service bindings (prod only — dev falls back to the
   // public *_API_URL vars below since vite dev runs plain Node).
