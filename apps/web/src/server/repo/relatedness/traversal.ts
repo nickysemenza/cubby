@@ -264,7 +264,7 @@ export const compileTraversal = (
     hops.push({
       table: nextTable,
       relation: mappedExpenseProject
-        ? aliases.expenseProjectRelation
+        ? aliases?.expenseProjectRelation
         : undefined,
       alias,
       fromAlias: currentAlias,
