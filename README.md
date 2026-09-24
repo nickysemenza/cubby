@@ -346,6 +346,13 @@ dispatch option `simulator_e2e` runs the same command with native PostgreSQL
 `contact-sheet.png` in that run's artifact directory for review in Codex. See the
 [fast native iteration guide](apps/apple/ITERATION.md) for which loop to use.
 
+`pnpm dev:sim:watch` keeps a disposable database, workerd, and the installed
+Debug app alive for local UI iteration. Press Enter to seed a new product and
+replay a short deep-link edit flow; the app rebuilds after Apple source changes.
+The command prints an agent-device session for interactive inspection. Ctrl-C
+closes the session and drops the database. See the [iteration guide](apps/apple/ITERATION.md)
+for snapshot, screenshot, and replay commands.
+
 `pnpm test:e2e:headless` uses the same disposable database, synthetic product,
 and workerd harness. The `cubby` CLI signs in through `AuthFlow`, searches,
 builds an `EntityPatch`, updates through `CubbyClient`, and checks native readback
