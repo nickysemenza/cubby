@@ -1,5 +1,7 @@
 import { financialAccountOptionsOut } from "@cubby/schemas/financial-account";
 import {
+  financialStatementImportPreviewInput,
+  financialStatementImportPreviewOut,
   financialTransactionSourceOptionsOut,
   merchantVendorInference,
   merchantVendorInferenceInput,
@@ -26,6 +28,10 @@ export const ledgerPartyContract = defineContract("ledgerParty", {
 export const financialTransactionContract = defineContract(
   "financialTransaction",
   {
+    previewStatementImport: query({
+      input: financialStatementImportPreviewInput,
+      output: financialStatementImportPreviewOut,
+    }),
     sourceOptions: query({
       input: z.null(),
       output: financialTransactionSourceOptionsOut,

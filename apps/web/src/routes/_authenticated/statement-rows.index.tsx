@@ -3,10 +3,12 @@ import {
   statementRowMatchState,
 } from "@cubby/schemas/statement-row";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { listChromePage } from "~/app/_components/routing/entity-routes";
 import { StatementRowList } from "~/app/_components/statement-rows/statement-row-list";
+import { Button } from "~/components/ui/button";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
@@ -48,6 +50,11 @@ const StatementRowsPage = listChromePage({
   compact: true,
   decoration: "none",
   page: StatementRowList,
+  actions: () => (
+    <Button render={<Link to="/statement-rows/import" />} nativeButton={false}>
+      Import statement
+    </Button>
+  ),
 });
 
 export const Route = createFileRoute("/_authenticated/statement-rows/")({

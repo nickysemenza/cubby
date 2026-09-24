@@ -1,15 +1,21 @@
 import {
   listStatementImportsInput,
   listStatementRowsInput,
+  recordStatementRowsInput,
+  recordStatementRowsOut,
   statementImportListOut,
   statementRowListOut,
   statementRowSummaryInput,
   statementRowSummaryOut,
 } from "@cubby/schemas/statement-row";
 
-import { defineContract, query } from "~/contracts/define";
+import { defineContract, mutation, query } from "~/contracts/define";
 
 export const statementRowContract = defineContract("statementRow", {
+  record: mutation({
+    input: recordStatementRowsInput,
+    output: recordStatementRowsOut,
+  }),
   list: query({
     input: listStatementRowsInput,
     output: statementRowListOut,

@@ -1,9 +1,4 @@
 import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
-import {
-  financialStatementImportPreviewInput,
-  financialStatementImportPreviewOut,
-  financialTransactionCreateInput,
-} from "@cubby/schemas/financial-transaction";
 import { locationCreateInput } from "@cubby/schemas/location";
 import {
   commitPurchaseImportOut,
@@ -13,7 +8,7 @@ import { proposeProductMatchOut } from "@cubby/schemas/recommendations";
 import { testUserId } from "@cubby/schemas/testing";
 import { chromium, expect, request } from "@playwright/test";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { parse } from "csv-parse/sync";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { z } from "zod";
@@ -21,13 +16,12 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
-import { registerFinancialTools } from "~/server/mcp/tools/financial.tools";
 import { registerProductTools } from "~/server/mcp/tools/product.tools";
 import { registerPurchaseTools } from "~/server/mcp/tools/purchase.tools";
 import { startOrResumeImportRun } from "~/server/purchase-import/run-service";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { classifyOrderCapture } from "~/server/purchase-import/order-list";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { previewFinancialStatementImport } from "~/server/repo/financial-statement-preview";
 import { proposeProductMatch } from "~/server/services/product-match.service";
 
 import {
@@ -39,23 +33,9 @@ import {
 
 const photoName = "Synthetic Gray Crew Shirt";
 const purchaseName = "Synthetic Heather Crew Tee";
-const orderId = "SYNTHETIC-WARDROBE-ORDER-1";
+const orderId = "111-2222222-3333333";
 const matchEvidence =
   "The synthetic order's gray crew tee matches the photographed shirt and its label; the vendor Product has the purchase history.";
-
-const monarchRow = z.strictObject({
-  Date: z.string().min(1),
-  Merchant: z.string().min(1),
-  Category: z.string(),
-  Account: z.string().min(1),
-  "Original Statement": z.string().min(1),
-  Notes: z.string(),
-  Amount: z.string().min(1),
-  Tags: z.string(),
-  Owner: z.string(),
-  Reviewed: z.string(),
-  Id: z.string().min(1),
-});
 
 type ScenarioInput = {
   databaseURL: string;
@@ -63,6 +43,102 @@ type ScenarioInput = {
   artifacts: string;
   userId: string;
 };
+
+const syntheticOrder = z.object({
+  orderNumber: z.string(),
+  orderDate: z.iso.datetime(),
+  seller: z.object({ name: z.string() }),
+  priceCurrency: z.literal("USD"),
+  price: z.number(),
+  paymentMethodId: z.string(),
+  orderStatus: z.string(),
+});
+const syntheticProduct = z.object({
+  name: z.string(),
+  url: z.url(),
+  offers: z.object({ price: z.number(), priceCurrency: z.literal("USD") }),
+});
+
+async function readSyntheticRetailerEvidence() {
+  const fixture = (name: string) =>
+    new URL(`../../tests/e2e/fixtures/${name}`, import.meta.url);
+  const history = fixture("synthetic-retailer-order-history.html");
+  const orderPage = fixture("synthetic-retailer-order.html");
+  const productPage = fixture("synthetic-retailer-product.html");
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.goto(history.href);
+    const historyUrl = await page
+      .locator('link[rel="canonical"]')
+      .getAttribute("href");
+    if (!historyUrl)
+      throw new Error("Synthetic order history has no canonical URL");
+    const links = await page.locator("a").evaluateAll((anchors) =>
+      anchors.map((anchor, index) => ({
+        id: String(index + 1),
+        href: anchor instanceof HTMLAnchorElement ? anchor.href : "",
+        text: anchor.textContent?.trim() ?? "",
+      })),
+    );
+    const classified = classifyOrderCapture(
+      {
+        url: historyUrl,
+        title: await page.title(),
+        text: await page.locator("body").innerText(),
+        links,
+        images: [],
+        capturedAt: "2026-09-21T00:00:00.000Z",
+      },
+      { allowedHosts: ["shop.example.test"] },
+    );
+    if (
+      classified.kind !== "order_list" ||
+      classified.orders.length !== 1 ||
+      classified.orders[0]?.orderId !== orderId
+    )
+      throw new Error(
+        `Synthetic order discovery failed: ${JSON.stringify(classified)}`,
+      );
+    await page.goto(orderPage.href);
+    const order = syntheticOrder.parse(
+      JSON.parse(
+        (await page
+          .locator('script[type="application/ld+json"]')
+          .textContent()) ?? "",
+      ),
+    );
+    const orderUrl = await page
+      .locator('link[rel="canonical"]')
+      .getAttribute("href");
+    await page.goto(productPage.href);
+    const product = syntheticProduct.parse(
+      JSON.parse(
+        (await page
+          .locator('script[type="application/ld+json"]')
+          .textContent()) ?? "",
+      ),
+    );
+    if (
+      !orderUrl ||
+      classified.orders[0].orderUrl !== orderUrl ||
+      order.orderNumber !== orderId ||
+      product.name !== purchaseName ||
+      order.price !== product.offers.price
+    )
+      throw new Error("Synthetic retailer pages disagree about the order");
+    const sourceChecksum = createHash("sha256")
+      .update(readFileSync(orderPage))
+      .digest("hex");
+    const evidenceChecksum = createHash("sha256")
+      .update(readFileSync(orderPage))
+      .update(readFileSync(productPage))
+      .digest("hex");
+    return { order, product, orderUrl, sourceChecksum, evidenceChecksum };
+  } finally {
+    await browser.close();
+  }
+}
 
 async function readConvergenceFacts(
   pool: Pool,
@@ -293,8 +369,9 @@ async function reviewMatchInBrowser(input: {
 async function importSyntheticMonarchCsv(
   pool: Pool,
   db: Database,
-  kernel: KernelContext,
   userId: string,
+  origin: string,
+  artifacts: string,
 ): Promise<string> {
   const member = await pool.query<{ id: string }>(
     `SELECT id FROM "LedgerParty" WHERE "userId" = $1 AND kind = 'member' AND "deletedAt" IS NULL`,
@@ -303,31 +380,7 @@ async function importSyntheticMonarchCsv(
   const memberId = member.rows[0]?.id;
   if (member.rows.length !== 1 || !memberId)
     throw new Error("Synthetic member is unavailable for statement import");
-  const csv = readFileSync(
-    new URL(
-      "../../tests/e2e/fixtures/synthetic-monarch-wardrobe.csv",
-      import.meta.url,
-    ),
-    "utf8",
-  );
-  const parsed = z
-    .array(monarchRow)
-    .nonempty()
-    .parse(parse(csv, { columns: true, bom: true, skip_empty_lines: true }));
-  const input = financialStatementImportPreviewInput.parse({
-    rows: parsed.map((row) => ({
-      key: row.Id,
-      source: "monarch",
-      account: row.Account,
-      date: row.Date,
-      amount: Number(row.Amount),
-      merchant: row.Merchant,
-      originalStatement: row["Original Statement"],
-      category: row.Category || null,
-      notes: row.Notes || null,
-    })),
-  });
-  const account = await insertWithShortcode(db, "financialAccount", {
+  await insertWithShortcode(db, "financialAccount", {
     name: "Fixture Visa",
     ledgerPartyId: parseEntityId("ledgerParty", memberId),
     identity: { kind: "credit_card", issuer: null, network: "visa" },
@@ -349,75 +402,102 @@ async function importSyntheticMonarchCsv(
     ],
     provisional: false,
   });
-  const server = new McpServer({
-    name: "wardrobe-statement-sim",
-    version: "1.0",
+  const api = await request.newContext({
+    baseURL: origin,
+    extraHTTPHeaders: { Origin: origin },
   });
-  registerFinancialTools(server);
-  const preview = async () => {
-    const result = await callMcpTool(
-      server,
-      "preview_financial_statement_import",
-      input,
-      {
-        financialTransaction: {
-          previewStatementImport: (data) =>
-            previewFinancialStatementImport(db, data),
-        },
+  const csvPath = new URL(
+    "../../tests/e2e/fixtures/synthetic-monarch-wardrobe.csv",
+    import.meta.url,
+  ).pathname;
+  try {
+    const login = await api.post("/api/auth/sign-in/email", {
+      data: {
+        email: "sim@cubby.localhost",
+        password: "cubby-sim-local-only",
       },
-      { entityKernel: kernel },
+    });
+    if (!login.ok())
+      throw new Error(`Statement review sign-in failed: ${await login.text()}`);
+    const state = await api.storageState();
+    state.cookies = state.cookies.filter(
+      (cookie) => !cookie.name.endsWith("session_data"),
     );
-    if (result.isError)
-      throw new Error(
-        `Monarch preview failed: ${JSON.stringify(result.content)}`,
-      );
-    return financialStatementImportPreviewOut.parse(result.structuredContent);
-  };
-  const first = await preview();
-  const row = first.rows[0];
-  if (
-    first.rows.length !== 1 ||
-    row?.status !== "ready_to_create" ||
-    row.accountId !== account.shortcode
-  )
-    throw new Error(
-      `Synthetic Monarch row was not ready: ${JSON.stringify(first)}`,
-    );
-  const proposed = row.proposed;
-  const transaction = await createFixtureWithContext(
-    kernel,
-    "financialTransaction",
-    financialTransactionCreateInput.parse({
-      accountId: row.accountId,
-      purchaseId: null,
-      kind: proposed.kind,
-      status: proposed.status,
-      amount: proposed.amount,
-      transactionDate: proposed.transactionDate,
-      postedDate: proposed.postedDate,
-      merchant: proposed.merchant,
-      rawDescription: proposed.rawDescription,
-      sourceCategory: proposed.sourceCategory,
-      sourceRefs: [proposed.sourceRef],
-      notes: proposed.notes,
-    }),
+    const browser = await chromium.launch();
+    try {
+      const context = await browser.newContext({
+        storageState: state,
+        viewport: { width: 1280, height: 900 },
+        recordVideo: { dir: artifacts, size: { width: 1280, height: 900 } },
+      });
+      const page = await context.newPage();
+      try {
+        await page.goto(`${origin}/statement-rows/import`);
+        await page.getByLabel("Monarch CSV file").setInputFiles(csvPath);
+        const preview = page.getByRole("region", { name: "Statement preview" });
+        await expect(preview.getByText("Ready to record")).toHaveCount(2);
+        await expect(preview).toContainText("Fixture Visa");
+        await expect(preview).toContainText("Monarch category: Clothing");
+        await expect(preview).toContainText(
+          "Monarch category: Credit Card Payment",
+        );
+        await preview
+          .getByRole("checkbox", { name: "Record SYNTHETIC CARD PAYMENT" })
+          .uncheck();
+        await expect(
+          preview.getByRole("button", { name: "Choose transaction kinds" }),
+        ).toBeDisabled();
+        await preview
+          .getByRole("combobox", {
+            name: "Transaction kind for SYNTHETIC OUTFITTERS ORDER 1",
+          })
+          .selectOption("purchase");
+        await preview
+          .getByRole("button", { name: "Confirm 1 transaction" })
+          .click();
+        await expect(page.getByRole("status")).toContainText(
+          "1 transactions created · 2 new source rows · 1 held for review",
+        );
+        await page.getByLabel("Monarch CSV file").setInputFiles(csvPath);
+        await expect(preview.getByText("Already recorded")).toBeVisible();
+        await preview
+          .getByRole("checkbox", { name: "Record SYNTHETIC CARD PAYMENT" })
+          .uncheck();
+        await preview
+          .getByRole("button", { name: "Confirm 0 transactions" })
+          .click();
+        await expect(page.getByRole("status")).toContainText(
+          "0 transactions created · 0 new source rows",
+        );
+      } finally {
+        await context.close();
+        const videoPath = await page.video()?.path();
+        if (videoPath)
+          console.log(
+            `[headless-wardrobe-e2e] Statement review video: ${videoPath}`,
+          );
+      }
+    } finally {
+      await browser.close();
+    }
+  } finally {
+    await api.dispose();
+  }
+  const recorded = await pool.query<{ shortcode: string }>(
+    `SELECT shortcode FROM "FinancialTransaction"
+     WHERE "sourceRefs" @> '[{"source":"monarch"}]'::jsonb AND "deletedAt" IS NULL`,
   );
-  const transactionCode = parseShortcodeFor(
-    "financialTransaction",
-    transaction.id,
+  const statementRows = await pool.query<{ count: string }>(
+    `SELECT count(*)::text AS count FROM "StatementRow" WHERE source = 'monarch'`,
   );
-  const replay = await preview();
-  if (
-    replay.rows[0]?.status !== "already_recorded" ||
-    !replay.rows[0].existingTransactionIds.includes(transactionCode)
-  )
+  if (recorded.rows.length !== 1 || statementRows.rows[0]?.count !== "2")
     throw new Error(
-      "Replaying the synthetic Monarch CSV duplicated its charge",
+      "Replaying the synthetic Monarch CSV duplicated its evidence",
     );
   console.log(
-    "[headless-wardrobe-e2e] Synthetic Monarch CSV preview, approval, and source-ref replay verified",
+    "[headless-wardrobe-e2e] Synthetic Monarch CSV browser preview, confirmation, evidence, and replay verified",
   );
-  return transactionCode;
+  return recorded.rows[0]!.shortcode;
 }
 
 async function importSyntheticPurchase(
@@ -427,6 +507,7 @@ async function importSyntheticPurchase(
   userId: string,
   photoProduct: { id: string; shortcode: string },
 ): Promise<{ id: string; shortcode: string }> {
+  const evidence = await readSyntheticRetailerEvidence();
   const member = await pool.query<{ id: string }>(
     `SELECT id FROM "LedgerParty" WHERE "userId" = $1 AND kind = 'member' AND "deletedAt" IS NULL`,
     [userId],
@@ -483,35 +564,36 @@ async function importSyntheticPurchase(
           itemOperationId: "prepare-item:synthetic-wardrobe-order",
           source: {
             kind: "browser_order",
-            externalKey: "shop.example.test:order:synthetic-wardrobe-1",
-            checksum: "a".repeat(64),
+            externalKey: evidence.orderUrl,
+            checksum: evidence.sourceChecksum,
           },
-          evidenceChecksum: "b".repeat(64),
-          extractionRevision: "synthetic@1",
+          evidenceChecksum: evidence.evidenceChecksum,
+          extractionRevision: "synthetic-html@1",
           extraction: {
             status: "ready",
             candidate: {
-              orderId,
-              orderedAt: "2026-09-20T12:00:00.000Z",
-              merchant: "Synthetic Outfitters",
-              currency: "USD",
-              printedGrandTotal: 29.99,
+              orderId: evidence.order.orderNumber,
+              orderedAt: evidence.order.orderDate,
+              merchant: evidence.order.seller.name,
+              currency: evidence.order.priceCurrency,
+              printedGrandTotal: evidence.order.price,
               lines: [
                 {
-                  title: purchaseName,
-                  amount: 29.99,
+                  title: evidence.product.name,
+                  amount: evidence.product.offers.price,
                   lineKind: "principal",
-                  productUrl: "https://shop.example.test/products/crew-tee",
+                  productUrl: evidence.product.url,
                 },
               ],
               payments: [
                 {
-                  amount: 29.99,
-                  chargedAt: "2026-09-20T12:00:00.000Z",
-                  cardLastFour: "4242",
+                  amount: evidence.order.price,
+                  chargedAt: evidence.order.orderDate,
+                  cardLastFour: evidence.order.paymentMethodId,
                 },
               ],
-              allShipmentsDelivered: true,
+              allShipmentsDelivered:
+                evidence.order.orderStatus.endsWith("OrderDelivered"),
             },
           },
           lineIds: ["synthetic-wardrobe-order:line-1"],
@@ -614,8 +696,9 @@ export async function runWardrobeConvergenceScenario({
     const statementTransactionId = await importSyntheticMonarchCsv(
       pool,
       db,
-      kernel,
       userId,
+      origin,
+      artifacts,
     );
     const purchaseProduct = await importSyntheticPurchase(
       pool,

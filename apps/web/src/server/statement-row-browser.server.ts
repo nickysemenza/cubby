@@ -4,11 +4,14 @@ import {
   getStatementRowSummaryWorkflow,
   listStatementImportsWorkflow,
   listStatementRowsWorkflow,
+  recordStatementRowsWorkflow,
 } from "~/server/workflows/statement-row.server";
 
 export const statementRowHandlers = implementOperationDomain(
   statementRowContract,
   {
+    record: (context, input) =>
+      recordStatementRowsWorkflow(context.db, context.actorContext, input),
     list: {
       run: (context, input) => listStatementRowsWorkflow(context.db, input),
     },

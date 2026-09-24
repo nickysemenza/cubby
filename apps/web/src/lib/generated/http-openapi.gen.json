@@ -5583,6 +5583,47 @@
         }
       }
     },
+    "/api/v1/financialTransaction/previewStatementImport": {
+      "post": {
+        "tags": [
+          "financialTransaction"
+        ],
+        "parameters": [],
+        "operationId": "financialTransaction.previewStatementImport",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialStatementImportPreviewInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialStatementImportPreviewOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/financialTransaction/sourceOptions": {
       "get": {
         "tags": [
@@ -25810,6 +25851,47 @@
         }
       }
     },
+    "/api/v1/statementRow/record": {
+      "post": {
+        "tags": [
+          "statementRow"
+        ],
+        "parameters": [],
+        "operationId": "statementRow.record",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordStatementRowsInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordStatementRowsOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/statementRow/summary": {
       "post": {
         "tags": [
@@ -42180,6 +42262,280 @@
           "postedRefundTotal"
         ]
       },
+      "FinancialStatementImportPreviewInput": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "minItems": 1,
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FinancialStatementImportRow"
+            }
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "additionalProperties": false
+      },
+      "FinancialStatementImportPreviewOut": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FinancialStatementImportPreviewRow"
+            }
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "rowsIn": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "alreadyRecorded": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "readyToCreate": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "possibleExisting": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "unresolvedAccount": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "indistinguishableDuplicate": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "rowsIn",
+              "alreadyRecorded",
+              "readyToCreate",
+              "possibleExisting",
+              "unresolvedAccount",
+              "indistinguishableDuplicate"
+            ]
+          }
+        },
+        "required": [
+          "rows",
+          "summary"
+        ]
+      },
+      "FinancialStatementImportPreviewRow": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FinancialStatementImportPreviewStatus"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/FinancialAccountShortcode"
+          },
+          "accountName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provisionalAccount": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "identity": {
+                "$ref": "#/components/schemas/FinancialAccountIdentity"
+              },
+              "cardNumbers": {
+                "$ref": "#/components/schemas/FinancialAccountCardNumbers"
+              },
+              "provisional": {
+                "type": "boolean",
+                "const": true
+              },
+              "sourceAliases": {
+                "$ref": "#/components/schemas/FinancialAccountSourceAliases"
+              }
+            },
+            "required": [
+              "name",
+              "identity",
+              "cardNumbers",
+              "provisional",
+              "sourceAliases"
+            ]
+          },
+          "proposed": {
+            "type": "object",
+            "properties": {
+              "sourceRef": {
+                "$ref": "#/components/schemas/FinancialTransactionSourceRef"
+              },
+              "amount": {
+                "$ref": "#/components/schemas/FinancialTransactionNonZeroAmount"
+              },
+              "kind": {
+                "$ref": "#/components/schemas/FinancialTransactionKind"
+              },
+              "status": {
+                "type": "string",
+                "const": "posted"
+              },
+              "transactionDate": {
+                "$ref": "#/components/schemas/PlainDate"
+              },
+              "postedDate": {
+                "$ref": "#/components/schemas/PlainDate"
+              },
+              "merchant": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "rawDescription": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceCategory": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "notes": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "sourceRef",
+              "amount",
+              "kind",
+              "status",
+              "postedDate",
+              "merchant",
+              "rawDescription",
+              "sourceCategory",
+              "notes"
+            ]
+          },
+          "existingTransactionIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FinancialTransactionShortcode"
+            }
+          },
+          "vendorInference": {
+            "$ref": "#/components/schemas/MerchantVendorInference",
+            "description": "Advisory Vendor evidence only. Null for completed or duplicate rows. It neither matches nor links anything."
+          }
+        },
+        "required": [
+          "key",
+          "status",
+          "accountName",
+          "provisionalAccount",
+          "proposed",
+          "existingTransactionIds"
+        ]
+      },
+      "FinancialStatementImportPreviewStatus": {
+        "type": "string",
+        "enum": [
+          "already_recorded",
+          "ready_to_create",
+          "possible_existing",
+          "unresolved_account",
+          "indistinguishable_duplicate"
+        ]
+      },
+      "FinancialStatementImportRow": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source": {
+            "default": "monarch",
+            "description": "Provider slug, conventionally one of monarch, copilot, mint, apple-card. Any slug is accepted; a new one simply namespaces its own refs.",
+            "$ref": "#/components/schemas/ExternalIdSource"
+          },
+          "account": {
+            "type": "string",
+            "minLength": 1
+          },
+          "date": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/FinancialTransactionNonZeroAmount"
+          },
+          "merchant": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "originalStatement": {
+            "type": "string",
+            "minLength": 1
+          },
+          "category": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notes": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FinancialTransactionKind"
+          }
+        },
+        "required": [
+          "key",
+          "account",
+          "date",
+          "amount",
+          "originalStatement"
+        ],
+        "additionalProperties": false
+      },
       "FinancialTransactionAllocationDefect": {
         "type": "object",
         "properties": {
@@ -42514,6 +42870,20 @@
           "attachments",
           "redirectedFrom",
           "previousShortcodes"
+        ]
+      },
+      "FinancialTransactionKind": {
+        "type": "string",
+        "enum": [
+          "purchase",
+          "refund",
+          "account_transfer",
+          "credit_card_payment",
+          "fee",
+          "interest",
+          "income",
+          "adjustment",
+          "other"
         ]
       },
       "FinancialTransactionListItem": {
@@ -73153,6 +73523,105 @@
           "resolutions"
         ]
       },
+      "RecordStatementRowsInput": {
+        "type": "object",
+        "properties": {
+          "import": {
+            "$ref": "#/components/schemas/StatementImportInput"
+          },
+          "rows": {
+            "minItems": 1,
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatementRowInput"
+            }
+          },
+          "dryRun": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "import",
+          "rows"
+        ],
+        "additionalProperties": false
+      },
+      "RecordStatementRowsOut": {
+        "type": "object",
+        "properties": {
+          "batchId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "batchCreated": {
+            "type": "boolean"
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "inserted": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "unchanged": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "alreadyInThisBatch": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "alreadyInAnotherBatch": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "indistinguishableDuplicates": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "rowsOmitted": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "rowCountStored": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "signWarning": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "batchId",
+          "batchCreated",
+          "dryRun",
+          "inserted",
+          "unchanged",
+          "alreadyInThisBatch",
+          "alreadyInAnotherBatch",
+          "indistinguishableDuplicates",
+          "rowsOmitted",
+          "rowCountStored",
+          "signWarning"
+        ]
+      },
       "ReferentialLivenessViolation": {
         "type": "object",
         "properties": {
@@ -76527,6 +76996,48 @@
           "unknown"
         ]
       },
+      "StatementImportInput": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/ExternalIdSource"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "fingerprint": {
+            "type": "string",
+            "minLength": 1
+          },
+          "dateKind": {
+            "default": "unknown",
+            "$ref": "#/components/schemas/StatementDateKind"
+          },
+          "rowCountDeclared": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "default": null
+          },
+          "notes": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "source",
+          "label",
+          "fingerprint"
+        ],
+        "additionalProperties": false
+      },
       "StatementImportListOut": {
         "type": "object",
         "properties": {
@@ -76661,6 +77172,57 @@
             "type": "string"
           }
         }
+      },
+      "StatementRowInput": {
+        "type": "object",
+        "properties": {
+          "accountDescriptor": {
+            "type": "string",
+            "minLength": 1
+          },
+          "statementDate": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "providerAmount": {
+            "type": "number"
+          },
+          "merchant": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rawDescription": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sourceCategory": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "providerStatus": {
+            "$ref": "#/components/schemas/StatementRowProviderStatus",
+            "default": null
+          },
+          "providerNotes": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "accountDescriptor",
+          "statementDate",
+          "providerAmount",
+          "rawDescription"
+        ],
+        "additionalProperties": false
       },
       "StatementRowListOut": {
         "type": "object",

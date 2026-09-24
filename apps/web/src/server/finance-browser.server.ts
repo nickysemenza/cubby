@@ -4,6 +4,7 @@ import {
   ledgerPartyContract,
 } from "~/contracts/finance.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { previewFinancialStatementImport } from "~/server/repo/financial-statement-preview";
 import {
   financialAccountOptionsWorkflow,
   financialTransactionSourceOptionsWorkflow,
@@ -28,6 +29,8 @@ export const ledgerPartyHandlers = implementOperationDomain(
 export const financialTransactionHandlers = implementOperationDomain(
   financialTransactionContract,
   {
+    previewStatementImport: (context, input) =>
+      previewFinancialStatementImport(context.readDb, input),
     sourceOptions: (context) =>
       financialTransactionSourceOptionsWorkflow(context.readDb),
     vendorInference: (context, input) =>

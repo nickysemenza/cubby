@@ -111,6 +111,24 @@ history is the archive. Permanent product constraints live in the
 
 ## Ready projects
 
+- **Finish the input-first retailer and statement journey.** Make a saved
+  synthetic order-history and product HTML page drive the actual browser capture
+  and purchase prepare/commit path, then confirm the order in the web UI. Cover
+  both statement-before-order and order-before-statement allocation using a
+  synthetic Monarch CSV; keep account identity and Product merge as explicit
+  review decisions. Extend the same journey to native CSV/photo review and a
+  Gmail connect-to-order approval check. Track the exercised boundaries in
+  [core journey E2E](agents/core-journey-e2e.md), with only account/login
+  prerequisites seeded.
+
+- **Review full-size Monarch exports in the browser.** The new statement
+  screen handles one preview batch (200 rows), while a real multi-year export
+  can be much larger. Page preview and confirmation through bounded batches,
+  keep a single file-level progress/retry state, and check duplicate source
+  identities across batch boundaries before offering bulk approval. Add a
+  category-aware bulk kind decision for selected rows; never infer payment,
+  transfer, income, or purchase solely from the amount's sign.
+
 - **Accept recipe links from the iOS Share Sheet.** Route incoming recipe URLs
   into the native recipe flow before retiring the remaining web intake.
 
@@ -1428,6 +1446,15 @@ Deferred from the 2026-09 manifest-rendering and deletion/parity PRs; unordered.
   `apps/apple/CubbyKit/Sources/CubbyKit/FFI`.
 
 ## Deferred: deploy surface
+
+- **Use Wrangler's local R2 binding for isolated object-storage tests.** Replace
+  the local S3-compatible mini-server only after an adapter can keep Cubby's
+  presigned browser and native upload/download URLs working alongside the
+  Worker binding (`apps/web/src/server/utils/s3.ts`, `wrangler.jsonc`). Exercise
+  upload, direct read, image processing, and replay under `wrangler dev` with
+  local R2 bytes; retain the workerd-backed CI gate. [Wrangler supports local
+  R2 simulation](https://developers.cloudflare.com/workers/local-development/bindings-per-env/),
+  but a binding alone does not implement the current presigned-URL contract.
 
 - **Fold `apps/upc-lookup` and `apps/usda-api` into the main worker.** Two
   separate Workers with three contract packages (`packages/upc-contract`,

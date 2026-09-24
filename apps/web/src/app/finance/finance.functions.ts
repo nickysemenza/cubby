@@ -19,6 +19,9 @@ export const ledgerParty = defineOperationDomain(ledgerPartyContract, {
 export const financialTransaction = defineOperationDomain(
   financialTransactionContract,
   {
+    previewStatementImport: {
+      tags: [["financialTransaction"], ["financialAccount"]],
+    },
     sourceOptions: { tags: [["financialTransaction", "sourceOptions"]] },
     vendorInference: {
       tags: [["financialTransaction"], ["purchase"], ["vendor"]],
