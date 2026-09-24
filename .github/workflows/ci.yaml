@@ -262,6 +262,11 @@ jobs:
             browser: chromium
             test-script: test:e2e:ci:desktop
             shard: "1/2"
+          - lane: "desktop 2/2"
+            slug: desktop-2
+            browser: chromium
+            test-script: test:e2e:ci:desktop
+            shard: "2/2"
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
       CUBBY_E2E_HTTP2: "1"
@@ -368,7 +373,7 @@ jobs:
           name: recipebridge-wasm
           path: packages/wasm
       - name: Run Playwright tests
-        run: pnpm --filter @cubby/web run ${{ matrix.test-script }} tests/e2e/http-resource-api.spec.ts -g 'Scalar sends session-authenticated reads and writes without an API key' --timeout=45000
+        run: pnpm --filter @cubby/web run ${{ matrix.test-script }} --shard=${{ matrix.shard }}
       - name: Save Playwright report
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
