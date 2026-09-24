@@ -11,6 +11,53 @@ transaction, or a manual entry, a person can reach **one well-identified
 Product** with the right evidence attached. The entry point and sequence do
 not change what the result means.
 
+## The whole journey
+
+Connect read-only Gmail in Cubby Settings, import a Monarch CSV through the
+MCP statement preview, and capture own-item and label photos on iPhone or Mac.
+These sources can arrive in any order. Cubby should converge them on one exact
+Product, an itemized Purchase, and a truthful settlement allocation. A human
+reviews uncertain identity, grouped photos, and ambiguous charges. Flue can
+coordinate the browser, mail, and photo jobs; Jev can help rank bounded
+ambiguous choices. Neither agent substitutes for source evidence or approval.
+
+```mermaid
+flowchart LR
+    G[Connect Gmail] --> E[Order mail events]
+    R[Retailer history or receipt] --> O[Itemized Purchase]
+    E --> R
+    M[Import Monarch CSV] --> T[Posted transaction evidence]
+    F[Take item and label photos] --> Q[Agent proposes photo groups]
+    Q --> H{Human review}
+    H --> P[Exact Product variant]
+    O --> V{Variant match}
+    V --> P
+    O --> S{Unique settlement?}
+    T --> S
+    S -->|Yes, full payment set| A[Allocate transaction to Purchase]
+    S -->|Ambiguous| U[Review charge and order evidence]
+    U --> A
+    P --> I[Optional explicit inventory receive]
+```
+
+The statement does not identify an item, and a photo does not prove where it
+was bought. A delivered email and a card charge do not receive inventory.
+
+### What works today and what still needs work
+
+| Part        | Current path                                                                                                                           | Next product step                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Gmail       | Google connection in Settings grants read-only Gmail; order mail can feed discovery.                                                   | Make source coverage and missing itemization obvious in one journey view.                            |
+| Monarch CSV | An MCP client parses locally, previews normalized rows, then writes approved transactions.                                             | Add a first-class CSV upload/review screen and match late-arriving statements to existing Purchases. |
+| Photos      | Native upload creates a photo run; Flue proposes groups; web review approves them. Direct native Product photo attachment also exists. | Bring run status, group review, and Product match evidence into the native app.                      |
+| Settlement  | Purchase import can allocate a unique complete payment set to a transaction already recorded.                                          | Give ambiguous and reverse-arrival matches a single review worklist.                                 |
+| Activity    | Flue conversation streams; the run record and system log refresh while active.                                                         | Show one coherent event timeline and stage durations on desktop and phone.                           |
+
+The [shared photo skill](../.claude/skills/photo-inventory-import/SKILL.md)
+and [purchase skill](../.claude/skills/purchase-import/SKILL.md) apply to
+Flue, Codex, and Claude. They encode source boundaries and review rules, not
+one model's private prompt.
+
 ```mermaid
 flowchart LR
     A[Own-item photo] --> M[Find or create exact Product]

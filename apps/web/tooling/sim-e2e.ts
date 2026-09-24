@@ -666,6 +666,7 @@ async function runHeadlessPhotoScenario(
   objectStorageUrl: string,
   userId: string,
 ): Promise<void> {
+  const scenarioStarted = performance.now();
   const pool = new Pool({ connectionString: databaseURL });
   try {
     const [{ seedSimulatorPhotoActor }, scenario, maintenance] =
@@ -710,6 +711,7 @@ async function runHeadlessPhotoScenario(
     objectStorageUrl,
     imagePaths.length,
   );
+  const nativeReady = performance.now();
   const context = await request.newContext({
     baseURL: url.origin,
     extraHTTPHeaders: { Origin: url.origin },
@@ -787,6 +789,7 @@ async function runHeadlessPhotoScenario(
     } finally {
       await proposalPool.end();
     }
+    const proposedAt = performance.now();
     const browser = await chromium.launch();
     try {
       const state = await context.storageState();
@@ -842,6 +845,7 @@ async function runHeadlessPhotoScenario(
     } finally {
       await browser.close();
     }
+    const reviewedAt = performance.now();
     const pool = new Pool({ connectionString: databaseURL });
     try {
       const result = await pool.query<{ status: string; completed: string }>(
@@ -890,6 +894,9 @@ async function runHeadlessPhotoScenario(
       await pool.end();
     }
     await exercisePhotoProcessingJobs(imageIDs);
+    console.log(
+      `[${lane}] Photo stages: native upload and processing ${(nativeReady - scenarioStarted).toFixed(0)}ms; MCP proposal ${(proposedAt - nativeReady).toFixed(0)}ms; browser review ${(reviewedAt - proposedAt).toFixed(0)}ms; final checks and image jobs ${(performance.now() - reviewedAt).toFixed(0)}ms`,
+    );
     console.log(`[${lane}] Proposal submission and reviewer approval verified`);
   } finally {
     await context.dispose();
@@ -1114,12 +1121,16 @@ async function main(): Promise<void> {
         if (purchase) {
           const { runWardrobeConvergenceScenario } =
             await import("./scenarios/wardrobe-convergence");
+          const convergenceStarted = performance.now();
           await runWardrobeConvergenceScenario({
             databaseURL,
             origin: url.origin,
             artifacts,
             userId,
           });
+          console.log(
+            `[${lane}] Purchase and Product convergence ${(performance.now() - convergenceStarted).toFixed(0)}ms`,
+          );
         }
       } else await runHeadlessProductScenario(url, productId, userId);
     } else {

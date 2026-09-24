@@ -19,6 +19,36 @@ email, receipt, retry, audit, and lifecycle orchestration; a human agent may
 continue the same work for unusual evidence. Source-backed orders always pass
 through Cubby's prepare/commit writer rather than generic entity mutation.
 
+## Connect and converge evidence
+
+1. In Cubby Settings, connect Google with read-only Gmail access. Search order
+   mail by configured vendor sender, order id, and time window. An email event
+   establishes lifecycle context; open the retailer order detail or a receipt
+   for itemized variants. If a retailer requests login, pause the browser run
+   and let the member sign in to the Cubby-managed browser tab before resuming.
+2. Parse a Monarch CSV in the MCP client, keeping the raw file out of prompts
+   and the repository. Submit normalized batches to
+   `preview_financial_statement_import`; create only approved
+   `ready_to_create` FinancialTransactions and preserve the stable source refs.
+   Repeated exports must replay, not create a second charge. Statement rows
+   remain evidence until an account and transaction have been resolved.
+3. Take own-item and label photos directly on iPhone/Mac or upload a
+   `photo_inventory` run. The [photo-inventory-import
+   skill](../photo-inventory-import/SKILL.md) proposes groups for review and
+   identifies an exact Product variant. Do not turn a photo into a Purchase.
+4. Stitch the three paths by stable evidence: order id and itemized line to
+   Purchase, variant identifiers and visible attributes to Product, and actual
+   charge/refund to Purchase settlement. Check both arrival orders: a charge
+   can predate the Purchase import, or arrive later in a statement. Propose
+   ambiguous allocation and Product identity separately; show evidence and
+   the changes that approval would make.
+
+Flue coordinates durable steps, browser handoffs, progress, and review stops.
+Jev can rank a bounded set of ambiguous candidates using evidence, but its
+choice is not a settlement write or a license to infer an absent transaction.
+The [human journey](../../../docs/product-identity-journey.md) describes the
+same outcome without prescribing an agent runtime.
+
 ## Invariants
 
 - `SUM(Expense.cost)` is the only spend ledger. A Purchase describes an order;
@@ -115,6 +145,11 @@ Load [financial-settlement.md](references/financial-settlement.md). Match litera
 posted charges or refunds to Purchases; one transaction may allocate across
 several Purchases and one order may have several shipment charges. Do not create
 synthetic transactions. If evidence is incomplete, leave settlement unresolved.
+For a unique full payment set, verify amount, account/card identity and a
+bounded date window; a statement row may have only `postedDate`. A late
+statement still needs the same check against Purchases already imported.
+Same-amount nearby charges, split tender, wallet aliases, and shipment splits
+are review cases unless the full allocation is uniquely supported.
 Monarch rows prove settlement, not itemization or exact Product identity. Use
 email/order lines for items and prefer matching existing photo-created Products
 when variant evidence agrees. Keep historical Expense attribution separate from

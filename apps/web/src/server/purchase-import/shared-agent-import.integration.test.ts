@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   expense,
+  financialTransactionAllocation,
   importRunOperation,
   importRunTarget,
   product,
@@ -73,6 +74,27 @@ describe("shared purchase-import prepare and commit", () => {
       vendorAccountId: account.id,
       trigger: "manual",
     });
+    const financialAccount = await insertWithShortcode(
+      ctx.db,
+      "financialAccount",
+      {
+        name: "Shared import fixture card",
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        ledgerPartyId: party.id,
+      },
+    );
+    const postedCharge = await insertWithShortcode(
+      ctx.db,
+      "financialTransaction",
+      {
+        accountId: financialAccount.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 12.34,
+        transactionDate: null,
+        postedDate: "2026-09-21",
+      },
+    );
     const prepareInput = {
       _runExecution: {
         runId: run.id,
@@ -107,7 +129,9 @@ describe("shared purchase-import prepare and commit", () => {
                     "https://www.amazon.com/dp/B012345678?ref_=orders",
                 },
               ],
-              payments: [],
+              payments: [
+                { amount: 12.34, chargedAt: "2026-09-20T12:00:00.000Z" },
+              ],
               allShipmentsDelivered: false,
             },
           },
@@ -186,6 +210,13 @@ describe("shared purchase-import prepare and commit", () => {
       .from(expense)
       .where(eq(expense.purchaseId, writtenPurchases[0]!.id));
     expect(writtenExpenses).toEqual([{ productId: existingProduct.entityId }]);
+    const allocations = await getDb(ctx.db)
+      .select({ transactionId: financialTransactionAllocation.transactionId })
+      .from(financialTransactionAllocation)
+      .where(
+        eq(financialTransactionAllocation.purchaseId, writtenPurchases[0]!.id),
+      );
+    expect(allocations).toEqual([{ transactionId: postedCharge.id }]);
   });
 
   it("matches a photo-recorded barcode exactly when the order line SKU is that UPC", async () => {

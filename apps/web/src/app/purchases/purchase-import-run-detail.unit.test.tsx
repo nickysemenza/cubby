@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { RunImportWorkflow } from "./purchase-import-run-detail";
+import { RunImportWorkflow, RunPhotoBatch } from "./purchase-import-run-detail";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
@@ -98,6 +98,22 @@ beforeEach(() => {
     "fetch",
     vi.fn().mockImplementation((input: string | URL | Request) => {
       const url = input instanceof Request ? input.url : String(input);
+      if (url.includes("/photo-groups")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              review: {
+                runId: run.publicId,
+                runStatus: "completed",
+                proposals: [],
+                unassignedImageIds: [],
+              },
+              images: [],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+        );
+      }
       if (url.includes("/agent")) {
         return Promise.resolve(
           new Response(
@@ -150,9 +166,9 @@ describe("RunImportWorkflow", () => {
     expect(
       await screen.findByRole("link", { name: "Fixture purchase" }),
     ).toHaveAttribute("href", "/purchases/PUR-ABCDE12345");
-    expect(
-      screen.getByLabelText("Purchase import transcript"),
-    ).toHaveTextContent("extract-1");
+    expect(screen.getByLabelText("Import run transcript")).toHaveTextContent(
+      "extract-1",
+    );
     expect(screen.getByText("Orders seen")).toBeInTheDocument();
     expect(screen.getByText("Targets and outcome")).toBeInTheDocument();
     expect(screen.getByText("Outcome: replayed")).toBeInTheDocument();
@@ -171,4 +187,23 @@ describe("RunImportWorkflow", () => {
       screen.queryByRole("button", { name: "Abort agent" }),
     ).not.toBeInTheDocument();
   });
+});
+
+it("shows durable progress and diagnostics alongside photo group review", async () => {
+  const photoRecord = fromPartial<ImportRunOut>({
+    id: run.publicId,
+    status: "completed",
+    purpose: "photo_inventory",
+  });
+  render(<RunPhotoBatch record={photoRecord} />, {
+    wrapper: harness.wrapper,
+  });
+
+  expect(await screen.findByText("Proposed items")).toBeInTheDocument();
+  expect(screen.getByText("Run progress")).toBeInTheDocument();
+  expect(screen.getByText("Timeline and system log")).toBeInTheDocument();
+  expect(screen.getByLabelText("Import run transcript")).toHaveTextContent(
+    "extract-1",
+  );
+  expect(await screen.findByText("System and Mac log")).toBeInTheDocument();
 });
