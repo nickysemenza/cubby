@@ -117,7 +117,12 @@ describe("product match queue", () => {
   /** On an order, with the owner as the line's beneficiary. */
   const purchasedProduct = async (
     name: string,
-    opts: { owner?: string; category?: Category } = {},
+    opts: {
+      owner?: string;
+      category?: Category;
+      expenseOnly?: boolean;
+      expenseCost?: number;
+    } = {},
   ) => {
     const created = await product(name, opts.category);
     const vendorId = await findOrCreateVendor(ctx.db, "Synthetic outfitter");
@@ -126,17 +131,19 @@ describe("product match queue", () => {
       date: "2026-09-01",
       displayLabel: `${name} order`,
     });
-    await attachPurchaseProducts(
-      ctx.db,
-      order.id,
-      [created.entityId],
-      ctx.actor,
-    );
+    if (!opts.expenseOnly)
+      await attachPurchaseProducts(
+        ctx.db,
+        order.id,
+        [created.entityId],
+        ctx.actor,
+      );
     await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({
           name: `${name} line`,
+          cost: opts.expenseCost ?? 100,
           date: "2026-09-01",
           purchaseId: parseShortcodeFor("purchase", order.shortcode),
           productId: created.id,
@@ -190,6 +197,52 @@ describe("product match queue", () => {
             "Same owner",
           ]),
         );
+      },
+    },
+    {
+      name: "recognizes an itemized purchase recorded only by its Expense",
+      run: async () => {
+        const photo = await photoProduct("Gray crew shirt");
+        const bought = await purchasedProduct("Heather crew tee", {
+          expenseOnly: true,
+        });
+        await proposeProductMatch(ctx.db, {
+          productIds: [photo.id, bought.id],
+          evidence: "Synthetic order line matches the photographed shirt",
+        });
+        const items = await queueFor(photo.id);
+        expect(items).toMatchObject([
+          {
+            source: "agent",
+            keeper: {
+              id: bought.id,
+              role: "purchase",
+              purchase: { vendor: "Synthetic outfitter" },
+            },
+            other: { id: photo.id, role: "photo", inventoryCount: 1 },
+          },
+        ]);
+      },
+    },
+    {
+      name: "does not treat an Expense-only sale as an acquisition",
+      run: async () => {
+        const photo = await photoProduct("Wool scarf");
+        const sold = await purchasedProduct("Wool scarf, resold", {
+          expenseOnly: true,
+          expenseCost: -20,
+        });
+        await proposeProductMatch(ctx.db, {
+          productIds: [photo.id, sold.id],
+          evidence: "Synthetic pair for direction check",
+        });
+        const items = await queueFor(photo.id);
+        expect(items).toMatchObject([
+          {
+            keeper: { id: photo.id, role: "photo" },
+            other: { id: sold.id, role: "other" },
+          },
+        ]);
       },
     },
     {

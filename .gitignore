@@ -108,4 +108,5 @@ artifacts/sim-e2e/
 artifacts/sim-dev/
 artifacts/headless-e2e/
 artifacts/headless-photo-e2e/
+artifacts/headless-wardrobe-e2e/
 artifacts/photo-review/
