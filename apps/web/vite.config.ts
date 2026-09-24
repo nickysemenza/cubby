@@ -60,9 +60,10 @@ const clientCodeSplittingGroups = [
       /[\\/]src[\\/]/.test(id) &&
       !/[\\/]server[\\/]|\.functions\.ts(?:\?|$)/.test(id),
     tags: ["$initial" as const],
+    priority: -1,
     entriesAware: true,
     entriesAwareMergeThreshold: 65536,
-    includeDependenciesRecursively: false,
+    includeDependenciesRecursively: true,
   },
   {
     name: "icons",
