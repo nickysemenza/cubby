@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
   appendFileSync,
+  existsSync,
   mkdirSync,
   readdirSync,
   statSync,
@@ -26,13 +27,17 @@ const repoRoot = path.resolve(webRoot, "../..");
 const kitRoot = path.join(repoRoot, "apps/apple/CubbyKit");
 const headless = process.argv.slice(2).includes("--headless");
 const watch = process.argv.slice(2).includes("--watch");
+const video = process.argv.slice(2).includes("--video");
 if (
   (watch && !headless) ||
+  (video && headless) ||
   process.argv
     .slice(2)
-    .some((argument) => !["--headless", "--watch"].includes(argument))
+    .some(
+      (argument) => !["--headless", "--watch", "--video"].includes(argument),
+    )
 )
-  throw new Error("Usage: sim-e2e.ts [--headless [--watch]]");
+  throw new Error("Usage: sim-e2e.ts [--video | --headless [--watch]]");
 const lane = headless ? "headless-e2e" : "sim-e2e";
 dotenv.config({ path: path.join(webRoot, ".env") });
 for (const [key, value] of Object.entries({
@@ -209,6 +214,71 @@ async function simulator(): Promise<{
       `No iPhone 17 simulator found${preferred ? ` matching ${preferred}` : ""}`,
     );
   return selected;
+}
+
+async function recordSimulatorVideo(
+  deviceID: string,
+): Promise<() => Promise<void>> {
+  const output = path.join(artifacts, "run.mp4");
+  appendFileSync(
+    path.join(artifacts, "commands.log"),
+    `xcrun simctl io ${deviceID} recordVideo --codec=h264 ${output}\n`,
+  );
+  const recorder = spawn(
+    "xcrun",
+    ["simctl", "io", deviceID, "recordVideo", "--codec=h264", output],
+    { cwd: repoRoot, stdio: ["ignore", "ignore", "pipe"] },
+  );
+  const log = path.join(artifacts, "runner.log");
+  const closed = new Promise<void>((resolve, reject) => {
+    recorder.once("error", reject);
+    recorder.once("close", (code, signal) => {
+      if (code === 0 || signal === "SIGINT") resolve();
+      else reject(new Error(`simctl recordVideo exited ${code ?? signal}`));
+    });
+  });
+  void closed.catch(() => {});
+  let started = false;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      let outputText = "";
+      const timeout = setTimeout(
+        () =>
+          reject(
+            new Error("Simulator recording did not start within 30 seconds"),
+          ),
+        30_000,
+      );
+      const finish = (error?: Error) => {
+        clearTimeout(timeout);
+        if (error) reject(error);
+        else resolve();
+      };
+      recorder.stderr.on("data", (chunk: Buffer) => {
+        appendFileSync(log, chunk);
+        outputText += chunk.toString();
+        if (outputText.includes("Recording started")) finish();
+      });
+      recorder.once("error", (error) => finish(error));
+      recorder.once("close", () =>
+        finish(new Error("Simulator recording stopped before its first frame")),
+      );
+    });
+    started = true;
+  } finally {
+    if (!started) {
+      recorder.kill("SIGINT");
+      await closed.catch(() => {});
+    }
+  }
+  console.log(`[${lane}] Recording simulator video to ${output}`);
+  return async () => {
+    if (recorder.exitCode === null) recorder.kill("SIGINT");
+    await closed;
+    if (!existsSync(output) || statSync(output).size === 0)
+      throw new Error(`Simulator video was not saved at ${output}`);
+    console.log(`[${lane}] Video saved: ${output}`);
+  };
 }
 
 async function main(): Promise<void> {
@@ -488,21 +558,28 @@ async function main(): Promise<void> {
         url.origin,
       ]);
       try {
-        await run("pnpm", [
-          "exec",
-          "agent-device",
-          "test",
-          "apps/apple/e2e/product-edit.ad",
-          ...common,
-          "--artifacts-dir",
-          artifacts,
-          "--reporter",
-          "default",
-          "--reporter",
-          `junit:${path.join(artifacts, "junit.xml")}`,
-          "-e",
-          `PRODUCT_ID=${productId}`,
-        ]);
+        const stopRecording = video
+          ? await recordSimulatorVideo(device.udid)
+          : undefined;
+        try {
+          await run("pnpm", [
+            "exec",
+            "agent-device",
+            "test",
+            "apps/apple/e2e/product-edit.ad",
+            ...common,
+            "--artifacts-dir",
+            artifacts,
+            "--reporter",
+            "default",
+            "--reporter",
+            `junit:${path.join(artifacts, "junit.xml")}`,
+            "-e",
+            `PRODUCT_ID=${productId}`,
+          ]);
+        } finally {
+          await stopRecording?.();
+        }
       } catch (error) {
         await run("xcrun", [
           "simctl",
