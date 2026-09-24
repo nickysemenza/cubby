@@ -4,9 +4,9 @@ import type {
   RecipeFlowPlan,
   RecipeFlowSource,
 } from "@cubby/schemas/recipe-flow";
-import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
-import { GitMergeIcon as GitMerge } from "@phosphor-icons/react/dist/csr/GitMerge";
-import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { GitMergeIcon } from "@phosphor-icons/react/dist/csr/GitMerge";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
 import { useId, useMemo } from "react";
 
@@ -48,7 +48,7 @@ export function FlowSourceContent({
     return (
       <>
         <span className="flex min-w-0 items-center gap-1 font-medium text-warning-ink">
-          <AlertTriangle className="size-3.5 shrink-0" />
+          <WarningIcon className="size-3.5 shrink-0" />
           <span
             className={readable ? "break-words" : "truncate"}
             title={source.label}
@@ -430,7 +430,7 @@ export function RecipeFlowTable({
                     key={column}
                     className="min-w-36 border-r bg-muted/20"
                   >
-                    <ArrowRight className="mx-auto size-3.5 text-muted-foreground" />
+                    <ArrowRightIcon className="mx-auto size-3.5 text-muted-foreground" />
                   </TableCell>
                 );
               }
@@ -459,7 +459,7 @@ export function RecipeFlowTable({
                     )}
                   >
                     {operation.inputs.length > 1 && (
-                      <GitMerge className="size-3.5 text-primary" />
+                      <GitMergeIcon className="size-3.5 text-primary" />
                     )}
                     <FlowOperationContent
                       operation={operation}

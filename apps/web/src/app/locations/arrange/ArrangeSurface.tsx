@@ -1,6 +1,6 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import { ColumnsIcon as Columns3 } from "@phosphor-icons/react/dist/csr/Columns";
-import { TreeViewIcon as ListTree } from "@phosphor-icons/react/dist/csr/TreeView";
+import { ColumnsIcon } from "@phosphor-icons/react/dist/csr/Columns";
+import { TreeViewIcon } from "@phosphor-icons/react/dist/csr/TreeView";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
@@ -23,8 +23,8 @@ import { useArrangeMutations } from "./use-arrange-mutations";
 type ArrangeView = "board" | "tree";
 
 const VIEW_OPTIONS: ViewSwitcherOption<ArrangeView>[] = [
-  { value: "board", label: "Board", icon: Columns3 },
-  { value: "tree", label: "Tree", icon: ListTree },
+  { value: "board", label: "Board", icon: ColumnsIcon },
+  { value: "tree", label: "Tree", icon: TreeViewIcon },
 ];
 
 /** Stable empty default — a fresh `[]` per render would thrash the image query. */

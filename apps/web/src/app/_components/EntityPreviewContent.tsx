@@ -15,7 +15,7 @@ import {
   TIER1_NUTRIENTS,
   dataTypeLabel,
 } from "@cubby/usda-schemas";
-import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import { type ComponentType, type ReactNode, useEffect } from "react";
@@ -205,7 +205,7 @@ export function toRecipeCard(
         to: "/recipes/$shortcode",
         params: { shortcode: data.id },
         search: { view: "prep" },
-        icon: <ListChecks className="size-3" />,
+        icon: <ListChecksIcon className="size-3" />,
         label: "Prep sheet",
       },
     ],

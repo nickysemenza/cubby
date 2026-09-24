@@ -1,9 +1,9 @@
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import {
   type ReactNode,
   type Ref,
@@ -163,7 +163,7 @@ function ConversionRowsField({
               className="text-muted-foreground hover:text-destructive"
               aria-label="Remove conversion"
             >
-              <X className="size-3.5" />
+              <XIcon className="size-3.5" />
             </button>
           )}
         </Row>
@@ -176,7 +176,7 @@ function ConversionRowsField({
         onClick={onAdd}
         className="text-xs text-muted-foreground hover:text-foreground"
       >
-        <Plus className="size-3" /> Add another
+        <PlusIcon className="size-3" /> Add another
       </Row>
     </Stack>
   );
@@ -247,7 +247,7 @@ function LivePanels({
         >
           {linkedFoods.length > 0 && (
             <Row as="p" align="center" gap="xs">
-              <Check className="size-3 text-positive" />
+              <CheckIcon className="size-3 text-positive" />
               <span className="text-muted-foreground">Linked USDA:</span>{" "}
               {linkedFoods.map((f) => f.foodInfo.description).join(", ")}
             </Row>

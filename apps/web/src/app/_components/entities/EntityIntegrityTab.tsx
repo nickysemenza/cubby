@@ -8,9 +8,9 @@ import type {
   RelationshipProvenance,
 } from "@cubby/schemas/entity-integrity";
 import { humanize } from "@cubby/shared";
-import { DatabaseIcon as Database } from "@phosphor-icons/react/dist/csr/Database";
-import { HeartbeatIcon as HeartPulse } from "@phosphor-icons/react/dist/csr/Heartbeat";
-import { PathIcon as Waypoints } from "@phosphor-icons/react/dist/csr/Path";
+import { DatabaseIcon } from "@phosphor-icons/react/dist/csr/Database";
+import { HeartbeatIcon } from "@phosphor-icons/react/dist/csr/Heartbeat";
+import { PathIcon } from "@phosphor-icons/react/dist/csr/Path";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
@@ -47,11 +47,11 @@ type IntegrityLens = EntityGraphLens | "physical";
 const LENS_OPTIONS: {
   value: IntegrityLens;
   label: string;
-  icon: typeof Waypoints;
+  icon: typeof PathIcon;
 }[] = [
-  { value: "logical", label: "Logical", icon: Waypoints },
-  { value: "physical", label: "Physical", icon: Database },
-  { value: "health", label: "Health", icon: HeartPulse },
+  { value: "logical", label: "Logical", icon: PathIcon },
+  { value: "physical", label: "Physical", icon: DatabaseIcon },
+  { value: "health", label: "Health", icon: HeartbeatIcon },
 ];
 
 const EMPTY_REFERENTIAL_LIVENESS_VIOLATIONS: ReferentialLivenessViolation[] =
@@ -276,7 +276,7 @@ function EntityChip({
   onClick: () => void;
 }) {
   const def = isBrowserRoutedEntity(entity) ? entities[entity] : null;
-  const Icon = def?.phosphorIcon ?? Waypoints;
+  const Icon = def?.phosphorIcon ?? PathIcon;
   const label = entityLabel(entity);
   return (
     <Badge
@@ -478,7 +478,7 @@ function EntityDetailPanel({
   }
 
   const def = isBrowserRoutedEntity(entity) ? entities[entity] : null;
-  const Icon = def?.phosphorIcon ?? Waypoints;
+  const Icon = def?.phosphorIcon ?? PathIcon;
   const label = entityLabel(entity);
 
   return (

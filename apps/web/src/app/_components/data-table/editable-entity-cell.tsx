@@ -1,7 +1,7 @@
 "use client";
 
-import { PencilIcon as Pencil } from "@phosphor-icons/react/dist/csr/Pencil";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type React from "react";
 import { useCallback, useState } from "react";
 
@@ -117,7 +117,7 @@ export function EditableEntityCell<TId extends string>({
           aria-label={`Edit ${label}`}
           className={CELL_EDIT_PENCIL_CLASS}
         >
-          <Pencil className="size-3 text-muted-foreground" />
+          <PencilIcon className="size-3 text-muted-foreground" />
         </CellEditTrigger>
         {editor}
       </span>
@@ -244,7 +244,7 @@ function EditableEntityEditor<TId extends string>({
           disabled={isPending}
           aria-label="Cancel editing"
         >
-          <X className="size-3.5" />
+          <XIcon className="size-3.5" />
         </Button>
       </div>
       {suggest && (

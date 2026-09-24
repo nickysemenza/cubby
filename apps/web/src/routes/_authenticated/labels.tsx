@@ -1,6 +1,6 @@
-import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
-import { DownloadIcon as Download } from "@phosphor-icons/react/dist/csr/Download";
-import { PrinterIcon as Printer } from "@phosphor-icons/react/dist/csr/Printer";
+import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { DownloadIcon } from "@phosphor-icons/react/dist/csr/Download";
+import { PrinterIcon } from "@phosphor-icons/react/dist/csr/Printer";
 import {
   createFileRoute,
   stripSearchParams,
@@ -159,7 +159,7 @@ function LabelsPage() {
         actions={
           <div className="flex items-center gap-2 max-md:w-full max-md:flex-wrap">
             <Button variant="outline" onClick={() => router.history.back()}>
-              <ArrowLeft className="mr-2 size-4" />
+              <ArrowLeftIcon className="mr-2 size-4" />
               Back
             </Button>
             <AddLabelsPopover codes={codes} onCodesChange={handleCodesChange} />
@@ -223,7 +223,7 @@ function LabelsPage() {
                   })
                 }
               >
-                <Printer className="mr-2 size-4" />
+                <PrinterIcon className="mr-2 size-4" />
                 Print
               </Button>
             ) : (
@@ -238,7 +238,7 @@ function LabelsPage() {
                   })
                 }
               >
-                <Download className="mr-2 size-4" />
+                <DownloadIcon className="mr-2 size-4" />
                 Download CSV
               </Button>
             )}

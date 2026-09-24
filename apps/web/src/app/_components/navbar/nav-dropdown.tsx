@@ -1,4 +1,4 @@
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { Link } from "@tanstack/react-router";
 
 import {
@@ -35,7 +35,7 @@ export const NavDropdown = ({ group }: { group: NavGroup }) => {
           weight={isGroupActive ? "bold" : "regular"}
         />
         <span className="hidden lg:inline">{label}</span>
-        <ChevronDown className="size-3" />
+        <CaretDownIcon className="size-3" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-44">
         {children.map((item) => {

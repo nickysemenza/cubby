@@ -1,6 +1,6 @@
 import { TZDate } from "@date-fns/tz";
-import { LinkIcon as Link2 } from "@phosphor-icons/react/dist/csr/Link";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { type ReactNode, useId, useMemo, useState } from "react";
 import { match } from "ts-pattern";
 
@@ -398,7 +398,7 @@ export function CubbyGantt({
                 setSelectedId((current) => (current === row.id ? null : row.id))
               }
             >
-              <Link2 className="size-3" />
+              <LinkIcon className="size-3" />
               <span className="font-mono text-2xs">{count}</span>
             </button>
           ) : null;
@@ -438,7 +438,7 @@ export function CubbyGantt({
             className="ml-auto inline-flex size-7 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             onClick={() => setSelectedId(null)}
           >
-            <X className="size-3" />
+            <XIcon className="size-3" />
           </button>
         </div>
       )}
@@ -487,7 +487,7 @@ export function CubbyGantt({
                 {occurrence.event.title}
               </span>
               {data?.critical && (
-                <Link2
+                <LinkIcon
                   className="relative size-3 shrink-0"
                   aria-label="Critical chain"
                 />

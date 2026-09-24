@@ -1,4 +1,4 @@
-import { InfoIcon as Info } from "@phosphor-icons/react/dist/csr/Info";
+import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 /**
  * Real-browser layout invariants for the shared table cell anatomy.
  *
@@ -55,7 +55,7 @@ function rail() {
       aria-label="How price is determined"
       className={CELL_RAIL_BUTTON_CLASS}
     >
-      <Info className="size-3" />
+      <InfoIcon className="size-3" />
     </Button>
   );
 }

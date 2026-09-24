@@ -1,5 +1,5 @@
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
-import { SquaresFourIcon as LayoutDashboard } from "@phosphor-icons/react/dist/csr/SquaresFour";
+import { SquaresFourIcon } from "@phosphor-icons/react/dist/csr/SquaresFour";
 import { Link } from "@tanstack/react-router";
 import * as React from "react";
 
@@ -107,7 +107,7 @@ export function LocationBreadcrumb({
                   />
                 }
               >
-                <LayoutDashboard size={14} />
+                <SquaresFourIcon size={14} />
                 <span>Dashboard</span>
               </BreadcrumbLink>
             </BreadcrumbItem>

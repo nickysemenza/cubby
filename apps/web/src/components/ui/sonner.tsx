@@ -1,9 +1,9 @@
 import { Toaster as Sonner, type ToasterProps } from "sonner";
-import { CheckCircleIcon as CircleCheckIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
-import { WarningIcon as TriangleAlertIcon } from "@phosphor-icons/react/dist/csr/Warning";
-import { WarningOctagonIcon as OctagonXIcon } from "@phosphor-icons/react/dist/csr/WarningOctagon";
-import { CircleNotchIcon as Loader2Icon } from "@phosphor-icons/react/dist/csr/CircleNotch";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
+import { WarningOctagonIcon } from "@phosphor-icons/react/dist/csr/WarningOctagon";
+import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
 
 const Toaster = ({ ...props }: ToasterProps) => {
   return (
@@ -11,11 +11,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
       theme="light"
       className="toaster group"
       icons={{
-        success: <CircleCheckIcon className="size-4" />,
+        success: <CheckCircleIcon className="size-4" />,
         info: <InfoIcon className="size-4" />,
-        warning: <TriangleAlertIcon className="size-4" />,
-        error: <OctagonXIcon className="size-4" />,
-        loading: <Loader2Icon className="size-4 animate-spin" />,
+        warning: <WarningIcon className="size-4" />,
+        error: <WarningOctagonIcon className="size-4" />,
+        loading: <CircleNotchIcon className="size-4 animate-spin" />,
       }}
       style={
         {

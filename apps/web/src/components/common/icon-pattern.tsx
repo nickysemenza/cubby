@@ -1,30 +1,29 @@
-import { BowlFoodIcon as Apple } from "@phosphor-icons/react/dist/csr/BowlFood";
-import { BowlFoodIcon as Salad } from "@phosphor-icons/react/dist/csr/BowlFood";
-import { CarrotIcon as Carrot } from "@phosphor-icons/react/dist/csr/Carrot";
-import { ChefHatIcon as ChefHat } from "@phosphor-icons/react/dist/csr/ChefHat";
-import { CookingPotIcon as CookingPot } from "@phosphor-icons/react/dist/csr/CookingPot";
-import { ForkKnifeIcon as UtensilsCrossed } from "@phosphor-icons/react/dist/csr/ForkKnife";
-import { GrainsIcon as Wheat } from "@phosphor-icons/react/dist/csr/Grains";
-import { HamburgerIcon as Sandwich } from "@phosphor-icons/react/dist/csr/Hamburger";
-import { PackageIcon as Package } from "@phosphor-icons/react/dist/csr/Package";
-import { PintGlassIcon as Milk } from "@phosphor-icons/react/dist/csr/PintGlass";
-import { WarehouseIcon as Warehouse } from "@phosphor-icons/react/dist/csr/Warehouse";
+import { BowlFoodIcon } from "@phosphor-icons/react/dist/csr/BowlFood";
+import { CarrotIcon } from "@phosphor-icons/react/dist/csr/Carrot";
+import { ChefHatIcon } from "@phosphor-icons/react/dist/csr/ChefHat";
+import { CookingPotIcon } from "@phosphor-icons/react/dist/csr/CookingPot";
+import { ForkKnifeIcon } from "@phosphor-icons/react/dist/csr/ForkKnife";
+import { GrainsIcon } from "@phosphor-icons/react/dist/csr/Grains";
+import { HamburgerIcon } from "@phosphor-icons/react/dist/csr/Hamburger";
+import { PackageIcon } from "@phosphor-icons/react/dist/csr/Package";
+import { PintGlassIcon } from "@phosphor-icons/react/dist/csr/PintGlass";
+import { WarehouseIcon } from "@phosphor-icons/react/dist/csr/Warehouse";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "~/lib/utils";
 
 const patternIcons = [
-  Package,
-  UtensilsCrossed,
-  ChefHat,
-  Carrot,
-  CookingPot,
-  Apple,
-  Warehouse,
-  Salad,
-  Milk,
-  Sandwich,
-  Wheat,
+  PackageIcon,
+  ForkKnifeIcon,
+  ChefHatIcon,
+  CarrotIcon,
+  CookingPotIcon,
+  BowlFoodIcon,
+  WarehouseIcon,
+  BowlFoodIcon,
+  PintGlassIcon,
+  HamburgerIcon,
+  GrainsIcon,
 ];
 
 // Seeded random for consistent positions across renders

@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
-import { ClipboardIcon as ClipboardCopy } from "@phosphor-icons/react/dist/csr/Clipboard";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { ClipboardIcon } from "@phosphor-icons/react/dist/csr/Clipboard";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { cva, type VariantProps } from "class-variance-authority";
 import { type CSSProperties, type ReactNode, useState } from "react";
@@ -248,9 +248,9 @@ function CopyableHeroNo({ heroNo }: { heroNo: string }) {
     >
       {heroNo}
       {copied ? (
-        <Check className="size-3" />
+        <CheckIcon className="size-3" />
       ) : (
-        <ClipboardCopy className="size-3 opacity-60" />
+        <ClipboardIcon className="size-3 opacity-60" />
       )}
     </button>
   );

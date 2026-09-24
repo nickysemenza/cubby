@@ -4,9 +4,9 @@ import type {
   SmartCollectionMatch,
 } from "@cubby/schemas/collection";
 import { formatCollectionLabel } from "@cubby/shared/collection-tag";
-import { CubeFocusIcon as PackageSearch } from "@phosphor-icons/react/dist/csr/CubeFocus";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { MapPinIcon as MapPin } from "@phosphor-icons/react/dist/csr/MapPin";
+import { CubeFocusIcon } from "@phosphor-icons/react/dist/csr/CubeFocus";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
@@ -320,7 +320,7 @@ export function CollectionProductsTable({
   const toolbar = (
     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
       <div className="relative min-w-52 flex-1 sm:max-w-72">
-        <Search
+        <MagnifyingGlassIcon
           className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
           aria-hidden
         />
@@ -351,7 +351,7 @@ export function CollectionProductsTable({
       getMobileDetailsHref={(product) => `/products/${product.id}`}
       emptyState={
         <div className="py-6 text-center">
-          <PackageSearch
+          <CubeFocusIcon
             className="mx-auto size-5 text-muted-foreground"
             aria-hidden
           />
@@ -493,7 +493,8 @@ export function CollectionDetailPage({
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <CopyableShortcode code={root.id} />
                       <span className="flex items-center gap-1 font-mono text-2xs tracking-wider text-muted-foreground uppercase">
-                        <MapPin className="size-3" aria-hidden /> Tagged root
+                        <MapPinIcon className="size-3" aria-hidden /> Tagged
+                        root
                       </span>
                     </div>
                   </div>

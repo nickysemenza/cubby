@@ -7,9 +7,9 @@ import {
   mealTypeSchema,
   type MealType,
 } from "@cubby/schemas/meal-classification";
-import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { addDays, format, parseISO } from "date-fns";
@@ -55,7 +55,7 @@ export function DailyNutrition({
             aria-label="Previous day"
             onClick={() => move(-1)}
           >
-            <ChevronLeft className="size-4" />
+            <CaretLeftIcon className="size-4" />
           </Button>
           <DatePickerInput
             value={selectedDate}
@@ -71,7 +71,7 @@ export function DailyNutrition({
             aria-label="Next day"
             onClick={() => move(1)}
           >
-            <ChevronRight className="size-4" />
+            <CaretRightIcon className="size-4" />
           </Button>
           <Button
             variant="ghost"
@@ -83,7 +83,7 @@ export function DailyNutrition({
           {selectedDate > today && <Badge variant="outline">Planned</Badge>}
         </Row>
         <Button className="min-h-11" onClick={() => setAdding(true)}>
-          <Plus className="size-4" />
+          <PlusIcon className="size-4" />
           Add food
         </Button>
       </Row>
@@ -169,7 +169,7 @@ function DailyAddFood({
             variant="outline"
             onClick={() => setNewMeal(true)}
           >
-            <Plus className="size-4" />
+            <PlusIcon className="size-4" />
             New meal or snack
           </Button>
         ) : (

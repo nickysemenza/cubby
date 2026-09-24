@@ -1,7 +1,7 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type { UnitMapping, UnitMappingInput } from "@cubby/schemas/unitmapping";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { NetworkIcon as Network } from "@phosphor-icons/react/dist/csr/Network";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import { lazy, Suspense, useId, useMemo, useState } from "react";
 
 import { Row, Stack } from "~/components/layout";
@@ -115,11 +115,11 @@ export function UnitCoveragePanel({
             />
           }
         >
-          <ChevronRight
+          <CaretRightIcon
             className={`size-4 transition-transform ${graphOpen ? "rotate-90" : ""}`}
             aria-hidden
           />
-          <Network className="size-4" aria-hidden />
+          <NetworkIcon className="size-4" aria-hidden />
           <span>Conversion graph</span>
         </CollapsibleTrigger>
         <CollapsibleContent>

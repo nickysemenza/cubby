@@ -1,4 +1,4 @@
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { Link } from "@tanstack/react-router";
 import type * as React from "react";
 
@@ -72,7 +72,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
             className="hidden h-8 px-2 md:flex"
             title="Search"
           >
-            <Search className="size-3.5" />
+            <MagnifyingGlassIcon className="size-3.5" />
             <span className="sr-only">Search</span>
           </Button>
         )}

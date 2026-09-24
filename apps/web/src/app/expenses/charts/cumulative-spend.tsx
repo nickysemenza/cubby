@@ -1,5 +1,5 @@
 import type { ExpenseCumulativePoint } from "@cubby/schemas/project";
-import { TrendUpIcon as TrendingUp } from "@phosphor-icons/react/dist/csr/TrendUp";
+import { TrendUpIcon } from "@phosphor-icons/react/dist/csr/TrendUp";
 import { useMemo } from "react";
 
 import { SpendTrend } from "~/app/_components/charts/kit";
@@ -24,7 +24,7 @@ export function CumulativeSpend({
   );
 
   if (points.length === 0) {
-    return <ChartEmpty icon={TrendingUp} title="No dated expense data." />;
+    return <ChartEmpty icon={TrendUpIcon} title="No dated expense data." />;
   }
 
   const ys = points.map((p) => p.y);

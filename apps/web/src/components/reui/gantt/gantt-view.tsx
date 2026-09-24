@@ -70,8 +70,8 @@ import {
 } from "~/components/ui/tooltip"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus";
-import { CaretRightIcon as ChevronRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { CaretLeftIcon as ChevronLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 
 /** Current time, refreshed on an interval and on tab focus. */
 function useNow(intervalMs = 30_000): Date {
@@ -2138,7 +2138,7 @@ const GanttTreeRow = memo(function GanttTreeRow({
                   )}
                   onClick={() => onToggle(row)}
                 >
-                  <ChevronRightIcon className={cn(
+                  <CaretRightIcon className={cn(
                                                         "size-3.5 transition-transform",
                                                         !row.collapsed && "rotate-90"
                                                       )} aria-hidden="true" />
@@ -2545,9 +2545,9 @@ function GanttOffscreenChips({
               }
             >
               {chip.side === "start" ? (
-                <ChevronLeftIcon className="size-3" aria-hidden="true" />
+                <CaretLeftIcon className="size-3" aria-hidden="true" />
               ) : (
-                <ChevronRightIcon className="size-3" aria-hidden="true" />
+                <CaretRightIcon className="size-3" aria-hidden="true" />
               )}
               <span
                 aria-hidden

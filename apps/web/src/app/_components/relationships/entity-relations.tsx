@@ -8,11 +8,11 @@ import {
   type EntityGraphOutput,
 } from "@cubby/schemas/entity-graph";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
-import { ArrowClockwiseIcon as RotateCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
-import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
-import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
-import { ListIcon as List } from "@phosphor-icons/react/dist/csr/List";
-import { NetworkIcon as Network } from "@phosphor-icons/react/dist/csr/Network";
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
+import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
@@ -61,8 +61,8 @@ import {
 import { GraphExplorer } from "./graph-explorer";
 
 const VIEW_OPTIONS = [
-  { value: "list", label: "List", icon: List },
-  { value: "graph", label: "Graph", icon: Network },
+  { value: "list", label: "List", icon: ListIcon },
+  { value: "graph", label: "Graph", icon: NetworkIcon },
 ] as const;
 export function supportsEntityGraph(entity: Entity) {
   return (
@@ -1147,7 +1147,7 @@ function VisitedRecords({
               disabled={cursor === 0}
               onClick={() => moveHistory(-1)}
             >
-              <ArrowLeft className="size-3.5" />
+              <ArrowLeftIcon className="size-3.5" />
             </Button>
             <Button
               size="icon-sm"
@@ -1156,7 +1156,7 @@ function VisitedRecords({
               disabled={cursor >= trail.length - 1}
               onClick={() => moveHistory(1)}
             >
-              <ArrowRight className="size-3.5" />
+              <ArrowRightIcon className="size-3.5" />
             </Button>
             <EntityIcon
               entity={selected.entityType}
@@ -1191,7 +1191,7 @@ function VisitedRecords({
               disabled={busy.has(selectedKey)}
               onClick={() => void reload()}
             >
-              <RotateCw className="size-3.5" /> Reload neighborhood
+              <ArrowClockwiseIcon className="size-3.5" /> Reload neighborhood
             </Button>
           </Row>
           <nav

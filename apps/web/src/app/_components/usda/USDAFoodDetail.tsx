@@ -1,10 +1,10 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import { BowlFoodIcon as Apple } from "@phosphor-icons/react/dist/csr/BowlFood";
-import { ForkKnifeIcon as UtensilsCrossed } from "@phosphor-icons/react/dist/csr/ForkKnife";
-import { InfoIcon as Info } from "@phosphor-icons/react/dist/csr/Info";
-import { LinkIcon as Link2 } from "@phosphor-icons/react/dist/csr/Link";
-import { ScalesIcon as Scale } from "@phosphor-icons/react/dist/csr/Scales";
-import { ScrollIcon as ScrollText } from "@phosphor-icons/react/dist/csr/Scroll";
+import { BowlFoodIcon } from "@phosphor-icons/react/dist/csr/BowlFood";
+import { ForkKnifeIcon } from "@phosphor-icons/react/dist/csr/ForkKnife";
+import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
+import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
+import { ScalesIcon } from "@phosphor-icons/react/dist/csr/Scales";
+import { ScrollIcon } from "@phosphor-icons/react/dist/csr/Scroll";
 import { useMemo } from "react";
 
 import { Stack } from "~/components/layout";
@@ -245,42 +245,42 @@ export const USDAFoodDetail: React.FC<{
     {
       id: "food-information",
       title: "Food Information",
-      icon: Info,
+      icon: InfoIcon,
       placement: "supporting",
       content: foodInfoSection,
     },
     {
       id: "associated-products",
       title: "Associated Products",
-      icon: Link2,
+      icon: LinkIcon,
       placement: "supporting",
       content: linkedProductsSection,
     },
     {
       id: "nutrition-information",
       title: "Nutrition Information",
-      icon: Apple,
+      icon: BowlFoodIcon,
       placement: "primary",
       content: nutritionSection,
     },
     {
       id: "serving-information",
       title: "Serving Information",
-      icon: UtensilsCrossed,
+      icon: ForkKnifeIcon,
       placement: "primary",
       content: servingInfoSection,
     },
     {
       id: "branded-ingredients",
       title: "Branded Food Ingredients",
-      icon: ScrollText,
+      icon: ScrollIcon,
       placement: "primary",
       content: ingredientsSection,
     },
     {
       id: "unit-conversions",
       title: "Unit Conversions",
-      icon: Scale,
+      icon: ScalesIcon,
       placement: "supporting",
       content: unitMappingsSection,
     },

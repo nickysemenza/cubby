@@ -1,9 +1,9 @@
 import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { taskStatusValues } from "@cubby/schemas/project";
 import { useDraggable } from "@dnd-kit/core";
-import { DotsSixVerticalIcon as GripVertical } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
-import { DotsThreeVerticalIcon as EllipsisVertical } from "@phosphor-icons/react/dist/csr/DotsThreeVertical";
-import { ProhibitIcon as Ban } from "@phosphor-icons/react/dist/csr/Prohibit";
+import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
+import { DotsThreeVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsThreeVertical";
+import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
 import { useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
 
@@ -192,7 +192,7 @@ export function TaskCard({
               {...attributes}
               {...listeners}
             >
-              <GripVertical className="size-3" />
+              <DotsSixVerticalIcon className="size-3" />
             </Button>
             <button
               type="button"
@@ -221,7 +221,7 @@ export function TaskCard({
                   />
                 }
               >
-                <EllipsisVertical />
+                <DotsThreeVerticalIcon />
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
@@ -299,7 +299,7 @@ export function TaskCard({
                 render={
                   <span className="cursor-help">
                     <Badge variant="outline">
-                      <Ban className="size-3" />
+                      <ProhibitIcon className="size-3" />
                       {task.blockedByIds.length}
                     </Badge>
                   </span>

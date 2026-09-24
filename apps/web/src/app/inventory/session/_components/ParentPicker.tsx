@@ -1,8 +1,8 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { formatDistanceToNow } from "date-fns";
 import pluralize from "pluralize";
 import { useEffect, useMemo, useState } from "react";
@@ -198,7 +198,7 @@ export function ParentPicker({
                   aria-label={`Dismiss saved ${pass.location.name} recount`}
                   onClick={() => dismissPass(pass.rootId)}
                 >
-                  <X />
+                  <XIcon />
                 </Button>
               </Row>
             ))}
@@ -239,7 +239,7 @@ export function ParentPicker({
           </Stack>
           {showAreas && (
             <div className="relative pt-2">
-              <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <MagnifyingGlassIcon className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
@@ -299,7 +299,7 @@ export function ParentPicker({
                         }
                         disabled={!hasCandidateChildren || searching}
                       >
-                        <ChevronRight className="size-4" />
+                        <CaretRightIcon className="size-4" />
                       </button>
                     }
                     trailing={

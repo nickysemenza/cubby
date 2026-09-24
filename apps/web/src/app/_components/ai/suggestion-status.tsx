@@ -2,7 +2,7 @@ import type {
   FieldSuggestion,
   FieldSuggestionOutcome,
 } from "@cubby/schemas/ai";
-import { SparkleIcon as Sparkle } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
@@ -155,7 +155,7 @@ export function SuggestionStatus({
           title={text}
           className="inline-flex min-w-0 items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Sparkle className="size-3 shrink-0" />
+          <SparkleIcon className="size-3 shrink-0" />
           <span className="truncate">{text}</span>
         </PopoverTrigger>
         {showBreakdown ? (

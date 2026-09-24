@@ -26,7 +26,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { positiveAmount } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useQuery } from "@tanstack/react-query";
 import { type FC, useEffect, useMemo } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
@@ -247,7 +247,7 @@ export const ProductBulkAddToInventoryDialog: FC<
                     onClick={() => remove(index)}
                     className="self-end sm:mb-1 sm:shrink-0"
                   >
-                    <X className="size-4" />
+                    <XIcon className="size-4" />
                   </Button>
                 </Row>
               );

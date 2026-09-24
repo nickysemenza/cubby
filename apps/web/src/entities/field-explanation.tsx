@@ -6,7 +6,7 @@ import {
 } from "@cubby/schemas/field-explanation";
 import { inventoryShortcode } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
-import { InfoIcon as Info } from "@phosphor-icons/react/dist/csr/Info";
+import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
@@ -205,7 +205,7 @@ export function FieldExplanation({
           />
         }
       >
-        <Info className={surface === "list" ? "size-3" : "size-3.5"} />
+        <InfoIcon className={surface === "list" ? "size-3" : "size-3.5"} />
       </PopoverTrigger>
       <PopoverContent className="max-h-[min(32rem,80dvh)] w-80 overflow-y-auto">
         <Stack gap="sm">

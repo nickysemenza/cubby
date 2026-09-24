@@ -1,6 +1,6 @@
-import { CheckCircleIcon as CheckCircle2 } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
-import { WarningCircleIcon as CircleAlert } from "@phosphor-icons/react/dist/csr/WarningCircle";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
@@ -42,7 +42,11 @@ export function TargetedImportLaunchButton({
         variant="outline"
         onClick={() => setOpen(true)}
       >
-        {purpose === "purchase_validation" ? <CheckCircle2 /> : <Sparkles />}
+        {purpose === "purchase_validation" ? (
+          <CheckCircleIcon />
+        ) : (
+          <SparkleIcon />
+        )}
         {purpose === "purchase_validation"
           ? "Validate ingestion"
           : "Enrich product"}
@@ -269,7 +273,7 @@ export function TargetedImportLaunchDialog({
         {start.data?.runs.some((entry) => entry.blockingRun) ? (
           <div className="grid gap-1 border border-border bg-muted/30 p-3 text-sm">
             <div className="flex items-center gap-2 font-medium">
-              <CircleAlert className="size-3.5 text-warning" />
+              <WarningCircleIcon className="size-3.5 text-warning" />
               One account is already busy
             </div>
             {start.data.runs

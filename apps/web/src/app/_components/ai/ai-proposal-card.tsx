@@ -1,5 +1,5 @@
 import type { AiCacheStatus, Confidence } from "@cubby/schemas/ai";
-import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { type KeyboardEvent, type ReactNode, useEffect, useRef } from "react";
 
 import { formatCompactRelative } from "~/app/_components/HoverableTimestamp";
@@ -164,7 +164,7 @@ export function AiProposalCard({
     <div className="border border-border bg-muted/30 p-2 text-sm">
       <Stack gap="xs">
         <Row align="center" gap="sm" wrap>
-          <Sparkles className="size-3 text-muted-foreground" />
+          <SparkleIcon className="size-3 text-muted-foreground" />
           <span className="font-medium">{label}:</span>
           <span className={confidenceColor[confidence]}>
             {confidence} confidence

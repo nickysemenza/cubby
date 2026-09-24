@@ -1,5 +1,5 @@
-import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
-import { WarningIcon as TriangleAlert } from "@phosphor-icons/react/dist/csr/Warning";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { match } from "ts-pattern";
@@ -131,7 +131,7 @@ function TotalsGapAction({
       className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
     >
       {cta}
-      <ArrowRight className="ml-1 size-3" />
+      <ArrowRightIcon className="ml-1 size-3" />
     </Link>
   );
 }
@@ -236,7 +236,7 @@ export function RecipeTotalsCoverageButton({
           "inline-flex items-center gap-2 border border-warning/40 px-2 py-1 text-xs text-warning-ink hover:bg-warning/10",
         )}
       >
-        <TriangleAlert className="size-3.5" />
+        <WarningIcon className="size-3.5" />
         {gaps.length} block totals
       </PopoverTrigger>
       <PopoverContent align="end" className="w-96">
@@ -264,7 +264,7 @@ export function RecipeTotalsCoverageButton({
           )}
         >
           Open all in workbench
-          <ArrowRight className="size-3.5" />
+          <ArrowRightIcon className="size-3.5" />
         </Link>
       </PopoverContent>
     </Popover>

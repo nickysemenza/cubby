@@ -1,6 +1,6 @@
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useQuery } from "@tanstack/react-query";
 import { type Ref, useEffect, useMemo, useRef, useState } from "react";
 
@@ -177,7 +177,7 @@ function QueueUsdaPicker({
           className="h-6 px-2 text-xs"
           onClick={() => setShowSearch(true)}
         >
-          <Search className="size-3" />
+          <MagnifyingGlassIcon className="size-3" />
           Search manually <Kbd className="ml-1">u</Kbd>
         </Button>
       )}

@@ -4,7 +4,7 @@ import type {
   RelatedSummaryRelationKey,
 } from "@cubby/schemas/related-view";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import type {
   CellData,
@@ -481,7 +481,7 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
       {/* min-w floor, because these sections also sit in the narrow aside rail
           where a flex-1 input otherwise collapses to a few characters. */}
       <div className="relative min-w-32 flex-1">
-        <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        <MagnifyingGlassIcon className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}

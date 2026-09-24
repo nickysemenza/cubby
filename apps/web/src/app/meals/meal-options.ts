@@ -7,17 +7,17 @@ import {
   mealKindValues,
   mealTypeValues,
 } from "@cubby/schemas/meal-classification";
-import { BreadIcon as Croissant } from "@phosphor-icons/react/dist/csr/Bread";
-import { CircleDashedIcon as CircleDashed } from "@phosphor-icons/react/dist/csr/CircleDashed";
-import { CookieIcon as Cookie } from "@phosphor-icons/react/dist/csr/Cookie";
-import { CookingPotIcon as CookingPot } from "@phosphor-icons/react/dist/csr/CookingPot";
-import { CookingPotIcon as Refrigerator } from "@phosphor-icons/react/dist/csr/CookingPot";
-import { ForkKnifeIcon as UtensilsCrossed } from "@phosphor-icons/react/dist/csr/ForkKnife";
-import { IceCreamIcon as IceCreamCone } from "@phosphor-icons/react/dist/csr/IceCream";
-import { MoonIcon as Moon } from "@phosphor-icons/react/dist/csr/Moon";
-import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/dist/csr/ShoppingBag";
-import { SunIcon as Sun } from "@phosphor-icons/react/dist/csr/Sun";
-import { SunHorizonIcon as Sunrise } from "@phosphor-icons/react/dist/csr/SunHorizon";
+import { BreadIcon } from "@phosphor-icons/react/dist/csr/Bread";
+import { CircleDashedIcon } from "@phosphor-icons/react/dist/csr/CircleDashed";
+import { CookieIcon } from "@phosphor-icons/react/dist/csr/Cookie";
+import { CookingPotIcon } from "@phosphor-icons/react/dist/csr/CookingPot";
+import { ForkKnifeIcon } from "@phosphor-icons/react/dist/csr/ForkKnife";
+import { IceCreamIcon } from "@phosphor-icons/react/dist/csr/IceCream";
+import { MoonIcon } from "@phosphor-icons/react/dist/csr/Moon";
+import { RepeatIcon } from "@phosphor-icons/react/dist/csr/Repeat";
+import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
+import { SunIcon } from "@phosphor-icons/react/dist/csr/Sun";
+import { SunHorizonIcon } from "@phosphor-icons/react/dist/csr/SunHorizon";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { format } from "date-fns";
 
@@ -92,16 +92,16 @@ export function mealTypeTimeLabel(type: MealType | null): string | null {
  * (same rule as `TRADE_ICONS`).
  */
 const MEAL_TYPE_ICONS = {
-  breakfast: Sunrise,
-  brunch: Croissant,
-  lunch: Sun,
-  dinner: Moon,
-  snack: Cookie,
-  dessert: IceCreamCone,
+  breakfast: SunHorizonIcon,
+  brunch: BreadIcon,
+  lunch: SunIcon,
+  dinner: MoonIcon,
+  snack: CookieIcon,
+  dessert: IceCreamIcon,
 } satisfies Record<MealType, Icon>;
 
 /** What an unslotted meal shows — the generic glyph the calendar used for all meals. */
-const UNSLOTTED_MEAL_ICON: Icon = CookingPot;
+const UNSLOTTED_MEAL_ICON: Icon = CookingPotIcon;
 
 /**
  * Kind glyphs, and `cooked` is deliberately absent.
@@ -112,10 +112,10 @@ const UNSLOTTED_MEAL_ICON: Icon = CookingPot;
  * description, which likewise names the kind only when it isn't `cooked`.
  */
 const MEAL_KIND_ICONS = {
-  leftovers: Refrigerator,
-  eating_out: UtensilsCrossed,
-  takeout: ShoppingBag,
-  other: CircleDashed,
+  leftovers: RepeatIcon,
+  eating_out: ForkKnifeIcon,
+  takeout: ShoppingBagIcon,
+  other: CircleDashedIcon,
 } satisfies Record<Exclude<MealKind, "cooked">, Icon>;
 
 /** The slot glyph, or the generic pot when unslotted. */

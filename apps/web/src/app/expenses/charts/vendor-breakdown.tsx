@@ -1,5 +1,5 @@
 import type { ExpenseVendorAggregate } from "@cubby/schemas/project";
-import { StorefrontIcon as Store } from "@phosphor-icons/react/dist/csr/Storefront";
+import { StorefrontIcon } from "@phosphor-icons/react/dist/csr/Storefront";
 
 import { RankedBarBreakdown } from "~/app/_components/charts/kit";
 
@@ -22,7 +22,7 @@ export function VendorBreakdown({
       data={byVendor}
       valueKey="net"
       labelKey="vendorName"
-      emptyIcon={Store}
+      emptyIcon={StorefrontIcon}
       emptyTitle="No vendor-linked expenses."
     />
   );

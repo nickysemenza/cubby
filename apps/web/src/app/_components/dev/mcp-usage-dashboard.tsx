@@ -6,7 +6,7 @@ import type {
   McpUsageWindow,
 } from "@cubby/schemas/telemetry";
 import { ResponsiveBar } from "@nivo/bar";
-import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
@@ -728,7 +728,7 @@ export function McpUsageDashboard() {
 
       {!data.observationComplete && window !== "lifetime" ? (
         <Alert>
-          <AlertTriangle />
+          <WarningIcon />
           <AlertTitle>Incomplete observation window</AlertTitle>
           <AlertDescription>
             {data.observationStartedAt

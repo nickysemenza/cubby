@@ -1,7 +1,7 @@
 import { activityKind, activityRunId } from "@cubby/schemas/activity";
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import { auditChannelSchema } from "@cubby/schemas/context";
-import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
+import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { useQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -243,7 +243,7 @@ function ActivityBody() {
           }
         >
           Devices
-          <ArrowUpRight />
+          <ArrowUpRightIcon />
         </Button>
       </TabsContent>
     </Tabs>

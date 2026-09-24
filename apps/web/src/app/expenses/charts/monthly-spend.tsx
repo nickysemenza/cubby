@@ -1,6 +1,6 @@
 import type { ExpenseMonthlyAggregate } from "@cubby/schemas/project";
 import { ResponsiveBar } from "@nivo/bar";
-import { CalendarDotsIcon as CalendarDays } from "@phosphor-icons/react/dist/csr/CalendarDots";
+import { CalendarDotsIcon } from "@phosphor-icons/react/dist/csr/CalendarDots";
 import { useMemo } from "react";
 
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
@@ -51,7 +51,9 @@ export function MonthlySpend({
   );
 
   if (data.length === 0) {
-    return <ChartEmpty icon={CalendarDays} title="No dated expense data." />;
+    return (
+      <ChartEmpty icon={CalendarDotsIcon} title="No dated expense data." />
+    );
   }
 
   // Thin the month axis to ~12 labels — every bar labeled overlaps once the

@@ -1,4 +1,4 @@
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { Link } from "@tanstack/react-router";
 
 import { Button } from "~/components/ui/button";
@@ -39,7 +39,7 @@ export const QuickActionsMenu = () => {
             />
           }
         >
-          <Plus className="size-4" />
+          <PlusIcon className="size-4" />
         </TooltipTrigger>
         <TooltipContent>
           <p>Quick actions</p>

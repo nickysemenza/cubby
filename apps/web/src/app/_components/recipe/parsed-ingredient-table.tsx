@@ -1,6 +1,6 @@
 import type { WAmount } from "@cubby/recipebridge";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { WarningCircleIcon as AlertCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { Fragment, useMemo } from "react";
 import type { ReadonlyDeep } from "type-fest";
 
@@ -134,7 +134,7 @@ export function ParsedIngredientTable({
                     ) : (
                       <Row as="span" align="center" gap="xs">
                         {isNew && (
-                          <AlertCircle className="size-3 shrink-0 text-warning" />
+                          <WarningCircleIcon className="size-3 shrink-0 text-warning" />
                         )}
                         <span className={isNew ? "text-warning-ink" : ""}>
                           {name}
@@ -148,7 +148,7 @@ export function ParsedIngredientTable({
                             onClick={() => onCreate(parsed.name)}
                             title="Add to your library"
                           >
-                            <Plus className="size-3" />
+                            <PlusIcon className="size-3" />
                           </Button>
                         ) : (
                           isNew && (

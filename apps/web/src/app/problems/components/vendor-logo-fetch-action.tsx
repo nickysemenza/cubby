@@ -1,5 +1,5 @@
 import type { VendorOut } from "@cubby/schemas/vendor";
-import { ImageIcon as ImageDown } from "@phosphor-icons/react/dist/csr/Image";
+import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { vendor as vendorOperations } from "~/app/vendors/vendor.functions";
@@ -40,7 +40,7 @@ export function VendorLogoFetchAction({
       onClick={() => fetchLogo.mutate({ id: vendor.id })}
       disabled={fetchLogo.isPending}
     >
-      <ImageDown className="mr-1 size-3" />
+      <ImageIcon className="mr-1 size-3" />
       {fetchLogo.isPending ? "Fetching…" : "Fetch logo"}
     </Button>
   );

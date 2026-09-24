@@ -1,6 +1,6 @@
-import { ArrowDownIcon as ArrowDown } from "@phosphor-icons/react/dist/csr/ArrowDown";
-import { ArrowUpIcon as ArrowUp } from "@phosphor-icons/react/dist/csr/ArrowUp";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { ArrowDownIcon } from "@phosphor-icons/react/dist/csr/ArrowDown";
+import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import type { RowData } from "@tanstack/react-table";
 
 import { Row, Stack } from "~/components/layout";
@@ -139,9 +139,9 @@ function SortOption({
         )}
       </Stack>
       <Row as="span" align="center" gap="xs" className="shrink-0">
-        {direction === "asc" && <ArrowUp className="size-3.5" />}
-        {direction === "desc" && <ArrowDown className="size-3.5" />}
-        {selected && <Check className="size-3.5" />}
+        {direction === "asc" && <ArrowUpIcon className="size-3.5" />}
+        {direction === "desc" && <ArrowDownIcon className="size-3.5" />}
+        {selected && <CheckIcon className="size-3.5" />}
       </Row>
     </Row>
   );

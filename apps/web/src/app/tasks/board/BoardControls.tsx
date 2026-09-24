@@ -1,5 +1,5 @@
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 
 import { Row } from "~/components/layout";
 import { Input } from "~/components/ui/input";
@@ -69,7 +69,7 @@ export function BoardControls({
         )}
       </Row>
       <div className="relative w-full sm:w-56">
-        <Search className="absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        <MagnifyingGlassIcon className="absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
@@ -84,7 +84,7 @@ export function BoardControls({
             onClick={() => onSearchChange("")}
             className="absolute top-1/2 right-1.5 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
-            <X className="size-3.5" />
+            <XIcon className="size-3.5" />
           </button>
         )}
       </div>

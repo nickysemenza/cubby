@@ -1,4 +1,4 @@
-import { ZodRawShape } from "zod";
+import { ZodRawShape as RawShape } from "zod";
 
 export const responseShape = {};
 export type ResultShape = typeof responseShape;

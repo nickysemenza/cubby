@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { DotsThreeIcon as Ellipsis } from "@phosphor-icons/react/dist/csr/DotsThree";
+import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import type { ReactNode } from "react";
 import { createContext, Fragment, useContext, useMemo, useRef } from "react";
 
@@ -832,7 +832,7 @@ export function EntityActionButtons({
               <Button variant="outline" size="sm" aria-label="More actions" />
             }
           >
-            <Ellipsis />
+            <DotsThreeIcon />
             More actions
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">

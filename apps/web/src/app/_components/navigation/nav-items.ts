@@ -1,20 +1,20 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { BarcodeIcon as ScanBarcode } from "@phosphor-icons/react/dist/csr/Barcode";
-import { DatabaseIcon as Database } from "@phosphor-icons/react/dist/csr/Database";
-import { DotsThreeIcon as MoreHorizontal } from "@phosphor-icons/react/dist/csr/DotsThree";
-import { FileTextIcon as FileText } from "@phosphor-icons/react/dist/csr/FileText";
-import { GearIcon as Settings } from "@phosphor-icons/react/dist/csr/Gear";
-import { HouseIcon as Home } from "@phosphor-icons/react/dist/csr/House";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { NetworkIcon as Network } from "@phosphor-icons/react/dist/csr/Network";
-import { PaletteIcon as Palette } from "@phosphor-icons/react/dist/csr/Palette";
-import { PlugIcon as Plug } from "@phosphor-icons/react/dist/csr/Plug";
-import { PulseIcon as Activity } from "@phosphor-icons/react/dist/csr/Pulse";
-import { QrCodeIcon as QrCode } from "@phosphor-icons/react/dist/csr/QrCode";
-import { RobotIcon as Bot } from "@phosphor-icons/react/dist/csr/Robot";
-import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
-import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
-import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
+import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
+import { DatabaseIcon } from "@phosphor-icons/react/dist/csr/Database";
+import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
+import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
+import { GearIcon } from "@phosphor-icons/react/dist/csr/Gear";
+import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
+import { PaletteIcon } from "@phosphor-icons/react/dist/csr/Palette";
+import { PlugIcon } from "@phosphor-icons/react/dist/csr/Plug";
+import { PulseIcon } from "@phosphor-icons/react/dist/csr/Pulse";
+import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
+import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
+import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { type LinkProps, useLocation } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
@@ -72,7 +72,7 @@ export function navItemLinkProps(item: NavItem, active: boolean) {
 // desktop tree (top-level desktop + bottom tabs / public bar). Everything else
 // is inlined where it's used.
 /** Home is a direct workspace destination rather than a grouped leaf. */
-export const homeNavItem: NavItem = { to: "/", label: "Home", icon: Home };
+export const homeNavItem: NavItem = { to: "/", label: "Home", icon: HouseIcon };
 const inventory: NavItem = {
   to: "/inventory",
   entity: "inventory",
@@ -82,12 +82,12 @@ const inventory: NavItem = {
 const scan: NavItem = {
   to: "/scan",
   label: "Scan",
-  icon: ScanBarcode,
+  icon: BarcodeIcon,
 };
 export const settingsNavItem: NavItem = {
   to: "/settings",
   label: "Settings",
-  icon: Settings,
+  icon: GearIcon,
 };
 
 /** Sidebar groups omit Settings because the workspace footer owns it. */
@@ -106,12 +106,12 @@ export function getSidebarGroupItems(group: NavGroup): NavItem[] {
 const activityDirectoryNavItem: NavItem = {
   to: "/activities",
   label: "Activities",
-  icon: Activity,
+  icon: PulseIcon,
 };
 const recordDirectoryNavItem: NavItem = {
   to: "/records",
   label: "Records",
-  icon: Database,
+  icon: DatabaseIcon,
 };
 
 export const desktopNav: NavNode[] = [
@@ -138,30 +138,30 @@ export const desktopNav: NavNode[] = [
   },
   {
     label: "More",
-    icon: MoreHorizontal,
+    icon: DotsThreeIcon,
     tier: "utility",
     children: [
       scan,
-      { to: "/labels", label: "Labels", icon: QrCode },
-      { to: "/problems", label: "Problems", icon: AlertTriangle },
-      { to: "/activity", label: "Activity", icon: Activity },
-      { to: "/collections", label: "Collections", icon: Palette },
-      { to: "/entities", label: "Entity explorer", icon: Network },
-      { to: "/graph", label: "Graph", icon: Network },
-      { to: "/search", label: "Search", icon: Search },
+      { to: "/labels", label: "Labels", icon: QrCodeIcon },
+      { to: "/problems", label: "Problems", icon: WarningIcon },
+      { to: "/activity", label: "Activity", icon: PulseIcon },
+      { to: "/collections", label: "Collections", icon: PaletteIcon },
+      { to: "/entities", label: "Entity explorer", icon: NetworkIcon },
+      { to: "/graph", label: "Graph", icon: NetworkIcon },
+      { to: "/search", label: "Search", icon: MagnifyingGlassIcon },
       settingsNavItem,
     ],
   },
   {
     label: "Dev",
-    icon: Wrench,
+    icon: WrenchIcon,
     tier: "developer",
     children: [
-      { to: "/design", label: "Design", icon: Palette },
-      { to: "/ai-smoke-test", label: "AI smoke test", icon: Sparkles },
-      { to: "/ai-usage", label: "AI usage", icon: Bot },
-      { to: "/search/debug", label: "Search debug", icon: Search },
-      { to: "/mcp", label: "MCP tools", icon: Plug },
+      { to: "/design", label: "Design", icon: PaletteIcon },
+      { to: "/ai-smoke-test", label: "AI smoke test", icon: SparkleIcon },
+      { to: "/ai-usage", label: "AI usage", icon: RobotIcon },
+      { to: "/search/debug", label: "Search debug", icon: MagnifyingGlassIcon },
+      { to: "/mcp", label: "MCP tools", icon: PlugIcon },
     ],
   },
 ];
@@ -225,10 +225,10 @@ export const workspaceUtilitySections: NavSection[] = [
 
 /** Four persistent task destinations; the More trigger is the fifth tab. */
 export const bottomNavItems: NavItem[] = [
-  { to: "/", label: "Today", icon: Home },
+  { to: "/", label: "Today", icon: HouseIcon },
   inventory,
   scan,
-  { to: "/search", label: "Search", icon: Search },
+  { to: "/search", label: "Search", icon: MagnifyingGlassIcon },
 ];
 
 /** A labeled group of leaves in the mobile "More" sheet. */
@@ -237,7 +237,7 @@ export type NavSection = { title: string; items: NavItem[] };
 /** Signed-out bar / bottom tabs — always flat leaves (no dropdowns). */
 export const publicNavItems: NavItem[] = [
   homeNavItem,
-  { to: "/docs", label: "Docs", icon: FileText },
+  { to: "/docs", label: "Docs", icon: FileTextIcon },
 ];
 
 /**

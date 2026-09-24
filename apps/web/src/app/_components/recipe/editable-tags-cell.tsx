@@ -1,7 +1,7 @@
 "use client";
 
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type React from "react";
 import { useCallback, useState } from "react";
 
@@ -150,7 +150,7 @@ function EditableTagsEditor({
         onClick={() => void handleSave()}
         disabled={isPending}
       >
-        <Check className="size-3.5" />
+        <CheckIcon className="size-3.5" />
       </Button>
       <Button
         size="icon"
@@ -158,7 +158,7 @@ function EditableTagsEditor({
         onClick={onCancel}
         disabled={isPending}
       >
-        <X className="size-3.5" />
+        <XIcon className="size-3.5" />
       </Button>
     </div>
   );

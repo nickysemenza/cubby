@@ -4,7 +4,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { ProductPickerItemOut } from "@cubby/schemas/product";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import type { RowSelectionState, Updater } from "@tanstack/react-table";
@@ -190,7 +190,7 @@ export function LinkProductsDialog({
           </DialogDescription>
         </DialogHeader>
         <Row align="center" gap="sm">
-          <Search
+          <MagnifyingGlassIcon
             className="size-3.5 shrink-0 text-muted-foreground"
             aria-hidden
           />

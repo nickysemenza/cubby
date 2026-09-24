@@ -1,5 +1,5 @@
 import { cn } from "~/lib/utils";
-import { CircleNotchIcon as Loader2Icon } from "@phosphor-icons/react/dist/csr/CircleNotch";
+import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
 
 const sizeClasses = {
   sm: "size-3",
@@ -16,7 +16,7 @@ interface SpinnerProps extends Omit<React.ComponentProps<"svg">, "size"> {
 
 function Spinner({ className, size = "default", ...props }: SpinnerProps) {
   return (
-    <Loader2Icon
+    <CircleNotchIcon
       role="status"
       aria-label="Loading"
       className={cn("animate-spin", sizeClasses[size], className)}

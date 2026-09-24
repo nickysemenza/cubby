@@ -3,7 +3,7 @@ import {
   preferredImageUrl,
   type ImageRepresentations,
 } from "@cubby/schemas/image-summary";
-import { ImageBrokenIcon as ImageOff } from "@phosphor-icons/react/dist/csr/ImageBroken";
+import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken";
 import type { ReactNode } from "react";
 
 import { Image } from "~/components/ui/image";
@@ -63,7 +63,10 @@ export function EntityCover({
     (entity ? (
       <EntityIcon entity={entity} colored className="size-4" />
     ) : (
-      <ImageOff className="size-4 text-muted-foreground/40" aria-hidden />
+      <ImageBrokenIcon
+        className="size-4 text-muted-foreground/40"
+        aria-hidden
+      />
     ));
 
   if (images.length === 0 && placeholder === "none") return null;

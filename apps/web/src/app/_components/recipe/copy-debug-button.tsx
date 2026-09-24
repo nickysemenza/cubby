@@ -1,5 +1,5 @@
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
-import { ClipboardIcon as ClipboardCopy } from "@phosphor-icons/react/dist/csr/Clipboard";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { ClipboardIcon } from "@phosphor-icons/react/dist/csr/Clipboard";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -46,9 +46,9 @@ export function CopyDebugButton({
       }}
     >
       {copied ? (
-        <Check className="size-3" />
+        <CheckIcon className="size-3" />
       ) : (
-        <ClipboardCopy className="size-3" />
+        <ClipboardIcon className="size-3" />
       )}
       {label}
     </Button>

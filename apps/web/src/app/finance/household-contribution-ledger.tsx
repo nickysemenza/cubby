@@ -1,8 +1,8 @@
 import type { HouseholdContributionLedgerOut } from "@cubby/schemas/household-contribution";
-import { ArrowsLeftRightIcon as ArrowRightLeft } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
-import { CheckCircleIcon as CircleCheck } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
-import { XCircleIcon as CircleX } from "@phosphor-icons/react/dist/csr/XCircle";
+import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
+import { XCircleIcon } from "@phosphor-icons/react/dist/csr/XCircle";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useId, useMemo, useState } from "react";
@@ -37,9 +37,9 @@ import { ledgerPartyKindOptions } from "./ledger-party-options";
 
 function CheckMark({ ok }: { ok: boolean }) {
   return ok ? (
-    <CircleCheck className="size-3.5 text-positive" aria-hidden="true" />
+    <CheckCircleIcon className="size-3.5 text-positive" aria-hidden="true" />
   ) : (
-    <CircleX className="size-3.5 text-warning-ink" aria-hidden="true" />
+    <XCircleIcon className="size-3.5 text-warning-ink" aria-hidden="true" />
   );
 }
 
@@ -214,7 +214,7 @@ export function HouseholdContributionLedgerReport({
         </div>
         {data.gaps.length === 0 ? (
           <Alert>
-            <CircleCheck className="size-3.5 text-positive" />
+            <CheckCircleIcon className="size-3.5 text-positive" />
             <AlertTitle>Nothing needs reconciliation</AlertTitle>
             <AlertDescription>
               Every recorded gap category is clear as of {data.asOf}.
@@ -234,7 +234,7 @@ export function HouseholdContributionLedgerReport({
                 <TableRow key={`${gap.code}:${gap.targetIds.join(":")}`}>
                   <TableCell>
                     <Row align="center" gap="xs">
-                      <AlertTriangle className="size-3.5 shrink-0 text-warning-ink" />
+                      <WarningIcon className="size-3.5 shrink-0 text-warning-ink" />
                       {contributionGapLabels[gap.code]}
                     </Row>
                   </TableCell>
@@ -288,7 +288,7 @@ export function HouseholdContributionLedger() {
           onClick={() => setAsOf(null)}
           disabled={asOf === null}
         >
-          <ArrowRightLeft className="size-3" />
+          <ArrowsLeftRightIcon className="size-3" />
           Today
         </Button>
         {data && (

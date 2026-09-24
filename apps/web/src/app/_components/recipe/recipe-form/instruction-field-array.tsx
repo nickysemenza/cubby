@@ -1,4 +1,4 @@
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import type { FC } from "react";
 import { type UseFormReturn, useFieldArray } from "react-hook-form";
 
@@ -60,7 +60,7 @@ export const InstructionFieldArray: FC<InstructionFieldArrayProps> = ({
           size="sm"
           onClick={() => append({ instruction: "" })}
         >
-          <Plus className="mr-2 size-4" />
+          <PlusIcon className="mr-2 size-4" />
           Add Instruction
         </Button>
       </Row>

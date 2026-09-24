@@ -2,13 +2,13 @@ import type {
   ProjectAttentionItem,
   ProjectAttentionType,
 } from "@cubby/schemas/project";
-import { CalendarCheckIcon as CalendarClock } from "@phosphor-icons/react/dist/csr/CalendarCheck";
-import { ClockIcon as Clock } from "@phosphor-icons/react/dist/csr/Clock";
-import { CurrencyDollarIcon as DollarSign } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
-import { ProhibitIcon as Ban } from "@phosphor-icons/react/dist/csr/Prohibit";
-import { RulerIcon as Ruler } from "@phosphor-icons/react/dist/csr/Ruler";
-import { TagIcon as Tag } from "@phosphor-icons/react/dist/csr/Tag";
-import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
+import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
+import { CurrencyDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
+import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
+import { RulerIcon } from "@phosphor-icons/react/dist/csr/Ruler";
+import { TagIcon } from "@phosphor-icons/react/dist/csr/Tag";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
 
@@ -33,45 +33,45 @@ const ATTENTION_GROUPS: Array<{
 }> = [
   {
     type: "overdue_task",
-    icon: CalendarClock,
+    icon: CalendarCheckIcon,
     iconClassName: "size-3.5 text-destructive",
     title: (n) => `${n} overdue task${n !== 1 ? "s" : ""}`,
   },
   {
     type: "blocked_work",
-    icon: Ban,
+    icon: ProhibitIcon,
     iconClassName: "size-3.5 text-warning",
     title: (n) =>
       `${n} project${n !== 1 ? "s" : ""} blocked with no next action`,
   },
   {
     type: "stalled_project",
-    icon: AlertTriangle,
+    icon: WarningIcon,
     iconClassName: "size-3.5 text-warning",
     title: (n) =>
       `${n} stalled project${n !== 1 ? "s" : ""} (no activity in 30 days)`,
   },
   {
     type: "past_due_planned_expense",
-    icon: Clock,
+    icon: ClockIcon,
     iconClassName: "size-3.5 text-warning",
     title: (n) => `${n} planned expense${n !== 1 ? "s" : ""} past due`,
   },
   {
     type: "missing_budget",
-    icon: DollarSign,
+    icon: CurrencyDollarIcon,
     iconClassName: "size-3.5 text-warning",
     title: (n) => `${n} project${n !== 1 ? "s" : ""} missing a cost estimate`,
   },
   {
     type: "unclassified_expense",
-    icon: Tag,
+    icon: TagIcon,
     iconClassName: "size-3.5 text-muted-foreground",
     title: (n) => `${n} unclassified expense${n !== 1 ? "s" : ""}`,
   },
   {
     type: "date_window_drift",
-    icon: Ruler,
+    icon: RulerIcon,
     iconClassName: "size-3.5 text-muted-foreground",
     title: (n) => `${n} project date window${n !== 1 ? "s" : ""} hiding work`,
   },
@@ -121,7 +121,7 @@ export function NeedsAttention({ items }: { items: ProjectAttentionItem[] }) {
         gap="sm"
         className="text-sm font-medium text-warning-ink"
       >
-        <AlertTriangle className="size-4" />
+        <WarningIcon className="size-4" />
         Needs Attention ({items.length})
       </Row>
 

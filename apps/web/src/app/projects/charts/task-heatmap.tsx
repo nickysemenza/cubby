@@ -1,5 +1,5 @@
 import type { TaskOut } from "@cubby/schemas/project";
-import { CalendarCheckIcon as CalendarClock } from "@phosphor-icons/react/dist/csr/CalendarCheck";
+import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
@@ -59,7 +59,9 @@ export function TaskHeatmap({ tasks }: { tasks: TaskOut[] }) {
   }, [tasks]);
 
   if (data.length === 0) {
-    return <ChartEmpty icon={CalendarClock} title="No tasks with due dates." />;
+    return (
+      <ChartEmpty icon={CalendarCheckIcon} title="No tasks with due dates." />
+    );
   }
 
   return (

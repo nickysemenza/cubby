@@ -1,5 +1,5 @@
 import type { IngredientUsageRow } from "@cubby/schemas/ingredient-usage";
-import { CarrotIcon as Carrot } from "@phosphor-icons/react/dist/csr/Carrot";
+import { CarrotIcon } from "@phosphor-icons/react/dist/csr/Carrot";
 
 import { RankedBarBreakdown } from "~/app/_components/charts/kit";
 
@@ -41,7 +41,7 @@ export function IngredientUsageChart({
       formatValue={(value) => `${value} recipe${value === 1 ? "" : "s"}`}
       formatLabel={(value) => `${value}`}
       axisBottomFormat={(value) => `${value}`}
-      emptyIcon={Carrot}
+      emptyIcon={CarrotIcon}
       emptyTitle="No ingredient usage yet."
       summary={summary}
     />

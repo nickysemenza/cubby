@@ -6,16 +6,16 @@ import type {
   ProductQuantitySummariesOut,
   ProductQuantitySummaryOut,
 } from "@cubby/schemas/product";
-import { ArrowsLeftRightIcon as ArrowRightLeft } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
-import { ArrowUUpLeftIcon as Undo2 } from "@phosphor-icons/react/dist/csr/ArrowUUpLeft";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
-import { FolderSimplePlusIcon as FolderInput } from "@phosphor-icons/react/dist/csr/FolderSimplePlus";
-import { MinusIcon as Minus } from "@phosphor-icons/react/dist/csr/Minus";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { SkipForwardIcon as SkipForward } from "@phosphor-icons/react/dist/csr/SkipForward";
-import { SlidersHorizontalIcon as SlidersHorizontal } from "@phosphor-icons/react/dist/csr/SlidersHorizontal";
-import { StackPlusIcon as PackagePlus } from "@phosphor-icons/react/dist/csr/StackPlus";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
+import { ArrowUUpLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowUUpLeft";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { FolderSimplePlusIcon } from "@phosphor-icons/react/dist/csr/FolderSimplePlus";
+import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { SkipForwardIcon } from "@phosphor-icons/react/dist/csr/SkipForward";
+import { SlidersHorizontalIcon } from "@phosphor-icons/react/dist/csr/SlidersHorizontal";
+import { StackPlusIcon } from "@phosphor-icons/react/dist/csr/StackPlus";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { match } from "ts-pattern";
@@ -160,7 +160,7 @@ export function LocationReviewPane({
         className="min-h-12 w-full justify-start px-4"
         onClick={() => setAddOpen(true)}
       >
-        <PackagePlus />
+        <StackPlusIcon />
         Add something here
         {unknownCount > 0 && (
           <Badge variant="outline" className="ml-auto">
@@ -207,7 +207,7 @@ export function LocationReviewPane({
             disabled={locationCompleted || donePending}
             onClick={onDone}
           >
-            {donePending ? <Spinner /> : <Check className="size-4" />}
+            {donePending ? <Spinner /> : <CheckIcon className="size-4" />}
             {locationCompleted
               ? "Saved this pass"
               : unresolvedCount > 0
@@ -224,7 +224,7 @@ export function LocationReviewPane({
               className="min-h-12 shrink-0"
               onClick={onToggleSkip}
             >
-              {locationSkipped ? <Undo2 /> : <SkipForward />}
+              {locationSkipped ? <ArrowUUpLeftIcon /> : <SkipForwardIcon />}
               {locationSkipped ? "Unskip" : "Skip"}
             </Button>
           )}
@@ -461,7 +461,7 @@ function ExpectedItemReviewRow({
         disabled={completed}
         aria-label={`Change ${item.product.name}`}
       >
-        <SlidersHorizontal />
+        <SlidersHorizontalIcon />
         <span className="hidden sm:inline">Change</span>
       </Button>
 
@@ -492,7 +492,7 @@ function ExpectedItemReviewRow({
                       onClick={() => bump(-1)}
                       aria-label="Decrease quantity"
                     >
-                      <Minus className="size-4" />
+                      <MinusIcon className="size-4" />
                     </Button>
                     <Input
                       inputMode="numeric"
@@ -516,7 +516,7 @@ function ExpectedItemReviewRow({
                       onClick={() => bump(1)}
                       aria-label="Increase quantity"
                     >
-                      <Plus className="size-4" />
+                      <PlusIcon className="size-4" />
                     </Button>
                   </Row>
                 </Row>
@@ -532,7 +532,7 @@ function ExpectedItemReviewRow({
                     setActionsOpen(false);
                   }}
                 >
-                  <Undo2 />
+                  <ArrowUUpLeftIcon />
                   {match(resolution)
                     .with({ kind: "adjust" }, () => "Undo count change")
                     .with({ kind: "remove" }, () => "Keep as present")
@@ -552,7 +552,7 @@ function ExpectedItemReviewRow({
                     setActionsOpen(false);
                   }}
                 >
-                  <ArrowRightLeft />
+                  <ArrowsLeftRightIcon />
                   Move to Unknown
                 </Button>
               )}
@@ -565,7 +565,7 @@ function ExpectedItemReviewRow({
                   setActionsOpen(false);
                 }}
               >
-                <FolderInput />
+                <FolderSimplePlusIcon />
                 Move somewhere else
               </Button>
               <Button
@@ -577,7 +577,7 @@ function ExpectedItemReviewRow({
                   setActionsOpen(false);
                 }}
               >
-                <X />
+                <XIcon />
                 Remove from inventory
               </Button>
             </Stack>
@@ -643,11 +643,11 @@ export function ReviewStateMark({
       aria-hidden="true"
     >
       {isRemoving ? (
-        <X />
+        <XIcon />
       ) : isRelocating ? (
-        <ArrowRightLeft />
+        <ArrowsLeftRightIcon />
       ) : present ? (
-        <Check />
+        <CheckIcon />
       ) : null}
     </span>
   );

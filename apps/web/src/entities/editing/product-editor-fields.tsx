@@ -13,8 +13,8 @@ import {
 } from "@cubby/shared/collection-tag";
 import { redundantTokens } from "@cubby/shared/redundant-tokens";
 import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda-schemas";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { type MutableRefObject, useMemo, useRef, useState } from "react";
 import {
   type FieldValues,
@@ -339,7 +339,11 @@ export function ProductUpcField({
           onClick={() => void handleLookup()}
           disabled={isLookingUp || !upcValue}
         >
-          {isLookingUp ? <Spinner /> : <Search className="size-4" />}
+          {isLookingUp ? (
+            <Spinner />
+          ) : (
+            <MagnifyingGlassIcon className="size-4" />
+          )}
           <span className="ml-1">Lookup</span>
         </Button>
       </Row>
@@ -465,7 +469,7 @@ export function ProductLabelNutritionField({
           />
         }
       >
-        <ChevronRight
+        <CaretRightIcon
           className={`size-4 transition-transform ${open ? "rotate-90" : ""}`}
           aria-hidden
         />

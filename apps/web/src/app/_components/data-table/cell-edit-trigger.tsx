@@ -1,6 +1,6 @@
 "use client";
 
-import { PencilIcon as Pencil } from "@phosphor-icons/react/dist/csr/Pencil";
+import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import * as React from "react";
 
 import { useHydrationGate } from "~/hooks/useHydrated";
@@ -180,7 +180,7 @@ export function CellEditTrigger<TSaved>({
             aria-hidden
             className="pointer-events-none absolute inset-y-0 right-0.5 my-auto flex size-5 items-center justify-center rounded-sm bg-muted opacity-0 shadow-[-6px_0_6px_var(--muted)] transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 pointer-coarse:static pointer-coarse:bg-transparent pointer-coarse:opacity-100 pointer-coarse:shadow-none"
           >
-            <Pencil className="size-3 text-muted-foreground" />
+            <PencilIcon className="size-3 text-muted-foreground" />
           </span>
         </>
       )}

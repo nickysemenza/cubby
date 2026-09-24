@@ -1,10 +1,10 @@
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CaretUpIcon as ChevronUp } from "@phosphor-icons/react/dist/csr/CaretUp";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { TrashIcon as Trash } from "@phosphor-icons/react/dist/csr/Trash";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useMutation } from "@tanstack/react-query";
 import { type FC, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -505,7 +505,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                       }
                       disabled={sectionIndex === 0}
                     >
-                      <ChevronUp className="size-4" />
+                      <CaretUpIcon className="size-4" />
                     </Button>
                     <Button
                       type="button"
@@ -519,7 +519,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                       }
                       disabled={sectionIndex === sectionFields.length - 1}
                     >
-                      <ChevronDown className="size-4" />
+                      <CaretDownIcon className="size-4" />
                     </Button>
                     <Button
                       type="button"
@@ -528,7 +528,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                       onClick={() => removeSection(sectionIndex)}
                       disabled={sectionFields.length === 1}
                     >
-                      <Trash className="size-4" />
+                      <TrashIcon className="size-4" />
                     </Button>
                   </Row>
                 </Row>
@@ -576,7 +576,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                   })
                 }
               >
-                <Plus className="mr-2 size-4" />
+                <PlusIcon className="mr-2 size-4" />
                 Add Section
               </Button>
             </Row>

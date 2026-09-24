@@ -3,8 +3,8 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
-import { ArrowBendDownRightIcon as CornerDownRight } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { ArrowBendDownRightIcon } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { useRef } from "react";
 
 import { Row, Stack } from "~/components/layout";
@@ -85,7 +85,7 @@ export function ArrangeTree({
           />
           {ancestors.map((node, i) => (
             <Row key={node.id} align="center" gap="xs">
-              <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+              <CaretRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
               <BreadcrumbSegment
                 label={node.name}
                 locationId={node.id}
@@ -235,7 +235,7 @@ function CollapsedRow({ node, roots, depth, onDrill }: CollapsedRowProps) {
       )}
       style={{ paddingLeft: `${depth * 1.25 + 1.25}rem` }}
     >
-      <CornerDownRight className="size-3.5 shrink-0" />
+      <ArrowBendDownRightIcon className="size-3.5 shrink-0" />
       <span>{count} more inside</span>
     </Row>
   );

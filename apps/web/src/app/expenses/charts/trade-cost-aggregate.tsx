@@ -4,7 +4,7 @@ import {
   type ExpenseTradeCostAggregate,
   type Trade,
 } from "@cubby/schemas/project";
-import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/dist/csr/ShoppingBag";
+import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { useMemo } from "react";
 
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
@@ -85,7 +85,7 @@ export function TradeBarsAggregate({
   }, [tradeCostMatrix]);
 
   if (rows.length === 0) {
-    return <ChartEmpty icon={ShoppingBag} title="No expense data." />;
+    return <ChartEmpty icon={ShoppingBagIcon} title="No expense data." />;
   }
 
   const tradeLabel = (value: string) => {
@@ -175,7 +175,7 @@ export function TradeCostMatrixAggregate({
     activeCell?.trade === trade && activeCell.costType === costType;
 
   if (rows.length === 0) {
-    return <ChartEmpty icon={ShoppingBag} title="No expense data." />;
+    return <ChartEmpty icon={ShoppingBagIcon} title="No expense data." />;
   }
 
   const interactiveCell =

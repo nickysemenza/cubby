@@ -1,5 +1,5 @@
-import { GridNineIcon as Grid3x3 } from "@phosphor-icons/react/dist/csr/GridNine";
-import { ListIcon as List } from "@phosphor-icons/react/dist/csr/List";
+import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
+import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
 import {
   createFileRoute,
   stripSearchParams,
@@ -22,8 +22,8 @@ import {
 import { pageTitle } from "~/lib/page-title";
 
 const VIEW_OPTIONS: ViewSwitcherOption<ShoppingListView>[] = [
-  { value: "list", label: "List", icon: List },
-  { value: "matrix", label: "Matrix", icon: Grid3x3 },
+  { value: "list", label: "List", icon: ListIcon },
+  { value: "matrix", label: "Matrix", icon: GridNineIcon },
 ];
 
 export const Route = createFileRoute("/_authenticated/meals/shopping-list")({

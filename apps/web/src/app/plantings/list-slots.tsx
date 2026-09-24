@@ -1,6 +1,6 @@
 import type { ListSlotId } from "@cubby/schemas/entity-manifest";
-import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
@@ -68,7 +68,7 @@ function PlantingsScheduleSlot({ search, navigate }: ListSlotProps) {
             disabled={year <= 2000}
             onClick={() => navigate({ year: year - 1 })}
           >
-            <ChevronLeft className="size-3.5" />
+            <CaretLeftIcon className="size-3.5" />
           </Button>
           <span className="min-w-12 text-center text-sm tabular-nums">
             {year}
@@ -81,7 +81,7 @@ function PlantingsScheduleSlot({ search, navigate }: ListSlotProps) {
             disabled={year >= 2100}
             onClick={() => navigate({ year: year + 1 })}
           >
-            <ChevronRight className="size-3.5" />
+            <CaretRightIcon className="size-3.5" />
           </Button>
           <Button
             variant="outline"

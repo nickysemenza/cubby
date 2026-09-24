@@ -1,4 +1,4 @@
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { ReactNode } from "react";
 import {
   Controller,
@@ -87,7 +87,7 @@ export function EntityMultiValueField<
                             )
                           }
                         >
-                          <X />
+                          <XIcon />
                         </Button>
                       </Badge>
                     ))}

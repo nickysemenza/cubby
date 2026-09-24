@@ -1,6 +1,6 @@
 import { Combobox as ComboboxPrimitive } from "@base-ui/react";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
-import { CaretDownIcon as ChevronDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import * as React from "react";
 
@@ -193,7 +193,7 @@ export function FilterableCombobox({
           aria-label={`Open ${placeholder ?? "options"}`}
           className="-mr-2 flex h-full min-w-7 shrink-0 items-center justify-center"
         >
-          <ChevronDownIcon
+          <CaretDownIcon
             className={cn(
               "size-3.5 text-muted-foreground transition-transform duration-150",
               open && "rotate-180",

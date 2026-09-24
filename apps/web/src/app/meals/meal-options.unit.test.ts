@@ -22,6 +22,10 @@ describe("meal glyphs", () => {
     expect(mealTypeValues.map((v) => mealTypeIcon(v))).not.toContain(unslotted);
   });
 
+  it("distinguishes leftovers from the generic unslotted meal", () => {
+    expect(mealKindIcon("leftovers")).not.toBe(mealTypeIcon(null));
+  });
+
   it("marks only the non-cooked kinds", () => {
     // `cooked` is nearly every meal; a glyph on all of them would distinguish
     // nothing. Same rule as the badge tone and the ICS description.

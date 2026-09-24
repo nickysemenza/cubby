@@ -1,5 +1,5 @@
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import {
   type CSSProperties,
   type KeyboardEvent,
@@ -364,9 +364,9 @@ export function ScheduleGrid({
                   className="-m-2 inline-flex size-11 shrink-0 items-center justify-center"
                 >
                   {row.expanded ? (
-                    <ChevronDown className="size-4" />
+                    <CaretDownIcon className="size-4" />
                   ) : (
-                    <ChevronRight className="size-4" />
+                    <CaretRightIcon className="size-4" />
                   )}
                 </button>
               )}
@@ -522,9 +522,9 @@ export function ScheduleGrid({
                       className="inline-flex size-7 shrink-0 items-center justify-center rounded-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     >
                       {row.expanded ? (
-                        <ChevronDown className="size-3.5" />
+                        <CaretDownIcon className="size-3.5" />
                       ) : (
-                        <ChevronRight className="size-3.5" />
+                        <CaretRightIcon className="size-3.5" />
                       )}
                     </button>
                   ) : (

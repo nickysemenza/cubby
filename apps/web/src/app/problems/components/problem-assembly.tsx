@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ProblemsCoverage } from "@cubby/schemas/problems";
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { FunnelIcon as ListFilter } from "@phosphor-icons/react/dist/csr/Funnel";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Fragment } from "react";
 
 import { Button, buttonVariants } from "~/components/ui/button";
@@ -213,7 +213,7 @@ export function ProblemAssembly({
               "ml-auto",
             )}
           >
-            <ListFilter className="mr-1 size-3" />
+            <FunnelIcon className="mr-1 size-3" />
             Open {onlyLocation.count}{" "}
             {entityPluralLabel(onlyLocation.location.entity).toLowerCase()}
           </a>
@@ -227,7 +227,7 @@ export function ProblemAssembly({
             </span>
           )}
         <CollapsibleTrigger render={<Button size="xs" variant="ghost" />}>
-          How it works <ChevronDown className="ml-1 size-3" />
+          How it works <CaretDownIcon className="ml-1 size-3" />
         </CollapsibleTrigger>
       </div>
       <CollapsibleContent>
@@ -271,7 +271,7 @@ export function ProblemAssembly({
                         "ml-1",
                       )}
                     >
-                      <ListFilter className="mr-1 size-3" />
+                      <FunnelIcon className="mr-1 size-3" />
                       Open {entry.count}{" "}
                       {entityPluralLabel(entry.location.entity).toLowerCase()}
                     </a>

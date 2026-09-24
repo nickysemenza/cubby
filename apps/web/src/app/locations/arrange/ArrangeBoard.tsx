@@ -1,7 +1,7 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { HouseIcon as Home } from "@phosphor-icons/react/dist/csr/House";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
 import { useEffect, useMemo, useRef } from "react";
 
 import { cn } from "~/lib/utils";
@@ -156,14 +156,14 @@ function BoardBreadcrumb({ roots, home, path, onJump }: BoardBreadcrumbProps) {
         roots={roots}
         locationId={home?.id ?? null}
         label={home?.name ?? "Home"}
-        icon={<Home className="size-3.5" />}
+        icon={<HouseIcon className="size-3.5" />}
         onClick={() => onJump(0)}
       />
       {path.map((id, i) => {
         const node = findNode(roots, id);
         return (
           <span key={id} className="flex items-center gap-1">
-            <ChevronRight className="size-3.5 text-muted-foreground" />
+            <CaretRightIcon className="size-3.5 text-muted-foreground" />
             <BreadcrumbCrumb
               roots={roots}
               locationId={id}

@@ -1,7 +1,7 @@
-import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
-import { DatabaseIcon as Database } from "@phosphor-icons/react/dist/csr/Database";
-import { FlowArrowIcon as Workflow } from "@phosphor-icons/react/dist/csr/FlowArrow";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
+import { DatabaseIcon } from "@phosphor-icons/react/dist/csr/Database";
+import { FlowArrowIcon } from "@phosphor-icons/react/dist/csr/FlowArrow";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { Link } from "@tanstack/react-router";
 import { useId } from "react";
 
@@ -65,7 +65,7 @@ export function ApplicationDirectory({
               />
             }
           >
-            <Workflow className="size-4" aria-hidden /> Activities
+            <FlowArrowIcon className="size-4" aria-hidden /> Activities
           </Button>
           <Button
             variant={mode === "records" ? "secondary" : "ghost"}
@@ -77,7 +77,7 @@ export function ApplicationDirectory({
               />
             }
           >
-            <Database className="size-4" aria-hidden /> Records
+            <DatabaseIcon className="size-4" aria-hidden /> Records
           </Button>
         </Row>
         <p className="max-w-prose text-sm text-muted-foreground">
@@ -90,7 +90,7 @@ export function ApplicationDirectory({
             {mode === "activities" ? "Find an activity" : "Find a record type"}
           </label>
           <div className="relative">
-            <Search
+            <MagnifyingGlassIcon
               className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
               aria-hidden
             />
@@ -207,7 +207,7 @@ function DirectoryLink({
             {destination.description}
           </span>
         </span>
-        <ArrowUpRight
+        <ArrowUpRightIcon
           className="mt-0.5 size-4 shrink-0 text-muted-foreground"
           aria-hidden
         />

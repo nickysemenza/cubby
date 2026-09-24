@@ -1,9 +1,9 @@
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import type { Entity } from "@cubby/schemas/entity";
-import { BookmarkIcon as Bookmark } from "@phosphor-icons/react/dist/csr/Bookmark";
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { GearSixIcon as Settings2 } from "@phosphor-icons/react/dist/csr/GearSix";
+import { BookmarkIcon } from "@phosphor-icons/react/dist/csr/Bookmark";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
 import type { RowData } from "@tanstack/react-table";
 import { type ReactNode, useState } from "react";
 import { createPortal } from "react-dom";
@@ -90,9 +90,9 @@ function SavedViewsSubmenu<TData extends RowData>({
   return (
     <MenuPrimitive.SubmenuRoot>
       <MenuPrimitive.SubmenuTrigger className={submenuTriggerClass}>
-        <Bookmark />
+        <BookmarkIcon />
         Saved views
-        <ChevronRight className="ml-auto" />
+        <CaretRightIcon className="ml-auto" />
       </MenuPrimitive.SubmenuTrigger>
       <MenuPrimitive.Portal>
         <MenuPrimitive.Positioner
@@ -151,7 +151,7 @@ function ActionsMenu<TData extends RowData>({
           }
         >
           Actions
-          <ChevronDown />
+          <CaretDownIcon />
           {isCustomized && (
             <span
               aria-hidden
@@ -162,7 +162,7 @@ function ActionsMenu<TData extends RowData>({
         <DropdownMenuContent align="end" className="w-56">
           {showColumns && (
             <DropdownMenuItem onClick={() => setColumnsOpen(true)}>
-              <Settings2 />
+              <GearSixIcon />
               Columns…
             </DropdownMenuItem>
           )}

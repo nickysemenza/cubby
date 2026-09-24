@@ -2,7 +2,7 @@ import {
   projectStatusSchema,
   projectStatusValues,
 } from "@cubby/schemas/project";
-import { FunnelIcon as ListFilter } from "@phosphor-icons/react/dist/csr/Funnel";
+import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { type ReactNode, useId, useState } from "react";
 
 import { Row, Stack } from "~/components/layout";
@@ -52,7 +52,7 @@ export function DashboardFilters(props: DashboardFiltersProps) {
         onClick={() => setOpen(true)}
         aria-label={count > 0 ? `Filters, ${count} active` : "Filter projects"}
       >
-        <ListFilter />
+        <FunnelIcon />
         {count > 0 ? `Filters (${count})` : "Filter"}
       </Button>
 

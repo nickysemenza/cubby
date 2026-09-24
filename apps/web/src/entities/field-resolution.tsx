@@ -6,11 +6,11 @@ import {
   type FieldResolution,
 } from "@cubby/schemas/field-resolution";
 import { parseShortcode } from "@cubby/shared";
-import { ArrowBendDownRightIcon as CornerDownRight } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
-import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { ChartPieIcon as PieChart } from "@phosphor-icons/react/dist/csr/ChartPie";
-import { ProhibitIcon as CircleSlash } from "@phosphor-icons/react/dist/csr/Prohibit";
-import { WarningIcon as TriangleAlert } from "@phosphor-icons/react/dist/csr/Warning";
+import { ArrowBendDownRightIcon } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { ChartPieIcon } from "@phosphor-icons/react/dist/csr/ChartPie";
+import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { z } from "zod";
@@ -86,7 +86,7 @@ export function useRedundantOverrideBulkAction<TData extends { id: string }>(
     return {
       id: "use-inherited-values",
       label: "Use inherited values",
-      icon: <RotateCcw />,
+      icon: <ArrowCounterClockwiseIcon />,
       availability: (rows) =>
         rows.some((row) => redundantResetPatch(entity, row.original))
           ? { status: "available" }
@@ -156,16 +156,16 @@ function resolutionLabel(resolution: FieldResolution): string {
 
 function resolutionIcon(resolution: FieldResolution) {
   if (resolution.mode === "explicit" && resolution.matchesFallback)
-    return TriangleAlert;
+    return WarningIcon;
   switch (resolution.mode) {
     case "inherit":
-      return CornerDownRight;
+      return ArrowBendDownRightIcon;
     case "allocated":
-      return PieChart;
+      return ChartPieIcon;
     case "none":
-      return CircleSlash;
+      return ProhibitIcon;
     case "explicit":
-      return RotateCcw;
+      return ArrowCounterClockwiseIcon;
   }
 }
 

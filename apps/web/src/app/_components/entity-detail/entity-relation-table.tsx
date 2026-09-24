@@ -8,8 +8,8 @@ import {
   type BrowserRoutedEntity,
 } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { flexRender, type RowData } from "@tanstack/react-table";
@@ -274,7 +274,7 @@ export function RelationSectionActions({
           aria-label={createLabel ?? `New ${singular.toLocaleLowerCase()}`}
           onClick={() => setCreating(true)}
         >
-          <Plus />
+          <PlusIcon />
           {createLabel ?? "Add"}
         </Button>
       ) : null}
@@ -295,7 +295,7 @@ export function RelationSectionActions({
         }
       >
         Open all
-        <ArrowUpRight />
+        <ArrowUpRightIcon />
       </Button>
       {dialog}
     </div>
@@ -336,7 +336,7 @@ function RelationEmptyState({
           className="mt-1"
           onClick={() => setCreating(true)}
         >
-          <Plus />
+          <PlusIcon />
           New {singular.toLocaleLowerCase()}
         </Button>
       ) : null}

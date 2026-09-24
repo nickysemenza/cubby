@@ -1,6 +1,6 @@
 import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { TRADE_LABELS } from "@cubby/schemas/project";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
 
@@ -119,7 +119,7 @@ export function ColumnHeader({
             aria-label={`Add task to ${axisLabel(column)}`}
             onClick={() => onQuickAdd(taskCreatePreset(column, null))}
           >
-            <Plus className="size-3.5" />
+            <PlusIcon className="size-3.5" />
           </Button>
         )}
       </Row>

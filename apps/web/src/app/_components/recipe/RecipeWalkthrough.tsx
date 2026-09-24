@@ -3,8 +3,8 @@ import type {
   RecipeFlowInstructionRef,
   RecipeFlowPlan,
 } from "@cubby/schemas/recipe-flow";
-import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
-import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { useRef, useState } from "react";
 
 import { Row, Stack } from "~/components/layout";
@@ -220,7 +220,7 @@ export function RecipeWalkthrough({
               disabled={activeIndex === 0}
               onClick={() => selectStop(activeIndex - 1)}
             >
-              <ArrowLeft />
+              <ArrowLeftIcon />
               Previous
             </Button>
             <output className="text-xs text-muted-foreground">
@@ -234,7 +234,7 @@ export function RecipeWalkthrough({
               onClick={() => selectStop(activeIndex + 1)}
             >
               Next
-              <ArrowRight />
+              <ArrowRightIcon />
             </Button>
           </Row>
         </Stack>

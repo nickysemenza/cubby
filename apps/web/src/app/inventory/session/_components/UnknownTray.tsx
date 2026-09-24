@@ -1,7 +1,7 @@
 import type { InfLocation } from "@cubby/schemas/location";
-import { ArrowLineDownIcon as ArrowDownToLine } from "@phosphor-icons/react/dist/csr/ArrowLineDown";
-import { FolderSimplePlusIcon as FolderInput } from "@phosphor-icons/react/dist/csr/FolderSimplePlus";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { ArrowLineDownIcon } from "@phosphor-icons/react/dist/csr/ArrowLineDown";
+import { FolderSimplePlusIcon } from "@phosphor-icons/react/dist/csr/FolderSimplePlus";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useState } from "react";
 
 import { Row, Stack } from "~/components/layout";
@@ -47,7 +47,7 @@ export function UnknownTray({
   return (
     <Stack gap="sm">
       <label className="flex min-h-12 items-center gap-2 border border-[var(--border)] px-4">
-        <Search className="size-4 text-muted-foreground" />
+        <MagnifyingGlassIcon className="size-4 text-muted-foreground" />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -79,7 +79,7 @@ export function UnknownTray({
                   aria-label={`Move into ${currentLocationName}`}
                   onClick={() => onMoveLocationIn(location)}
                 >
-                  <ArrowDownToLine className="size-4" />
+                  <ArrowLineDownIcon className="size-4" />
                 </Button>
               }
             />
@@ -104,7 +104,7 @@ export function UnknownTray({
                     aria-label="Move to another location"
                     onClick={() => onMoveTo(item)}
                   >
-                    <FolderInput className="size-4" />
+                    <FolderSimplePlusIcon className="size-4" />
                   </Button>
                   <Button
                     type="button"
@@ -115,7 +115,7 @@ export function UnknownTray({
                     aria-label={`Move into ${currentLocationName}`}
                     onClick={() => onMoveIn(item)}
                   >
-                    <ArrowDownToLine className="size-4" />
+                    <ArrowLineDownIcon className="size-4" />
                   </Button>
                 </Row>
               }

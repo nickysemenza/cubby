@@ -5,8 +5,8 @@ import {
   type StoredNutritionTotals,
 } from "@cubby/schemas/nutrition";
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { EyeIcon as Eye } from "@phosphor-icons/react/dist/csr/Eye";
-import { EyeSlashIcon as EyeOff } from "@phosphor-icons/react/dist/csr/EyeSlash";
+import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
+import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { sumBy } from "es-toolkit";
 import { type ReactNode, useMemo, useState } from "react";
 
@@ -100,7 +100,7 @@ function VitalsPanel({
               title="Hide nutrition & cost"
               className="text-muted-foreground hover:text-foreground"
             >
-              <EyeOff className="size-3.5" />
+              <EyeSlashIcon className="size-3.5" />
             </button>
           </Row>
 
@@ -175,7 +175,7 @@ function VitalsPanel({
           onClick={onToggle}
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
-          <Eye className="size-3.5" />
+          <EyeIcon className="size-3.5" />
           Show nutrition &amp; cost
         </button>
       )}

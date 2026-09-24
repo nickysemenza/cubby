@@ -1,5 +1,5 @@
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import { type FC, useState } from "react";
 
@@ -73,7 +73,7 @@ const EntityImageList: FC<EntityImageListProps> = ({
                         onRemove(image.id);
                       }}
                     >
-                      <X className="size-3.5" />
+                      <XIcon className="size-3.5" />
                     </Button>
                   )
                 : undefined

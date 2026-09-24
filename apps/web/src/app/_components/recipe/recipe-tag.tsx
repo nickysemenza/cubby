@@ -1,4 +1,4 @@
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { FC } from "react";
 
 import { Row } from "~/components/layout";
@@ -70,7 +70,7 @@ export const RecipeTag: FC<RecipeTagProps> = ({
           }}
           className="ml-1 rounded hover:bg-muted"
         >
-          <X size={size === "sm" ? 10 : 12} />
+          <XIcon size={size === "sm" ? 10 : 12} />
         </button>
       )}
     </Badge>

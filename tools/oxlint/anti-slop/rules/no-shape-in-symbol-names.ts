@@ -58,7 +58,15 @@ export const noForbiddenTermInSymbolNamesRule = defineRule({
         }
       },
       Identifier(node) {
-        if (ownedIdentifiers.has(node)) reportForbiddenSymbolName(node);
+        if (!ownedIdentifiers.has(node)) return;
+        const parent = node.parent;
+        if (
+          parent.type === "ImportSpecifier" &&
+          parent.local === node &&
+          parent.imported.name === node.name
+        )
+          return;
+        reportForbiddenSymbolName(node);
       },
       PrivateIdentifier(node) {
         if (isOwnedPrivateIdentifier(node)) reportForbiddenSymbolName(node);

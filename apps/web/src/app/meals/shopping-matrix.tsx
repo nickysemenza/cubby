@@ -1,5 +1,5 @@
 import type { UnexpandedSubRecipe } from "@cubby/schemas/meal";
-import { WarningIcon as TriangleAlert } from "@phosphor-icons/react/dist/csr/Warning";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import { useMemo } from "react";
@@ -205,7 +205,7 @@ export function ShoppingMatrix({
                   <span
                     title={`Missing ingredients from ${blocked.join(", ")}`}
                   >
-                    <TriangleAlert
+                    <WarningIcon
                       aria-label={`Incomplete: ${blocked.join(", ")}`}
                       className="size-3 shrink-0 text-warning"
                     />

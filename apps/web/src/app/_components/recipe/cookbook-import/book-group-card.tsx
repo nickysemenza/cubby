@@ -3,10 +3,10 @@ import type {
   CookbookIngredientLine,
   CookbookRecipe,
 } from "@cubby/schemas/cookbook";
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { DownloadSimpleIcon as Import } from "@phosphor-icons/react/dist/csr/DownloadSimple";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { DownloadSimpleIcon } from "@phosphor-icons/react/dist/csr/DownloadSimple";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useQueries } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useId, useMemo, useRef } from "react";
@@ -153,9 +153,9 @@ export function BookGroupCard({
           aria-label={book.expanded ? "Collapse" : "Expand"}
         >
           {book.expanded ? (
-            <ChevronDown className="size-4" />
+            <CaretDownIcon className="size-4" />
           ) : (
-            <ChevronRight className="size-4" />
+            <CaretRightIcon className="size-4" />
           )}
         </button>
         <Input
@@ -176,7 +176,7 @@ export function BookGroupCard({
                 importing || book.selected.size === 0 || name.length === 0
               }
             >
-              <Import className="mr-1 size-4" />
+              <DownloadSimpleIcon className="mr-1 size-4" />
               Import {book.selected.size}
             </Button>
           )}
@@ -186,7 +186,7 @@ export function BookGroupCard({
             className="text-muted-foreground hover:text-foreground"
             aria-label="Remove book"
           >
-            <X className="size-4" />
+            <XIcon className="size-4" />
           </button>
         </Row>
       </CardHeader>
@@ -562,7 +562,7 @@ function ChapterRow({
       {context.length > 0 && (
         <Collapsible>
           <CollapsibleTrigger className="flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground">
-            <ChevronDown className="size-3" />
+            <CaretDownIcon className="size-3" />
             {context.length} technique{context.length === 1 ? "" : "s"} / essay
             {context.length === 1 ? "" : "s"} — read, not importable
           </CollapsibleTrigger>

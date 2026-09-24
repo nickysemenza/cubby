@@ -10,8 +10,8 @@ import {
   type Trade,
 } from "@cubby/schemas/project";
 import { MAX_SPLIT_EXPENSE_PARTS } from "@cubby/schemas/purchase";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useNavigate } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 import { useRef, useState } from "react";
@@ -234,7 +234,7 @@ export function SplitExpenseDialog({
                   onClick={() => removePart(part.key)}
                   aria-label={`Remove part ${index + 1}`}
                 >
-                  <X />
+                  <XIcon />
                 </Button>
               </Row>
               <Row align="center" gap="sm">
@@ -390,7 +390,7 @@ export function SplitExpenseDialog({
               onClick={addPart}
               disabled={atSplitLimit}
             >
-              <Plus />
+              <PlusIcon />
               Add part
             </Button>
             {atSplitLimit ? (

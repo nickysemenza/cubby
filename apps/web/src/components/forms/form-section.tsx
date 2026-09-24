@@ -1,4 +1,4 @@
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { type ReactNode, useId, useState } from "react";
 
 import { Row } from "~/components/layout";
@@ -57,7 +57,7 @@ export function FormSection({
       className="my-0 text-xs font-medium text-muted-foreground"
     >
       {collapsed && (
-        <ChevronRight
+        <CaretRightIcon
           className={cn(
             "size-3.5 shrink-0 transition-transform",
             open && "rotate-90",

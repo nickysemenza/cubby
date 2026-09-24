@@ -1,5 +1,5 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
-import { CalendarCheckIcon as CalendarClock } from "@phosphor-icons/react/dist/csr/CalendarCheck";
+import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
 import { useMemo } from "react";
 
 import { monthLabel } from "../shared";
@@ -28,7 +28,7 @@ export function PlannedVsActualByMonth({
   );
 
   if (data.length === 0) {
-    return <ChartEmpty icon={CalendarClock} title="No expense data." />;
+    return <ChartEmpty icon={CalendarCheckIcon} title="No expense data." />;
   }
 
   return <PlannedActualBar data={data} />;

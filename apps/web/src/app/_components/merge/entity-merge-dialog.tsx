@@ -1,5 +1,5 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useMemo, useState } from "react";
 
@@ -185,7 +185,7 @@ function RankedMergeDialog<T extends MergeRow>({
                     className="h-auto justify-start py-1"
                     onClick={() => setSelectedKeepId(row.id)}
                   >
-                    <Check
+                    <CheckIcon
                       className={`size-4 shrink-0 ${selected ? "opacity-100" : "opacity-0"}`}
                     />
                     <span className="flex min-w-0 flex-1 flex-col items-start gap-1">

@@ -1,8 +1,8 @@
 import type { InfLocation } from "@cubby/schemas/location";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
-import { SidebarIcon as PanelLeft } from "@phosphor-icons/react/dist/csr/Sidebar";
-import { SidebarSimpleIcon as PanelLeftClose } from "@phosphor-icons/react/dist/csr/SidebarSimple";
+import { SidebarIcon } from "@phosphor-icons/react/dist/csr/Sidebar";
+import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { locationTypeNoun } from "~/app/inventory/session/session-utils";
@@ -138,7 +138,7 @@ export function GallerySidebar({
           className="m-2 transition-colors hover:bg-primary/10"
           title="Expand sidebar"
         >
-          <PanelLeft className="size-4" />
+          <SidebarIcon className="size-4" />
         </Button>
       </div>
     );
@@ -165,7 +165,7 @@ export function GallerySidebar({
           className="transition-colors hover:bg-primary/10"
           title="Collapse sidebar"
         >
-          <PanelLeftClose className="size-4" />
+          <SidebarSimpleIcon className="size-4" />
         </Button>
       </Row>
 
@@ -232,7 +232,7 @@ function SidebarDisclosure({
       )}
     >
       {hasChildren && (
-        <ChevronRight
+        <CaretRightIcon
           className={cn(
             "size-3.5 transition-transform duration-150",
             isExpanded && "rotate-90",

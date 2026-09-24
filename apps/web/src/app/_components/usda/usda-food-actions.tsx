@@ -1,7 +1,7 @@
 import type { IngredientShortcode } from "@cubby/schemas/identifiers";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import { LinkIcon as Link2 } from "@phosphor-icons/react/dist/csr/Link";
-import { StackPlusIcon as PackagePlus } from "@phosphor-icons/react/dist/csr/StackPlus";
+import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
+import { StackPlusIcon } from "@phosphor-icons/react/dist/csr/StackPlus";
 import { useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
@@ -49,7 +49,7 @@ function CreateProductFromFoodButton({
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <PackagePlus />
+        <StackPlusIcon />
         Create product from this food
       </Button>
       <EntityEditDialog
@@ -90,7 +90,7 @@ function LinkFoodToIngredientButton({
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Link2 />
+        <LinkIcon />
         Link to an ingredient
       </Button>
       <Dialog open={open && !ingredient} onOpenChange={handleOpenChange}>

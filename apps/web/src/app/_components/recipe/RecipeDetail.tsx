@@ -1,13 +1,13 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/dist/csr/BookOpen";
-import { BowlFoodIcon as Apple } from "@phosphor-icons/react/dist/csr/BowlFood";
-import { ClipboardTextIcon as ClipboardList } from "@phosphor-icons/react/dist/csr/ClipboardText";
-import { CoffeeIcon as Coffee } from "@phosphor-icons/react/dist/csr/Coffee";
-import { GitBranchIcon as GitBranch } from "@phosphor-icons/react/dist/csr/GitBranch";
+import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
+import { BowlFoodIcon } from "@phosphor-icons/react/dist/csr/BowlFood";
+import { ClipboardTextIcon } from "@phosphor-icons/react/dist/csr/ClipboardText";
+import { CoffeeIcon } from "@phosphor-icons/react/dist/csr/Coffee";
+import { GitBranchIcon } from "@phosphor-icons/react/dist/csr/GitBranch";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
-import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
-import { PrinterIcon as Printer } from "@phosphor-icons/react/dist/csr/Printer";
-import { TableIcon as Table2 } from "@phosphor-icons/react/dist/csr/Table";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { PrinterIcon } from "@phosphor-icons/react/dist/csr/Printer";
+import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import { Link } from "@tanstack/react-router";
 import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
@@ -70,11 +70,11 @@ const RecipeCostTreemap = lazy(
 export type RecipeViewMode = "read" | "spec" | "data" | "prep" | "flow";
 
 const RECIPE_VIEW_OPTIONS: ViewSwitcherOption<RecipeViewMode>[] = [
-  { value: "read", label: "Read", icon: BookOpen },
-  { value: "spec", label: "Spec", icon: ClipboardList },
-  { value: "data", label: "Data", icon: Table2 },
-  { value: "prep", label: "Prep", icon: ListChecks },
-  { value: "flow", label: "Flow", icon: GitBranch },
+  { value: "read", label: "Read", icon: BookOpenIcon },
+  { value: "spec", label: "Spec", icon: ClipboardTextIcon },
+  { value: "data", label: "Data", icon: TableIcon },
+  { value: "prep", label: "Prep", icon: ListChecksIcon },
+  { value: "flow", label: "Flow", icon: GitBranchIcon },
 ];
 
 /**
@@ -531,7 +531,7 @@ function RecipeWorkflowControls({
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           title="Open the print / export sheet"
         >
-          <Printer className="size-3" />
+          <PrinterIcon className="size-3" />
           Print / export
         </Link>
       </Row>
@@ -561,7 +561,7 @@ function WakeLockButton({
           : "border-border text-muted-foreground hover:text-foreground",
       )}
     >
-      <Coffee className="size-3.5" />
+      <CoffeeIcon className="size-3.5" />
       {wakeLock.enabled ? "Awake" : "Keep awake"}
     </button>
   );
@@ -590,7 +590,7 @@ function RecipeWorkflowSupplemental({
       {nutritionEstimates ? (
         <details className="group border border-border bg-muted/30 px-4 py-2 print:hidden">
           <summary className="cursor-pointer eyebrow marker:content-none">
-            <Apple className="mr-2 inline size-3 align-[-2px]" />
+            <BowlFoodIcon className="mr-2 inline size-3 align-[-2px]" />
             Nutrition
           </summary>
           <div className="mt-4">

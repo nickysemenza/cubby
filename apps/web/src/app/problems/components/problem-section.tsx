@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
-import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
@@ -429,9 +429,9 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
                 }
               >
                 {open ? (
-                  <X className="mr-1 size-3" />
+                  <XIcon className="mr-1 size-3" />
                 ) : (
-                  <Wrench className="mr-1 size-3" />
+                  <WrenchIcon className="mr-1 size-3" />
                 )}
                 {open ? "Cancel" : inlineFix.label}
               </TooltipTrigger>
@@ -456,7 +456,7 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
                   />
                 }
               >
-                <ExternalLink className="mr-1 size-3" />
+                <ArrowSquareOutIcon className="mr-1 size-3" />
                 {editLabel ?? `Open ${routeNoun(route)}`}
               </TooltipTrigger>
               <TooltipContent>

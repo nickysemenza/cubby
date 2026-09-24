@@ -1,4 +1,4 @@
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
 import {
@@ -493,7 +493,7 @@ export function MobileCard({
                     className="flex size-11 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     aria-label="View details"
                   >
-                    <ChevronRight className="size-4" />
+                    <CaretRightIcon className="size-4" />
                   </Link>
                 )}
                 {actions}

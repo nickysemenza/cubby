@@ -6,24 +6,24 @@ import {
   WAYFINDING_DOMAINS,
   entitySummary,
 } from "@cubby/schemas/entity-summary";
-import { ArrowsLeftRightIcon as ArrowLeftRight } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
-import { BarcodeIcon as ScanBarcode } from "@phosphor-icons/react/dist/csr/Barcode";
-import { BookOpenTextIcon as BookOpenCheck } from "@phosphor-icons/react/dist/csr/BookOpenText";
-import { CalendarBlankIcon as CalendarRange } from "@phosphor-icons/react/dist/csr/CalendarBlank";
-import { CameraIcon as Camera } from "@phosphor-icons/react/dist/csr/Camera";
-import { ChefHatIcon as ChefHat } from "@phosphor-icons/react/dist/csr/ChefHat";
-import { ClipboardTextIcon as ClipboardCheck } from "@phosphor-icons/react/dist/csr/ClipboardText";
-import { CreditCardIcon as CreditCard } from "@phosphor-icons/react/dist/csr/CreditCard";
-import { CubeFocusIcon as PackageSearch } from "@phosphor-icons/react/dist/csr/CubeFocus";
-import { CurrencyCircleDollarIcon as CircleDollarSign } from "@phosphor-icons/react/dist/csr/CurrencyCircleDollar";
-import { LayoutIcon as PanelsTopLeft } from "@phosphor-icons/react/dist/csr/Layout";
-import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
-import { PlantIcon as Sprout } from "@phosphor-icons/react/dist/csr/Plant";
-import { QrCodeIcon as QrCode } from "@phosphor-icons/react/dist/csr/QrCode";
-import { ShoppingCartIcon as ShoppingCart } from "@phosphor-icons/react/dist/csr/ShoppingCart";
-import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
-import { WarehouseIcon as Warehouse } from "@phosphor-icons/react/dist/csr/Warehouse";
-import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
+import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
+import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
+import { BookOpenTextIcon } from "@phosphor-icons/react/dist/csr/BookOpenText";
+import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
+import { CameraIcon } from "@phosphor-icons/react/dist/csr/Camera";
+import { ChefHatIcon } from "@phosphor-icons/react/dist/csr/ChefHat";
+import { ClipboardTextIcon } from "@phosphor-icons/react/dist/csr/ClipboardText";
+import { CreditCardIcon } from "@phosphor-icons/react/dist/csr/CreditCard";
+import { CubeFocusIcon } from "@phosphor-icons/react/dist/csr/CubeFocus";
+import { CurrencyCircleDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyCircleDollar";
+import { LayoutIcon } from "@phosphor-icons/react/dist/csr/Layout";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { PlantIcon } from "@phosphor-icons/react/dist/csr/Plant";
+import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
+import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { WarehouseIcon } from "@phosphor-icons/react/dist/csr/Warehouse";
+import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import type { Icon } from "@phosphor-icons/react/lib";
 import type { LinkProps } from "@tanstack/react-router";
 
@@ -77,7 +77,7 @@ export const activityViews = [
   {
     key: "cook",
     label: DOMAIN_WAYFINDING.cook.label,
-    icon: ChefHat,
+    icon: ChefHatIcon,
     destinations: [
       recordDestination("recipe", "Browse recipes and open one to cook."),
       recordDestination("cookbook", "Browse the recipe collections you keep."),
@@ -85,32 +85,32 @@ export const activityViews = [
         to: "/ingredients/workbench",
         label: "Ingredient workbench",
         description: "Resolve ingredient identity and measurement coverage.",
-        icon: ListChecks,
+        icon: ListChecksIcon,
       },
       {
         to: "/ingredients/equivalences",
         label: "Ingredient equivalences",
         description: "Review conversion paths between ingredient units.",
-        icon: ArrowLeftRight,
+        icon: ArrowsLeftRightIcon,
       },
       {
         to: "/recipes/compare",
         label: "Compare recipes",
         description: "Compare ingredients, portions, and costs side by side.",
-        icon: PanelsTopLeft,
+        icon: LayoutIcon,
       },
       {
         to: "/recipes/import",
         label: "Import recipes",
         description: "Bring recipes into Cubby with a supervised review.",
-        icon: BookOpenCheck,
+        icon: BookOpenTextIcon,
       },
     ],
   },
   {
     key: "pantry",
     label: DOMAIN_WAYFINDING.pantry.label,
-    icon: Warehouse,
+    icon: WarehouseIcon,
     destinations: [
       recordDestination("inventory", "Review what is currently on hand."),
       recordDestination("location", "Browse the places where things live."),
@@ -118,51 +118,51 @@ export const activityViews = [
         to: "/scan",
         label: "Scan a product",
         description: "Find or receive a product from its barcode.",
-        icon: ScanBarcode,
+        icon: BarcodeIcon,
       },
       {
         to: "/inventory/session",
         label: "Recount inventory",
         description: "Restore the household's approximate on-hand picture.",
-        icon: ClipboardCheck,
+        icon: ClipboardTextIcon,
       },
       {
         to: "/inventory/bulk-move",
         label: "Move inventory",
         description: "Relocate several inventory records together.",
-        icon: PackageSearch,
+        icon: CubeFocusIcon,
       },
       {
         to: "/locations/photo-pass",
         label: "Location photo pass",
         description:
           "Capture useful location photos while moving around the house.",
-        icon: Camera,
+        icon: CameraIcon,
       },
       {
         to: "/locations/arrange",
         label: "Arrange locations",
         description: "Maintain the physical location hierarchy.",
-        icon: Warehouse,
+        icon: WarehouseIcon,
       },
       {
         to: "/pantry-view",
         label: "Pantry view",
         description: "Explore stocked products in their physical context.",
-        icon: PackageSearch,
+        icon: CubeFocusIcon,
       },
       {
         to: "/labels",
         label: "Print labels",
         description: "Prepare durable labels for household locations.",
-        icon: QrCode,
+        icon: QrCodeIcon,
       },
     ],
   },
   {
     key: "plan",
     label: DOMAIN_WAYFINDING.plan.label,
-    icon: CalendarRange,
+    icon: CalendarBlankIcon,
     destinations: [
       recordDestination("meal", "Review meals planned for upcoming days."),
       recordDestination("wish", "Keep track of items you may want to buy."),
@@ -170,26 +170,26 @@ export const activityViews = [
         to: "/calendar",
         label: "Household calendar",
         description: "Plan meals, tasks, and expected expenses by date.",
-        icon: CalendarRange,
+        icon: CalendarBlankIcon,
       },
       {
         to: "/meals/suggestions",
         label: "What can I make?",
         description: "Find recipes supported by approximate availability.",
-        icon: Sparkles,
+        icon: SparkleIcon,
       },
       {
         to: "/meals/shopping-list",
         label: "Build a shopping list",
         description: "Turn selected meals into reviewed shopping needs.",
-        icon: ShoppingCart,
+        icon: ShoppingCartIcon,
       },
     ],
   },
   {
     key: "house",
     label: DOMAIN_WAYFINDING.house.label,
-    icon: Wrench,
+    icon: WrenchIcon,
     destinations: [
       recordDestination(
         "project",
@@ -204,26 +204,26 @@ export const activityViews = [
         to: "/garden-workbench",
         label: "Garden workbench",
         description: "Compare planting timing, household practice, and plans.",
-        icon: Sprout,
+        icon: PlantIcon,
       },
       {
         to: "/tools",
         label: "Tool coverage",
         description: "See which reusable tools support household work.",
-        icon: Wrench,
+        icon: WrenchIcon,
       },
       {
         to: "/projects/tools",
         label: "Project tools",
         description: "Connect project plans to the tools they require.",
-        icon: PackageSearch,
+        icon: CubeFocusIcon,
       },
     ],
   },
   {
     key: "finance",
     label: DOMAIN_WAYFINDING.finance.label,
-    icon: CreditCard,
+    icon: CreditCardIcon,
     destinations: [
       recordDestination("expense", "Review the authoritative household spend."),
       recordDestination("purchase", "Review orders and their expense lines."),
@@ -231,13 +231,13 @@ export const activityViews = [
         to: "/household-contribution",
         label: "Contribution ledger",
         description: "Review shared costs and household positions.",
-        icon: ArrowLeftRight,
+        icon: ArrowsLeftRightIcon,
       },
       {
         to: "/statement-rows",
         label: "Reconcile statements",
         description: "Match imported statement evidence to recorded purchases.",
-        icon: CircleDollarSign,
+        icon: CurrencyCircleDollarIcon,
       },
     ],
   },

@@ -1,8 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { ClockIcon as Clock } from "@phosphor-icons/react/dist/csr/Clock";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
   createContext,
@@ -278,7 +278,7 @@ function SectionCard({
                 onClick={() => setOpen((current) => !current)}
                 className="flex min-w-0 items-center gap-2 font-medium text-muted-foreground transition-colors hover:text-foreground"
               >
-                <ChevronRight
+                <CaretRightIcon
                   className={cn(
                     "size-3.5 shrink-0 transition-transform",
                     open && "rotate-90",
@@ -469,7 +469,7 @@ function DetailAnchorIndex({
             Jump to:{" "}
             <span className="font-medium text-foreground">{activeTitle}</span>
           </span>
-          <ChevronDown className="size-3.5 shrink-0" />
+          <CaretDownIcon className="size-3.5 shrink-0" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-52">
           {indexed.map((section) => (
@@ -666,7 +666,7 @@ function resolveActivityDetail(
   const section: DetailSection = {
     id: ACTIVITY_SECTION_ID,
     title: "History",
-    icon: Clock,
+    icon: ClockIcon,
     placement: "supporting",
     content: (
       <AuditLogList

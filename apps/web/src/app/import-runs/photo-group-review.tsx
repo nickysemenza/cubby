@@ -12,10 +12,10 @@ import {
   type PhotoRunReview,
   type ReviewPhotoGroupsAction,
 } from "@cubby/schemas/photo-import-run";
-import { ArrowsMergeIcon as Merge } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
-import { DotsThreeIcon as Ellipsis } from "@phosphor-icons/react/dist/csr/DotsThree";
-import { TrashIcon as Trash2 } from "@phosphor-icons/react/dist/csr/Trash";
+import { ArrowsMergeIcon } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
+import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -242,7 +242,7 @@ function ImageMenu({
           />
         }
       >
-        <Ellipsis />
+        <DotsThreeIcon />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         {purpose ? (
@@ -714,7 +714,7 @@ function ProposalCard({
                   disabled={working}
                   render={<Button variant="ghost" size="sm" />}
                 >
-                  <Merge />
+                  <ArrowsMergeIcon />
                   Merge into…
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-60">
@@ -766,7 +766,7 @@ function ProposalCard({
                 })
               }
             >
-              <Trash2 />
+              <TrashIcon />
               Discard
             </Button>
             <Button
@@ -783,7 +783,7 @@ function ProposalCard({
                 })
               }
             >
-              <Check />
+              <CheckIcon />
               Approve
             </Button>
           </Row>
@@ -1094,7 +1094,7 @@ export function PhotoGroupReview({
               disabled={busy || proposed.length === 0}
               onClick={() => action.mutate({ action: "approve" })}
             >
-              <Check />
+              <CheckIcon />
               Approve all {proposed.length ? `(${proposed.length})` : ""}
             </Button>
           </Row>

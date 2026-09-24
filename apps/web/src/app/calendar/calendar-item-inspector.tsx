@@ -1,5 +1,5 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
-import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
@@ -284,7 +284,7 @@ function OpenFullRecord({ item }: { item: CalendarItem }) {
       nativeButton={false}
     >
       Open full record
-      <ExternalLink className="size-3.5" />
+      <ArrowSquareOutIcon className="size-3.5" />
     </Button>
   );
 }

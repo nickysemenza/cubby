@@ -6,7 +6,7 @@ import {
   type FlueConversationMessage,
   type FlueConversationPart,
 } from "@flue/sdk";
-import { ArrowSquareOutIcon as SquareArrowOutUpRight } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type ReactNode,
@@ -1342,7 +1342,7 @@ function RunLink({
           href={importRunHref(publicId)}
         >
           {publicId}
-          <SquareArrowOutUpRight className="size-3" />
+          <ArrowSquareOutIcon className="size-3" />
         </a>
       ) : (
         <span>—</span>

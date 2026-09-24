@@ -1,5 +1,5 @@
 import type { ExpenseOut } from "@cubby/schemas/project";
-import { FunnelIcon as ListFilter } from "@phosphor-icons/react/dist/csr/Funnel";
+import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
@@ -150,7 +150,7 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
           className="shrink-0 text-muted-foreground hover:text-foreground"
           aria-label={`Show every Expense from ${data.purchase.vendorName ?? "this vendor"}`}
         >
-          <ListFilter className="size-3.5" />
+          <FunnelIcon className="size-3.5" />
         </Link>
       </Row>
 

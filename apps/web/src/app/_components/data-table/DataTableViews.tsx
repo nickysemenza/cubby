@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { BookmarkIcon as Bookmark } from "@phosphor-icons/react/dist/csr/Bookmark";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { BookmarkIcon } from "@phosphor-icons/react/dist/csr/Bookmark";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import type { RowData } from "@tanstack/react-table";
 
 import { Stack } from "~/components/layout";
@@ -144,7 +144,7 @@ function SavedViewsMenuItems({
         const active = isViewActive(view, columnFilters, sorting);
         return (
           <DropdownMenuItem key={view.id} onClick={() => applyView(view)}>
-            <Check
+            <CheckIcon
               className={active ? "size-3.5" : "size-3.5 text-transparent"}
             />
             <Stack gap="tight">
@@ -175,7 +175,7 @@ export function SavedViewsMenu(props: SavedViewsMenuProps) {
           />
         }
       >
-        <Bookmark className="size-3.5" />
+        <BookmarkIcon className="size-3.5" />
         Saved views
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[240px]">

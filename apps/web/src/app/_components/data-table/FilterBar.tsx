@@ -1,10 +1,10 @@
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
-import { FunnelIcon as ListFilter } from "@phosphor-icons/react/dist/csr/Funnel";
-import { GearSixIcon as Settings2 } from "@phosphor-icons/react/dist/csr/GearSix";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
+import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { RowData } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
 
@@ -361,7 +361,7 @@ export function FilterBar({
     >
       {searchField && (
         <div className="relative flex h-7 w-[220px] shrink-0 items-center">
-          <Search className="pointer-events-none absolute left-2 size-3.5 text-muted-foreground" />
+          <MagnifyingGlassIcon className="pointer-events-none absolute left-2 size-3.5 text-muted-foreground" />
           <Input
             value={searchValue}
             onChange={(event) => setValues(searchField, [event.target.value])}
@@ -380,7 +380,7 @@ export function FilterBar({
               className="absolute right-1.5 text-muted-foreground hover:text-foreground"
               onClick={() => clear(searchField)}
             >
-              <X className="size-3.5" />
+              <XIcon className="size-3.5" />
             </button>
           )}
         </div>
@@ -429,7 +429,7 @@ export function FilterBar({
                   />
                 }
               >
-                <ChevronDown className="size-3.5" />
+                <CaretDownIcon className="size-3.5" />
                 More
               </PopoverTrigger>
               <PopoverContent align="start" className="w-72">
@@ -575,7 +575,7 @@ export function MobileFilterTier<TData extends RowData>({
       <div className="flex w-full items-center gap-2">
         {searchField && (
           <div className="relative flex h-9 flex-1 items-center">
-            <Search className="pointer-events-none absolute left-2.5 size-4 text-muted-foreground" />
+            <MagnifyingGlassIcon className="pointer-events-none absolute left-2.5 size-4 text-muted-foreground" />
             <Input
               value={searchValue}
               onChange={(event) => setValues(searchField, [event.target.value])}
@@ -596,7 +596,7 @@ export function MobileFilterTier<TData extends RowData>({
             className="relative h-9 shrink-0"
             onClick={() => openSheet("fields")}
           >
-            <ListFilter />
+            <FunnelIcon />
             Filter
             {activeCount > 0 && (
               <span className="absolute -top-1.5 -right-1.5 flex size-[18px] items-center justify-center rounded-full bg-primary font-mono text-2xs font-semibold text-primary-foreground">
@@ -630,7 +630,7 @@ export function MobileFilterTier<TData extends RowData>({
                   aria-label={`Clear ${label} filter`}
                   onClick={() => clear(field)}
                 >
-                  <X className="size-3" />
+                  <XIcon className="size-3" />
                 </button>
               </span>
             );
@@ -689,7 +689,7 @@ export function MobileFilterTier<TData extends RowData>({
               className="mt-2 flex min-h-11 items-center gap-2 border-t border-border pt-2 text-left text-sm font-medium"
               onClick={() => setView("columns")}
             >
-              <Settings2 className="size-4" />
+              <GearSixIcon className="size-4" />
               Columns
             </button>
           </div>

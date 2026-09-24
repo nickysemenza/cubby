@@ -1,4 +1,4 @@
-import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -40,7 +40,7 @@ export function EstimatePanel({
           </Description>
         </Row>
         <Button type="button" size="sm" onClick={onExtract} disabled={disabled}>
-          <Sparkles className="mr-1 size-4" />
+          <SparkleIcon className="mr-1 size-4" />
           Extract
         </Button>
       </Row>

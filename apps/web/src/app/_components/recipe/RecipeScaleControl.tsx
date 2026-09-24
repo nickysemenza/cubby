@@ -1,6 +1,6 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { ArrowsOutIcon as Scaling } from "@phosphor-icons/react/dist/csr/ArrowsOut";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { ArrowsOutIcon } from "@phosphor-icons/react/dist/csr/ArrowsOut";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
@@ -161,7 +161,7 @@ export function RecipeScaleControl({
         <PopoverTrigger
           render={
             <Button variant="outline" size="sm" className="max-sm:min-h-11">
-              <Scaling className="mr-1 size-3" />
+              <ArrowsOutIcon className="mr-1 size-3" />
               {scaled ? `${Number(factor.toFixed(2))}×` : "Custom"}
             </Button>
           }
@@ -306,7 +306,7 @@ export function RecipeScaleControl({
           aria-label="Reset scale to 1×"
           onClick={() => onFactorChange(1)}
         >
-          <X className="size-3" />
+          <XIcon className="size-3" />
         </Button>
       )}
     </Row>

@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
-import { ListIcon as List } from "@phosphor-icons/react/dist/csr/List";
-import { ListDashesIcon as LayoutList } from "@phosphor-icons/react/dist/csr/ListDashes";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
+import { ListDashesIcon } from "@phosphor-icons/react/dist/csr/ListDashes";
 import type { CellSelectionState, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import type { ReactNode } from "react";
@@ -377,9 +377,9 @@ function GroupToggle<TItem extends RowData>({
       aria-label={grouped ? "Show flat list" : "Show grouped list"}
     >
       {grouped ? (
-        <List className="size-4" />
+        <ListIcon className="size-4" />
       ) : (
-        <LayoutList className="size-4" />
+        <ListDashesIcon className="size-4" />
       )}
     </Button>
   );
@@ -394,7 +394,7 @@ function GroupToggleMenuItem<TItem extends RowData>({
   if (!groupConfig || !onGroupedChange) return null;
   return (
     <DropdownMenuItem onClick={() => onGroupedChange(!grouped)}>
-      <Check className={grouped ? "opacity-100" : "opacity-0"} />
+      <CheckIcon className={grouped ? "opacity-100" : "opacity-0"} />
       Grouped
     </DropdownMenuItem>
   );

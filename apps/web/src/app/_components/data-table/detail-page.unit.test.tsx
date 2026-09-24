@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { CircleIcon as Circle } from "@phosphor-icons/react/dist/csr/Circle";
+import { CircleIcon } from "@phosphor-icons/react/dist/csr/Circle";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -18,21 +18,21 @@ const sections: DetailSection[] = [
   {
     id: "summary",
     title: "Summary",
-    icon: Circle,
+    icon: CircleIcon,
     placement: "supporting",
     content: <p>Summary content</p>,
   },
   {
     id: "story",
     title: "Story",
-    icon: Circle,
+    icon: CircleIcon,
     placement: "primary",
     content: <p>Story content</p>,
   },
   {
     id: "ledger",
     title: "Ledger",
-    icon: Circle,
+    icon: CircleIcon,
     placement: "full",
     content: <p>Ledger content</p>,
   },
@@ -139,7 +139,7 @@ describe("DetailSections ledger", () => {
         {
           id: "relationships",
           title: "Relationships",
-          icon: Circle,
+          icon: CircleIcon,
           placement: "full",
           content: <p>Full relationships</p>,
         },
@@ -164,7 +164,7 @@ describe("DetailSections ledger", () => {
         {
           id: "relationships",
           title: "Relationships",
-          icon: Circle,
+          icon: CircleIcon,
           placement: "full",
           content: <p>Product route ledger</p>,
         },
@@ -182,14 +182,14 @@ describe("DetailSections ledger", () => {
       {
         id: "relationships",
         title: "Relationships",
-        icon: Circle,
+        icon: CircleIcon,
         placement: "full",
         content: <p>Full relationship route</p>,
       },
       {
         id: "history",
         title: "History",
-        icon: Circle,
+        icon: CircleIcon,
         placement: "supporting",
         content: <p>Authored activity</p>,
       },
@@ -211,7 +211,7 @@ describe("DetailSections ledger", () => {
         {
           id: "relationships",
           title: "Relationships",
-          icon: Circle,
+          icon: CircleIcon,
           placement: "full",
           content: <p>Direct relationship route</p>,
         },
@@ -248,7 +248,7 @@ describe("DetailSections ledger", () => {
         {
           id: "analytics",
           title: "Analytics",
-          icon: Circle,
+          icon: CircleIcon,
           placement: "primary",
           collapsed: true,
           content: <p>Analytics content</p>,
@@ -278,7 +278,7 @@ function HideableContent({ hidden }: { hidden: boolean }) {
 const hideableSection = (hidden: boolean): DetailSection => ({
   id: "relation",
   title: "Relation",
-  icon: Circle,
+  icon: CircleIcon,
   placement: "primary",
   headerAction: <button type="button">Add</button>,
   content: <HideableContent hidden={hidden} />,

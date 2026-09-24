@@ -4,9 +4,9 @@ import type {
   ProductMatchCandidate,
   ProductMatchSide,
 } from "@cubby/schemas/recommendations";
-import { GitMergeIcon as GitMerge } from "@phosphor-icons/react/dist/csr/GitMerge";
-import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { GitMergeIcon } from "@phosphor-icons/react/dist/csr/GitMerge";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
@@ -171,13 +171,13 @@ function ProductMatchCard({
             align="start"
             className="text-sm text-warning"
           >
-            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            <WarningIcon className="mt-0.5 size-3.5 shrink-0" />
             <span>{warning}</span>
           </Row>
         ))}
         <Row gap="sm">
           <Button type="button" onClick={() => setMerging(true)}>
-            <GitMerge className="size-3.5" />
+            <GitMergeIcon className="size-3.5" />
             Review merge
           </Button>
           <Button
@@ -188,7 +188,7 @@ function ProductMatchCard({
               dismiss.mutate({ productIds: [item.keeper.id, item.other.id] })
             }
           >
-            <X className="size-3.5" />
+            <XIcon className="size-3.5" />
             Not the same
           </Button>
         </Row>

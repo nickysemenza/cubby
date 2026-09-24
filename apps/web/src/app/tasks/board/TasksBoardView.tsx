@@ -3,7 +3,7 @@ import type {
   TaskFilters,
   TaskOut,
 } from "@cubby/schemas/project";
-import { ListChecksIcon as ListTodo } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -166,7 +166,7 @@ export function TasksBoardView({ filters }: { filters: TaskFilters }) {
         // hid a 500 behind what looked like lost data.
         <Empty>
           <EmptyHeader>
-            <EmptyIcon icon={ListTodo} />
+            <EmptyIcon icon={ListChecksIcon} />
             <EmptyTitle>Couldn't load tasks</EmptyTitle>
             <EmptyDescription>{getErrorMessage(error)}</EmptyDescription>
           </EmptyHeader>

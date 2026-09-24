@@ -5,7 +5,7 @@ import {
   type RelatedViewDefinition,
   relatedViewsFor,
 } from "@cubby/schemas/related-view";
-import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { skipToken, useQuery } from "@tanstack/react-query";
 import { type ReactNode, useMemo } from "react";
 import { z } from "zod";
@@ -347,7 +347,7 @@ export function RelationshipRoutePreview({
       <div className="[scrollbar-width:thin] overflow-x-auto overscroll-x-contain">
         <div className="flex min-w-max items-center gap-2 px-1 md:min-w-0 md:flex-wrap">
           <SourcePreview source={model.source} />
-          <ArrowRight aria-hidden className="size-3 shrink-0 text-slate" />
+          <ArrowRightIcon aria-hidden className="size-3 shrink-0 text-slate" />
           <div className="flex items-center gap-1 text-xs font-medium whitespace-nowrap">
             <span>{model.relation.label}</span>
             <span className="font-mono text-2xs text-slate">

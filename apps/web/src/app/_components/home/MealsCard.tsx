@@ -1,5 +1,5 @@
 import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
-import { ForkKnifeIcon as UtensilsCrossed } from "@phosphor-icons/react/dist/csr/ForkKnife";
+import { ForkKnifeIcon } from "@phosphor-icons/react/dist/csr/ForkKnife";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format, isSameDay, parseISO } from "date-fns";
@@ -43,7 +43,7 @@ export function TodayMeals({
     <section aria-labelledby={titleId} className="min-w-0">
       <div className="flex items-start justify-between gap-3 border-b border-border pb-2">
         <div className="flex min-w-0 items-start gap-2">
-          <UtensilsCrossed
+          <ForkKnifeIcon
             className="mt-0.5 size-4 shrink-0 text-slate"
             aria-hidden
           />

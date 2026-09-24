@@ -1,7 +1,7 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { AuditChannel } from "@cubby/schemas/context";
-import { PulseIcon as Activity } from "@phosphor-icons/react/dist/csr/Pulse";
-import { WarningCircleIcon as CircleAlert } from "@phosphor-icons/react/dist/csr/WarningCircle";
+import { PulseIcon } from "@phosphor-icons/react/dist/csr/Pulse";
+import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { uniqBy } from "es-toolkit";
 import { useMemo } from "react";
@@ -124,7 +124,7 @@ export function AuditLogList({
   if (isError) {
     return (
       <Empty variant="minimal" className="py-6">
-        <EmptyIcon icon={CircleAlert} />
+        <EmptyIcon icon={WarningCircleIcon} />
         <EmptyTitle>Couldn&apos;t load activity</EmptyTitle>
         <EmptyDescription>
           {getErrorMessage(error) || "Try again to load recent activity."}
@@ -146,7 +146,7 @@ export function AuditLogList({
   if (entries.length === 0) {
     return (
       <Empty variant="minimal" className="py-6">
-        <EmptyIcon icon={Activity} />
+        <EmptyIcon icon={PulseIcon} />
         <EmptyTitle>No activity yet</EmptyTitle>
         <EmptyDescription>Actions you take will appear here</EmptyDescription>
       </Empty>

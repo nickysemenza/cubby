@@ -1,7 +1,7 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import { useDraggable } from "@dnd-kit/core";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { DotsSixVerticalIcon as GripVertical } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
 
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { resolveLocationPrimaryVisual } from "~/app/_components/locations/location-visual-resolver";
@@ -75,7 +75,7 @@ export function ArrangeLocationCard({
           {...listeners}
           {...attributes}
         >
-          <GripVertical className="size-3.5" />
+          <DotsSixVerticalIcon className="size-3.5" />
         </button>
         <ArrangeThumb
           images={cover ? [cover] : []}
@@ -106,7 +106,7 @@ export function ArrangeLocationCard({
             </span>
           )}
           {childCount > 0 && (
-            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            <CaretRightIcon className="size-4 shrink-0 text-muted-foreground" />
           )}
         </button>
       </Row>

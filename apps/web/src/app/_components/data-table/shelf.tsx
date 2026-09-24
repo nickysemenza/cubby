@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ListGroupSummary } from "@cubby/schemas/pagination";
-import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
+import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
@@ -221,7 +221,7 @@ export function ShelfCard({
           title={`Open ${title}`}
           className="absolute top-1 right-1 flex size-11 items-center justify-center border border-[var(--border)] bg-card/95 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:size-7"
         >
-          <ArrowUpRight className="size-4" />
+          <ArrowUpRightIcon className="size-4" />
         </Link>
       )}
     </div>

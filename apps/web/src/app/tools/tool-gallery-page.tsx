@@ -5,10 +5,10 @@ import type {
   ToolGalleryItemOut,
 } from "@cubby/schemas/project";
 import { toolGalleryGroupBy } from "@cubby/schemas/project";
-import { ArrowClockwiseIcon as RotateCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { SquaresFourIcon as LayoutGrid } from "@phosphor-icons/react/dist/csr/SquaresFour";
-import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { SquaresFourIcon } from "@phosphor-icons/react/dist/csr/SquaresFour";
+import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import {
   type RefObject,
@@ -180,7 +180,7 @@ export function ToolCard({
           className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.015]"
           fallback={
             <div className="flex h-full w-full items-center justify-center bg-[var(--domain-house-surface)] text-[var(--domain-house)]">
-              <Wrench className="size-8" aria-hidden />
+              <WrenchIcon className="size-8" aria-hidden />
             </div>
           }
         />
@@ -317,7 +317,7 @@ function EmptyGallery({
 }) {
   return (
     <Empty className="min-h-72 bg-card">
-      <EmptyIcon icon={query ? Search : Wrench} />
+      <EmptyIcon icon={query ? MagnifyingGlassIcon : WrenchIcon} />
       <EmptyHeader>
         <EmptyTitle>
           {query ? "No matching tools" : "No inventoried tools"}
@@ -888,7 +888,7 @@ export function ToolGalleryPage({
       <div className="space-y-3">
         <ErrorDisplay error={error} />
         <Button variant="outline" onClick={() => void refetch()}>
-          <RotateCw /> Retry
+          <ArrowClockwiseIcon /> Retry
         </Button>
       </div>
     );
@@ -930,7 +930,7 @@ export function ToolGalleryPage({
           htmlFor="tool-gallery-search"
           className="relative min-w-0 flex-1 sm:max-w-md"
         >
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <MagnifyingGlassIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <span className="sr-only">Search inventoried tools</span>
           <Input
             id="tool-gallery-search"
@@ -958,7 +958,7 @@ export function ToolGalleryPage({
         </label>
         {totals ? (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground sm:ml-auto">
-            <LayoutGrid className="size-3.5 text-[var(--domain-house)]" />
+            <SquaresFourIcon className="size-3.5 text-[var(--domain-house)]" />
             <span className="font-mono tabular-nums">
               {totals.products} tools · {totals.placements} placements
             </span>

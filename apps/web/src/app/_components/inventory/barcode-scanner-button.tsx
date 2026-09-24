@@ -7,7 +7,7 @@
  * app — reticle ROI, torch, beep, and same-code debounce included.
  */
 
-import { CameraIcon as Camera } from "@phosphor-icons/react/dist/csr/Camera";
+import { CameraIcon } from "@phosphor-icons/react/dist/csr/Camera";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -41,7 +41,7 @@ export function BarcodeScannerButton({
         className={className}
         title="Scan barcode"
       >
-        <Camera className="size-4" />
+        <CameraIcon className="size-4" />
       </Button>
       <ScanSheet
         open={open}

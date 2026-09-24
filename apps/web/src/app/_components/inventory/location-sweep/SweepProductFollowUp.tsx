@@ -9,7 +9,7 @@
  */
 
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { useEffect, useState } from "react";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
@@ -213,7 +213,7 @@ export function SweepProductFollowUp({
                 });
               }}
             >
-              {save.isPending ? <Spinner /> : <Check className="size-4" />}
+              {save.isPending ? <Spinner /> : <CheckIcon className="size-4" />}
               Save
             </Button>
           </Row>

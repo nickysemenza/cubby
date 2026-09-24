@@ -2,8 +2,8 @@ import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import type { EntityRef } from "@cubby/schemas/entity";
 import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import type { ProjectOut, TaskOut } from "@cubby/schemas/project";
-import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
-import { NetworkIcon as Network } from "@phosphor-icons/react/dist/csr/Network";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -208,7 +208,7 @@ function ProjectScheduleSurface({
               }
               className="inline-flex size-10 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:size-6"
             >
-              <Network className="size-3.5" aria-hidden="true" />
+              <NetworkIcon className="size-3.5" aria-hidden="true" />
             </button>
           )}
         </span>
@@ -227,7 +227,7 @@ function ProjectScheduleSurface({
         </span>
         <span className="inline-flex items-center gap-1">
           Open a name for its record{" "}
-          <ArrowRight className="size-3" aria-hidden="true" />
+          <ArrowRightIcon className="size-3" aria-hidden="true" />
         </span>
       </div>
       {selected && (

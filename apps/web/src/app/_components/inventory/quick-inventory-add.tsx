@@ -12,9 +12,9 @@ import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useCallback, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -350,7 +350,7 @@ export function QuickInventoryAdd({
                 onClick={() => handleCreateNew("")}
                 className="mb-1"
               >
-                <Plus className="mr-1 size-3" />
+                <PlusIcon className="mr-1 size-3" />
                 New
               </Button>
             </Row>
@@ -366,7 +366,7 @@ export function QuickInventoryAdd({
                 disabled={addMutation.isPending}
                 className="mb-1"
               >
-                <Plus className="size-4" />
+                <PlusIcon className="size-4" />
               </Button>
             </Row>
           </div>
@@ -393,7 +393,7 @@ export function QuickInventoryAdd({
             size="default"
             onClick={switchToSelectMode}
           >
-            <X className="mr-1 size-3" />
+            <XIcon className="mr-1 size-3" />
             Cancel
           </Button>
         </Row>
@@ -417,7 +417,7 @@ export function QuickInventoryAdd({
               "transition-colors",
             )}
           >
-            <ChevronDown
+            <CaretDownIcon
               className={cn(
                 "size-3 transition-transform",
                 fieldsExpanded && "rotate-180",
@@ -495,7 +495,7 @@ export function QuickInventoryAdd({
             {isCreating ? (
               <Spinner size="sm" />
             ) : (
-              <Plus className="mr-1 size-3" />
+              <PlusIcon className="mr-1 size-3" />
             )}
             Create & Add
           </Button>

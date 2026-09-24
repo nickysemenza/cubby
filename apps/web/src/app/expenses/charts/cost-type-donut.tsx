@@ -1,5 +1,5 @@
 import type { ExpenseCostTypeAggregate } from "@cubby/schemas/project";
-import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/dist/csr/ShoppingBag";
+import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 
@@ -58,7 +58,7 @@ export function CostTypeDonut({
           </div>
         );
       }}
-      emptyIcon={ShoppingBag}
+      emptyIcon={ShoppingBagIcon}
       emptyTitle="No expense data."
     />
   );

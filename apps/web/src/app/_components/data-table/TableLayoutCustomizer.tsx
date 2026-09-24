@@ -11,15 +11,15 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { ArrowDownIcon as ArrowDown } from "@phosphor-icons/react/dist/csr/ArrowDown";
-import { ArrowUpIcon as ArrowUp } from "@phosphor-icons/react/dist/csr/ArrowUp";
-import { DotsSixVerticalIcon as GripVertical } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
-import { DotsThreeIcon as MoreHorizontal } from "@phosphor-icons/react/dist/csr/DotsThree";
-import { EyeSlashIcon as EyeOff } from "@phosphor-icons/react/dist/csr/EyeSlash";
-import { PushPinSlashIcon as PinOff } from "@phosphor-icons/react/dist/csr/PushPinSlash";
-import { SidebarIcon as PanelLeft } from "@phosphor-icons/react/dist/csr/Sidebar";
-import { SidebarSimpleIcon as PanelRight } from "@phosphor-icons/react/dist/csr/SidebarSimple";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { ArrowDownIcon } from "@phosphor-icons/react/dist/csr/ArrowDown";
+import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp";
+import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
+import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
+import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
+import { PushPinSlashIcon } from "@phosphor-icons/react/dist/csr/PushPinSlash";
+import { SidebarIcon } from "@phosphor-icons/react/dist/csr/Sidebar";
+import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import type { RowData } from "@tanstack/react-table";
 import { useId } from "react";
 import { z } from "zod";
@@ -129,7 +129,7 @@ function SortableColumn<TData extends RowData>({
           {...attributes}
           {...listeners}
         >
-          <GripVertical className="size-3.5" />
+          <DotsSixVerticalIcon className="size-3.5" />
         </Button>
       )}
       <span className="truncate text-xs">
@@ -147,7 +147,7 @@ function SortableColumn<TData extends RowData>({
             disabled={index === 0}
             onClick={() => move(-1)}
           >
-            <ArrowUp className="size-3" />
+            <ArrowUpIcon className="size-3" />
           </Button>
           <Button
             variant="ghost"
@@ -156,7 +156,7 @@ function SortableColumn<TData extends RowData>({
             disabled={index === regionColumns.length - 1}
             onClick={() => move(1)}
           >
-            <ArrowDown className="size-3" />
+            <ArrowDownIcon className="size-3" />
           </Button>
           {region !== "start" && (
             <Button
@@ -165,7 +165,7 @@ function SortableColumn<TData extends RowData>({
               aria-label={`Pin ${columnLabel(column)} to start`}
               onClick={() => column.pin("start")}
             >
-              <PanelLeft className="size-3" />
+              <SidebarIcon className="size-3" />
             </Button>
           )}
           {region !== "end" && (
@@ -175,7 +175,7 @@ function SortableColumn<TData extends RowData>({
               aria-label={`Pin ${columnLabel(column)} to end`}
               onClick={() => column.pin("end")}
             >
-              <PanelRight className="size-3" />
+              <SidebarSimpleIcon className="size-3" />
             </Button>
           )}
           {region !== "center" && (
@@ -185,7 +185,7 @@ function SortableColumn<TData extends RowData>({
               aria-label={`Unpin ${columnLabel(column)}`}
               onClick={() => column.pin(false)}
             >
-              <PinOff className="size-3" />
+              <PushPinSlashIcon className="size-3" />
             </Button>
           )}
           {column.getCanHide() && (
@@ -195,7 +195,7 @@ function SortableColumn<TData extends RowData>({
               aria-label={`${column.getIsVisible() ? "Hide" : "Show"} ${columnLabel(column)}`}
               onClick={() => column.toggleVisibility()}
             >
-              <EyeOff className="size-3" />
+              <EyeSlashIcon className="size-3" />
             </Button>
           )}
         </div>
@@ -212,41 +212,41 @@ function SortableColumn<TData extends RowData>({
               />
             }
           >
-            <MoreHorizontal className="size-3.5" />
+            <DotsThreeIcon className="size-3.5" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuItem disabled={index === 0} onClick={() => move(-1)}>
-              <ArrowUp className="size-3.5" />
+              <ArrowUpIcon className="size-3.5" />
               Move earlier
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={index === regionColumns.length - 1}
               onClick={() => move(1)}
             >
-              <ArrowDown className="size-3.5" />
+              <ArrowDownIcon className="size-3.5" />
               Move later
             </DropdownMenuItem>
             {region !== "start" && (
               <DropdownMenuItem onClick={() => column.pin("start")}>
-                <PanelLeft className="size-3.5" />
+                <SidebarIcon className="size-3.5" />
                 Pin to start
               </DropdownMenuItem>
             )}
             {region !== "end" && (
               <DropdownMenuItem onClick={() => column.pin("end")}>
-                <PanelRight className="size-3.5" />
+                <SidebarSimpleIcon className="size-3.5" />
                 Pin to end
               </DropdownMenuItem>
             )}
             {region !== "center" && (
               <DropdownMenuItem onClick={() => column.pin(false)}>
-                <PinOff className="size-3.5" />
+                <PushPinSlashIcon className="size-3.5" />
                 Unpin
               </DropdownMenuItem>
             )}
             {column.getCanHide() && (
               <DropdownMenuItem onClick={() => column.toggleVisibility()}>
-                <EyeOff className="size-3.5" />
+                <EyeSlashIcon className="size-3.5" />
                 {column.getIsVisible() ? "Hide" : "Show"} {columnLabel(column)}
               </DropdownMenuItem>
             )}
@@ -410,7 +410,7 @@ export default function TableLayoutCustomizer<TData extends RowData>({
         />
       </DndContext>
       <Button variant="ghost" size="sm" className="w-full" onClick={reset}>
-        <RotateCcw className="size-3.5" />
+        <ArrowCounterClockwiseIcon className="size-3.5" />
         Restore default layout
       </Button>
     </div>

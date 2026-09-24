@@ -1,5 +1,5 @@
 import { nutritionBasis as nutritionBasisSchema } from "@cubby/schemas/nutrition";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import {
   createFileRoute,
   stripSearchParams,
@@ -89,7 +89,7 @@ function RecipeDetailBody({
       heroActions={{
         primary: (
           <Button onClick={stopEditing} variant="outline" size="sm">
-            <X />
+            <XIcon />
             Cancel
           </Button>
         ),

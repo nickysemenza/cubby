@@ -3,8 +3,8 @@ import type {
   FinancialTransactionOut,
 } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { PencilIcon as Pencil } from "@phosphor-icons/react/dist/csr/Pencil";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useCallback, useMemo } from "react";
 
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
@@ -158,7 +158,7 @@ export function LinkedTransactions({
                     onEditTransaction(row.original);
                   }}
                 >
-                  <Pencil />
+                  <PencilIcon />
                 </Button>
               ),
             }),
@@ -188,7 +188,7 @@ export function LinkedTransactions({
       {onAddTransaction ? (
         <Row justify="end">
           <Button type="button" size="sm" onClick={onAddTransaction}>
-            <Plus />
+            <PlusIcon />
             Add transaction
           </Button>
         </Row>

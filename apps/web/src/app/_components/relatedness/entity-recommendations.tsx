@@ -5,8 +5,8 @@ import type {
   ExpenseProjectProposal,
 } from "@cubby/schemas/entity-recommendations";
 import type { InventoryPlacementProposal } from "@cubby/schemas/entity-recommendations";
-import { ArrowClockwiseIcon as RotateCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
-import { LightbulbIcon as Lightbulb } from "@phosphor-icons/react/dist/csr/Lightbulb";
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { LightbulbIcon } from "@phosphor-icons/react/dist/csr/Lightbulb";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
@@ -175,7 +175,7 @@ export function EntityRecommendations({
           variant="outline"
           onClick={() => void query.refetch()}
         >
-          <RotateCw className="size-3.5" />
+          <ArrowClockwiseIcon className="size-3.5" />
           Retry suggestions
         </Button>
       </Row>
@@ -208,7 +208,7 @@ export function EntityRecommendations({
     <Stack gap="sm" aria-label="Suggestions">
       {!compact && (
         <Row align="center" gap="xs" className="text-sm font-medium">
-          <Lightbulb className="size-3.5" />
+          <LightbulbIcon className="size-3.5" />
           Derived suggestions
         </Row>
       )}

@@ -1,4 +1,4 @@
-import { ImageBrokenIcon as ImageOff } from "@phosphor-icons/react/dist/csr/ImageBroken";
+import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken";
 import {
   type ComponentProps,
   type ReactNode,
@@ -114,7 +114,7 @@ export function Image({
         aria-hidden={accessibleAlt ? undefined : true}
       >
         {fallback ?? (
-          <ImageOff
+          <ImageBrokenIcon
             className="h-1/3 max-h-5 w-1/3 max-w-5 text-muted-foreground/40"
             aria-hidden
           />

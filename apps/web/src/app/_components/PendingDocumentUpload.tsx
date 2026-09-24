@@ -1,7 +1,7 @@
 import type { EntityImage } from "@cubby/schemas/entity";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
-import { FileTextIcon as FileText } from "@phosphor-icons/react/dist/csr/FileText";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useMutation } from "@tanstack/react-query";
 import prettyBytes from "pretty-bytes";
 import { useCallback, useState } from "react";
@@ -57,7 +57,7 @@ function DocumentRow({
       gap="sm"
       className="min-w-0 border border-[var(--border)] px-2 py-1"
     >
-      <FileText className="size-4 shrink-0 text-muted-foreground" />
+      <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1 truncate text-sm">
         {document.filename}
       </span>
@@ -73,7 +73,7 @@ function DocumentRow({
         className="size-6 shrink-0 text-muted-foreground hover:text-destructive"
         onClick={onRemove}
       >
-        <X className="size-4" />
+        <XIcon className="size-4" />
       </Button>
     </Row>
   );

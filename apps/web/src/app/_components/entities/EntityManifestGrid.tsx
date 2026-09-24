@@ -8,7 +8,7 @@ import {
   photoCategories,
 } from "@cubby/schemas/entity-manifest";
 import { LEGACY_SHORTCODE_PREFIX } from "@cubby/shared";
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { useQuery } from "@tanstack/react-query";
 import { Fragment, type ReactNode } from "react";
 
@@ -707,7 +707,7 @@ function MegaTable({
                     aria-controls={`entity-details-${entity}`}
                     onClick={() => onSelect(isSelected ? null : entity)}
                   >
-                    <ChevronDown
+                    <CaretDownIcon
                       aria-hidden
                       className={cn(
                         "size-3.5 shrink-0 transition-transform",

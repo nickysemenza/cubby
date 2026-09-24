@@ -4,8 +4,8 @@ import type {
   InventoryItemForTree,
 } from "@cubby/schemas/location";
 import { useDraggable } from "@dnd-kit/core";
-import { DotsSixVerticalIcon as GripVertical } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
-import { PackageIcon as Package } from "@phosphor-icons/react/dist/csr/Package";
+import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
+import { PackageIcon } from "@phosphor-icons/react/dist/csr/Package";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
@@ -69,7 +69,7 @@ export function ArrangeItemChip({
         {...listeners}
         {...attributes}
       >
-        <GripVertical className="size-3" />
+        <DotsSixVerticalIcon className="size-3" />
       </button>
       <ArrangeThumb
         images={images}
@@ -79,7 +79,7 @@ export function ArrangeItemChip({
         // -my cancels the chip's own py so the cover is full-bleed. The name is
         // line-clamped to two lines, so the tile follows a two-line chip up.
         className="-my-1"
-        fallback={<Package className="size-3" />}
+        fallback={<PackageIcon className="size-3" />}
         to="/products/$shortcode"
         shortcode={item.productId}
       />

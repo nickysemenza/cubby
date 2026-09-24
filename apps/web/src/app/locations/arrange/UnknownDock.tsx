@@ -1,5 +1,5 @@
 import type { InfLocation } from "@cubby/schemas/location";
-import { QuestionIcon as HelpCircle } from "@phosphor-icons/react/dist/csr/Question";
+import { QuestionIcon } from "@phosphor-icons/react/dist/csr/Question";
 
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
@@ -45,7 +45,7 @@ export function UnknownDock({ unknownRoot, roots }: UnknownDockProps) {
       )}
     >
       <Row align="center" gap="sm">
-        <HelpCircle className="size-4 text-muted-foreground" />
+        <QuestionIcon className="size-4 text-muted-foreground" />
         <span className="text-sm font-medium">Unknown staging</span>
         <Description as="span" size="2xs" className="ml-auto">
           {count}

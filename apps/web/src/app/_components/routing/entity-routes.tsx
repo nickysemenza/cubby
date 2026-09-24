@@ -6,11 +6,11 @@ import {
 } from "@cubby/schemas/entity-definitions/definition";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import { CalendarCheckIcon as CalendarClock } from "@phosphor-icons/react/dist/csr/CalendarCheck";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
-import { GridFourIcon as Grid2X2 } from "@phosphor-icons/react/dist/csr/GridFour";
-import { GridNineIcon as Grid3X3 } from "@phosphor-icons/react/dist/csr/GridNine";
-import { TableIcon as Table2 } from "@phosphor-icons/react/dist/csr/Table";
+import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { GridFourIcon } from "@phosphor-icons/react/dist/csr/GridFour";
+import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
+import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import type { Icon } from "@phosphor-icons/react/lib";
 import type { UseSuspenseQueryOptions } from "@tanstack/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
@@ -97,9 +97,9 @@ interface EntityListPageOptions {
 }
 
 const VIEW_ICONS = {
-  table: Table2,
-  shelf: Grid2X2,
-  timeline: CalendarClock,
+  table: TableIcon,
+  shelf: GridFourIcon,
+  timeline: CalendarCheckIcon,
 } satisfies Record<"table" | "shelf" | "timeline", Icon>;
 
 /** The segmented view control, rendered only when the manifest declares more than one view. */
@@ -123,7 +123,7 @@ function ListViewSwitcher({ entity }: { entity: BrowserRoutedEntity }) {
           {
             value: "compact",
             label: listPresentationLabel("compact") ?? "Compact",
-            icon: Grid3X3,
+            icon: GridNineIcon,
           },
         ]
       : [choice];
@@ -163,7 +163,7 @@ function ListViewSwitcher({ entity }: { entity: BrowserRoutedEntity }) {
                 aria-current={option.value === selected ? "true" : undefined}
                 onClick={() => onValueChange(option.value)}
               >
-                {option.value === selected && <Check aria-hidden />}
+                {option.value === selected && <CheckIcon aria-hidden />}
                 {option.label}
               </DropdownMenuItem>
             ))}

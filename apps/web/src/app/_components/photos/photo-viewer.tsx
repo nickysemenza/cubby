@@ -1,7 +1,7 @@
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
-import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
-import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
 
 import { Button, buttonVariants } from "~/components/ui/button";
@@ -65,7 +65,7 @@ export function PhotoViewer<TImage extends PhotoGridImage>({
               aria-label="Previous image"
               onClick={() => onIndexChange(currentIndex - 1)}
             >
-              <ChevronLeft className="size-4" />
+              <CaretLeftIcon className="size-4" />
             </Button>
           ) : null}
           {hasNext ? (
@@ -77,7 +77,7 @@ export function PhotoViewer<TImage extends PhotoGridImage>({
               aria-label="Next image"
               onClick={() => onIndexChange(currentIndex + 1)}
             >
-              <ChevronRight className="size-4" />
+              <CaretRightIcon className="size-4" />
             </Button>
           ) : null}
         </div>
@@ -88,7 +88,7 @@ export function PhotoViewer<TImage extends PhotoGridImage>({
               params={detailLink(image)}
               className={buttonVariants({ variant: "secondary" })}
             >
-              <ExternalLink className="size-3.5" />
+              <ArrowSquareOutIcon className="size-3.5" />
               View image details
             </Link>
           ) : null}

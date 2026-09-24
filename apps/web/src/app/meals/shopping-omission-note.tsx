@@ -1,7 +1,7 @@
 import type { ShoppingListOut, UnexpandedSubRecipe } from "@cubby/schemas/meal";
 import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
-import { InfoIcon as Info } from "@phosphor-icons/react/dist/csr/Info";
-import { WarningIcon as TriangleAlert } from "@phosphor-icons/react/dist/csr/Warning";
+import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 
@@ -49,7 +49,7 @@ export function ShoppingOmissionNote({
           className="border border-warning/40 bg-warning/5 px-2 py-2 text-2xs"
         >
           <Row gap="xs" align="center" className="text-warning-ink">
-            <TriangleAlert className="size-3" />
+            <WarningIcon className="size-3" />
             <span className="font-medium">
               {unique.length} sub-recipe{unique.length === 1 ? "" : "s"}{" "}
               couldn't be broken down — {unique.length === 1 ? "its" : "their"}{" "}
@@ -83,7 +83,7 @@ export function ShoppingOmissionNote({
           className="border border-[var(--border)] bg-muted/30 px-2 py-2 text-2xs"
         >
           <Row gap="xs" align="center" className="text-muted-foreground">
-            <Info className="size-3" />
+            <InfoIcon className="size-3" />
             <span className="font-medium">
               {omittedMeals.length} meal{omittedMeals.length === 1 ? "" : "s"}{" "}
               in this range {omittedMeals.length === 1 ? "isn't" : "aren't"}{" "}

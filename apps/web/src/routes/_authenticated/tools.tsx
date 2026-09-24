@@ -1,8 +1,8 @@
 import type { ToolGalleryGroupBy } from "@cubby/schemas/project";
-import { GridFourIcon as Grid2X2 } from "@phosphor-icons/react/dist/csr/GridFour";
-import { GridNineIcon as Grid3X3 } from "@phosphor-icons/react/dist/csr/GridNine";
-import { LayoutIcon as PanelsTopLeft } from "@phosphor-icons/react/dist/csr/Layout";
-import { TableIcon as TableProperties } from "@phosphor-icons/react/dist/csr/Table";
+import { GridFourIcon } from "@phosphor-icons/react/dist/csr/GridFour";
+import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
+import { LayoutIcon } from "@phosphor-icons/react/dist/csr/Layout";
+import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 
@@ -26,10 +26,10 @@ import { pageTitle } from "~/lib/page-title";
 type ToolsView = ToolGalleryPresentation | "usage";
 
 const VIEW_OPTIONS: ViewSwitcherOption<ToolsView>[] = [
-  { value: "cards", label: "Cards", icon: Grid2X2 },
-  { value: "compact", label: "Compact", icon: Grid3X3 },
-  { value: "flow", label: "Flow", icon: PanelsTopLeft },
-  { value: "usage", label: "Usage", icon: TableProperties },
+  { value: "cards", label: "Cards", icon: GridFourIcon },
+  { value: "compact", label: "Compact", icon: GridNineIcon },
+  { value: "flow", label: "Flow", icon: LayoutIcon },
+  { value: "usage", label: "Usage", icon: TableIcon },
 ];
 
 export const Route = createFileRoute("/_authenticated/tools")({

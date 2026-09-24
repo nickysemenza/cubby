@@ -2,9 +2,9 @@ import type {
   CalendarCredential,
   CalendarRotateCredential,
 } from "@cubby/schemas/calendar";
-import { ArrowsClockwiseIcon as CalendarSync } from "@phosphor-icons/react/dist/csr/ArrowsClockwise";
-import { CopyIcon as Copy } from "@phosphor-icons/react/dist/csr/Copy";
-import { KeyIcon as KeyRound } from "@phosphor-icons/react/dist/csr/Key";
+import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowsClockwise";
+import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
+import { KeyIcon } from "@phosphor-icons/react/dist/csr/Key";
 import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -53,7 +53,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
         );
       }}
     >
-      <Copy className="size-3" aria-hidden />
+      <CopyIcon className="size-3" aria-hidden />
       Copy
     </Button>
   );
@@ -225,7 +225,7 @@ export function CalendarAppPasswordSection({
           <SetupNotes />
           <Row justify="end">
             <Button disabled={isRotating} onClick={onRotate}>
-              <KeyRound className="size-3" aria-hidden />
+              <KeyIcon className="size-3" aria-hidden />
               {isRotating ? "Generating…" : "Create app password"}
             </Button>
           </Row>
@@ -387,7 +387,7 @@ export function CalendarConnectDialog() {
       <DialogTrigger
         render={
           <Button variant="outline" size="sm">
-            <CalendarSync className="size-3" aria-hidden />
+            <ArrowsClockwiseIcon className="size-3" aria-hidden />
             Connect Calendar
           </Button>
         }

@@ -1,23 +1,23 @@
 import { type Trade, tradeValues } from "@cubby/schemas/project";
-import { ArchiveIcon as Archive } from "@phosphor-icons/react/dist/csr/Archive";
-import { CarIcon as Car } from "@phosphor-icons/react/dist/csr/Car";
-import { ClipboardTextIcon as ClipboardList } from "@phosphor-icons/react/dist/csr/ClipboardText";
-import { DropIcon as Droplets } from "@phosphor-icons/react/dist/csr/Drop";
-import { FanIcon as Fan } from "@phosphor-icons/react/dist/csr/Fan";
-import { GridNineIcon as Grid3x3 } from "@phosphor-icons/react/dist/csr/GridNine";
-import { HammerIcon as Hammer } from "@phosphor-icons/react/dist/csr/Hammer";
-import { LightningIcon as Zap } from "@phosphor-icons/react/dist/csr/Lightning";
-import { OvenIcon as Refrigerator } from "@phosphor-icons/react/dist/csr/Oven";
-import { PaintRollerIcon as PaintRoller } from "@phosphor-icons/react/dist/csr/PaintRoller";
-import { PaletteIcon as Palette } from "@phosphor-icons/react/dist/csr/Palette";
-import { RectangleIcon as RectangleHorizontal } from "@phosphor-icons/react/dist/csr/Rectangle";
-import { RulerIcon as Ruler } from "@phosphor-icons/react/dist/csr/Ruler";
-import { ShapesIcon as OtherTradeIcon } from "@phosphor-icons/react/dist/csr/Shapes";
-import { SquareIcon as Square } from "@phosphor-icons/react/dist/csr/Square";
-import { TrashIcon as Trash2 } from "@phosphor-icons/react/dist/csr/Trash";
-import { TreeIcon as Trees } from "@phosphor-icons/react/dist/csr/Tree";
-import { TruckIcon as Truck } from "@phosphor-icons/react/dist/csr/Truck";
-import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
+import { ArchiveIcon } from "@phosphor-icons/react/dist/csr/Archive";
+import { CarIcon } from "@phosphor-icons/react/dist/csr/Car";
+import { ClipboardTextIcon } from "@phosphor-icons/react/dist/csr/ClipboardText";
+import { DropIcon } from "@phosphor-icons/react/dist/csr/Drop";
+import { FanIcon } from "@phosphor-icons/react/dist/csr/Fan";
+import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
+import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
+import { LightningIcon } from "@phosphor-icons/react/dist/csr/Lightning";
+import { OvenIcon } from "@phosphor-icons/react/dist/csr/Oven";
+import { PaintRollerIcon } from "@phosphor-icons/react/dist/csr/PaintRoller";
+import { PaletteIcon } from "@phosphor-icons/react/dist/csr/Palette";
+import { RectangleIcon } from "@phosphor-icons/react/dist/csr/Rectangle";
+import { RulerIcon } from "@phosphor-icons/react/dist/csr/Ruler";
+import { ShapesIcon } from "@phosphor-icons/react/dist/csr/Shapes";
+import { SquareIcon } from "@phosphor-icons/react/dist/csr/Square";
+import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
+import { TreeIcon } from "@phosphor-icons/react/dist/csr/Tree";
+import { TruckIcon } from "@phosphor-icons/react/dist/csr/Truck";
+import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import type { Icon } from "@phosphor-icons/react/lib";
 
 import { Badge } from "~/components/ui/badge";
@@ -44,25 +44,25 @@ import { TRADE_LABELS } from "./project-formatting";
  * Porcelain surfaces without a glossy clash.
  */
 const TRADE_ICONS = {
-  planning: ClipboardList,
-  demolition: Trash2,
-  building: Hammer,
-  drywall: Square,
-  electrical: Zap,
-  plumbing: Droplets,
-  mechanical: Fan,
-  cabinetry: Archive,
-  countertop: RectangleHorizontal,
-  flooring: Grid3x3,
-  millwork: Ruler,
-  finishes: PaintRoller,
-  appliances: Refrigerator,
-  landscaping: Trees,
-  logistics: Truck,
-  metalworking: Wrench,
-  crafts: Palette,
-  auto: Car,
-  other: OtherTradeIcon,
+  planning: ClipboardTextIcon,
+  demolition: TrashIcon,
+  building: HammerIcon,
+  drywall: SquareIcon,
+  electrical: LightningIcon,
+  plumbing: DropIcon,
+  mechanical: FanIcon,
+  cabinetry: ArchiveIcon,
+  countertop: RectangleIcon,
+  flooring: GridNineIcon,
+  millwork: RulerIcon,
+  finishes: PaintRollerIcon,
+  appliances: OvenIcon,
+  landscaping: TreeIcon,
+  logistics: TruckIcon,
+  metalworking: WrenchIcon,
+  crafts: PaletteIcon,
+  auto: CarIcon,
+  other: ShapesIcon,
 } satisfies Record<Trade, Icon>;
 
 /** Outline badge with the trade's leading glyph + label — the canonical trade chip. */

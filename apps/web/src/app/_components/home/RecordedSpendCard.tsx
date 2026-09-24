@@ -1,5 +1,5 @@
 import type { ExpenseMonthlyAggregate } from "@cubby/schemas/project";
-import { ChartBarIcon as ChartNoAxesColumnIncreasing } from "@phosphor-icons/react/dist/csr/ChartBar";
+import { ChartBarIcon } from "@phosphor-icons/react/dist/csr/ChartBar";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { useId, useMemo } from "react";
@@ -69,7 +69,7 @@ export function RecordedSpendCard({ asOf }: { asOf: HomeAsOfWindow }) {
 
   return (
     <DashboardCard
-      icon={ChartNoAxesColumnIncreasing}
+      icon={ChartBarIcon}
       title="Recorded spend"
       description="Last six calendar months · actual expenses only"
       action={<CardActionLink to="/expenses">Ledger</CardActionLink>}
