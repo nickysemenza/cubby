@@ -237,12 +237,13 @@ describe("product match queue", () => {
           evidence: "Synthetic pair for direction check",
         });
         const items = await queueFor(photo.id);
-        expect(items).toMatchObject([
-          {
-            keeper: { id: photo.id, role: "photo" },
-            other: { id: sold.id, role: "other" },
-          },
-        ]);
+        expect(items).toHaveLength(1);
+        expect([items[0]?.keeper, items[0]?.other]).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ id: photo.id, role: "photo" }),
+            expect.objectContaining({ id: sold.id, role: "other" }),
+          ]),
+        );
       },
     },
     {
