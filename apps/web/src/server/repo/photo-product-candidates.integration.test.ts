@@ -48,6 +48,11 @@ describe("photo product candidates", () => {
       manufacturer: "ForgeWear",
     });
     expect(matches[0]?.id).toBe(clean.id);
+    expect(matches[0]?.match).toEqual({
+      source: "catalog_name",
+      sharedNameTerms: ["pocket", "tee", "black", "small"],
+      brandMatches: true,
+    });
     expect(
       matches.find((item) => item.id === photographed.id)?.hasOwnPhoto,
     ).toBe(true);

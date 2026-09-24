@@ -55,6 +55,11 @@ type CandidateFact = {
   hasInventory: boolean;
 };
 
+type RankedCandidate = CandidateFact & {
+  sharedNameTerms: string[];
+  brandMatches: boolean;
+};
+
 /** Splits compact vendor titles like `ForgeWearMenPocketShirtBlackSmall`. */
 function productIdentityWords(value: string): Set<string> {
   const spaced = value.replace(/([a-z])([A-Z])/g, "$1 $2");
@@ -73,17 +78,21 @@ export function rankPhotoProductCandidates(
   name: string,
   manufacturer: string | null,
   candidates: readonly CandidateFact[],
-): CandidateFact[] {
+): RankedCandidate[] {
   const wanted = productIdentityWords(name);
   const brand = manufacturer?.toLowerCase().trim() || null;
+  const brandWords = manufacturer
+    ? productIdentityWords(manufacturer)
+    : new Set<string>();
   const scored = candidates.flatMap((candidate) => {
     const words = productIdentityWords(candidate.name);
     const shared = [...wanted].filter((word) => words.has(word));
+    const sharedIdentity = shared.filter((word) => !brandWords.has(word));
     const brandMatch =
       !!brand &&
       (candidate.manufacturer?.toLowerCase() === brand ||
         candidate.name.toLowerCase().includes(brand));
-    if (shared.length < 2 && !(brandMatch && shared.length >= 1)) return [];
+    if (sharedIdentity.length < (brandMatch ? 1 : 2)) return [];
     // One additional identity word (often the exact color or size) must outrank
     // every provenance preference combined. Provenance breaks ties between
     // plausible variants; it cannot turn a different variant into the match.
@@ -97,7 +106,7 @@ export function rankPhotoProductCandidates(
       (candidate.hasPurchase ? 3 : 0) -
       (candidate.hasInventory ? 6 : 0);
     const score = identityScore + provenanceScore;
-    return [{ candidate, score }];
+    return [{ candidate, score, sharedIdentity, brandMatch }];
   });
   return scored
     .sort(
@@ -106,7 +115,11 @@ export function rankPhotoProductCandidates(
         a.candidate.shortcode.localeCompare(b.candidate.shortcode),
     )
     .slice(0, SUGGESTION_LIMIT)
-    .map(({ candidate }) => candidate);
+    .map(({ candidate, sharedIdentity, brandMatch }) => ({
+      ...candidate,
+      sharedNameTerms: sharedIdentity,
+      brandMatches: brandMatch,
+    }));
 }
 
 const searchPattern = (value: string) =>
@@ -190,6 +203,11 @@ export async function findPhotoProductCandidates(
     id: parseShortcodeFor("product", candidate.shortcode),
     name: candidate.name,
     coverUrl: covers.get(candidate.id) ?? null,
+    match: {
+      source: "catalog_name" as const,
+      sharedNameTerms: candidate.sharedNameTerms,
+      brandMatches: candidate.brandMatches,
+    },
     hasOwnPhoto: candidate.hasOwnPhoto,
     hasPhotoImport: candidate.hasPhotoImport,
     hasPurchase: candidate.hasPurchase,

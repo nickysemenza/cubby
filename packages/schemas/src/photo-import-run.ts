@@ -349,6 +349,9 @@ export const photoRunImage = z.object({
   /** Current-source subject-lift and description job states; null = never queued. */
   cutout: imageProcessingJobState.nullable(),
   describe: imageProcessingJobState.nullable(),
+  /** The current description job's dispatch-to-completion interval, if recorded. */
+  describeStartedAt: z.iso.datetime().nullable(),
+  describeCompletedAt: z.iso.datetime().nullable(),
   /** True after the device has submitted its local Vision analysis. */
   localAnalysisReady: z.boolean(),
   /** The cutout processor's skip or failure reason, e.g. `not_suitable`. */
@@ -363,6 +366,12 @@ export const photoProductCandidate = z.object({
   id: productShortcode,
   name: z.string(),
   coverUrl: z.string().nullable(),
+  /** Deterministic catalogue matching, not an agent or model decision. */
+  match: z.object({
+    source: z.literal("catalog_name"),
+    sharedNameTerms: z.array(z.string()),
+    brandMatches: z.boolean(),
+  }),
   hasOwnPhoto: z.boolean(),
   hasPhotoImport: z.boolean(),
   hasPurchase: z.boolean(),

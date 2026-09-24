@@ -1,9 +1,19 @@
-import { imageShortcode, importRunShortcode } from "@cubby/schemas/identifiers";
+import {
+  imageShortcode,
+  importRunShortcode,
+  productShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   PhotoRunImage,
   PhotoRunReview,
 } from "@cubby/schemas/photo-import-run";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ImportRunDetail } from "~/lib/purchase-import-run-detail";
@@ -113,6 +123,8 @@ const photo = (
   cutoutUrl: text.cutout ? `https://img.example.com/${id}-cutout.png` : null,
   cutout: null,
   describe: null,
+  describeStartedAt: null,
+  describeCompletedAt: null,
   localAnalysisReady: Boolean(text.recognizedText),
   cutoutReason: null,
   describeReason: null,
@@ -213,6 +225,92 @@ describe("PhotoImportRunView", () => {
     expect(screen.queryByText("Size M")).not.toBeInTheDocument();
     expect(screen.getByText("Device: Done")).toBeInTheDocument();
     expect(screen.getAllByText("Device: Not received")).toHaveLength(2);
+  });
+
+  it("shows a neutral skipped cutout pill with the label-only reason", async () => {
+    harness.queryClient.setQueryData(
+      ["purchase-import", "run", RUN_ID, "photo-review"],
+      {
+        ...review,
+        review: {
+          ...review.review,
+          proposals: [
+            {
+              groupKey: "fixture-sweater",
+              state: "committed",
+              images: [
+                { id: imageShortcode.parse("IMG-4K7M"), purpose: "item" },
+                { id: imageShortcode.parse("IMG-4K7N"), purpose: "label" },
+              ],
+              skip: [],
+              product: { kind: "create", create: { name: "Fixture sweater" } },
+              committedProduct: {
+                id: productShortcode.parse("PRD-4K7M"),
+                name: "Fixture sweater",
+                coverUrl: null,
+              },
+              inventory: null,
+              evidence: null,
+              conflict: null,
+              lastError: null,
+              missingImageCount: 0,
+              committedAt: "2026-09-20T16:04:00.000Z",
+              updatedAt: "2026-09-20T16:04:00.000Z",
+            },
+          ],
+        },
+        images: review.images.map((image) =>
+          image.id === "IMG-4K7N"
+            ? {
+                ...image,
+                cutout: "skipped",
+                cutoutReason: "Image is attached only as label evidence",
+              }
+            : image,
+        ),
+      } satisfies PhotoRunReview,
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          candidates: [
+            {
+              id: "PRD-4K7N",
+              name: "ForgeWear pocket tee black small",
+              coverUrl: null,
+              match: {
+                source: "catalog_name",
+                sharedNameTerms: ["pocket", "tee", "black", "small"],
+                brandMatches: true,
+              },
+              hasOwnPhoto: false,
+              hasPhotoImport: false,
+              hasPurchase: true,
+              hasInventory: false,
+            },
+          ],
+        }),
+      ),
+    );
+    render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
+
+    expect(await screen.findByText("Cutout: Skipped")).toHaveAttribute(
+      "data-slot",
+      "badge",
+    );
+    expect(
+      screen.getByLabelText(
+        "Cutout: Skipped. This photo is label evidence, so it does not need a cutout.",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Review possible matches" }),
+    );
+    expect(await screen.findByText("Database search")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Shared name: pocket, tee, black, small/),
+    ).toBeInTheDocument();
   });
 
   it("holds approval while cloud description runs, then enables it without waiting for device analysis or cutout", async () => {

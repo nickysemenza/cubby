@@ -58,6 +58,7 @@ describe("photo product candidate ranking", () => {
           false,
           false,
         ),
+        candidate("PRD-7A2F", "ForgeWear socks", false, false),
       ],
     );
     expect(ranked.map((item) => item.shortcode)).toEqual([

@@ -57,6 +57,11 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { readJsonOrThrow } from "~/lib/http-error";
 import {
   IMPORT_RUN_TARGET_STATE_LABEL,
@@ -706,10 +711,18 @@ function PhotoProductSuggestions({
   if (!suggestions.data.candidates.length) return null;
   return (
     <div className="min-w-0 rounded-md border border-border bg-muted/30 p-2">
-      <p className="mb-2 text-xs font-semibold">
-        {settled
-          ? "Possible product matches"
-          : "Could this already be a product?"}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <p className="text-xs font-semibold">
+          {settled
+            ? "Possible product matches"
+            : "Could this already be a product?"}
+        </p>
+        <Badge variant="outline">Database search</Badge>
+      </div>
+      <p className="mb-2 text-2xs text-muted-foreground">
+        Shared product names and brand rank these results. Purchase and photo
+        history also affect their order; Jev and frontier AI did not select
+        them.
       </p>
       <div className="space-y-1">
         {suggestions.data.candidates.slice(0, 3).map((candidate) => (
@@ -729,6 +742,14 @@ function PhotoProductSuggestions({
                 title={candidate.name}
               >
                 {candidate.name}
+              </p>
+              <p className="text-2xs text-muted-foreground">
+                {candidate.match.brandMatches ? "Brand name matches · " : ""}
+                Shared name:{" "}
+                {candidate.match.sharedNameTerms.slice(0, 5).join(", ")}
+                {candidate.match.sharedNameTerms.length > 5
+                  ? ` +${candidate.match.sharedNameTerms.length - 5} more`
+                  : ""}
               </p>
               <p className="text-2xs text-muted-foreground">
                 {[
@@ -1189,18 +1210,33 @@ function ProcessingBadge({
           : state === "leased"
             ? CircleNotchIcon
             : ClockIcon;
-  return (
-    <Badge
-      variant={PROCESSING_VARIANT[state]}
-      title={reason ?? undefined}
-      className="max-w-full"
-    >
+  const explanation =
+    reason === "not_suitable"
+      ? "Subject lift found no suitable item to cut out."
+      : reason === "Image is attached only as label evidence"
+        ? "This photo is label evidence, so it does not need a cutout."
+        : reason;
+  const badge = (
+    <Badge variant={PROCESSING_VARIANT[state]} className="max-w-full">
       <Icon
         className={`size-3 shrink-0 ${state === "leased" ? "animate-spin" : ""}`}
         aria-hidden="true"
       />
       {label}: {PROCESSING_LABEL[state]}
     </Badge>
+  );
+  if (!explanation) return badge;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<span className="inline-flex w-fit cursor-help" />}
+        tabIndex={0}
+        aria-label={`${label}: ${PROCESSING_LABEL[state]}. ${explanation}`}
+      >
+        {badge}
+      </TooltipTrigger>
+      <TooltipContent>{explanation}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -1309,22 +1345,23 @@ function PhotoTable({
                           Device:{" "}
                           {photo.localAnalysisReady ? "Done" : "Not received"}
                         </Badge>
-                        {labelImages.has(photo.id) && !photo.cutoutUrl ? (
-                          <span className="text-2xs text-muted-foreground">
-                            Cutout: not needed for label
-                          </span>
-                        ) : (
-                          <ProcessingBadge
-                            label="Cutout"
-                            state={photo.cutout}
-                            reason={photo.cutoutReason}
-                          />
-                        )}
-                        {photo.cutoutReason ? (
-                          <span className="max-w-56 text-2xs break-words text-muted-foreground">
-                            {photo.cutoutReason}
-                          </span>
-                        ) : null}
+                        <ProcessingBadge
+                          label="Cutout"
+                          state={
+                            photo.cutout ??
+                            (labelImages.has(photo.id) &&
+                            photo.targetState === "completed"
+                              ? "skipped"
+                              : null)
+                          }
+                          reason={
+                            photo.cutoutReason ??
+                            (labelImages.has(photo.id) &&
+                            photo.targetState === "completed"
+                              ? "Image is attached only as label evidence"
+                              : null)
+                          }
+                        />
                         <ProcessingBadge
                           label="AI description"
                           state={photo.describe}

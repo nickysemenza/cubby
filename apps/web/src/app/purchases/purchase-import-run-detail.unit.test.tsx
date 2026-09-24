@@ -206,4 +206,10 @@ it("shows durable progress and diagnostics alongside photo group review", async 
     "extract-1",
   );
   expect(await screen.findByText("System and Mac log")).toBeInTheDocument();
+  expect(await screen.findByText("Work at a glance")).toBeInTheDocument();
+  expect(screen.getByText("Purchase import complete")).toBeInTheDocument();
+  expect(screen.queryByText("Extracted order details")).not.toBeInTheDocument();
+  expect(
+    screen.getByText("Agent messages and tool calls · 0 messages"),
+  ).toBeInTheDocument();
 });
