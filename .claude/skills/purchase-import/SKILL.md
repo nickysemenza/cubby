@@ -5,6 +5,15 @@ description: Support Cubby purchase imports when learning a vendor, ingesting a 
 
 # Purchase-import support
 
+For a durable account sync, purchase validation, or product enrichment run,
+load [run-workflow.md](references/run-workflow.md). For receipt or browser
+extraction and post-commit audit, load the respective
+[extraction](references/extraction.md) and [audit](references/audit.md)
+instructions. For a photographed receipt or a Gmail order event, load
+[receipt extraction](references/receipt-extraction.md) or
+[order mail](references/order-mail.md). Flue, Codex, and Claude share these
+contracts.
+
 Flue, Claude, and Codex use this same workflow. Flue owns routine browser,
 email, receipt, retry, audit, and lifecycle orchestration; a human agent may
 continue the same work for unusual evidence. Source-backed orders always pass

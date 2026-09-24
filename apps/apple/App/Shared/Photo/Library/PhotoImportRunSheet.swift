@@ -209,11 +209,17 @@ struct PhotoImportRunSheet: View {
                     LabeledContent("Owner", value: flow.selectedOwnerName ?? "You (signed-in member)")
                 }
                 .accessibilityIdentifier("photos.importRun.owner")
-                TextField("Notes", text: $flow.notes, axis: .vertical)
-                Button("Start a new run") {
+                DisclosureGroup("Add a note") {
+                    TextField("Notes for this batch", text: $flow.notes, axis: .vertical)
+                }
+                Button {
                     flow.startNewRun(items: items, client: appModel.client)
+                } label: {
+                    Label("Import \(items.count) photo\(items.count == 1 ? "" : "s")", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .controlSize(.large)
                 .accessibilityIdentifier("photos.importRun.startNew")
             } header: {
                 Text("New run")
@@ -276,6 +282,13 @@ private struct RunningView: View {
 
     @Environment(AppModel.self) private var appModel
 
+    private func reviewURL(for runID: ImportRunShortcode) -> URL {
+        let base = appModel.webURL(for: runID)
+        var components = URLComponents(url: base, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "startGrouping", value: "1")]
+        return components?.url ?? base
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
             Text(stageTitle)
@@ -327,8 +340,8 @@ private struct RunningView: View {
                     "The agent will propose item groups. Review them on the web before products are created."
                 )
                 .font(.porcelainBody)
-                Link(destination: appModel.webURL(for: runID)) {
-                    Label("Open import run", systemImage: "arrow.up.right")
+                Link(destination: reviewURL(for: runID)) {
+                    Label("Review item groups on web", systemImage: "arrow.up.right")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)

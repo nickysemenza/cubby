@@ -628,7 +628,14 @@ function ProductPanel({
       <InventoryFields proposal={proposal} save={saveGroup} busy={busy} />
 
       {proposal.evidence ? (
-        <p className="text-xs text-muted-foreground">{proposal.evidence}</p>
+        <details className="border-t border-border pt-2 text-xs text-muted-foreground">
+          <summary className="cursor-pointer font-medium text-foreground">
+            Why this item was proposed
+          </summary>
+          <p className="mt-2 leading-relaxed whitespace-pre-wrap">
+            {proposal.evidence}
+          </p>
+        </details>
       ) : null}
     </Stack>
   );
@@ -750,16 +757,22 @@ function ProposalCard({
                 ? "New product"
                 : "Existing product"}
             </Badge>
-            <span className="font-mono text-2xs text-muted-foreground">
+            <span className="hidden font-mono text-2xs text-muted-foreground lg:inline">
               {proposal.groupKey}
             </span>
           </Row>
-          <Row align="center" gap="xs">
+          <Row align="center" gap="xs" wrap className="w-full sm:w-auto">
             {mergeTargets.length ? (
               <DropdownMenu>
                 <DropdownMenuTrigger
                   disabled={working}
-                  render={<Button variant="ghost" size="sm" />}
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="min-h-11 sm:min-h-0"
+                    />
+                  }
                 >
                   <ArrowsMergeIcon />
                   Merge into…
@@ -805,6 +818,7 @@ function ProposalCard({
             <Button
               variant="destructive"
               size="sm"
+              className="min-h-11 sm:min-h-0"
               disabled={working || stale}
               onClick={() =>
                 action.mutate({
@@ -818,6 +832,7 @@ function ProposalCard({
             </Button>
             <Button
               size="sm"
+              className="min-h-11 flex-1 sm:min-h-0 sm:flex-none"
               disabled={
                 working ||
                 stale ||
@@ -1160,6 +1175,7 @@ export function PhotoGroupReview({
               </span>
             </Stack>
             <Button
+              className="min-h-11 w-full sm:w-auto"
               disabled={busy || proposed.length === 0 || hasStaleGroups}
               onClick={() => action.mutate({ action: "approve" })}
             >

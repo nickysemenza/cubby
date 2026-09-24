@@ -418,6 +418,11 @@ function RunProgress({ run }: { run: ImportRunDetail }) {
             ? `${run.latestProgress.phase}${run.latestProgress.detail ? ` · ${run.latestProgress.detail}` : ""}`
             : "No progress updates have been recorded."}
         </p>
+        {run.progress.length ? (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {run.progress.length} updates · newest first
+          </p>
+        ) : null}
       </div>
       {run.controllingMembers.length ? (
         <p className="text-sm text-muted-foreground">
@@ -454,10 +459,10 @@ function RunProgress({ run }: { run: ImportRunDetail }) {
       ) : null}
       {run.progress.length ? (
         <div
-          className="max-h-64 overflow-auto"
+          className="max-h-[50vh] overflow-auto"
           aria-label="Run progress history"
         >
-          {run.progress.map((progress) => (
+          {[...run.progress].reverse().map((progress) => (
             <div
               key={progress.eventId}
               className="grid gap-1 border-b border-border py-2 last:border-0 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-2"
@@ -1129,6 +1134,23 @@ export function RunPhotoBatch({ record }: { record: ImportRunOut }) {
   );
 }
 
+function RunOperationalSections({
+  run,
+  placement,
+}: {
+  run: ImportRunDetail;
+  placement: "active" | "terminal";
+}) {
+  if (ACTIVE_RUN_STATUSES.has(run.status) !== (placement === "active"))
+    return null;
+  return (
+    <>
+      <RunProgress run={run} />
+      <AgentSurface run={run} />
+    </>
+  );
+}
+
 // The operational record intentionally renders every durable evidence family
 // together so terminal history cannot silently omit one during refactors.
 function ImportRunContent({ run }: { run: ImportRunDetail }) {
@@ -1175,6 +1197,8 @@ function ImportRunContent({ run }: { run: ImportRunDetail }) {
           <StatusText tone="destructive">{run.dispatch.error}</StatusText>
         ) : null}
       </section>
+
+      <RunOperationalSections run={run} placement="active" />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <section className="grid gap-3 border border-border bg-card p-4">
@@ -1343,8 +1367,7 @@ function ImportRunContent({ run }: { run: ImportRunDetail }) {
           <StatusText>No orders were prepared.</StatusText>
         )}
       </section>
-      <AgentSurface run={run} />
-      <RunProgress run={run} />
+      <RunOperationalSections run={run} placement="terminal" />
       <RunTimeline run={run} />
       <RunDebugLog
         publicId={run.publicId}

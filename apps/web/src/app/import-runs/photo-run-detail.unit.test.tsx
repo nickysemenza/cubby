@@ -3,8 +3,8 @@ import type {
   PhotoRunImage,
   PhotoRunReview,
 } from "@cubby/schemas/photo-import-run";
-import { render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ImportRunDetail } from "~/lib/purchase-import-run-detail";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -145,9 +145,33 @@ beforeEach(() => {
 
 afterEach(() => {
   harness.dispose();
+  window.history.replaceState(null, "", "/");
+  vi.unstubAllGlobals();
 });
 
 describe("PhotoImportRunView", () => {
+  it("starts grouping when the completed iPhone upload opens its review link", async () => {
+    window.history.replaceState(null, "", "/runs/RUN-4K7M?startGrouping=1");
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) =>
+        Response.json(
+          init?.method === "POST" ? { runId: RUN_ID, started: true } : review,
+        ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <PhotoImportRunView run={{ ...run, status: "running", endedAt: null }} />,
+      { wrapper: harness.wrapper },
+    );
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.filter(([, init]) => init?.method === "POST"),
+      ).toHaveLength(1),
+    );
+  });
+
   // The run's status, owner, times and notes render in the generic Run
   // detail's hero and overview; this slot owns only the worklist.
   it("shows the progress tally and every run photo with its cutout and description", async () => {

@@ -1,5 +1,6 @@
 import type { PhotoRunReview } from "@cubby/schemas/photo-import-run";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -16,9 +17,11 @@ import { PhotoGroupReview, usePhotoRunReview } from "./photo-group-review";
 function PhotoRunProgress({
   run,
   review,
+  children,
 }: {
   run: ImportRunDetail;
   review?: PhotoRunReview;
+  children?: ReactNode;
 }) {
   const photos = run.targets.filter((target) => target.targetType === "image");
   const settled = photos.filter(
@@ -42,7 +45,7 @@ function PhotoRunProgress({
       <CardHeader>
         <CardTitle as="h2">Progress</CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-2">
+      <CardContent className="grid gap-3">
         <p className="text-sm font-medium">{stage}</p>
         <Progress
           value={settled}
@@ -52,6 +55,7 @@ function PhotoRunProgress({
         <p className="font-mono text-xs text-muted-foreground tabular-nums">
           {settled} of {photos.length} photos settled
         </p>
+        {children}
       </CardContent>
     </Card>
   );
@@ -63,6 +67,7 @@ function PhotoRunProgress({
 export function PhotoImportRunView({ run }: { run: ImportRunDetail }) {
   const queryClient = useQueryClient();
   const review = usePhotoRunReview(run.publicId, run.status);
+  const autoStartAttempted = useRef(false);
   const start = useMutation({
     mutationFn: async () => {
       const response = await fetch(
@@ -80,35 +85,46 @@ export function PhotoImportRunView({ run }: { run: ImportRunDetail }) {
     (target) => target.targetType === "image" && target.state === "pending",
   ).length;
   const hasProposals = Boolean(review.data?.review.proposals.length);
+  useEffect(() => {
+    if (
+      autoStartAttempted.current ||
+      new URLSearchParams(window.location.search).get("startGrouping") !==
+        "1" ||
+      run.status !== "running" ||
+      run.dispatch?.eventId ||
+      !pending ||
+      review.isPending ||
+      hasProposals
+    )
+      return;
+    autoStartAttempted.current = true;
+    start.mutate();
+  }, [
+    run.status,
+    run.dispatch?.eventId,
+    pending,
+    review.isPending,
+    hasProposals,
+    start,
+  ]);
   return (
     <Stack gap="lg">
-      <PhotoRunProgress run={run} review={review.data} />
-      {run.status === "running" && !run.dispatch?.eventId && !hasProposals ? (
-        <Card>
-          <CardHeader>
-            <CardTitle as="h2">Group your photos</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3">
+      <PhotoRunProgress run={run} review={review.data}>
+        {run.status === "running" && !run.dispatch?.eventId && !hasProposals ? (
+          <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
+            <Button
+              type="button"
+              disabled={!pending || start.isPending}
+              onClick={() => start.mutate()}
+              className="min-h-11"
+            >
+              {start.isPending ? "Starting agent…" : "Start grouping"}
+            </Button>
             <p className="text-sm text-muted-foreground">
-              After upload, ask the agent to propose items. Review and approve
-              each group before any Product or Inventory is created.
+              {pending
+                ? "The agent proposes items; you approve each one before anything is created."
+                : "Upload and finalize photos in the Cubby app first."}
             </p>
-            <div>
-              <Button
-                type="button"
-                disabled={!pending || start.isPending}
-                onClick={() => start.mutate()}
-              >
-                {start.isPending
-                  ? "Starting agent…"
-                  : "Ask agent to group photos"}
-              </Button>
-            </div>
-            {!pending ? (
-              <StatusText tone="muted">
-                Upload and finalize photos in the Cubby app first.
-              </StatusText>
-            ) : null}
             {start.isError ? (
               <StatusText tone="destructive">
                 {start.error.message}{" "}
@@ -119,28 +135,17 @@ export function PhotoImportRunView({ run }: { run: ImportRunDetail }) {
                 ) : null}
               </StatusText>
             ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
-      {run.status === "running" && run.dispatch?.eventId ? (
-        <Card>
-          <CardHeader>
-            <CardTitle as="h2">
-              {run.latestProgress?.awaitingApproval
-                ? "Ready for your review"
-                : "Agent is grouping photos"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <StatusText tone="muted">
-              {run.latestProgress?.awaitingApproval
-                ? "Review each proposed item below. Products and Inventory are created only when you approve a group."
-                : (run.latestProgress?.detail ??
-                  "The agent is reading the uploaded photos and preparing item groups.")}
-            </StatusText>
-          </CardContent>
-        </Card>
-      ) : null}
+          </div>
+        ) : null}
+        {run.status === "running" && run.dispatch?.eventId ? (
+          <StatusText tone="muted">
+            {run.latestProgress?.awaitingApproval
+              ? "Review each proposed item below. Products and Inventory are created when you approve a group."
+              : (run.latestProgress?.detail ??
+                "The agent is reading the uploaded photos and preparing item groups.")}
+          </StatusText>
+        ) : null}
+      </PhotoRunProgress>
       <PhotoGroupReview runId={run.publicId} runStatus={run.status} />
     </Stack>
   );
