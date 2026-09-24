@@ -486,7 +486,13 @@ export const deriveRelationSections = (
         collapsed: false,
         relation: relation.key,
         filter,
-        columns: null,
+        columns: target.fieldModel.fields
+          .filter(
+            (field) =>
+              field.display.list &&
+              (field.readKey !== null || field.display.renderer?.list != null),
+          )
+          .map((field) => field.display.columnId ?? field.key),
         prefill: filterOverride?.prefill ?? null,
         sort: null,
         limit: null,

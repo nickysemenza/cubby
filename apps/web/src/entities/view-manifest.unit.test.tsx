@@ -149,13 +149,13 @@ describe("expense views produce the filters their old tabs pinned", () => {
 
   it("sends the sentinel through as a sentinel, never as an id", () => {
     const view = viewsForEntity("expense").find((v) => v.id === "unassigned");
-    expect(view?.filters).toEqual([{ id: "project", value: [FILTER_NONE] }]);
+    expect(view?.filters).toEqual([{ id: "projectId", value: [FILTER_NONE] }]);
   });
 
   it("unattached pins the existing no-purchase vendor predicate", () => {
     expect(build("unattached")).toEqual({ vendorPresenceFilter: "none" });
     const view = viewsForEntity("expense").find((v) => v.id === "unattached");
-    expect(view?.filters).toEqual([{ id: "vendor", value: [FILTER_NONE] }]);
+    expect(view?.filters).toEqual([{ id: "purchaseId", value: [FILTER_NONE] }]);
   });
 
   it("unknown-quantities pins the two presence sentinels plus already-made", () => {
@@ -178,7 +178,7 @@ describe("expense views produce the filters their old tabs pinned", () => {
       (candidate) => candidate.id === "unknown-quantities",
     );
     const ids = (view?.filters ?? []).map((filter) => filter.id);
-    expect(ids).toEqual(["product", "productQuantity", "future"]);
+    expect(ids).toEqual(["productId", "productQuantity", "future"]);
   });
 
   it("reveals the column it exists to have you edit", () => {
@@ -365,7 +365,7 @@ describe("views reveal the columns they select on", () => {
     const productViews = viewManifest.product ?? [];
     const shelfDisagrees = productViews.find((v) => v.id === "shelf-disagrees");
     expect(shelfDisagrees?.layout?.columnVisibility).toEqual({
-      expectedQuantity: true,
+      ledgerExpectedQuantity: true,
       quantityVariance: true,
       servingAsLocations: true,
     });
@@ -402,7 +402,7 @@ describe("the unlocated views stay one question at three widths", () => {
   // since its shelf claim moved to parts that match this view on their own.
   it("selects on expected-quantity, ALL THREE kinds of presence, and undecided stock tracking", () => {
     expect(broad?.filters).toEqual([
-      { id: "expectedQuantity", value: "positive" },
+      { id: "ledgerExpectedQuantity", value: "positive" },
       { id: "location", value: [FILTER_NONE] },
       { id: "servingAsLocations", value: "none" },
       { id: "stockTracked", value: "none" },

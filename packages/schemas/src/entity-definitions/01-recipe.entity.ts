@@ -181,10 +181,14 @@ export default defineEntity({
       {
         key: "meals",
         kind: "number",
-        // A live MealRecipe count, not a stored column. The reference marks it
-        // as relation-derived for the specialized list cell.
+        // A live MealRecipe count in the list response, not a stored column.
         reference: { entity: "meal", multiple: true },
         display: { list: true },
+        validation: {
+          read: z.number().int(),
+          create: null,
+          update: null,
+        },
         explanation: {
           ruleId: "recipe.meal-count",
           description:

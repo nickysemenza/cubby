@@ -412,9 +412,7 @@ export async function createProduct(
   await dialog.getByRole("button", { name: /^Create$/ }).click();
   await expect(dialog).not.toBeVisible({ timeout: 15000 });
   await openProductFromPalette(page, name);
-  await expect(
-    page.getByRole("heading", { name: "Basic Information" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 }
 
 /** Reach a product's detail page by name and assert its URL and heading. */

@@ -66,7 +66,7 @@ export function inheritanceContract() {
     await expectViewportBounded(page);
     await gotoAuthenticatedPage(page, `/purchases/${fixture.purchase.id}`);
     const projectCell = page
-      .locator('[data-cell-col="project"]')
+      .locator('[data-cell-col="projectId"]')
       .filter({ has: page.getByText("purchase default", { exact: true }) })
       .first();
     await expect(projectCell).toBeVisible();

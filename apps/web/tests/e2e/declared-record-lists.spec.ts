@@ -55,7 +55,7 @@ test("declared record lists retain identities, relationships and amounts on desk
   await expect(
     page.getByRole("columnheader").filter({
       has: page.getByRole("button", {
-        name: "Reorder vendor column",
+        name: "Reorder purchaseId column",
         exact: true,
       }),
     }),

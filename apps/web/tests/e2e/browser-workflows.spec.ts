@@ -56,14 +56,14 @@ test("create dialog validation and parent picker remain reachable", async ({
   await dialog
     .getByRole("textbox", { name: "Name", exact: true })
     .fill("Pantry");
-  const picker = dialog.getByRole("combobox", { name: /Parent location/i });
+  const picker = dialog.getByRole("combobox", { name: "Parent", exact: true });
   await picker.fill(parentName);
   await page
     .getByRole("option", { name: new RegExp(`^${escapeRegExp(parentName)}`) })
     .click();
   await expect(picker).toHaveValue(`${parentName} — room`);
   await expect(
-    dialog.getByRole("button", { name: /^Clear parent location/i }),
+    dialog.getByRole("button", { name: "Clear Parent", exact: true }),
   ).toBeVisible();
 });
 

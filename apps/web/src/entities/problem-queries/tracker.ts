@@ -23,7 +23,7 @@ export const trackerProblemQueries = [
       filters: [
         { id: "dueRelative", value: "beforeToday" },
         { id: "completion", value: "open" },
-        { id: "parentTask", value: [FILTER_NONE] },
+        { id: "parentTaskId", value: [FILTER_NONE] },
       ],
       sort: [{ id: "dueDate", desc: false }],
       columnVisibility: { dueDate: true, status: true, project: true },

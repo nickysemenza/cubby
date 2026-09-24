@@ -27,7 +27,18 @@ export default defineEntity({
       actionLabel: "Add Vendor",
     },
     icons: { phosphor: "Storefront", sfSymbol: "storefront", emoji: "🏪" },
-    detail: {},
+    detail: {
+      additionalSectionOverrides: [
+        {
+          kind: "relation",
+          id: "purchased-products",
+          title: "Purchased products",
+          relation: "products",
+          filter: { descriptor: "related:product.vendors" },
+          columns: ["name", "manufacturer", "categoryId", "expenseTotal"],
+        },
+      ],
+    },
     list: { actionOverrides: ["merge", "delete"] },
   },
   model: {

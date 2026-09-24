@@ -45,7 +45,7 @@ test("taxonomy edits keep product classification paths and labels separate from 
     .fill(renamedType);
   await selectComboboxItem(
     page,
-    editor.getByRole("combobox", { name: "Parent category", exact: true }),
+    editor.getByRole("combobox", { name: "Parent", exact: true }),
     destinationRoot,
   );
   await editor
@@ -64,7 +64,7 @@ test("taxonomy edits keep product classification paths and labels separate from 
     .fill(productName);
   await selectComboboxItem(
     page,
-    createDialog.getByRole("combobox", { name: "Classification", exact: true }),
+    createDialog.getByRole("combobox", { name: "Category", exact: true }),
     `${destinationRoot} / ${renamedType}`,
   );
   await createDialog.getByRole("button", { name: /^Create$/ }).click();
