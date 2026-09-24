@@ -485,7 +485,10 @@ function AgentWorkOverview({
       Date.parse(run.startedAt),
   );
   const workCount = (item: AgentWorkItem) => {
-    if (item.kind === "image-description")
+    if (
+      item.kind === "image-description" ||
+      item.kind === "image-description-reused"
+    )
       return `${item.completed} ${item.completed === 1 ? "photo" : "photos"}`;
     if (item.completed < 2) return null;
     if (item.kind === "catalog" || item.kind === "records")
@@ -656,7 +659,10 @@ function PhotoAgentWorkOverview({
   messages: readonly FlueConversationMessage[];
 }) {
   const review = usePhotoRunReview(run.publicId, run.status);
-  const descriptionWork = summarizePhotoDescriptions(review.data?.images ?? []);
+  const descriptionWork = summarizePhotoDescriptions(
+    review.data?.images ?? [],
+    run.startedAt,
+  );
   return (
     <AgentWorkOverview
       run={run}

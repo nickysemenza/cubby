@@ -7,6 +7,7 @@ export { formatDuration as formatWorkDuration } from "~/lib/format-duration";
 type WorkKind =
   | "photo-analysis"
   | "image-description"
+  | "image-description-reused"
   | "catalog"
   | "records"
   | "photo-groups"
@@ -32,6 +33,7 @@ export type AgentWorkItem = {
 const WORK_LABELS = {
   "photo-analysis": "Read photo analysis",
   "image-description": "Processed image descriptions",
+  "image-description-reused": "Reused earlier image descriptions",
   catalog: "Searched existing products",
   records: "Checked Cubby records",
   "photo-groups": "Proposed item groups",
@@ -142,10 +144,20 @@ export function summarizeAgentWork(
 /** Actual dispatch-to-completion wall time for the completed description batch. */
 export function summarizePhotoDescriptions(
   images: readonly PhotoRunImage[],
+  runStartedAt?: string,
 ): AgentWorkItem[] {
   const described = images.filter((photo) => photo.describe === "ready");
   if (!described.length) return [];
-  const timed = described.flatMap((photo) =>
+  const runStartMs = runStartedAt ? Date.parse(runStartedAt) : null;
+  const reused = described.filter(
+    (photo) =>
+      runStartMs !== null &&
+      photo.describeStartedAt !== null &&
+      photo.describeStartedAt !== undefined &&
+      Date.parse(photo.describeStartedAt) < runStartMs,
+  );
+  const current = described.filter((photo) => !reused.includes(photo));
+  const timed = current.flatMap((photo) =>
     photo.describeStartedAt && photo.describeCompletedAt
       ? [
           {
@@ -156,24 +168,25 @@ export function summarizePhotoDescriptions(
       : [],
   );
   const durationMs =
-    timed.length === described.length
+    timed.length === current.length && timed.length > 0
       ? Math.max(
           0,
           Math.max(...timed.map((photo) => photo.completedAt)) -
             Math.min(...timed.map((photo) => photo.startedAt)),
         )
       : null;
-  const attemptMs = described.every(
+  const attemptMs = current.every(
     (photo) =>
       photo.describeAttemptMs !== null && photo.describeAttemptMs !== undefined,
   )
-    ? described.reduce((sum, photo) => sum + (photo.describeAttemptMs ?? 0), 0)
+    ? current.reduce((sum, photo) => sum + (photo.describeAttemptMs ?? 0), 0)
     : null;
-  return [
-    {
+  const work: AgentWorkItem[] = [];
+  if (current.length)
+    work.push({
       kind: "image-description",
       label: WORK_LABELS["image-description"],
-      completed: described.length,
+      completed: current.length,
       failed: 0,
       running: 0,
       durationMs,
@@ -183,6 +196,16 @@ export function summarizePhotoDescriptions(
         durationMs !== null && attemptMs !== null
           ? Math.max(0, durationMs - attemptMs)
           : null,
-    },
-  ];
+    });
+  if (reused.length)
+    work.push({
+      kind: "image-description-reused",
+      label: WORK_LABELS["image-description-reused"],
+      completed: reused.length,
+      failed: 0,
+      running: 0,
+      durationMs: null,
+      timing: "elapsed",
+    });
+  return work;
 }
