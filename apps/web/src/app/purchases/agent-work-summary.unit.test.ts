@@ -155,6 +155,30 @@ describe("agent work summary", () => {
     expect(formatWorkDuration(step!.durationMs!)).toBe("6h 39m");
   });
 
+  it("does not charge a new run for descriptions completed before it started", () => {
+    const images = fromPartial<PhotoRunImage[]>([
+      {
+        describe: "ready",
+        describeStartedAt: "2026-09-20T08:00:00.000Z",
+        describeCompletedAt: "2026-09-20T14:38:55.500Z",
+        describeAttemptMs: 4_000,
+      },
+    ]);
+    expect(
+      summarizePhotoDescriptions(images, "2026-09-21T08:00:00.000Z"),
+    ).toEqual([
+      {
+        kind: "image-description-reused",
+        label: "Reused earlier image descriptions",
+        completed: 1,
+        failed: 0,
+        running: 0,
+        durationMs: null,
+        timing: "elapsed",
+      },
+    ]);
+  });
+
   it("counts the gap between photo jobs as batch waiting", () => {
     const images = fromPartial<PhotoRunImage[]>([
       {
