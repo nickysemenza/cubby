@@ -129,7 +129,7 @@ function buildFinancialTransactionColumns() {
       );
       add(
         helper.display({
-          id: "possibleVendor",
+          id: "vendorInference",
           enableSorting: false,
           cell: ({ row }) => (
             <span>{row.original.vendorInference ? "Vendor" : "—"}</span>
@@ -138,7 +138,7 @@ function buildFinancialTransactionColumns() {
       );
       add(
         helper.display({
-          id: "source",
+          id: "sourceRefs",
           enableSorting: false,
           cell: ({ row }) => (
             <span>
@@ -183,18 +183,18 @@ describe("financial transaction list display columns", () => {
     const ids = buildTransactionColumnMeta().map((d) => d.id);
     expect(ids).toEqual([
       "accountId",
+      "purchaseId",
       "kind",
       "status",
       "amount",
-      "purchaseId",
       "transactionDate",
       "postedDate",
       "merchant",
-      "possibleVendor",
-      "source",
       "rawDescription",
       "sourceCategory",
+      "sourceRefs",
       "notes",
+      "vendorInference",
       "dataQuality",
     ]);
   });
@@ -209,12 +209,12 @@ describe("financial transaction list display columns", () => {
       status: "Status",
       amount: "Amount",
       purchaseId: "Purchase",
-      transactionDate: "Transaction Date",
-      postedDate: "Posted",
+      transactionDate: "Transaction date",
+      postedDate: "Posted date",
       merchant: "Merchant",
-      possibleVendor: "Possible vendor",
-      source: "Source",
-      rawDescription: "Statement description",
+      vendorInference: "Vendor inference",
+      sourceRefs: "Source refs",
+      rawDescription: "Raw description",
       sourceCategory: "Source category",
       notes: "Notes",
       dataQuality: "Data quality",
@@ -235,8 +235,8 @@ describe("financial transaction list display columns", () => {
     // Not in the roster.
     expect(byId.accountId).toBe(false);
     expect(byId.purchaseId).toBe(false);
-    expect(byId.possibleVendor).toBe(false);
-    expect(byId.source).toBe(false);
+    expect(byId.vendorInference).toBe(false);
+    expect(byId.sourceRefs).toBe(false);
     expect(byId.rawDescription).toBe(false);
     expect(byId.sourceCategory).toBe(false);
     expect(byId.notes).toBe(false);
@@ -294,8 +294,8 @@ describe("financial transaction list display columns", () => {
           add(helper.display({ id: "amount", cell: () => null }));
           add(helper.display({ id: "purchaseId", cell: () => null }));
           add(helper.display({ id: "postedDate", cell: () => null }));
-          add(helper.display({ id: "possibleVendor", cell: () => null }));
-          add(helper.display({ id: "source", cell: () => null }));
+          add(helper.display({ id: "vendorInference", cell: () => null }));
+          add(helper.display({ id: "sourceRefs", cell: () => null }));
           add(helper.display({ id: "accountName", cell: () => null }));
         }),
       ),

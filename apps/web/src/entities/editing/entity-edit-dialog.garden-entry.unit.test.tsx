@@ -65,11 +65,11 @@ describe("EntityEditDialog generic create", () => {
     expect(await screen.findByText("New Garden Entry")).toBeInTheDocument();
     expect(screen.getByText("PLT-4K7M")).toBeInTheDocument();
     const harvest = screen.getByLabelText("Harvest amount", { exact: true });
-    const observed = screen.getByLabelText("Observed", { exact: true });
+    const observed = screen.getByLabelText("Observed on", { exact: true });
     fireEvent.change(observed, { target: { value: "2026-08-20" } });
     fireEvent.blur(observed);
     await waitFor(() =>
-      expect(screen.getByLabelText("Observed", { exact: true })).toHaveValue(
+      expect(screen.getByLabelText("Observed on", { exact: true })).toHaveValue(
         "Aug 20, 2026",
       ),
     );
