@@ -289,6 +289,20 @@ The alternatives were measured on standard runners and rejected:
 | Six PostgreSQL workers               | On the same standard runner class, test step **137s** versus **129s** at four; job **3:33** versus **3:27**. [Experiment](https://github.com/nickysemenza/cubby/actions/runs/35928414452) rejected.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | HTTP-only tests in Worker/PostgreSQL | All **704** PostgreSQL tests and desktop checks passed at exact head, but [#1289](https://github.com/nickysemenza/cubby/pull/1289) took **5:31** to `Web checks` versus **5:09** before the move, with the same **3s** median queue. Closed under the timing rule.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
+The retained [#1308](https://github.com/nickysemenza/cubby/pull/1308)
+removed the Playwright context route that fulfilled Sentry requests. Playwright
+disables HTTP caching whenever routing is enabled, so the route made every
+full-page navigation refetch immutable JavaScript. The client now disables
+Sentry before E2E scripts run; a focused trace saw **346 cached JavaScript
+responses** on the second load and **zero Sentry requests**. On the same-base
+successful [control](https://github.com/nickysemenza/cubby/actions/runs/35942268260)
+and [exact-head PR run](https://github.com/nickysemenza/cubby/actions/runs/35943279640),
+`Web checks` took **5:59 → 5:20** from workflow creation, with desktop runner
+queue time **13–14s → 11–12s**. Desktop jobs fell from **5:09 + 5:41** to
+**4:19 + 5:02**, saving **1:29** of runner time. Both shards and PostgreSQL
+passed. This is one controlled pair, not the five naturally occurring PR runs
+needed for a new median; the roughly three-minute target remains open.
+
 In the HTTP/2 comparison, desktop runner queue time was **14–15s** in both
 runs. Total desktop runner time rose from **9:49** to **10:14**, so the unchanged
 `Web checks` time did not hide a runner-minute saving.
