@@ -342,6 +342,21 @@ drops the database after the run. Set
 failure artifacts are under `artifacts/sim-e2e/`. The manual `CI` workflow
 dispatch option `simulator_e2e` runs the same command with native PostgreSQL
 17 and pgvector on a hosted macOS runner. This lane is not a required PR check.
+`pnpm test:e2e:sim:video` also records the scripted flow to `run.mp4` in that
+run's artifact directory for review in Codex. See the
+[fast native iteration guide](apps/apple/ITERATION.md) for which loop to use.
+
+`pnpm test:e2e:headless` uses the same disposable database, synthetic product,
+and workerd harness. The `cubby` CLI signs in through `AuthFlow`, searches,
+builds an `EntityPatch`, updates through `CubbyClient`, and checks native readback
+plus the database row. It skips Xcode, installation, and UI automation for a
+quicker native data-flow loop; use `test:e2e:sim` for tab, sheet, and layout behavior.
+Headless failure logs are under `artifacts/headless-e2e/`.
+For repeated native changes, `pnpm test:e2e:headless:watch` keeps that database
+and workerd harness running. Press Enter to seed a fresh product and rerun the
+CLI scenario; Ctrl-C drops the database. Restart watch mode after changing web
+server or Rust FFI code so it rebuilds those bundles. Watch mode runs the built
+CLI directly when Swift sources are unchanged and rebuilds it after a Swift edit.
 
 For faster local Playwright iteration, `pnpm --filter @cubby/web
 test:e2e:watch` keeps warm PostgreSQL/IntegreSQL containers across runs

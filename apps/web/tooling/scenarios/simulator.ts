@@ -21,6 +21,7 @@ export const SIM_PRODUCT_UPDATED_NAME = "Synthetic Atlas Lantern Updated";
 export async function seedSimulatorScenario(
   pool: Pool,
   userId: string,
+  name = SIM_PRODUCT_NAME,
 ): Promise<string> {
   await pool.query(
     `INSERT INTO "Location" (shortcode, name, aliases, tags, type, "parentId")
@@ -38,7 +39,7 @@ export async function seedSimulatorScenario(
     context,
     "product",
     productCreateInput.parse({
-      name: SIM_PRODUCT_NAME,
+      name,
       aliases: [],
       tags: [],
       upc: null,

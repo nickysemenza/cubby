@@ -1,5 +1,9 @@
 # Cubby native (iOS + macOS)
 
+For a speed-first choice between focused Swift tests, the headless native loop,
+SwiftUI previews, simulator exploration, recorded E2E, and a real iPhone, see
+[Fast native iteration](ITERATION.md).
+
 SwiftUI household workflows backed by CubbyKit, the generated HTTP client, and
 shared Rust computation. The app includes Today, catalog/search, capture/recount,
 photos, Garden, links, and App Intents. See [DESIGN.md](DESIGN.md) for native UX
