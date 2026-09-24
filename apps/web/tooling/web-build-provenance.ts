@@ -49,7 +49,8 @@ function filesUnder(target: string): string[] {
   if (!existsSync(target)) return [];
   if (statSync(target).isFile()) return [target];
   return readdirSync(target, { withFileTypes: true }).flatMap((entry) => {
-    if (entry.isSymbolicLink()) return [];
+    // upload-artifact omits hidden files from the bundle consumed by E2E.
+    if (entry.isSymbolicLink() || entry.name.startsWith(".")) return [];
     const child = path.join(target, entry.name);
     return entry.isDirectory() ? filesUnder(child) : [child];
   });

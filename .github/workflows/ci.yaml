@@ -180,7 +180,10 @@ jobs:
         env:
           CUBBY_SOURCE_COMMIT: ${{ github.sha }}
           CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
-        run: pnpm --filter @cubby/web run build:cf
+        run: |
+          git status --short
+          pnpm --filter @cubby/web run build:cf
+          git status --short
       - name: Save recipebridge WASM
         if: matrix.tier == 'node'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -365,7 +368,9 @@ jobs:
           name: recipebridge-wasm
           path: packages/wasm
       - name: Run Playwright tests
-        run: pnpm --filter @cubby/web run ${{ matrix.test-script }} --shard=${{ matrix.shard }} --workers=2
+        run: |
+          git status --short
+          pnpm --filter @cubby/web run ${{ matrix.test-script }} --shard=${{ matrix.shard }} --workers=2
       - name: Save Playwright run bundle
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
