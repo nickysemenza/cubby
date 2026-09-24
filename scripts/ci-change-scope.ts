@@ -38,10 +38,6 @@ const formatOnly = /\.(?:ya?ml|toml)$/i;
 const generatedMarkdown = "docs/how-values-are-determined.md";
 const generatedAppleConfig = "apps/apple/openapi/openapi-generator-config.yaml";
 
-// Repo Markdown that is imported as application content. Keep this list in
-// sync with `?raw` Markdown imports in apps/web/src.
-export const bundledMarkdown = ["docs/inventory-audit.md"] as const;
-
 const sharedConfig = new Set([
   "package.json",
   "pnpm-lock.yaml",
@@ -68,7 +64,7 @@ const affectedByPath = (path: string): Partial<CiChangeScope> | null => {
       docs: true,
       format: true,
       ...(path === generatedMarkdown && { generator: true }),
-      ...(bundledMarkdown.some((bundled) => bundled === path) && { web: true }),
+      ...(path.startsWith("docs/") && { web: true }),
     };
   if (
     path.startsWith(".github/") ||

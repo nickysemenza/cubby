@@ -1,20 +1,10 @@
 import { lazy, type ReactNode } from "react";
 
-// Lazy-load every section. Two independent reasons, both load-bearing:
-//
-// 1. The React sections pull in `_data/samples`, which generates UUIDs
-//    (`crypto.randomUUID()`) at module top-level — illegal in the Cloudflare
-//    Workers GLOBAL scope. The route files import this registry into the eager
-//    route-tree graph, so a static import would run that UUID at worker init
-//    and crash SSR. `lazy()` defers it to render time (inside a request
-//    handler / on the client), where random values are allowed.
-// 2. `/docs` resolves `DEFAULT_DOC_SLUG` in `beforeLoad`, so this registry is
-//    in the eager chunk of every page load. Anything it imports statically
-//    ships to users who never open the docs — which is how react-markdown
-//    (~150 KiB, via the guide) ended up on the critical path.
-//
-// So: keep this file's imports to `react` alone. New sections go in
-// `./sections/*`, referenced only through `lazy()`.
+import { docSlug } from "./doc-paths";
+
+// This registry is imported by the eager route tree. Keep react-markdown
+// behind lazy imports and emit Markdown as static assets so guide text does
+// not enter executable client chunks or the Worker's global scope.
 const ConceptsSection = lazy(() =>
   import("./sections/concepts-section").then((m) => ({
     default: m.ConceptsSection,
@@ -30,30 +20,16 @@ const ComponentDemosSection = lazy(() =>
     default: m.ComponentDemosSection,
   })),
 );
-const InventoryAuditGuide = lazy(() =>
-  import("./sections/inventory-audit-guide").then((m) => ({
-    default: m.InventoryAuditGuide,
-  })),
-);
 
-/**
- * Registry of docs sections, keyed by URL slug (`/docs/<slug>`). The sidebar
- * (docs-layout) and the `/docs/$section` route both read this list, so adding a
- * section — a React page, or a repo `docs/*.md` guide wrapped in `GuideDoc` — is
- * a `./sections/*` module plus a single `lazy()` entry here. Guides keep the
- * repo markdown as the source of truth (`?raw` import); editing the `.md`
- * updates the page.
- */
-type DocSectionGroup = "Reference" | "Guides";
-
-interface DocSection {
+export interface DocSection {
   slug: string;
   title: string;
-  group: DocSectionGroup;
+  group: string;
+  sourcePath?: string;
   render: () => ReactNode;
 }
 
-export const docSections: DocSection[] = [
+const referenceSections: DocSection[] = [
   {
     slug: "concepts",
     title: "Concepts",
@@ -72,15 +48,94 @@ export const docSections: DocSection[] = [
     group: "Reference",
     render: () => <ComponentDemosSection />,
   },
-  {
-    slug: "inventory-audit",
-    title: "Inventory audit",
-    group: "Guides",
-    render: () => <InventoryAuditGuide />,
-  },
 ];
 
-export const DEFAULT_DOC_SLUG = docSections[0]!.slug;
+const DOCS_PREFIX = "../../../../../docs/";
+const markdownModules = import.meta.glob<string>(
+  "../../../../../docs/**/*.md",
+  { query: "?url", import: "default" },
+);
+
+const groupNames = new Map([
+  ["adr", "ADRs"],
+  ["agents", "Agent guides"],
+  ["application-framework", "Application framework"],
+  ["plans", "Plans"],
+  ["runbooks", "Runbooks"],
+]);
+
+const wordNames = new Map([
+  ["adr", "ADR"],
+  ["api", "API"],
+  ["caldav", "CalDAV"],
+  ["ci", "CI"],
+  ["json", "JSON"],
+  ["mcp", "MCP"],
+  ["r2", "R2"],
+  ["readme", "Overview"],
+  ["ui", "UI"],
+  ["wasm", "WASM"],
+  ["xcode", "Xcode"],
+]);
+
+function titleForDoc(path: string): string {
+  const name = path.split("/").at(-1)!.replace(/\.md$/, "");
+  if (name === "README") return "Overview";
+  const title = name
+    .split("-")
+    .map((word) => wordNames.get(word.toLowerCase()) ?? word)
+    .join(" ");
+  return title.charAt(0).toUpperCase() + title.slice(1);
+}
+
+function groupForDoc(path: string): string {
+  const folder = path.split("/")[0];
+  if (!path.includes("/")) return "Docs";
+  return groupNames.get(folder!) ?? titleForDoc(`${folder!}.md`);
+}
+
+const markdownSections: DocSection[] = Object.entries(markdownModules)
+  .sort(([left], [right]) => {
+    const leftPath = left.slice(DOCS_PREFIX.length);
+    const rightPath = right.slice(DOCS_PREFIX.length);
+    if (leftPath === "README.md") return -1;
+    if (rightPath === "README.md") return 1;
+    const leftNested = leftPath.includes("/");
+    const rightNested = rightPath.includes("/");
+    return (
+      Number(leftNested) - Number(rightNested) || left.localeCompare(right)
+    );
+  })
+  .map(([modulePath, load]) => {
+    const sourcePath = modulePath.slice(DOCS_PREFIX.length);
+    const GuideSection = lazy(async () => {
+      const [sourceUrl, { GuideDoc }] = await Promise.all([
+        load(),
+        import("./_components/GuideDoc"),
+      ]);
+      return {
+        default: () => (
+          <GuideDoc sourcePath={sourcePath} sourceUrl={sourceUrl} />
+        ),
+      };
+    });
+
+    return {
+      slug: docSlug(sourcePath),
+      title: titleForDoc(sourcePath),
+      group: groupForDoc(sourcePath),
+      sourcePath,
+      render: () => <GuideSection />,
+    };
+  });
+
+/** The sidebar and route use the same source-backed list. */
+export const docSections: DocSection[] = [
+  ...markdownSections,
+  ...referenceSections,
+];
+
+export const DEFAULT_DOC_SLUG = docSlug("README.md");
 
 export function getDocSection(slug: string): DocSection | undefined {
   return docSections.find((section) => section.slug === slug);
