@@ -233,13 +233,9 @@ jobs:
         with:
           wasm: "restore"
           workspace-filter: "@cubby/web... @cubby/purchase-agent..."
-      - name: Build coupled workerd Workers
-        env:
-          CUBBY_SOURCE_COMMIT: ${{ github.sha }}
-          CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
-        run: |
-          pnpm --filter @cubby/purchase-agent run build
-          pnpm --filter @cubby/web run build:cf
+      - name: Build purchase agent Worker
+        run: pnpm --filter @cubby/purchase-agent run build
+      - uses: ./.github/actions/restore-cf-build
       - name: Run PostgreSQL integration tests
         env:
           CUBBY_TEST_INTEGRATION: "1"
@@ -321,44 +317,7 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.browser }}
-      - name: Wait for the tested Cloudflare bundle
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        with:
-          script: |
-            const deadline = Date.now() + 20 * 60 * 1000;
-            for (;;) {
-              const artifacts = await github.paginate(
-                github.rest.actions.listWorkflowRunArtifacts,
-                { ...context.repo, run_id: context.runId, per_page: 100 },
-              );
-              if (artifacts.some(({ name }) => name === "cf-build")) return;
-
-              const jobs = await github.paginate(
-                github.rest.actions.listJobsForWorkflowRun,
-                { ...context.repo, run_id: context.runId, per_page: 100 },
-              );
-              // Matches the job's display name literally: renaming test-web
-              // silently turns a build failure into a 20-minute timeout here.
-              const build = jobs.find(
-                ({ name }) => name === "Tests - web (node)",
-              );
-              if (
-                build?.status === "completed" &&
-                build.conclusion !== "success"
-              ) {
-                core.setFailed(`Cloudflare build ended ${build.conclusion}`);
-                return;
-              }
-              if (Date.now() >= deadline) {
-                core.setFailed("cf-build was not published within twenty minutes");
-                return;
-              }
-              await new Promise((resolve) => setTimeout(resolve, 5_000));
-            }
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: cf-build
-          path: apps/web/dist
+      - uses: ./.github/actions/restore-cf-build
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: recipebridge-wasm
