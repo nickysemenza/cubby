@@ -1,0 +1,58 @@
+# Local input-first journey checks
+
+These checks run against disposable local databases and synthetic evidence. Start
+at the same boundary a person uses: a photo file, CSV row, browser page, or app
+control. Seed only prerequisites that the journey cannot create itself, such as
+the signed-in member, a configured account, or an existing item being matched.
+Assert the final linked records after the review action, not just an upload or
+an agent message. Keep raw household exports, real entity codes, and production
+screenshots out of fixtures and test reports.
+
+## Product identity and settlement
+
+| Journey in [product identity](../product-identity-journey.md) | Local check and actual input                                                                                                                                                                                                                                                                      | Seeded prerequisites                                                      | Current boundary                                                                                                                                       |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Direct photo, no run; manual Product                          | [`product-photo-first.spec.ts`](../../apps/web/tests/e2e/product-photo-first.spec.ts) opens the Product create dialog and uploads synthetic item and label PNGs                                                                                                                                   | Signed-in test member                                                     | Web creation and persisted image roles; native direct attachment still needs a simulator journey                                                       |
+| Photo inventory run                                           | `pnpm test:e2e:headless:wardrobe` uploads synthetic PNG bytes through native APIs, runs the photo agent with a deterministic model seam, and approves in Chromium                                                                                                                                 | Signed-in member, isolated database, local object storage                 | Tests the non-AI pipeline and review; real model quality and physical iPhone interaction are separate checks                                           |
+| Retailer order and Product match                              | The same wardrobe run calls purchase prepare/commit, proposes a match, reviews the dense merge preview in Chromium, and reads the surviving Product, Expense, and photos                                                                                                                          | Synthetic vendor account and candidate Product from the photo path        | The order extraction payload is still constructed by the local agent harness; a saved HTML page is not yet the input to this run                       |
+| Gmail order event                                             | [Purchase agent workerd integration](../../apps/web/src/server/purchase-import/purchase-agent-workerd.integration.test.ts) exercises durable browser handoff; [Gmail tests](../../apps/web/src/server/purchase-import/gmail/gmail.unit.test.ts) cover mail interpretation                         | Synthetic mail/API response                                               | No local click-through from Google connect through mailbox discovery and itemized order approval yet                                                   |
+| Monarch statement transaction                                 | `pnpm test:e2e:headless:wardrobe` parses [`synthetic-monarch-wardrobe.csv`](../../apps/web/tests/e2e/fixtures/synthetic-monarch-wardrobe.csv), invokes statement preview, approves the proposed transaction through the entity writer, replays the source ref, and checks its Purchase allocation | Synthetic financial account because CSV cannot establish account identity | CSV approval currently uses MCP, not a first-class browser or native import screen; late-arriving statement allocation needs its own test and worklist |
+| Explicit receive and later recount                            | Wardrobe run verifies that order import leaves stock unchanged; [inventory session E2E](../../apps/web/tests/e2e/inventory-session.spec.ts) reviews and completes a real browser recount                                                                                                          | A location with two stock rows for recount                                | The wardrobe run creates its room and initial inventory through the entity writer; a photo-to-optional-receive UI check remains                        |
+
+The wardrobe run verifies the joined graph after merge: one live Product, own
+item and label Images, one InventoryEntry, one Purchase, its Expense, a posted
+FinancialTransaction, and one allocation. It also checks that replaying the
+statement does not create another transaction. The deterministic model seam is
+intentional: this is a regression check for Cubby's non-AI contracts, not a
+score for model decisions. Run a separate live Flue trial for proposal quality,
+streaming, and wall time.
+
+## Other documented core journeys
+
+| Documented journey                                                 | Local browser check                                                                                                                                                                                                                                   | Actual user action exercised                                       | Gap to close                                                                 |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| [Inventory recount](../inventory-audit.md)                         | [`inventory-session.spec.ts`](../../apps/web/tests/e2e/inventory-session.spec.ts)                                                                                                                                                                     | Open a count sheet, finish, reload, and resume                     | Native recount and scanned bin input                                         |
+| [Product relationships](../product-relationship-route.md)          | [`relationship-discovery.spec.ts`](../../apps/web/tests/e2e/relationship-discovery.spec.ts) and [`connected-records.spec.ts`](../../apps/web/tests/e2e/connected-records.spec.ts)                                                                     | Review a relationship and navigate connected records               | An input-first Purchase/stock relationship path without seeded relation rows |
+| [Garden](../garden.md)                                             | [`garden.spec.ts`](../../apps/web/tests/e2e/garden.spec.ts)                                                                                                                                                                                           | Create a planting, edit it, log a journal entry, and see its photo | Native camera capture and whole-season planning input                        |
+| [Recipes and meals](../runbooks/meal-food-entry-schema.md)         | [`create-recipe-full-flow.spec.ts`](../../apps/web/tests/e2e/create-recipe-full-flow.spec.ts), [`recipe-flow.spec.ts`](../../apps/web/tests/e2e/recipe-flow.spec.ts), and [`meal-nutrition.spec.ts`](../../apps/web/tests/e2e/meal-nutrition.spec.ts) | Create and use recipe/meal controls                                | A single source-file-to-meal journey without injected extraction artifact    |
+| [Projects and household work](../household-contribution-ledger.md) | [`project-tracker.spec.ts`](../../apps/web/tests/e2e/project-tracker.spec.ts)                                                                                                                                                                         | Add and navigate a Task                                            | Full contribution attribution through Project, Task, and Expense             |
+| Cookbook import                                                    | [`cookbook-photos.spec.ts`](../../apps/web/tests/e2e/cookbook-photos.spec.ts)                                                                                                                                                                         | Upload a synthetic EPUB with photos                                | Cover through extracted recipe to meal in one run                            |
+
+This table is a coverage contract, not a claim that every row is complete.
+When adding a journey, keep the original input in a synthetic fixture, minimize
+pre-created records, assert the durable final graph and replay behavior, and
+update the gap column only after that local check passes. Browser videos and
+simulator captures stay in ignored local artifacts.
+
+## Run the current Product checks
+
+```sh
+pnpm test:e2e:headless:wardrobe
+pnpm test:e2e product-photo-first.spec.ts
+pnpm test:e2e photo-group-review.spec.ts
+pnpm test:e2e inventory-session.spec.ts
+```
+
+Playwright's standalone command uses the built web app, so build it after web
+source changes. See [validation policy](validation.md) for test tiers and the
+exact-head GitHub merge gate.

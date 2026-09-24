@@ -408,6 +408,18 @@ function AgentSurface({ run }: { run: ImportRunDetail }) {
   return <ActiveAgentSurface run={run} />;
 }
 
+function useAbsentAgentRefresh(
+  phase: string,
+  dispatchEventId: string | null | undefined,
+  observation: { refresh: () => void },
+) {
+  useEffect(() => {
+    if (phase !== "absent" || !dispatchEventId) return;
+    const timer = window.setInterval(() => observation.refresh(), 2_500);
+    return () => window.clearInterval(timer);
+  }, [phase, dispatchEventId, observation]);
+}
+
 function RunProgress({ run }: { run: ImportRunDetail }) {
   return (
     <section className="grid gap-3 border border-border bg-card p-4">
@@ -540,6 +552,7 @@ function ActiveAgentSurface({ run }: { run: ImportRunDetail }) {
     observation.getSnapshot,
     () => EMPTY_AGENT_SNAPSHOT,
   );
+  useAbsentAgentRefresh(agent.phase, run.dispatch?.eventId, observation);
   const promptMutation = useMutation({
     mutationFn: async (value: string) =>
       await client.send({
@@ -578,9 +591,8 @@ function ActiveAgentSurface({ run }: { run: ImportRunDetail }) {
       </div>
       {agent.phase === "absent" ? (
         <p className="text-sm text-muted-foreground">
-          {run.purpose === "photo_inventory"
-            ? "The photo agent conversation is starting. Refresh this run if it does not appear."
-            : "The agent conversation is not available yet. Connect the vendor account, then refresh this run."}
+          The agent conversation is not available yet. This view will connect
+          automatically once the agent starts.
           {run.purpose === "photo_inventory" ? null : (
             <a
               className="ml-1 text-primary hover:underline"
@@ -802,7 +814,7 @@ function RunTimeline({ run }: { run: ImportRunDetail }) {
       {run.operations.length > 0 ? (
         <div
           className="max-h-[32rem] overflow-auto"
-          aria-label="Purchase import transcript"
+          aria-label="Import run transcript"
         >
           {run.operations.map((operation) => (
             <div
@@ -1127,7 +1139,20 @@ export function RunPhotoBatch({ record }: { record: ImportRunOut }) {
             <DispatchRecoveryControls run={run} />
           ) : null}
           <PhotoImportRunView run={run} />
+          <RunProgress run={run} />
           {run.dispatch?.eventId ? <AgentSurface run={run} /> : null}
+          <details className="border border-border bg-card p-4">
+            <summary className="cursor-pointer font-medium">
+              Timeline and system log
+            </summary>
+            <div className="mt-4 grid gap-4">
+              <RunTimeline run={run} />
+              <RunDebugLog
+                publicId={run.publicId}
+                active={ACTIVE_RUN_STATUSES.has(run.status)}
+              />
+            </div>
+          </details>
         </>
       )}
     </ImportRunGate>

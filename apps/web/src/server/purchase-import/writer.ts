@@ -1237,6 +1237,7 @@ export async function importVendorOrder(
           id: financialTransaction.id,
           amount: financialTransaction.amount,
           transactionDate: financialTransaction.transactionDate,
+          postedDate: financialTransaction.postedDate,
           accountCardNumbers: financialAccount.cardNumbers,
         })
         .from(financialTransaction)
@@ -1261,27 +1262,29 @@ export async function importVendorOrder(
         .where(
           and(
             notDeleted(financialTransaction),
-            between(financialTransaction.transactionDate, low, high),
+            between(
+              sql<string>`coalesce(${financialTransaction.transactionDate}, ${financialTransaction.postedDate})`,
+              low,
+              high,
+            ),
             isNull(financialTransactionAllocation.id),
           ),
         );
       const matches = matchCompletePaymentSet(
         candidate.payments,
-        candidates.flatMap((row) =>
-          row.transactionDate
+        candidates.flatMap((row) => {
+          const date = row.transactionDate ?? row.postedDate;
+          return date
             ? [
                 {
                   id: row.id,
                   amount: row.amount,
-                  occurredAt: new Date(`${row.transactionDate}T12:00:00.000Z`),
-                  cardLastFours: cardLastFoursOn(
-                    row.accountCardNumbers,
-                    row.transactionDate,
-                  ),
+                  occurredAt: new Date(`${date}T12:00:00.000Z`),
+                  cardLastFours: cardLastFoursOn(row.accountCardNumbers, date),
                 },
               ]
-            : [],
-        ),
+            : [];
+        }),
       );
       if (matches) {
         const transactionIds = matches.map((match) =>

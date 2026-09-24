@@ -11,6 +11,53 @@ transaction, or a manual entry, a person can reach **one well-identified
 Product** with the right evidence attached. The entry point and sequence do
 not change what the result means.
 
+## The whole journey
+
+Connect read-only Gmail in Cubby Settings, import a Monarch CSV through the
+MCP statement preview, and capture own-item and label photos on iPhone or Mac.
+These sources can arrive in any order. Cubby should converge them on one exact
+Product, an itemized Purchase, and a truthful settlement allocation. A human
+reviews uncertain identity, grouped photos, and ambiguous charges. Flue can
+coordinate the browser, mail, and photo jobs; Jev can help rank bounded
+ambiguous choices. Neither agent substitutes for source evidence or approval.
+
+```mermaid
+flowchart LR
+    G[Connect Gmail] --> E[Order mail events]
+    R[Retailer history or receipt] --> O[Itemized Purchase]
+    E --> R
+    M[Import Monarch CSV] --> T[Posted transaction evidence]
+    F[Take item and label photos] --> Q[Agent proposes photo groups]
+    Q --> H{Human review}
+    H --> P[Exact Product variant]
+    O --> V{Variant match}
+    V --> P
+    O --> S{Unique settlement?}
+    T --> S
+    S -->|Yes, full payment set| A[Allocate transaction to Purchase]
+    S -->|Ambiguous| U[Review charge and order evidence]
+    U --> A
+    P --> I[Optional explicit inventory receive]
+```
+
+The statement does not identify an item, and a photo does not prove where it
+was bought. A delivered email and a card charge do not receive inventory.
+
+### What works today and what still needs work
+
+| Part        | Current path                                                                                                                           | Next product step                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Gmail       | Google connection in Settings grants read-only Gmail; order mail can feed discovery.                                                   | Make source coverage and missing itemization obvious in one journey view.                            |
+| Monarch CSV | An MCP client parses locally, previews normalized rows, then writes approved transactions.                                             | Add a first-class CSV upload/review screen and match late-arriving statements to existing Purchases. |
+| Photos      | Native upload creates a photo run; Flue proposes groups; web review approves them. Direct native Product photo attachment also exists. | Bring run status, group review, and Product match evidence into the native app.                      |
+| Settlement  | Purchase import can allocate a unique complete payment set to a transaction already recorded.                                          | Give ambiguous and reverse-arrival matches a single review worklist.                                 |
+| Activity    | Flue conversation streams; the run record and system log refresh while active.                                                         | Show one coherent event timeline and stage durations on desktop and phone.                           |
+
+The [shared photo skill](../.claude/skills/photo-inventory-import/SKILL.md)
+and [purchase skill](../.claude/skills/purchase-import/SKILL.md) apply to
+Flue, Codex, and Claude. They encode source boundaries and review rules, not
+one model's private prompt.
+
 ```mermaid
 flowchart LR
     A[Own-item photo] --> M[Find or create exact Product]
@@ -109,11 +156,13 @@ the repository.
 
 ## How to check the journey
 
-Use synthetic fixtures for the complete path: manual creation or exact match,
-photo grouping and approval, order preparation and replay, ambiguous
-settlement, and a return or trial that does not imply ownership. On iPhone,
-repeat the direct photo and new Product paths in a disposable local database;
-inspect the candidate order, taps, review language, and final Product detail.
-On web, verify the same Product, attached image roles, purchase line, and
-settlement status. Record a simulator or browser video when interaction quality
-is the question. Keep real household evidence in local analysis only.
+The [local journey coverage map](agents/core-journey-e2e.md) names each
+executable Product path, its actual synthetic input, the few seeded
+prerequisites, and its remaining gap. The wardrobe check carries uploaded
+photos and a parsed Monarch CSV through grouping, approval, purchase import,
+settlement, and Product merge. A separate browser check creates a Product from
+item and label files without an import run. On iPhone, repeat direct photo and
+new Product paths in a disposable local database; inspect candidate order,
+taps, review language, and final Product detail. Record a simulator or browser
+video when interaction quality is the question. Keep real household evidence
+in local analysis only.

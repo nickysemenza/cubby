@@ -214,3 +214,6 @@ Still deliberately deferred:
   shipped: the phone row already carries a thumbnail, name, state, status glyph,
   and Change, and two more targets crush the name column. Quantity editing lives
   in the Change sheet, where the stepper and typed entry both fit.
+
+The [local journey coverage map](agents/core-journey-e2e.md) links the recount
+browser test and records the native scan and photo-input gaps.

@@ -53,12 +53,15 @@ one as imported.
 Name and match per [product identity](../product-enrichment/references/product-identity.md)
 — its either-side-first contract governs every photo Product: `Brand Model —
 Color, Size`, one Product per exact variant. Before creating, check for an
-existing match — `resolve_products` for name/alias hits, `find_similar_entities`
-for a visual/embedding candidate, and `entity list product { filters: {
-dataGap: "product_unpurchased" } }` scoped to this owner/category for a
-Product a prior photo batch or a purchase already created but never received
-inventory for. Also inspect purchase-linked candidates, especially Products
-with no own-item photo or prior photo-import attachment. An exact identifier read off a label or box (SKU/UPC/model)
+existing match — call `suggest_photo_product_candidates` once per distinct
+item with its observed name and manufacturer. Its results include purchase,
+own-photo, earlier photo-import, and inventory evidence. Compare exact variant
+facts yourself; rank and absence of an own photo are useful leads, not proof.
+Use `resolve_products`, `find_similar_entities`, or a scoped Product list only
+when the candidate response leaves a concrete identity question unanswered;
+avoid repeating broad catalog reads for every photo of the same item. A
+purchase-created Product without an own photo deserves close inspection even
+when it came from a vendor import. An exact identifier read off a label or box (SKU/UPC/model)
 that matches a candidate supports `existingId`. A strong combination of
 visible brand, garment features, color, and variant evidence may also support
 proposing that existing Product for human approval; explain any unreadable size
@@ -124,5 +127,16 @@ handoff to purchase-import, not a task this run repeats.
 Do only the requested import: never infer prices, receipts, purchases,
 vendors, or purchase relationships from a photo. A later receipt is handled
 by `purchase-import`, which matches this same Product (see `dataGap:
-product_unpurchased`) using settlement evidence only and creates no new
-inventory.
+product_unpurchased`) using itemized order and exact-variant evidence; it
+handles settlement separately and creates no new inventory.
+
+## Joining later evidence
+
+Treat this run as the photo side of the [product identity
+journey](../../../docs/product-identity-journey.md). An agent may later find an
+itemized retailer order through connected Gmail or a retailer account, and a
+posted charge through a statement import. Only the order line can establish a
+Purchase-to-Product relationship; the statement can settle that Purchase but
+cannot identify the garment. Propose uncertain Product matches for human
+review, with label, color, size, and source-image provenance visible. Never
+attach a charge to a Product directly.

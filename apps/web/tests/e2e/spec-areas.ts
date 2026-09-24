@@ -349,6 +349,20 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
+    file: "product-photo-first.spec.ts",
+    globs: [
+      `${WEB}/src/routes/_authenticated/products.index.tsx`,
+      `${WEB}/src/routes/_authenticated/products.$shortcode.tsx`,
+      `${WEB}/src/app/products/**`,
+      `${WEB}/src/app/_components/PendingImageUpload.tsx`,
+      `${WEB}/src/app/_components/entity-media/**`,
+      `${WEB}/src/server/repo/product/**`,
+      `${WEB}/src/server/repo/image.ts`,
+      `${WEB}/src/server/services/image-storage.service.ts`,
+      `${WEB}/src/lib/image.functions.ts`,
+    ],
+  },
+  {
     file: "product-ssr.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/products.$shortcode.tsx`,
