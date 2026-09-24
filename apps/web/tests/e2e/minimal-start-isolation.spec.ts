@@ -1,11 +1,15 @@
+import { test, expect } from "@playwright/test";
 import { Pool } from "pg";
 
-import { test, expect } from "./e2e-test";
+import { createE2EWorkerRuntime } from "./e2e-worker-runtime";
 
-test("minimal-start database has no corpus products", async ({
-  e2eRuntime,
-}) => {
-  const pool = new Pool({ connectionString: e2eRuntime.databaseUrl });
+// oxlint-disable-next-line no-empty-pattern -- Playwright requires fixture destructuring.
+test("minimal-start database has no corpus products", async ({}, testInfo) => {
+  const runtime = await createE2EWorkerRuntime({
+    authenticated: true,
+    parallelIndex: testInfo.parallelIndex,
+  });
+  const pool = new Pool({ connectionString: runtime.databaseUrl });
   try {
     const result = await pool.query<{ count: string }>(
       'SELECT count(*)::text AS count FROM "Product"',
@@ -13,5 +17,6 @@ test("minimal-start database has no corpus products", async ({
     expect(Number(result.rows[0]?.count)).toBe(0);
   } finally {
     await pool.end();
+    await runtime.close();
   }
 });
