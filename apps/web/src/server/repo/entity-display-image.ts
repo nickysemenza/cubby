@@ -1,4 +1,7 @@
-import type { DisplayImageSummary } from "@cubby/schemas/display-images";
+import {
+  displayImagesField,
+  type DisplayImageSummary,
+} from "@cubby/schemas/display-images";
 import { type Entity, entityRefKey, entitySchema } from "@cubby/schemas/entity";
 import type { RelationshipPathStep } from "@cubby/schemas/entity-integrity";
 import {
@@ -334,6 +337,7 @@ async function resolveEntityDisplayImageLists(
 }
 
 const publicEntityRowSchema = z.looseObject({ id: z.string() });
+const resolvedListMediaSchema = z.object({ displayImages: displayImagesField });
 type PublicEntityRow = z.output<typeof publicEntityRowSchema>;
 
 /** Every direct attachment of the given subjects, in display order. */
@@ -459,6 +463,22 @@ export async function withUniversalEntityMedia<
         : projected;
     }),
   );
+}
+
+/** Repository list projections that already carry resolved images need no
+ * shortcode lookup or second display-image query at the kernel boundary. */
+export async function withListEntityMedia<
+  E extends Exclude<Entity, "usda-food">,
+  Row,
+>(
+  db: Database | DrizzleTransaction,
+  entityType: E,
+  rows: Row[],
+): Promise<Row[] | Awaited<ReturnType<typeof withUniversalEntityMedia>>> {
+  if (rows.every((row) => resolvedListMediaSchema.safeParse(row).success)) {
+    return rows;
+  }
+  return withUniversalEntityMedia(db, entityType, rows, false);
 }
 
 /**

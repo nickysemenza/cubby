@@ -27,6 +27,7 @@ import {
   resolveEntityDisplayImages,
   resolveEntityAttachments,
   withDisplayImages,
+  withListEntityMedia,
   withUniversalEntityMedia,
 } from "./entity-display-image";
 import {
@@ -46,6 +47,30 @@ import {
 // index never collides across tests.
 describe("entity display image resolver", () => {
   const ctx = withTestDb();
+
+  it("keeps images already resolved by a repository list", async () => {
+    const record = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic list item" }),
+      ctx.actor,
+    );
+    const photo = await createUploadedImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "unlinked.jpg",
+      contentType: "image/jpeg",
+      size: 100,
+    });
+    const rows = [
+      {
+        id: record.id,
+        displayImages: [
+          { id: photo.shortcode, url: getR2PublicUrl(photo.key) },
+        ],
+      },
+    ];
+
+    expect(await withListEntityMedia(ctx.db, "product", rows)).toBe(rows);
+  });
 
   const expectedRepresentations = (key: string) => {
     const original = getR2PublicUrl(key);
