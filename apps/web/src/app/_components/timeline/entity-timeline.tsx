@@ -23,6 +23,7 @@ import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
+import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { EnumPill } from "~/components/ui/enum-pill";
@@ -259,7 +260,7 @@ function EventLine({ event }: { event: EntityTimelineEvent }) {
       </EnumPill>
       {event.detail ? (
         <Description size="xs" className="min-w-0 truncate">
-          {event.detail}
+          <ShortcodeProse>{event.detail}</ShortcodeProse>
         </Description>
       ) : (
         <span />
@@ -669,7 +670,9 @@ export function EntityTimeline<E extends TimelineEntity>({
         </StatGrid>
       )}
       {data.notes.length > 0 && (
-        <Description>{data.notes.join(" ")}</Description>
+        <Description>
+          <ShortcodeProse>{data.notes.join(" ")}</ShortcodeProse>
+        </Description>
       )}
       <TimelinePager
         meta={data.meta}

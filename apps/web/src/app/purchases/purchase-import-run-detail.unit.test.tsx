@@ -1,13 +1,18 @@
 import type { ImportRunOut } from "@cubby/schemas/import-run";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  importRunDetailResponse,
+  type ImportRunDetail,
+} from "~/lib/purchase-import-run-detail";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { RunImportWorkflow } from "./purchase-import-run-detail";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
+let detailRun: ImportRunDetail;
 
 const run = {
   publicId: "RUN-4K7M",
@@ -94,6 +99,7 @@ const run = {
 
 beforeEach(() => {
   harness = createBrowserTestHarness();
+  detailRun = importRunDetailResponse.parse({ run }).run;
   vi.stubGlobal(
     "fetch",
     vi.fn().mockImplementation((input: string | URL | Request) => {
@@ -121,7 +127,7 @@ beforeEach(() => {
         );
       }
       return Promise.resolve(
-        new Response(JSON.stringify({ run }), {
+        new Response(JSON.stringify({ run: detailRun }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
@@ -142,6 +148,35 @@ const record = fromPartial<ImportRunOut>({
 });
 
 describe("RunImportWorkflow", () => {
+  it("links image shortcodes in progress summaries and history", async () => {
+    const update = {
+      eventId: "progress-1",
+      phase: "investigating",
+      currentItem: "IMG-4S9Q + IMG-R6MW",
+      awaitingApproval: false,
+      detail: "Checking both label photos.",
+      createdAt: "2026-09-20T16:02:00.000Z",
+    };
+    detailRun = importRunDetailResponse.parse({
+      run: {
+        ...run,
+        progress: [update],
+        latestProgress: { ...update, detail: "Review IMG-4S9Q." },
+      },
+    }).run;
+    render(<RunImportWorkflow record={record} />, {
+      wrapper: harness.wrapper,
+    });
+
+    const history = await screen.findByLabelText("Run progress history");
+    expect(
+      within(history).getByRole("link", { name: "IMG-4S9Q" }),
+    ).toHaveAttribute("href", "/images/IMG-4S9Q");
+    expect(
+      within(history).getByRole("link", { name: "IMG-R6MW" }),
+    ).toHaveAttribute("href", "/images/IMG-R6MW");
+    expect(screen.getAllByRole("link", { name: "IMG-4S9Q" })).toHaveLength(2);
+  });
   it("keeps terminal evidence view-only while showing the transcript", async () => {
     render(<RunImportWorkflow record={record} />, {
       wrapper: harness.wrapper,

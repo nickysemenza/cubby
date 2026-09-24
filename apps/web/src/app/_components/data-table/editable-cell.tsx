@@ -130,7 +130,7 @@ interface EditableCellCommonProps<T> {
   onSave: (value: T | null) => Promise<void>;
   renderValue: (value: T | null) => React.ReactNode;
   clipboard?: CellClipboardSpec<T | null>;
-  trigger?: "wrap" | "pencil";
+  trigger?: "wrap" | "pencil" | "pencil-wrap";
   autoOpen?: boolean;
 }
 
@@ -316,7 +316,7 @@ export function useCellEditState<TSaved = void>(
 
 const referenceEquals = <T,>(a: T | null, b: T | null) => a === b;
 
-type EditTriggerMode = "wrap" | "pencil";
+type EditTriggerMode = "wrap" | "pencil" | "pencil-wrap";
 
 function EditableDisplay<TSaved>({
   mode,
@@ -331,10 +331,18 @@ function EditableDisplay<TSaved>({
   clipboard?: CellClipboardSpec<TSaved>;
   children: React.ReactNode;
 }) {
-  if (mode === "pencil") {
+  if (mode !== "wrap") {
     return (
       <span className={CELL_EDIT_GROUP_CLASS}>
-        <span className="min-w-0 truncate">{children}</span>
+        <span
+          className={
+            mode === "pencil-wrap"
+              ? "min-w-0 break-words whitespace-pre-wrap"
+              : "min-w-0 truncate"
+          }
+        >
+          {children}
+        </span>
         <CellEditTrigger
           ref={triggerRef}
           onStartEdit={onStartEdit}

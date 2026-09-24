@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { ErrorDisplay } from "~/components/feedback/error-display";
+import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -56,7 +57,9 @@ function ImageAnalysisHistory({
             <summary className="text-xs text-muted-foreground">
               {analysis.provider} · {analysis.model} · {analysis.createdAt}
             </summary>
-            <p>{analysis.result.description}</p>
+            <p>
+              <ShortcodeProse>{analysis.result.description}</ShortcodeProse>
+            </p>
             <pre className="mt-2 max-h-48 overflow-auto text-xs whitespace-pre-wrap">
               {JSON.stringify(analysis, null, 2)}
             </pre>
@@ -71,7 +74,7 @@ function ImageAnalysisHistory({
           >
             <summary>
               Unparsed result · {analysis.provider ?? "Unknown provider"} ·{" "}
-              {analysis.reason}
+              <ShortcodeProse>{analysis.reason}</ShortcodeProse>
             </summary>
             <pre className="mt-2 max-h-48 overflow-auto text-xs whitespace-pre-wrap">
               {analysis.rawResultJson}
@@ -103,10 +106,15 @@ function DescriptionSummary({
     <>
       {status.correction ? (
         <p>
-          <strong>Confirmed correction:</strong> {status.correction.description}
+          <strong>Confirmed correction:</strong>{" "}
+          <ShortcodeProse>{status.correction.description}</ShortcodeProse>
         </p>
       ) : null}
-      {preferred ? <p>{preferred.result.description}</p> : null}
+      {preferred ? (
+        <p>
+          <ShortcodeProse>{preferred.result.description}</ShortcodeProse>
+        </p>
+      ) : null}
     </>
   );
 }

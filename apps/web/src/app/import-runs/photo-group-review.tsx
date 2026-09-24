@@ -29,6 +29,7 @@ import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
+import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -1252,7 +1253,7 @@ function PhotoTable({
                           className="line-clamp-2 text-xs text-muted-foreground"
                           title={snippet}
                         >
-                          {snippet}
+                          <ShortcodeProse>{snippet}</ShortcodeProse>
                         </p>
                       ) : (
                         <span className="text-2xs text-muted-foreground">
