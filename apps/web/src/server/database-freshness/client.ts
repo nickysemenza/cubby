@@ -7,6 +7,7 @@ import { problemsCountSchema } from "@cubby/schemas/problems";
 import superjson from "superjson";
 import type { z } from "zod";
 
+import { householdLocalDate } from "~/lib/household-date";
 import {
   getDatabaseFreshnessNamespace,
   getExecutionCtx,
@@ -202,7 +203,7 @@ export async function readEntityListSnapshot<
       "SHA-256",
       new TextEncoder().encode(superjson.stringify(input)),
     );
-    const key = `entity-list:${getWorkerVersionId()}:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+    const key = `entity-list:${getWorkerVersionId()}:${householdLocalDate()}:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
     const snapshot = await boundedRpc(() => target.getListSnapshot(key));
     if (snapshot.payload === null) {
       return { data: null, key, revision: snapshot.revision };

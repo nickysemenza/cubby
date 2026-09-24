@@ -78,6 +78,21 @@ describe("freshness RPC failure policy", () => {
     );
     expect(invalid.data).toBeNull();
     expect(invalid.key).toBe(first.key);
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-25T06:59:00Z"));
+    const beforeMidnight = await readEntityListSnapshot(
+      { entity: "product" },
+      page,
+      port,
+    );
+    vi.setSystemTime(new Date("2026-09-25T07:01:00Z"));
+    const afterMidnight = await readEntityListSnapshot(
+      { entity: "product" },
+      page,
+      port,
+    );
+    expect(afterMidnight.key).not.toBe(beforeMidnight.key);
   });
 
   it("serves a validated problem-count edge hit without a second Durable Object RPC", async () => {
