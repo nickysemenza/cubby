@@ -16,6 +16,8 @@ export const STRONG_QUERY_OPERATIONS = [
   "usda-food.alternateId",
   "usda-food.detail",
   "usda-food.list",
+  // The shared list snapshot validates against the strong write revision.
+  "entity.list",
 
   // Credentials and live operational state.
   "calendar.getCredential",

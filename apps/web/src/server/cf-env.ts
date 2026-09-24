@@ -169,4 +169,7 @@ export const getBindingFetcher = (
 
 export const getDatabaseFreshnessNamespace = () => cfEnv?.DB_FRESHNESS;
 
+export const getWorkerVersionId = (): string =>
+  cfEnv?.CF_VERSION_METADATA?.id ?? "local";
+
 export const getAiResponseCacheNamespace = () => cfEnv?.AI_RESPONSE_CACHE;

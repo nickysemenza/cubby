@@ -4,10 +4,13 @@ import {
 } from "@cubby/schemas/dashboard";
 import type { ProblemsCount } from "@cubby/schemas/problems";
 import { problemsCountSchema } from "@cubby/schemas/problems";
+import superjson from "superjson";
+import type { z } from "zod";
 
 import {
   getDatabaseFreshnessNamespace,
   getExecutionCtx,
+  getWorkerVersionId,
 } from "~/server/cf-env";
 
 import type { DatabaseFreshness } from "./state";
@@ -51,6 +54,17 @@ export interface ProblemCountsSnapshotPort {
 
 export interface ReadSnapshotPort {
   getDashboardCounts(): Promise<DashboardLocalCounts | null>;
+}
+
+export interface ListSnapshotPort {
+  getListSnapshot(
+    key: string,
+  ): Promise<{ payload: string | null; revision: number }>;
+  putListSnapshot(
+    key: string,
+    payload: string,
+    revision: number,
+  ): Promise<void>;
 }
 
 const getPort = () =>
@@ -163,5 +177,72 @@ export async function readDashboardCountsSnapshot(
   } catch (error) {
     console.error("Dashboard-count snapshot unavailable", error);
     return null;
+  }
+}
+
+export async function readEntityListSnapshot<
+  Input extends z.ZodType,
+  Output extends z.ZodType,
+>(
+  input: z.output<Input>,
+  output: Output,
+  port?: ListSnapshotPort,
+): Promise<{
+  data: z.output<Output> | null;
+  key: string;
+  revision: number | null;
+}> {
+  // SAFETY: DB_FRESHNESS binds DatabaseFreshnessDurableObject, whose RPC
+  // methods implement ListSnapshotPort.
+  const target: ListSnapshotPort | undefined =
+    port ?? (getPort() as ListSnapshotPort | undefined);
+  if (!target) return { data: null, key: "", revision: null };
+  try {
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(superjson.stringify(input)),
+    );
+    const key = `entity-list:${getWorkerVersionId()}:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+    const snapshot = await boundedRpc(() => target.getListSnapshot(key));
+    if (snapshot.payload === null) {
+      return { data: null, key, revision: snapshot.revision };
+    }
+    const parsed = output.safeParse(superjson.parse(snapshot.payload));
+    return {
+      data: parsed.success ? parsed.data : null,
+      key,
+      revision: snapshot.revision,
+    };
+  } catch (error) {
+    // SILENT: a cache failure falls back to the authoritative list read.
+    console.warn("Entity list snapshot lookup failed", error);
+    return { data: null, key: "", revision: null };
+  }
+}
+
+export function publishEntityListSnapshot<Data>(
+  key: string,
+  revision: number | null,
+  data: Data,
+  port?: ListSnapshotPort,
+): void {
+  // SAFETY: DB_FRESHNESS binds DatabaseFreshnessDurableObject, whose RPC
+  // methods implement ListSnapshotPort.
+  const target: ListSnapshotPort | undefined =
+    port ?? (getPort() as ListSnapshotPort | undefined);
+  if (!target || revision === null) return;
+  try {
+    const publish = target
+      .putListSnapshot(key, superjson.stringify(data), revision)
+      .catch((error) => {
+        // SILENT: a cache publish failure cannot fail a validated list read.
+        console.warn("Entity list snapshot publish failed", error);
+      });
+    const execution = getExecutionCtx();
+    if (execution) execution.waitUntil(publish);
+    else void publish;
+  } catch (error) {
+    // SILENT: a cache publish failure cannot fail a validated list read.
+    console.warn("Entity list snapshot publish failed", error);
   }
 }

@@ -1,8 +1,10 @@
 import { testUserId } from "@cubby/schemas/testing";
 import { fromAny } from "@total-typescript/shoehorn";
+import superjson from "superjson";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { setCfEnv } from "~/server/cf-env";
 import { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import type { ObservedResult } from "~/server/observed-request";
@@ -74,6 +76,7 @@ describe("runStartOperation", () => {
     observedOperations.length = 0;
     inspections.length = 0;
     authenticate.mockResolvedValue(context);
+    setCfEnv(undefined);
   });
 
   it("uses a trusted API context once and fails closed without freshness", async () => {
@@ -117,6 +120,50 @@ describe("runStartOperation", () => {
       expect.objectContaining({ db: database, readDb: database }),
       {},
     );
+  });
+
+  it("reuses an authenticated list after its first strong read", async () => {
+    const run = vi.fn(async () => true as const);
+    let payload: string | null = null;
+    setCfEnv(
+      fromAny({
+        DB_FRESHNESS: {
+          getByName: () => ({
+            getListSnapshot: async () => ({
+              payload,
+              revision: 2,
+            }),
+            putListSnapshot: async (_key: string, value: string) => {
+              payload = value;
+            },
+          }),
+        },
+      }),
+    );
+    try {
+      const options = {
+        operation: "entity.list",
+        type: "query",
+        input: {},
+        inputSchema: z.object({}),
+        outputSchema: z.literal(true),
+        request: request(),
+        run,
+      } as const;
+      expect(await runStartOperation(options)).toEqual({
+        ok: true,
+        data: true,
+      });
+      expect(await runStartOperation(options)).toEqual({
+        ok: true,
+        data: true,
+      });
+      expect(payload).toBe(superjson.stringify(true));
+      expect(authenticate).toHaveBeenCalledTimes(2);
+      expect(run).toHaveBeenCalledOnce();
+    } finally {
+      setCfEnv(undefined);
+    }
   });
 
   it("propagates a request id only through the structured failure", () => {

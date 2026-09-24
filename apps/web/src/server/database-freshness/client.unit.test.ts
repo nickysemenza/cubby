@@ -1,5 +1,6 @@
 import { problemsCountSchema } from "@cubby/schemas/problems";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
 import { runWithExecutionCtx } from "~/server/cf-env";
@@ -7,6 +8,7 @@ import { runWithExecutionCtx } from "~/server/cf-env";
 import {
   readDashboardCountsSnapshot,
   readDatabaseFreshness,
+  readEntityListSnapshot,
   readProblemCountsFromDurableObject,
   recordDatabaseWrite,
 } from "./client";
@@ -47,6 +49,35 @@ describe("freshness RPC failure policy", () => {
         },
       }),
     ).toBeNull();
+  });
+
+  it("validates list snapshots before reusing them", async () => {
+    const page = z.object({ rows: z.array(z.number()) });
+    const getListSnapshot = vi.fn().mockResolvedValue({
+      payload: '{"json":{"rows":[1]},"meta":{"values":{}}}',
+      revision: 3,
+    });
+    const port = {
+      getListSnapshot,
+      putListSnapshot: vi.fn(async () => undefined),
+    };
+    const first = await readEntityListSnapshot(
+      { entity: "product" },
+      page,
+      port,
+    );
+    expect(first.data).toEqual({ rows: [1] });
+    getListSnapshot.mockResolvedValue({
+      payload: '{"rows":"invalid"}',
+      revision: 3,
+    });
+    const invalid = await readEntityListSnapshot(
+      { entity: "product" },
+      page,
+      port,
+    );
+    expect(invalid.data).toBeNull();
+    expect(invalid.key).toBe(first.key);
   });
 
   it("serves a validated problem-count edge hit without a second Durable Object RPC", async () => {

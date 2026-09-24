@@ -13,7 +13,11 @@ import {
   startOperationDefinitionFor,
 } from "~/lib/start-operation-observability";
 import { scheduleCalendarFeedDirty } from "~/server/calendar/client";
-import { recordDatabaseWrite } from "~/server/database-freshness/client";
+import {
+  publishEntityListSnapshot,
+  readEntityListSnapshot,
+  recordDatabaseWrite,
+} from "~/server/database-freshness/client";
 import {
   appErrorFromUnknown,
   isExpectedAppError,
@@ -317,6 +321,56 @@ function isOutputSchemaResolver<
 
 const operationEntityInputSchema = z.object({ entity: z.string() });
 
+async function cachedListRead<
+  InputSchema extends z.ZodType,
+  OutputSchema extends z.ZodType,
+>(
+  operation: StartOperationId,
+  input: z.output<InputSchema>,
+  outputSchema: OutputSchema,
+  requestOrigin: string,
+  signal: AbortSignal,
+  span: AppSpan,
+): Promise<{
+  snapshot: {
+    key: string;
+    revision: number | null;
+  } | null;
+  data: z.output<OutputSchema> | null;
+}> {
+  if (operation !== "entity.list") return { snapshot: null, data: null };
+  const snapshot = await readEntityListSnapshot(input, outputSchema);
+  throwIfStartOperationAborted(signal);
+  if (snapshot.data !== null) {
+    span.setAttributes({
+      "cubby.request_origin": requestOrigin,
+      "cubby.read.consistency": "snapshot",
+      "cubby.list_cache.hit": true,
+    });
+  }
+  return { snapshot, data: snapshot.data };
+}
+
+function annotateSelectedRead(
+  span: AppSpan,
+  context: AuthenticatedStartOperationContext,
+  readPolicy: ReadPolicy,
+  operationType: "query" | "mutation" | "subscription",
+): void {
+  span.setAttributes({
+    "cubby.request_origin": context.requestOrigin,
+    "cubby.read.consistency":
+      readPolicy === "strong" ? "strong" : context.readConsistency.consistency,
+    "cubby.read.reason":
+      readPolicy === "strong"
+        ? operationType === "mutation"
+          ? "mutation"
+          : "authoritative-operation"
+        : context.readConsistency.reason,
+    "cubby.list_cache.hit": false,
+  });
+}
+
 export type RunStartOperationOptions<
   InputSchema extends z.ZodType,
   OutputSchema extends z.ZodType,
@@ -388,24 +442,6 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
                 ? "strong"
                 : (options.readPolicy ??
                   readPolicyFor(options.operation, "query"));
-            const context = await selectOperationContext(
-              authenticated,
-              readPolicy,
-            );
-            span.setAttributes({
-              "cubby.request_origin": context.requestOrigin,
-              "cubby.read.consistency":
-                readPolicy === "strong"
-                  ? "strong"
-                  : context.readConsistency.consistency,
-              "cubby.read.reason":
-                readPolicy === "strong"
-                  ? options.type === "mutation"
-                    ? "mutation"
-                    : "authoritative-operation"
-                  : context.readConsistency.reason,
-            });
-
             stage = "input";
             const input = options.inputSchema.parse(options.input);
             const entityInput = operationEntityInputSchema.safeParse(input);
@@ -417,6 +453,26 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
             if (entity) span.setAttribute("cubby.entity", entity);
             throwIfStartOperationAborted(options.request.signal);
 
+            const outputSchema = isOutputSchemaResolver(options.outputSchema)
+              ? options.outputSchema(input)
+              : options.outputSchema;
+            const cachedList = await cachedListRead(
+              options.operation,
+              input,
+              outputSchema,
+              authenticated.requestOrigin,
+              options.request.signal,
+              span,
+            );
+            if (cachedList.data !== null)
+              return { result: { ok: true, data: cachedList.data } };
+
+            const context = await selectOperationContext(
+              authenticated,
+              readPolicy,
+            );
+            annotateSelectedRead(span, context, readPolicy, options.type);
+
             stage = "run";
             mutationStarted =
               options.type === "mutation" &&
@@ -425,11 +481,15 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
             throwIfStartOperationAborted(options.request.signal);
 
             stage = "output";
-            const outputSchema = isOutputSchemaResolver(options.outputSchema)
-              ? options.outputSchema(input)
-              : options.outputSchema;
             const data = outputSchema.parse(rawOutput);
             throwIfStartOperationAborted(options.request.signal);
+            if (cachedList.snapshot) {
+              publishEntityListSnapshot(
+                cachedList.snapshot.key,
+                cachedList.snapshot.revision,
+                data,
+              );
+            }
             if (mutationStarted) {
               runtime.markCalendarDirty(
                 context,

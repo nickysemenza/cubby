@@ -104,4 +104,26 @@ describe("database freshness Durable Object", () => {
     await stub.recordWrite();
     expect(await stub.getDashboardCounts()).toBeNull();
   });
+
+  it("serves a list snapshot only for the revision it covered", async () => {
+    const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
+    const first = await stub.getListSnapshot("synthetic-page");
+    expect(first.payload).toBeNull();
+    await stub.putListSnapshot("synthetic-page", '{"rows":[]}', first.revision);
+    expect((await stub.getListSnapshot("synthetic-page")).payload).toBe(
+      '{"rows":[]}',
+    );
+    await evictDurableObject(stub);
+    expect((await stub.getListSnapshot("synthetic-page")).payload).toBe(
+      '{"rows":[]}',
+    );
+    await stub.recordWrite();
+    expect((await stub.getListSnapshot("synthetic-page")).payload).toBeNull();
+    await stub.putListSnapshot(
+      "synthetic-page",
+      '{"rows":[1]}',
+      first.revision,
+    );
+    expect((await stub.getListSnapshot("synthetic-page")).payload).toBeNull();
+  });
 });

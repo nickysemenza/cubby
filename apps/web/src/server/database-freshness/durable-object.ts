@@ -21,6 +21,9 @@ import { databaseFreshness } from "./state";
 const REFRESH_DELAY_MS = 15 * 60_000;
 const MAX_SNAPSHOT_AGE_MS = 24 * 60 * 60_000;
 const MAX_READ_SNAPSHOT_AGE_MS = 5 * 60_000;
+const MAX_LIST_SNAPSHOT_AGE_MS = 5 * 60_000;
+const MAX_LIST_SNAPSHOT_BYTES = 4 * 1024 * 1024;
+const MAX_LIST_SNAPSHOTS = 64;
 
 // SAFETY: this module's named export is declared locally and remains lazy so
 // workerd does not initialize the WASM-backed problem implementation at boot.
@@ -75,6 +78,9 @@ export class DatabaseFreshnessDurableObject extends DurableObject<Env> {
     );
     ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS read_snapshots (kind TEXT PRIMARY KEY, payload TEXT NOT NULL, computed_at INTEGER NOT NULL, covered_sequence INTEGER NOT NULL)",
+    );
+    ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS list_snapshots (key TEXT PRIMARY KEY, payload TEXT NOT NULL, computed_at INTEGER NOT NULL, covered_sequence INTEGER NOT NULL)",
     );
   }
 
@@ -134,6 +140,42 @@ export class DatabaseFreshnessDurableObject extends DurableObject<Env> {
       console.error("dashboard.snapshot.refresh.failed", error);
       return null;
     }
+  }
+
+  getListSnapshot(key: string) {
+    const revision = this.readRefreshState().write_sequence;
+    const row = this.ctx.storage.sql
+      .exec<ReadSnapshotRow>(
+        "SELECT payload, computed_at, covered_sequence FROM list_snapshots WHERE key = ?",
+        key,
+      )
+      .toArray()[0];
+    return {
+      payload:
+        row &&
+        row.covered_sequence === revision &&
+        Date.now() - row.computed_at < MAX_LIST_SNAPSHOT_AGE_MS
+          ? row.payload
+          : null,
+      revision,
+    };
+  }
+
+  putListSnapshot(key: string, payload: string, revision: number): void {
+    if (new TextEncoder().encode(payload).byteLength > MAX_LIST_SNAPSHOT_BYTES)
+      return;
+    if (this.readRefreshState().write_sequence !== revision) return;
+    this.ctx.storage.sql.exec(
+      "INSERT INTO list_snapshots (key, payload, computed_at, covered_sequence) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET payload = excluded.payload, computed_at = excluded.computed_at, covered_sequence = excluded.covered_sequence",
+      key,
+      payload,
+      Date.now(),
+      revision,
+    );
+    this.ctx.storage.sql.exec(
+      "DELETE FROM list_snapshots WHERE key IN (SELECT key FROM list_snapshots ORDER BY computed_at DESC LIMIT -1 OFFSET ?)",
+      MAX_LIST_SNAPSHOTS,
+    );
   }
 
   async alarm(): Promise<void> {
