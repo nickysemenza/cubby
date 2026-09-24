@@ -801,7 +801,6 @@ export const renderEntityArtifacts = (
         entity.key,
         {
           ...entity.inspector,
-          overrides: entity.overrides,
           shortcodePrefix: entity.shortcode,
           searchable: entity.descriptor.searchable === true,
           // Search is a list capability, not a synthetic model field. Keeping
@@ -1223,7 +1222,6 @@ export const renderEntityArtifacts = (
         "export type EntityInspectorMetadata = CompiledEntityPresentation & {\n" +
         "  singular: string;\n" +
         "  plural: string | null;\n" +
-        "  overrides: readonly { path: string; value: string }[];\n" +
         "  shortcodePrefix: string | null;\n" +
         "  searchable: boolean;\n" +
         "  primarySearch: { key: string; placeholder: string } | null;\n" +
@@ -1266,6 +1264,22 @@ export const renderEntityArtifacts = (
           entries: inspectorMetadata,
           satisfies: "Record<Entity, EntityInspectorMetadata>",
           comment: "// Generated inspector metadata stays one entity per line.",
+        }),
+    },
+    {
+      relativePath: "apps/web/src/entities/generated/entity-overrides.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "@cubby/schemas/entity";\n\n' +
+        renderRecord({
+          name: "entityDeclarationOverrides",
+          entries: Object.fromEntries(
+            entities.map(({ key, overrides }) => [key, overrides]),
+          ),
+          satisfies:
+            "Record<Entity, readonly { path: string; value: string }[]>",
+          comment:
+            "// Explicit inputs are kept separate from shared inspector metadata.",
         }),
     },
     {

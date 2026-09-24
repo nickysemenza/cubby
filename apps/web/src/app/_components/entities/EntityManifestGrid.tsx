@@ -31,6 +31,7 @@ import {
   type EntityInspectorHealth,
   entityInspectorHealth,
 } from "~/entities/entity-inspector-health";
+import { entityDeclarationOverrides } from "~/entities/generated/entity-overrides.gen";
 import { viewsForEntity } from "~/entities/view-manifest";
 import { authClient } from "~/lib/auth-client";
 import { ENTITY_NATIVE_COVERAGE } from "~/lib/generated/entity-native-coverage.gen";
@@ -106,6 +107,12 @@ function metadataFor(entity: Entity): EntityInspectorMetadata {
   // satisfies `EntityInspectorMetadata`, just not through a type TS can see
   // when indexed by a union key.
   return entityInspectorMetadata[entity] as EntityInspectorMetadata;
+}
+
+function overridesFor(
+  entity: Entity,
+): readonly { path: string; value: string }[] {
+  return entityDeclarationOverrides[entity];
 }
 
 function legacyPrefix(entity: Entity): string | null {
@@ -611,7 +618,7 @@ function EffectiveBehavior({ entity }: { entity: Entity }) {
 }
 
 function OverridesSubRow({ entity }: { entity: Entity }) {
-  const overrides = metadataFor(entity).overrides;
+  const overrides = overridesFor(entity);
   return (
     <TableRow className="bg-muted/20 hover:bg-muted/20">
       <TableCell colSpan={COLUMN_COUNT} className="px-4 py-3 whitespace-normal">
@@ -743,7 +750,7 @@ function MegaTable({
                   {metadata.mcpOperations.length}
                 </TableCell>
                 <TableCell className={cn(cellCls, mono)}>
-                  {metadata.overrides.length}
+                  {overridesFor(entity).length}
                 </TableCell>
                 <TableCell
                   className={cn(cellCls, "max-w-[10rem] truncate")}
