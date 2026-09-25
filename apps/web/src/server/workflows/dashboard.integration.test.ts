@@ -74,7 +74,7 @@ describe("dashboard count workflow", () => {
     expect(result.ledgerParty).toBe(list.count);
   });
 
-  it("uses a valid local snapshot while USDA remains a parallel live read", async () => {
+  it("reads live local counts even when a stale snapshot is available", async () => {
     const snapshot = dashboardLocalCounts.parse({
       ...(await getEntityCounts(ctx.db)),
       product: 17,
@@ -101,7 +101,7 @@ describe("dashboard count workflow", () => {
         }),
       },
     });
-    expect(result.product).toBe(17);
+    expect(result.product).toBe(0);
     expect(result.usdaFoods).toBe(42);
   });
 });

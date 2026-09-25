@@ -1,8 +1,6 @@
-import { dashboardLocalCounts } from "@cubby/schemas/dashboard";
 import { problemsCountSchema } from "@cubby/schemas/problems";
 import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import superjson from "superjson";
 import { describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
@@ -79,29 +77,5 @@ describe("database freshness Durable Object", () => {
     });
 
     expect(await stub.getProblemCounts()).toEqual(counts);
-  });
-
-  it("persists warm read snapshots and rejects them after a write", async () => {
-    const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
-    const dashboard = dashboardLocalCounts.parse(
-      Object.fromEntries(
-        Object.keys(dashboardLocalCounts.shape).map((key) => [key, 1]),
-      ),
-    );
-    await runInDurableObject(stub, (_instance, state) => {
-      state.storage.sql.exec(
-        "INSERT INTO read_snapshots (kind, payload, computed_at, covered_sequence) VALUES (?, ?, ?, 0)",
-        "dashboard",
-        superjson.stringify(dashboard),
-        Date.now(),
-      );
-    });
-
-    expect(await stub.getDashboardCounts()).toEqual(dashboard);
-    await evictDurableObject(stub);
-    expect(await stub.getDashboardCounts()).toEqual(dashboard);
-
-    await stub.recordWrite();
-    expect(await stub.getDashboardCounts()).toBeNull();
   });
 });

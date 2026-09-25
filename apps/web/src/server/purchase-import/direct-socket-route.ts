@@ -2,17 +2,16 @@ import { and, eq } from "drizzle-orm";
 
 import { getPurchaseImportNamespace } from "~/server/cf-env";
 import { vendorAccount } from "~/server/db/schema";
+import { PURCHASE_IMPORT_SOCKET_PATH } from "~/server/direct-socket-paths";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { createRequestContext, requireActor } from "~/server/request-context";
-
-const SOCKET_PATH = "/api/import/agent/socket";
 
 export function isDirectBrowserSocketUpgrade(request: Request): boolean {
   // Workers may consume the Upgrade header before user code sees the request.
   // Route every request for this dedicated endpoint around Start; the handler
   // and Durable Object still reject non-WebSocket requests with HTTP 426.
-  return new URL(request.url).pathname === SOCKET_PATH;
+  return new URL(request.url).pathname === PURCHASE_IMPORT_SOCKET_PATH;
 }
 
 /**

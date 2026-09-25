@@ -13,16 +13,6 @@ import { setCfEnv } from "~/server/cf-env";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import { withRequestDbClient, type Database } from "~/server/db";
 import type { SearchDocumentCursor } from "~/server/repo/search-document";
-import {
-  applySearchIndexRepairOrphanPage,
-  applySearchIndexRepairSourcePage,
-  createSearchIndexRepairCounters,
-  foldSearchIndexRepairCounters,
-  publishSearchIndexRepairSourcePage,
-  SEARCH_INDEX_REPAIR_PAGE_SIZE,
-  selectSearchIndexRepairOrphanPage,
-  selectSearchIndexRepairSourcePage,
-} from "~/server/services/search-index-repair.service";
 
 interface SearchIndexRepairWorkflowParams {
   readonly requestedAt: string;
@@ -36,11 +26,12 @@ const progress = (
   phase: "orphans" | "sources",
   counters: SearchIndexRepairCounters,
   more: boolean,
+  pageSize: number,
 ): SearchIndexRepairEvent => ({
   type: "progress",
   phase,
   done: counters.scanned,
-  total: counters.scanned + (more ? SEARCH_INDEX_REPAIR_PAGE_SIZE : 0),
+  total: counters.scanned + (more ? pageSize : 0),
   counters: { ...counters },
 });
 
@@ -62,6 +53,16 @@ export class SearchIndexRepairWorkflow extends WorkflowEntrypoint<
     // Workflow invocations may resume in a fresh isolate. Set the binding
     // bridge before any page step publishes queue work or records freshness.
     setCfEnv(this.env);
+    const {
+      applySearchIndexRepairOrphanPage,
+      applySearchIndexRepairSourcePage,
+      createSearchIndexRepairCounters,
+      foldSearchIndexRepairCounters,
+      publishSearchIndexRepairSourcePage,
+      SEARCH_INDEX_REPAIR_PAGE_SIZE,
+      selectSearchIndexRepairOrphanPage,
+      selectSearchIndexRepairSourcePage,
+    } = await import("~/server/services/search-index-repair.service");
     let counters = createSearchIndexRepairCounters();
     let cursor: SearchDocumentCursor | null = null;
     let page = 0;
@@ -97,7 +98,12 @@ export class SearchIndexRepairWorkflow extends WorkflowEntrypoint<
         RETRIES,
         () =>
           Promise.resolve(
-            progress("orphans", counters, selection.nextCursor !== null),
+            progress(
+              "orphans",
+              counters,
+              selection.nextCursor !== null,
+              SEARCH_INDEX_REPAIR_PAGE_SIZE,
+            ),
           ),
       );
       cursor = selection.nextCursor;
@@ -153,7 +159,12 @@ export class SearchIndexRepairWorkflow extends WorkflowEntrypoint<
         RETRIES,
         () =>
           Promise.resolve(
-            progress("sources", counters, selection.nextCursor !== null),
+            progress(
+              "sources",
+              counters,
+              selection.nextCursor !== null,
+              SEARCH_INDEX_REPAIR_PAGE_SIZE,
+            ),
           ),
       );
       cursor = selection.nextCursor;
