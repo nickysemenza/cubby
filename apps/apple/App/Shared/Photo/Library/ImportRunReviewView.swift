@@ -1116,30 +1116,30 @@ private struct PhotoGroupDraftEditView: View {
             return ImportRunReviewModel(snapshot: run, review: review)
         }
     }
+
+    #Preview("Photo review", traits: .modifier(SignedInPreview())) {
+        NavigationStack {
+            ImportRunReviewView(
+                runID: ImportRunReviewPreviewFixture.runID,
+                previewModel: ImportRunReviewPreviewFixture.model())
+        }
+    }
+
+    #Preview("Photo review — intermediate", traits: .modifier(SignedInPreview())) {
+        NavigationStack {
+            ImportRunReviewView(
+                runID: ImportRunReviewPreviewFixture.runID,
+                previewModel: ImportRunReviewPreviewFixture.model())
+        }
+        .frame(width: 760, height: 900)
+    }
+
+    #Preview("Photo review — wide", traits: .modifier(SignedInPreview())) {
+        NavigationStack {
+            ImportRunReviewView(
+                runID: ImportRunReviewPreviewFixture.runID,
+                previewModel: ImportRunReviewPreviewFixture.model())
+        }
+        .frame(width: 1360, height: 900)
+    }
 #endif
-
-#Preview("Photo review", traits: .modifier(SignedInPreview())) {
-    NavigationStack {
-        ImportRunReviewView(
-            runID: ImportRunReviewPreviewFixture.runID,
-            previewModel: ImportRunReviewPreviewFixture.model())
-    }
-}
-
-#Preview("Photo review — intermediate", traits: .modifier(SignedInPreview())) {
-    NavigationStack {
-        ImportRunReviewView(
-            runID: ImportRunReviewPreviewFixture.runID,
-            previewModel: ImportRunReviewPreviewFixture.model())
-    }
-    .frame(width: 760, height: 900)
-}
-
-#Preview("Photo review — wide", traits: .modifier(SignedInPreview())) {
-    NavigationStack {
-        ImportRunReviewView(
-            runID: ImportRunReviewPreviewFixture.runID,
-            previewModel: ImportRunReviewPreviewFixture.model())
-    }
-    .frame(width: 1360, height: 900)
-}

@@ -133,6 +133,8 @@ automatic Xcode-build distribution enabled. In Certificates, Identifiers & Profi
 Associated Domains for the identifier and create exactly these active profiles:
 
 - `AppStore com.nickysemenza.cubby iOS` (`IOS_APP_STORE`)
+- `AppStore com.nickysemenza.cubby.LiveActivity iOS` (`IOS_APP_STORE`, for the embedded Live
+  Activity extension; register the `com.nickysemenza.cubby.LiveActivity` identifier first)
 - `AppStore com.nickysemenza.cubby macOS` (`MAC_APP_STORE`)
 
 Configure these repository Actions secrets:

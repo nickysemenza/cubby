@@ -211,6 +211,14 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nickysemenza.cubby.LiveActivity
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+      configs:
+        Release:
+          # The embedded extension needs its own App Store profile; testflight.sh
+          # passes its UUID alongside the app's.
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          DEVELOPMENT_TEAM: Y9A97FXT63
+          PROVISIONING_PROFILE_SPECIFIER: "$(CUBBY_LIVE_ACTIVITY_PROVISIONING_PROFILE_SPECIFIER)"
   Cubby-macOS:
     templates: [CubbyApp]
     templateAttributes:

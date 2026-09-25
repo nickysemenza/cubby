@@ -1,7 +1,11 @@
 name: "Download Apple provisioning profile"
-description: "Downloads one App Store provisioning profile for the Cubby bundle identifier"
+description: "Downloads the App Store provisioning profiles for one Cubby bundle identifier"
 
 inputs:
+  bundle-id:
+    description: "Bundle identifier whose profiles to download"
+    required: false
+    default: com.nickysemenza.cubby
   profile-type:
     description: "IOS_APP_STORE or MAC_APP_STORE"
     required: true
@@ -27,7 +31,7 @@ runs:
       id: download
       uses: apple-actions/download-provisioning-profiles@2126b5f86a0e2863cbf4d2d312112b22b943a594 # v6
       with:
-        bundle-id: com.nickysemenza.cubby
+        bundle-id: ${{ inputs.bundle-id }}
         profile-type: ${{ inputs.profile-type }}
         issuer-id: ${{ inputs.issuer-id }}
         api-key-id: ${{ inputs.api-key-id }}
