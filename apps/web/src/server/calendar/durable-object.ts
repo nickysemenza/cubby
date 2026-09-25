@@ -7,8 +7,6 @@ import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import { withTrace } from "~/server/tracing";
 
 import { authenticateCalendar, calendarDigest } from "./caldav-auth";
-import { createCalDavHandler } from "./caldav-http";
-import { renderCalDavResource } from "./caldav-ics";
 import {
   CalDavError,
   type CalDavBackend,
@@ -63,6 +61,7 @@ export class CalendarFeedDurableObject
       write: (input) =>
         this.serializePublication(() => this.write(input, origin)),
     };
+    const { createCalDavHandler } = await import("./caldav-http");
     return createCalDavHandler(backend)(request);
   }
   async getToken() {
@@ -217,11 +216,15 @@ export class CalendarFeedDurableObject
       "calendar.feed.refresh",
       async () => {
         const { resources, snapshot } = await this.withDatabase(async (db) => {
-          const [{ loadCalDavProjection }, { buildCalendarSnapshot }] =
-            await Promise.all([
-              import("~/server/repo/calendar-caldav"),
-              import("./snapshot"),
-            ]);
+          const [
+            { loadCalDavProjection },
+            { buildCalendarSnapshot },
+            { renderCalDavResource },
+          ] = await Promise.all([
+            import("~/server/repo/calendar-caldav"),
+            import("./snapshot"),
+            import("./caldav-ics"),
+          ]);
           const data = await loadCalDavProjection(db);
           const identityByCode = new Map(
             this.store
