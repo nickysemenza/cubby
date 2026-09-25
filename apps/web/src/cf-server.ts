@@ -41,6 +41,7 @@ import {
   reportServerError,
   withErrorReporting,
 } from "./server/errors/report-error";
+import { withUnhandledErrorBody } from "./server/errors/unhandled-error-body";
 import {
   resolvePurchaseAgentBrowserOperation,
   type PurchaseAgentCommand,
@@ -311,7 +312,14 @@ const handler = {
                         }
 
                         const correlatedResponse = withResponseDiagnostics(
-                          withHtmlNoCache(response),
+                          withHtmlNoCache(
+                            response.status >= 500 && interceptedError
+                              ? await withUnhandledErrorBody(
+                                  response,
+                                  interceptedError,
+                                )
+                              : response,
+                          ),
                           {
                             requestId: getRequestId(request.headers),
                             workerVersion: env.CF_VERSION_METADATA.id,

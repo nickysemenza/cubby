@@ -125,7 +125,10 @@ struct AuditEntryRow: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
-            Text(entry.createdAt, style: .relative)
+            // `style: .relative` renders compound durations ("4 min, 27 sec") for very recent
+            // times; the named relative format ("4 minutes ago") matches the rest of the app
+            // (see ActivityView's event rows and ImageEntityDetailView).
+            Text(entry.createdAt.formatted(.relative(presentation: .named)))
                 .font(.caption).foregroundStyle(.secondary)
         }
         .frame(minHeight: PorcelainTokens.touchTarget)
@@ -275,9 +278,6 @@ struct TodayContent: View {
     #if os(iOS)
         private var iOSList: some View {
             List {
-                Section {
-                    Text(dateText).foregroundStyle(.secondary)
-                }
                 Section("Activity inbox") {
                     NavigationLink(value: Route.activityList) {
                         Label("All activity", systemImage: "clock.arrow.circlepath")
@@ -286,13 +286,16 @@ struct TodayContent: View {
                         Button {
                             model.navigator.openActivity(.serverRun(run.id))
                         } label: {
-                            VStack(alignment: .leading) {
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text(run.subjectName).font(.headline)
-                                Text("\(run.kind.rawValue) · \(run.state)")
-                                    .font(.caption).foregroundStyle(.secondary)
+                                Text(
+                                    "\(run.kind.title) · \(run.state.replacingOccurrences(of: "_", with: " ").capitalized)"
+                                )
+                                .font(.caption).foregroundStyle(.secondary)
                             }
                             .frame(minHeight: PorcelainTokens.touchTarget, alignment: .leading)
                         }
+                        .buttonStyle(.plain)
                     }
                     if highlights?.runs.isEmpty == true {
                         Text("No recent runs").foregroundStyle(.secondary)
@@ -313,16 +316,11 @@ struct TodayContent: View {
                 .accessibilityIdentifier("work.auditFeed")
                 Section("Next up") {
                     switch tasks {
-                    case .loading: LoadingIndicator(label: "Loading tasks")
+                    case .loading: loadingRow("Loading tasks")
                     case .failed(let message):
                         failure(message, isLoading: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
                     case .loaded(let briefing):
-                        Text(taskSummary(briefing))
-                            .font(.porcelainLabel)
-                            .foregroundStyle(.secondary)
-                        if briefing.next.isEmpty {
-                            Text("Nothing ready right now").foregroundStyle(.secondary)
-                        }
+                        nextUpEmptyState(briefing)
                         ForEach(briefing.next) { task in
                             NavigationLink(value: Route.entityDetail(.task, id: task.id)) {
                                 TaskRow(task: task)
@@ -335,7 +333,7 @@ struct TodayContent: View {
                 }
                 Section("Meals today") {
                     switch meals {
-                    case .loading: LoadingIndicator(label: "Loading meals")
+                    case .loading: loadingRow("Loading meals")
                     case .failed(let message):
                         failure(message, isLoading: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
                     case .loaded(let rows):
@@ -352,7 +350,7 @@ struct TodayContent: View {
                 }
                 Section("Nutrition today") {
                     switch nutrition {
-                    case .loading: LoadingIndicator(label: "Loading nutrition")
+                    case .loading: loadingRow("Loading nutrition")
                     case .failed(let message):
                         failure(
                             message, isLoading: nutritionIsLoading,
@@ -371,7 +369,7 @@ struct TodayContent: View {
                 }
                 Section("Status") {
                     switch problems {
-                    case .loading: LoadingIndicator(label: "Loading problems")
+                    case .loading: loadingRow("Loading problems")
                     case .failed(let message):
                         failure(message, isLoading: problemsIsLoading, retry: onRetryProblems ?? onRefresh)
                     case .loaded(let counts):
@@ -405,6 +403,7 @@ struct TodayContent: View {
             }
             .refreshControl(onRefresh)
             .accessibilityIdentifier("today.sections")
+            .navigationSubtitle(dateText)
         }
     #endif
 
@@ -539,12 +538,7 @@ struct TodayContent: View {
                     case .failed(let message):
                         failure(message, isLoading: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
                     case .loaded(let briefing):
-                        Text(taskSummary(briefing))
-                            .font(.porcelainLabel)
-                            .foregroundStyle(.secondary)
-                        if briefing.next.isEmpty {
-                            Text("Nothing ready right now").foregroundStyle(.secondary)
-                        }
+                        nextUpEmptyState(briefing)
                         ForEach(briefing.next) { task in
                             NavigationLink(value: Route.entityDetail(.task, id: task.id)) {
                                 TaskRow(task: task)
@@ -610,6 +604,14 @@ struct TodayContent: View {
         }
     #endif
 
+    /// Matches `TaskRow`/`MealRow`/`AuditEntryRow`'s `touchTarget` minHeight so a section's
+    /// loading placeholder doesn't collapse to a single text line and then jump taller once its
+    /// first real row replaces it.
+    private func loadingRow(_ label: String) -> some View {
+        LoadingIndicator(label: label)
+            .frame(minHeight: PorcelainTokens.touchTarget, alignment: .leading)
+    }
+
     private func failure(_ message: String, isLoading: Bool, retry: @escaping @Sendable () async -> Void)
         -> some View
     {
@@ -620,7 +622,10 @@ struct TodayContent: View {
         }
     }
 
-    private func taskSummary(_ briefing: TaskTodayBriefingOut) -> String {
+    /// `nil` when there is nothing overdue, due soon, blocked, or later to summarize — distinct
+    /// from `briefing.next.isEmpty`, which is about the ready-now list `nextUpEmptyState` renders
+    /// alongside it.
+    private func taskSummary(_ briefing: TaskTodayBriefingOut) -> String? {
         let parts = [
             briefing.overdueCount > 0 ? "\(briefing.overdueCount) overdue" : nil,
             briefing.dueThisWeekCount > 0 ? "\(briefing.dueThisWeekCount) due this week" : nil,
@@ -629,7 +634,22 @@ struct TodayContent: View {
                 ? "\(briefing.nextCount - briefing.next.count) more ready" : nil,
             briefing.laterCount > 0 ? "\(briefing.laterCount) later" : nil,
         ].compactMap { $0 }
-        return parts.isEmpty ? "Nothing urgent is due" : parts.joined(separator: " · ")
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// One consistently-styled empty/summary line for "Next up" instead of two differently-sized
+    /// messages stacked (a summary-count caption plus a body-size "nothing ready" line).
+    @ViewBuilder
+    private func nextUpEmptyState(_ briefing: TaskTodayBriefingOut) -> some View {
+        let summary = taskSummary(briefing)
+        if let summary {
+            Text(summary).font(.porcelainLabel).foregroundStyle(.secondary)
+        }
+        if briefing.next.isEmpty {
+            Text(summary == nil ? "Nothing urgent or ready right now" : "Nothing ready right now")
+                .font(.porcelainLabel)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 

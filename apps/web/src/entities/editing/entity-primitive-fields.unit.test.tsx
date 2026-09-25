@@ -1,3 +1,6 @@
+import type { Entity } from "@cubby/schemas/entity";
+import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { FormProvider, useForm } from "react-hook-form";
@@ -6,6 +9,7 @@ import { z } from "zod";
 
 import type { EntitySuggestionsOperations } from "~/app/_components/ai/field-suggestion";
 import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
+import { isReferencePickerEntity } from "~/app/_components/combobox/reference-entity-search";
 import { ai } from "~/lib/ai.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -720,5 +724,37 @@ describe("EntityIntentFields", () => {
     expect(details).not.toContainElement(notes);
     expect(name.closest("section")).toBeNull();
     expect(notes.closest("section")).toBeNull();
+  });
+});
+
+describe("edit intent reference pickers", () => {
+  it("has a picker for every reference an edit intent renders", () => {
+    // A multi-reference without one throws and takes the whole form down; a
+    // singular one degrades to a shortcode text input, which only
+    // device-reported provenance should ever need.
+    const textFallbacks = [
+      "imageSighting.full.imageId -> image",
+      "imageSighting.full.deviceId -> device",
+    ];
+    const missing = Object.entries(generatedEntityEditIntents).flatMap(
+      ([entity, intents]) =>
+        Object.entries(intents.fields).flatMap(([intent, keys]) =>
+          keys.flatMap((key: string) => {
+            // SAFETY: edit intents are generated only for manifest entities.
+            const model = entityFieldModels[entity as Entity] as {
+              fields: readonly PrimitiveFieldModel[];
+            };
+            const field = model.fields.find(
+              (candidate) => candidate.key === key,
+            );
+            // EntityIntentFields renders only fields with a control.
+            const reference = field?.control ? field.reference : null;
+            return reference && !isReferencePickerEntity(reference.entity)
+              ? [`${entity}.${intent}.${key} -> ${reference.entity}`]
+              : [];
+          }),
+        ),
+    );
+    expect(missing).toEqual(textFallbacks);
   });
 });

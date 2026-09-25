@@ -57,7 +57,48 @@ final class ImportRunReviewModel {
     }
 }
 
+/// Whether the "Start grouping" action belongs on screen, and what to say instead when it
+/// doesn't. Zero photos and mid-processing both hide the action — grouping needs settled
+/// descriptions to work from, not just an upload.
+enum PhotoGroupingReadiness: Equatable {
+    /// No photos have arrived yet; nothing to group.
+    case waitingForPhotos
+    /// Photos arrived but device/description processing hasn't settled for all of them.
+    case processing
+    /// Photos are uploaded and described; the agent can be started.
+    case readyToStart
+    /// The agent already stopped short of proposing groups; review continues on the web.
+    case needsReviewOnWeb
+    /// The agent is between stages (already asked to start, or run isn't `.running`).
+    case working
+
+    var message: String {
+        switch self {
+        case .waitingForPhotos: "Waiting for photos to upload."
+        case .processing: "Photos are processing. Grouping starts once descriptions are ready."
+        case .readyToStart: "Photos are ready for the agent to propose item groups."
+        case .needsReviewOnWeb: "The agent stopped before proposing groups. Review these photos on the web."
+        case .working: "Photos uploaded; the agent is preparing item groups."
+        }
+    }
+}
+
 enum PhotoReviewPolicy {
+    /// A photo counts as settled for grouping once its description job reaches a terminal state
+    /// (ready, skipped, or failed) — `.pending`/`.leased`/`.waitingForDevice` mean grouping would
+    /// start from incomplete evidence.
+    static func groupingReadiness(
+        images: [PhotoRunImage], runStatus: ImportRunStatus?
+    ) -> PhotoGroupingReadiness {
+        guard !images.isEmpty else { return .waitingForPhotos }
+        if runStatus == .needsReview { return .needsReviewOnWeb }
+        let settled = images.allSatisfy {
+            $0.describe == .ready || $0.describe == .skipped || $0.describe == .failed
+        }
+        guard settled else { return .processing }
+        return runStatus == .running ? .readyToStart : .working
+    }
+
     static func approvalBlocker(
         group: PhotoGroupProposal, images: [PhotoRunImage], runStatus: ImportRunStatus?
     ) -> String? {
@@ -293,15 +334,13 @@ struct ImportRunReviewView: View {
             Section {
                 photoProcessing(review.images)
                 if proposed.isEmpty, review.review.proposals.isEmpty {
-                    Text(
-                        model.snapshot?.status == .needsReview
-                            ? "The agent stopped before proposing groups. Review these photos on the web."
-                            : "Photos are ready for the agent to propose item groups."
-                    )
-                    .foregroundStyle(.secondary)
-                    if model.snapshot?.status == .needsReview {
+                    let readiness = PhotoReviewPolicy.groupingReadiness(
+                        images: review.images, runStatus: model.snapshot?.status)
+                    Text(readiness.message).foregroundStyle(.secondary)
+                    switch readiness {
+                    case .needsReviewOnWeb:
                         Link("Group photos on web", destination: appModel.webURL(for: .importRun, id: runID))
-                    } else if model.snapshot?.status == .running {
+                    case .readyToStart:
                         Button {
                             Task {
                                 await model.act(runID: runID, client: appModel.client) {
@@ -311,7 +350,9 @@ struct ImportRunReviewView: View {
                         } label: {
                             Label("Start grouping", systemImage: "sparkles")
                         }
-                        .disabled(model.busy || review.images.isEmpty)
+                        .disabled(model.busy)
+                    case .waitingForPhotos, .processing, .working:
+                        EmptyView()
                     }
                 }
             } header: {
@@ -355,7 +396,7 @@ struct ImportRunReviewView: View {
                 }
             }
 
-            if proposed.isEmpty {
+            if proposed.isEmpty, !review.images.isEmpty {
                 Section("Photos") { evidenceRegion(review.images) }
             }
         }
@@ -433,7 +474,7 @@ struct ImportRunReviewView: View {
 
     private func evidenceRegion(_ images: [PhotoRunImage]) -> some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-            Text("Photo evidence").font(.headline)
+            Text("Photo evidence · \(images.count)").font(.headline)
             ForEach(images, id: \.id) { image in
                 HStack(alignment: .top, spacing: PorcelainTokens.Space.sm) {
                     Thumb(url: URL(string: image.originalUrl), size: 58)
@@ -598,14 +639,21 @@ struct ImportRunReviewView: View {
                     .monospacedDigit()
                 }
             }
-            if let coordinatorModel = run.coordinatorModel {
+            if let coordinatorModel = run.coordinatorModel, run.agentModelMs > 0 || model.usage != nil {
                 HStack {
-                    Label(coordinatorModel, systemImage: "sparkles")
+                    Label {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Model time")
+                            Text(coordinatorModel).font(.caption).foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "sparkles")
+                    }
                     Spacer()
                     Text(Duration.milliseconds(run.agentModelMs).formatted())
                         .monospacedDigit()
                 }
-                .accessibilityLabel("Agent model time")
+                .accessibilityLabel("Model time: \(coordinatorModel)")
             }
             if let usage = model.usage {
                 HStack {

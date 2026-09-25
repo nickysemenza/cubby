@@ -15,7 +15,11 @@ import {
 } from "~/entities/entities";
 import { entityGraph } from "~/entities/entity-graph.functions";
 
-import { useSectionCount, useSectionVisible } from "../data-table/detail-page";
+import {
+  useSectionCount,
+  useSectionIndexPending,
+  useSectionVisible,
+} from "../data-table/detail-page";
 
 const PAGE_SIZE = 20;
 
@@ -167,6 +171,8 @@ export function ConnectedRecordsTable({
       query.isError ||
       (query.data?.totalCount ?? 0) > 0,
   );
+  // An index entry that appears, then vanishes when empty, shifts the rest.
+  useSectionIndexPending(hideWhenEmpty && query.isPending);
   if (query.isPending)
     return (
       <p className="text-sm text-muted-foreground">Loading connections…</p>

@@ -245,6 +245,26 @@ const traceQuery = (
   return queryBridge(implementation);
 };
 
+/**
+ * One connection runs one statement at a time. Repository code fans reads out
+ * with `Promise.all` over whatever handle it gets, which is a single client
+ * inside a transaction or a Queue/Workflow scope. pg 8 queued the overflow
+ * itself behind a deprecation warning; pg 9 rejects it. Chain promise queries
+ * per client so pg never sees a second one in flight. Callback and stream
+ * queries are not chained; nothing in the app issues them concurrently.
+ */
+const serializeQueries = (run: QueryBridge): QueryBridge => {
+  let tail: Promise<unknown> = Promise.resolve();
+  const implementation: PgQueryImplementation = (...args) => {
+    if (isCallbackQuery(args)) return run(...args);
+    if (isStreamQuery(args)) return run(...args);
+    const response = tail.then(() => run(...args));
+    tail = response.catch(() => undefined);
+    return response;
+  };
+  return queryBridge(implementation);
+};
+
 /** Testable promise/callback tracing contract before pg overload restoration. */
 export const createTracedQuery = (
   run: PgQueryImplementation,
@@ -299,10 +319,9 @@ const traceClient = <T extends pg.ClientBase>(
 ): T => {
   if (tracedClients.has(client)) return client;
   const rawQuery = queryBridge(client.query.bind(client));
-  client.query = traceQuery(
-    rawQuery,
-    () => transactionState.get(client) ?? false,
-    role,
+  // Serialize outside the span so it times execution, not the wait.
+  client.query = serializeQueries(
+    traceQuery(rawQuery, () => transactionState.get(client) ?? false, role),
   );
   tracedClients.add(client);
   return client;

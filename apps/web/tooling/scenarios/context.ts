@@ -4,6 +4,7 @@ import type { Pool } from "pg";
 import { z } from "zod";
 
 import { Database } from "~/server/db";
+import { tracePool } from "~/server/db-pg-tracing";
 import * as schema from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import {
@@ -29,7 +30,8 @@ const createdEntitySchema = z.object({ id: z.string().min(1) });
 
 /** Wrap a plain `pg` pool as the repository-facing `Database` handle scenario builders need. */
 export function buildScenarioDatabase(pool: Pool): Database {
-  const client = drizzle(pool, { schema });
+  // The production wrapper: one statement at a time per connection.
+  const client = drizzle(tracePool(pool, "strong"), { schema });
   return new Database(() => ({
     client,
     withConnection: (run) => run(client),

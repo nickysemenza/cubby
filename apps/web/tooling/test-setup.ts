@@ -25,7 +25,10 @@ import {
   type DatabaseClient,
   type DatabaseRuntime,
 } from "../src/server/db/database";
-import { observePgPoolAndClientQueries } from "../src/server/db-pg-tracing";
+import {
+  observePgPoolAndClientQueries,
+  tracePool,
+} from "../src/server/db-pg-tracing";
 import * as schema from "../src/server/db/schema";
 import type {
   EntityCreateInput,
@@ -90,8 +93,13 @@ const countObservedStatement = (text: string) => {
   );
 };
 
+// tracePool is the production wrapper (it serializes each connection's
+// queries); counting sits on top so it sees the same statements as before.
 const countPoolQueries = (pool: Pool): Pool =>
-  observePgPoolAndClientQueries(pool, countObservedStatement);
+  observePgPoolAndClientQueries(
+    tracePool(pool, "strong"),
+    countObservedStatement,
+  );
 
 /**
  * Count SQL statements issued by one operation against this integration

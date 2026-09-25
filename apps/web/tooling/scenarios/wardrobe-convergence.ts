@@ -15,6 +15,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 
+import { importRunsResponse } from "~/lib/purchase-import-run-detail";
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
 import { registerProductTools } from "~/server/mcp/tools/product.tools";
 import { registerPurchaseTools } from "~/server/mcp/tools/purchase.tools";
@@ -455,7 +456,19 @@ async function reviewLateChargeInBrowser(input: {
       });
       const page = await context.newPage();
       try {
+        const importRuns = page.waitForResponse((response) =>
+          response.url().includes("/api/import/runs?purchaseId="),
+        );
         await page.goto(`${input.origin}/purchases/${input.purchaseId}`);
+        // The purchase import run that created this Purchase must list; a
+        // response-schema drift here once turned the slot into a bare 500.
+        const runsResponse = await importRuns;
+        expect(runsResponse.status()).toBe(200);
+        const { runs } = importRunsResponse.parse(await runsResponse.json());
+        expect(runs.length).toBeGreaterThan(0);
+        await expect(
+          page.getByText("Purchase import runs could not load."),
+        ).toHaveCount(0);
         await page
           .getByRole("button", { name: "Match a statement charge" })
           .click();
@@ -473,6 +486,10 @@ async function reviewLateChargeInBrowser(input: {
         await expect(
           page.getByRole("button", { name: "Match a statement charge" }),
         ).toHaveCount(0);
+        // The matched charge must list in the settlement panel, not just clear
+        // the match button (the panel once kept "No linked transactions").
+        await expect(page.getByText("No linked transactions")).toHaveCount(0);
+        await expect(page.getByText("1 financial transaction")).toBeVisible();
       } finally {
         await context.close();
         const videoPath = await page.video()?.path();

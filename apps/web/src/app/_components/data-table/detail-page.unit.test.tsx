@@ -11,6 +11,7 @@ import {
   type DetailSection,
   DetailSections,
   useSectionCollapsed,
+  useSectionIndexPending,
   useSectionVisible,
 } from "./detail-page";
 
@@ -383,6 +384,63 @@ describe("hideWhenEmpty relation sections", () => {
       <Page {...pageProps}>
         <DetailSections
           sections={[summary, story, hideableSection(false)]}
+          rawData={pageProps.rawData}
+        />
+      </Page>,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Relation" })).toBeVisible();
+    });
+  });
+});
+
+// A section still waiting on its first `hideWhenEmpty` fetch reports both
+// visible (it renders its own "Loading…" row) and pending through
+// `useSectionIndexPending`; `ConnectedRecordsTable` is the real caller.
+function PendingHideableContent({ pending }: { pending: boolean }) {
+  useSectionVisible(true);
+  useSectionIndexPending(pending);
+  return <p>{pending ? "Loading connections…" : "Rows content"}</p>;
+}
+
+const pendingSection = (pending: boolean): DetailSection => ({
+  id: "relation",
+  title: "Relation",
+  icon: CircleIcon,
+  placement: "primary",
+  content: <PendingHideableContent pending={pending} />,
+});
+
+describe("pending sections never enter the jump index", () => {
+  it("keeps a still-loading hideWhenEmpty section out of the index until it resolves, without hiding the section itself", async () => {
+    const [summary, story] = sections;
+    if (!summary || !story) throw new Error("Expected two fixture sections");
+    const pageProps = {
+      variant: "detail" as const,
+      title: "Fixture detail",
+      entity: "image" as const,
+      rawData: { id: "IMG-EXAMPLE", filename: "fixture.jpg" },
+    };
+    const { rerender } = render(
+      <Page {...pageProps}>
+        <DetailSections
+          sections={[summary, story, pendingSection(true)]}
+          rawData={pageProps.rawData}
+        />
+      </Page>,
+      { wrapper: harness.wrapper },
+    );
+    // The section itself renders unchanged while pending...
+    expect(await screen.findByText("Loading connections…")).toBeVisible();
+    expect(document.getElementById("relation")).toBeVisible();
+    // ...but it never gets a jump-index entry during that window.
+    expect(screen.queryByRole("link", { name: "Relation" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Summary" })).toBeVisible();
+
+    rerender(
+      <Page {...pageProps}>
+        <DetailSections
+          sections={[summary, story, pendingSection(false)]}
           rawData={pageProps.rawData}
         />
       </Page>,

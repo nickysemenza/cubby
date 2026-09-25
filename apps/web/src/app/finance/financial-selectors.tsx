@@ -6,6 +6,7 @@ import type {
   FinancialAccountShortcode,
   LedgerPartyShortcode,
   PurchaseShortcode,
+  VendorAccountShortcode,
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
@@ -159,6 +160,38 @@ export function WithLedgerPartySearch({
     items,
     onSearchChange,
     isLoading: parties.isLoading,
+    onOpenChange,
+  });
+}
+
+/** Vendor accounts are a household-sized roster too; filtered locally like
+ * ledger parties. */
+export function WithVendorAccountSearch({
+  children,
+}: WithEntitySearchProps<VendorAccountShortcode>) {
+  const { searchQuery, onSearchChange } = useEntitySearch();
+  const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
+  const accounts = useQuery({
+    ...entityListFor("vendorAccount").queryOptions({ filters: {}, pagination }),
+    enabled,
+  });
+  const items = useMemo<ComboboxItem<VendorAccountShortcode>[]>(
+    () =>
+      (accounts.data?.items ?? []).map((account) => ({
+        id: account.id,
+        shortcode: account.id,
+        name: account.label,
+        secondary:
+          [account.vendorName, account.ledgerPartyName]
+            .filter((fact): fact is string => Boolean(fact))
+            .join(" · ") || undefined,
+      })),
+    [accounts.data],
+  );
+  return children({
+    items,
+    onSearchChange,
+    isLoading: accounts.isLoading,
     onOpenChange,
   });
 }
