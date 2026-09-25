@@ -262,6 +262,7 @@ struct TodayContent: View {
     var highlights: WorkHighlightsModel?
     @Environment(AppModel.self) private var model
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var macDashboardWidth: CGFloat = 0
 
     var body: some View {
         #if os(macOS)
@@ -415,46 +416,25 @@ struct TodayContent: View {
                         .font(.porcelainHeadline)
                         .foregroundStyle(PorcelainTokens.graphiteSecondary)
 
-                    if dynamicTypeSize.isAccessibilitySize {
-                        VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
-                            macWorkColumn
-                            macMealsColumn
-                        }
+                    if dynamicTypeSize.isAccessibilitySize || macDashboardWidth < 760 {
+                        macDashboardStack
                     } else {
-                        ViewThatFits(in: .horizontal) {
-                            HStack(alignment: .top, spacing: PorcelainTokens.Space.lg) {
-                                macWorkColumn
-                                    .frame(width: 620, alignment: .topLeading)
-                                macMealsColumn
-                                    .frame(width: 300, alignment: .topLeading)
-                            }
-                            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
-                                macWorkColumn
-                                macMealsColumn
-                            }
-                        }
-                    }
-                    if let highlights = highlights {
-                        if dynamicTypeSize.isAccessibilitySize {
-                            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
-                                workActivityPanel(highlights)
-                                workAuditPanel(highlights)
-                            }
-                        } else {
-                            ViewThatFits(in: .horizontal) {
-                                HStack(alignment: .top, spacing: PorcelainTokens.Space.lg) {
-                                    workActivityPanel(highlights).frame(minWidth: 300)
-                                    workAuditPanel(highlights).frame(minWidth: 300)
-                                }
-                                VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
-                                    workActivityPanel(highlights)
-                                    workAuditPanel(highlights)
-                                }
-                            }
+                        HStack(alignment: .top, spacing: PorcelainTokens.Space.lg) {
+                            macWorkAndActivity
+                                .frame(width: macWorkWidth, alignment: .topLeading)
+                            macMealsAndChanges
+                                .frame(
+                                    width: macDashboardWidth - macWorkWidth - PorcelainTokens.Space.lg,
+                                    alignment: .topLeading)
                         }
                     }
                 }
                 .frame(maxWidth: 1080, alignment: .leading)
+                .onGeometryChange(for: CGFloat.self) {
+                    $0.size.width
+                } action: {
+                    macDashboardWidth = $0
+                }
                 .frame(maxWidth: .infinity, alignment: .top)
                 .padding(PorcelainTokens.Space.xxl)
             }
@@ -462,6 +442,32 @@ struct TodayContent: View {
             .background(PorcelainTokens.canvas)
             .refreshControl(onRefresh)
             .accessibilityIdentifier("today.sections")
+        }
+
+        private var macWorkWidth: CGFloat {
+            max(400, (macDashboardWidth - PorcelainTokens.Space.lg) * 0.55)
+        }
+
+        private var macWorkAndActivity: some View {
+            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+                macWorkColumn
+                if let highlights { workActivityPanel(highlights) }
+            }
+        }
+
+        private var macMealsAndChanges: some View {
+            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+                macMealsColumn
+                if let highlights { workAuditPanel(highlights) }
+            }
+        }
+
+        private var macDashboardStack: some View {
+            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+                macWorkAndActivity
+                macMealsAndChanges
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
 
         private func workActivityPanel(_ highlights: WorkHighlightsModel) -> some View {
