@@ -114,7 +114,7 @@ const run: ImportRunDetail = {
 const photo = (
   id: string,
   position: number,
-  targetState: "completed" | "pending",
+  targetState: PhotoRunImage["targetState"],
   text: { description?: string; recognizedText?: string; cutout?: boolean },
 ): PhotoRunImage => ({
   id: imageShortcode.parse(id),
@@ -167,6 +167,52 @@ afterEach(() => {
 });
 
 describe("PhotoImportRunView", () => {
+  it("keeps approval available for unresolved photos on a stopped review run", async () => {
+    const stoppedReview: PhotoRunReview = {
+      review: {
+        ...review.review,
+        runStatus: "needs_review",
+        proposals: [
+          {
+            groupKey: "fixture-shirt",
+            state: "proposed",
+            images: [{ id: imageShortcode.parse("IMG-4K7P"), purpose: "item" }],
+            skip: [],
+            product: { kind: "create", create: { name: "Fixture shirt" } },
+            committedProduct: null,
+            inventory: null,
+            evidence: null,
+            conflict: null,
+            lastError: null,
+            missingImageCount: 0,
+            committedAt: null,
+            updatedAt: "2026-09-20T16:04:00.000Z",
+          },
+        ],
+      },
+      images: review.images.map((image) =>
+        image.id === "IMG-4K7P"
+          ? { ...image, targetState: "unresolved" }
+          : image,
+      ),
+    };
+    harness.queryClient.setQueryData(
+      ["purchase-import", "run", RUN_ID, "photo-review"],
+      stoppedReview,
+    );
+    render(<PhotoImportRunView run={{ ...run, status: "needs_review" }} />, {
+      wrapper: harness.wrapper,
+    });
+
+    expect(
+      await screen.findByRole("button", { name: /Approve all/ }),
+    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
+    expect(
+      screen.queryByText(/photos that can no longer be reviewed/),
+    ).not.toBeInTheDocument();
+  });
+
   it("starts grouping when the completed iPhone upload opens its review link", async () => {
     window.history.replaceState(null, "", "/runs/RUN-4K7M?startGrouping=1");
     const fetchMock = vi.fn(

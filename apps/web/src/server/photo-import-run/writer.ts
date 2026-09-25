@@ -228,9 +228,10 @@ type LockedTargets = {
 
 /**
  * Lock this group's `ImportRunTarget` rows and classify the group as either a
- * full replay of a prior commit under the same `groupKey`, or fresh work
- * (every target still `pending`). Any other mix — partial completion, or a
- * target already completed under a DIFFERENT `groupKey` — is refused: it
+ * full replay of a prior commit under the same `groupKey`, or fresh review work
+ * (targets `pending`, or `unresolved` on a run stopped for review). Any other
+ * mix — partial completion, or a target already completed under a DIFFERENT
+ * `groupKey` — is refused: it
  * means the caller's image roster doesn't match this run's actual state.
  */
 async function lockTargets(
@@ -239,6 +240,7 @@ async function lockTargets(
   attaches: ResolvedAttach[],
   skips: ResolvedSkip[],
   groupKey: string,
+  runStatus: string,
 ): Promise<LockedTargets> {
   const imageIds = [...attaches, ...skips].map((entry) => entry.imageId);
   const lockedTargets: LockedTarget[] = await getDb(txDb)
@@ -273,12 +275,16 @@ async function lockTargets(
     skips.every((entry) =>
       isReplayMatch(true, targetByImageId.get(entry.imageId), groupKey),
     );
-  const allPending = [...attaches, ...skips].every(
-    (entry) => targetByImageId.get(entry.imageId)?.state === "pending",
-  );
-  if (!allReplayed && !allPending) {
+  const allReviewable = [...attaches, ...skips].every((entry) => {
+    const state = targetByImageId.get(entry.imageId)?.state;
+    return (
+      state === "pending" ||
+      (runStatus === "needs_review" && state === "unresolved")
+    );
+  });
+  if (!allReplayed && !allReviewable) {
     throw new Error(
-      "This group's images are in an inconsistent target state — part of the group was already completed (possibly under a different groupKey) while the rest is still pending",
+      "This group's images have conflicting target states; some were already settled or belong to a different group",
     );
   }
   return { targetByImageId, allReplayed };
@@ -557,7 +563,7 @@ async function markTargets(
   return images;
 }
 
-/** Bump the run's counters and, once no `pending` target remains, complete the run. */
+/** Bump counters and complete only after every reviewable photo is settled. */
 async function completeRunIfDone(
   txDb: Database,
   scope: RunScope,
@@ -571,7 +577,7 @@ async function completeRunIfDone(
     .where(
       and(
         eq(importRunTarget.runId, scope.public.runId),
-        eq(importRunTarget.state, "pending"),
+        inArray(importRunTarget.state, ["pending", "unresolved"]),
       ),
     );
   const runCompletes = (pendingRow?.pending ?? 0) === 0;
@@ -615,7 +621,7 @@ async function doCommit(
   const skips = await resolveSkips(txDb, input.skip ?? []);
 
   // Run row first, then targets: `proposePhotoGroups` takes the same run lock
-  // before it validates that proposed images are still pending, so a proposal
+  // before it validates that proposed images are still reviewable, so a proposal
   // save cannot interleave with a commit. Every writer locks in this order
   // (and `completeRunIfDone` only re-touches the row already held), so no
   // run/target lock cycle exists.
@@ -632,16 +638,17 @@ async function doCommit(
     attaches,
     skips,
     input.groupKey,
+    runStatus,
   );
   if (allReplayed) {
     return buildReplayOutput(scope, input, attaches, skips, targetByImageId);
   }
 
-  // Fresh work: every target is `pending`. A dead run may still legitimately
-  // replay (above), but never starts new work.
-  if (runStatus !== "running") {
+  // A photo run stopped for review can still accept the human's decision on
+  // its unresolved targets. Other terminal states permit only exact replay.
+  if (runStatus !== "running" && runStatus !== "needs_review") {
     throw new Error(
-      `Photo-inventory run ${scope.public.shortcode} is not running (status: ${runStatus})`,
+      `Photo-inventory run ${scope.public.shortcode} is not open for review (status: ${runStatus})`,
     );
   }
   // A `failed` ledger row may take over with a changed payload, but "failed"

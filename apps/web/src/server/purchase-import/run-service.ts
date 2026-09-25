@@ -1151,8 +1151,9 @@ const STALE_RUN_MS = 2 * 60 * 60_000;
  * A run still `running` after its Flue submission settled means the
  * coordinator stopped without a terminal tool call: a `review` progress
  * report, a turn budget, or a model that simply ended its turn. The one
- * legitimate way to settle while running is a browser command still in flight
- * (its result event resumes the conversation), so that case is left alone.
+ * legitimate ways to settle while running are a browser command still in
+ * flight (its result resumes the conversation) and photo groups awaiting a
+ * household review, so those cases are left alone.
  * Approvals never reach here: they move the run to `paused_approval` first.
  */
 export async function reconcileSettledImportRun(
@@ -1170,9 +1171,14 @@ export async function reconcileSettledImportRun(
   if (scope.public.status !== "running")
     return { reconciled: false as const, status: scope.public.status };
   if (scope.public.purpose === "photo_inventory") {
-    const [progress, proposal] = await Promise.all([
-      latestImportRunProgress(db, input.runId),
-      getDb(db)
+    const awaitingPhotoReview = await withTransaction(db, async (tx) => {
+      const [locked] = await tx
+        .select({ status: importRun.status })
+        .from(importRun)
+        .where(eq(importRun.id, scope.public.runId))
+        .for("update");
+      if (locked?.status !== "running") return false;
+      const [proposal] = await tx
         .select({ id: photoGroupProposal.id })
         .from(photoGroupProposal)
         .where(
@@ -1181,9 +1187,32 @@ export async function reconcileSettledImportRun(
             eq(photoGroupProposal.state, "proposed"),
           ),
         )
-        .limit(1),
-    ]);
-    if (progress?.awaitingApproval && proposal.length > 0)
+        .limit(1);
+      if (!proposal) return false;
+      const [progress] = await tx
+        .select({ awaitingApproval: importRunProgress.awaitingApproval })
+        .from(importRunProgress)
+        .where(eq(importRunProgress.runId, scope.public.runId))
+        .orderBy(desc(importRunProgress.createdAt), desc(importRunProgress.id))
+        .limit(1);
+      if (!progress?.awaitingApproval) {
+        // A saved proposal is durable human work even when the coordinator
+        // stops before reporting its final phase. Preserve pending targets.
+        await tx
+          .insert(importRunProgress)
+          .values({
+            runId: scope.public.runId,
+            eventId: `photo-review-handoff:${scope.public.runId}`,
+            phase: "awaiting_approval",
+            currentItem: "Review proposed photo groups",
+            awaitingApproval: true,
+            detail: "Photo groups are ready for human review",
+          })
+          .onConflictDoNothing();
+      }
+      return true;
+    });
+    if (awaitingPhotoReview)
       return { reconciled: false as const, status: "running" as const };
   }
   if (scope.public.vendorAccountId) {

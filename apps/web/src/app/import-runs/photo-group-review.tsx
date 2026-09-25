@@ -194,17 +194,37 @@ type SaveGroup = (build: () => PhotoGroupProposalGroup) => void;
 type ImagesById = ReadonlyMap<string, PhotoRunImage>;
 const WithProductCategorySearch = referenceEntitySearch("productCategory");
 
-const isStaleGroup = (proposal: PhotoGroupProposal, imagesById: ImagesById) =>
+const isStaleGroup = (
+  proposal: PhotoGroupProposal,
+  imagesById: ImagesById,
+  runStatus: string,
+) =>
   proposal.missingImageCount > 0 ||
   [...proposal.images, ...proposal.skip].some((entry) => {
     const photo = imagesById.get(entry.id);
-    return photo !== undefined && photo.targetState !== "pending";
+    return (
+      photo !== undefined &&
+      photo.targetState !== "pending" &&
+      !(runStatus === "needs_review" && photo.targetState === "unresolved")
+    );
   });
 
 const proposalName = (proposal: PhotoGroupProposal): string =>
   proposal.product.kind === "create"
     ? proposal.product.create.name
     : (proposal.product.existing?.name ?? "Deleted product — pick another");
+
+const emptyReviewCopy = (runStatus: string) =>
+  runStatus === "needs_review"
+    ? {
+        title: "The agent stopped before proposing groups.",
+        detail: "Use a photo’s menu below to start a group for review.",
+      }
+    : {
+        title: "Waiting for an agent to propose groups.",
+        detail:
+          "The agent is preparing item groups. They will appear here for review before products are created.",
+      };
 
 function PhotoThumb({
   image,
@@ -881,6 +901,7 @@ function InventoryFields({
 
 function ProposalCard({
   runId,
+  runStatus,
   proposal,
   proposals,
   imagesById,
@@ -889,6 +910,7 @@ function ProposalCard({
   action,
 }: {
   runId: string;
+  runStatus: string;
   proposal: PhotoGroupProposal;
   proposals: readonly PhotoGroupProposal[];
   imagesById: ImagesById;
@@ -903,7 +925,7 @@ function ProposalCard({
   );
   // Photos deleted or settled outside this review (e.g. a direct commit) make
   // the group unapprovable and undiscardable; removing it is the way out.
-  const stale = isStaleGroup(proposal, imagesById);
+  const stale = isStaleGroup(proposal, imagesById, runStatus);
   const descriptionsPending = awaitingDescriptions(proposal, imagesById);
   return (
     <Card>
@@ -1436,6 +1458,7 @@ export function PhotoGroupReview({
   if (!query.data) return null;
 
   const { review, images } = query.data;
+  const emptyCopy = emptyReviewCopy(review.runStatus);
   const imagesById = new Map(images.map((image) => [image.id, image]));
   const proposed = review.proposals.filter(
     (proposal) => proposal.state === "proposed",
@@ -1453,7 +1476,7 @@ export function PhotoGroupReview({
     }
   const busy = action.isPending;
   const hasStaleGroups = proposed.some((proposal) =>
-    isStaleGroup(proposal, imagesById),
+    isStaleGroup(proposal, imagesById, review.runStatus),
   );
   const hasPendingDescriptions = proposed.some(
     (proposal) => awaitingDescriptions(proposal, imagesById).length > 0,
@@ -1494,14 +1517,11 @@ export function PhotoGroupReview({
               </StatusText>
             ) : (
               <Stack gap="sm" className="items-start">
-                <StatusText tone="muted">
-                  Waiting for an agent to propose groups.
-                </StatusText>
+                <StatusText tone="muted">{emptyCopy.title}</StatusText>
                 {images.length ? (
                   <>
                     <p className="text-xs text-muted-foreground">
-                      The agent is preparing item groups. They will appear here
-                      for review before products are created.
+                      {emptyCopy.detail}
                     </p>
                   </>
                 ) : null}
@@ -1515,6 +1535,7 @@ export function PhotoGroupReview({
         <ProposalCard
           key={proposal.groupKey}
           runId={runId}
+          runStatus={review.runStatus}
           proposal={proposal}
           proposals={review.proposals}
           imagesById={imagesById}
