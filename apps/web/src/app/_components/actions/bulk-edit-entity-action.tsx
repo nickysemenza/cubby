@@ -47,6 +47,7 @@ import { countLabel } from "~/lib/pluralize";
 
 import { useActionMutation } from "../hooks/useActionMutation";
 import { VerbMenuItem } from "./action-verb-ui";
+import type { ActionVerbId } from "./action-verbs";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
 /**
@@ -590,8 +591,31 @@ export function BulkEditDialogBody({
  */
 export function useBulkEditEntityAction(
   entity: GeneratedBrowserCrudEntity,
+  {
+    verb = "bulkEdit",
+    fields,
+    updateEach = false,
+  }: {
+    verb?: ActionVerbId;
+    /** A single-field verb edits only these declared fields. */
+    fields?: readonly string[];
+    /** For an entity without a bulk-update contract: one update per row. */
+    updateEach?: boolean;
+  } = {},
 ): EntityActionHandles {
   const [items, setItems] = useState<BulkEditRow[]>([]);
+  const update = useActionMutation({
+    // SAFETY: as below — the kernel re-parses `data` against the entity's
+    // update input, and the draft only holds keys from `fields`.
+    mutationFn: entityMutationOptionsFactory(
+      entity,
+      "update",
+    ) as () => UseMutationOptions<
+      unknown,
+      Error,
+      { id: string; data: BulkEditDraft }
+    >,
+  });
   const bulkUpdate = entityMutationOptionsFactory(entity, "bulkUpdate");
   const mutation = useActionMutation({
     // SAFETY: the kernel re-parses `data` against this entity's generated
@@ -611,7 +635,9 @@ export function useBulkEditEntityAction(
   // declare a non-null `capabilities.bulkUpdate` — the `?? []` is a defensive
   // fallback, not an expected path.
   const fieldKeys =
-    entityInspectorMetadata[entity].lifecycle.bulkUpdate?.fields ?? [];
+    fields ??
+    entityInspectorMetadata[entity].lifecycle.bulkUpdate?.fields ??
+    [];
 
   const stage = useCallback((rows: readonly EntityActionRow[]) => {
     setItems(rows.map(asBulkEditRow));
@@ -619,16 +645,23 @@ export function useBulkEditEntityAction(
 
   const submit = useCallback(
     async (data: Readonly<BulkEditDraft>) => {
-      await mutation.mutateAsync({
-        ids: items.map((item) => item.id),
-        // SAFETY: `data` is built from this entity's own declared
-        // `capabilities.bulkUpdate.fields`; the generic mutation factory
-        // cannot express a runtime-selected field subset per entity.
-        data: data as never,
-      });
+      if (updateEach) {
+        for (const item of items) {
+          await update.mutateAsync({ id: item.id, data: { ...data } });
+        }
+      } else {
+        await mutation.mutateAsync({
+          ids: items.map((item) => item.id),
+          // SAFETY: `data` is built from this entity's own declared
+          // `capabilities.bulkUpdate.fields`; the generic mutation factory
+          // cannot express a runtime-selected field subset per entity.
+          data: data as never,
+        });
+      }
       setItems([]);
     },
-    [items, mutation],
+    // oxlint-disable-next-line react/exhaustive-deps -- mutation wrappers change identity every render; their operation contracts are stable.
+    [items, updateEach],
   );
 
   return {
@@ -638,7 +671,7 @@ export function useBulkEditEntityAction(
     },
     rowMenuItem: (row) => (
       <VerbMenuItem
-        verb="bulkEdit"
+        verb={verb}
         onSelect={(event) => {
           event.stopPropagation();
           stage([row]);
@@ -654,7 +687,7 @@ export function useBulkEditEntityAction(
           if (!open) setItems([]);
         }}
         onSubmit={submit}
-        isPending={mutation.isPending}
+        isPending={mutation.isPending || update.isPending}
       />
     ),
   };

@@ -3,19 +3,17 @@ import {
   locationShortcode,
   productShortcode,
 } from "@cubby/schemas/identifiers";
-import { projectStatusSchema } from "@cubby/schemas/project";
 import { useState } from "react";
 import { z } from "zod";
 
 import { expenseCaptureRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { fieldEnumOptions } from "~/entities/enum-field-display";
 
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { ProductDiscardDialog } from "../products/product-discard-dialog";
-import { SetFieldDialog } from "../tracker/set-field-dialog";
 import { VerbMenuItem } from "./action-verb-ui";
+import { useBulkEditEntityAction } from "./bulk-edit-entity-action";
 import { defineEntityAction } from "./entity-action-definition";
 import type {
   EntityActionHandles,
@@ -135,68 +133,13 @@ function useDiscardProductAction(): EntityActionHandles {
   };
 }
 
-const projectStatusRow = z.object({
-  id: z.string(),
-  name: z.string().nullish(),
-  status: projectStatusSchema.optional(),
-});
-
+/** Project has no bulk-update contract, so its status verb writes per row. */
 function useSetProjectStatusAction(): EntityActionHandles {
-  const [items, setItems] = useState<
-    Array<{ id: string; name: string; status: string | null }>
-  >([]);
-  const update = useUpdateMutation({
-    mutationFn: entityMutationOptionsFactory("project", "update"),
-    entity: "project",
+  return useBulkEditEntityAction("project", {
+    verb: "setStatus",
+    fields: ["status"],
+    updateEach: true,
   });
-  const stage = (rows: readonly EntityActionRow[]) => {
-    setItems(
-      rows.map((row) => {
-        const parsed = projectStatusRow.safeParse(row);
-        return {
-          id: row.id,
-          name: row.name || row.id,
-          status: parsed.success ? (parsed.data.status ?? null) : null,
-        };
-      }),
-    );
-  };
-  return {
-    run: async (rows) => {
-      stage(rows);
-      return { success: rows.length > 0 };
-    },
-    rowMenuItem: (row) => (
-      <VerbMenuItem
-        verb="setStatus"
-        onSelect={(event) => {
-          event.stopPropagation();
-          stage([row]);
-        }}
-      />
-    ),
-    dialog: items.length > 0 && (
-      <SetFieldDialog
-        open
-        onOpenChange={(open) => {
-          if (!open) setItems([]);
-        }}
-        items={items}
-        options={fieldEnumOptions("project", "status")}
-        fieldLabel="Status"
-        itemNoun="Project"
-        currentValue={(item) => item.status}
-        isPending={update.isPending}
-        onConfirm={async (value) => {
-          const status = projectStatusSchema.parse(value);
-          for (const item of items) {
-            await update.mutateAsync({ id: item.id, data: { status } });
-          }
-          setItems([]);
-        }}
-      />
-    ),
-  };
 }
 
 const wishRow = z.object({

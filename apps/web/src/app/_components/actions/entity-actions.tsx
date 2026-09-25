@@ -39,7 +39,6 @@ import {
   type EntityActionPlacement,
   type EntityActionSurface,
 } from "./entity-action-definition";
-import { ingredientEntityActionDefinitions } from "./ingredient-entity-actions";
 import { inventoryLocationEntityActionDefinitions } from "./inventory-location-entity-actions";
 import { mergeEntityActionDefinitions } from "./merge-entity-actions";
 import { productRosterEntityActionDefinitions } from "./product-roster-entity-actions";
@@ -334,7 +333,6 @@ const entityActions: readonly EntityActionDefinition[] = [
     use: useDiscardInventoryAction,
   }),
   ...recipeEntityActionDefinitions,
-  ...ingredientEntityActionDefinitions,
   ...inventoryLocationEntityActionDefinitions,
   ...mergeEntityActionDefinitions,
   ...productRosterEntityActionDefinitions,
