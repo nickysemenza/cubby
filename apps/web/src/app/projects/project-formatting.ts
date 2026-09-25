@@ -1,4 +1,3 @@
-import type { CostType } from "@cubby/schemas/project";
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import { capitalize } from "@cubby/shared";
 import { format } from "date-fns";
@@ -9,16 +8,6 @@ import { parsePlainDate } from "~/lib/plain-date";
 export { capitalize } from "@cubby/shared";
 
 export { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
-
-export function normalizeCostTypeKey(
-  costType: CostType | null,
-): CostType | "other" {
-  return costType ?? "other";
-}
-
-export function monthKey(date: string): string {
-  return date.slice(0, 7);
-}
 
 export function monthLabel(key: string): string {
   const [year, month] = key.split("-");

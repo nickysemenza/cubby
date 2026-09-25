@@ -6,8 +6,8 @@ import {
 import { sum } from "es-toolkit";
 
 // Derived from the zod enum — not re-listed.
-export const PIVOT_COST_KEYS = costTypeValues;
-export type PivotCostKey = CostType;
+const PIVOT_COST_KEYS = costTypeValues;
+type PivotCostKey = CostType;
 
 type TradePivotRow = {
   trade: Trade | null;

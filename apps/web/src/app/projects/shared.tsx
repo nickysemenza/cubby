@@ -44,18 +44,15 @@ export {
   nivoChartTheme,
   nivoCurrencyAxis,
 } from "~/lib/nivo-theme";
-export { getCostTypeColor } from "~/lib/status-colors";
 export {
   capitalize,
   formatDate,
   formatDateRange,
-  monthKey,
   monthLabel,
-  normalizeCostTypeKey,
   PROJECT_STATUS_LABELS,
   TRADE_LABELS,
 } from "./project-formatting";
-export { TradeBadge, TradeIcon } from "./trade-options";
+export { TradeBadge } from "./trade-options";
 
 export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
   const { icon: Icon, className } = getStatusBadgeProps("project", status);

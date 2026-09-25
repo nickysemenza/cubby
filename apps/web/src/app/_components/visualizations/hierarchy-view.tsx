@@ -361,7 +361,7 @@ const LABEL_WIDTH = 180;
 const MARGIN = 24;
 
 /** The whole structure as a pannable, zoomable tidy tree. */
-export function HierarchyTree({ entity }: { entity: HierarchyEntity }) {
+function HierarchyTree({ entity }: { entity: HierarchyEntity }) {
   return (
     <HierarchyState entity={entity} height={600}>
       {(data) => <TidyTree entity={entity} data={data} />}

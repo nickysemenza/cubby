@@ -1,8 +1,4 @@
-import {
-  formatCategoryLabel,
-  getCategoryColor,
-  getFeatureColor,
-} from "@cubby/shared";
+import { getCategoryColor, getFeatureColor } from "@cubby/shared";
 import { ArchiveIcon } from "@phosphor-icons/react/dist/csr/Archive";
 import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
 import { CouchIcon } from "@phosphor-icons/react/dist/csr/Couch";
@@ -18,7 +14,7 @@ import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import type { Icon } from "@phosphor-icons/react/lib";
 
 // Re-export colors/helpers from @cubby/shared for existing consumers
-export { formatCategoryLabel, getCategoryColor, getFeatureColor };
+export { getCategoryColor, getFeatureColor };
 
 const featureIcons = {
   food: ForkKnifeIcon,
