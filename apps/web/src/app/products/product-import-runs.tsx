@@ -1,17 +1,47 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { CircleDashedIcon } from "@phosphor-icons/react/dist/csr/CircleDashed";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
 import { Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { readJsonOrThrow } from "~/lib/http-error";
 import {
   importRunsResponse,
   type ImportRunSummary,
 } from "~/lib/purchase-import-run-detail";
+import { purchaseLabel } from "~/lib/purchase-label";
 
 import { importRunHref } from "../purchases/purchase-import-links";
 import { TargetedImportLaunchButton } from "../purchases/targeted-import-launch";
+
+function JourneyStep({
+  label,
+  detail,
+  complete,
+}: {
+  label: string;
+  detail: string;
+  complete: boolean;
+}) {
+  const Icon = complete ? CheckCircleIcon : CircleDashedIcon;
+  return (
+    <div className="flex min-w-0 items-start gap-2 border border-border bg-background p-2.5">
+      <Icon
+        className={`mt-0.5 size-4 shrink-0 ${complete ? "text-positive" : "text-muted-foreground"}`}
+      />
+      <div className="min-w-0">
+        <span className="block text-xs font-semibold">{label}</span>
+        <span className="block text-xs break-words text-muted-foreground">
+          {detail}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 /** Targeted enrichment history stays visible even when a run made no writes. */
 export const ProductImportRuns: DetailSlotComponent<"product"> = ({
@@ -31,6 +61,12 @@ export const ProductImportRuns: DetailSlotComponent<"product"> = ({
       return data.runs;
     },
   });
+  const purchases = useQuery(
+    entityListFor("purchase").queryOptions({
+      filters: { productId: parseShortcodeFor("product", product.id) },
+      pagination: { pageIndex: 0, pageSize: 20 },
+    }),
+  );
   const launch = (
     <TargetedImportLaunchButton
       targetId={product.id}
@@ -38,22 +74,72 @@ export const ProductImportRuns: DetailSlotComponent<"product"> = ({
       purpose="product_enrichment"
     />
   );
-  if (runs.isPending)
-    return (
-      <Stack gap="sm">
-        {launch}
-        <StatusText>Loading enrichment history…</StatusText>
-      </Stack>
-    );
-  if (runs.isError)
-    return (
-      <Stack gap="sm">
-        {launch}
-        <StatusText tone="destructive">{runs.error.message}</StatusText>
-      </Stack>
-    );
+  const ownPhotos = product.attachments.filter(
+    (image) => image.source === "own",
+  ).length;
+  const linkedPurchases = purchases.data?.items ?? [];
+  const settled = linkedPurchases.some(
+    (purchase) => purchase.financialReconciliation.status === "match",
+  );
   return (
     <Stack gap="sm">
+      <div className="rounded-md border border-border bg-card p-3 text-sm">
+        <strong className="block">Finish this item</strong>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Keep photos, stock, purchase and statement evidence together.
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <JourneyStep
+            label="Your photos"
+            detail={ownPhotos ? `${ownPhotos} own photos` : "Add an item photo"}
+            complete={ownPhotos > 0}
+          />
+          <JourneyStep
+            label="Inventory"
+            detail={
+              product.inventoryEntry.length
+                ? "Inventory recorded"
+                : "Record where it lives"
+            }
+            complete={product.inventoryEntry.length > 0}
+          />
+          <JourneyStep
+            label="Purchase & statement"
+            detail={
+              purchases.isPending
+                ? "Checking purchases"
+                : linkedPurchases.length
+                  ? settled
+                    ? "Statement matched"
+                    : "Review statement match"
+                  : "Match a purchase"
+            }
+            complete={settled}
+          />
+        </div>
+        {purchases.isError ? (
+          <StatusText tone="destructive">{purchases.error.message}</StatusText>
+        ) : null}
+        {linkedPurchases.map((purchase) => (
+          <div
+            key={purchase.id}
+            className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1"
+          >
+            <Link
+              to="/purchases/$shortcode"
+              params={{ shortcode: purchase.id }}
+              className="font-medium text-primary hover:underline"
+            >
+              {purchaseLabel(purchase)}
+            </Link>
+            <span className="text-muted-foreground">
+              {purchase.financialReconciliation.status === "match"
+                ? "Statement matched"
+                : "Statement match still needed"}
+            </span>
+          </div>
+        ))}
+      </div>
       {launch}
       <p className="text-sm text-muted-foreground">
         To match this item to a purchase, open the purchase and choose
@@ -70,15 +156,25 @@ export const ProductImportRuns: DetailSlotComponent<"product"> = ({
       >
         Find a purchase
       </Link>
-      {runs.data?.length ? (
-        <div className="grid gap-3">
-          {runs.data.map((run) => (
-            <ProductImportRunSummary key={run.publicId} run={run} />
-          ))}
-        </div>
-      ) : (
-        <StatusText>No targeted enrichment runs have been recorded.</StatusText>
-      )}
+      {runs.isPending ? (
+        <StatusText>Loading enrichment history…</StatusText>
+      ) : null}
+      {runs.isError ? (
+        <StatusText tone="destructive">{runs.error.message}</StatusText>
+      ) : null}
+      {runs.isSuccess ? (
+        runs.data.length ? (
+          <div className="grid gap-3">
+            {runs.data.map((run) => (
+              <ProductImportRunSummary key={run.publicId} run={run} />
+            ))}
+          </div>
+        ) : (
+          <StatusText>
+            No targeted enrichment runs have been recorded.
+          </StatusText>
+        )
+      ) : null}
     </Stack>
   );
 };

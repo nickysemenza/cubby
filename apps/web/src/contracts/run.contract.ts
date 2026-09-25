@@ -35,6 +35,10 @@ export const runContract = defineContract("run", {
       runId: importRunShortcode,
       purpose: importRunPurpose,
       status: importRunStatus,
+      startedAt: z.iso.datetime(),
+      endedAt: z.iso.datetime().nullable(),
+      coordinatorModel: z.string().nullable(),
+      agentModelMs: z.number().nonnegative(),
       ordersSeen: z.number().int(),
       imported: z.number().int(),
       updated: z.number().int(),
@@ -60,6 +64,7 @@ export const runContract = defineContract("run", {
     }),
   }),
   aiUsage: query({
+    native: "Show live AI spend alongside native run timing",
     input: aiRunUsageInput,
     output: aiRunUsageOut,
   }),

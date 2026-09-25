@@ -32,6 +32,7 @@ import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { referenceEntitySearch } from "~/app/_components/combobox/reference-entity-search";
 import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { ProductVariantEvidence } from "~/app/_components/product-variant-evidence";
 import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import { ShortcodeProse } from "~/components/shortcode-prose";
@@ -781,6 +782,11 @@ function PhotoProductSuggestions({
                   .filter(Boolean)
                   .join(" · ") || "Compare details"}
               </p>
+              <ProductVariantEvidence
+                comparison={candidate.match.variant}
+                firstLabel="Proposal"
+                secondLabel="Product"
+              />
             </div>
             {settled && proposal.committedProduct ? (
               <Button

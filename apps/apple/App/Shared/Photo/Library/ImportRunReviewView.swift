@@ -6,6 +6,8 @@ import SwiftUI
 final class ImportRunReviewModel {
     private(set) var snapshot: RunWorkSnapshotOutput?
     private(set) var review: PhotoRunReviewResponse?
+    private(set) var usage: AiRunUsageOut?
+    private(set) var usageError: String?
     private(set) var error: String?
     private(set) var actionError: String?
     private(set) var busy = false
@@ -17,11 +19,19 @@ final class ImportRunReviewModel {
 
     func refresh(runID: String, client: CubbyClient) async {
         do {
+            async let usageRequest = client.runAiUsage(runID)
             let next = try await client.runWorkSnapshot(runID)
             snapshot = next
             error = nil
             if next.purpose == .photoInventory {
                 review = try await client.photoRunReview(runID)
+            }
+            do {
+                usage = try await usageRequest
+                usageError = nil
+            } catch {
+                Diagnostics.report(error, context: "Load run AI usage")
+                usageError = error.localizedDescription
             }
         } catch {
             Diagnostics.report(error, context: "Load import run review")
@@ -44,6 +54,32 @@ final class ImportRunReviewModel {
             Diagnostics.report(error, context: "Update photo import run")
             actionError = error.localizedDescription
         }
+    }
+}
+
+enum PhotoReviewPolicy {
+    static func approvalBlocker(
+        group: PhotoGroupProposal, images: [PhotoRunImage], runStatus: ImportRunStatus?
+    ) -> String? {
+        if group.missingImageCount > 0 { return "Some photos are missing; remove them before approval." }
+        let byID = Dictionary(uniqueKeysWithValues: images.map { ($0.id, $0) })
+        if (group.images.map(\.id) + group.skip.map(\.id)).contains(where: {
+            guard let state = byID[$0]?.targetState else { return false }
+            return state != .pending && !(runStatus == .needsReview && state == .unresolved)
+        }) {
+            return "A photo has already been settled outside this group."
+        }
+        if group.images.contains(where: {
+            guard let state = byID[$0.id]?.describe else { return false }
+            return state == .pending || state == .waitingForDevice || state == .leased || state == .failed
+        }) {
+            return
+                "Approval waits for AI descriptions. Device analysis and cutouts may continue in the background."
+        }
+        if case .existing(let product) = group.product, product.existing == nil {
+            return "Select an existing product before approval."
+        }
+        return nil
     }
 }
 
@@ -77,6 +113,7 @@ struct ImportRunReviewView: View {
             return "\(proposed.count) item \(proposed.count == 1 ? "group" : "groups") ready for review"
         }
         if review.images.isEmpty { return "Waiting for photos to upload" }
+        if model.snapshot?.status == .needsReview { return "Agent stopped; photos need review" }
         if model.actionError != nil { return "Grouping needs attention" }
         if !autoStartAttempted { return "Photos uploaded; ready to group" }
         return "Agent is preparing item groups"
@@ -205,6 +242,23 @@ struct ImportRunReviewView: View {
                     )
                     .font(.caption).foregroundStyle(.secondary)
                 }
+                if run.status == .pausedAuth || run.status == .pausedOffline {
+                    Label(
+                        run.status == .pausedAuth
+                            ? "Waiting for retailer sign-in" : "Waiting for Mac browser",
+                        systemImage: "person.crop.circle.badge.clock"
+                    )
+                    .font(.subheadline.weight(.medium))
+                    Text(
+                        run.status == .pausedAuth
+                            ? "Finish sign-in in the Cubby-managed Chrome tab on your Mac, then resume this run."
+                            : "Reconnect the Cubby Mac browser and leave the retailer tab open before resuming."
+                    )
+                    .font(.caption).foregroundStyle(.secondary)
+                    Link(
+                        "Open sign-in and resume controls",
+                        destination: appModel.webURL(for: .importRun, id: runID))
+                }
                 if let latest = run.progress.last {
                     HStack(alignment: .firstTextBaseline) {
                         Text(
@@ -237,18 +291,26 @@ struct ImportRunReviewView: View {
             Section {
                 photoProcessing(review.images)
                 if proposed.isEmpty, review.review.proposals.isEmpty {
-                    Text("Photos are ready for the agent to propose item groups.")
-                        .foregroundStyle(.secondary)
-                    Button {
-                        Task {
-                            await model.act(runID: runID, client: appModel.client) {
-                                try await appModel.client.startPhotoGrouping(runID)
+                    Text(
+                        model.snapshot?.status == .needsReview
+                            ? "The agent stopped before proposing groups. Review these photos on the web."
+                            : "Photos are ready for the agent to propose item groups."
+                    )
+                    .foregroundStyle(.secondary)
+                    if model.snapshot?.status == .needsReview {
+                        Link("Group photos on web", destination: appModel.webURL(for: .importRun, id: runID))
+                    } else if model.snapshot?.status == .running {
+                        Button {
+                            Task {
+                                await model.act(runID: runID, client: appModel.client) {
+                                    try await appModel.client.startPhotoGrouping(runID)
+                                }
                             }
+                        } label: {
+                            Label("Start grouping", systemImage: "sparkles")
                         }
-                    } label: {
-                        Label("Start grouping", systemImage: "sparkles")
+                        .disabled(model.busy || review.images.isEmpty)
                     }
-                    .disabled(model.busy || review.images.isEmpty || model.snapshot?.status != .running)
                 }
             } header: {
                 Text("Photo processing")
@@ -386,7 +448,7 @@ struct ImportRunReviewView: View {
                 Text(error).foregroundStyle(PorcelainTokens.destructive)
             }
             NavigationLink {
-                PhotoCandidateSelectionView(runID: runID, group: group) {
+                PhotoCandidateSelectionView(runID: runID, group: group, images: images) {
                     Task { await refresh() }
                 }
             } label: {
@@ -420,24 +482,8 @@ struct ImportRunReviewView: View {
     }
 
     private func approvalBlocker(_ group: PhotoGroupProposal, images: [PhotoRunImage]) -> String? {
-        if group.missingImageCount > 0 { return "Some photos are missing; remove them before approval." }
-        let byID = Dictionary(uniqueKeysWithValues: images.map { ($0.id, $0) })
-        if (group.images.map(\.id) + group.skip.map(\.id)).contains(where: {
-            byID[$0]?.targetState != nil && byID[$0]?.targetState != .pending
-        }) {
-            return "A photo has already been settled outside this group."
-        }
-        if group.images.contains(where: {
-            guard let state = byID[$0.id]?.describe else { return false }
-            return state == .pending || state == .waitingForDevice || state == .leased || state == .failed
-        }) {
-            return
-                "Approval waits for AI descriptions. Device analysis and cutouts may continue in the background."
-        }
-        if case .existing(let product) = group.product, product.existing == nil {
-            return "Select an existing product before approval."
-        }
-        return nil
+        PhotoReviewPolicy.approvalBlocker(
+            group: group, images: images, runStatus: model.review?.review.runStatus)
     }
 
     private func processingLabel(_ name: String, state: ImageProcessingJobState?, reason: String?)
@@ -461,32 +507,108 @@ struct ImportRunReviewView: View {
     }
 
     private func workTimeline(_ run: RunWorkSnapshotOutput) -> some View {
-        Section("Work log") {
-            if run.progress.isEmpty && run.operations.isEmpty {
-                Text("No progress recorded yet.").foregroundStyle(.secondary)
-            }
-            ForEach(Array(run.progress.enumerated()), id: \.offset) { _, step in
-                VStack(alignment: .leading) {
-                    Text(step.phase.replacingOccurrences(of: "_", with: " ").capitalized)
-                    if let detail = step.detail { Text(detail).font(.caption).foregroundStyle(.secondary) }
-                    Text(step.createdAt, format: .dateTime.hour().minute().second())
-                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+        Section("Work at a glance") {
+            TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                HStack {
+                    Label("Elapsed", systemImage: "clock")
+                    Spacer()
+                    Text(
+                        Duration.seconds(
+                            max(0, (run.endedAt ?? timeline.date).timeIntervalSince(run.startedAt))
+                        ).formatted()
+                    )
+                    .monospacedDigit()
                 }
             }
-            ForEach(Array(run.operations.enumerated()), id: \.offset) { _, operation in
-                VStack(alignment: .leading) {
-                    Text(operation.kind.replacingOccurrences(of: "_", with: " ").capitalized)
-                    Text(operation.state.capitalized).font(.caption).foregroundStyle(.secondary)
-                    if let end = operation.completedAt {
-                        Text(
-                            "\(end.timeIntervalSince(operation.startedAt).formatted(.number.precision(.fractionLength(1)))) seconds"
-                        )
-                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    }
-                    if let error = operation.error {
-                        Text(error).font(.caption).foregroundStyle(PorcelainTokens.destructive)
+            if let coordinatorModel = run.coordinatorModel {
+                HStack {
+                    Label(coordinatorModel, systemImage: "sparkles")
+                    Spacer()
+                    Text(Duration.milliseconds(run.agentModelMs).formatted())
+                        .monospacedDigit()
+                }
+                .accessibilityLabel("Agent model time")
+            }
+            if let usage = model.usage {
+                HStack {
+                    Label("AI spend", systemImage: "dollarsign.circle")
+                    Spacer()
+                    Text(usage.pricedSubtotal, format: .currency(code: "USD"))
+                        .monospacedDigit()
+                }
+                if usage.unpricedCount > 0 {
+                    Text("\(usage.unpricedCount) AI calls have no price yet.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } else if let usageError = model.usageError {
+                Text(usageError).font(.caption).foregroundStyle(PorcelainTokens.warning)
+            }
+            if run.purpose == .photoInventory {
+                let images = model.review?.images ?? []
+                workStage("Receive photos", done: !images.isEmpty, detail: "\(images.count) received")
+                workStage(
+                    "Process photos",
+                    done: !images.isEmpty
+                        && images.allSatisfy { $0.describe == .ready || $0.describe == .skipped },
+                    detail: "Device, cutout and description run in the background"
+                )
+                workStage(
+                    "Prepare item groups",
+                    done: !(model.review?.review.proposals.isEmpty ?? true),
+                    detail: "Agent proposes which photos belong together"
+                )
+                workStage(
+                    "Review and save",
+                    done: run.targetsTotal > 0 && run.targetsCompleted == run.targetsTotal,
+                    detail: "Products are created or linked after approval"
+                )
+            } else {
+                workStage(
+                    "Read source", done: !run.progress.isEmpty, detail: "Collect order or account evidence")
+                workStage("Extract orders", done: run.ordersSeen > 0, detail: "\(run.ordersSeen) found")
+                workStage(
+                    "Review and save", done: run.status == .completed, detail: "\(run.imported) imported")
+            }
+            DisclosureGroup("Technical timeline") {
+                if run.progress.isEmpty && run.operations.isEmpty {
+                    Text("No events recorded yet.").foregroundStyle(.secondary)
+                }
+                ForEach(Array(run.progress.enumerated()), id: \.offset) { _, step in
+                    VStack(alignment: .leading) {
+                        Text(step.phase.replacingOccurrences(of: "_", with: " ").capitalized)
+                        if let detail = step.detail {
+                            Text(detail).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Text(step.createdAt, format: .dateTime.hour().minute().second())
+                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                     }
                 }
+                ForEach(Array(run.operations.enumerated()), id: \.offset) { _, operation in
+                    VStack(alignment: .leading) {
+                        Text(operation.kind.replacingOccurrences(of: "_", with: " ").capitalized)
+                        Text(operation.state.capitalized).font(.caption).foregroundStyle(.secondary)
+                        if let end = operation.completedAt {
+                            Text(
+                                "\(end.timeIntervalSince(operation.startedAt).formatted(.number.precision(.fractionLength(1)))) seconds"
+                            )
+                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        }
+                        if let error = operation.error {
+                            Text(error).font(.caption).foregroundStyle(PorcelainTokens.destructive)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func workStage(_ title: String, done: Bool, detail: String) -> some View {
+        HStack(alignment: .top, spacing: PorcelainTokens.Space.sm) {
+            Image(systemName: done ? "checkmark.circle.fill" : "circle.dotted")
+                .foregroundStyle(done ? PorcelainTokens.positive : .secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.subheadline.weight(.medium))
+                Text(detail).font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -495,6 +617,7 @@ struct ImportRunReviewView: View {
 private struct PhotoCandidateSelectionView: View {
     let runID: String
     let group: PhotoGroupProposal
+    let images: [PhotoRunImage]
     let onChosen: () -> Void
 
     @Environment(AppModel.self) private var appModel
@@ -504,12 +627,40 @@ private struct PhotoCandidateSelectionView: View {
     @State private var loading = true
     @State private var choosing = false
     @State private var searchingAll = false
+    @State private var previewCandidate: PhotoProductCandidate?
 
     var body: some View {
         List {
+            Section("Your photos") {
+                ScrollView(.horizontal) {
+                    HStack(spacing: PorcelainTokens.Space.sm) {
+                        ForEach(group.images, id: \.id) { item in
+                            if let image = images.first(where: { $0.id == item.id }) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Thumb(url: URL(string: image.originalUrl), size: 96)
+                                    Text(item.purpose.rawValue.capitalized)
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+                ForEach(group.images, id: \.id) { item in
+                    if let image = images.first(where: { $0.id == item.id }),
+                        let text = image.recognizedText, !text.isEmpty
+                    {
+                        DisclosureGroup("Text read from \(item.purpose.rawValue) photo") {
+                            Text(text).font(.caption).textSelection(.enabled)
+                            Text("Check the photo before using unclear letters as a size or model.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
             Section {
                 Text(
-                    "Database name search suggests these products. Shared words, brand, purchase history and photo history explain each result. An agent did not rank this list."
+                    "Database name search suggests these products. Size and color below come from Product titles, not photo analysis. Check the label before choosing."
                 )
                 .font(.subheadline).foregroundStyle(.secondary)
             }
@@ -526,9 +677,10 @@ private struct PhotoCandidateSelectionView: View {
                         Thumb(url: candidate.coverUrl.flatMap(URL.init(string:)), size: 56)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(candidate.name).font(.headline)
+                            variantFacts(candidate)
                             Text(reasons(candidate)).font(.caption).foregroundStyle(.secondary)
                             Button("Use this product") {
-                                Task { await choose(productID: candidate.id) }
+                                previewCandidate = candidate
                             }
                             .disabled(choosing)
                         }
@@ -555,6 +707,88 @@ private struct PhotoCandidateSelectionView: View {
             EntityPickerSheet(target: .product) { picks in
                 guard let product = picks.first else { return }
                 Task { await choose(productID: ProductCode(product.id)) }
+            }
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { previewCandidate != nil },
+                set: { if !$0 { previewCandidate = nil } })
+        ) {
+            if let candidate = previewCandidate {
+                NavigationStack {
+                    List {
+                        Section("What this choice keeps") {
+                            LabeledContent("Product name", value: candidate.name)
+                            LabeledContent("Product details", value: "Existing values stay")
+                            LabeledContent("Existing photos", value: "Keep all")
+                        }
+                        Section("What this choice adds") {
+                            LabeledContent(
+                                "Your photos", value: "\(group.images.count) attached after approval")
+                            LabeledContent("Photo proposal", value: proposalName)
+                            Text(
+                                "The proposed name and details will not replace the existing Product. Check size and color before continuing."
+                            )
+                            .font(.footnote).foregroundStyle(.secondary)
+                        }
+                        Section("Variant check") {
+                            variantFacts(candidate)
+                        }
+                    }
+                    .navigationTitle("Use existing product")
+                    #if os(iOS)
+                        .navigationBarTitleDisplayMode(.inline)
+                    #endif
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { previewCandidate = nil }
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Use product") {
+                                Task { await choose(productID: candidate.id) }
+                            }
+                            .disabled(choosing)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var proposalName: String {
+        switch group.product {
+        case .create(let proposal): proposal.create.name
+        case .existing: "Existing Product"
+        }
+    }
+
+    private func variantFacts(_ candidate: PhotoProductCandidate) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            variantLine(
+                "Color", first: candidate.match.variant.color.first,
+                second: candidate.match.variant.color.second,
+                relation: candidate.match.variant.color.relation.rawValue)
+            variantLine(
+                "Size", first: candidate.match.variant.size.first,
+                second: candidate.match.variant.size.second,
+                relation: candidate.match.variant.size.relation.rawValue)
+        }
+        .font(.caption)
+    }
+
+    private func variantLine(
+        _ title: String, first: String?, second: String?, relation: String
+    ) -> some View {
+        let detail =
+            relation == "same"
+            ? "\(first ?? "Unknown") in both titles"
+            : "Proposal: \(first ?? "unknown") · Product: \(second ?? "unknown")"
+        return HStack(alignment: .firstTextBaseline) {
+            Text("\(title): \(detail)")
+                .foregroundStyle(relation == "different" ? PorcelainTokens.warning : .secondary)
+            if relation == "different" {
+                Image(systemName: "exclamationmark.triangle")
+                    .foregroundStyle(PorcelainTokens.warning)
             }
         }
     }
@@ -745,6 +979,8 @@ private struct PhotoGroupDraftEditView: View {
                 images: images)
             let run = RunWorkSnapshotOutput(
                 runId: runID, purpose: .photoInventory, status: .running,
+                startedAt: .now.addingTimeInterval(-12), endedAt: nil,
+                coordinatorModel: "gpt-6-sol", agentModelMs: 4_200,
                 ordersSeen: 0, imported: 0, updated: 0, skipped: 0,
                 targetsTotal: 2, targetsCompleted: 0,
                 progress: [

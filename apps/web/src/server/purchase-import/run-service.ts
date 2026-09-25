@@ -3757,11 +3757,28 @@ export async function controlImportRun(
       if (input.action === "resume") {
         if (!new Set(["paused_auth", "paused_offline"]).has(locked.status))
           throw new Error(`Purchase import run is fenced in ${locked.status}`);
+        const dispatchEventId = crypto.randomUUID();
         await tx
           .update(importRun)
-          .set({ status: "running", failureCode: null, updatedAt: new Date() })
+          .set({
+            status: "running",
+            failureCode: null,
+            dispatchEventId,
+            dispatchError: null,
+            coordinatorStartedAt: null,
+            endedAt: null,
+            updatedAt: new Date(),
+          })
           .where(eq(importRun.id, scope.public.runId));
-        return { publicId: input.runPublicId, status: "running" as const };
+        return {
+          publicId: input.runPublicId,
+          status: "running" as const,
+          dispatchRunId: scope.public.runId,
+          dispatchPublicId: input.runPublicId,
+          dispatchPurpose: locked.purpose,
+          dispatchCoordinatorModel: "gpt-6-sol",
+          dispatchEventId,
+        };
       }
 
       if (!input.operationId)

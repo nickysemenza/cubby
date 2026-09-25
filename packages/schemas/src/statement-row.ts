@@ -7,7 +7,62 @@ import {
   financialTransactionShortcode,
 } from "./identifiers";
 import { dateRangeFields, numericRangeFields, plainDate } from "./base-entity";
-import { merchantVendorInference } from "./financial-transaction";
+import {
+  financialStatementImportPreviewOut,
+  financialTransactionKind,
+  merchantVendorInference,
+} from "./financial-transaction";
+
+export const statementCsvColumnMapping = z.strictObject({
+  source: z.string(),
+  account: z.string(),
+  accountColumn: z.string(),
+  date: z.string(),
+  amount: z.string(),
+  description: z.string(),
+  merchant: z.string(),
+  category: z.string(),
+  notes: z.string(),
+  direction: z.string(),
+  status: z.string(),
+  pendingValue: z.string(),
+  chargeValue: z.string(),
+  creditValue: z.string(),
+  sign: z.enum(["charges-negative", "charges-positive", "direction-column"]),
+});
+
+export const statementCsvFileInput = z.object({
+  fileName: z.string().min(1),
+  text: z.string().min(1).max(5_000_000),
+  mapping: statementCsvColumnMapping.optional(),
+  previewOffset: z.number().int().nonnegative().optional(),
+});
+export type StatementCsvFileInput = z.infer<typeof statementCsvFileInput>;
+
+export const statementCsvPreviewOut = z.object({
+  headers: z.array(z.string()),
+  needsMapping: z.boolean(),
+  source: z.string().nullable(),
+  totalRows: z.number().int(),
+  pendingRows: z.number().int(),
+  zeroValueRows: z.number().int(),
+  previewOffset: z.number().int(),
+  hasMore: z.boolean(),
+  preview: financialStatementImportPreviewOut.nullable(),
+});
+
+export const statementCsvCommitInput = statementCsvFileInput.extend({
+  selected: z.array(
+    z.object({ key: z.string(), kind: financialTransactionKind }),
+  ),
+});
+export type StatementCsvCommitInput = z.infer<typeof statementCsvCommitInput>;
+
+export const statementCsvCommitOut = z.object({
+  transactions: z.number().int(),
+  evidence: z.number().int(),
+  alreadyPresent: z.number().int(),
+});
 
 /**
  * The provider-statement ledger: what the card statements said, stored verbatim

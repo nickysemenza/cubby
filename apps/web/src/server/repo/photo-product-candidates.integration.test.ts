@@ -52,6 +52,10 @@ describe("photo product candidates", () => {
       source: "catalog_name",
       sharedNameTerms: ["pocket", "tee", "black", "small"],
       brandMatches: true,
+      variant: {
+        color: { first: "Black", second: "Black", relation: "same" },
+        size: { first: "Small", second: "Small", relation: "same" },
+      },
     });
     expect(
       matches.find((item) => item.id === photographed.id)?.hasOwnPhoto,

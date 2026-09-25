@@ -1,3 +1,4 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { render, screen } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
@@ -5,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   FinancialSettlementStatus,
   financialTransactionCaptureRequestForPurchase,
+  rankSettlementCandidates,
 } from "./financial-settlement";
 import { purchaseReconciliationOptions } from "./purchase-options";
 import { ReconciliationStatus } from "./purchase-reconciliation";
@@ -83,5 +85,46 @@ describe("purchase reconciliation statuses", () => {
         seed: { purchaseId: "PUR-2345" },
       }),
     );
+  });
+
+  it("ranks a late statement charge by amount, date and merchant without suggesting allocated rows", () => {
+    const purchase = {
+      date: "2026-08-14",
+      statedTotal: 42.5,
+      vendorName: "ForgeWear",
+    };
+    const make = (
+      id: string,
+      fields: Partial<Parameters<typeof rankSettlementCandidates>[1][number]>,
+    ) =>
+      fromPartial<Parameters<typeof rankSettlementCandidates>[1][number]>({
+        id,
+        amount: 42.5,
+        postedDate: "2026-08-16",
+        transactionDate: "2026-08-16",
+        merchant: "ForgeWear Online",
+        kind: "purchase",
+        status: "posted",
+        allocations: [],
+        ...fields,
+      });
+    expect(
+      rankSettlementCandidates(
+        fromPartial<Parameters<typeof rankSettlementCandidates>[0]>(purchase),
+        [
+          make("FTX-2345", {}),
+          make("FTX-3456", { amount: 91 }),
+          make("FTX-4567", {
+            allocations: [
+              {
+                purchaseId: parseShortcodeFor("purchase", "PUR-2345"),
+                amount: 42.5,
+              },
+            ],
+          }),
+          make("FTX-5678", { kind: "account_transfer" }),
+        ],
+      ).map((candidate) => candidate.transaction.id),
+    ).toEqual(["FTX-2345"]);
   });
 });

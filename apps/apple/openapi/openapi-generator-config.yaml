@@ -204,8 +204,11 @@ filter:
     - resources.wish.get
     - resources.wish.list
     - resources.wish.update
+    - run.aiUsage
     - run.workSnapshot
     - search.find
+    - statementRow.commitCsv
+    - statementRow.previewCsv
     - task.board
     - task.bulkReorder
     - task.todayBriefing

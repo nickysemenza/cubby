@@ -164,6 +164,43 @@ describe("purchase import run admission", () => {
     });
   });
 
+  it("dispatches a manually resumed retailer sign-in run instead of leaving it idle", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const run = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const { importRun } = await import("~/server/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    await getDb(ctx.db)
+      .update(importRun)
+      .set({ status: "paused_auth", coordinatorStartedAt: new Date() })
+      .where(eq(importRun.id, run.id));
+
+    const resumed = await controlImportRun(ctx.db, ctx.actor, {
+      runPublicId: run.publicId,
+      action: "resume",
+    });
+    expect(resumed).toMatchObject({
+      status: "running",
+      dispatchRunId: run.id,
+      dispatchPurpose: "account_sync",
+      dispatchEventId: expect.any(String),
+    });
+    const [stored] = await getDb(ctx.db)
+      .select({
+        eventId: importRun.dispatchEventId,
+        coordinatorStartedAt: importRun.coordinatorStartedAt,
+      })
+      .from(importRun)
+      .where(eq(importRun.id, run.id));
+    expect(stored?.eventId).not.toBe(run.dispatchEventId);
+    expect(stored?.coordinatorStartedAt).toBeNull();
+  });
+
   it("republishes an interrupted authorization dispatch with its stable event id", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);

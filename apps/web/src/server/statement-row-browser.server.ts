@@ -1,6 +1,10 @@
 import { statementRowContract } from "~/contracts/statement-row.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
+  commitStatementCsv,
+  previewStatementCsv,
+} from "~/server/statement-csv-import";
+import {
   getStatementRowSummaryWorkflow,
   listStatementImportsWorkflow,
   listStatementRowsWorkflow,
@@ -10,6 +14,10 @@ import {
 export const statementRowHandlers = implementOperationDomain(
   statementRowContract,
   {
+    previewCsv: (context, input) =>
+      previewStatementCsv(context.readDb, context.actorContext, input),
+    commitCsv: (context, input) =>
+      commitStatementCsv(context.db, context.actorContext, input),
     record: (context, input) =>
       recordStatementRowsWorkflow(context.db, context.actorContext, input),
     list: {

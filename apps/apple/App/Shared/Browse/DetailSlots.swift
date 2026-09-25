@@ -43,9 +43,39 @@ enum DetailSlotRegistry {
         case .inventory:
             guard let detail = try? row.decode(InventoryDetail.self) else { return nil }
             return AnyView(InventoryOwnershipControl(detail: detail, onChanged: onChanged))
+        case .product:
+            guard let detail = try? row.decode(ProductDetail.self) else { return nil }
+            return AnyView(ProductJourneySummaryView(product: detail))
         default:
             return nil
         }
+    }
+}
+
+private struct ProductJourneySummaryView: View {
+    let product: ProductDetail
+    @Environment(AppModel.self) private var appModel
+
+    private var ownPhotos: Int { product.attachments.filter { $0.source == .own }.count }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+            Text("Finish this item").font(.subheadline.weight(.semibold))
+            Label(
+                ownPhotos == 0 ? "Add an item photo" : "\(ownPhotos) own photos",
+                systemImage: ownPhotos == 0 ? "circle.dotted" : "checkmark.circle.fill"
+            )
+            Label(
+                product.inventoryEntry.isEmpty ? "Record where it lives" : "Inventory recorded",
+                systemImage: product.inventoryEntry.isEmpty ? "circle.dotted" : "checkmark.circle.fill"
+            )
+            Link(
+                "Review purchase and statement",
+                destination: appModel.webURL(for: .product, id: product.id.rawValue))
+        }
+        .font(.caption)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, PorcelainTokens.Space.xs)
     }
 }
 

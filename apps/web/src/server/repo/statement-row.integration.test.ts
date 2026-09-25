@@ -11,6 +11,10 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  commitStatementCsv,
+  previewStatementCsv,
+} from "~/server/statement-csv-import";
+import {
   listStatementRowsWorkflow,
   recordStatementRowsWorkflow,
 } from "~/server/workflows/statement-row.server";
@@ -75,6 +79,77 @@ const record = (
 
 describe("statement row ledger", () => {
   const ctx = withTestDb();
+
+  it("previews, confirms and safely replays a synthetic CSV through the native intake contract", async () => {
+    await createFinancialAccount(
+      ctx.db,
+      financialAccountCreateInput.parse({
+        name: "Test Card",
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        cardNumbers: [
+          {
+            last4: "4242",
+            kind: "primary",
+            validFrom: null,
+            validTo: null,
+            note: null,
+          },
+        ],
+        sourceAliases: [
+          {
+            source: "monarch",
+            alias: "Test Card (...4242)",
+            externalAccountId: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const file = {
+      fileName: "synthetic-statement.csv",
+      text: "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Id\n2026-08-16,ForgeWear,Clothing,Test Card (...4242),FORGEWEAR ORDER,, -42.50,row-1\n",
+    };
+    const preview = await previewStatementCsv(ctx.db, ctx.actor, file);
+    expect(preview.preview?.rows[0]).toMatchObject({
+      status: "ready_to_create",
+    });
+    expect((await listStatementRows(ctx.db, {})).count).toBe(0);
+
+    const first = await commitStatementCsv(ctx.db, ctx.actor, {
+      ...file,
+      selected: [{ key: "1", kind: "purchase" }],
+    });
+    expect(first).toMatchObject({ transactions: 1, evidence: 1 });
+    const replay = await commitStatementCsv(ctx.db, ctx.actor, {
+      ...file,
+      selected: [{ key: "1", kind: "purchase" }],
+    });
+    expect(replay).toMatchObject({ transactions: 0, evidence: 0 });
+    expect((await listStatementRows(ctx.db, {})).count).toBe(1);
+  });
+
+  it("pages a long native CSV preview so later charges can be reviewed", async () => {
+    const file = {
+      fileName: "long-synthetic-statement.csv",
+      text:
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Id\n" +
+        Array.from(
+          { length: 201 },
+          (_, index) =>
+            `2026-08-16,Shop ${index},Home,Unknown Card,ORDER ${index},,-1.00,row-${index}\n`,
+        ).join(""),
+    };
+    const first = await previewStatementCsv(ctx.db, ctx.actor, file);
+    const second = await previewStatementCsv(ctx.db, ctx.actor, {
+      ...file,
+      previewOffset: 200,
+    });
+    expect(first.preview?.rows).toHaveLength(200);
+    expect(first.hasMore).toBe(true);
+    expect(second.preview?.rows).toHaveLength(1);
+    expect(second.hasMore).toBe(false);
+    expect(second.preview?.rows[0]?.proposed.merchant).toBe("Shop 200");
+  });
 
   it("records provider rows verbatim and is idempotent on re-ingest", async () => {
     const first = await record(ctx.db, ctx.actor, [

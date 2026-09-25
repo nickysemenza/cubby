@@ -9,6 +9,31 @@ import Testing
 @MainActor
 @Suite("Photo import flow", .serialized)
 struct PhotoImportFlowTests {
+    @Test func stoppedPhotoRunCanReviewUnresolvedGroupWithoutAcceptingStalePhotos() {
+        let imageID = ImageCode("IMG-2345")
+        let group = PhotoGroupProposal(
+            groupKey: "work-shirt", state: .proposed,
+            images: [.init(id: imageID, purpose: .item)], skip: [],
+            product: .create(
+                .init(kind: .create, create: .init(name: "Canvas shirt", manufacturer: "ForgeWear"))),
+            missingImageCount: 0, updatedAt: "2026-09-25T12:00:00Z")
+        let image = PhotoRunImage(
+            id: imageID, targetState: .unresolved, originalUrl: "synthetic://shirt",
+            cutout: .ready, describe: .ready, localAnalysisReady: true)
+
+        #expect(
+            PhotoReviewPolicy.approvalBlocker(
+                group: group, images: [image], runStatus: .needsReview) == nil)
+        #expect(
+            PhotoReviewPolicy.approvalBlocker(
+                group: group, images: [image], runStatus: .running) != nil)
+        var settled = image
+        settled.targetState = .completed
+        #expect(
+            PhotoReviewPolicy.approvalBlocker(
+                group: group, images: [settled], runStatus: .needsReview) != nil)
+    }
+
     @Test func manifestKeepsUnassignedPhotosOutOfCommitUntilMoved() throws {
         let first = try selection(filename: "first.jpg")
         let second = try selection(filename: "second.jpg")

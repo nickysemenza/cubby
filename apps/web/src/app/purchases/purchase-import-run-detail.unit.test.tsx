@@ -1,5 +1,11 @@
 import type { ImportRunOut } from "@cubby/schemas/import-run";
-import { render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -165,6 +171,35 @@ const record = fromPartial<ImportRunOut>({
 });
 
 describe("RunImportWorkflow", () => {
+  it("gives a paused retailer run one clear sign-in handoff and resume action", async () => {
+    detailRun = importRunDetailResponse.parse({
+      run: { ...run, status: "paused_auth", endedAt: null },
+    }).run;
+    render(
+      <RunImportWorkflow
+        record={fromPartial<ImportRunOut>({ ...record, status: "paused_auth" })}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(
+      await screen.findByText("Sign in to Fixture vendor"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/managed browser tab/)).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "I've signed in — resume run" }),
+    );
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/import/runs/RUN-4K7M",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ action: "resume" }),
+        }),
+      ),
+    );
+  });
+
   it("links image shortcodes in progress summaries and history", async () => {
     const update = {
       eventId: "progress-1",
