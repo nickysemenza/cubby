@@ -891,6 +891,38 @@ async function runHeadlessPhotoScenario(
         await expect(
           page.getByText("Completed", { exact: true }).first(),
         ).toBeVisible();
+        // A restart copies exactly the inputs the run shows, and each run
+        // links to the other.
+        const restartInputs = async () => {
+          await page.getByText("Restart inputs", { exact: true }).click();
+          return z
+            .looseObject({ targets: z.array(z.unknown()) })
+            .parse(
+              JSON.parse(
+                await page.getByLabel("Restart inputs JSON").innerText(),
+              ),
+            );
+        };
+        const originalInputs = await restartInputs();
+        expect(originalInputs.targets).toHaveLength(imageIDs.length);
+        await page
+          .getByRole("button", { name: "Start new run with same inputs" })
+          .click();
+        await expect(page).not.toHaveURL(new RegExp(`/${runID}$`));
+        const successorID = page.url().split("/").at(-1) ?? "";
+        await expect(
+          page.getByRole("link", { name: runID, exact: true }),
+        ).toBeVisible();
+        expect(await restartInputs()).toEqual(originalInputs);
+        await page.goto(`${url.origin}/runs/${runID}`);
+        await expect(
+          page.getByRole("link", { name: successorID, exact: true }),
+        ).toBeVisible();
+        await expect(
+          page.getByRole("button", {
+            name: "Start another run with same inputs",
+          }),
+        ).toBeVisible();
       } finally {
         await browserContext.close();
         const videoPath = await page.video()?.path();

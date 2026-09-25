@@ -241,7 +241,9 @@ function TerminalRunControls({ run }: { run: ImportRunDetail }) {
           onClick={() => retry.mutate("restart")}
           disabled={retry.isPending}
         >
-          Start new run with same inputs
+          {run.successorRunPublicId
+            ? "Start another run with same inputs"
+            : "Start new run with same inputs"}
         </Button>
       </div>
       {run.purpose === "photo_inventory" ? (
@@ -258,6 +260,50 @@ function TerminalRunControls({ run }: { run: ImportRunDetail }) {
 }
 
 /** A committed run without Flue admission is recoverable, not silently stuck. */
+/** Where this run came from, what replaced it, and the inputs a restart copies. */
+function RunLineageAndInputs({ run }: { run: ImportRunDetail }) {
+  const links = [
+    ["Started from", run.predecessorRunPublicId],
+    ["Restarted as", run.successorRunPublicId ?? null],
+  ] as const;
+  if (!run.restartInputs && !links.some(([, publicId]) => publicId))
+    return null;
+  return (
+    <div className="grid gap-2 text-sm">
+      {links.map(([label, publicId]) =>
+        publicId ? (
+          <p key={label} className="text-muted-foreground">
+            {label}{" "}
+            <a
+              className="font-mono text-xs text-primary hover:underline"
+              href={importRunHref(publicId)}
+            >
+              {publicId}
+            </a>
+          </p>
+        ) : null,
+      )}
+      {run.restartInputs ? (
+        <details className="border border-border bg-card p-3">
+          <summary className="cursor-pointer font-medium">
+            Restart inputs
+          </summary>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Exactly what “Start new run with same inputs” copies. Proposals,
+            decisions, and the agent conversation are not carried over.
+          </p>
+          <pre
+            aria-label="Restart inputs JSON"
+            className="mt-2 max-h-96 overflow-auto bg-muted p-2 font-mono text-xs"
+          >
+            {JSON.stringify(run.restartInputs, null, 2)}
+          </pre>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
 function DispatchRecoveryControls({ run }: { run: ImportRunDetail }) {
   const queryClient = useQueryClient();
   const dispatch = run.dispatch;
@@ -1546,6 +1592,7 @@ export function RunPhotoBatch({ record }: { record: ImportRunOut }) {
       {(run) => (
         <>
           <TerminalRunControls run={run} />
+          <RunLineageAndInputs run={run} />
           {run.dispatch?.eventId && !run.dispatch.coordinatorStartedAt ? (
             <DispatchRecoveryControls run={run} />
           ) : null}
@@ -1600,6 +1647,7 @@ function ImportRunContent({ run }: { run: ImportRunDetail }) {
           <ManualEvidenceUpload run={run} />
           <TerminalRunControls run={run} />
         </div>
+        <RunLineageAndInputs run={run} />
         <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
           <Metadata label="Source" value={run.source?.kind ?? run.trigger} />
           <Metadata

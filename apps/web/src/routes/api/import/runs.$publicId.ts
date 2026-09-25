@@ -60,6 +60,7 @@ const browserRun = (
   },
   predecessorRunPublicId: run.predecessorRunPublicId,
   successorRunPublicId: run.successorRunPublicId,
+  restartInputs: run.restartInputs,
   coordinatorModel: run.coordinatorModel,
   skillRevision: run.skillRevision,
   runtimeRevision: run.runtimeRevision,

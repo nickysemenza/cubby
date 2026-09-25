@@ -105,6 +105,29 @@ const importRunFinding = z.object({
   expiresAt: z.iso.datetime().nullable(),
 });
 
+/** The settings and targets "Start new run with same inputs" copies. */
+const restartInputs = z.object({
+  purpose: z.string(),
+  trigger: z.literal("manual"),
+  coordinatorModel: z.string(),
+  vendorAccount: z.string().nullable(),
+  notes: z.string().nullable(),
+  skillRevision: z.string().nullable(),
+  runtimeRevision: z.string().nullable(),
+  targets: z.array(
+    z.object({
+      position: z.number().int().nullable(),
+      image: z.string().nullable(),
+      purchase: z.string().nullable(),
+      product: z.string().nullable(),
+      vendorAccount: z.string().nullable(),
+      sourceKind: z.string().nullable(),
+      sourceExternalKey: z.string().nullable(),
+      targetFingerprint: z.string().nullable(),
+    }),
+  ),
+});
+
 const importRunTarget = z.object({
   id: z.string().min(1),
   targetType: z.enum(["purchase", "product", "image"]),
@@ -155,6 +178,8 @@ const importRunDetail = z.object({
   notes: z.string().nullable().optional(),
   predecessorRunPublicId: importRunShortcode.nullable(),
   successorRunPublicId: importRunShortcode.nullable().optional(),
+  /** Null for runs that cannot be started again. */
+  restartInputs: restartInputs.nullable().optional(),
   coordinatorModel: z.string().nullable(),
   skillRevision: z.string().nullable(),
   runtimeRevision: z.string().nullable(),
