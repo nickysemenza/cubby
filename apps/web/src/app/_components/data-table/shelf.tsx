@@ -209,7 +209,7 @@ export function ShelfCard({
         </div>
       </Link>
       {subtitle != null && subtitle !== "" && (
-        <div className="min-w-0 truncate px-2 pb-2 font-mono text-xs text-muted-foreground">
+        <div className="min-w-0 truncate px-2 pb-2 text-xs text-muted-foreground">
           {subtitle}
         </div>
       )}

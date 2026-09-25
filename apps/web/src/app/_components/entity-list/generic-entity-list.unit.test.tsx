@@ -9,6 +9,7 @@ import {
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
+import { formatCategoryLabel } from "@cubby/shared";
 import {
   fireEvent,
   render,
@@ -431,6 +432,10 @@ describe("GenericEntityList", () => {
     });
     const gadgetCard = gadget.closest<HTMLElement>("[data-entity-card]");
     expect(gadgetCard).not.toBeNull();
-    expect(within(gadgetCard!).getByText(/tools/iu)).toBeVisible();
+    expect(
+      within(gadgetCard!).getByText(formatCategoryLabel(unpriced.category)),
+    ).toBeVisible();
+    expect(gadgetCard).not.toHaveTextContent('"path"');
+    expect(gadgetCard?.querySelector("pre")).toBeNull();
   });
 });

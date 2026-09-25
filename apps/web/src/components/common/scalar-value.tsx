@@ -1,10 +1,16 @@
 import { format } from "date-fns";
 import type { ReactNode } from "react";
+import { z } from "zod";
 
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import JsonRenderer from "~/app/_components/json-renderer";
 import { EnumPill } from "~/components/ui/enum-pill";
 import { NoneValue } from "~/components/ui/none-value";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
 import { parsePlainDate } from "~/lib/plain-date";
 
 export type ScalarDisplayValue =
@@ -80,6 +86,64 @@ function ListTextValue({ label }: { label: string }) {
   );
 }
 
+const structuredJson = z.json();
+type StructuredJson = z.infer<typeof structuredJson>;
+
+function structuredSummary(value: StructuredJson): string | null {
+  if (Array.isArray(value))
+    return value.length > 0
+      ? `${value.length} ${value.length === 1 ? "item" : "items"}`
+      : null;
+  const object = z.record(z.string(), structuredJson).safeParse(value);
+  if (object.success) {
+    const count = Object.keys(object.data).length;
+    return count > 0 ? `${count} ${count === 1 ? "field" : "fields"}` : null;
+  }
+  return value == null ? null : String(value);
+}
+
+function StructuredValue({
+  value,
+  surface,
+}: {
+  value: Extract<ScalarDisplayValue, { kind: "json" }>;
+  surface: "list" | "detail" | "plain";
+}) {
+  const parsed = structuredJson.safeParse(value.raw);
+  const summary = parsed.success
+    ? structuredSummary(parsed.data)
+    : "Structured value";
+  if (summary === null) return <NoneValue />;
+  if (surface === "detail")
+    return (
+      <details className="max-w-full min-w-0">
+        <summary className="cursor-pointer text-primary">{summary}</summary>
+        <div className="mt-2 max-h-80 max-w-full overflow-auto text-xs">
+          <JsonRenderer input={value.raw} />
+        </div>
+      </details>
+    );
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            aria-label={`Show ${summary} details`}
+            className="block max-w-full truncate text-left text-primary hover:underline"
+            onClick={(event) => event.stopPropagation()}
+          />
+        }
+      >
+        {summary}
+      </PopoverTrigger>
+      <PopoverContent className="max-h-80 w-[min(32rem,80vw)] overflow-auto">
+        <JsonRenderer input={value.raw} />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function renderScalarValue(
   value: ScalarDisplayValue,
   surface: "list" | "detail" | "plain" = "plain",
@@ -98,7 +162,7 @@ export function renderScalarValue(
     case "list":
       return value.raw.length ? value.raw.join(", ") : <NoneValue />;
     case "json":
-      return <JsonRenderer input={value.raw} />;
+      return <StructuredValue value={value} surface={surface} />;
     case "enum":
       if (surface === "plain") return value.label;
       return (
