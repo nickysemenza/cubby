@@ -29,19 +29,13 @@ import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { StatusText } from "~/components/ui/status-text";
+import type {
+  ImportRunDetail,
+  ImportRunLogEntry,
+} from "~/contracts/run.contract";
 import { run as runOperations } from "~/entities/run.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { readJsonOrThrow } from "~/lib/http-error";
-import {
-  importRunLogResponse,
-  type ImportRunLogEntry,
-} from "~/lib/purchase-import-debug";
-import {
-  importRunControlResponse,
-  importRunDetailResponse,
-  type ImportRunDetail,
-} from "~/lib/purchase-import-run-detail";
 import { formatCurrency } from "~/lib/utils";
 
 import {
@@ -78,17 +72,8 @@ const statusBadgeVariant = (status: string): BadgeVariant => {
 const formatMoment = (value: string | null): string =>
   value ? new Date(value).toLocaleString() : "Still active";
 
-const getRun = async (publicId: string): Promise<ImportRunDetail> => {
-  const response = await fetch(
-    `/api/import/runs/${encodeURIComponent(publicId)}`,
-  );
-  const data = await readJsonOrThrow(
-    response,
-    importRunDetailResponse,
-    "Import run could not load.",
-  );
-  return data.run;
-};
+const getRun = (publicId: string): Promise<ImportRunDetail> =>
+  runOperations.work.call({ runId: publicId });
 
 const EMPTY_AGENT_SNAPSHOT: AgentConversationObservationSnapshot = {
   conversation: undefined,
@@ -115,20 +100,10 @@ function RunControl({ run }: { run: ImportRunDetail }) {
   const queryClient = useQueryClient();
   const update = useMutation({
     mutationFn: async (action: "pause" | "resume" | "cancel") => {
-      const response = await fetch(
-        `/api/import/runs/${encodeURIComponent(run.publicId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
-        },
-      );
-      const data = await readJsonOrThrow(
-        response,
-        importRunControlResponse,
-        "Run could not be updated.",
-        { method: "PATCH" },
-      );
+      const data = await runOperations.control.call({
+        runId: run.publicId,
+        action,
+      });
       return data.run;
     },
     onSuccess: () => {
@@ -189,20 +164,7 @@ function TerminalRunControls({ run }: { run: ImportRunDetail }) {
   const queryClient = useQueryClient();
   const retry = useMutation({
     mutationFn: async (action: "retry" | "restart") => {
-      const response = await fetch(
-        `/api/import/runs/${encodeURIComponent(run.publicId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
-        },
-      );
-      return readJsonOrThrow(
-        response,
-        importRunControlResponse,
-        "A successor run could not be created.",
-        { method: "PATCH" },
-      );
+      return runOperations.control.call({ runId: run.publicId, action });
     },
     onSuccess: (result) => {
       if (result.successor) {
@@ -263,20 +225,10 @@ function DispatchRecoveryControls({ run }: { run: ImportRunDetail }) {
   const dispatch = run.dispatch;
   const action = useMutation({
     mutationFn: async (next: "retry_dispatch" | "abort") => {
-      const response = await fetch(
-        `/api/import/runs/${encodeURIComponent(run.publicId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: next }),
-        },
-      );
-      const data = await readJsonOrThrow(
-        response,
-        importRunControlResponse,
-        "Run could not be updated.",
-        { method: "PATCH" },
-      );
+      const data = await runOperations.control.call({
+        runId: run.publicId,
+        action: next,
+      });
       return data.run;
     },
     onSuccess: () => {
@@ -326,20 +278,7 @@ function DispatchRecoveryControls({ run }: { run: ImportRunDetail }) {
 function EvidenceRecoveryControls({ run }: { run: ImportRunDetail }) {
   const action = useMutation({
     mutationFn: async (next: "upload_evidence" | "no_evidence_available") => {
-      const response = await fetch(
-        `/api/import/runs/${encodeURIComponent(run.publicId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: next }),
-        },
-      );
-      return readJsonOrThrow(
-        response,
-        importRunControlResponse,
-        "Evidence retry could not start.",
-        { method: "PATCH" },
-      );
+      return runOperations.control.call({ runId: run.publicId, action: next });
     },
     onSuccess: ({ successor }) => {
       if (successor) window.location.assign(importRunHref(successor.publicId));
@@ -421,17 +360,10 @@ function ManualEvidenceUpload({ run }: { run: ImportRunDetail }) {
         body: bytes,
       });
       if (!stored.ok) throw new Error("Evidence bytes could not be stored.");
-      const dispatched = await fetch(
-        `/api/import/runs/${encodeURIComponent(run.publicId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "retry_dispatch" }),
-        },
-      );
-      if (!dispatched.ok)
-        throw new Error("Evidence was stored, but dispatch failed.");
-      return importRunControlResponse.parse(await dispatched.json());
+      return runOperations.control.call({
+        runId: run.publicId,
+        action: "retry_dispatch",
+      });
     },
     onSuccess: () => window.location.reload(),
   });
@@ -1366,20 +1298,12 @@ function PendingApprovalActions({
   const queryClient = useQueryClient();
   const decision = useMutation({
     mutationFn: async (action: "approve" | "reject") => {
-      const response = await fetch(
-        `/api/import/runs/${encodeURIComponent(publicId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action, operationId, approvalId }),
-        },
-      );
-      const data = await readJsonOrThrow(
-        response,
-        importRunControlResponse,
-        "Approval could not be recorded.",
-        { method: "PATCH" },
-      );
+      const data = await runOperations.control.call({
+        runId: publicId,
+        action,
+        operationId,
+        approvalId,
+      });
       return data.run;
     },
     onSuccess: () => {
@@ -1423,19 +1347,7 @@ function RunDebugLog({
 }) {
   const log = useQuery({
     queryKey: ["purchase-import", "run-log", publicId],
-    queryFn: async () => {
-      const response = await fetch("/api/import/run-logs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ publicId }),
-      });
-      return readJsonOrThrow(
-        response,
-        importRunLogResponse,
-        "The run log could not load.",
-        { method: "POST" },
-      );
-    },
+    queryFn: () => runOperations.logs.call({ runId: publicId }),
     refetchInterval: active ? 3_000 : false,
   });
   return (

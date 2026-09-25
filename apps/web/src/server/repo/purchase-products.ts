@@ -409,7 +409,7 @@ const PURCHASE_PRODUCT_EDGE = {
   label: "purchase product links",
 } as const;
 
-export async function previewAttachPurchaseProducts(
+async function previewAttachPurchaseProducts(
   db: Database,
   purchaseId: PurchaseId,
   productIds: readonly ProductId[],
@@ -425,7 +425,7 @@ export async function previewAttachPurchaseProducts(
   });
 }
 
-export async function previewDetachPurchaseProducts(
+async function previewDetachPurchaseProducts(
   db: Database,
   purchaseId: PurchaseId,
   productIds: readonly ProductId[],

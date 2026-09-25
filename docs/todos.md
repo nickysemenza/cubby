@@ -93,10 +93,10 @@ history is the archive. Permanent product constraints live in the
   a blocking disposition on one loser that leaves confirm enabled.
 
 - **Cover the photo-group review's untested guards.** Add regression tests for
-  the photo-groups route's household-member check (404 for a non-member), the
+  the photo review operations' household-member check (404 for a non-member), the
   `state='proposed'` guard on the approval `lastError` write, and the
   frozen-group toast after a save into a just-committed group
-  (`apps/web/src/routes/api/import/runs.$publicId.photo-groups.ts`,
+  (`apps/web/src/server/photo-import.server.ts`,
   `apps/web/src/app/import-runs/photo-group-review.tsx`).
 
 - **Sweep exact-count test pins.** Assertions that pin a registry total

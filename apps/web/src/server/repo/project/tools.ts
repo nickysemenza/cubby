@@ -761,7 +761,7 @@ const PROJECT_RESOURCE_EDGE = {
   label: "project resource uses",
 } as const;
 
-export async function previewAttachProjectResources(
+async function previewAttachProjectResources(
   db: Database,
   projectId: ProjectId,
   productIds: readonly ProductId[],
@@ -815,7 +815,7 @@ function withoutTargets(
   };
 }
 
-export async function previewDetachProjectResources(
+async function previewDetachProjectResources(
   db: Database,
   projectId: ProjectId,
   productIds: readonly ProductId[],

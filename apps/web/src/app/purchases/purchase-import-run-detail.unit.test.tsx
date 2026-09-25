@@ -1,3 +1,4 @@
+import { importRunShortcode } from "@cubby/schemas/identifiers";
 import type { ImportRunOut } from "@cubby/schemas/import-run";
 import {
   fireEvent,
@@ -9,19 +10,19 @@ import {
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  importRunDetailResponse,
-  type ImportRunDetail,
-} from "~/lib/purchase-import-run-detail";
+import type { ImportRunDetail } from "~/contracts/run.contract";
+import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { RunImportWorkflow, RunPhotoBatch } from "./purchase-import-run-detail";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 let detailRun: ImportRunDetail;
+let restoreDispatch: () => void;
+const operationCalls: Array<{ operation: string; input: unknown }> = [];
 
-const run = {
-  publicId: "RUN-4K7M",
+const run: ImportRunDetail = {
+  publicId: importRunShortcode.parse("RUN-4K7M"),
   status: "completed",
   purpose: "purchase_validation",
   trigger: "manual",
@@ -32,7 +33,9 @@ const run = {
   updated: 1,
   skipped: 1,
   failureCode: null,
+  notes: null,
   predecessorRunPublicId: null,
+  successorRunPublicId: null,
   coordinatorModel: "test-model",
   skillRevision: "purchase-import@test",
   runtimeRevision: "flue@test",
@@ -106,60 +109,52 @@ const run = {
 
 beforeEach(() => {
   harness = createBrowserTestHarness();
-  detailRun = importRunDetailResponse.parse({ run }).run;
+  detailRun = run;
+  operationCalls.length = 0;
+  restoreDispatch = overrideStartDispatch(async (operation, input) => {
+    operationCalls.push({ operation, input });
+    if (operation === "run.work") return { ok: true, data: detailRun };
+    if (operation === "run.logs")
+      return { ok: true, data: { entries: [], truncated: false } };
+    if (operation === "run.control")
+      return { ok: true, data: { run: detailRun, successor: null } };
+    if (operation === "photoImport.review")
+      return {
+        ok: true,
+        data: {
+          review: {
+            runId: run.publicId,
+            runStatus: "completed",
+            proposals: [],
+            unassignedImageIds: [],
+          },
+          images: [],
+        },
+      };
+    throw new Error(`Unexpected operation: ${operation}`);
+  });
+  // The agent conversation stream stays a plain route.
   vi.stubGlobal(
     "fetch",
-    vi.fn().mockImplementation((input: string | URL | Request) => {
-      const url = input instanceof Request ? input.url : String(input);
-      if (url.includes("/photo-groups")) {
-        return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              review: {
-                runId: run.publicId,
-                runStatus: "completed",
-                proposals: [],
-                unassignedImageIds: [],
-              },
-              images: [],
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          ),
-        );
-      }
-      if (url.includes("/agent")) {
-        return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              v: 1,
-              conversationId: "agent-1",
-              offset: "0",
-              messages: [],
-              settlements: [],
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          ),
-        );
-      }
-      if (url.includes("/run-logs")) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ entries: [], truncated: false }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
+    vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            v: 1,
+            conversationId: "agent-1",
+            offset: "0",
+            messages: [],
+            settlements: [],
           }),
-        );
-      }
-      return Promise.resolve(
-        new Response(JSON.stringify({ run: detailRun }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-      );
-    }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    ),
   );
 });
 
 afterEach(() => {
+  restoreDispatch();
   harness.dispose();
   vi.unstubAllGlobals();
 });
@@ -172,9 +167,7 @@ const record = fromPartial<ImportRunOut>({
 
 describe("RunImportWorkflow", () => {
   it("gives a paused retailer run one clear sign-in handoff and resume action", async () => {
-    detailRun = importRunDetailResponse.parse({
-      run: { ...run, status: "paused_auth", endedAt: null },
-    }).run;
+    detailRun = { ...run, status: "paused_auth", endedAt: null };
     render(
       <RunImportWorkflow
         record={fromPartial<ImportRunOut>({ ...record, status: "paused_auth" })}
@@ -190,13 +183,10 @@ describe("RunImportWorkflow", () => {
       screen.getByRole("button", { name: "I've signed in — resume run" }),
     );
     await waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith(
-        "/api/import/runs/RUN-4K7M",
-        expect.objectContaining({
-          method: "PATCH",
-          body: JSON.stringify({ action: "resume" }),
-        }),
-      ),
+      expect(operationCalls).toContainEqual({
+        operation: "run.control",
+        input: { runId: "RUN-4K7M", action: "resume" },
+      }),
     );
   });
 
@@ -209,13 +199,11 @@ describe("RunImportWorkflow", () => {
       detail: "Checking both label photos.",
       createdAt: "2026-09-20T16:02:00.000Z",
     };
-    detailRun = importRunDetailResponse.parse({
-      run: {
-        ...run,
-        progress: [update],
-        latestProgress: { ...update, detail: "Review IMG-4S9Q." },
-      },
-    }).run;
+    detailRun = {
+      ...run,
+      progress: [update],
+      latestProgress: { ...update, detail: "Review IMG-4S9Q." },
+    };
     render(<RunImportWorkflow record={record} />, {
       wrapper: harness.wrapper,
     });
@@ -264,37 +252,21 @@ describe("RunImportWorkflow", () => {
 });
 
 it("shows durable progress and diagnostics alongside photo group review", async () => {
-  const defaultFetch = fetch;
-  vi.stubGlobal(
-    "fetch",
-    vi.fn((input: string | URL | Request, init?: RequestInit) => {
-      const url = input instanceof Request ? input.url : String(input);
-      if (url.endsWith(`/api/import/runs/${run.publicId}`))
-        return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              run: {
-                ...run,
-                purpose: "photo_inventory",
-                targets: [],
-                operations: [
-                  {
-                    operationId: "group-1",
-                    kind: "commit_photo_group",
-                    state: "completed",
-                    startedAt: "2026-09-20T16:01:00.000Z",
-                    completedAt: "2026-09-20T16:01:02.000Z",
-                    error: null,
-                  },
-                ],
-              },
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          ),
-        );
-      return defaultFetch(input, init);
-    }),
-  );
+  detailRun = {
+    ...run,
+    purpose: "photo_inventory",
+    targets: [],
+    operations: [
+      {
+        operationId: "group-1",
+        kind: "commit_photo_group",
+        state: "completed",
+        startedAt: "2026-09-20T16:01:00.000Z",
+        completedAt: "2026-09-20T16:01:02.000Z",
+        error: null,
+      },
+    ],
+  };
   const photoRecord = fromPartial<ImportRunOut>({
     id: run.publicId,
     status: "completed",
@@ -327,30 +299,14 @@ it("shows durable progress and diagnostics alongside photo group review", async 
 });
 
 it("shows the remaining photo milestones while a run is active", async () => {
-  const defaultFetch = fetch;
-  vi.stubGlobal(
-    "fetch",
-    vi.fn((input: string | URL | Request, init?: RequestInit) => {
-      const url = input instanceof Request ? input.url : String(input);
-      if (url.endsWith(`/api/import/runs/${run.publicId}`))
-        return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              run: {
-                ...run,
-                purpose: "photo_inventory",
-                status: "running",
-                endedAt: null,
-                targets: [],
-                operations: [],
-              },
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          ),
-        );
-      return defaultFetch(input, init);
-    }),
-  );
+  detailRun = {
+    ...run,
+    purpose: "photo_inventory",
+    status: "running",
+    endedAt: null,
+    targets: [],
+    operations: [],
+  };
   render(
     <RunPhotoBatch
       record={fromPartial<ImportRunOut>({

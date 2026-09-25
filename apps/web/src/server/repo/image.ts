@@ -2865,7 +2865,7 @@ const countAttachmentPreconditionImages = async (
  * dispatching to its join table. Mirrors {@link associateImagesWithProduct} for
  * the others; `.exhaustive()` forces this to grow if `attachableImageEntity`
  * does. Takes a client-or-tx so it can run inside the insert transaction (see
- * {@link createAndAssociateUploadedImage}).
+ * {@link createOrReuseAttachedImage}).
  */
 const associateImageWithEntity = async (
   dbc: DrizzleClient | DrizzleTransaction,
@@ -2926,48 +2926,6 @@ const associateImageWithEntity = async (
       associatePendingImages(dbc, imageJoinBindings.task, id, [imageId]),
     )
     .exhaustive();
-};
-
-/**
- * Insert an UPLOADED image row and associate it with its target entity in a
- * single transaction, so a failure in either step rolls back the DB write. The
- * caller owns removing the R2 object on failure (see attachFileToEntity) — a
- * stranded UPLOADED row would otherwise never be reaped (cull only touches
- * PENDING rows).
- */
-export const createAndAssociateUploadedImage = async (
-  db: Database,
-  params: {
-    key: string;
-    filename: string;
-    contentType: string;
-    size: number;
-    width?: number | null;
-    height?: number | null;
-    detectedContentType?: string | null;
-    sha256?: string | null;
-    renderStatus?: "unverified" | "verified" | "failed" | null;
-    storageStatus?:
-      | "unverified"
-      | "available"
-      | "missing"
-      | "metadata_mismatch"
-      | null;
-    verifiedAt?: Date | null;
-    targetType?: string | null;
-    targetId?: string | null;
-    idempotencyKey?: string | null;
-    source?: "own" | "catalog" | "unknown" | "screenshot";
-    sourcePageUrl?: string | null;
-    sourceAssetUrl?: string | null;
-    sourceName?: string | null;
-    provenanceEvidence?: { basis: "import-url" } | null;
-  },
-  entity: AttachableImageRef,
-  documentKind?: PurchaseDocumentKind,
-): Promise<typeof image.$inferSelect> => {
-  return (await createOrReuseAttachedImage(db, params, entity, documentKind))
-    .row;
 };
 
 /**

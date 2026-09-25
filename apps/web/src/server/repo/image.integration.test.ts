@@ -33,7 +33,7 @@ import {
   withTransaction,
 } from "./database-helpers";
 import {
-  createAndAssociateUploadedImage,
+  createOrReuseAttachedImage,
   createPendingImageRecord,
   createUploadedImageRecord,
   countCullablePendingImages,
@@ -707,16 +707,18 @@ describe("image repository — purchase (charge) documents", () => {
 
   describe("detachImagesFromEntity", () => {
     const attachToProject = async (projectId: ProjectId, filename: string) =>
-      await createAndAssociateUploadedImage(
-        ctx.db,
-        {
-          key: `test/${crypto.randomUUID()}-${filename}`,
-          filename,
-          contentType: "image/jpeg",
-          size: 1024,
-        },
-        { entity: "project", id: projectId },
-      );
+      (
+        await createOrReuseAttachedImage(
+          ctx.db,
+          {
+            key: `test/${crypto.randomUUID()}-${filename}`,
+            filename,
+            contentType: "image/jpeg",
+            size: 1024,
+          },
+          { entity: "project", id: projectId },
+        )
+      ).row;
 
     const makeProject = async (name: string) =>
       (
@@ -839,16 +841,18 @@ describe("image repository — purchase (charge) documents", () => {
         contentType: "image/jpeg",
         size: 1024,
       });
-      const attached = await createAndAssociateUploadedImage(
-        ctx.db,
-        {
-          key: `test/${crypto.randomUUID()}.jpg`,
-          filename: "attached.jpg",
-          contentType: "image/jpeg",
-          size: 1024,
-        },
-        { entity: "project", id: projectId },
-      );
+      const attached = (
+        await createOrReuseAttachedImage(
+          ctx.db,
+          {
+            key: `test/${crypto.randomUUID()}.jpg`,
+            filename: "attached.jpg",
+            contentType: "image/jpeg",
+            size: 1024,
+          },
+          { entity: "project", id: projectId },
+        )
+      ).row;
       const pending = await makePendingImage();
       const coverOnly = await createUploadedImageRecord(ctx.db, {
         key: `test/${crypto.randomUUID()}.jpg`,

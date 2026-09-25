@@ -38,10 +38,6 @@ const STATIC_TRACE_ROUTES = new Set([
   "/api/import/agent/socket",
   "/api/companion/image-processing/socket",
   "/api/import/agent/sync",
-  "/api/import/merchant-rules",
-  "/api/import/run-logs",
-  "/api/import/runs",
-  "/api/import/targeted",
   "/api/mcp",
   "/api/products/merge-preview",
   "/api/settings/member-logins",
@@ -107,20 +103,8 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
     template: "/runs/:shortcode",
   },
   {
-    pattern: /^\/api\/import\/runs\/[^/]+$/u,
-    template: "/api/import/runs/:publicId",
-  },
-  {
     pattern: /^\/api\/import\/runs\/[^/]+\/agent$/u,
     template: "/api/import/runs/:publicId/agent",
-  },
-  {
-    pattern: /^\/api\/import\/runs\/[^/]+\/photo-groups$/u,
-    template: "/api/import/runs/:publicId/photo-groups",
-  },
-  {
-    pattern: /^\/api\/import\/runs\/[^/]+\/photo-groups\/candidates$/u,
-    template: "/api/import/runs/:publicId/photo-groups/candidates",
   },
   {
     pattern: /^\/api\/import\/runs\/[^/]+\/photo-agent$/u,

@@ -33,10 +33,9 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     page.getByRole("button", { name: "Start grouping" }),
   ).toBeVisible();
   if (recording) await page.waitForTimeout(1_500);
-  const proposed = await page.request.post(
-    `/api/import/runs/${seed.runId}/photo-groups`,
-    { data: { action: "save", groups: seed.groups } },
-  );
+  const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
+    data: { runId: seed.runId, groups: seed.groups },
+  });
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
 
   // Both proposed groups render, and every seeded photo is assigned to one.
@@ -89,7 +88,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect
     .poll(async () => {
       const response = await page.request.get(
-        `/api/import/runs/${seed.runId}/photo-groups`,
+        `/api/v1/photoImport/review?runId=${seed.runId}`,
       );
       const body = await response.json();
       return body.review.proposals.find(
@@ -147,9 +146,11 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect(page).not.toHaveURL(new RegExp(`/runs/${seed.runId}$`));
   const restartedId = new URL(page.url()).pathname.split("/").at(-1);
   expect(restartedId).toBeTruthy();
-  const restarted = await page.request.get(`/api/import/runs/${restartedId}`);
+  const restarted = await page.request.get(
+    `/api/v1/run/work?runId=${restartedId}`,
+  );
   expect(restarted.ok(), await restarted.text()).toBeTruthy();
-  const restartedRun = (await restarted.json()).run;
+  const restartedRun = await restarted.json();
   expect(restartedRun.predecessorRunPublicId).toBe(seed.runId);
   expect(restartedRun.targets).toHaveLength(3);
   expect(
@@ -177,12 +178,9 @@ test("suggests an existing variant and previews every merge decision for a creat
     `/runs/${seed.runId}`,
     page.getByRole("heading", { name: "Proposed items" }),
   );
-  const proposed = await page.request.post(
-    `/api/import/runs/${seed.runId}/photo-groups`,
-    {
-      data: { action: "save", groups: seed.groups },
-    },
-  );
+  const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
+    data: { runId: seed.runId, groups: seed.groups },
+  });
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
 
   const group = page.locator('[data-slot="card"]').filter({
@@ -198,7 +196,7 @@ test("suggests an existing variant and previews every merge decision for a creat
     page.getByRole("link", { name: "Gray crew t-shirt — M" }),
   ).toBeVisible();
   const review = await page.request.get(
-    `/api/import/runs/${seed.runId}/photo-groups`,
+    `/api/v1/photoImport/review?runId=${seed.runId}`,
   );
   const body = await review.json();
   const createdId = body.review.proposals.find(

@@ -28,7 +28,6 @@ import {
   createLedgerParty,
   deleteLedgerParties,
   mergeLedgerParties,
-  previewMergeLedgerParties,
   updateLedgerParty,
 } from "~/server/repo/ledger-party";
 import {
@@ -444,31 +443,12 @@ describe("consolidated household ledger", () => {
       ctx.actor,
     );
 
-    const preview = await previewMergeLedgerParties(ctx.db, {
-      keepId: keep.entityId,
-      mergeIds: [lose.entityId],
-    });
-    expect(preview.blockers).toEqual([]);
-    expect(preview.changes).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: "merge-attributions", total: 4 }),
-        expect.objectContaining({
-          code: "repoint-outgoing-transfers",
-          total: 1,
-        }),
-      ]),
-    );
     await expect(
-      previewMergeLedgerParties(ctx.db, {
-        keepId: keep.entityId,
-        mergeIds: [lose.entityId, lose.entityId],
-      }),
-    ).resolves.toMatchObject({ blockers: [] });
-    await expect(
-      previewMergeLedgerParties(ctx.db, {
-        keepId: keep.entityId,
-        mergeIds: [keep.entityId],
-      }),
+      mergeLedgerParties(
+        ctx.db,
+        { keepId: keep.output.id, mergeIds: [keep.output.id] },
+        ctx.actor,
+      ),
     ).rejects.toThrow("into itself");
     const mergeResult = await mergeLedgerParties(
       ctx.db,

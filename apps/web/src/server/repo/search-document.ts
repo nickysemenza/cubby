@@ -13,7 +13,6 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { preferredImageDescriptionPolicy } from "~/server/image-processing/description-policy";
 import { unwrapDb, uuidArrayParam } from "~/server/repo/database-helpers";
 import {
-  getEmbeddingTextsForEntityTypes,
   getEmbeddingTextsForRefs,
   type SearchableEntityText,
 } from "~/server/repo/entity-embedding";
@@ -45,12 +44,6 @@ export interface SearchDocumentRefreshResult {
   status: "upserted" | "softDeleted" | "missing";
   entityType: SearchableEntity;
   entityId: string;
-}
-
-export interface SearchDocumentDiagnostics {
-  missing: Array<{ entityType: SearchableEntity; entityId: string }>;
-  orphaned: Array<{ entityType: SearchableEntity; entityId: string }>;
-  stale: Array<{ entityType: SearchableEntity; entityId: string }>;
 }
 
 /**
@@ -923,96 +916,3 @@ export type SearchDocumentCursor = {
   entityType: SearchableEntity;
   entityId: string;
 };
-
-/**
- * Missing, orphaned, and stale rows for cutover/repair checks.
- *
- * Staleness is the whole written row against the whole live one, via
- * `sourceHash` — not the semantic body against itself. Nothing in this
- * codebase re-projects `SearchDocument` when a projection or an enum changes:
- * documents are refreshed per entity by `runMutationSideEffects`, and the two
- * paths that skip it — a raw-SQL backfill script, a `db:push` that reinterprets
- * a column — are exactly the ones that change a projection wholesale. This
- * check plus `repairSearchDocuments` is that missing trigger, so it has to see
- * every projected column rather than the subset the embedding text echoes.
- */
-export async function getSearchDocumentDiagnostics(
-  db: Database | DrizzleTransaction,
-  entityTypes: SearchableEntity[] = [...searchableEntities],
-): Promise<SearchDocumentDiagnostics> {
-  // Texts enumerate what SHOULD exist (the canonical loaders, as the backfill
-  // uses); sources carry the projected columns the write path hashes.
-  const [texts, sources, documentResult] = await Promise.all([
-    getEmbeddingTextsForEntityTypes(db, entityTypes),
-    getSearchDocumentSources(db, entityTypes),
-    unwrapDb(db).execute<{
-      entityType: SearchableEntity;
-      entityId: string;
-      sourceHash: string;
-    }>(sql`
-      SELECT "entityType", "entityId"::text AS "entityId", "sourceHash"
-      FROM "SearchDocument"
-      WHERE "deletedAt" IS NULL
-        AND "entityType" IN (${sql.join(
-          entityTypes.map((entityType) => sql`${entityType}`),
-          sql`, `,
-        )})
-    `),
-  ]);
-  const imageTexts = await loadDirectImageSearchText(
-    db,
-    texts.map((text) => ({
-      entityType: text.entityType,
-      entityId: text.entityId,
-    })),
-  );
-  const textByRef = new Map(
-    texts.map((text) => [entityRefKey(text.entityType, text.entityId), text]),
-  );
-  const sourceByRef = new Map(
-    sources.map((source) => [
-      entityRefKey(source.entityType, source.entityId),
-      source,
-    ]),
-  );
-  const documentByRef = new Map(
-    documentResult.rows.map((document) => [
-      entityRefKey(document.entityType, document.entityId),
-      document,
-    ]),
-  );
-  const missing = texts
-    .filter(
-      (text) =>
-        !documentByRef.has(entityRefKey(text.entityType, text.entityId)),
-    )
-    .map(({ entityType, entityId }) => ({ entityType, entityId }));
-  const orphaned = documentResult.rows
-    .filter(
-      (document) =>
-        !textByRef.has(entityRefKey(document.entityType, document.entityId)),
-    )
-    .map(({ entityType, entityId }) => ({ entityType, entityId }));
-
-  const stale: Array<{ entityType: SearchableEntity; entityId: string }> = [];
-  for (const document of documentResult.rows) {
-    const key = entityRefKey(document.entityType, document.entityId);
-    const source = sourceByRef.get(key);
-    const text = textByRef.get(key);
-    // No live source is orphaned, not stale — reported above, retired by repair.
-    if (!source || !text) continue;
-    const expected = await searchDocumentSourceHash(
-      source,
-      [text.embeddingText, imageTexts.get(key)]
-        .filter((value): value is string => Boolean(value))
-        .join("\n"),
-    );
-    if (expected !== document.sourceHash) {
-      stale.push({
-        entityType: document.entityType,
-        entityId: document.entityId,
-      });
-    }
-  }
-  return { missing, orphaned, stale };
-}

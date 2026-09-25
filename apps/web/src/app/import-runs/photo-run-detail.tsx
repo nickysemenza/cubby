@@ -8,10 +8,10 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Progress } from "~/components/ui/progress";
 import { StatusText } from "~/components/ui/status-text";
+import type { ImportRunDetail } from "~/contracts/run.contract";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { throwHttpError } from "~/lib/http-error";
-import type { ImportRunDetail } from "~/lib/purchase-import-run-detail";
 
 import { PhotoGroupReview, usePhotoRunReview } from "./photo-group-review";
 

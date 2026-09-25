@@ -1,3 +1,4 @@
+import { photoImportContract } from "~/contracts/photo-import.contract";
 import { runContract } from "~/contracts/run.contract";
 import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
@@ -7,6 +8,9 @@ export const run = defineOperationDomain(runContract, {
   detail: { tags: [["run"]] },
   aiUsage: { tags: [["ai", "usage"]] },
 });
+
+/** @lintignore Discovered by the operation registry generator. */
+export const photoImport = defineOperationDomain(photoImportContract);
 
 /** The detail query the generated `runs.$shortcode` route reads and prefetches. */
 export const runDetailQuery = (shortcode: string) =>

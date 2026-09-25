@@ -16,13 +16,21 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { StatusText } from "~/components/ui/status-text";
-import {
-  loadTargetedImportLaunch,
-  startTargetedImport,
-  type TargetedImportPurpose,
-  type TargetedProductCandidate,
-  type TargetedImportSource,
-} from "~/lib/targeted-import-api";
+import type {
+  TargetedImportPurpose,
+  TargetedImportSource,
+  TargetedImportStartInput,
+  TargetedProductCandidate,
+} from "~/contracts/run.contract";
+import { run as runOperations } from "~/entities/run.functions";
+
+const loadTargetedImportLaunch = (
+  purpose: TargetedImportPurpose,
+  targetId: string,
+) => runOperations.targetedLaunch.call({ purpose, targetId });
+
+const startTargetedImport = (input: TargetedImportStartInput) =>
+  runOperations.startTargeted.call(input);
 
 export function TargetedImportLaunchButton({
   targetId,

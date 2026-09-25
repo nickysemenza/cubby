@@ -105,7 +105,7 @@ export class PhotoRunNotFoundError extends Error {
 
 /**
  * The browser surface's household-member gate, matching
- * `loadImportRunByShortcode`: the actor must have a live `member` LedgerParty.
+ * the run operations: the actor must have a live `member` LedgerParty.
  */
 export async function assertPhotoRunReviewer(
   db: Database,

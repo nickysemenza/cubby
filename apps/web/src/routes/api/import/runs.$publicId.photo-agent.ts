@@ -1,8 +1,8 @@
+import { importRunShortcode } from "@cubby/schemas/identifiers";
 import { getErrorMessage } from "@cubby/shared";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
-import { importRunShortcode } from "~/lib/purchase-import-run-detail";
 import { startPhotoGroupingForActor } from "~/server/photo-import-run/grouping";
 import { PhotoRunNotFoundError } from "~/server/photo-import-run/proposals";
 import { createRequestContext, requireActor } from "~/server/request-context";

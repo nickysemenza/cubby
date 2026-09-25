@@ -17,7 +17,6 @@ export { idParam, strictFilterInput } from "./tool-input";
 export { stripMockFromJsonSchema } from "./tool-json-schema";
 export {
   getRequestContext,
-  type McpRequestContext,
   READ_ONLY_CLOSED,
   READ_ONLY_OPEN,
   registerMcpTool,

@@ -1,8 +1,6 @@
 import { activityExecutor } from "@cubby/schemas/activity";
 import { z } from "zod";
 
-import { importRunShortcode } from "~/lib/purchase-import-run-detail";
-
 const purchaseImportDebugEventName = z.enum([
   "connect.requested",
   "replay.loaded",
@@ -63,37 +61,17 @@ export const purchaseImportDebugEventsRequest = z.object({
   events: z.array(purchaseImportDebugEvent).min(1).max(100),
 });
 
-const importRunLogEntry = z.object({
-  id: z.string(),
-  occurredAt: z.iso.datetime(),
-  source: z.enum(["run", "server", "mac"]),
-  level: z.enum(["debug", "info", "error"]),
-  event: z.string(),
-  state: z.string().nullable(),
-  commandId: z.uuid().nullable(),
-  operationId: z.string().nullable(),
-  operationKind: z.string().nullable(),
-  host: z.string().nullable(),
-  browser: z.string().nullable(),
-  attempt: z.number().int().nullable(),
-  count: z.number().int().nullable(),
-  outcome: z.string().nullable(),
-  messageType: z.string().nullable(),
-  errorType: z.string().nullable(),
-  errorCode: z.number().int().nullable(),
-  error: z.string().nullable(),
-});
-
-export const importRunLogResponse = z.object({
-  entries: z.array(importRunLogEntry),
-  truncated: z.boolean(),
-});
-
-export const importRunLogRequest = z.union([
-  z.object({ publicId: importRunShortcode }),
-  // Legacy Settings entries predate public PIR addresses. New detail routes
-  // use the public-id branch; this preserves older local history links.
-  z.object({ runId: z.uuid() }),
+export const purchaseAgentConnectionStatus = z.enum([
+  "authorized",
+  "denied",
+  "failed",
+  "dispatch_failed",
 ]);
+export type PurchaseAgentConnectionStatus = z.infer<
+  typeof purchaseAgentConnectionStatus
+>;
 
-export type ImportRunLogEntry = z.infer<typeof importRunLogEntry>;
+export const purchaseImportAgentOAuthStatus = z.object({
+  authorized: z.boolean(),
+  expiresAt: z.iso.datetime().nullable(),
+});

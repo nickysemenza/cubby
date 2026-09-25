@@ -198,7 +198,6 @@ const plantCrud = createEntityCrud({
   auditUpdateFields: [...entityFieldModels.plant.audit],
 });
 
-export const getPlantByID = plantCrud.getByID;
 export const getPlantByShortcode = plantCrud.getByShortcode;
 
 const resolveIngredient = async (

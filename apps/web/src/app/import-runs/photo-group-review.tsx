@@ -4,15 +4,12 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { productCategoryShortcode } from "@cubby/schemas/identifiers";
 import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
-import {
-  photoRunReviewResponse,
-  photoProductCandidatesResponse,
-  reviewPhotoGroupsOutput,
-  type PhotoGroupProposal,
-  type PhotoGroupProposalGroup,
-  type PhotoRunImage,
-  type PhotoRunReview,
-  type ReviewPhotoGroupsAction,
+import type {
+  PhotoGroupProposal,
+  PhotoGroupProposalGroup,
+  PhotoRunImage,
+  PhotoRunReview,
+  ReviewPhotoGroupsAction,
 } from "@cubby/schemas/photo-import-run";
 import { ArrowsMergeIcon } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
@@ -64,7 +61,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { readJsonOrThrow } from "~/lib/http-error";
+import { photoImport } from "~/entities/run.functions";
 import {
   IMPORT_RUN_TARGET_STATE_LABEL,
   IMPORT_RUN_TARGET_STATE_VARIANT,
@@ -88,32 +85,15 @@ const LIVE_RUN_STATUSES = new Set([
 const reviewQueryKey = (runId: string) =>
   ["purchase-import", "run", runId, "photo-review"] as const;
 
-async function fetchReview(runId: string): Promise<PhotoRunReview> {
-  const response = await fetch(
-    `/api/import/runs/${encodeURIComponent(runId)}/photo-groups`,
-  );
-  return readJsonOrThrow(
-    response,
-    photoRunReviewResponse,
-    "Photo groups could not load.",
-  );
-}
+const fetchReview = (runId: string): Promise<PhotoRunReview> =>
+  photoImport.review.call({ runId });
 
-async function postReview(runId: string, action: ReviewPhotoGroupsAction) {
-  const response = await fetch(
-    `/api/import/runs/${encodeURIComponent(runId)}/photo-groups`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(action),
-    },
-  );
-  return readJsonOrThrow(
-    response,
-    reviewPhotoGroupsOutput,
-    "Photo groups could not be updated.",
-    { method: "POST" },
-  );
+function postReview(runId: string, action: ReviewPhotoGroupsAction) {
+  if (action.action === "save")
+    return photoImport.saveGroups.call({ ...action, runId });
+  if (action.action === "approve")
+    return photoImport.approveGroups.call({ ...action, runId });
+  return photoImport.discardGroup.call({ ...action, runId });
 }
 
 /** Photos and proposals poll while the run is live, like the run itself. */
@@ -712,17 +692,8 @@ function PhotoProductSuggestions({
       proposal.groupKey,
       proposal.updatedAt,
     ],
-    queryFn: async () => {
-      const query = new URLSearchParams({ groupKey: proposal.groupKey });
-      const response = await fetch(
-        `/api/import/runs/${encodeURIComponent(runId)}/photo-groups/candidates?${query}`,
-      );
-      return readJsonOrThrow(
-        response,
-        photoProductCandidatesResponse,
-        "Product matches could not load.",
-      );
-    },
+    queryFn: () =>
+      photoImport.candidates.call({ runId, groupKey: proposal.groupKey }),
   });
   if (suggestions.isPending)
     return <StatusText tone="muted">Finding existing products…</StatusText>;

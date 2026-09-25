@@ -629,7 +629,7 @@ function assertComponentsAttachable(
  * Advisory impact for a component attach, using the SAME predicate the
  * mutation refuses on. Runs on the pooled client, outside any transaction.
  */
-export async function previewAttachProductComponents(
+async function previewAttachProductComponents(
   db: Database,
   parentProductId: ProductId,
   componentProductIds: readonly ProductId[],
@@ -646,7 +646,7 @@ export async function previewAttachProductComponents(
   });
 }
 
-export async function previewDetachProductComponents(
+async function previewDetachProductComponents(
   db: Database,
   parentProductId: ProductId,
   componentProductIds: readonly ProductId[],

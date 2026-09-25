@@ -9,11 +9,8 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatusText } from "~/components/ui/status-text";
-import { readJsonOrThrow } from "~/lib/http-error";
-import {
-  importRunsResponse,
-  type ImportRunSummary,
-} from "~/lib/purchase-import-run-detail";
+import type { ImportRunSummary } from "~/contracts/run.contract";
+import { run as runOperations } from "~/entities/run.functions";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
 
@@ -37,17 +34,8 @@ export const ImportRuns: DetailSlotComponent<"purchase"> = ({
 }) => {
   const runs = useQuery({
     queryKey: ["purchase-import", "purchase-runs", purchase.id],
-    queryFn: async () => {
-      const response = await fetch(
-        `/api/import/runs?purchaseId=${encodeURIComponent(purchase.id)}`,
-      );
-      const data = await readJsonOrThrow(
-        response,
-        importRunsResponse,
-        "Purchase import runs could not load.",
-      );
-      return data.runs;
-    },
+    queryFn: async () =>
+      (await runOperations.history.call({ purchaseId: purchase.id })).runs,
   });
 
   const startValidation = (

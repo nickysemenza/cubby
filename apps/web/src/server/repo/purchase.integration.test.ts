@@ -46,14 +46,12 @@ import { createProduct } from "./product";
 import { createProject } from "./project";
 import {
   createPurchase,
-  deleteEmptyPurchases,
   deletePurchases,
   findOrCreatePurchase,
   getPurchaseByID,
   getPurchaseByShortcode,
   getPurchaseExpenses,
   mergePurchases,
-  previewMergePurchases,
   purchaseList,
   splitExpense,
   updatePurchase,
@@ -531,7 +529,6 @@ describe("purchase repository — mergePurchases", () => {
     const { output: keeper } = await createCharge("2024-02-01");
     const { output: loserA } = await createCharge("2024-02-02");
     const { output: loserB } = await createCharge("2024-02-03");
-    const keeperId = await purchaseUuid(ctx.db, keeper.id);
     const loserIds = await Promise.all(
       [loserA.id, loserB.id].map((id) => purchaseUuid(ctx.db, id)),
     );
@@ -571,20 +568,6 @@ describe("purchase repository — mergePurchases", () => {
         notes: null,
       });
     }
-
-    const preview = await previewMergePurchases(ctx.db, {
-      keepId: keeperId,
-      mergeIds: loserIds,
-    });
-    expect(
-      preview.changes.find(
-        (item) => item.edgeKey === "FinancialTransactionAllocation.purchaseId",
-      ),
-    ).toMatchObject({
-      label: "settlement allocations moved",
-      total: 2,
-      byTargetId: { [loserIds[0]!]: 1, [loserIds[1]!]: 1 },
-    });
 
     await mergePurchases(
       ctx.db,
@@ -708,9 +691,8 @@ describe("purchase repository — deletion cascades", () => {
     });
 
     await expect(
-      deleteEmptyPurchases(ctx.db, [emptyPurchase.id], ctx.actor),
-    ).resolves.toEqual({
-      shortcodes: [emptyPurchase.id],
+      deletePurchases(ctx.db, [emptyPurchase.id], ctx.actor),
+    ).resolves.toMatchObject({
       // Nothing else referenced the document, so the delete reaps it and hands
       // back the R2 key for the router to drop after the commit.
       detachedImageKeys: [document.key],
@@ -745,49 +727,6 @@ describe("purchase repository — deletion cascades", () => {
         ),
       );
     expect(auditRows).toEqual([{ action: "delete" }]);
-  });
-
-  it("atomically refuses a delete-empty batch when any Purchase has spend", async () => {
-    const vendorId = await vendorShortcodeByName(
-      ctx.db,
-      "Atomic Empty Delete Vendor",
-    );
-    const { output: emptyPurchase } = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        vendorId,
-        date: "2024-01-15",
-        orderId: "ATOMIC-EMPTY",
-      }),
-      ctx.actor,
-    );
-    const { output: line } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "real spend",
-          cost: 25,
-          vendor: "Atomic Empty Delete Vendor",
-          orderId: "ATOMIC-NONEMPTY",
-        }),
-      ),
-      ctx.actor,
-    );
-
-    await expect(
-      deleteEmptyPurchases(
-        ctx.db,
-        [emptyPurchase.id, line.purchaseId!],
-        ctx.actor,
-      ),
-    ).rejects.toMatchObject({ reason: "PURCHASE_NOT_EMPTY" });
-
-    await expect(
-      getPurchaseByShortcode(ctx.db, emptyPurchase.id),
-    ).resolves.not.toBeNull();
-    const spendAfter = await expenseByShortcode(ctx.db, line.id);
-    expect(spendAfter.cost).toBe(25);
-    expect(spendAfter.purchaseId).toBe(line.purchaseId);
   });
 
   it("NULLS expense.purchaseId (never deletes spend) and soft-deletes its documents", async () => {

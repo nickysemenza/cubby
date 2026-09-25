@@ -16,7 +16,7 @@ import { readJsonOrThrow } from "~/lib/http-error";
 import {
   type PurchaseAgentConnectionStatus,
   purchaseImportAgentOAuthStatus,
-} from "~/lib/purchase-import-run-detail";
+} from "~/lib/purchase-import-debug";
 
 /** Connection state is owned by Activity because it governs who may run imports. */
 export function PurchaseImportAgentConnection({

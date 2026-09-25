@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  purchaseImportDebugEvent,
-  importRunLogRequest,
-  importRunLogResponse,
-} from "./purchase-import-debug";
+import { purchaseImportDebugEvent } from "./purchase-import-debug";
 
 const validEvent = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -33,45 +29,5 @@ describe("purchase import debug contract", () => {
     { ...validEvent, event: "page.capture.raw" },
   ])("rejects unscoped or unbounded client data", (event) => {
     expect(purchaseImportDebugEvent.safeParse(event).success).toBe(false);
-  });
-
-  it("does not expose operation input or result payloads in the web log", () => {
-    const parsed = importRunLogResponse.parse({
-      entries: [
-        {
-          id: "event-1",
-          occurredAt: "2026-09-19T18:00:00Z",
-          source: "server",
-          level: "info",
-          event: "tool.capture",
-          state: "completed",
-          commandId: null,
-          operationId: "capture-001",
-          operationKind: null,
-          host: null,
-          browser: null,
-          attempt: null,
-          count: null,
-          outcome: null,
-          messageType: null,
-          errorType: null,
-          errorCode: null,
-          error: null,
-          result: { pageText: "private" },
-        },
-      ],
-      truncated: false,
-    });
-
-    expect(parsed.entries[0]).not.toHaveProperty("result");
-  });
-
-  it("accepts the public PIR address used by the detail page", () => {
-    expect(importRunLogRequest.parse({ publicId: "RUN-4K7M" })).toEqual({
-      publicId: "RUN-4K7M",
-    });
-    expect(
-      importRunLogRequest.safeParse({ publicId: validEvent.runId }).success,
-    ).toBe(false);
   });
 });

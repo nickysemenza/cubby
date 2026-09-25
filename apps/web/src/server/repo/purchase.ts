@@ -1,10 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 /** Purchase repository: one vendor event per row; Expense is the authoritative spend ledger. */
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type {
-  ImpactItem,
-  OperationDisposition,
-} from "@cubby/schemas/entity-integrity";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   type ExpenseId,
@@ -117,10 +114,8 @@ import {
   transactionIdsAllocatedTo,
 } from "~/server/repo/financial-transaction-allocations";
 import { displayableImageSql } from "~/server/repo/image-displayability";
-import { countByTarget, impact, present } from "~/server/repo/impact";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import {
-  assertDistinctMergeTargets,
   finalizeMerge,
   repointEdge,
   resolveMergeTargets,
@@ -2202,170 +2197,3 @@ export const deletePurchases = async (
   shortcodes: PurchaseShortcode[],
   actor: ActorContext,
 ) => deletePurchasesWithPolicy(db, shortcodes, actor, "detach-references");
-
-/** Reference checks and deletion share row locks; no earlier preview is trusted. */
-export const deleteEmptyPurchases = async (
-  db: Database,
-  shortcodes: PurchaseShortcode[],
-  actor: ActorContext,
-): Promise<{
-  shortcodes: PurchaseShortcode[];
-  detachedImageKeys: string[];
-}> => {
-  const { detachedImageKeys } = await deletePurchasesWithPolicy(
-    db,
-    shortcodes,
-    actor,
-    "require-empty",
-  );
-  return { shortcodes, detachedImageKeys };
-};
-
-export const previewMergePurchases = async (
-  db: Database,
-  input: { keepId: PurchaseId; mergeIds: PurchaseId[] },
-): Promise<{
-  blockers: ImpactItem[];
-  changes: ImpactItem[];
-  sideEffects: ImpactItem[];
-}> => {
-  const { keepId } = input;
-  assertDistinctMergeTargets("purchase", keepId, input.mergeIds);
-  const losers = input.mergeIds;
-  if (losers.length === 0)
-    return { blockers: [], changes: [], sideEffects: [] };
-
-  const dbClient = getDb(db);
-  const rows = await dbClient.query.purchase.findMany({
-    where: and(inArray(purchase.id, [keepId, ...losers]), notDeleted(purchase)),
-    columns: { id: true, vendorId: true, orderId: true },
-  });
-
-  const keeper = rows.find((r) => r.id === keepId);
-  if (!keeper) {
-    return {
-      blockers: present([
-        impact({
-          disposition: {
-            code: "block-purchase-not-found",
-            effect: "block",
-            description:
-              "The keeper purchase doesn't exist or has already been deleted.",
-          },
-          label: "missing keeper purchase",
-          byTargetId: { [keepId]: 1 },
-        }),
-      ]),
-      changes: [],
-      sideEffects: [],
-    };
-  }
-
-  const violations = checkPurchaseMergeSet(rows, keeper);
-  const blockers = present(
-    violations.map((violation) =>
-      violation.kind === "cross-vendor"
-        ? impact({
-            disposition: {
-              code: "block-cross-vendor-merge",
-              effect: "block",
-              description:
-                "Purchases across different vendors can't be merged — a merge re-points a purchase's expenses and documents, never its vendor.",
-            },
-            label: "purchases belonging to a different vendor",
-            byTargetId: Object.fromEntries(
-              violation.offendingIds.map((id) => [id, 1]),
-            ),
-          })
-        : impact({
-            disposition: {
-              code: "block-order-collision-merge",
-              effect: "block",
-              description:
-                "More than one purchase in this merge set carries its own order id — those are separate transactions and can't be merged.",
-            },
-            label: "purchases each carrying an order id",
-            byTargetId: Object.fromEntries(
-              violation.offendingIds.map((id) => [id, 1]),
-            ),
-          }),
-    ),
-  );
-
-  const changes = present([
-    impact({
-      disposition: PURCHASE_MERGE_EDGE_POLICY["ImportRunTarget.purchaseId"],
-      edgeKey: "ImportRunTarget.purchaseId",
-      label: "targeted import runs re-pointed",
-      byTargetId: await countByTarget(
-        dbClient,
-        importRunTarget,
-        importRunTarget.purchaseId,
-        losers,
-        // ImportRunTarget is hard-delete-only operational history: every
-        // retained target must be previewed before merge repoints it.
-        { includeDeleted: true },
-      ),
-    }),
-    impact({
-      disposition: PURCHASE_MERGE_EDGE_POLICY["Expense.purchaseId"],
-      edgeKey: "Expense.purchaseId",
-      label: "expenses re-pointed",
-      byTargetId: await countByTarget(
-        dbClient,
-        expense,
-        expense.purchaseId,
-        losers,
-      ),
-    }),
-    impact({
-      disposition:
-        PURCHASE_MERGE_EDGE_POLICY["EntityAttachment.subjectEntityId"],
-      edgeKey: "EntityAttachment.subjectEntityId",
-      label: "documents moved and deduplicated",
-      byTargetId: await countByTarget(
-        dbClient,
-        entityAttachment,
-        entityAttachment.subjectEntityId,
-        losers,
-      ),
-    }),
-    impact({
-      disposition: PURCHASE_MERGE_EDGE_POLICY["PurchaseProduct.purchaseId"],
-      edgeKey: "PurchaseProduct.purchaseId",
-      label: "product links moved and deduplicated",
-      byTargetId: await countByTarget(
-        dbClient,
-        purchaseProduct,
-        purchaseProduct.purchaseId,
-        losers,
-      ),
-    }),
-    impact({
-      disposition:
-        PURCHASE_MERGE_EDGE_POLICY["FinancialTransactionAllocation.purchaseId"],
-      edgeKey: "FinancialTransactionAllocation.purchaseId",
-      label: "settlement allocations moved",
-      byTargetId: await countByTarget(
-        dbClient,
-        financialTransactionAllocation,
-        financialTransactionAllocation.purchaseId,
-        losers,
-      ),
-    }),
-  ]);
-
-  const sideEffects = present([
-    impact({
-      disposition: {
-        code: "soft-delete-source-purchase",
-        effect: "soft-delete",
-        description: "The merged-away purchases are soft-deleted.",
-      },
-      label: "source purchases removed",
-      byTargetId: Object.fromEntries(losers.map((id) => [id, 1])),
-    }),
-  ]);
-
-  return { blockers, changes, sideEffects };
-};

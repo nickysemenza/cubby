@@ -16,12 +16,20 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ImportRunDetail } from "~/lib/purchase-import-run-detail";
+import type { ImportRunDetail } from "~/contracts/run.contract";
+import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import type { UnparsedStartOperationData } from "~/server/start-operation.contract";
 
 import { PhotoImportRunView } from "./photo-run-detail";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
+let restoreDispatch: (() => void) | undefined;
+
+/** Answer every Start operation with `data`, as candidate reads expect. */
+const answerOperations = (data: UnparsedStartOperationData) => {
+  restoreDispatch = overrideStartDispatch(async () => ({ ok: true, data }));
+};
 
 // "RUN-4K7M" is the one synthetic shortcode body AGENTS.md sanctions for
 // outward-facing examples, and it also satisfies the real shortcode format
@@ -42,11 +50,12 @@ const run: ImportRunDetail = {
   failureCode: null,
   notes: "Fall closet batch, top shelf",
   predecessorRunPublicId: null,
+  successorRunPublicId: null,
   coordinatorModel: null,
   skillRevision: null,
   runtimeRevision: null,
   agentModelMs: 0,
-  source: null,
+  source: { kind: "manual", vendorName: null },
   actor: {
     name: null,
     ledgerParty: { id: "LPY-4K7M", name: "Fixture household member" },
@@ -54,6 +63,13 @@ const run: ImportRunDetail = {
   controllingMembers: [],
   controlHistory: [],
   vendorAccount: null,
+  dispatch: {
+    eventId: null,
+    state: "pending",
+    attempts: 0,
+    error: null,
+    coordinatorStartedAt: null,
+  },
   affectedPurchases: [],
   findings: [],
   operations: [],
@@ -161,6 +177,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  restoreDispatch?.();
+  restoreDispatch = undefined;
   harness.dispose();
   window.history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
@@ -319,33 +337,28 @@ describe("PhotoImportRunView", () => {
         ),
       } satisfies PhotoRunReview,
     );
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        Response.json({
-          candidates: [
-            {
-              id: "PRD-4K7N",
-              name: "ForgeWear pocket tee black small",
-              coverUrl: null,
-              match: {
-                source: "catalog_name",
-                sharedNameTerms: ["pocket", "tee", "black", "small"],
-                brandMatches: true,
-                variant: {
-                  color: { first: null, second: "black", relation: "unknown" },
-                  size: { first: null, second: "small", relation: "unknown" },
-                },
-              },
-              hasOwnPhoto: false,
-              hasPhotoImport: false,
-              hasPurchase: true,
-              hasInventory: false,
+    answerOperations({
+      candidates: [
+        {
+          id: "PRD-4K7N",
+          name: "ForgeWear pocket tee black small",
+          coverUrl: null,
+          match: {
+            source: "catalog_name",
+            sharedNameTerms: ["pocket", "tee", "black", "small"],
+            brandMatches: true,
+            variant: {
+              color: { first: null, second: "black", relation: "unknown" },
+              size: { first: null, second: "small", relation: "unknown" },
             },
-          ],
-        }),
-      ),
-    );
+          },
+          hasOwnPhoto: false,
+          hasPhotoImport: false,
+          hasPurchase: true,
+          hasInventory: false,
+        },
+      ],
+    });
     render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
 
     expect(await screen.findByText("Cutout: Skipped")).toHaveAttribute(
@@ -397,10 +410,7 @@ describe("PhotoImportRunView", () => {
     };
     const key = ["purchase-import", "run", RUN_ID, "photo-review"];
     harness.queryClient.setQueryData(key, pendingReview);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => Response.json({ candidates: [] })),
-    );
+    answerOperations({ candidates: [] });
     render(
       <PhotoImportRunView run={{ ...run, status: "running", endedAt: null }} />,
       { wrapper: harness.wrapper },

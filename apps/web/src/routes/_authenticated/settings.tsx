@@ -33,6 +33,7 @@ import { Eyebrow } from "~/components/ui/eyebrow";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { StatusText } from "~/components/ui/status-text";
+import { run as runOperations } from "~/entities/run.functions";
 import { authClient } from "~/lib/auth-client";
 import { copyText } from "~/lib/clipboard";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -44,7 +45,6 @@ import {
   timingResponseSchema,
   type TimingResponse,
 } from "~/routes/api/debug/timing";
-import { merchantRulesResponse } from "~/routes/api/import/merchant-rules";
 import { memberLoginsResponse } from "~/routes/api/settings/member-logins";
 
 export const Route = createFileRoute("/_authenticated/settings")({
@@ -129,29 +129,14 @@ function MerchantVendorRulesCard() {
   const [vendorId, setVendorId] = useState("");
   const rules = useQuery({
     queryKey: ["purchase-import", "merchant-rules"],
-    queryFn: async () => {
-      const response = await fetch("/api/import/merchant-rules");
-      return readJsonOrThrow(
-        response,
-        merchantRulesResponse,
-        "Merchant routing rules could not load.",
-      );
-    },
+    queryFn: () => runOperations.merchantRules.call(),
   });
   const save = useMutation({
-    mutationFn: async () => {
-      const response = await fetch("/api/import/merchant-rules", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ merchant, vendorId }),
-      });
-      return readJsonOrThrow(
-        response,
-        merchantRulesResponse,
-        "Merchant routing rule could not save.",
-        { method: "POST" },
-      );
-    },
+    mutationFn: () =>
+      runOperations.confirmMerchantRule.call({
+        merchant,
+        vendorId,
+      }),
     onSuccess: (data) => {
       queryClient.setQueryData(["purchase-import", "merchant-rules"], data);
       setMerchant("");

@@ -16,7 +16,7 @@ import {
   product,
 } from "~/server/db/schema";
 import {
-  latestImportRunProgress,
+  loadImportRunDetail,
   reconcileSettledImportRun,
   stopImportRunForReview,
 } from "~/server/purchase-import/run-service";
@@ -137,7 +137,9 @@ describe("photo group proposals", () => {
       { runId: run.id, operationId: "synthetic-photo-settle" },
     );
     expect(settled).toEqual({ reconciled: false, status: "running" });
-    expect(await latestImportRunProgress(ctx.db, run.id)).toMatchObject({
+    expect(
+      (await loadImportRunDetail(ctx.db, run.shortcode)).latestProgress,
+    ).toMatchObject({
       phase: "awaiting_approval",
       awaitingApproval: true,
     });

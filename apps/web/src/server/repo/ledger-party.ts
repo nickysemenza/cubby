@@ -65,13 +65,8 @@ import {
 } from "~/server/repo/database-helpers";
 import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import { countByTarget, impact, present } from "~/server/repo/impact";
 import { applyInventoryOwnershipInTransaction } from "~/server/repo/inventory/ownership-mutations";
-import {
-  assertDistinctMergeTargets,
-  finalizeMerge,
-  resolveMergeTargets,
-} from "~/server/repo/merge/core";
+import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge/core";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal/entity";
 import {
@@ -680,142 +675,6 @@ export async function deleteLedgerParties(
     });
     return { deleted };
   });
-}
-
-export async function previewMergeLedgerParties(
-  db: Database,
-  input: { keepId: LedgerPartyId; mergeIds: LedgerPartyId[] },
-) {
-  assertDistinctMergeTargets("ledgerParty", input.keepId, input.mergeIds);
-  const mergeIds = uniq(input.mergeIds);
-  const allIds = [input.keepId, ...mergeIds];
-  const [
-    parties,
-    attributions,
-    accounts,
-    inventoryOwners,
-    outgoing,
-    incoming,
-    portions,
-    foodEntries,
-  ] = await Promise.all([
-    unwrapDb(db)
-      .select(columns)
-      .from(ledgerParty)
-      .where(and(inArray(ledgerParty.id, allIds), notDeleted(ledgerParty))),
-    countByTarget(
-      getDb(db),
-      expenseAttribution,
-      expenseAttribution.ledgerPartyId,
-      allIds,
-    ),
-    countByTarget(
-      getDb(db),
-      financialAccount,
-      financialAccount.ledgerPartyId,
-      mergeIds,
-    ),
-    countByTarget(
-      getDb(db),
-      inventoryEntry,
-      inventoryEntry.ownerLedgerPartyId,
-      mergeIds,
-    ),
-    countByTarget(
-      getDb(db),
-      ledgerTransfer,
-      ledgerTransfer.fromPartyId,
-      mergeIds,
-    ),
-    countByTarget(
-      getDb(db),
-      ledgerTransfer,
-      ledgerTransfer.toPartyId,
-      mergeIds,
-    ),
-    countByTarget(
-      getDb(db),
-      mealRecipePortion,
-      mealRecipePortion.ledgerPartyId,
-      mergeIds,
-    ),
-    countByTarget(
-      getDb(db),
-      mealFoodEntry,
-      mealFoodEntry.ledgerPartyId,
-      mergeIds,
-    ),
-  ]);
-  const invalid =
-    parties.length !== mergeIds.length + 1 ||
-    parties.some((party) => party.kind === "household") ||
-    new Set(parties.map((party) => party.kind)).size !== 1;
-  return {
-    blockers: invalid
-      ? [
-          {
-            code: "invalid-party-merge",
-            effect: "block" as const,
-            label: "incompatible ledger parties",
-            description:
-              "Only live parties of one non-household kind can be merged.",
-            total: 1,
-            byTargetId: { [input.keepId]: 1 },
-          },
-        ]
-      : [],
-    changes: present([
-      impact({
-        disposition:
-          LEDGER_PARTY_MERGE_EDGE_POLICY["ExpenseAttribution.ledgerPartyId"],
-        edgeKey: "ExpenseAttribution.ledgerPartyId",
-        label: "expense attributions",
-        byTargetId: attributions,
-      }),
-      impact({
-        disposition:
-          LEDGER_PARTY_MERGE_EDGE_POLICY["FinancialAccount.ledgerPartyId"],
-        edgeKey: "FinancialAccount.ledgerPartyId",
-        label: "financial accounts",
-        byTargetId: accounts,
-      }),
-      impact({
-        disposition:
-          LEDGER_PARTY_MERGE_EDGE_POLICY["InventoryEntry.ownerLedgerPartyId"],
-        edgeKey: "InventoryEntry.ownerLedgerPartyId",
-        label: "explicitly owned inventory",
-        byTargetId: inventoryOwners,
-      }),
-      impact({
-        disposition:
-          LEDGER_PARTY_MERGE_EDGE_POLICY["LedgerTransfer.fromPartyId"],
-        edgeKey: "LedgerTransfer.fromPartyId",
-        label: "outgoing transfers",
-        byTargetId: outgoing,
-      }),
-      impact({
-        disposition: LEDGER_PARTY_MERGE_EDGE_POLICY["LedgerTransfer.toPartyId"],
-        edgeKey: "LedgerTransfer.toPartyId",
-        label: "incoming transfers",
-        byTargetId: incoming,
-      }),
-      impact({
-        disposition:
-          LEDGER_PARTY_MERGE_EDGE_POLICY["MealRecipePortion.ledgerPartyId"],
-        edgeKey: "MealRecipePortion.ledgerPartyId",
-        label: "meal portions",
-        byTargetId: portions,
-      }),
-      impact({
-        disposition:
-          LEDGER_PARTY_MERGE_EDGE_POLICY["MealFoodEntry.ledgerPartyId"],
-        edgeKey: "MealFoodEntry.ledgerPartyId",
-        label: "meal food entries",
-        byTargetId: foodEntries,
-      }),
-    ]),
-    sideEffects: [],
-  };
 }
 
 const lockMealRecipePortionReferences = async (
