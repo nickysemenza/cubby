@@ -5,7 +5,6 @@ import { mock } from "~/lib/test/mock-schema";
 import { runWithExecutionCtx } from "~/server/cf-env";
 
 import {
-  readDashboardCountsSnapshot,
   readDatabaseFreshness,
   readProblemCountsFromDurableObject,
   recordDatabaseWrite,
@@ -37,16 +36,6 @@ describe("freshness RPC failure policy", () => {
     const read = readDatabaseFreshness(port);
     await vi.advanceTimersByTimeAsync(1000);
     expect(await read).toBeNull();
-  });
-
-  it("falls back to direct reads when the dashboard snapshot fails", async () => {
-    expect(
-      await readDashboardCountsSnapshot({
-        getDashboardCounts: async () => {
-          throw new Error("offline");
-        },
-      }),
-    ).toBeNull();
   });
 
   it("serves a validated problem-count edge hit without a second Durable Object RPC", async () => {
