@@ -1,8 +1,6 @@
-import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import {
   type CostType,
   costTypeValues,
-  type ExpenseOut,
   type Trade,
 } from "@cubby/schemas/project";
 import { sum } from "es-toolkit";
@@ -31,13 +29,7 @@ const emptyCells = () =>
     services: 0,
   }) satisfies Record<PivotCostKey, number>;
 
-/**
- * One trade×costType amount, whatever produced it. The two callers reach the
- * same pivot from different places — the projects view from raw expenses, the
- * analytics view from `expense.analytics`'s already-server-aggregated rows (so
- * it never needs a raw expense fetch) — and normalizing to this shape is what
- * lets them share one implementation instead of two that drift.
- */
+/** One server-aggregated trade×costType amount from `expense.analytics`. */
 export type TradeCostContribution = {
   trade: Trade | null;
   costType: PivotCostKey;
@@ -78,14 +70,4 @@ export function pivotTradeCostContributions(
   const grandTotal = sum(Object.values(columnTotals));
 
   return { rows, columnTotals, grandTotal, maxCell };
-}
-
-export function buildTradeCostPivot(expenses: ExpenseOut[]): TradeCostPivot {
-  return pivotTradeCostContributions(
-    expenses.filter(isPrincipalExpense).map((p) => ({
-      trade: p.trade,
-      costType: p.costType,
-      value: p.cost ?? 0,
-    })),
-  );
 }

@@ -4,10 +4,8 @@ import { Section, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 
 import { CostVsEstimate } from "./charts/cost-vs-estimate";
-import { MonthlyTrend } from "./charts/monthly-trend";
 import { OpenTasksByProject } from "./charts/open-tasks-by-project";
 import { PlannedVsActualByMonth } from "./charts/planned-vs-actual-by-month";
-import { SpendingByProject } from "./charts/spending-by-project";
 import { TradeActivity } from "./charts/trade-activity";
 
 export type ProjectPortfolioAnalyticsViewProps = {
@@ -17,7 +15,7 @@ export type ProjectPortfolioAnalyticsViewProps = {
 
 /**
  * The portfolio analytics interaction owns one optional chart module. Keeping
- * its seven chart imports together makes the route pay one lazy request when
+ * its chart imports together makes the route pay one lazy request when
  * Analytics is selected, while the normal project dashboard stays light.
  */
 export function ProjectPortfolioAnalyticsView({
@@ -35,20 +33,6 @@ export function ProjectPortfolioAnalyticsView({
         description="% of budget spent — projects with an estimate only"
       >
         <CostVsEstimate data={data.costVsEstimate} />
-      </Section>
-
-      <Section
-        title="Top 10 Projects by Spending"
-        description="Raw dollar totals, regardless of whether a project has an estimate"
-      >
-        <SpendingByProject data={data.spendingByProject} />
-      </Section>
-
-      <Section
-        title="Monthly Spending Trend"
-        description="Actual vs committed spend, by month"
-      >
-        <MonthlyTrend data={data.monthlySpend} />
       </Section>
 
       <Section
