@@ -3,10 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { expectedProblemKeys } from "~/entities/problem-registry";
 
-import {
-  deleteUnusedIngredientsWorkflow,
-  resolveProblemCounts,
-} from "./problems.server";
+import { resolveProblemCounts } from "./problem-counts.server";
+import { deleteUnusedIngredientsWorkflow } from "./problems.server";
 
 const counts = (total: number) =>
   problemsCountSchema.parse({
