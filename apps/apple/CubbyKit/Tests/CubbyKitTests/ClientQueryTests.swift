@@ -71,6 +71,18 @@ struct ClientQueryTests {
         return data
     }
 
+    @Test func auditHistoryUsesTypedPagedRead() async throws {
+        let request = try await capture(returning: Data(#"{"entries":[],"nextCursor":"page-3"}"#.utf8)) {
+            client in
+            let page = try await client.auditHistory(cursor: "page-2", limit: 7)
+            #expect(page.entries.isEmpty)
+            #expect(page.nextCursor == "page-3")
+        }
+        #expect(request.url?.path == "/api/v1/auditLog/list")
+        #expect(queryItems(of: request).contains(URLQueryItem(name: "cursor", value: "page-2")))
+        #expect(queryItems(of: request).contains(URLQueryItem(name: "limit", value: "7.0")))
+    }
+
     /// An attach patch carries only `pendingImageIds`: an omitted field means "leave as is", so
     /// attaching a photo must never clear the entry's content.
     @Test func attachmentPatchesPreserveContent() async throws {

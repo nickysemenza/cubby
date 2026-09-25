@@ -1,0 +1,19 @@
+context platform=ios timeout=240000
+
+open com.nickysemenza.cubby
+wait text "All activity" 60000
+click "label=\"All activity\""
+wait "id=activity.run.${RUN_ID}" 60000
+click "id=activity.run.${RUN_ID}"
+wait text "Review photos and proposed items" 60000
+click "label=\"Review photos and proposed items\""
+wait text "Photo processing" 60000
+wait text "Waiting for photos to upload" 60000
+click "label=Library"
+wait text "All photos" 60000
+click "label=\"All photos\""
+wait text "Photos" 60000
+back
+wait text "Browse catalog" 60000
+click "label=\"Browse catalog\""
+wait text "Browse" 60000

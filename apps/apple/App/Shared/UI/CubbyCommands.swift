@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// App-level keyboard shortcuts: ⌘1…⌘N select each tabbed `AppSection` (macOS menu bar and, since
-/// `Commands` is honoured on iPadOS too, a hardware keyboard there), ⌘F jumps to Search and
+/// App-level keyboard shortcuts: ⌘1…⌘N select the visible destinations, ⌘F jumps to Search and
 /// focuses its field, and ⌘0 opens Dev — off the tab bar on iOS (see `AppSection.tabs`), so it
 /// needs its own shortcut rather than a slot in the numbered loop.
 ///
@@ -14,12 +13,21 @@ struct CubbyCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .toolbar) {
-            ForEach(Array(AppSection.tabs.enumerated()), id: \.element) { index, section in
-                Button(section.title) {
-                    AppModel.active?.navigator.section = section
+            #if os(iOS)
+                ForEach(Array(PhoneTab.allCases.enumerated()), id: \.element) { index, tab in
+                    Button(tab.title) {
+                        AppModel.active?.navigator.phoneTab = tab
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
                 }
-                .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
-            }
+            #else
+                ForEach(Array(AppSection.tabs.enumerated()), id: \.element) { index, section in
+                    Button(section.title) {
+                        AppModel.active?.navigator.section = section
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                }
+            #endif
             Divider()
             Button("Refresh") { refresh?.run() }
                 .keyboardShortcut("r", modifiers: .command)

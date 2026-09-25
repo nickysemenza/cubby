@@ -539,6 +539,151 @@ public struct Client: APIProtocol {
             }
         )
     }
+    /// - Remark: HTTP `GET /api/v1/auditLog/list`.
+    /// - Remark: Generated from `#/paths//api/v1/auditLog/list/get(auditLog.list)`.
+    public func auditLog_list(_ input: Operations.AuditLog_list.Input) async throws -> Operations.AuditLog_list.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.AuditLog_list.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/api/v1/auditLog/list",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "entityType",
+                    value: input.query.entityType
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "entityId",
+                    value: input.query.entityId
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "channel",
+                    value: input.query.channel
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "oauthClient",
+                    value: input.query.oauthClient
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "deviceId",
+                    value: input.query.deviceId
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "runId",
+                    value: input.query.runId
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "createdAtFrom",
+                    value: input.query.createdAtFrom
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "createdAtTo",
+                    value: input.query.createdAtTo
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "limit",
+                    value: input.query.limit
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "cursor",
+                    value: input.query.cursor
+                )
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.AuditLog_list.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.AuditLogListOut.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.AuditLog_list.Output.Default.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ApiError.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
     /// - Remark: HTTP `GET /api/v1/calendar/range`.
     /// - Remark: Generated from `#/paths//api/v1/calendar/range/get(calendar.range)`.
     public func calendar_range(_ input: Operations.Calendar_range.Input) async throws -> Operations.Calendar_range.Output {

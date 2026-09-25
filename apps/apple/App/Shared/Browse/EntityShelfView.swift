@@ -22,7 +22,6 @@ struct EntityShelfView: View {
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var columns: [GridItem] {
         [
@@ -37,20 +36,14 @@ struct EntityShelfView: View {
         if dynamicTypeSize.isAccessibilitySize {
             return density == .compact ? 144 : 200
         }
-        if horizontalSizeClass == .compact {
-            return density == .compact ? 96 : 152
-        }
-        return density == .compact ? 88 : 176
+        return density == .compact ? 96 : 160
     }
 
     private var maximumWidth: CGFloat {
         if dynamicTypeSize.isAccessibilitySize {
             return density == .compact ? 220 : 280
         }
-        if horizontalSizeClass == .compact {
-            return density == .compact ? 140 : 220
-        }
-        return density == .compact ? 120 : 240
+        return density == .compact ? 140 : 240
     }
 
     private var gridSpacing: CGFloat {

@@ -10,16 +10,33 @@ import SwiftUI
 final class Navigator {
     var section: AppSection = .today
     var paths: [AppSection: [Route]] = [:]
+    var selectedActivity: ActivitySelection?
     var browseKey: EntityKey?
     var selectedRecords: [AppSection: RecordSelection] = [:]
     var graphWorkspace: GraphWorkspaceSession?
+
+    var phoneTab: PhoneTab {
+        get {
+            switch section {
+            case .today, .activity: .work
+            case .capture: .capture
+            case .photos, .browse, .graph: .library
+            case .search, .dev: .find
+            }
+        }
+        set { section = newValue.rootSection }
+    }
+
+    func path(for tab: PhoneTab) -> Binding<[Route]> {
+        path(for: tab.rootSection)
+    }
 
     func openGraph(root: EntityRef? = nil) {
         #if os(macOS)
             section = .graph
             paths[.graph] = root.map { [.graph($0)] } ?? []
         #else
-            paths[section, default: []].append(.graph(root))
+            paths[phoneTab.rootSection, default: []].append(.graph(root))
         #endif
     }
 
@@ -64,7 +81,7 @@ final class Navigator {
                 paths[section, default: []].append(.entityDetail(record.key, id: record.id))
             }
         #else
-            paths[section, default: []].append(.entityDetail(record.key, id: record.id))
+            paths[phoneTab.rootSection, default: []].append(.entityDetail(record.key, id: record.id))
         #endif
     }
 
@@ -79,13 +96,18 @@ final class Navigator {
                 return
             }
         #endif
-        var path = paths[section] ?? []
+        #if os(iOS)
+            let pathSection = phoneTab.rootSection
+        #else
+            let pathSection = section
+        #endif
+        var path = paths[pathSection] ?? []
         if path.last != nil {
             path[path.index(before: path.endIndex)] = .entityDetail(record.key, id: record.id)
         } else {
             path.append(.entityDetail(record.key, id: record.id))
         }
-        paths[section] = path
+        paths[pathSection] = path
     }
     /// Set by a `capture?location=` link; `CaptureView` takes it once its locations have loaded.
     var pendingCaptureLocation: LocationCode?
@@ -130,6 +152,9 @@ final class Navigator {
             paths[.capture] = [.audit(locationID: location)]
         case .photos:
             section = .photos
+            #if os(iOS)
+                paths[.browse] = [.photosLibrary]
+            #endif
         case .identify:
             openIdentify()
         case .today:
@@ -152,7 +177,7 @@ final class Navigator {
     /// selects it directly instead.
     func openDev() {
         #if os(iOS)
-            paths[section, default: []].append(.dev)
+            paths[phoneTab.rootSection, default: []].append(.dev)
         #else
             section = .dev
             paths[.dev] = []
@@ -167,16 +192,42 @@ final class Navigator {
         switch link {
         case .serverRun(let id):
             section = .activity
-            paths[.activity] = [.activityDetail(id)]
+            selectedActivity = .serverRun(id)
+            #if os(iOS)
+                paths[.today] = [.activityList]
+            #else
+                paths[.activity] = []
+            #endif
         case .localActivity(let id):
             section = .activity
-            paths[.activity] = [.localActivity(id)]
+            selectedActivity = .localActivity(id)
+            #if os(iOS)
+                paths[.today] = [.activityList]
+            #else
+                paths[.activity] = []
+            #endif
         case .photos:
-            section = .photos
+            open(.photos)
         case nil:
             section = .activity
-            paths[.activity] = []
+            selectedActivity = nil
+            #if os(iOS)
+                paths[.today] = [.activityList]
+            #else
+                paths[.activity] = []
+            #endif
         }
+    }
+
+    func openPhotoReview(runID: String) {
+        selectedActivity = nil
+        #if os(iOS)
+            section = .activity
+            paths[.today] = [.activityList, .photoReview(runID)]
+        #else
+            section = .activity
+            paths[.activity] = [.photoReview(runID)]
+        #endif
     }
 
     /// Opens Identify as part of Capture's navigation stack. Keeping the parent route in Capture
@@ -210,6 +261,18 @@ final class Navigator {
     func takeSearchQuery() -> String? {
         defer { pendingSearchQuery = nil }
         return pendingSearchQuery
+    }
+}
+
+enum ActivitySelection: Hashable, Identifiable {
+    case serverRun(String)
+    case localActivity(String)
+
+    var id: String {
+        switch self {
+        case .serverRun(let id): "server:\(id)"
+        case .localActivity(let id): "local:\(id)"
+        }
     }
 }
 

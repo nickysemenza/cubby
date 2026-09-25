@@ -900,6 +900,293 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/AttachableImageEntityId`.
         public typealias AttachableImageEntityId = Swift.String
+        /// - Remark: Generated from `#/components/schemas/AuditChannel`.
+        @frozen public enum AuditChannel: String, Codable, Hashable, Sendable, CaseIterable {
+            case web = "web"
+            case api = "api"
+            case mcp = "mcp"
+            case caldav = "caldav"
+            case system = "system"
+        }
+        /// - Remark: Generated from `#/components/schemas/AuditEntity`.
+        @frozen public enum AuditEntity: String, Codable, Hashable, Sendable, CaseIterable {
+            case product = "product"
+            case recipe = "recipe"
+            case ingredient = "ingredient"
+            case cookbook = "cookbook"
+            case location = "location"
+            case inventory = "inventory"
+            case meal = "meal"
+            case ledgerParty = "ledgerParty"
+            case ledgerTransfer = "ledgerTransfer"
+            case project = "project"
+            case task = "task"
+            case vendor = "vendor"
+            case purchase = "purchase"
+            case financialAccount = "financialAccount"
+            case financialTransaction = "financialTransaction"
+            case wish = "wish"
+            case expense = "expense"
+            case planting = "planting"
+            case gardenEntry = "gardenEntry"
+            case vendorAccount = "vendorAccount"
+            case productCategory = "productCategory"
+            case device = "device"
+            case imageSighting = "imageSighting"
+            case plant = "plant"
+        }
+        /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut`.
+        public struct AuditLogEntryOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/entryKey`.
+            public var entryKey: Swift.String
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/entityType`.
+            public var entityType: Components.Schemas.AuditEntity
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/entityId`.
+            public var entityId: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/canonicalEntityId`.
+            public var canonicalEntityId: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/entityName`.
+            public var entityName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/displayImage`.
+            public var displayImage: Components.Schemas.ImageUrlSummary?
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/action`.
+            @frozen public enum ActionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case create = "create"
+                case update = "update"
+                case delete = "delete"
+            }
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/action`.
+            public var action: Components.Schemas.AuditLogEntryOut.ActionPayload
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/changes`.
+            public struct ChangesPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/changes/additionalProperties`.
+                public struct AdditionalPropertiesPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/changes/additionalProperties/from`.
+                    public var from: Components.Schemas.JsonValue?
+                    /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/changes/additionalProperties/to`.
+                    public var to: Components.Schemas.JsonValue?
+                    /// Creates a new `AdditionalPropertiesPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - from:
+                    ///   - to:
+                    public init(
+                        from: Components.Schemas.JsonValue? = nil,
+                        to: Components.Schemas.JsonValue? = nil
+                    ) {
+                        self.from = from
+                        self.to = to
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case from
+                        case to
+                    }
+                }
+                /// A container of undocumented properties.
+                public var additionalProperties: [String: Components.Schemas.AuditLogEntryOut.ChangesPayload.AdditionalPropertiesPayload]
+                /// Creates a new `ChangesPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                public init(additionalProperties: [String: Components.Schemas.AuditLogEntryOut.ChangesPayload.AdditionalPropertiesPayload] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/changes`.
+            public var changes: Components.Schemas.AuditLogEntryOut.ChangesPayload?
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/userId`.
+            public var userId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/channel`.
+            public var channel: Components.Schemas.AuditChannel
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/oauthClient`.
+            public struct OauthClientPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/oauthClient/id`.
+                public var id: Swift.String
+                /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/oauthClient/name`.
+                public var name: Swift.String?
+                /// Creates a new `OauthClientPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - name:
+                public init(
+                    id: Swift.String,
+                    name: Swift.String? = nil
+                ) {
+                    self.id = id
+                    self.name = name
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case id
+                    case name
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/oauthClient`.
+            public var oauthClient: Components.Schemas.AuditLogEntryOut.OauthClientPayload?
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/device`.
+            public struct DevicePayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/device/id`.
+                public var id: Components.Schemas.DeviceShortcode
+                /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/device/name`.
+                public var name: Swift.String?
+                /// Creates a new `DevicePayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - name:
+                public init(
+                    id: Components.Schemas.DeviceShortcode,
+                    name: Swift.String? = nil
+                ) {
+                    self.id = id
+                    self.name = name
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case id
+                    case name
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/device`.
+            public var device: Components.Schemas.AuditLogEntryOut.DevicePayload?
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/runId`.
+            public var runId: Components.Schemas.ImportRunShortcode?
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/createdAt`.
+            public var createdAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/user`.
+            public struct UserPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/user/id`.
+                public var id: Swift.String
+                /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/user/name`.
+                public var name: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/user/email`.
+                public var email: Swift.String
+                /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/user/image`.
+                public var image: Swift.String?
+                /// Creates a new `UserPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - name:
+                ///   - email:
+                ///   - image:
+                public init(
+                    id: Swift.String,
+                    name: Swift.String? = nil,
+                    email: Swift.String,
+                    image: Swift.String? = nil
+                ) {
+                    self.id = id
+                    self.name = name
+                    self.email = email
+                    self.image = image
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case id
+                    case name
+                    case email
+                    case image
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/AuditLogEntryOut/user`.
+            public var user: Components.Schemas.AuditLogEntryOut.UserPayload?
+            /// Creates a new `AuditLogEntryOut`.
+            ///
+            /// - Parameters:
+            ///   - entryKey:
+            ///   - entityType:
+            ///   - entityId:
+            ///   - canonicalEntityId:
+            ///   - entityName:
+            ///   - displayImage:
+            ///   - action:
+            ///   - changes:
+            ///   - userId:
+            ///   - channel:
+            ///   - oauthClient:
+            ///   - device:
+            ///   - runId:
+            ///   - createdAt:
+            ///   - user:
+            public init(
+                entryKey: Swift.String,
+                entityType: Components.Schemas.AuditEntity,
+                entityId: Swift.String? = nil,
+                canonicalEntityId: Swift.String? = nil,
+                entityName: Swift.String? = nil,
+                displayImage: Components.Schemas.ImageUrlSummary? = nil,
+                action: Components.Schemas.AuditLogEntryOut.ActionPayload,
+                changes: Components.Schemas.AuditLogEntryOut.ChangesPayload? = nil,
+                userId: Swift.String,
+                channel: Components.Schemas.AuditChannel,
+                oauthClient: Components.Schemas.AuditLogEntryOut.OauthClientPayload? = nil,
+                device: Components.Schemas.AuditLogEntryOut.DevicePayload? = nil,
+                runId: Components.Schemas.ImportRunShortcode? = nil,
+                createdAt: Foundation.Date,
+                user: Components.Schemas.AuditLogEntryOut.UserPayload? = nil
+            ) {
+                self.entryKey = entryKey
+                self.entityType = entityType
+                self.entityId = entityId
+                self.canonicalEntityId = canonicalEntityId
+                self.entityName = entityName
+                self.displayImage = displayImage
+                self.action = action
+                self.changes = changes
+                self.userId = userId
+                self.channel = channel
+                self.oauthClient = oauthClient
+                self.device = device
+                self.runId = runId
+                self.createdAt = createdAt
+                self.user = user
+            }
+            public enum CodingKeys: String, CodingKey {
+                case entryKey
+                case entityType
+                case entityId
+                case canonicalEntityId
+                case entityName
+                case displayImage
+                case action
+                case changes
+                case userId
+                case channel
+                case oauthClient
+                case device
+                case runId
+                case createdAt
+                case user
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/AuditLogListOut`.
+        public struct AuditLogListOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AuditLogListOut/entries`.
+            public var entries: [Components.Schemas.AuditLogEntryOut]
+            /// - Remark: Generated from `#/components/schemas/AuditLogListOut/nextCursor`.
+            public var nextCursor: Swift.String?
+            /// Creates a new `AuditLogListOut`.
+            ///
+            /// - Parameters:
+            ///   - entries:
+            ///   - nextCursor:
+            public init(
+                entries: [Components.Schemas.AuditLogEntryOut],
+                nextCursor: Swift.String? = nil
+            ) {
+                self.entries = entries
+                self.nextCursor = nextCursor
+            }
+            public enum CodingKeys: String, CodingKey {
+                case entries
+                case nextCursor
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/BackgroundBatchRef`.
         public struct BackgroundBatchRef: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/BackgroundBatchRef/id`.

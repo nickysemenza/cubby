@@ -37,6 +37,7 @@
     "test:e2e": "pnpm --filter @cubby/web test:e2e",
     "test:e2e:sim": "pnpm --dir apps/web exec tsx tooling/sim-e2e.ts",
     "test:e2e:sim:video": "pnpm --dir apps/web exec tsx tooling/sim-e2e.ts --video",
+    "test:e2e:sim:layout": "pnpm --dir apps/web exec tsx tooling/sim-e2e.ts --layout",
     "dev:sim:watch": "pnpm --dir apps/web exec tsx tooling/sim-e2e.ts --watch",
     "test:e2e:headless": "pnpm --dir apps/web exec tsx tooling/sim-e2e.ts --headless",
     "test:e2e:headless:photo": "pnpm --dir apps/web exec tsx tooling/sim-e2e.ts --headless --photo",

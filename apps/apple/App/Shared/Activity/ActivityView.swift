@@ -176,9 +176,13 @@ struct ActivityView: View {
                         "No activity", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
                 }
                 ForEach(model.runs, id: \.id) { run in
-                    NavigationLink(value: Route.activityDetail(run.id)) {
+                    Button {
+                        appModel.navigator.selectedActivity = .serverRun(run.id)
+                    } label: {
                         ActivityRunRow(run: run)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("activity.run.\(run.id)")
                 }
                 if model.nextCursor != nil {
                     Button("Load more") {
@@ -198,6 +202,17 @@ struct ActivityView: View {
         .task(id: appModel.host) { await model.loadDevices(client: appModel.client) }
         .task(id: "\(appModel.host):\(model.filterIdentity):poll") {
             await model.pollActive(client: appModel.client)
+        }
+        .inspector(
+            isPresented: Binding(
+                get: { appModel.navigator.selectedActivity != nil },
+                set: { if !$0 { appModel.navigator.selectedActivity = nil } }
+            )
+        ) {
+            if let selection = appModel.navigator.selectedActivity {
+                ActivitySelectionDetailView(selection: selection)
+                    .inspectorColumnWidth(min: 300, ideal: 380, max: 540)
+            }
         }
     }
 
@@ -261,6 +276,17 @@ struct ActivityView: View {
         Binding(
             get: { appModel.participation.automaticWork },
             set: { appModel.setParticipation(automaticWork: $0) })
+    }
+}
+
+struct ActivitySelectionDetailView: View {
+    let selection: ActivitySelection
+
+    var body: some View {
+        switch selection {
+        case .serverRun(let id): ActivityDetailView(id: id)
+        case .localActivity(let id): LocalActivityDetailView(id: id)
+        }
     }
 }
 
@@ -593,8 +619,8 @@ struct ActivityDetailView: View {
     private func runSection(detail: ActivityDetailOutput) -> some View {
         Section("Run") {
             if detail.run.kind == .photoInventory {
-                NavigationLink {
-                    ImportRunReviewView(runID: detail.run.id)
+                Button {
+                    appModel.navigator.openPhotoReview(runID: detail.run.id)
                 } label: {
                     Label("Review photos and proposed items", systemImage: "photo.on.rectangle")
                 }
@@ -614,51 +640,55 @@ struct ActivityDetailView: View {
     }
 
     private func attemptsSection(detail: ActivityDetailOutput) -> some View {
-        Section("Attempts") {
-            ForEach(detail.attempts, id: \.number) { attempt in
-                DisclosureGroup("Attempt \(attempt.number) · \(attempt.state)") {
-                    if let executor = attempt.executor {
-                        LabeledContent("Executor", value: executor.name)
-                        LabeledContent("Platform", value: executor.platform.rawValue)
-                        if let version = executor.appVersion {
-                            LabeledContent("App", value: version)
+        Section {
+            DisclosureGroup("Attempts · \(detail.attempts.count)") {
+                ForEach(detail.attempts, id: \.number) { attempt in
+                    DisclosureGroup("Attempt \(attempt.number) · \(attempt.state)") {
+                        if let executor = attempt.executor {
+                            LabeledContent("Executor", value: executor.name)
+                            LabeledContent("Platform", value: executor.platform.rawValue)
+                            if let version = executor.appVersion {
+                                LabeledContent("App", value: version)
+                            }
+                            if let version = executor.osVersion {
+                                LabeledContent("OS", value: version)
+                            }
                         }
-                        if let version = executor.osVersion {
-                            LabeledContent("OS", value: version)
+                        diagnosticText("Diagnostics", attempt.diagnosticsJson)
+                        diagnosticText("Result", attempt.resultJson)
+                        if let error = attempt.error {
+                            Text(error).foregroundStyle(PorcelainTokens.destructive)
                         }
-                    }
-                    diagnosticText("Diagnostics", attempt.diagnosticsJson)
-                    diagnosticText("Result", attempt.resultJson)
-                    if let error = attempt.error {
-                        Text(error).foregroundStyle(PorcelainTokens.destructive)
                     }
                 }
-            }
-            if detail.nextAttemptCursor != nil {
-                Button("Load more attempts") {
-                    Task { await model.loadMoreAttempts(id: id, client: appModel.client) }
+                if detail.nextAttemptCursor != nil {
+                    Button("Load more attempts") {
+                        Task { await model.loadMoreAttempts(id: id, client: appModel.client) }
+                    }
                 }
             }
         }
     }
 
     private func eventsSection() -> some View {
-        Section("Events") {
-            ForEach(model.events, id: \.id) { event in
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(event.event).font(.body.monospaced())
-                    Text(
-                        "\(event.source.rawValue) · \(event.occurredAt.formatted(.relative(presentation: .named)))"
-                    )
-                    .font(.caption).foregroundStyle(.secondary)
-                    if let details = event.detailsJson {
-                        Text(details).font(.caption.monospaced()).textSelection(.enabled)
+        Section {
+            DisclosureGroup("Events · \(model.events.count)") {
+                ForEach(model.events, id: \.id) { event in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(event.event).font(.body.monospaced())
+                        Text(
+                            "\(event.source.rawValue) · \(event.occurredAt.formatted(.relative(presentation: .named)))"
+                        )
+                        .font(.caption).foregroundStyle(.secondary)
+                        if let details = event.detailsJson {
+                            Text(details).font(.caption.monospaced()).textSelection(.enabled)
+                        }
                     }
                 }
-            }
-            if model.eventCursor != nil {
-                Button("Load more events") {
-                    Task { await model.loadMoreEvents(id: id, client: appModel.client) }
+                if model.eventCursor != nil {
+                    Button("Load more events") {
+                        Task { await model.loadMoreEvents(id: id, client: appModel.client) }
+                    }
                 }
             }
         }

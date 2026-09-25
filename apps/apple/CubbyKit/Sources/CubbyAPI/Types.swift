@@ -27,6 +27,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/activity/submission`.
     /// - Remark: Generated from `#/paths//api/v1/activity/submission/get(activity.submission)`.
     func activity_submission(_ input: Operations.Activity_submission.Input) async throws -> Operations.Activity_submission.Output
+    /// - Remark: HTTP `GET /api/v1/auditLog/list`.
+    /// - Remark: Generated from `#/paths//api/v1/auditLog/list/get(auditLog.list)`.
+    func auditLog_list(_ input: Operations.AuditLog_list.Input) async throws -> Operations.AuditLog_list.Output
     /// - Remark: HTTP `GET /api/v1/calendar/range`.
     /// - Remark: Generated from `#/paths//api/v1/calendar/range/get(calendar.range)`.
     func calendar_range(_ input: Operations.Calendar_range.Input) async throws -> Operations.Calendar_range.Output
@@ -638,6 +641,17 @@ extension APIProtocol {
         headers: Operations.Activity_submission.Input.Headers = .init()
     ) async throws -> Operations.Activity_submission.Output {
         try await activity_submission(Operations.Activity_submission.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/auditLog/list`.
+    /// - Remark: Generated from `#/paths//api/v1/auditLog/list/get(auditLog.list)`.
+    public func auditLog_list(
+        query: Operations.AuditLog_list.Input.Query = .init(),
+        headers: Operations.AuditLog_list.Input.Headers = .init()
+    ) async throws -> Operations.AuditLog_list.Output {
+        try await auditLog_list(Operations.AuditLog_list.Input(
             query: query,
             headers: headers
         ))

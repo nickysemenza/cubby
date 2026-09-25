@@ -1,11 +1,143 @@
 import CubbyKit
 import SwiftUI
 
+struct WorkRootView: View {
+    var body: some View { TodayView() }
+}
+
+@MainActor @Observable
+final class WorkHighlightsModel {
+    private(set) var runs: [ActivityRun] = []
+    private(set) var entries: [AuditLogEntryOut] = []
+    private(set) var error: String?
+
+    init(runs: [ActivityRun] = [], entries: [AuditLogEntryOut] = [], error: String? = nil) {
+        self.runs = runs
+        self.entries = entries
+        self.error = error
+    }
+
+    func refresh(client: CubbyClient) async {
+        do {
+            async let runPage = client.activityRuns(limit: 4)
+            async let auditPage = client.auditHistory(limit: 6)
+            runs = try await runPage.items
+            entries = try await auditPage.entries
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+            Diagnostics.report(error, context: "work.highlights")
+        }
+    }
+}
+
+@MainActor @Observable
+final class AuditHistoryModel {
+    private(set) var entries: [AuditLogEntryOut] = []
+    private(set) var cursor: String?
+    private(set) var loading = false
+    private(set) var error: String?
+
+    func load(client: CubbyClient, reset: Bool = false) async {
+        guard !loading else { return }
+        loading = true
+        defer { loading = false }
+        do {
+            let page = try await client.auditHistory(cursor: reset ? nil : cursor)
+            if reset {
+                entries = page.entries
+            } else {
+                let known = Set(entries.map(\.entryKey))
+                entries += page.entries.filter { !known.contains($0.entryKey) }
+            }
+            cursor = page.nextCursor
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+            Diagnostics.report(error, context: "audit.history")
+        }
+    }
+}
+
+struct AuditHistoryView: View {
+    @Environment(AppModel.self) private var appModel
+    @State private var history = AuditHistoryModel()
+
+    var body: some View {
+        List {
+            if let error = history.error {
+                ContentUnavailableView(
+                    "Couldn’t load changes", systemImage: "exclamationmark.triangle",
+                    description: Text(error))
+                Button("Retry") { Task { await history.load(client: appModel.client, reset: true) } }
+            }
+            ForEach(history.entries, id: \.entryKey) { AuditEntryRow(entry: $0) }
+            if history.entries.isEmpty && !history.loading && history.error == nil {
+                ContentUnavailableView("No changes yet", systemImage: "clock")
+            }
+            if history.cursor != nil {
+                Button("Load more") { Task { await history.load(client: appModel.client) } }
+                    .disabled(history.loading)
+            }
+        }
+        .navigationTitle("Changes")
+        .task(id: appModel.host) { await history.load(client: appModel.client, reset: true) }
+        .refreshable { await history.load(client: appModel.client, reset: true) }
+    }
+}
+
+struct AuditEntryRow: View {
+    let entry: AuditLogEntryOut
+    @Environment(AppModel.self) private var appModel
+
+    private var record: RecordSelection? {
+        guard entry.action != .delete,
+            let key = EntityKey(rawValue: entry.entityType.rawValue),
+            let id = entry.canonicalEntityId ?? entry.entityId
+        else { return nil }
+        return RecordSelection(key: key, id: id)
+    }
+
+    var body: some View {
+        Group {
+            if let record {
+                Button {
+                    appModel.navigator.openRecord(record)
+                } label: {
+                    content
+                }
+                .buttonStyle(.plain)
+            } else {
+                content
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var content: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Image(systemName: entry.action == .delete ? "trash" : "clock.arrow.circlepath")
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entry.entityName ?? entry.entityType.rawValue.capitalized)
+                    .font(.subheadline.weight(.medium))
+                Text("\(entry.action.rawValue.capitalized) · \(entry.entityType.rawValue)")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            Text(entry.createdAt, style: .relative)
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(minHeight: PorcelainTokens.touchTarget)
+    }
+}
+
 struct TodayView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @State private var today: TodayModel?
     @State private var nutrition: MealNutritionModel?
+    @State private var highlights = WorkHighlightsModel()
     @State private var householdDay = HouseholdDay.string(for: .now)
 
     var body: some View {
@@ -36,7 +168,8 @@ struct TodayView: View {
                     tasksIsLoading: today.tasksIsLoading,
                     mealsIsLoading: today.mealsIsLoading,
                     problemsIsLoading: today.problemsIsLoading,
-                    nutritionIsLoading: nutrition?.isLoading ?? false
+                    nutritionIsLoading: nutrition?.isLoading ?? false,
+                    highlights: highlights
                 )
             } else {
                 LoadingIndicator.screen(label: "Loading Today")
@@ -69,8 +202,14 @@ struct TodayView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await synchronizeDay(forceRefresh: true) } }
+            if phase == .active {
+                Task {
+                    await synchronizeDay(forceRefresh: true)
+                    await highlights.refresh(client: model.client)
+                }
+            }
         }
+        .task(id: model.host) { await highlights.refresh(client: model.client) }
     }
 
     private var displayDate: String {
@@ -120,7 +259,9 @@ struct TodayContent: View {
     var mealsIsLoading = false
     var problemsIsLoading = false
     var nutritionIsLoading = false
+    var highlights: WorkHighlightsModel?
     @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         #if os(macOS)
@@ -136,6 +277,39 @@ struct TodayContent: View {
                 Section {
                     Text(dateText).foregroundStyle(.secondary)
                 }
+                Section("Activity inbox") {
+                    NavigationLink(value: Route.activityList) {
+                        Label("All activity", systemImage: "clock.arrow.circlepath")
+                    }
+                    ForEach(highlights?.runs ?? [], id: \.id) { run in
+                        Button {
+                            model.navigator.openActivity(.serverRun(run.id))
+                        } label: {
+                            VStack(alignment: .leading) {
+                                Text(run.subjectName).font(.headline)
+                                Text("\(run.kind.rawValue) · \(run.state)")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            .frame(minHeight: PorcelainTokens.touchTarget, alignment: .leading)
+                        }
+                    }
+                    if highlights?.runs.isEmpty == true {
+                        Text("No recent runs").foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityIdentifier("work.activityInbox")
+                Section("Recent changes") {
+                    ForEach(highlights?.entries ?? [], id: \.entryKey) { entry in
+                        AuditEntryRow(entry: entry)
+                    }
+                    NavigationLink(value: Route.auditHistory) {
+                        Label("All changes", systemImage: "clock")
+                    }
+                    if let error = highlights?.error {
+                        Text(error).font(.caption).foregroundStyle(PorcelainTokens.warning)
+                    }
+                }
+                .accessibilityIdentifier("work.auditFeed")
                 Section("Next up") {
                     switch tasks {
                     case .loading: LoadingIndicator(label: "Loading tasks")
@@ -241,16 +415,42 @@ struct TodayContent: View {
                         .font(.porcelainHeadline)
                         .foregroundStyle(PorcelainTokens.graphiteSecondary)
 
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .top, spacing: PorcelainTokens.Space.lg) {
-                            macWorkColumn
-                                .frame(width: 620, alignment: .topLeading)
-                            macMealsColumn
-                                .frame(width: 300, alignment: .topLeading)
-                        }
+                    if dynamicTypeSize.isAccessibilitySize {
                         VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
                             macWorkColumn
                             macMealsColumn
+                        }
+                    } else {
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .top, spacing: PorcelainTokens.Space.lg) {
+                                macWorkColumn
+                                    .frame(width: 620, alignment: .topLeading)
+                                macMealsColumn
+                                    .frame(width: 300, alignment: .topLeading)
+                            }
+                            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+                                macWorkColumn
+                                macMealsColumn
+                            }
+                        }
+                    }
+                    if let highlights = highlights {
+                        if dynamicTypeSize.isAccessibilitySize {
+                            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+                                workActivityPanel(highlights)
+                                workAuditPanel(highlights)
+                            }
+                        } else {
+                            ViewThatFits(in: .horizontal) {
+                                HStack(alignment: .top, spacing: PorcelainTokens.Space.lg) {
+                                    workActivityPanel(highlights).frame(minWidth: 300)
+                                    workAuditPanel(highlights).frame(minWidth: 300)
+                                }
+                                VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+                                    workActivityPanel(highlights)
+                                    workAuditPanel(highlights)
+                                }
+                            }
                         }
                     }
                 }
@@ -262,6 +462,25 @@ struct TodayContent: View {
             .background(PorcelainTokens.canvas)
             .refreshControl(onRefresh)
             .accessibilityIdentifier("today.sections")
+        }
+
+        private func workActivityPanel(_ highlights: WorkHighlightsModel) -> some View {
+            dashboardPanel("Activity inbox", systemImage: "clock.arrow.circlepath") {
+                Button("All activity") { model.navigator.section = .activity }
+                ForEach(highlights.runs, id: \.id) { run in
+                    Button(run.subjectName) { model.navigator.openActivity(.serverRun(run.id)) }
+                        .buttonStyle(.link)
+                }
+                if highlights.runs.isEmpty { Text("No recent runs").foregroundStyle(.secondary) }
+            }
+        }
+
+        private func workAuditPanel(_ highlights: WorkHighlightsModel) -> some View {
+            dashboardPanel("Recent changes", systemImage: "clock") {
+                ForEach(highlights.entries, id: \.entryKey) { AuditEntryRow(entry: $0) }
+                NavigationLink(value: Route.auditHistory) { Text("All changes") }
+                if let error = highlights.error { Text(error).foregroundStyle(PorcelainTokens.warning) }
+            }
         }
 
         private var macMealsColumn: some View {
@@ -505,7 +724,20 @@ private func formattedDueDate(_ raw: String) -> String {
             problems: .loaded(PreviewFixtures.sampleTodayProblems),
             nutrition: .loaded(PreviewFixtures.sampleMealNutrition),
             nutritionDay: "2026-09-14",
-            onRefresh: {}
+            onRefresh: {},
+            highlights: WorkHighlightsModel(
+                runs: [
+                    ActivityRun(
+                        id: "RUN-4K7M", kind: .photoInventory, subjectName: "Photo import",
+                        state: "running", active: true, createdAt: .now,
+                        attempts: 1, executors: [], hasDiagnostics: false, canRetry: false)
+                ],
+                entries: [
+                    AuditLogEntryOut(
+                        entryKey: "synthetic-change", entityType: .product,
+                        entityId: "PRD-2345", entityName: "Sample Product", action: .update,
+                        userId: "synthetic-user", channel: .web, createdAt: .now)
+                ])
         )
         .navigationTitle("Today")
     }
@@ -585,6 +817,27 @@ private func formattedDueDate(_ raw: String) -> String {
             .navigationTitle("Today")
         }
         .frame(width: 700, height: 900)
+        .environment(PreviewFixtures.signedInModel())
+    }
+
+    #Preview("Work — wide Mac") {
+        NavigationStack {
+            TodayContent(
+                dateText: "Friday, September 11",
+                tasks: .loaded(PreviewFixtures.sampleTodayBriefing),
+                meals: .loaded(PreviewFixtures.sampleTodayMeals),
+                problems: .loaded(PreviewFixtures.sampleTodayProblems),
+                nutrition: .loaded(PreviewFixtures.sampleMealNutrition),
+                onRefresh: {},
+                highlights: WorkHighlightsModel(
+                    runs: [
+                        ActivityRun(
+                            id: "RUN-4K7M", kind: .photoInventory, subjectName: "Photo import",
+                            state: "running", active: true, createdAt: .now,
+                            attempts: 1, executors: [], hasDiagnostics: false, canRetry: false)
+                    ]))
+        }
+        .frame(width: 1240, height: 900)
         .environment(PreviewFixtures.signedInModel())
     }
 #endif

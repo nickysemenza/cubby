@@ -3,6 +3,11 @@ import SwiftUI
 
 /// The typed navigation spine shared by the iOS tab stacks and the macOS split view.
 enum Route: Hashable {
+    case activityList
+    case auditHistory
+    case photosLibrary
+    case browseCatalog
+    case photoReview(String)
     case graph(EntityRef?)
     case nutrition(day: String)
     case activityDetail(String)
@@ -26,7 +31,42 @@ enum Route: Hashable {
     case dev
 }
 
-/// Top-level sections. Tabs on iOS, sidebar rows on macOS.
+/// Stable iOS destinations. Their paths live on root sections so a deep link into a workflow
+/// selects a visible tab without replacing another tab's navigation history.
+enum PhoneTab: String, CaseIterable, Identifiable {
+    case work, capture, library, find
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .work: "Work"
+        case .capture: "Capture"
+        case .library: "Library"
+        case .find: "Find"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .work: "checklist"
+        case .capture: "barcode.viewfinder"
+        case .library: "books.vertical"
+        case .find: "magnifyingglass"
+        }
+    }
+
+    var rootSection: AppSection {
+        switch self {
+        case .work: .today
+        case .capture: .capture
+        case .library: .browse
+        case .find: .search
+        }
+    }
+}
+
+/// Top-level sections. The Mac exposes all in its sidebar; iOS maps them into `PhoneTab`.
 enum AppSection: String, CaseIterable, Identifiable {
     case today, activity, capture, photos, browse, search, graph, dev
 
@@ -58,10 +98,10 @@ enum AppSection: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Dev and Graph are pushed screens on iOS; macOS keeps them as sidebar rows.
+    /// Mac sidebar destinations, retained independently of the phone tabs.
     static var tabs: [AppSection] {
         #if os(iOS)
-            allCases.filter { $0 != .dev && $0 != .graph }
+            [.today, .capture, .browse, .search]
         #else
             allCases
         #endif

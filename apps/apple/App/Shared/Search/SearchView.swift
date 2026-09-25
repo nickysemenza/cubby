@@ -49,7 +49,6 @@ struct SearchContent: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismissSearch) private var dismissSearch
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var scanning = false
     @State private var creatingProduct = false
     @State private var presentation = ListPresentationChoice.list
@@ -191,15 +190,17 @@ struct SearchContent: View {
 
     @ViewBuilder
     private var presentationPicker: some View {
-        if prefersSegmentedPresentationPicker {
-            Picker("View", selection: $presentation) {
-                ForEach(ListPresentationChoice.allCases, id: \.self) { choice in
-                    Text(choice.label).tag(choice)
+        ViewThatFits(in: .horizontal) {
+            if !dynamicTypeSize.isAccessibilitySize {
+                Picker("View", selection: $presentation) {
+                    ForEach(ListPresentationChoice.allCases, id: \.self) { choice in
+                        Text(choice.label).tag(choice)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .fixedSize(horizontal: true, vertical: false)
+                .accessibilityLabel("View")
             }
-            .pickerStyle(.segmented)
-            .accessibilityLabel("View")
-        } else {
             Picker("View", selection: $presentation) {
                 ForEach(ListPresentationChoice.allCases, id: \.self) { choice in
                     Label(choice.label, systemImage: choice.symbol).tag(choice)
@@ -208,15 +209,6 @@ struct SearchContent: View {
             .pickerStyle(.menu)
             .accessibilityLabel("View")
         }
-    }
-
-    private var prefersSegmentedPresentationPicker: Bool {
-        guard !dynamicTypeSize.isAccessibilitySize else { return false }
-        #if os(macOS)
-            return true
-        #else
-            return horizontalSizeClass == .regular
-        #endif
     }
 
     /// The un-searched state: recents alone don't need a big empty view (they show as

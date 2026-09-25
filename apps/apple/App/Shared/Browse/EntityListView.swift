@@ -37,7 +37,6 @@ struct EntityListView: View {
     let key: EntityKey
     @Environment(AppModel.self) private var appModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var model: GenericEntityListModel?
     @State private var showingFilters = false
     @State private var creating = false
@@ -328,13 +327,15 @@ struct EntityListView: View {
                 }
             },
             set: { id in selectPresentation(id, model: model) })
-        if prefersSegmentedPresentationPicker {
-            Picker("View", selection: selection) {
-                ForEach(presentationChoices) { choice in Text(choice.label).tag(choice.id) }
+        ViewThatFits(in: .horizontal) {
+            if !dynamicTypeSize.isAccessibilitySize && presentationChoices.count <= 3 {
+                Picker("View", selection: selection) {
+                    ForEach(presentationChoices) { choice in Text(choice.label).tag(choice.id) }
+                }
+                .pickerStyle(.segmented)
+                .fixedSize(horizontal: true, vertical: false)
+                .accessibilityLabel("View")
             }
-            .pickerStyle(.segmented)
-            .accessibilityLabel("View")
-        } else {
             Picker("View", selection: selection) {
                 ForEach(presentationChoices) { choice in
                     Label(choice.label, systemImage: choice.symbol).tag(choice.id)
@@ -343,17 +344,6 @@ struct EntityListView: View {
             .pickerStyle(.menu)
             .accessibilityLabel("View")
         }
-    }
-
-    private var prefersSegmentedPresentationPicker: Bool {
-        guard !dynamicTypeSize.isAccessibilitySize, presentationChoices.count <= 3 else {
-            return false
-        }
-        #if os(macOS)
-            return true
-        #else
-            return horizontalSizeClass == .regular
-        #endif
     }
 
     private func selectPresentation(_ id: String, model: GenericEntityListModel) {
