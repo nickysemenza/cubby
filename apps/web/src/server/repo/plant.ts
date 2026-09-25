@@ -40,11 +40,8 @@ import {
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { resolveOrCreateIngredients } from "~/server/repo/ingredient/crud";
 import { listScaffold } from "~/server/repo/list-scaffold";
-import {
-  finalizeMerge,
-  repointEdge,
-  resolveMergeTargets,
-} from "~/server/repo/merge";
+import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge";
+import { applyMergePolicy } from "~/server/repo/removal";
 import {
   lookupEntityReferences,
   resolveOrThrow,
@@ -242,20 +239,13 @@ export async function mergePlants(
     ...input,
   });
   return withTransaction(db, async (tx) => {
-    const plantingEdgesRepointed = (
-      await repointEdge(tx, "plant", "Planting.plantId", {
-        from: loserIds,
-        to: keepId,
-        liveOnly: false,
-      })
-    ).length;
-    const productEdgesRepointed = (
-      await repointEdge(tx, "plant", "Product.growsPlantId", {
-        from: loserIds,
-        to: keepId,
-        liveOnly: false,
-      })
-    ).length;
+    const repointed = await applyMergePolicy(tx, {
+      entity: "plant",
+      policy: PLANT_MERGE_EDGE_POLICY,
+      keepId,
+      loserIds,
+      liveOnly: false,
+    });
     const { removed } = await finalizeMerge(tx, {
       entity: "plant",
       table: plant,
@@ -269,8 +259,8 @@ export async function mergePlants(
       mergeSummary: {
         deletedIds: uniq(input.mergeIds),
         merged: removed,
-        plantingEdgesRepointed,
-        productEdgesRepointed,
+        plantingEdgesRepointed: repointed["Planting.plantId"] ?? 0,
+        productEdgesRepointed: repointed["Product.growsPlantId"] ?? 0,
       },
     };
   });

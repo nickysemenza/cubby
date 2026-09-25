@@ -15,6 +15,7 @@ export type { ChildCascade } from "./entity";
 export { removeEntity } from "./entity";
 export {
   applyDispositions,
+  applyMergePolicy,
   deleteByPolicy,
   type DeleteHooks,
   policyDelete,

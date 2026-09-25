@@ -82,6 +82,8 @@ type EdgePhysical = {
   disposition: OperationDisposition;
   table: PgTable;
   column: PgColumn;
+  /** The column's Drizzle property name, which `.set()` keys by. */
+  property: string;
   softDeletable: boolean;
 };
 
@@ -105,12 +107,18 @@ const physicalEdges = <E extends RemovableEntity>(
       const column = edge.column as PgColumn;
       // SAFETY: as above — a Postgres column's table is a PgTable.
       const table = column.table as PgTable;
+      const columns = getTableColumns(table);
+      const property = Object.entries(columns).find(
+        ([, candidate]) => candidate === column,
+      )?.[0];
+      if (!property) throw new Error(`No column property for edge ${key}`);
       return {
         key,
         disposition,
         table,
         column,
-        softDeletable: "deletedAt" in getTableColumns(table),
+        property,
+        softDeletable: "deletedAt" in columns,
       };
     })
     .sort((a, b) => rank(a.key) - rank(b.key));
@@ -140,6 +148,7 @@ const assertNotBlocked = async <E extends RemovableEntity>(
   entity: E,
   edges: readonly EdgePhysical[],
   ids: readonly string[],
+  operation: "delete" | "merge" = "delete",
 ): Promise<void> => {
   const own: ShortcodeTable = SHORTCODE_TABLE[entity];
   const blockers: { edge: EdgePhysical; byTargetId: Record<string, number> }[] =
@@ -192,7 +201,7 @@ const assertNotBlocked = async <E extends RemovableEntity>(
   });
   throw createBlockedError(
     "ENTITY_DELETE_BLOCKED",
-    `Cannot delete ${ENTITY_LABEL[entity].toLowerCase()}: ${lines.join(" ")}`,
+    `Cannot ${operation} ${ENTITY_LABEL[entity].toLowerCase()}: ${lines.join(" ")}`,
     items,
   );
 };
@@ -216,7 +225,7 @@ const detach = async (
       : [];
   await tx
     .update(edge.table)
-    .set({ [edge.column.name]: null })
+    .set({ [edge.property]: null })
     .where(where);
   if (source && detached.length > 0)
     await logAuditEntries(
@@ -226,7 +235,7 @@ const detach = async (
         entityType: source,
         entityId: String(row.id),
         action: "update" as const,
-        changes: { [edge.column.name]: { from: row.from, to: null } },
+        changes: { [edge.property]: { from: row.from, to: null } },
       })),
     );
 };
@@ -395,3 +404,61 @@ export const policyDelete =
   ) => Promise<PolicyDeleteResult<E>>) =>
   (db, shortcodes, actor) =>
     deleteByPolicy(db, { entity, policy, shortcodes, actor, ...hooks });
+
+/**
+ * A merge's declared policy over its losers: refuse on a live `block` edge,
+ * re-point every `repoint` edge onto the survivor, and run the named override
+ * for any other effect (`move-dedupe` and the like are entity-specific).
+ * Returns the re-pointed row count per edge.
+ */
+export const applyMergePolicy = async <E extends RemovableEntity>(
+  tx: Tx,
+  args: {
+    entity: E;
+    policy: Policy;
+    keepId: EntityId<E>;
+    loserIds: readonly EntityId<E>[];
+    /** `false` when the losers are hard-deleted: FKs bind tombstones too. */
+    liveOnly: boolean;
+    overrides?: Readonly<
+      Record<
+        string,
+        (tx: Tx, loserIds: readonly EntityId<E>[]) => Promise<void>
+      >
+    >;
+  },
+): Promise<Record<string, number>> => {
+  const edges = physicalEdges(args.entity, args.policy);
+  await assertNotBlocked(
+    tx,
+    args.entity,
+    edges.filter((edge) => !args.overrides?.[edge.key]),
+    args.loserIds,
+    "merge",
+  );
+  const repointed: Record<string, number> = {};
+  for (const edge of edges) {
+    const override = args.overrides?.[edge.key];
+    if (override) {
+      await override(tx, args.loserIds);
+      continue;
+    }
+    if (edge.disposition.effect === "block") continue;
+    if (edge.disposition.effect !== "repoint")
+      throw new Error(
+        `${edge.key}: a ${edge.disposition.effect} merge edge needs an override`,
+      );
+    const rows = await tx
+      .update(edge.table)
+      .set({ [edge.property]: args.keepId })
+      .where(
+        and(
+          inArray(edge.column, [...args.loserIds]),
+          args.liveOnly ? liveWhere(edge) : undefined,
+        ),
+      )
+      .returning();
+    repointed[edge.key] = rows.length;
+  }
+  return repointed;
+};

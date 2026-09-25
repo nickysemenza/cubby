@@ -67,7 +67,7 @@ import {
 } from "~/server/repo/merge";
 import { foldChargeInto } from "~/server/repo/purchase";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { policyDelete } from "~/server/repo/removal";
+import { applyMergePolicy, policyDelete } from "~/server/repo/removal";
 import {
   resolveLiveShortcode,
   resolveOrThrow,
@@ -857,35 +857,44 @@ export const mergeVendors = async (
       await tx.update(vendor).set(carriedColumns).where(eq(vendor.id, keepId));
     }
 
-    for (const fold of plan.folded) {
-      await foldChargeInto(tx, fold.deadId, fold.survivorId, actor);
-    }
-
-    // Everything still live moves to the keeper. The doomed charges are already
-    // soft-deleted, so `liveOnly` is what keeps this from re-introducing the
-    // collision the fold just resolved.
-    await repointEdge(tx, "vendor", "Purchase.vendorId", {
-      from: losers,
-      to: keepId,
-      liveOnly: true,
-    });
-
-    // Detach every loser logo before tombstoning, then give the survivor the
-    // carried one, so a logo that was not carried is eligible for the same
-    // shared-reference reap as an ordinary vendor delete.
     const loserLogos: string[] = [];
-    for (const loserId of losers) {
-      const { previousImageId } = await replaceSingularAttachment(
-        tx,
-        loserId,
-        "logo",
-        null,
-      );
-      if (previousImageId) loserLogos.push(previousImageId);
-    }
-    if (carriedLogo) {
-      await replaceSingularAttachment(tx, keepId, "logo", carriedLogo);
-    }
+    await applyMergePolicy(tx, {
+      entity: "vendor",
+      policy: VENDOR_MERGE_EDGE_POLICY,
+      keepId,
+      loserIds: losers,
+      liveOnly: true,
+      overrides: {
+        "Purchase.vendorId": async () => {
+          for (const fold of plan.folded)
+            await foldChargeInto(tx, fold.deadId, fold.survivorId, actor);
+          // Everything still live moves to the keeper. The doomed charges are
+          // already soft-deleted, so `liveOnly` keeps this from re-introducing
+          // the collision the fold just resolved.
+          await repointEdge(tx, "vendor", "Purchase.vendorId", {
+            from: losers,
+            to: keepId,
+            liveOnly: true,
+          });
+        },
+        // Detach every loser logo before tombstoning, then give the survivor
+        // the carried one, so a logo that was not carried is eligible for the
+        // same shared-reference reap as an ordinary vendor delete.
+        "EntityAttachment.subjectEntityId": async () => {
+          for (const loserId of losers) {
+            const { previousImageId } = await replaceSingularAttachment(
+              tx,
+              loserId,
+              "logo",
+              null,
+            );
+            if (previousImageId) loserLogos.push(previousImageId);
+          }
+          if (carriedLogo)
+            await replaceSingularAttachment(tx, keepId, "logo", carriedLogo);
+        },
+      },
+    });
 
     type VendorMergeSurvivorChanges = {
       mergedFrom: { from: null; to: VendorId[] };
