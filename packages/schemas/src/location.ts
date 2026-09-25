@@ -10,7 +10,6 @@ import {
 } from "./generated/entity-field-schemas.location.gen";
 import {
   auditDateFilterFields,
-  deriveUpdateData,
   numericRangeFields,
   timestampedFields,
 } from "./base-entity";
@@ -18,7 +17,6 @@ import { amount } from "./codec";
 import { money, moneyNullable } from "./money";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import {
-  imageShortcode,
   inventoryShortcode,
   locationShortcode,
   productShortcode,
@@ -379,28 +377,13 @@ export const infLocationWithSideEffects = infLocation.and(
 
 const optionalLocationShortcode = locationShortcode.nullable().optional();
 
-const locationCreateFields = generatedLocationFieldSchemas.create;
+export const locationCreateInput = z.object(
+  generatedLocationFieldSchemas.create,
+);
 
-export const locationCreateInput = z.object(locationCreateFields);
-
-// Every create field optional; `removeImageIds` is update-only. (The update
-// `parentId` inherits the create field's description — harmless doc, same type.)
-export const locationUpdateData = deriveUpdateData(locationCreateFields, {
-  extend: {
-    // Public `IMG-` codes, as returned by `LocationOut.images[].id` — resolved
-    // to uuids in the repo before they reach the `LocationImage` join table.
-    removeImageIds: z
-      .array(imageShortcode)
-      .optional()
-      .describe(
-        "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
-      ),
-    imageOrder: z
-      .array(imageShortcode)
-      .optional()
-      .describe("existing image ids in display order; first = cover"),
-  },
-});
+export const locationUpdateData = z.object(
+  generatedLocationFieldSchemas.update,
+);
 
 export const locationUpdateInput = z.object({
   id: locationShortcode,

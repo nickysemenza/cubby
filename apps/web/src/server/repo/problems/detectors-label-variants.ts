@@ -34,7 +34,7 @@
  */
 
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { DuplicateVendor, LabelVariant } from "@cubby/schemas/problems";
+import { ProblemItem } from "@cubby/schemas/problems";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { type Column, type SQL, sql } from "drizzle-orm";
 
@@ -144,7 +144,7 @@ const findSpellingVariants = async (
  */
 export const findManufacturerSpellingVariants = (
   db: Database,
-): Promise<LabelVariant[]> =>
+): Promise<ProblemItem<"manufacturerSpellingVariants">[]> =>
   findSpellingVariants(db, product, product.manufacturer, {
     extraWhere: sql`${canonicalLabelKey(product.manufacturer)} <> ${canonicalLabelKey(sql`${UNSPECIFIED_MANUFACTURER}`)}`,
   }).then((rows) =>
@@ -188,7 +188,7 @@ export const findManufacturerSpellingVariants = (
  */
 export const findDuplicateVendors = (
   db: Database,
-): Promise<DuplicateVendor[]> =>
+): Promise<ProblemItem<"duplicateVendors">[]> =>
   findSpellingVariants(db, vendor, vendor.name, {
     weight: sql`sum((
       SELECT count(*) FROM ${purchase}

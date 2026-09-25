@@ -233,7 +233,12 @@ export default defineEntity({
         validation: {
           read: null,
           create: null,
-          update: z.array(imageShortcode).optional(),
+          update: z
+            .array(imageShortcode)
+            .optional()
+            .describe(
+              "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
+            ),
         },
       },
       {
@@ -248,7 +253,10 @@ export default defineEntity({
         validation: {
           read: locationIdentityProductOut.nullable(),
           create: null,
-          update: z.array(imageShortcode).optional(),
+          update: z
+            .array(imageShortcode)
+            .optional()
+            .describe("existing image ids in display order; first = cover"),
         },
       },
       {

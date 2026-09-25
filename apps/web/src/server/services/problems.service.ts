@@ -15,7 +15,6 @@ import { measureEstimate, estimateCoverage } from "@cubby/schemas/nutrition";
 import {
   allProblemsSchema,
   type CoverageTotals,
-  type IngredientWithPartialCoverage,
   ingredientWithPartialCoverageSchema,
   type MaintenanceCounts,
   type ProblemKey,
@@ -24,12 +23,11 @@ import {
   type ProblemsFast,
   type ProblemsTracker,
   type ProblemsUpc,
-  type ProductWithBetterUpcData,
-  type ProductWithIslandedMappings,
   problemsCountSchema,
   productWithBetterUpcDataSchema,
   productWithIslandedMappingsSchema,
   TRACKER_PROBLEM_KEY_BY_TYPE,
+  type ProblemItem,
 } from "@cubby/schemas/problems";
 import type {
   ProjectAttentionItem,
@@ -140,8 +138,8 @@ const findProductCoverageProblems = async (
   db: Database,
   usdaClient: UsdaFoodBatchPort,
 ): Promise<{
-  ingredientsWithPartialCoverage: IngredientWithPartialCoverage[];
-  productsWithIslandedMappings: ProductWithIslandedMappings[];
+  ingredientsWithPartialCoverage: ProblemItem<"ingredientsWithPartialCoverage">[];
+  productsWithIslandedMappings: ProblemItem<"productsWithIslandedMappings">[];
   projection: ProductConversionCoverageProjection[];
 }> => {
   const products = await loadProductsForCoverage(db);
@@ -192,7 +190,8 @@ const findProductCoverageProblems = async (
     ]),
   );
 
-  const ingredientsWithPartialCoverage: IngredientWithPartialCoverage[] = [];
+  const ingredientsWithPartialCoverage: ProblemItem<"ingredientsWithPartialCoverage">[] =
+    [];
   const projectionById = new Map<
     ProductId,
     ProductConversionCoverageProjection
@@ -257,7 +256,8 @@ const findProductCoverageProblems = async (
     });
   }
 
-  const productsWithIslandedMappings: ProductWithIslandedMappings[] = [];
+  const productsWithIslandedMappings: ProblemItem<"productsWithIslandedMappings">[] =
+    [];
   for (const cand of islandedCandidates) {
     const p = enrichedById.get(cand.id);
     const effective = p ? effectiveById.get(p.id) : null;
@@ -525,8 +525,8 @@ const presentCoverageExactRows = async (
   partialPage: ExactProblemPage,
   islandPage: ExactProblemPage,
 ): Promise<{
-  ingredientsWithPartialCoverage: IngredientWithPartialCoverage[];
-  productsWithIslandedMappings: ProductWithIslandedMappings[];
+  ingredientsWithPartialCoverage: ProblemItem<"ingredientsWithPartialCoverage">[];
+  productsWithIslandedMappings: ProblemItem<"productsWithIslandedMappings">[];
 }> => {
   const selectedCodes = uniq([
     ...partialPage.data.map((row) => row.id),
@@ -1287,7 +1287,7 @@ const findProductsWithBetterUpcData = async (
   db: Database,
   upcLookupClient: UpcLookupBatchPort,
 ): Promise<{
-  products: ProductWithBetterUpcData[];
+  products: ProblemItem<"productsWithBetterUpcData">[];
   count: number;
   freshness: NonNullable<
     Awaited<ReturnType<typeof runDiagnostic>>["freshness"]

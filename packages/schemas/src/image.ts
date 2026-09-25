@@ -607,53 +607,22 @@ export const importTargetSummarySchema = z.object({
 });
 export type ImportTargetSummary = z.infer<typeof importTargetSummarySchema>;
 
-export const imageWithEntitySchema = z.object({
-  id: imageShortcode,
-  url: z.url(),
-  key: z.string(),
-  filename: z.string(),
-  size: z.int().positive(),
-  contentType: z.string(),
-  status: ImageStatus,
-  width: z.int().positive().nullable(),
-  height: z.int().positive().nullable(),
-  detectedContentType: z.string().nullable(),
-  sha256: z.string().nullable(),
-  renderStatus: ImageRenderStatus.nullable(),
-  storageStatus: ImageStorageStatus.nullable(),
-  source: generatedImageFieldSchemas.read.source,
-  sourcePageUrl: generatedImageFieldSchemas.read.sourcePageUrl,
-  sourceAssetUrl: generatedImageFieldSchemas.read.sourceAssetUrl,
-  sourceName: generatedImageFieldSchemas.read.sourceName,
-  useOriginal: generatedImageFieldSchemas.read.useOriginal,
-  representations: generatedImageFieldSchemas.read.representations,
-  verifiedAt: z.date().nullable(),
-  capturedAt: generatedImageFieldSchemas.read.capturedAt,
-  capturedAtOffsetMinutes:
-    generatedImageFieldSchemas.read.capturedAtOffsetMinutes,
-  captureLocation: generatedImageFieldSchemas.read.captureLocation,
-  capturePlaceName: generatedImageFieldSchemas.read.capturePlaceName,
-  captureDeviceLabel: generatedImageFieldSchemas.read.captureDeviceLabel,
-  capturedByPartyId: generatedImageFieldSchemas.read.capturedByPartyId,
-  capturedByName: generatedImageFieldSchemas.read.capturedByName,
-  captureAttribution: generatedImageFieldSchemas.read.captureAttribution,
-  provenanceEvidence: generatedImageFieldSchemas.read.provenanceEvidence,
-  // Optional like `processingIssue`/`importTarget`/`analysisSummary` below:
-  // `imageWithRelationsToAPI` builds the base shape and every real producer
-  // (`imageList`, `getImageById`, `getImagesByShortcodes`) merges in the
-  // batch-loaded score, the same "postprocessed field" pattern those three
-  // already use.
-  dataQuality: generatedImageFieldSchemas.read.dataQuality.optional(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-  entityType: entityImage.nullable(),
-  entityId: attachableImageEntityId.nullable(),
-  entityName: z.string().nullable(),
-  associations: z.array(imageAssociationSchema),
-  processingIssue: imageProcessingIssue.nullable().optional(),
-  importTarget: importTargetSummarySchema.nullable().optional(),
-  analysisSummary: imageAnalysisSummarySchema.nullable().optional(),
-});
+export const imageWithEntitySchema = z
+  .object(generatedImageFieldSchemas.read)
+  .extend({
+    // Optional like `processingIssue`/`importTarget`/`analysisSummary` below:
+    // `imageWithRelationsToAPI` builds the base shape and every real producer
+    // (`imageList`, `getImageById`, `getImagesByShortcodes`) merges in the
+    // batch-loaded score.
+    dataQuality: generatedImageFieldSchemas.read.dataQuality.optional(),
+    entityType: entityImage.nullable(),
+    entityId: attachableImageEntityId.nullable(),
+    entityName: z.string().nullable(),
+    associations: z.array(imageAssociationSchema),
+    processingIssue: imageProcessingIssue.nullable().optional(),
+    importTarget: importTargetSummarySchema.nullable().optional(),
+    analysisSummary: imageAnalysisSummarySchema.nullable().optional(),
+  });
 
 export type ImageWithEntity = z.infer<typeof imageWithEntitySchema>;
 
@@ -682,11 +651,9 @@ export const imageBrowserDeleteOut = z.object({
   sideEffects: mutationSideEffectsSchema,
 });
 
-export const projectImageSummarySchema = z.object({
-  id: imageShortcode,
-  url: z.url(),
-  filename: z.string(),
-});
+export const projectImageSummarySchema = z
+  .object(generatedImageFieldSchemas.read)
+  .pick({ id: true, url: true, filename: true });
 export const projectImageSummariesInput = z.object({
   projectIds: z.array(projectShortcode).max(500),
 });

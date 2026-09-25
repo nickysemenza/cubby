@@ -2,18 +2,10 @@ import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import { imageListFiltersSchema } from "@cubby/schemas/image";
 import type { SortParams } from "@cubby/schemas/pagination";
 import type {
-  EmptyLocation,
-  IngredientWithoutProduct,
-  LocationWithoutAiDescription,
-  NegativeExpectedQuantity,
-  NeverVerifiedInventory,
   ProblemKey,
   ProblemsViewsOut,
-  ProductMissingPrice,
-  ProductWithoutMappings,
   SectionTotals,
-  StaleLocation,
-  UnusedIngredient,
+  ProblemItem,
 } from "@cubby/schemas/problems";
 import {
   emptyLocationSchema,
@@ -489,7 +481,9 @@ export const executeProblem = async (
  * through their own output. One entry per converted key; the compiler holds it
  * to the schema's shape.
  */
-const toNeverVerified = (row: ListRow): NeverVerifiedInventory => {
+const toNeverVerified = (
+  row: ListRow,
+): ProblemItem<"neverVerifiedInventory"> => {
   const r = neverVerifiedInventorySchema.parse(row);
   return {
     id: r.id,
@@ -500,7 +494,9 @@ const toNeverVerified = (row: ListRow): NeverVerifiedInventory => {
   };
 };
 
-const toUnusedIngredient = (row: ListRow): UnusedIngredient => {
+const toUnusedIngredient = (
+  row: ListRow,
+): ProblemItem<"unusedIngredientsWithProduct"> => {
   const r = unusedIngredientSchema
     .omit({ products: true })
     .extend({
@@ -523,7 +519,7 @@ const toUnusedIngredient = (row: ListRow): UnusedIngredient => {
 
 const toLocationWithoutAiDescription = (
   row: ListRow,
-): LocationWithoutAiDescription => {
+): ProblemItem<"locationsWithoutAiDescription"> => {
   const r = locationWithoutAiDescriptionSchema
     .omit({ imageCount: true })
     .extend({ images: z.array(z.unknown()) })
@@ -540,7 +536,7 @@ const toLocationWithoutAiDescription = (
   };
 };
 
-const toEmptyLocation = (row: ListRow): EmptyLocation => {
+const toEmptyLocation = (row: ListRow): ProblemItem<"emptyLocations"> => {
   const r = emptyLocationSchema
     .omit({ firstImageId: true, firstImageUrl: true })
     .extend({ images: z.array(z.object({ id: z.string(), url: z.string() })) })
@@ -562,7 +558,9 @@ const toEmptyLocation = (row: ListRow): EmptyLocation => {
   };
 };
 
-const toNegativeExpectedQuantity = (row: ListRow): NegativeExpectedQuantity => {
+const toNegativeExpectedQuantity = (
+  row: ListRow,
+): ProblemItem<"negativeExpectedQuantity"> => {
   const r = z
     .object({
       id: negativeExpectedQuantitySchema.shape.id,
@@ -583,7 +581,9 @@ const toNegativeExpectedQuantity = (row: ListRow): NegativeExpectedQuantity => {
   };
 };
 
-const toProductMissingPrice = (row: ListRow): ProductMissingPrice => {
+const toProductMissingPrice = (
+  row: ListRow,
+): ProblemItem<"productsMissingPrice"> => {
   const r = productMissingPriceSchema
     .omit({ inventoryQuantity: true, locations: true })
     .extend({
@@ -610,7 +610,9 @@ const toProductMissingPrice = (row: ListRow): ProductMissingPrice => {
   };
 };
 
-const toProductWithoutMappings = (row: ListRow): ProductWithoutMappings => {
+const toProductWithoutMappings = (
+  row: ListRow,
+): ProblemItem<"productsWithoutMappings"> => {
   const r = productWithoutMappingsSchema
     .omit({ isIngredient: true, ingredientId: true, usdaUnavailable: true })
     .extend({
@@ -638,7 +640,7 @@ const toProductWithoutMappings = (row: ListRow): ProductWithoutMappings => {
   };
 };
 
-const toStaleLocation = (row: ListRow): StaleLocation => {
+const toStaleLocation = (row: ListRow): ProblemItem<"staleLocations"> => {
   const r = staleLocationSchema
     .omit({ itemCount: true })
     .extend({ inventoryEntries: z.array(z.unknown()) })
@@ -654,7 +656,9 @@ const toStaleLocation = (row: ListRow): StaleLocation => {
   };
 };
 
-const toIngredientWithoutProduct = (row: ListRow): IngredientWithoutProduct => {
+const toIngredientWithoutProduct = (
+  row: ListRow,
+): ProblemItem<"ingredientsWithoutProduct"> => {
   const r = ingredientWithoutProductSchema
     .omit({ recipeCount: true })
     .extend({ ownRecipeCount: z.number() })

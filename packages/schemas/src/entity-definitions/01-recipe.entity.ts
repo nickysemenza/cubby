@@ -6,8 +6,8 @@ import {
   recipeMeta,
   recipeNotes,
   recipeServings,
-  recipeSource,
   recipeTags,
+  recipeTopLevelFields,
   recipeTotals,
   recipeYieldSchema,
 } from "@cubby/schemas/recipe-shared";
@@ -56,7 +56,7 @@ export default defineEntity({
         control: { kind: "text", sectionOverride: "identity" },
         display: { list: true, detail: true, standard: "name" },
         validation: {
-          read: z.string(),
+          read: recipeTopLevelFields.name,
           create: z.string().trim().min(1, "Recipe name is required"),
           update: z
             .string()
@@ -72,7 +72,7 @@ export default defineEntity({
         control: { kind: "specialized", renderer: "structured-field" },
         display: { detail: true, renderer: { detail: "recipe-meta" } },
         validation: {
-          read: recipeMeta,
+          read: recipeTopLevelFields.meta,
           create: recipeMeta,
           update: recipeMeta.optional(),
         },
@@ -84,7 +84,7 @@ export default defineEntity({
         control: { kind: "specialized", renderer: "structured-field" },
         display: { detail: true, renderer: { detail: "recipe-yield" } },
         validation: {
-          read: recipeYieldSchema.nullable().optional(),
+          read: recipeTopLevelFields.yield,
           create: recipeYieldSchema.nullable().optional(),
           update: recipeYieldSchema.nullable().optional(),
         },
@@ -101,7 +101,7 @@ export default defineEntity({
           mobile: { slot: "trailing", priority: 5, interactive: true },
         },
         validation: {
-          read: recipeServings.nullable().optional(),
+          read: recipeTopLevelFields.servings,
           create: recipeServings.nullable().optional(),
           update: recipeServings.nullable().optional(),
         },
@@ -113,7 +113,7 @@ export default defineEntity({
         control: { kind: "specialized", renderer: "tag-list" },
         display: { list: true, detail: true },
         validation: {
-          read: recipeTags.nullable().optional(),
+          read: recipeTopLevelFields.tags,
           create: recipeTags.nullable().optional(),
           update: recipeTags.nullable().optional(),
         },
@@ -129,7 +129,7 @@ export default defineEntity({
         // `createEntityDisplayColumns`.
         display: { list: true, detail: true, listHidden: true },
         validation: {
-          read: recipeNotes.nullable().optional(),
+          read: recipeTopLevelFields.notes,
           create: recipeNotes.nullable().optional(),
           update: recipeNotes.nullable().optional(),
         },
@@ -260,7 +260,7 @@ export default defineEntity({
         key: "id",
         kind: "identifier",
         validation: {
-          read: recipeShortcode,
+          read: recipeTopLevelFields.id,
           create: null,
           update: null,
         },
@@ -270,7 +270,7 @@ export default defineEntity({
         kind: "timestamp",
         display: { detail: true },
         validation: {
-          read: z.date(),
+          read: recipeTopLevelFields.createdAt,
           create: null,
           update: null,
         },
@@ -280,7 +280,7 @@ export default defineEntity({
         kind: "timestamp",
         display: { detail: true },
         validation: {
-          read: z.date(),
+          read: recipeTopLevelFields.updatedAt,
           create: null,
           update: null,
         },
@@ -308,7 +308,7 @@ export default defineEntity({
           ],
         },
         validation: {
-          read: recipeSource.nullable().optional(),
+          read: recipeTopLevelFields.source,
           create: null,
           update: null,
         },
@@ -393,7 +393,7 @@ export default defineEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: { detail: true },
         validation: {
-          read: recipeShortcode.nullable(),
+          read: recipeTopLevelFields.forkedFromRecipeId,
           create: recipeShortcode.nullable().optional(),
           update: recipeShortcode.nullable().optional(),
         },
@@ -406,7 +406,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         validation: {
-          read: z.string().nullable(),
+          read: recipeTopLevelFields.forkedFromRecipeName,
           create: null,
           update: null,
         },

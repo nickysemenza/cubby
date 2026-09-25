@@ -3,7 +3,6 @@ import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { recipeRelatedFilterFields } from "./related-view";
 import {
   auditDateFilterFields,
-  deriveUpdateFields,
   numericRangeFields,
   timestampedFields,
 } from "./base-entity";
@@ -14,7 +13,6 @@ import {
   generatedRecipeFilterFields,
 } from "./generated/entity-field-schemas.recipe.gen";
 import { amount } from "./codec";
-import { requiredName } from "./common";
 import {
   cookbookShortcode,
   ingredientShortcode,
@@ -31,19 +29,10 @@ import {
 import {
   recipeTopLevelFields,
   recipeTopLevel,
-  recipeMeta,
-  recipeNotes,
-  recipeServings,
   recipeSourceValues,
-  recipeTags,
   recipeTotals,
-  recipeYieldSchema,
 } from "./recipe-shared";
-import {
-  recipeIngredientInput,
-  recipeSectionInput,
-  recipeSectionsOut,
-} from "./recipe-fields";
+import { recipeIngredientInput, recipeSectionsOut } from "./recipe-fields";
 export {
   recipeIngredientInput,
   recipeInstructionInput,
@@ -301,36 +290,9 @@ export const recipeListFilterFields = {
   nameFilter: recipeFilterFields.nameFilter,
 };
 
-// Descriptions surface to MCP clients through the explicit `mcpRecipe*Fields`
-// exports below; keep create-required fields and update-optional fields separate.
-const recipeWritableFields = {
-  name: requiredName("Recipe name").describe("Recipe name"),
-  meta: recipeMeta.describe("Source metadata, e.g. { url } of the web source"),
-  yield: recipeYieldSchema
-    .nullable()
-    .optional()
-    .describe('What the recipe produces, e.g. { value: 2, unit: "loaves" }'),
-  servings: recipeServings
-    .nullable()
-    .optional()
-    .describe("Number of servings (positive integer)"),
-  tags: recipeTags.nullable().optional().describe("Free-form tags"),
-  notes: recipeNotes
-    .nullable()
-    .optional()
-    .describe("Freeform markdown headnote/intro plus tips"),
-  sections: z
-    .array(recipeSectionInput)
-    .describe(
-      "Recipe sections, each with ingredients (by ingredient/recipe id) and instructions",
-    ),
-};
-
 export const recipeCreateInput = z.object(generatedRecipeFieldSchemas.create);
 
-export const recipeUpdateData = z
-  .object(generatedRecipeFieldSchemas.update)
-  .partial();
+export const recipeUpdateData = z.object(generatedRecipeFieldSchemas.update);
 
 export const recipeUpdateInput = z.object({
   id: recipeShortcode,
@@ -363,13 +325,6 @@ export const recipeIdInput = z.object({
 
 export type RecipeCreateInput = z.infer<typeof recipeCreateInput>;
 export type RecipeUpdateInput = z.infer<typeof recipeUpdateInput>;
-
-export const mcpRecipeCreateInput = z.object(recipeWritableFields);
-const mcpRecipeUpdateFields = {
-  id: recipeShortcode.describe("Recipe ID"),
-  ...deriveUpdateFields(recipeWritableFields),
-};
-export const mcpRecipeUpdateInput = z.object(mcpRecipeUpdateFields);
 
 /**
  * Slim MCP projection of a recipe list row — built from the same field map as

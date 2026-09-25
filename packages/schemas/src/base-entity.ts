@@ -115,66 +115,6 @@ export const numericRangeFields = <Prefix extends string>(
   } as NumericRangeFields<Prefix>;
 };
 
-type StripDefault<F> =
-  F extends z.ZodDefault<infer Inner extends z.ZodType> ? Inner : F;
-
-type UpdateFields<
-  T extends z.ZodRawShape,
-  OmitK extends keyof T,
-  E extends z.ZodRawShape,
-> = {
-  [K in Exclude<keyof T, OmitK>]: z.ZodOptional<StripDefault<T[K]>>;
-} & E;
-
-/**
- * Derive an UPDATE-data schema from a CREATE shape: every field becomes optional
- * AND any field-level `.default(...)` is stripped first.
- *
- * Stripping the default is the whole point — a partial update must leave an
- * omitted key UNCHANGED. With a naive `.partial()`, a create-time `.default([])`
- * (e.g. `unitMappings`, `externalIds`, `aliases`) survives, so omitting the key on
- * update would coerce it to `[]` and silently wipe the existing rows. This was
- * previously prevented by hand-writing each `xUpdateData`; now it's one helper.
- *
- * @param createFields the raw fields object behind the create schema (`z.object(createFields)`)
- * @param opts.extend update-only fields the create shape lacks (e.g. `removeImageIds`)
- * @param opts.omit  server-managed create fields to drop from the update surface
- */
-export function deriveUpdateFields<
-  T extends z.ZodRawShape,
-  const OmitK extends keyof T = never,
-  E extends z.ZodRawShape = Record<never, never>,
->(
-  createFields: T,
-  opts: { extend?: E; omit?: readonly OmitK[] } = {},
-): UpdateFields<T, OmitK, E> {
-  const omit = new Set<PropertyKey>(opts.omit ?? []);
-  const fields: Record<string, z.core.$ZodType> = {};
-  for (const [key, field] of Object.entries(createFields)) {
-    if (omit.has(key)) continue;
-    const base = field instanceof z.ZodDefault ? field.unwrap() : field;
-    fields[key] = z.optional(base);
-  }
-  Object.assign(fields, opts.extend ?? {});
-  // SAFETY: each retained create key is copied with its default removed and
-  // made optional; extend contributes exactly E, so this matches UpdateFields.
-  return fields as UpdateFields<T, OmitK, E>;
-}
-
-export function deriveUpdateData<
-  T extends z.ZodRawShape,
-  const OmitK extends keyof T = never,
-  E extends z.ZodRawShape = Record<never, never>,
->(
-  createFields: T,
-  opts: { extend?: E; omit?: readonly OmitK[] } = {},
-): z.ZodObject<UpdateFields<T, OmitK, E>> {
-  const fields = deriveUpdateFields(createFields, opts);
-  // SAFETY: deriveUpdateFields constructs exactly the raw shape described by
-  // UpdateFields; Zod's object constructor preserves that shape at runtime.
-  return z.object(fields) as z.ZodObject<UpdateFields<T, OmitK, E>>;
-}
-
 /**
  * `.refine()` args for an array that must not contain duplicate `keyFn(item)`
  * values — spread into `.refine(...uniqueBy(keyFn, message))`. `keyFn` is the

@@ -13,7 +13,7 @@ import {
   numericRangeFields,
   timestampedFields,
 } from "./base-entity";
-import { dataQuality, productDataCheck } from "./data-quality";
+import { productDataCheck } from "./data-quality";
 import { amount } from "./codec";
 import { requiredName } from "./common";
 import { money, moneyNullable, positiveMoneyNullable } from "./money";
@@ -28,13 +28,7 @@ import {
   locationShortcode,
   productShortcode,
 } from "./identifiers";
-import {
-  imageOut,
-  imageAnalysisSummarySchema,
-  ImageRenderStatus,
-  ImageStatus,
-  ImageStorageStatus,
-} from "./image";
+import { imageOut, imageAnalysisSummarySchema } from "./image";
 import { displayImagesField } from "./display-images";
 import { imageUrlSummary } from "./image-summary";
 import {
@@ -88,12 +82,7 @@ export const hasFoodIndicators = (product: {
   (product.ingredientId != null && product.ingredientId.length > 0);
 
 export const productCreateInput = z.object(generatedProductFieldSchemas.create);
-export const productUpdateData = z
-  .object(generatedProductFieldSchemas.update)
-  .extend({
-    removeImageIds: z.array(imageShortcode).optional(),
-    imageOrder: z.array(imageShortcode).optional(),
-  });
+export const productUpdateData = z.object(generatedProductFieldSchemas.update);
 
 export const productUpdateInput = z.object({
   id: productShortcode,
@@ -967,104 +956,78 @@ export type ProductQuickCreatePayload = z.infer<
   typeof productQuickCreatePayload
 >;
 
-const productMcpFields = {
-  id: productShortcode,
-  name: generatedProductFieldSchemas.read.name,
-  manufacturer: generatedProductFieldSchemas.read.manufacturer,
-  model: generatedProductFieldSchemas.read.model,
-  notes: generatedProductFieldSchemas.read.notes,
-  primaryGtin: generatedProductFieldSchemas.read.primaryGtin,
-  category: generatedProductFieldSchemas.read.category,
-  tags: generatedProductFieldSchemas.read.tags,
-  /**
-   * Hand-written rather than referencing `generatedProductFieldSchemas.read.
-   * price` directly: this shape adds `effectivePrice` alongside `price`, and
-   * documents the pairing in its own `.describe()` — see
-   * INTENTIONAL_RESPELLINGS in field-map-drift.unit.test.ts. The MEANING
-   * still matches `productTopLevelOut`/`productPricingOut`'s counterparts.
-   */
-  price: moneyNullable.describe(
-    "Manual per-item valuation/replacement-price override, exactly as stored; null means no override and `effectivePrice` falls back to the Expense-derived value.",
-  ),
-  effectivePrice: moneyNullable.describe(
-    "Resolved valuation/costing price: the manual `price` override when set, else the Expense-derived price. Same number as `pricing.effectivePrice` — this is what values stock and costs recipes.",
-  ),
-  pricing: productPricingOut,
-  // Stricter than the generated read field (`z.number().nullable()`, no
-  // int/positive) — registered in INTENTIONAL_RESPELLINGS.
-  expectedQuantity: z.number().int().positive().nullable(),
-  imageCount: z.number().int().nonnegative(),
-  /** Counts every active attachment in its role, including PDFs and files that
-   * cannot currently render. Together these sum to imageCount. */
-  itemImageCount: generatedProductFieldSchemas.read.itemImageCount,
-  labelImageCount: generatedProductFieldSchemas.read.labelImageCount,
-  coverImageUrl: z.url().nullable(),
-  fdc_id: generatedProductFieldSchemas.read.fdc_id,
-  usdaUnavailable: generatedProductFieldSchemas.read.usdaUnavailable,
-  stockTracked: generatedProductFieldSchemas.read.stockTracked,
-  // A slimmer MCP-facing projection of `externalIdOut` (no raw `id`/
-  // `isPrimary`) — registered in INTENTIONAL_RESPELLINGS.
-  externalIds: z.array(
-    z.object({
-      source: externalIdSource,
-      kind: externalIdKind,
-      externalId: z.string().min(1),
-      url: z.string().url().nullish(),
-      createdAt: z.date(),
-      updatedAt: z.date(),
-    }),
-  ),
-  // USDA FoodData Central id — declared exception, not a cubby shortcode.
-  usdaFdcId: z.number().nullable(),
-  // `ingredientId` has no generated *read* field (readKey: null on the
-  // entity); this reuses the generated *create* field, which carries the
-  // same nullable-shortcode meaning.
-  ingredientId: generatedProductFieldSchemas.create.ingredientId,
-  // Output-shaped (`mcpUnitMappingOut`), unlike the generated create/update
-  // field's input shape (`unitMappingInput`) — registered in
-  // INTENTIONAL_RESPELLINGS.
-  unitMappings: z.array(mcpUnitMappingOut),
-  labelNutrition: generatedProductFieldSchemas.read.labelNutrition,
-  dataQuality,
-};
-export const productMcpOut = z.object(productMcpFields);
+export const productMcpOut = z
+  .object(generatedProductFieldSchemas.read)
+  .pick({
+    id: true,
+    name: true,
+    manufacturer: true,
+    model: true,
+    notes: true,
+    primaryGtin: true,
+    category: true,
+    tags: true,
+    price: true,
+    pricing: true,
+    expectedQuantity: true,
+    itemImageCount: true,
+    labelImageCount: true,
+    fdc_id: true,
+    usdaUnavailable: true,
+    stockTracked: true,
+    labelNutrition: true,
+    dataQuality: true,
+  })
+  .extend({
+    effectivePrice: moneyNullable.describe(
+      "Resolved valuation/costing price: the manual `price` override when set, else the Expense-derived price. Same number as `pricing.effectivePrice` — this is what values stock and costs recipes.",
+    ),
+    imageCount: z.number().int().nonnegative(),
+    coverImageUrl: z.url().nullable(),
+    externalIds: z.array(productExternalIdMcpEntityOut),
+    // USDA FoodData Central id — declared exception, not a cubby shortcode.
+    usdaFdcId: z.number().nullable(),
+    // No generated read field (the declaration has no read key for it).
+    ingredientId: generatedProductFieldSchemas.create.ingredientId,
+    unitMappings: z.array(mcpUnitMappingOut),
+  });
 export type ProductMcpOut = z.infer<typeof productMcpOut>;
 
-export const productMcpImageOut = z.object({
-  // `imageShortcode`, not a uuid: images carry public `IMG-` codes now, so the
-  // MCP boundary no longer needs an image exception.
-  id: imageShortcode,
-  url: z.url(),
-  key: z.string(),
-  filename: z.string(),
-  size: z.int().positive(),
-  contentType: z.string(),
-  status: ImageStatus,
-  width: z.int().positive().nullable(),
-  height: z.int().positive().nullable(),
-  detectedContentType: z.string().nullable(),
-  sha256: z.string().nullable(),
-  renderStatus: ImageRenderStatus.nullable(),
-  storageStatus: ImageStorageStatus.nullable(),
-  source: imageOut.shape.source,
-  sourcePageUrl: imageOut.shape.sourcePageUrl,
-  sourceAssetUrl: imageOut.shape.sourceAssetUrl,
-  sourceName: imageOut.shape.sourceName,
-  useOriginal: imageOut.shape.useOriginal,
-  /** The ProductImage join role; null is distinct from an explicit item role. */
-  purpose: z.enum(["item", "label"]).nullable(),
-  verifiedAt: z.date().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-  displayPosition: z.number().int().positive().nullable(),
-  isCover: z.boolean(),
-  // Populated only on a Product detail/get read, not list, to keep list cost
-  // flat — see `dbProductToAPI`/`splitProductImages`.
-  analysisSummary: imageAnalysisSummarySchema.nullable().optional(),
-});
+export const productMcpImageOut = imageOut
+  .pick({
+    id: true,
+    url: true,
+    key: true,
+    filename: true,
+    size: true,
+    contentType: true,
+    status: true,
+    width: true,
+    height: true,
+    detectedContentType: true,
+    sha256: true,
+    renderStatus: true,
+    storageStatus: true,
+    source: true,
+    sourcePageUrl: true,
+    sourceAssetUrl: true,
+    sourceName: true,
+    useOriginal: true,
+    verifiedAt: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    /** The ProductImage join role; null is distinct from an explicit item role. */
+    purpose: z.enum(["item", "label"]).nullable(),
+    displayPosition: z.number().int().positive().nullable(),
+    isCover: z.boolean(),
+    // Populated only on a Product detail/get read, not list, to keep list cost
+    // flat — see `dbProductToAPI`/`splitProductImages`.
+    analysisSummary: imageAnalysisSummarySchema.nullable().optional(),
+  });
 
-export const productMcpDetailOut = z.object({
-  ...productMcpFields,
+export const productMcpDetailOut = productMcpOut.extend({
   coverImageId: imageShortcode.nullable(),
   images: z.array(productMcpImageOut),
 });

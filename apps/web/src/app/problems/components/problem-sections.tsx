@@ -6,21 +6,10 @@ import {
   type AllProblems,
   type CoverageProblemKey,
   type CoverageTotals,
-  type FinancialTransactionAllocationDefect,
-  type KitCountedTwice,
-  type ImportFindingProblem,
-  type ImageProcessingProblem,
-  type LabelVariant,
-  type NegativeExpectedQuantity,
   type ProblemKey,
-  type ProductMissingPrice,
-  type PurchaselessExitExpense,
-  type PurchaseNotReconciling,
-  type SoldButStillStocked,
   sectionSize,
-  type ToolUsedOutsideOwnership,
   TRACKER_PROBLEM_KEY_BY_TYPE,
-  type UnlinkedExitExpense,
+  type ProblemItem,
 } from "@cubby/schemas/problems";
 import type {
   ProjectAttentionItem,
@@ -73,7 +62,6 @@ import { countLabel } from "~/lib/pluralize";
 import { problems as problemOperations } from "~/lib/problems.functions";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
-import type { ProductWithBetterUpcData } from "~/server/repo/problems";
 
 import { BACKFILL } from "./backfill-registry";
 import { EmptyLocationsList } from "./empty-locations-list";
@@ -348,7 +336,11 @@ function problemAssembly(
  * component (not `renderItem`) so it can own the mutation hook; the card drops
  * out of the list once the problems queries invalidate.
  */
-function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
+function UpcApplyAction({
+  product,
+}: {
+  product: ProblemItem<"productsWithBetterUpcData">;
+}) {
   const apply = useActionMutation({
     mutationFn: productOperations.applyUpcData.mutationOptions,
     success: `Updated ${product.name} from UPC`,
@@ -369,7 +361,11 @@ function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
   );
 }
 
-function ImportFindingActions({ finding }: { finding: ImportFindingProblem }) {
+function ImportFindingActions({
+  finding,
+}: {
+  finding: ProblemItem<"importFindings">;
+}) {
   const resolve = useActionMutation({
     mutationFn: problemOperations.resolveImportFinding.mutationOptions,
     success: (result) =>
@@ -561,7 +557,10 @@ function ManufacturerVariantLink({ manufacturer }: { manufacturer: string }) {
 }
 
 const variantSubtitle = (
-  v: Pick<LabelVariant, "count" | "canonical" | "canonicalCount">,
+  v: Pick<
+    ProblemItem<"manufacturerSpellingVariants">,
+    "count" | "canonical" | "canonicalCount"
+  >,
   noun: string,
 ) =>
   `${v.count} ${noun}${v.count === 1 ? "" : "s"} — "${v.canonical}" has ${
@@ -703,27 +702,35 @@ const ALLOCATION_DEFECT_LABEL = {
   "allocation-sign-mismatch":
     "an allocation's sign differs from the transaction",
 } satisfies Record<
-  FinancialTransactionAllocationDefect["reasons"][number],
+  ProblemItem<"financialTransactionAllocationDefects">["reasons"][number],
   string
 >;
 
-function unpricedSubtitle(product: ProductMissingPrice): string {
+function unpricedSubtitle(
+  product: ProblemItem<"productsMissingPrice">,
+): string {
   const qty = product.inventoryQuantity;
   return `${byManufacturer(product.manufacturer)} · ${qty} ${qty === 1 ? "unit" : "units"} unvalued`;
 }
 
-function soldButStockedSubtitle(product: SoldButStillStocked): string {
+function soldButStockedSubtitle(
+  product: ProblemItem<"soldButStillStocked">,
+): string {
   const live = product.liveQuantity;
   const stocked = `${live} still on a shelf`;
   return `${byManufacturer(product.manufacturer)} · sold ${product.soldQuantity}, ${stocked} · ${formatCurrency(Math.abs(product.proceeds))} recovered`;
 }
 
-function kitCountedTwiceSubtitle(product: KitCountedTwice): string {
+function kitCountedTwiceSubtitle(
+  product: ProblemItem<"kitsCountedTwice">,
+): string {
   const bought = `${product.expectedUnits} bought`;
   return `${byManufacturer(product.manufacturer)} · ${product.ownUnits} stocked as itself, plus its parts · more than the ${bought}`;
 }
 
-function negativeExpectedSubtitle(row: NegativeExpectedQuantity): string {
+function negativeExpectedSubtitle(
+  row: ProblemItem<"negativeExpectedQuantity">,
+): string {
   const unknown = row.unknownAcquisitionLines + row.unknownExitLines;
   return [
     byManufacturer(row.manufacturer),
@@ -734,7 +741,9 @@ function negativeExpectedSubtitle(row: NegativeExpectedQuantity): string {
     .join(" · ");
 }
 
-function unlinkedExitSubtitle(row: UnlinkedExitExpense): string {
+function unlinkedExitSubtitle(
+  row: ProblemItem<"unlinkedExitExpenses">,
+): string {
   return [
     row.vendorName,
     formatCurrency(Math.abs(row.cost)),
@@ -744,7 +753,9 @@ function unlinkedExitSubtitle(row: UnlinkedExitExpense): string {
     .join(" · ");
 }
 
-function purchaselessExitSubtitle(row: PurchaselessExitExpense): string {
+function purchaselessExitSubtitle(
+  row: ProblemItem<"purchaselessExitExpenses">,
+): string {
   return [
     row.projectName,
     formatCurrency(Math.abs(row.cost)),
@@ -754,7 +765,9 @@ function purchaselessExitSubtitle(row: PurchaselessExitExpense): string {
     .join(" · ");
 }
 
-function outsideOwnershipSubtitle(row: ToolUsedOutsideOwnership): string {
+function outsideOwnershipSubtitle(
+  row: ProblemItem<"toolsUsedOutsideOwnership">,
+): string {
   // `projectBoundary` already has the detector's grace period applied, so it is
   // not the project's stated date — say "grace" rather than let the reader
   // compare it against the project page and conclude the card is wrong.
@@ -787,16 +800,20 @@ function entityBadge(
 }
 
 const locationBadges = (
-  locations: ProductMissingPrice["locations"],
+  locations: ProblemItem<"productsMissingPrice">["locations"],
 ): ReactNode[] =>
   locations.map((location) => entityBadge("location", location));
 
-function purchaseSubtitle(purchase: PurchaseNotReconciling): string {
+function purchaseSubtitle(
+  purchase: ProblemItem<"purchasesNotReconciling">,
+): string {
   const expenses = `${purchase.expenseCount} ${purchase.expenseCount === 1 ? "expense" : "expenses"}`;
   return `Stated ${formatCurrency(purchase.statedTotal)} · expenses ${formatCurrency(purchase.expenseTotal)} across ${expenses}`;
 }
 
-function purchaseDeltaHint(purchase: PurchaseNotReconciling): string | null {
+function purchaseDeltaHint(
+  purchase: ProblemItem<"purchasesNotReconciling">,
+): string | null {
   const delta = reconciliationDelta(purchase);
   if (delta === null) return null;
   const gap = formatCurrency(Math.abs(delta));
@@ -1450,7 +1467,7 @@ const DECLARED_SECTIONS = [
     problemKeys: ["imageProcessingIssues"],
     coverage: { keys: ["imageProcessingIssues"] },
     entity: "image",
-    renderItem: (image: ImageProcessingProblem) => ({
+    renderItem: (image: ProblemItem<"imageProcessingIssues">) => ({
       title: image.filename,
       subtitle:
         image.processingIssue === "failed"

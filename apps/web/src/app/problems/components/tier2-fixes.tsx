@@ -1,7 +1,4 @@
-import type {
-  DuplicateProductIdentity,
-  DuplicateVendor,
-} from "@cubby/schemas/problems";
+import { ProblemItem } from "@cubby/schemas/problems";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
@@ -81,7 +78,7 @@ export function DuplicateVendorMergeFix({
   variant,
   close,
 }: {
-  variant: DuplicateVendor;
+  variant: ProblemItem<"duplicateVendors">;
   close: () => void;
 }) {
   const merge = useActionMutation({
@@ -147,7 +144,7 @@ export function DuplicateProductMergeFix({
   variant,
   close,
 }: {
-  variant: DuplicateProductIdentity;
+  variant: ProblemItem<"duplicateProductIdentities">;
   close: () => void;
 }) {
   const merge = useActionMutation({
