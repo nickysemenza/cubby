@@ -93,6 +93,8 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     globs: [
       `${WEB}/src/lib/browser-operation-path.ts`,
       `${WEB}/src/lib/superjson-wire.ts`,
+      `${WEB}/src/routes/api/browser/dispatch.ts`,
+      `${WEB}/src/server.ts`,
       `${WEB}/src/server/start-operation-dispatch.contract.ts`,
       `${WEB}/src/server/start-operation.contract.ts`,
       `${WEB}/src/server/workflows/audit-log.ts`,

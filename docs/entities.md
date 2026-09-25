@@ -620,9 +620,10 @@ tracing, and console observability.
 Ordinary browser calls POST a SuperJSON operation envelope to
 `/api/browser/dispatch`. The Worker routes this path directly to the shared
 dispatcher; operation and entity labels remain in request headers for DevTools
-and tracing. SSR invokes that dispatcher in-process. The previous Start
-function path remains available to already-open clients, including its legacy
-alias rewrite at both server entries.
+and tracing. SSR invokes that dispatcher in-process. A browser that reaches an
+older Worker without this endpoint retries through the Start function. That
+function remains available to already-open clients, including its legacy alias
+rewrite at both server entries.
 
 The server operation boundary chooses one database adapter before invoking a
 handler and exposes that adapter through both context handles. Ordinary queries

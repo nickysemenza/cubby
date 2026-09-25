@@ -13,7 +13,10 @@ import {
   unparsedStartOperationResultSchema,
 } from "~/server/start-operation.contract";
 
-import { dispatchBrowserOperation } from "./browser-operation-transport";
+import {
+  BrowserOperationEndpointMissing,
+  dispatchBrowserOperation,
+} from "./browser-operation-transport";
 import type { CubbyOperationMeta } from "./operation-meta";
 import {
   beginObservedOperation,
@@ -107,7 +110,23 @@ export interface StartTransportRuntime {
   ): Promise<StartOperationResult<UnparsedStartOperationData>>;
 }
 
-async function dispatchStartOperation<Input>(
+async function dispatchLegacyStartOperation(
+  operation: StartOperationId,
+  input: UnparsedStartOperationData,
+  transport: { signal?: AbortSignal; headers: HeadersInit },
+): Promise<StartOperationResult<UnparsedStartOperationData>> {
+  const { dispatchStartOperationTransport } =
+    await import("~/server-functions/start-operation-dispatch.functions");
+  return unparsedStartOperationResultSchema.parse(
+    await dispatchStartOperationTransport({
+      data: { operation, input },
+      signal: transport.signal,
+      headers: transport.headers,
+    }),
+  );
+}
+
+async function dispatchServerOperation<Input>(
   operation: StartOperationId,
   input: Input,
   transport: { signal?: AbortSignal; headers: HeadersInit },
@@ -156,9 +175,15 @@ export function overrideStartDispatch(
 const productionStartTransportRuntime: StartTransportRuntime = {
   dispatch: async (operation, input, transport) => {
     if (dispatchOverride) return dispatchOverride(operation, input, transport);
-    if (!import.meta.env.SSR)
-      return dispatchBrowserOperation(operation, input, transport);
-    return dispatchStartOperation(operation, input, transport);
+    if (!import.meta.env.SSR) {
+      try {
+        return await dispatchBrowserOperation(operation, input, transport);
+      } catch (error) {
+        if (!(error instanceof BrowserOperationEndpointMissing)) throw error;
+        return dispatchLegacyStartOperation(operation, input, transport);
+      }
+    }
+    return dispatchServerOperation(operation, input, transport);
   },
 };
 

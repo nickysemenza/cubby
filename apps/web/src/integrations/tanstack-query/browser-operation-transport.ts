@@ -10,6 +10,8 @@ import {
   unparsedStartOperationResultSchema,
 } from "~/server/start-operation.contract";
 
+export class BrowserOperationEndpointMissing extends Error {}
+
 /** Use the same operation envelope as Start without importing its React handler. */
 export async function dispatchBrowserOperation(
   operation: StartOperationId,
@@ -29,6 +31,7 @@ export async function dispatchBrowserOperation(
       signal: transport.signal,
     },
   );
+  if (response.status === 404) throw new BrowserOperationEndpointMissing();
   const body: unknown = await response.json();
   const parsed = superJsonResultSchema.safeParse(body);
   if (!parsed.success) {
