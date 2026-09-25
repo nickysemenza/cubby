@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { kitsAccountedByParts } from "./product-add-to-inventory-dialog";
+import { kitsAccountedByParts } from "./product-bulk-add-to-inventory-dialog";
 
 describe("kitsAccountedByParts", () => {
   it("has no answer for a product that is not a kit", () => {

@@ -4,7 +4,6 @@ import { useCallback, useMemo, useState } from "react";
 
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 
-import { ProductAddToInventoryDialog } from "../products/product-add-to-inventory-dialog";
 import type { BulkAddProduct } from "../products/product-bulk-add-to-inventory-dialog";
 import { ProductBulkAddToInventoryDialog } from "../products/product-bulk-add-to-inventory-dialog";
 import { VerbMenuItem } from "./action-verb-ui";
@@ -102,44 +101,14 @@ export function useAddToInventoryAction(): EntityActionHandles {
         }}
       />
     ),
-    // One product gets the single-product dialog, which can offer the AI
-    // location suggester — it reads one product's history for a basis, so a
-    // mixed selection has nothing to suggest from. Anything more gets the
-    // grid, where the shared location is the whole point.
-    dialog: soleWithDetail ? (
-      accounting ? (
-        <ProductAddToInventoryDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setStaged([]);
-          }}
-          product={{
-            id: soleWithDetail.id,
-            name: soleWithDetail.name,
-            manufacturer: soleWithDetail.manufacturer ?? "",
-          }}
-          accounting={accounting}
-        />
-      ) : (
-        <ProductAddToInventoryDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setStaged([]);
-          }}
-          product={{
-            id: soleWithDetail.id,
-            name: soleWithDetail.name,
-            manufacturer: soleWithDetail.manufacturer ?? "",
-          }}
-        />
-      )
-    ) : (
+    dialog: (
       <ProductBulkAddToInventoryDialog
-        open={staged.length > 1}
+        open={staged.length > 0}
         onOpenChange={(open) => {
           if (!open) setStaged([]);
         }}
-        products={staged}
+        products={soleWithDetail ? [soleWithDetail] : staged}
+        accounting={accounting}
       />
     ),
   };

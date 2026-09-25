@@ -1,17 +1,16 @@
 /**
- * ProductBulkAddToInventoryDialog — stock a whole selection at one location.
+ * ProductBulkAddToInventoryDialog — stock one product or a whole selection at
+ * one location.
  *
- * The multi-row counterpart to `ProductAddToInventoryDialog`. The products are
- * fixed (the caller selected them), so the only shared question is where they
- * go; quantities stay per row because units genuinely differ per product and
- * each one's valuation resolves through its own unit-mapping graph.
+ * The products are fixed (the caller selected them), so the only shared
+ * question is where they go; quantities stay per row because units genuinely
+ * differ per product and each one's valuation resolves through its own
+ * unit-mapping graph.
  *
- * Two deliberate differences from the single-product dialog:
- *
- * - **No AI location suggester.** `FieldSuggestionProvider` for
- *   `inventory.locationId` needs one product as its basis; with a mixed
- *   selection there is no single basis to suggest from, and picking one row's
- *   product to stand for the rest would be a guess wearing a suggestion's
+ * - **The AI location suggester needs exactly one product.**
+ *   `FieldSuggestionProvider` for `inventory.locationId` reads one product's
+ *   history as its basis; a mixed selection has no single basis, and picking
+ *   one row to stand for the rest would be a guess wearing a suggestion's
  *   clothes.
  * - **The merge is shown before it happens.** `(productId, locationId,
  *   placement)` is a partial unique index, so an item whose slot is already
@@ -26,19 +25,23 @@ import {
 } from "@cubby/schemas/identifiers";
 import { positiveAmount } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useQuery } from "@tanstack/react-query";
 import { type FC, useEffect, useMemo } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { FormProvider, useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import {
   AmountFieldGroup,
   DEFAULT_AMOUNT_UNIT,
 } from "~/app/_components/inventory/amount-field-group";
 import { inventory } from "~/app/inventory/inventory.functions";
+import { product as productOperations } from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
@@ -80,6 +83,79 @@ interface ProductBulkAddToInventoryDialogProps {
   products: readonly BulkAddProduct[];
   /** Called after a successful add — the caller clears its row selection. */
   onComplete?: () => void;
+  /**
+   * For a single staged product, what the ledger and its kit parts already
+   * account for. Omitted by callers that don't know, which skips the warning.
+   */
+  accounting?: KitAccounting;
+}
+
+interface KitAccounting {
+  /** Units the ledger says were acquired and not disposed of. */
+  expectedQuantity: number;
+  /** Units already on shelves under THIS product's own name. */
+  ownOnHandUnits: number | null;
+  /** Live `ProductComponent` edges — zero means this is not a kit. */
+  componentCount: number;
+}
+
+/**
+ * Whether stocking one more unit here would account for more kits than were
+ * bought.
+ *
+ * Deliberately NOT "the parent is stocked XOR the parts are". A partially
+ * opened multi-pack is a legitimate mix — two 4-packs, one opened into four
+ * loose singles and one still sealed, is `1 parent + 4 components` and values
+ * correctly. What is never legitimate is accounting for more units than the
+ * ledger says were acquired, which is the real double-count.
+ *
+ * Complete kits, not loose parts: a kit whose parts are half-present accounts
+ * for zero whole kits, so this stays quiet rather than warning on a shortfall
+ * that the variance cue already reports.
+ */
+export const kitsAccountedByParts = (
+  components: readonly { quantity: number; onHandUnits: number | null }[],
+): number | null => {
+  if (components.length === 0) return null;
+  let complete = Number.POSITIVE_INFINITY;
+  for (const component of components) {
+    // A mixed-unit part cannot be counted, so the kit's accounting is
+    // unanswerable rather than zero — silence beats a wrong number.
+    if (component.onHandUnits === null) return null;
+    complete = Math.min(
+      complete,
+      Math.floor(component.onHandUnits / component.quantity),
+    );
+  }
+  return complete;
+};
+
+function useKitOverAccounting(
+  open: boolean,
+  productId: ProductShortcode | undefined,
+  accounting: KitAccounting | undefined,
+) {
+  // Same query the Kit Components section makes, so this costs nothing extra.
+  const { data: components } = useQuery({
+    ...productOperations.components.queryOptions({
+      // A parseable placeholder keeps the disabled query's input valid.
+      parentProductId: productId ?? productShortcode.parse("PRD-2222"),
+    }),
+    enabled:
+      open && productId !== undefined && (accounting?.componentCount ?? 0) > 0,
+  });
+  return useMemo(() => {
+    if (!accounting || !components) return null;
+    const byParts = kitsAccountedByParts(components);
+    if (byParts === null) return null;
+    const accounted = byParts + (accounting.ownOnHandUnits ?? 0);
+    // Only a ledger that says something can be exceeded. Expected 0 means no
+    // receipt was ever entered, not that nothing is owned, so stay quiet.
+    if (accounting.expectedQuantity <= 0) return null;
+    return accounted >= accounting.expectedQuantity
+      ? { accounted, expected: accounting.expectedQuantity }
+      : null;
+  }, [accounting, components]);
 }
 
 const rowsFor = (products: readonly BulkAddProduct[]) =>
@@ -93,7 +169,9 @@ const rowsFor = (products: readonly BulkAddProduct[]) =>
 
 export const ProductBulkAddToInventoryDialog: FC<
   ProductBulkAddToInventoryDialogProps
-> = ({ open, onOpenChange, products, onComplete }) => {
+> = ({ open, onOpenChange, products, onComplete, accounting }) => {
+  const sole = products.length === 1 ? products[0] : undefined;
+  const overAccounted = useKitOverAccounting(open, sole?.id, accounting);
   const form = useForm<BulkAddValues>({
     resolver: zodResolver(formSchema),
     defaultValues: { location: null, items: rowsFor(products) },
@@ -196,12 +274,43 @@ export const ProductBulkAddToInventoryDialog: FC<
           simply unreachable. Break the chain anywhere and `truncate` stops
           working. */}
       <Stack gap="md" className="min-w-0">
-        <ComboboxFieldWithSearch
-          form={form}
-          name="location"
-          label="Location"
-          searchType="location"
-        />
+        {overAccounted && (
+          <Alert variant="destructive">
+            <WarningIcon />
+            <AlertTitle>Already accounted for</AlertTitle>
+            <AlertDescription>
+              Its parts hold {overAccounted.accounted} of the{" "}
+              {overAccounted.expected} you bought. Adding one here counts a unit
+              you don't own — unless you have another still assembled or sealed.
+            </AlertDescription>
+          </Alert>
+        )}
+        {sole ? (
+          <FormProvider {...form}>
+            <FieldSuggestionProvider
+              entity="inventory"
+              mode="create"
+              staticBasis={{ productId: sole.id }}
+              fieldKeys={["locationId"]}
+              paths={{ locationId: "location" }}
+            >
+              <ComboboxFieldWithSearch
+                form={form}
+                name="location"
+                label="Location"
+                searchType="location"
+                suggestField="locationId"
+              />
+            </FieldSuggestionProvider>
+          </FormProvider>
+        ) : (
+          <ComboboxFieldWithSearch
+            form={form}
+            name="location"
+            label="Location"
+            searchType="location"
+          />
+        )}
 
         {locationId === null ? (
           <Description>Pick a location to stock these products.</Description>
