@@ -111,8 +111,8 @@ describe("entity graph path repository", () => {
       "expense",
       "explicit",
     ]);
-    // Image representations add one shared derivative lookup, never one per node.
-    expect(measured.queryCount).toBe(14);
+    // Image representations stay in the shared image query, never per node.
+    expect(measured.queryCount).toBe(13);
     expect(responseBytes).toBeLessThan(10_000);
   });
 
