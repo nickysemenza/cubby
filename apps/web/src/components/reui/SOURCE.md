@@ -10,6 +10,7 @@ variant from:
 Copied registry items:
 
 - `gantt` → `components/reui/gantt/`
+- `event-calendar` → `components/reui/event-calendar/` (also carries its own license notice)
 - `timeline` → `components/reui/timeline.tsx` (now specialized as the audit timeline)
 
 Cubby-specific adaptations add strict TypeScript compatibility, the Gantt

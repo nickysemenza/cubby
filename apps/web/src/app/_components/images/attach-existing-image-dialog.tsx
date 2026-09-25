@@ -8,6 +8,7 @@ import { Button } from "~/components/ui/button";
 import { DialogFooter } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { NativeSelect } from "~/components/ui/native-select";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { image as imageOperations } from "~/entities/image.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
@@ -88,8 +89,8 @@ export function AttachExistingImageDialog({
         {normalized.startsWith("PRD-") && (
           <>
             <Label htmlFor="existing-image-purpose">Product image use</Label>
-            <select
-              className="h-9 w-full rounded-sm border border-input bg-background px-2 text-sm"
+            <NativeSelect
+              className="w-full"
               id="existing-image-purpose"
               value={purpose}
               onChange={(event) =>
@@ -98,7 +99,7 @@ export function AttachExistingImageDialog({
             >
               <option value="item">Item photo</option>
               <option value="label">Label or tag</option>
-            </select>
+            </NativeSelect>
           </>
         )}
         {targetSearch.data && targetSearch.data.length > 0 && (

@@ -9,9 +9,12 @@ import * as React from "react";
 import { match } from "ts-pattern";
 import { z } from "zod";
 
-import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { StatGrid, StatTile } from "~/components/ui/stat-tile";
+import {
+  StatGrid,
+  StatTile,
+  type SummaryItem,
+} from "~/components/ui/stat-tile";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { formatCurrency } from "~/lib/utils";
 

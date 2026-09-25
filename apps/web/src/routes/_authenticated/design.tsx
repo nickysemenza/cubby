@@ -1,8 +1,11 @@
 import { ClipboardTextIcon } from "@phosphor-icons/react/dist/csr/ClipboardText";
 import { FloppyDiskIcon } from "@phosphor-icons/react/dist/csr/FloppyDisk";
 import { createFileRoute } from "@tanstack/react-router";
-import { useId } from "react";
+import { useId, useState } from "react";
 
+import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
+import { EntityPicker } from "~/app/_components/combobox/entity-picker";
+import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -10,9 +13,26 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
+import { FilterableCombobox } from "~/components/ui/combobox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSubmenu,
+  DropdownMenuSubmenuContent,
+  DropdownMenuSubmenuTrigger,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { NativeSelect } from "~/components/ui/native-select";
+import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { Skeleton } from "~/components/ui/skeleton";
 import {
   Table,
@@ -44,12 +64,28 @@ const DOMAIN_SWATCHES = [
   ["Finance", "var(--domain-finance)", "var(--domain-finance-surface)"],
 ] as const;
 
+const SAMPLE_RECORDS = [
+  { id: "sample-1", name: "Illustrative pantry item", secondary: "Shelf A" },
+  { id: "sample-2", name: "Illustrative kitchen item", secondary: "Shelf B" },
+];
+
+const SAMPLE_FILTERS = [
+  { value: "current", label: "Current" },
+  { value: "archived", label: "Archived" },
+];
+
 function DesignSmokeTest() {
   const projectNameId = useId();
   const stateSelectId = useId();
   const selectedCheckboxId = useId();
   const unselectedCheckboxId = useId();
   const disabledCheckboxId = useId();
+  const invalidFieldId = useId();
+  const invalidDescriptionId = useId();
+  const invalidErrorId = useId();
+  const [filter, setFilter] = useState<string | null>(null);
+  const [record, setRecord] = useState<ComboboxItem | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   return (
     <Page
@@ -188,6 +224,23 @@ function DesignSmokeTest() {
                     </NativeSelect>
                   </div>
                 </div>
+                <FormFieldGroup
+                  htmlFor={invalidFieldId}
+                  label="Invalid form field"
+                  description="A short explanation stays with the field."
+                  descriptionId={invalidDescriptionId}
+                  errorId={invalidErrorId}
+                  invalid
+                  error={{ type: "validate", message: "Enter a project name." }}
+                >
+                  <Input
+                    id={invalidFieldId}
+                    aria-invalid="true"
+                    aria-describedby={`${invalidDescriptionId} ${invalidErrorId}`}
+                    defaultValue=""
+                    placeholder="Project name"
+                  />
+                </FormFieldGroup>
                 <Row align="center" wrap gap="md">
                   <label
                     htmlFor={selectedCheckboxId}
@@ -235,7 +288,101 @@ function DesignSmokeTest() {
                   <Skeleton className="h-8 w-full" />
                   <Skeleton className="h-3 w-4/5" />
                 </div>
+                <Empty>
+                  <EmptyHeader>
+                    <EmptyTitle>No illustrative matches</EmptyTitle>
+                    <EmptyDescription>
+                      An empty result explains what to try next.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
               </Stack>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Menus and pickers</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Stack gap="md">
+                <Row>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger render={<Button variant="outline" />}>
+                      Open actions
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem>Review item</DropdownMenuItem>
+                      <DropdownMenuSubmenu>
+                        <DropdownMenuSubmenuTrigger>
+                          Move to view
+                        </DropdownMenuSubmenuTrigger>
+                        <DropdownMenuSubmenuContent>
+                          <DropdownMenuItem>Current view</DropdownMenuItem>
+                          <DropdownMenuItem disabled>
+                            Disabled view
+                          </DropdownMenuItem>
+                        </DropdownMenuSubmenuContent>
+                      </DropdownMenuSubmenu>
+                      <DropdownMenuItem disabled>
+                        Disabled action
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </Row>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label>Filter options</Label>
+                    <FilterableCombobox
+                      items={SAMPLE_FILTERS}
+                      value={filter}
+                      onValueChange={setFilter}
+                      placeholder="Choose a state"
+                      ariaLabel="Filter options"
+                      clearable
+                    />
+                  </div>
+                  <div>
+                    <Label>Record picker</Label>
+                    <EntityPicker
+                      entity="product"
+                      label="Record picker"
+                      items={SAMPLE_RECORDS}
+                      value={record}
+                      setValue={setRecord}
+                      placeholder="Find an illustrative item"
+                      clearable
+                    />
+                  </div>
+                </div>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Responsive dialog</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button variant="outline" onClick={() => setDialogOpen(true)}>
+                Open dialog
+              </Button>
+              <ResponsiveDialog
+                open={dialogOpen}
+                onOpenChange={setDialogOpen}
+                title="Illustrative edit"
+                description="A synthetic form in the shared dialog shell."
+                footer={
+                  <Button onClick={() => setDialogOpen(false)}>Done</Button>
+                }
+              >
+                <FormFieldGroup label="Item name">
+                  <Input
+                    aria-label="Item name"
+                    defaultValue="Illustrative item"
+                  />
+                </FormFieldGroup>
+              </ResponsiveDialog>
             </CardContent>
           </Card>
 
