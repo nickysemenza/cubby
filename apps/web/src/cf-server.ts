@@ -65,6 +65,12 @@ const getHttpApi = () => {
   return httpApiPromise;
 };
 
+const isHttpOperationPath = (pathname: string) =>
+  pathname.startsWith("/api/v1/") &&
+  !["/api/v1/docs", "/api/v1/openapi.json"].includes(
+    pathname.replace(/\/+$/u, ""),
+  );
+
 // Per-request holder for the console.error-intercepted error, scoped via
 // AsyncLocalStorage — mirrors withRequestDb's per-request pool store in
 // server/db.ts. Workers reuse one isolate across concurrent in-flight
@@ -237,19 +243,17 @@ const handler = {
                           // non-standard WebSocket slot verbatim.
                           return response;
                         }
-                        const handlerImport = withTrace(
-                          "cf.importHandler",
-                          () => getHandler(),
-                        );
-                        const httpApiImport = url.pathname.startsWith(
-                          "/api/v1/",
-                        )
-                          ? withTrace("cf.importHttpApi", () => getHttpApi())
-                          : Promise.resolve(undefined);
-                        const [{ default: handler }] = await Promise.all([
-                          handlerImport,
-                          httpApiImport,
-                        ]);
+                        const invoke = isHttpOperationPath(url.pathname)
+                          ? (
+                              await withTrace("cf.importHttpApi", () =>
+                                getHttpApi(),
+                              )
+                            ).handleHttpOperation
+                          : (
+                              await withTrace("cf.importHandler", () =>
+                                getHandler(),
+                              )
+                            ).default.fetch;
                         // Scoped here rather than around the whole handler body: this
                         // is the only region where request-scoped work runs, and
                         // waitUntil must belong to THIS request's context.
@@ -259,9 +263,7 @@ const handler = {
                             runWithExecutionCtx(
                               ctx,
                               async () =>
-                                handler.fetch(
-                                  rewriteLegacyStartRequest(request),
-                                ),
+                                invoke(rewriteLegacyStartRequest(request)),
                               url.origin,
                             ),
                         );
