@@ -2,18 +2,25 @@ import {
   displayImagesField,
   type DisplayImageSummary,
 } from "@cubby/schemas/display-images";
-import { type Entity, entityRefKey, entitySchema } from "@cubby/schemas/entity";
+import {
+  type Entity,
+  type EntityRef as PublicEntityRef,
+  entityRefKey,
+  entitySchema,
+} from "@cubby/schemas/entity";
 import type { RelationshipPathStep } from "@cubby/schemas/entity-integrity";
 import {
   allEntities,
   entityManifest,
   imageDisplayBindings,
   localRelationshipByKey,
+  shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
 import type { EntityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { imageShortcode } from "@cubby/schemas/identifiers";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { HOUSEHOLD_PROJECT_SHORTCODE } from "@cubby/schemas/project";
+import { parseShortcode } from "@cubby/shared";
 import {
   and,
   asc,
@@ -36,7 +43,10 @@ import { compileTraversal } from "~/server/repo/relatedness/traversal";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
-import { loadImageRepresentations } from "./image-processing";
+import {
+  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+  loadImageRepresentations,
+} from "./image-processing";
 import { hydrateImageReadProjection } from "./image-read-projection";
 
 /** A private database identity used only while hydrating public read models. */
@@ -257,7 +267,15 @@ const DISPLAY_BRANCHES: readonly DisplayBranch[] = [
 const displayImageRowSchema = z.object({
   entityType: entitySchema,
   entityId: z.string(),
-  images: z.array(z.object({ id: imageShortcode, key: z.string() })),
+  refKey: z.string(),
+  images: z.array(
+    z.object({
+      id: imageShortcode,
+      key: z.string(),
+      useOriginal: z.boolean(),
+      derivativeKey: z.string().nullable(),
+    }),
+  ),
 });
 
 /**
@@ -274,28 +292,13 @@ const displayImageRowSchema = z.object({
  * finite. Callers keep UUIDs private, map the returned summaries onto public
  * DTOs, and use a semantic entity mark when a ref resolves to nothing.
  */
-async function resolveUniversalEntityDisplayImageLists(
+async function resolveDisplayImageListsFromSqlRefs(
   db: Database | DrizzleTransaction,
-  refs: readonly EntityDisplayImageRef[],
+  refsSql: SQL,
+  sourceTypes: ReadonlySet<Entity>,
 ): Promise<Map<string, DisplayImageSummary[]>> {
-  const supported = [
-    ...new Map(
-      refs
-        .filter((ref) => DISPLAY_IMAGE_ENTITIES.has(ref.entityType))
-        .map((ref) => [entityRefKey(ref.entityType, ref.entityId), ref]),
-    ).values(),
-  ];
-  if (supported.length === 0) return new Map();
-
-  const values = sql.join(
-    supported.map(
-      (ref) => sql`(${ref.entityType}::text, ${ref.entityId}::uuid)`,
-    ),
-    sql`, `,
-  );
   // Unrelated entity arms still incur planner/JIT costs even when their WHERE
   // clauses can never match. Compile only the source types in this batch.
-  const sourceTypes = new Set(supported.map((ref) => ref.entityType));
   const selectedBranches = DISPLAY_BRANCHES.filter(({ entity }) =>
     sourceTypes.has(entity),
   );
@@ -337,12 +340,17 @@ async function resolveUniversalEntityDisplayImageLists(
     ? sql`UNION ALL ${sql.join(displayBranches, sql` UNION ALL `)}`
     : sql``;
   const result = await unwrapDb(db).execute(sql`
-    WITH refs("entityType", "entityId") AS (VALUES ${values})
+    WITH ${refsSql}
     ${expenseProjectRelation}
-    SELECT refs."entityType", refs."entityId"::text AS "entityId", (
+    SELECT refs."entityType", refs."entityId"::text AS "entityId", refs."refKey", (
       SELECT COALESCE(
         json_agg(
-          json_build_object('id', candidates.shortcode, 'key', candidates.key)
+          json_build_object(
+            'id', candidates.shortcode,
+            'key', candidates.key,
+            'useOriginal', selected_image."useOriginal",
+            'derivativeKey', derivative.key
+          )
           ORDER BY candidates.priority, candidates."groupCreatedAt", candidates."groupId",
                    candidates."sortOrder", candidates."createdAt", candidates."imageId"
         ),
@@ -361,24 +369,125 @@ async function resolveUniversalEntityDisplayImageLists(
                  raw_candidates."groupCreatedAt", raw_candidates."groupId",
                  raw_candidates."sortOrder", raw_candidates."createdAt"
       ) candidates
+      JOIN "Image" selected_image ON selected_image.id = candidates."imageId"
+      LEFT JOIN "ImageDerivative" derivative
+        ON derivative."imageId" = selected_image.id
+       AND derivative.purpose = 'transparent'
+       AND derivative."sourceContentHash" = selected_image.sha256
+       AND derivative."processorRevision" = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION}
+       AND derivative.status = 'ready'
+       AND derivative."deletedAt" IS NULL
     ) AS images
     FROM refs
   `);
 
   const rows = z.array(displayImageRowSchema).parse(result.rows);
-  const representations = await loadImageRepresentations(
-    db,
-    rows.flatMap((row) => row.images.map((img) => img.id)),
-  );
   return new Map(
     rows.map((row) => [
-      entityRefKey(row.entityType, row.entityId),
-      row.images.map((img) => ({
-        id: img.id,
-        url: getR2PublicUrl(img.key),
-        representations: representations.get(img.id),
-      })),
+      row.refKey,
+      row.images.map((img) => {
+        const original = getR2PublicUrl(img.key);
+        const transparent = img.derivativeKey
+          ? getR2PublicUrl(img.derivativeKey)
+          : null;
+        const preferTransparent = !img.useOriginal && transparent !== null;
+        return {
+          id: img.id,
+          url: original,
+          representations: {
+            original,
+            transparent,
+            preferred: preferTransparent ? transparent : original,
+            preferredKind: preferTransparent
+              ? ("transparent" as const)
+              : ("original" as const),
+          },
+        };
+      }),
     ]),
+  );
+}
+
+async function resolveUniversalEntityDisplayImageLists(
+  db: Database | DrizzleTransaction,
+  refs: readonly EntityDisplayImageRef[],
+): Promise<Map<string, DisplayImageSummary[]>> {
+  const supported = [
+    ...new Map(
+      refs
+        .filter((ref) => DISPLAY_IMAGE_ENTITIES.has(ref.entityType))
+        .map((ref) => [entityRefKey(ref.entityType, ref.entityId), ref]),
+    ).values(),
+  ];
+  if (supported.length === 0) return new Map();
+  const values = sql.join(
+    supported.map(
+      (ref) =>
+        sql`(${ref.entityType}::text, ${ref.entityId}::uuid, ${entityRefKey(ref.entityType, ref.entityId)}::text)`,
+    ),
+    sql`, `,
+  );
+  return resolveDisplayImageListsFromSqlRefs(
+    db,
+    sql`refs("entityType", "entityId", "refKey") AS (VALUES ${values})`,
+    new Set(supported.map((ref) => ref.entityType)),
+  );
+}
+
+/** Public shortcodes join durable identities inside the image query. */
+export async function resolvePublicEntityDisplayImages(
+  db: Database | DrizzleTransaction,
+  refs: readonly PublicEntityRef[],
+): Promise<Map<string, ImageUrlSummary>> {
+  const supported = [
+    ...new Map(
+      refs.flatMap((ref) => {
+        if (!shortcodeEntities.some((entity) => entity === ref.entityType))
+          return [];
+        const parsed = parseShortcode(ref.entityId);
+        if (!parsed || parsed.type !== ref.entityType) return [];
+        const refKey = entityRefKey(ref.entityType, ref.entityId);
+        return [
+          [refKey, { ...ref, shortcode: parsed.shortcode, refKey }] as const,
+        ];
+      }),
+    ).values(),
+  ];
+  if (supported.length === 0) return new Map();
+  const values = sql.join(
+    supported.map(
+      (ref) =>
+        sql`(${ref.entityType}::text, ${ref.shortcode}::text, ${ref.refKey}::text)`,
+    ),
+    sql`, `,
+  );
+  const lists = await resolveDisplayImageListsFromSqlRefs(
+    db,
+    sql`input_refs("entityType", "shortcode", "refKey") AS (VALUES ${values}),
+        refs("entityType", "entityId", "refKey") AS (
+          SELECT input_refs."entityType", identity.id, input_refs."refKey"
+          FROM input_refs
+          JOIN "Entity" identity ON identity.shortcode = input_refs.shortcode
+            AND identity.kind = input_refs."entityType"
+            AND identity."deletedAt" IS NULL
+            AND identity."mergedIntoId" IS NULL
+        )`,
+    new Set(supported.map((ref) => ref.entityType)),
+  );
+  return new Map(
+    [...lists].flatMap(([key, images]) =>
+      images[0]
+        ? [
+            [
+              key,
+              {
+                url: images[0].representations?.preferred ?? images[0].url,
+                representations: images[0].representations,
+              },
+            ] as const,
+          ]
+        : [],
+    ),
   );
 }
 

@@ -4,7 +4,12 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { entityAttachment, image, product } from "~/server/db/schema";
+import {
+  entityAttachment,
+  image,
+  imageDerivative,
+  product,
+} from "~/server/db/schema";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -30,6 +35,7 @@ import {
   withListEntityMedia,
   withUniversalEntityMedia,
 } from "./entity-display-image";
+import { IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION } from "./image-processing";
 import {
   createIngredientFixture,
   createInventoryFixture,
@@ -1073,6 +1079,78 @@ describe("entity display image resolver", () => {
   });
 
   describe("resolveEntityDisplayImages", () => {
+    it("selects the current ready derivative and honors the original override", async () => {
+      const owner = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Image representation fixture" }),
+        ctx.actor,
+      );
+      const cover = await makeImage();
+      const sourceHash = "a".repeat(64);
+      const derivativeKey = `images/${crypto.randomUUID()}.png`;
+      await getDb(ctx.db)
+        .update(image)
+        .set({ sha256: sourceHash })
+        .where(eq(image.id, cover.id));
+      await getDb(ctx.db).insert(entityAttachment).values({
+        subjectEntityId: owner.entityId,
+        imageId: cover.id,
+        sortOrder: 0,
+      });
+      await getDb(ctx.db)
+        .insert(imageDerivative)
+        .values({
+          imageId: parseEntityId("image", cover.id),
+          purpose: "transparent",
+          status: "ready",
+          key: derivativeKey,
+          sourceContentHash: sourceHash,
+          processorRevision: IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+          contentType: "image/png",
+          sha256: "b".repeat(64),
+          width: 10,
+          height: 10,
+        });
+      const ref = [
+        { entityType: "product" as const, entityId: owner.entityId },
+      ];
+      const key = entityRefKey("product", owner.entityId);
+      const original = getR2PublicUrl(cover.key);
+      const transparent = getR2PublicUrl(derivativeKey);
+
+      expect((await resolveEntityDisplayImages(ctx.db, ref)).get(key)).toEqual({
+        url: transparent,
+        representations: {
+          original,
+          transparent,
+          preferred: transparent,
+          preferredKind: "transparent",
+        },
+      });
+
+      await getDb(ctx.db)
+        .update(image)
+        .set({ useOriginal: true })
+        .where(eq(image.id, cover.id));
+      expect((await resolveEntityDisplayImages(ctx.db, ref)).get(key)).toEqual({
+        url: original,
+        representations: {
+          original,
+          transparent,
+          preferred: original,
+          preferredKind: "original",
+        },
+      });
+
+      await getDb(ctx.db)
+        .update(image)
+        .set({ useOriginal: false, sha256: "c".repeat(64) })
+        .where(eq(image.id, cover.id));
+      expect((await resolveEntityDisplayImages(ctx.db, ref)).get(key)).toEqual(
+        expectedImageUrl(cover),
+      );
+    });
+
     it("returns only the cover and omits refs with no image", async () => {
       const withImage = await createProductFixture(
         ctx.db,
