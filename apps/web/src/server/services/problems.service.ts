@@ -1,4 +1,6 @@
+import { amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
+import { displayGtin } from "@cubby/schemas/external-id";
 /** Problems service composes detector repos and cross-entity services without direct database access. */
 import {
   type IngredientId,
@@ -49,7 +51,9 @@ import {
   gradedKinds,
 } from "~/lib/conversion-coverage";
 import { getErrorMessage } from "~/lib/error-utils";
+import { countLabel } from "~/lib/pluralize";
 import { isMoneyUnit } from "~/lib/price-mapping-utils";
+import { formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 import { type Database, withConnection } from "~/server/db";
 import { countCullablePendingImages } from "~/server/repo/image";
@@ -95,6 +99,14 @@ import {
   type UpcLookupBatchPort,
   runDiagnostic,
 } from "~/server/services/problem-diagnostics.service";
+import {
+  byManufacturer,
+  locationBadges,
+  problemRow,
+  type ProblemRowInput,
+  recordBadge,
+  textBadge,
+} from "~/server/services/problem-rows";
 import {
   countViewProblem,
   executeProblem,
@@ -640,8 +652,7 @@ const exactProblemPresentationRowSchema = z.object({
   quantityLedger: z
     .object({ expectedQuantity: z.number().optional() })
     .nullish(),
-  createdAt:
-    allProblemsSchema.shape.unknownParkedItems.element.shape.createdAt.nullish(),
+  createdAt: z.date().nullish(),
   recipes: z
     .array(
       z.object({
@@ -659,13 +670,15 @@ const exactProblemPresentationRowSchema = z.object({
       }),
     )
     .nullish(),
-  amount:
-    allProblemsSchema.shape.unknownParkedItems.element.shape.amount.optional(),
-  product: allProblemsSchema.shape.unknownParkedItems.element.shape.product
-    .extend({ effectivePrice: z.number().nullish() })
+  amount: amount.optional(),
+  product: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      effectivePrice: z.number().nullish(),
+    })
     .optional(),
-  location:
-    allProblemsSchema.shape.unknownParkedItems.element.shape.location.optional(),
+  location: z.object({ id: z.string(), name: z.string() }).optional(),
   website: z.string().nullish(),
   purchaseCount: z.number().nullish(),
   vendorName: z.string().nullish(),
@@ -679,7 +692,9 @@ const exactProblemPresentationRowSchema = z.object({
   financialReconciliation: purchaseOut.shape.financialReconciliation.nullish(),
 });
 
-type FastProblemCard = ProblemsFast[FastEntityProblemKey][number];
+type FastProblemCard =
+  | ProblemsFast[FastEntityProblemKey][number]
+  | ProblemRowInput;
 type ExactProblemPresentationRow = z.infer<
   typeof exactProblemPresentationRowSchema
 >;
@@ -711,15 +726,52 @@ type FastExactPresenter = (
   hydration: FastProblemHydration | undefined,
 ) => FastProblemCard;
 
+const productRef = (row: ExactProblemPresentationRow) => ({
+  id: row.id,
+  name: String(row.name),
+});
+
+const amountLabel = (row: ExactProblemPresentationRow) =>
+  row.amount ? `${row.amount.value} ${row.amount.unit}` : null;
+
+/** An inventory row names its product; the location badge carries the recount root. */
+const inventoryRow = (
+  row: ExactProblemPresentationRow,
+  subtitle: readonly (string | null)[],
+  badges: ReturnType<typeof textBadge>[] = [],
+) =>
+  problemRow(
+    "inventory",
+    { id: row.id, name: row.product?.name ?? row.id },
+    subtitle,
+    [...badges, ...(row.location ? locationBadges([row.location]) : [])],
+  );
+
+const exitExpenseSubtitle = (
+  row: ExactProblemPresentationRow,
+  context: string | null | undefined,
+) => [
+  context,
+  formatCurrency(Math.abs(Number(row.cost))),
+  row.date ? `sold ${row.date}` : null,
+];
+
 const fastExactPresenters = {
-  duplicateInventory: (row) =>
-    allProblemsSchema.shape.duplicateInventory.element.parse({
-      id: row.id,
-      name: String(row.name),
-      manufacturer: String(row.manufacturer ?? ""),
-      expectedQuantity: row.expectedQuantity ?? null,
-      locations: inventoryLocations(row),
-    }),
+  duplicateInventory: (row) => {
+    const locations = inventoryLocations(row);
+    return problemRow(
+      "product",
+      productRef(row),
+      [
+        byManufacturer(row.manufacturer),
+        `${countLabel(locations.length, "entry")} across ${countLabel(uniqBy(locations, (l) => l.id).length, "location")}`,
+        row.expectedQuantity != null
+          ? `${row.expectedQuantity} expected`
+          : null,
+      ],
+      locationBadges(uniqBy(locations, (l) => l.id)),
+    );
+  },
   soldButStillStocked: (row, hydration) => {
     const totals = hydration?.soldTotals?.get(row.id);
     if (!totals) {
@@ -727,57 +779,66 @@ const fastExactPresenters = {
         `Canonical sold-but-stocked Problem selected ${row.id}, but bounded presentation hydration found no row`,
       );
     }
-    return allProblemsSchema.shape.soldButStillStocked.element.parse({
-      id: row.id,
-      name: String(row.name),
-      manufacturer: String(row.manufacturer ?? ""),
-      soldQuantity: totals.soldQuantity,
-      liveQuantity: Number(row.onHandUnits ?? 0),
-      proceeds: totals.proceeds,
-      locations: uniqBy(
-        [...inventoryLocations(row), ...totals.servingLocations],
-        (location) => location.id,
+    return problemRow(
+      "product",
+      productRef(row),
+      [
+        byManufacturer(row.manufacturer),
+        `sold ${totals.soldQuantity}, ${Number(row.onHandUnits ?? 0)} still on a shelf`,
+        `${formatCurrency(Math.abs(totals.proceeds))} recovered`,
+      ],
+      locationBadges(
+        uniqBy(
+          [...inventoryLocations(row), ...totals.servingLocations],
+          (location) => location.id,
+        ),
       ),
-    });
+    );
   },
   unlinkedExitExpenses: (row) =>
-    allProblemsSchema.shape.unlinkedExitExpenses.element.parse({
-      id: row.id,
-      name: String(row.name),
-      cost: Number(row.cost),
-      date: row.date ?? null,
-      purchaseId: String(row.purchaseId),
-      vendorName: row.vendor ?? null,
-    }),
+    problemRow(
+      "expense",
+      productRef(row),
+      exitExpenseSubtitle(row, row.vendor),
+      row.purchaseId
+        ? [
+            recordBadge("purchase", {
+              id: row.purchaseId,
+              name: row.purchaseId,
+            }),
+          ]
+        : [],
+    ),
   purchaselessExitExpenses: (row) =>
-    allProblemsSchema.shape.purchaselessExitExpenses.element.parse({
-      id: row.id,
-      name: String(row.name),
-      cost: Number(row.cost),
-      date: row.date ?? null,
-      projectName: row.projectName ?? null,
-    }),
+    problemRow(
+      "expense",
+      productRef(row),
+      exitExpenseSubtitle(row, row.projectName),
+    ),
   productsWithNoImages: (row) =>
-    allProblemsSchema.shape.productsWithNoImages.element.parse({
-      id: row.id,
-      name: String(row.name),
-      manufacturer: String(row.manufacturer ?? ""),
-      primaryGtin: row.primaryGtin ?? null,
-    }),
+    problemRow(
+      "product",
+      productRef(row),
+      [byManufacturer(row.manufacturer)],
+      row.primaryGtin ? [textBadge(displayGtin(row.primaryGtin))] : [],
+    ),
   imageProcessingIssues: (row) =>
-    allProblemsSchema.shape.imageProcessingIssues.element.parse({
-      id: row.id,
-      filename: row.filename ?? row.name ?? "(unnamed image)",
-      processingIssue: row.processingIssue,
-    }),
+    problemRow(
+      "image",
+      { id: row.id, name: row.filename ?? row.name ?? "(unnamed image)" },
+      [
+        row.processingIssue === "failed"
+          ? "Processing failed"
+          : "Cutout eligibility needs review",
+      ],
+      [textBadge(row.processingIssue === "failed" ? "Failed" : "Needs review")],
+    ),
   kitsCountedTwice: (row) =>
-    allProblemsSchema.shape.kitsCountedTwice.element.parse({
-      id: row.id,
-      name: String(row.name),
-      manufacturer: String(row.manufacturer ?? ""),
-      ownUnits: Number(row.onHandUnits ?? 0),
-      expectedUnits: Number(row.quantityLedger?.expectedQuantity ?? 0),
-    }),
+    problemRow("product", productRef(row), [
+      byManufacturer(row.manufacturer),
+      `${Number(row.onHandUnits ?? 0)} stocked as itself, plus its parts`,
+      `more than the ${Number(row.quantityLedger?.expectedQuantity ?? 0)} bought`,
+    ]),
   understatedCostMeals: (row) => {
     const affectedRecipes = (row.recipes ?? []).flatMap((entry) => {
       const recipe = entry.recipe;
@@ -802,22 +863,19 @@ const fastExactPresenters = {
       recipeCount: affectedRecipes.length,
     });
   },
-  unknownParkedItems: (row) =>
-    allProblemsSchema.shape.unknownParkedItems.element.parse({
-      id: row.id,
-      amount: row.amount,
-      createdAt: row.createdAt,
-      product: row.product,
-      location: row.location,
-    }),
+  unknownParkedItems: (row) => inventoryRow(row, [amountLabel(row)]),
   inventoryWithoutPricePath: (row) =>
-    allProblemsSchema.shape.inventoryWithoutPricePath.element.parse({
-      id: row.id,
-      amount: row.amount,
-      effectivePrice: Number(row.product?.effectivePrice ?? 0),
-      product: row.product,
-      location: row.location,
-    }),
+    // The price is what the unit WOULD be valued against — the row exists
+    // precisely because no conversion reaches it.
+    inventoryRow(
+      row,
+      [amountLabel(row)],
+      [
+        textBadge(
+          `Unreachable ${formatCurrency(Number(row.product?.effectivePrice ?? 0))} each`,
+        ),
+      ],
+    ),
   vendorsWithoutLogos: (row, hydration) => {
     const counts = hydration?.vendorExpenseCounts?.get(row.id);
     if (!counts) {
