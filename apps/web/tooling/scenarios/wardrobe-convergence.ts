@@ -556,7 +556,9 @@ async function importSyntheticMonarchCsv(
       const page = await context.newPage();
       try {
         await page.goto(`${origin}/statement-rows/import`);
-        await page.getByLabel("Statement CSV file").setInputFiles(csvPath);
+        const fileInput = page.getByLabel("Statement CSV file");
+        await expect(fileInput).toBeEnabled();
+        await fileInput.setInputFiles(csvPath);
         const preview = page.getByRole("region", { name: "Statement preview" });
         await expect(preview.getByText("Ready to record")).toHaveCount(2);
         await expect(preview).toContainText("Fixture Visa");
@@ -585,7 +587,8 @@ async function importSyntheticMonarchCsv(
         await expect(page.locator("output")).toContainText(
           "1 transactions created · 2 new source rows",
         );
-        await page.getByLabel("Statement CSV file").setInputFiles(csvPath);
+        await expect(fileInput).toBeEnabled();
+        await fileInput.setInputFiles(csvPath);
         await expect(preview.getByText("Already recorded")).toBeVisible();
         await preview
           .getByRole("button", { name: "Save 2 source rows" })
