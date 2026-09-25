@@ -8,7 +8,6 @@ import type {
   PhotoGroupProposal,
   PhotoGroupProposalGroup,
   PhotoRunImage,
-  PhotoRunReview,
   ReviewPhotoGroupsAction,
 } from "@cubby/schemas/photo-import-run";
 import { ArrowsMergeIcon } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
@@ -29,9 +28,10 @@ import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
 import { referenceEntitySearch } from "~/app/_components/combobox/reference-entity-search";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { PhotoGrid } from "~/app/_components/photos/photo-grid";
 import { ProductVariantEvidence } from "~/app/_components/product-variant-evidence";
 import { showErrorToast } from "~/components/feedback/error-details";
-import { Row, Stack } from "~/components/layout";
+import { Row, Section, Stack } from "~/components/layout";
 import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -62,6 +62,8 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { photoImport } from "~/entities/run.functions";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import {
   IMPORT_RUN_TARGET_STATE_LABEL,
   IMPORT_RUN_TARGET_STATE_VARIANT,
@@ -82,12 +84,6 @@ const LIVE_RUN_STATUSES = new Set([
   "paused_approval",
 ]);
 
-const reviewQueryKey = (runId: string) =>
-  ["purchase-import", "run", runId, "photo-review"] as const;
-
-const fetchReview = (runId: string): Promise<PhotoRunReview> =>
-  photoImport.review.call({ runId });
-
 function postReview(runId: string, action: ReviewPhotoGroupsAction) {
   if (action.action === "save")
     return photoImport.saveGroups.call({ ...action, runId });
@@ -99,8 +95,7 @@ function postReview(runId: string, action: ReviewPhotoGroupsAction) {
 /** Photos and proposals poll while the run is live, like the run itself. */
 export function usePhotoRunReview(runId: string, runStatus: string) {
   return useQuery({
-    queryKey: reviewQueryKey(runId),
-    queryFn: () => fetchReview(runId),
+    ...photoImport.review.queryOptions({ runId }),
     refetchInterval: (query) =>
       LIVE_RUN_STATUSES.has(runStatus)
         ? 3_000
@@ -120,7 +115,7 @@ function useReviewAction(runId: string) {
     scope: { id: `photo-run-review-${runId}` },
     mutationFn: (action: ReviewPhotoGroupsAction) => postReview(runId, action),
     onSuccess: (data) => {
-      queryClient.setQueryData<PhotoRunReview>(reviewQueryKey(runId), (old) =>
+      queryClient.setQueryData(photoImport.review.queryKey({ runId }), (old) =>
         old
           ? {
               ...old,
@@ -134,9 +129,7 @@ function useReviewAction(runId: string) {
           : old,
       );
       // Approval changes photo states and may complete the run.
-      void queryClient.refetchQueries({
-        queryKey: ["purchase-import", "run", runId],
-      });
+      void invalidateOperationTags(queryClient, ripple.runOnly);
       const problems = data.results.filter(
         (result) =>
           result.outcome === "conflict" || result.outcome === "failed",
@@ -206,6 +199,16 @@ const emptyReviewCopy = (runStatus: string) =>
         detail:
           "The agent is preparing item groups. They will appear here for review before products are created.",
       };
+
+/** A run photo as a `PhotoGrid` tile; a photo deleted since has no tile. */
+const photoTile = (image: PhotoRunImage | undefined) =>
+  image
+    ? {
+        id: image.id,
+        url: image.originalUrl,
+        filename: image.description ?? image.id,
+      }
+    : [];
 
 function PhotoThumb({
   image,
@@ -341,52 +344,54 @@ function GroupPhotos({
   editable: boolean;
   busy: boolean;
 }) {
+  const entries = new Map<string, "item" | "label" | null>([
+    ...proposal.images.map((entry) => [entry.id, entry.purpose] as const),
+    ...proposal.skip.map((entry) => [entry.id, null] as const),
+  ]);
   return (
-    <Row wrap gap="sm" align="start">
-      {proposal.images.map((entry) => (
-        <figure key={entry.id} className="relative m-0">
-          <PhotoThumb image={imagesById.get(entry.id)} size={112} />
-          <Badge
-            variant={entry.purpose === "item" ? "default" : "outline"}
-            className="absolute bottom-1 left-1 bg-card"
-          >
-            {entry.purpose === "item" ? "Item" : "Label"}
-          </Badge>
-          {editable ? (
-            <div className="absolute top-1 right-1">
-              <ImageMenu
-                imageId={entry.id}
-                groupKey={proposal.groupKey}
-                purpose={entry.purpose}
-                proposals={proposals}
-                save={save}
-                disabled={busy}
-              />
-            </div>
-          ) : null}
-        </figure>
-      ))}
-      {proposal.skip.map((entry) => (
-        <figure key={entry.id} className="relative m-0" title={entry.reason}>
-          <PhotoThumb image={imagesById.get(entry.id)} size={112} dimmed />
-          <Badge variant="secondary" className="absolute bottom-1 left-1">
-            Skipped
-          </Badge>
-          {editable ? (
-            <div className="absolute top-1 right-1">
-              <ImageMenu
-                imageId={entry.id}
-                groupKey={proposal.groupKey}
-                purpose={null}
-                proposals={proposals}
-                save={save}
-                disabled={busy}
-              />
-            </div>
-          ) : null}
-        </figure>
-      ))}
-    </Row>
+    <PhotoGrid
+      images={[...entries.keys()].flatMap((id) =>
+        photoTile(imagesById.get(id)),
+      )}
+      renderOverlay={(tile) => {
+        const purpose = entries.get(tile.id) ?? null;
+        return (
+          <>
+            {purpose === null ? (
+              <div className="absolute inset-0 bg-background/50" />
+            ) : null}
+            <Badge
+              variant={
+                purpose === "item"
+                  ? "default"
+                  : purpose === "label"
+                    ? "outline"
+                    : "secondary"
+              }
+              className="absolute bottom-1 left-1 bg-card"
+            >
+              {purpose === "item"
+                ? "Item"
+                : purpose === "label"
+                  ? "Label"
+                  : "Skipped"}
+            </Badge>
+            {editable ? (
+              <div className="absolute top-1 right-1">
+                <ImageMenu
+                  imageId={tile.id}
+                  groupKey={proposal.groupKey}
+                  purpose={purpose}
+                  proposals={proposals}
+                  save={save}
+                  disabled={busy}
+                />
+              </div>
+            ) : null}
+          </>
+        );
+      }}
+    />
   );
 }
 
@@ -429,29 +434,6 @@ function CommitInput({
   );
 }
 
-function ProductPicker({
-  onPick,
-  disabled,
-  placeholder,
-}: {
-  onPick: (id: ProductShortcode) => void;
-  disabled: boolean;
-  placeholder: string;
-}) {
-  return (
-    <EntityReferencePicker
-      entity="product"
-      label="existing product"
-      value={null}
-      setValue={(item) => {
-        if (item) onPick(item.id);
-      }}
-      disabled={disabled}
-      placeholder={placeholder}
-    />
-  );
-}
-
 function ProductPanel({
   runId,
   proposal,
@@ -474,14 +456,19 @@ function ProductPanel({
     <Stack gap="sm" className="min-w-0">
       <Row gap="sm" align="end" wrap className="min-w-0">
         <div className="min-w-0 flex-1">
-          <ProductPicker
+          <EntityReferencePicker
+            entity="product"
+            label="existing product"
+            value={null}
+            setValue={(item) => {
+              if (item) attachExisting(item.id);
+            }}
             disabled={busy}
             placeholder={
               product.kind === "existing"
                 ? "Choose a different product"
                 : "Search existing products before creating another"
             }
-            onPick={attachExisting}
           />
         </div>
         {product.kind === "existing" ? (
@@ -677,16 +664,9 @@ function PhotoProductSuggestions({
   busy?: boolean;
   settled?: boolean;
 }) {
-  const suggestions = useQuery({
-    queryKey: [
-      "photo-product-candidates",
-      runId,
-      proposal.groupKey,
-      proposal.updatedAt,
-    ],
-    queryFn: () =>
-      photoImport.candidates.call({ runId, groupKey: proposal.groupKey }),
-  });
+  const suggestions = useQuery(
+    photoImport.candidates.queryOptions({ runId, groupKey: proposal.groupKey }),
+  );
   if (suggestions.isPending)
     return <StatusText tone="muted">Finding existing products…</StatusText>;
   if (suggestions.isError)
@@ -1234,152 +1214,142 @@ function PhotoTable({
   labelImages: ReadonlySet<string>;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <Row align="center" gap="sm">
-          <CardTitle as="h2">Photos</CardTitle>
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {images.length}
-          </span>
-        </Row>
-      </CardHeader>
-      <CardContent>
-        {/* Bounded region: a 1,000-photo run scrolls here, not the page. */}
-        <div className="max-h-[70vh] overflow-auto rounded-md border border-border">
-          <Table>
-            <TableHeader className="sticky top-0 z-10 bg-card">
-              <TableRow>
-                <TableHead className="w-10">#</TableHead>
-                <TableHead>Original</TableHead>
-                <TableHead>Cutout</TableHead>
-                <TableHead>Import</TableHead>
-                <TableHead>Analysis</TableHead>
-                <TableHead>Description</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {images.map((photo) => {
-                const snippet =
-                  photo.description ??
-                  photo.recognizedText?.split("\n")[0] ??
-                  null;
-                return (
-                  <TableRow key={photo.id}>
-                    <TableCell className="font-mono text-2xs text-muted-foreground tabular-nums">
-                      {photo.position ?? "—"}
-                    </TableCell>
-                    <TableCell>
-                      <a
-                        href={`/images/${encodeURIComponent(photo.id)}`}
-                        aria-label={`Open photo ${photo.id}`}
+    <Section aria-label="Run photos" title={`Photos · ${images.length}`}>
+      {/* Bounded region: a 1,000-photo run scrolls here, not the page. */}
+      <div className="max-h-[70vh] overflow-auto rounded-md border border-border">
+        <Table>
+          <TableHeader className="sticky top-0 z-10 bg-card">
+            <TableRow>
+              <TableHead className="w-10">#</TableHead>
+              <TableHead>Original</TableHead>
+              <TableHead>Cutout</TableHead>
+              <TableHead>Import</TableHead>
+              <TableHead>Analysis</TableHead>
+              <TableHead>Description</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {images.map((photo) => {
+              const snippet =
+                photo.description ??
+                photo.recognizedText?.split("\n")[0] ??
+                null;
+              return (
+                <TableRow key={photo.id}>
+                  <TableCell className="font-mono text-2xs text-muted-foreground tabular-nums">
+                    {photo.position ?? "—"}
+                  </TableCell>
+                  <TableCell>
+                    <a
+                      href={`/images/${encodeURIComponent(photo.id)}`}
+                      aria-label={`Open photo ${photo.id}`}
+                    >
+                      <PhotoThumb image={photo} size={48} />
+                    </a>
+                  </TableCell>
+                  <TableCell>
+                    {photo.cutoutUrl ? (
+                      <Image
+                        src={photo.cutoutUrl}
+                        alt={`Cutout of ${photo.id}`}
+                        displayWidth={48}
+                        className="size-12 rounded-md border border-border bg-muted object-contain"
+                      />
+                    ) : (
+                      <span className="text-2xs text-muted-foreground">
+                        None
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Stack gap="tight">
+                      <Badge
+                        variant={
+                          IMPORT_RUN_TARGET_STATE_VARIANT[photo.targetState]
+                        }
                       >
-                        <PhotoThumb image={photo} size={48} />
-                      </a>
-                    </TableCell>
-                    <TableCell>
-                      {photo.cutoutUrl ? (
-                        <Image
-                          src={photo.cutoutUrl}
-                          alt={`Cutout of ${photo.id}`}
-                          displayWidth={48}
-                          className="size-12 rounded-md border border-border bg-muted object-contain"
-                        />
-                      ) : (
-                        <span className="text-2xs text-muted-foreground">
-                          None
+                        {IMPORT_RUN_TARGET_STATE_LABEL[photo.targetState]}
+                      </Badge>
+                      {groupByImage.get(photo.id) ? (
+                        <span className="max-w-40 truncate font-mono text-2xs text-muted-foreground">
+                          {groupByImage.get(photo.id)}
                         </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Stack gap="tight">
-                        <Badge
-                          variant={
-                            IMPORT_RUN_TARGET_STATE_VARIANT[photo.targetState]
-                          }
-                        >
-                          {IMPORT_RUN_TARGET_STATE_LABEL[photo.targetState]}
-                        </Badge>
-                        {groupByImage.get(photo.id) ? (
-                          <span className="max-w-40 truncate font-mono text-2xs text-muted-foreground">
-                            {groupByImage.get(photo.id)}
-                          </span>
-                        ) : null}
-                      </Stack>
-                    </TableCell>
-                    <TableCell>
-                      <Stack gap="tight">
-                        <Badge
-                          variant={
-                            photo.localAnalysisReady ? "positive" : "secondary"
-                          }
-                          title={
-                            photo.localAnalysisReady
-                              ? "Device Vision analysis received"
-                              : "Optional device Vision analysis has not arrived"
-                          }
-                        >
-                          {photo.localAnalysisReady ? (
-                            <CheckCircleIcon
-                              className="size-3"
-                              aria-hidden="true"
-                            />
-                          ) : (
-                            <ClockIcon className="size-3" aria-hidden="true" />
-                          )}
-                          Device:{" "}
-                          {photo.localAnalysisReady ? "Done" : "Not received"}
-                        </Badge>
-                        <ProcessingBadge
-                          label="Cutout"
-                          state={
-                            photo.cutout ??
-                            (labelImages.has(photo.id) &&
-                            photo.targetState === "completed"
-                              ? "skipped"
-                              : null)
-                          }
-                          reason={
-                            photo.cutoutReason ??
-                            (labelImages.has(photo.id) &&
-                            photo.targetState === "completed"
-                              ? "Image is attached only as label evidence"
-                              : null)
-                          }
-                        />
-                        <ProcessingBadge
-                          label="AI description"
-                          state={photo.describe}
-                          reason={photo.describeReason}
-                        />
-                        {photo.describeReason ? (
-                          <span className="max-w-56 text-2xs break-words text-destructive">
-                            {photo.describeReason}
-                          </span>
-                        ) : null}
-                      </Stack>
-                    </TableCell>
-                    <TableCell className="max-w-96 whitespace-normal">
-                      {snippet ? (
-                        <p
-                          className="line-clamp-2 text-xs text-muted-foreground"
-                          title={snippet}
-                        >
-                          <ShortcodeProse>{snippet}</ShortcodeProse>
-                        </p>
-                      ) : (
-                        <span className="text-2xs text-muted-foreground">
-                          Not described yet
+                      ) : null}
+                    </Stack>
+                  </TableCell>
+                  <TableCell>
+                    <Stack gap="tight">
+                      <Badge
+                        variant={
+                          photo.localAnalysisReady ? "positive" : "secondary"
+                        }
+                        title={
+                          photo.localAnalysisReady
+                            ? "Device Vision analysis received"
+                            : "Optional device Vision analysis has not arrived"
+                        }
+                      >
+                        {photo.localAnalysisReady ? (
+                          <CheckCircleIcon
+                            className="size-3"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <ClockIcon className="size-3" aria-hidden="true" />
+                        )}
+                        Device:{" "}
+                        {photo.localAnalysisReady ? "Done" : "Not received"}
+                      </Badge>
+                      <ProcessingBadge
+                        label="Cutout"
+                        state={
+                          photo.cutout ??
+                          (labelImages.has(photo.id) &&
+                          photo.targetState === "completed"
+                            ? "skipped"
+                            : null)
+                        }
+                        reason={
+                          photo.cutoutReason ??
+                          (labelImages.has(photo.id) &&
+                          photo.targetState === "completed"
+                            ? "Image is attached only as label evidence"
+                            : null)
+                        }
+                      />
+                      <ProcessingBadge
+                        label="AI description"
+                        state={photo.describe}
+                        reason={photo.describeReason}
+                      />
+                      {photo.describeReason ? (
+                        <span className="max-w-56 text-2xs break-words text-destructive">
+                          {photo.describeReason}
                         </span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
+                      ) : null}
+                    </Stack>
+                  </TableCell>
+                  <TableCell className="max-w-96 whitespace-normal">
+                    {snippet ? (
+                      <p
+                        className="line-clamp-2 text-xs text-muted-foreground"
+                        title={snippet}
+                      >
+                        <ShortcodeProse>{snippet}</ShortcodeProse>
+                      </p>
+                    ) : (
+                      <span className="text-2xs text-muted-foreground">
+                        Not described yet
+                      </span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </Section>
   );
 }
 
@@ -1445,52 +1415,44 @@ export function PhotoGroupReview({
 
   return (
     <Stack gap="lg">
-      <Card>
-        <CardHeader>
-          <Row align="center" justify="between" wrap gap="sm">
-            <Stack gap="tight">
-              <CardTitle as="h2">Proposed items</CardTitle>
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {proposed.length} to review · {settled.length} settled ·{" "}
-                {review.unassignedImageIds.length} photos not in a group
-              </span>
-            </Stack>
-            <Button
-              className="min-h-11 w-full sm:w-auto"
-              disabled={
-                busy ||
-                proposed.length === 0 ||
-                hasStaleGroups ||
-                hasPendingDescriptions
-              }
-              onClick={() => action.mutate({ action: "approve" })}
-            >
-              <CheckIcon />
-              Approve all {proposed.length ? `(${proposed.length})` : ""}
-            </Button>
-          </Row>
-        </CardHeader>
+      <Section
+        title="Proposed items"
+        description={`${proposed.length} to review · ${settled.length} settled · ${review.unassignedImageIds.length} photos not in a group`}
+      >
+        <Row align="center" justify="end" wrap gap="sm">
+          <Button
+            className="min-h-11 w-full sm:w-auto"
+            disabled={
+              busy ||
+              proposed.length === 0 ||
+              hasStaleGroups ||
+              hasPendingDescriptions
+            }
+            onClick={() => action.mutate({ action: "approve" })}
+          >
+            <CheckIcon />
+            Approve all {proposed.length ? `(${proposed.length})` : ""}
+          </Button>
+        </Row>
         {proposed.length === 0 ? (
-          <CardContent>
-            {settled.length ? (
-              <StatusText tone="muted">
-                Every proposed group has been approved or discarded.
-              </StatusText>
-            ) : (
-              <Stack gap="sm" className="items-start">
-                <StatusText tone="muted">{emptyCopy.title}</StatusText>
-                {images.length ? (
-                  <>
-                    <p className="text-xs text-muted-foreground">
-                      {emptyCopy.detail}
-                    </p>
-                  </>
-                ) : null}
-              </Stack>
-            )}
-          </CardContent>
+          settled.length ? (
+            <StatusText tone="muted">
+              Every proposed group has been approved or discarded.
+            </StatusText>
+          ) : (
+            <Stack gap="sm" className="items-start">
+              <StatusText tone="muted">{emptyCopy.title}</StatusText>
+              {images.length ? (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    {emptyCopy.detail}
+                  </p>
+                </>
+              ) : null}
+            </Stack>
+          )
         ) : null}
-      </Card>
+      </Section>
 
       {proposed.map((proposal) => (
         <ProposalCard
@@ -1507,65 +1469,53 @@ export function PhotoGroupReview({
       ))}
 
       {review.unassignedImageIds.length ? (
-        <Card>
-          <CardHeader>
-            <Row align="center" gap="sm">
-              <CardTitle as="h2">Not in a group</CardTitle>
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {review.unassignedImageIds.length}
-              </span>
-            </Row>
-          </CardHeader>
-          <CardContent>
-            <Row wrap gap="sm">
-              {review.unassignedImageIds.map((imageId) => (
-                <figure key={imageId} className="relative m-0">
-                  <PhotoThumb image={imagesById.get(imageId)} size={96} />
-                  <div className="absolute top-1 right-1">
-                    <ImageMenu
-                      imageId={imageId}
-                      groupKey={null}
-                      purpose={null}
-                      proposals={review.proposals}
-                      save={save}
-                      disabled={busy}
-                    />
-                  </div>
-                </figure>
-              ))}
-            </Row>
-          </CardContent>
-        </Card>
+        <Section
+          aria-label="Not in a group"
+          title={`Not in a group · ${review.unassignedImageIds.length}`}
+        >
+          <PhotoGrid
+            images={review.unassignedImageIds.flatMap((id) =>
+              photoTile(imagesById.get(id)),
+            )}
+            renderOverlay={(tile) => (
+              <div className="absolute top-1 right-1">
+                <ImageMenu
+                  imageId={tile.id}
+                  groupKey={null}
+                  purpose={null}
+                  proposals={review.proposals}
+                  save={save}
+                  disabled={busy}
+                />
+              </div>
+            )}
+          />
+        </Section>
       ) : null}
 
       {settled.length ? (
-        <Card>
-          <CardHeader>
-            <CardTitle as="h2">Settled groups</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Photos</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Outcome</TableHead>
-                  <TableHead>Group</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {settled.map((proposal) => (
-                  <SettledRow
-                    key={proposal.groupKey}
-                    runId={runId}
-                    proposal={proposal}
-                    imagesById={imagesById}
-                  />
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <Section aria-label="Settled groups" title="Settled groups">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Photos</TableHead>
+                <TableHead>Product</TableHead>
+                <TableHead>Outcome</TableHead>
+                <TableHead>Group</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {settled.map((proposal) => (
+                <SettledRow
+                  key={proposal.groupKey}
+                  runId={runId}
+                  proposal={proposal}
+                  imagesById={imagesById}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </Section>
       ) : null}
 
       {images.length ? (
@@ -1575,13 +1525,9 @@ export function PhotoGroupReview({
           labelImages={labelImages}
         />
       ) : (
-        <Card>
-          <CardContent>
-            <StatusText tone="muted">
-              No photos have been uploaded for this batch.
-            </StatusText>
-          </CardContent>
-        </Card>
+        <StatusText tone="muted">
+          No photos have been uploaded for this batch.
+        </StatusText>
       )}
     </Stack>
   );

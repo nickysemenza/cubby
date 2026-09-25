@@ -17,6 +17,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ImportRunDetail } from "~/contracts/run.contract";
+import { photoImport } from "~/entities/run.functions";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type { UnparsedStartOperationData } from "~/server/start-operation.contract";
@@ -171,7 +172,7 @@ const review: PhotoRunReview = {
 beforeEach(() => {
   harness = createBrowserTestHarness();
   harness.queryClient.setQueryData(
-    ["purchase-import", "run", RUN_ID, "photo-review"],
+    photoImport.review.queryKey({ runId: RUN_ID }),
     review,
   );
 });
@@ -215,7 +216,7 @@ describe("PhotoImportRunView", () => {
       ),
     };
     harness.queryClient.setQueryData(
-      ["purchase-import", "run", RUN_ID, "photo-review"],
+      photoImport.review.queryKey({ runId: RUN_ID }),
       stoppedReview,
     );
     render(<PhotoImportRunView run={{ ...run, status: "needs_review" }} />, {
@@ -233,13 +234,11 @@ describe("PhotoImportRunView", () => {
 
   it("starts grouping when the completed iPhone upload opens its review link", async () => {
     window.history.replaceState(null, "", "/runs/RUN-4K7M?startGrouping=1");
-    const fetchMock = vi.fn(
-      async (_input: RequestInfo | URL, init?: RequestInit) =>
-        Response.json(
-          init?.method === "POST" ? { runId: RUN_ID, started: true } : review,
-        ),
-    );
-    vi.stubGlobal("fetch", fetchMock);
+    const operations: string[] = [];
+    restoreDispatch = overrideStartDispatch(async (operation) => {
+      operations.push(operation);
+      return { ok: true, data: { runId: RUN_ID, started: true } };
+    });
 
     render(
       <PhotoImportRunView run={{ ...run, status: "running", endedAt: null }} />,
@@ -248,7 +247,7 @@ describe("PhotoImportRunView", () => {
 
     await waitFor(() =>
       expect(
-        fetchMock.mock.calls.filter(([, init]) => init?.method === "POST"),
+        operations.filter((name) => name === "photoImport.startGrouping"),
       ).toHaveLength(1),
     );
   });
@@ -296,7 +295,7 @@ describe("PhotoImportRunView", () => {
 
   it("shows a neutral skipped cutout pill with the label-only reason", async () => {
     harness.queryClient.setQueryData(
-      ["purchase-import", "run", RUN_ID, "photo-review"],
+      photoImport.review.queryKey({ runId: RUN_ID }),
       {
         ...review,
         review: {
@@ -408,7 +407,7 @@ describe("PhotoImportRunView", () => {
           : image,
       ),
     };
-    const key = ["purchase-import", "run", RUN_ID, "photo-review"];
+    const key = photoImport.review.queryKey({ runId: RUN_ID });
     harness.queryClient.setQueryData(key, pendingReview);
     answerOperations({ candidates: [] });
     render(

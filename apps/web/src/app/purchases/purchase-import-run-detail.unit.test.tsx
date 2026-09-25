@@ -223,7 +223,7 @@ describe("RunImportWorkflow", () => {
     });
 
     expect(
-      await screen.findByRole("link", { name: "Fixture purchase" }),
+      await screen.findByRole("link", { name: /Fixture purchase/ }),
     ).toHaveAttribute("href", "/purchases/PUR-ABCDE12345");
     expect(screen.getByLabelText("Import run transcript")).toHaveTextContent(
       "extract-1",

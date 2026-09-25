@@ -8,6 +8,10 @@ import {
   productMarkUsdaUnavailableEvent,
   productWorkflowSchemas,
 } from "@cubby/schemas/product-workflow";
+import {
+  mergeProductMatchInput,
+  productMergePreview,
+} from "@cubby/schemas/recommendations";
 import { z } from "zod";
 
 import {
@@ -47,6 +51,11 @@ export const productContract = defineContract("product", {
   }),
   getByShortcodes: query({ ...productWorkflowSchemas.getByShortcodes }),
   merge: mutation({ ...productWorkflowSchemas.merge }),
+  /** Which field wins, and what blocks, before a two-product merge commits. */
+  mergePreview: query({
+    input: mergeProductMatchInput,
+    output: productMergePreview,
+  }),
   projectUses: query({
     ...productWorkflowSchemas.projectUses,
     mcp: {

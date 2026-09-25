@@ -1,5 +1,5 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { productMergePreview } from "@cubby/schemas/recommendations";
+import type { productMergePreview } from "@cubby/schemas/recommendations";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useMemo, useState } from "react";
@@ -9,6 +9,7 @@ import {
   type ImpactPreviewOperations,
   MergeImpactPreview,
 } from "~/app/_components/actions/entity-operation-impact-preview";
+import { product } from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -25,7 +26,6 @@ import {
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { entities } from "~/entities/entities";
 import type { MergeDisplayRow, MergeableConfig } from "~/entities/types";
-import { readJsonOrThrow } from "~/lib/http-error";
 
 /** Display text comes from `mergeable.rowLabel`/`rowStat`, not a hardcoded
  * `name` field — a row shape like `PurchaseOut` (no `name`) works here too. */
@@ -293,21 +293,11 @@ function RankedMergeDialog<T extends MergeRow>({
   const productPreviewEnabled =
     entity === "product" && open && !!effectiveKeepId && aliasIds.length === 1;
   const productPreview = useQuery({
-    queryKey: ["product-merge-decisions", effectiveKeepId, aliasIds[0]],
+    ...product.mergePreview.queryOptions({
+      keepId: effectiveKeepId ?? "",
+      mergeId: aliasIds[0] ?? "",
+    }),
     enabled: productPreviewEnabled,
-    queryFn: async () => {
-      const response = await fetch("/api/products/merge-preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keepId: effectiveKeepId, mergeId: aliasIds[0] }),
-      });
-      return readJsonOrThrow(
-        response,
-        productMergePreview,
-        "Merge preview could not load.",
-        { method: "POST" },
-      );
-    },
   });
 
   return (

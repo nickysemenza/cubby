@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { Row } from "~/components/layout";
@@ -11,12 +11,9 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { StatusText } from "~/components/ui/status-text";
+import { run } from "~/entities/run.functions";
 import { getErrorMessage } from "~/lib/error-utils";
-import { readJsonOrThrow } from "~/lib/http-error";
-import {
-  type PurchaseAgentConnectionStatus,
-  purchaseImportAgentOAuthStatus,
-} from "~/lib/purchase-import-debug";
+import type { PurchaseAgentConnectionStatus } from "~/lib/purchase-import-debug";
 
 /** Connection state is owned by Activity because it governs who may run imports. */
 export function PurchaseImportAgentConnection({
@@ -24,35 +21,12 @@ export function PurchaseImportAgentConnection({
 }: {
   feedback?: PurchaseAgentConnectionStatus;
 }) {
-  const queryClient = useQueryClient();
-  const access = useQuery({
-    queryKey: ["purchase-import", "agent-oauth"],
-    queryFn: async () => {
-      const response = await fetch("/api/import/agent/oauth/status");
-      return readJsonOrThrow(
-        response,
-        purchaseImportAgentOAuthStatus,
-        "Purchase import agent access could not load.",
-      );
-    },
-  });
-  const disconnect = useMutation({
-    mutationFn: async () => {
-      const response = await fetch("/api/import/agent/oauth/status", {
-        method: "DELETE",
-      });
-      return readJsonOrThrow(
-        response,
-        purchaseImportAgentOAuthStatus,
-        "Purchase import agent access could not be disconnected.",
-        { method: "DELETE" },
-      );
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(["purchase-import", "agent-oauth"], data);
-      toast.success("Purchase import agent disconnected");
-    },
-  });
+  const access = useQuery(run.agentConnection.queryOptions());
+  const disconnect = useMutation(
+    run.disconnectAgent.mutationOptions({
+      onSuccess: () => toast.success("Purchase import agent disconnected"),
+    }),
+  );
   return (
     <Card className="max-w-2xl">
       <CardHeader>

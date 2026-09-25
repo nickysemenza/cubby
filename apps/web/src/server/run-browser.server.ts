@@ -2,10 +2,16 @@ import {
   importRunPurpose,
   importRunStatus,
 } from "@cubby/schemas/import-run-fields";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { runContract } from "~/contracts/run.contract";
+import { oauthRefreshToken } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import {
+  findActivePurchaseAgentGrant,
+  PURCHASE_AGENT_OAUTH_CLIENT_ID,
+} from "~/server/purchase-import/agent-auth";
 import {
   confirmMerchantVendorRule,
   listMerchantVendorRules,
@@ -14,6 +20,7 @@ import {
   controlImportRun,
   loadImportRunDetail,
   loadImportRunLog,
+  pauseAuthorizedImportRuns,
 } from "~/server/purchase-import/run-service";
 import {
   listImportRuns,
@@ -26,6 +33,7 @@ import {
   loadTargetedImportLaunch,
   startTargetedImport,
 } from "~/server/purchase-import/targeted-run";
+import { getDb } from "~/server/repo/database-helpers";
 import { getImportRunByShortcode } from "~/server/repo/import-run";
 import type { AuthenticatedRequestContext } from "~/server/request-context";
 import { listRunAiUsageWorkflow } from "~/server/workflows/ai.server";
@@ -145,6 +153,30 @@ export const runHandlers = implementOperationDomain(runContract, {
     ),
   startTargeted: async (context, input) =>
     startTargetedImport(context.db, (await memberParty(context)).id, input),
+  agentConnection: async (context) => {
+    const grant = await findActivePurchaseAgentGrant(
+      context.db,
+      context.auth.userId,
+    );
+    return {
+      authorized: grant !== null,
+      expiresAt: grant?.expiresAt?.toISOString() ?? null,
+    };
+  },
+  disconnectAgent: async (context) => {
+    await getDb(context.db)
+      .update(oauthRefreshToken)
+      .set({ revoked: new Date() })
+      .where(
+        and(
+          eq(oauthRefreshToken.clientId, PURCHASE_AGENT_OAUTH_CLIENT_ID),
+          eq(oauthRefreshToken.userId, context.auth.userId),
+          isNull(oauthRefreshToken.revoked),
+        ),
+      );
+    await pauseAuthorizedImportRuns(context.db, context.auth.userId);
+    return { authorized: false, expiresAt: null };
+  },
   merchantRules: async (context) =>
     listMerchantVendorRules(context.db, (await memberParty(context)).id),
   confirmMerchantRule: async (context, input) => {

@@ -15,6 +15,7 @@ import {
   listKitComponentRows,
   listKitMembership,
 } from "~/server/repo/product-components";
+import { previewProductMergeDecisions } from "~/server/repo/product/merge";
 import { listProductProjectUses } from "~/server/repo/project";
 import { listProductPurchases } from "~/server/repo/purchase-products";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
@@ -78,6 +79,13 @@ export const productHandlers = implementOperationDomain(productContract, {
   getByShortcodes: (context, input) =>
     getProductsByShortcodes(context.readDb, input.shortcodes),
   merge: mergeProductsWorkflow,
+  mergePreview: async (context, input) => {
+    const [keepId, mergeId] = await Promise.all([
+      productShortcodes.one(context.db, input.keepId),
+      productShortcodes.one(context.db, input.mergeId),
+    ]);
+    return previewProductMergeDecisions(context.db, { keepId, mergeId });
+  },
   projectUses: async (context, input) =>
     listProductProjectUses(
       context.readDb,

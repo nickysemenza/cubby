@@ -34,12 +34,10 @@ const STATIC_TRACE_ROUTES = new Set([
   "/api/import/agent/debug-events",
   "/api/import/agent/oauth/callback",
   "/api/import/agent/oauth/start",
-  "/api/import/agent/oauth/status",
   "/api/import/agent/socket",
   "/api/companion/image-processing/socket",
   "/api/import/agent/sync",
   "/api/mcp",
-  "/api/products/merge-preview",
   "/api/settings/member-logins",
   "/api/v1/docs",
   "/api/v1/openapi.json",
@@ -103,10 +101,6 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
   {
     pattern: /^\/api\/import\/runs\/[^/]+\/agent$/u,
     template: "/api/import/runs/:publicId/agent",
-  },
-  {
-    pattern: /^\/api\/import\/runs\/[^/]+\/photo-agent$/u,
-    template: "/api/import/runs/:publicId/photo-agent",
   },
   {
     pattern: /^\/api\/import\/runs\/[^/]+\/agent\/.*$/u,

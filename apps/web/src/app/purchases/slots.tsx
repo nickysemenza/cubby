@@ -32,11 +32,9 @@ const EMPTY_PURCHASE_PRODUCTS: PurchaseProductOut[] = [];
 export const ImportRuns: DetailSlotComponent<"purchase"> = ({
   record: purchase,
 }) => {
-  const runs = useQuery({
-    queryKey: ["purchase-import", "purchase-runs", purchase.id],
-    queryFn: async () =>
-      (await runOperations.history.call({ purchaseId: purchase.id })).runs,
-  });
+  const runs = useQuery(
+    runOperations.history.queryOptions({ purchaseId: purchase.id }),
+  );
 
   const startValidation = (
     <TargetedImportLaunchButton
@@ -59,7 +57,7 @@ export const ImportRuns: DetailSlotComponent<"purchase"> = ({
         <StatusText tone="destructive">{runs.error.message}</StatusText>
       </Stack>
     );
-  const importRuns = runs.data ?? [];
+  const importRuns = runs.data?.runs ?? [];
   if (importRuns.length === 0) {
     return (
       <Stack gap="sm">

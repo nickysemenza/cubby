@@ -45,9 +45,8 @@ export const ProductImportRuns: DetailSlotComponent<"product"> = ({
   record: product,
 }) => {
   const runs = useQuery({
-    queryKey: ["purchase-import", "product-runs", product.id],
-    queryFn: async () =>
-      (await runOperations.history.call({ productId: product.id })).runs,
+    ...runOperations.history.queryOptions({ productId: product.id }),
+    select: (history) => history.runs,
   });
   const purchases = useQuery(
     entityListFor("purchase").queryOptions({

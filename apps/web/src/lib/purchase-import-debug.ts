@@ -70,8 +70,3 @@ export const purchaseAgentConnectionStatus = z.enum([
 export type PurchaseAgentConnectionStatus = z.infer<
   typeof purchaseAgentConnectionStatus
 >;
-
-export const purchaseImportAgentOAuthStatus = z.object({
-  authorized: z.boolean(),
-  expiresAt: z.iso.datetime().nullable(),
-});

@@ -196,6 +196,11 @@ const importRunLogEntry = z.object({
 });
 export type ImportRunLogEntry = z.infer<typeof importRunLogEntry>;
 
+const agentConnection = z.object({
+  authorized: z.boolean(),
+  expiresAt: z.iso.datetime().nullable(),
+});
+
 const merchantRules = z.object({
   rules: z.array(
     z.object({
@@ -420,6 +425,13 @@ export const runContract = defineContract("run", {
     http: false,
     input: targetedImportStartInput,
     output: targetedImportStartOutput,
+  }),
+  /** The member's purchase-import agent OAuth grant. */
+  agentConnection: query({ input: z.undefined(), output: agentConnection }),
+  /** Revokes the grant and pauses the runs it authorized. */
+  disconnectAgent: mutation({
+    input: z.undefined(),
+    output: agentConnection,
   }),
   merchantRules: query({ input: z.undefined(), output: merchantRules }),
   confirmMerchantRule: mutation({
