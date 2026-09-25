@@ -5,67 +5,63 @@ import {
 } from "~/contracts/problems.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
-import {
-  deleteUnusedIngredientsWorkflow,
-  dryRunPruneAliasesWorkflow,
-  dryRunReparseWorkflow,
-  findCoverageProblemsWorkflow,
-  findCoverageTotalsWorkflow,
-  findFastProblemsWorkflow,
-  findMaintenanceCountsWorkflow,
-  findProblemByTypeWorkflow,
-  findProblemCountsWorkflow,
-  findTrackerProblemsWorkflow,
-  findUpcProblemsWorkflow,
-  findViewProblemsWorkflow,
-  pruneAllUnusedAliasesWorkflow,
-  recipeUsageByProductWorkflow,
-  resolveArrivedFindingsWorkflow,
-  resolveImportFindingWorkflow,
-  reparseStaleWorkflow,
-} from "~/server/workflows/problems.server";
+import { findProblemCountsWorkflow } from "~/server/workflows/problem-counts.server";
+
+// The homepage counts read normally ends at the Durable Object. Keep the
+// detector graph out of its cold path and load it only for other operations.
+const problemWorkflows = () => import("~/server/workflows/problems.server");
 
 /** Problem reads are authoritative so fixes disappear on the next fetch. */
 export const problemsHandlers = implementOperationDomain(problemsContract, {
   getFast: {
-    run: (context) => findFastProblemsWorkflow(context),
+    run: async (context) =>
+      (await problemWorkflows()).findFastProblemsWorkflow(context),
   },
   getCounts: {
     run: (context) => findProblemCountsWorkflow(context),
   },
   getViews: {
-    run: (context) => findViewProblemsWorkflow(context),
+    run: async (context) =>
+      (await problemWorkflows()).findViewProblemsWorkflow(context),
   },
   getCoverage: {
-    run: (context) => findCoverageProblemsWorkflow(context),
+    run: async (context) =>
+      (await problemWorkflows()).findCoverageProblemsWorkflow(context),
   },
   getUpc: {
-    run: (context) => findUpcProblemsWorkflow(context),
+    run: async (context) =>
+      (await problemWorkflows()).findUpcProblemsWorkflow(context),
   },
   getTracker: {
-    run: (context) => findTrackerProblemsWorkflow(context),
+    run: async (context) =>
+      (await problemWorkflows()).findTrackerProblemsWorkflow(context),
   },
   getCoverageTotals: {
-    run: (context) => findCoverageTotalsWorkflow(context),
+    run: async (context) =>
+      (await problemWorkflows()).findCoverageTotalsWorkflow(context),
   },
   getMaintenanceCounts: {
-    run: (context) => findMaintenanceCountsWorkflow(context),
+    run: async (context) =>
+      (await problemWorkflows()).findMaintenanceCountsWorkflow(context),
   },
   dryRunReparse: {
-    run: (context) => dryRunReparseWorkflow(context),
+    run: async (context) =>
+      (await problemWorkflows()).dryRunReparseWorkflow(context),
   },
   dryRunPruneAliases: {
-    run: (context) => dryRunPruneAliasesWorkflow(context),
+    run: async (context) =>
+      (await problemWorkflows()).dryRunPruneAliasesWorkflow(context),
   },
   recipeUsageByProduct: {
-    run: (context, input) => recipeUsageByProductWorkflow(context, input),
+    run: async (context, input) =>
+      (await problemWorkflows()).recipeUsageByProductWorkflow(context, input),
   },
-  deleteUnused: (context, input) =>
-    deleteUnusedIngredientsWorkflow(context, input),
-  resolveImportFinding: (context, input) =>
-    resolveImportFindingWorkflow(context, input),
-  resolveArrivedFindings: (context, input) =>
-    resolveArrivedFindingsWorkflow(context, input),
+  deleteUnused: async (context, input) =>
+    (await problemWorkflows()).deleteUnusedIngredientsWorkflow(context, input),
+  resolveImportFinding: async (context, input) =>
+    (await problemWorkflows()).resolveImportFindingWorkflow(context, input),
+  resolveArrivedFindings: async (context, input) =>
+    (await problemWorkflows()).resolveArrivedFindingsWorkflow(context, input),
 });
 
 export const integrityProblemsHandlers = implementOperationDomain(
@@ -74,7 +70,9 @@ export const integrityProblemsHandlers = implementOperationDomain(
     getByType: {
       run: async (context, input) =>
         integrityProblemsContract.ops.getByType.output.parse(
-          await findProblemByTypeWorkflow(context, input),
+          await (
+            await problemWorkflows()
+          ).findProblemByTypeWorkflow(context, input),
         ),
     },
   },
@@ -83,9 +81,17 @@ export const integrityProblemsHandlers = implementOperationDomain(
 export const problemsStreamHandlers = implementSubscriptionDomain(
   problemsStreamsContract,
   {
-    reparseStale: (context, _input, signal) =>
-      reparseStaleWorkflow(context, undefined, signal),
-    pruneAllUnusedAliases: (context, _input, signal) =>
-      pruneAllUnusedAliasesWorkflow(context, undefined, signal),
+    reparseStale: async (context, _input, signal) =>
+      (await problemWorkflows()).reparseStaleWorkflow(
+        context,
+        undefined,
+        signal,
+      ),
+    pruneAllUnusedAliases: async (context, _input, signal) =>
+      (await problemWorkflows()).pruneAllUnusedAliasesWorkflow(
+        context,
+        undefined,
+        signal,
+      ),
   },
 );
