@@ -94,6 +94,7 @@ describe("entity media public display images", () => {
     const result = await getEntityDisplayImages(ctx.db, [
       { entityType: "product", entityId: pictured.id },
       { entityType: "product", entityId: pictured.id },
+      { entityType: "product", entityId: pictured.id.replace(/^PRD-/u, "P-") },
       { entityType: "product", entityId: unpictured.id },
       { entityType: "product", entityId: deleted.id },
       { entityType: "location", entityId: picturedLocation.id },
@@ -104,6 +105,9 @@ describe("entity media public display images", () => {
 
     expect(result).toEqual({
       [entityRefKey("product", pictured.id)]: {
+        ...expectedImage(cover.key),
+      },
+      [entityRefKey("product", pictured.id.replace(/^PRD-/u, "P-"))]: {
         ...expectedImage(cover.key),
       },
       [entityRefKey("product", unpictured.id)]: null,
