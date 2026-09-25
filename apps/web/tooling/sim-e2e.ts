@@ -724,6 +724,7 @@ async function runHeadlessPhotoScenario(
     path.join(webRoot, "tests/e2e/fixtures", `synthetic-wardrobe-${label}.png`),
   );
   const nativeOutput = path.join(artifacts, "native-photo-output.txt");
+  const sourceFingerprint = nativeSourceFingerprint(false);
   await run(
     "pnpm",
     [
@@ -737,6 +738,10 @@ async function runHeadlessPhotoScenario(
     repoRoot,
     nativeOutput,
   );
+  nativeBuildBinary = path.join(kitRoot, ".build/debug/cubby");
+  nativeBuildSourceVersion = sourceFingerprint;
+  currentNativeSourceVersion = () => nativeSourceFingerprint(false);
+  nativeBuildReady = true;
   const match = readFileSync(nativeOutput, "utf8").match(
     /Headless native photo import verified: (RUN-[A-Z0-9]+)/u,
   );
