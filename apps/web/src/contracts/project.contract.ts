@@ -35,6 +35,11 @@ export const projectContract = defineContract("project", {
     output: schemas.projectResourcesOut,
   }),
   toolSuggestions: query({
+    mcp: {
+      name: "suggest_project_tools",
+      description:
+        "Suggest inventoried Cubby tools to attach to one exact project. Suggestions include tools purchased for the project at $100+ and trade-matched tools whose purchase history supports the project's task/expense trades; cheaper trade matches require at least two explicit prior project uses. This is a review queue only and never attaches tools automatically.",
+    },
     input: schemas.projectResourceProjectInput,
     output: schemas.projectToolSuggestionsOut,
   }),

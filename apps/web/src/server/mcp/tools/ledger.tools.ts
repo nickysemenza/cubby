@@ -1,35 +1,15 @@
 import {
   financialTransferPairSuggestionsOut,
-  householdContributionLedgerInput,
-  householdContributionLedgerOut,
-  projectContributionInput,
-  projectContributionOut,
   suggestFinancialTransferPairsInput,
 } from "@cubby/schemas/household-contribution";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
+import { suggestFinancialTransferPairs } from "~/server/repo/financial-transfer-pairing";
 
 import { READ_ONLY_CLOSED, registerRouterTool } from "./_shared";
 
 /** Standard entity surface only: detailed ledger invariants stay in the repos. */
 export function registerLedgerTools(server: McpServer) {
-  registerRouterTool(server, {
-    name: "get_household_contribution_ledger",
-    description:
-      "Read the household-wide contribution ledger as of a date (today when omitted). Positions include Expenses and Ledger Transfers dated through that day; evidence-gap counts describe currently attached Financial Transaction evidence. This is read-only and never records attribution, transfers, or evidence.",
-    inputSchema: householdContributionLedgerInput,
-    outputSchema: householdContributionLedgerOut,
-    annotations: READ_ONLY_CLOSED,
-    call: (caller, params) => caller.householdContribution.ledger(params),
-  });
-  registerRouterTool(server, {
-    name: "get_project_contribution",
-    description:
-      "Read whole-group cost, initial funding, consumption, and attribution gaps for one Project, optionally including descendants. Project reports include planned future Expenses and exclude later household-wide transfers. This is read-only.",
-    inputSchema: projectContributionInput,
-    outputSchema: projectContributionOut,
-    annotations: READ_ONLY_CLOSED,
-    call: (caller, params) => caller.householdContribution.project(params),
-  });
   registerRouterTool(server, {
     name: "suggest_financial_transfer_pairs",
     description:
@@ -37,7 +17,7 @@ export function registerLedgerTools(server: McpServer) {
     inputSchema: suggestFinancialTransferPairsInput,
     outputSchema: financialTransferPairSuggestionsOut,
     annotations: READ_ONLY_CLOSED,
-    call: (caller, params) =>
-      caller.householdContribution.suggestTransferPairs(params),
+    call: (context, params) =>
+      suggestFinancialTransferPairs(context.readDb, params),
   });
 }

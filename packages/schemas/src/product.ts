@@ -611,7 +611,7 @@ const productExternalIdMcpEntityOut = externalIdOut.omit({ id: true });
  * `syncProductUnitMappings` (repo/product/update-helpers.ts) accepts to update
  * an existing row in place — a mapping resent without it is hard-deleted and
  * reinserted, losing `createdAt`/`updatedAt` and its audit trail. External-id
- * rows have their own slot-addressed patch tool (`patch_product_external_ids`)
+ * rows have their own slot-addressed patch tool (`patch_products_external_ids`)
  * and stay id-less, but a unit mapping has no such tool, so this child row
  * keeps its raw uuid across the MCP boundary — the same "id is the follow-up
  * write handle" carve-out as mealRecipe `id` and recipe section `lineId` (see

@@ -1008,7 +1008,7 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
 - **Decode bytes in image verification** — Promote when a corrupt or fully transparent
   cover is next found by eye. `inspectImageFile`
   (`apps/web/src/server/services/image-integrity.ts`) checks magic bytes, header
-  dimensions, byte length and sha256 but never rasterizes, so `verify_product_images`
+  dimensions, byte length and sha256 but never rasterizes, so `verify_products_images`
   reports `verified` for files that will not render. A subagent citing the verify tool
   is therefore not proof of a good image.
 

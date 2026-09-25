@@ -39,6 +39,12 @@ export const entityGraphContract = defineContract("entity", {
     output: entityGraphPathsOutputSchema,
   }),
   connections: query({
+    mcp: {
+      name: "get_entity_connections",
+      description:
+        'One-hop physical connections of any entity: what points at it (`incoming`) and what it points at (`outgoing`), grouped by edge with a count and the first linked records. A merged-away code reads its survivor and reports `redirectedFrom`. Pass `operation: "delete"` or `"merge"` to see each incoming group\'s declared disposition (block, detach, repoint, ...) before running it; the preview is advisory and the mutation re-validates.',
+      readPolicy: "strong",
+    },
     native: "Native one-hop physical connections and delete/merge impact",
     input: entityConnectionsInput,
     output: entityConnectionsOut,

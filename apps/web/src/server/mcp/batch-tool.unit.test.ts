@@ -51,7 +51,7 @@ function createBatchServer(): McpServer {
     itemOutputSchema,
     projectReference: (item) => item.id,
     annotations: WRITE_CLOSED,
-    run: async (_caller, item) => {
+    run: async (item) => {
       if (item.fail) throw new Error(`Cannot process ${item.id}`);
       return { id: `result-${item.id}`, value: item.id.length };
     },

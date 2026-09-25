@@ -8,23 +8,31 @@ import {
   productResolveNamesInput,
 } from "@cubby/schemas/product";
 import { productComponentsInput } from "@cubby/schemas/product-components";
-import {
-  proposeProductMatchInput,
-  proposeProductMatchOut,
-} from "@cubby/schemas/recommendations";
 import { upc } from "@cubby/usda-schemas";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { productContract } from "~/contracts/product.contract";
+import {
+  patchProductExternalIds,
+  resolveProductNames,
+} from "~/server/repo/product";
+import { findProductExternalIdCollisions } from "~/server/repo/product/external-id-collisions";
+import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
+import { verifyProductImages } from "~/server/services/image-verification.service";
+import {
+  findOrCreateByUPC,
+  lookupUPC,
+} from "~/server/services/product-orchestration.service";
+import { getProductWithFood } from "~/server/services/product.service";
+import { listProductComponentsWorkflow } from "~/server/workflows/product.server";
 
 import {
-  getCaller,
+  getRequestContext,
   idParam,
   READ_ONLY_CLOSED,
   READ_ONLY_OPEN,
   registerBatchTool,
-  registerMcpTool,
   registerRouterTool,
   rejectDuplicateIds,
   respond,
@@ -37,6 +45,8 @@ import {
   mcpItemsEnvelope,
   mcpResultsEnvelope,
 } from "./contract-envelope";
+
+const productShortcodes = bindShortcodeResolver("product");
 
 /** `{results}` over `product.resolveNames`'s own output — see `mcpResultsEnvelope`. */
 const productResolveNamesMcpOut = mcpResultsEnvelope(
@@ -62,62 +72,43 @@ const productComponentsMcpOut = mcpItemsEnvelope(
 );
 
 export function registerProductTools(server: McpServer) {
-  registerMcpTool(server, {
+  registerRouterTool(server, {
     name: "find_product_external_id_collisions",
     description:
       "Find duplicate live Product external identifiers. Use source for a broad audit, or identifiers for ordered exact (source, kind, externalId) results including missing and unique slots. Pass productId — the product you are about to write these onto — and `unique` splits into `owned_by_this` and `owned_by_other`; without it, `unique` only means the id has ONE live owner, which reads as a clean pass even when that owner is a different product.",
     inputSchema: productExternalIdCollisionInput,
     outputSchema: productExternalIdCollisionsOut,
     annotations: READ_ONLY_CLOSED,
-    handler: (params, extra) =>
-      getCaller(extra).product.externalIdCollisions(params),
-  });
-
-  registerMcpTool(server, {
-    name: "patch_product_external_ids",
-    description:
-      "Patch named (source, kind) identifier slots without replacing unrelated Product identifiers. A slot holds ONE primary plus any number of secondaries — Amazon lists one item twice, so a product legitimately carries two ASINs. An upsert replaces the primary; pass isPrimary: false to add an additional identifier alongside it, addressed by its own value. Every removal must include the exact current external ID, all preconditions are checked before anything changes, and removing a primary promotes the oldest surviving secondary so the slot always has a value standing for it.",
-    inputSchema: patchProductExternalIdsInput,
-    outputSchema: productMcpDetailOut,
-    annotations: WRITE_CLOSED,
-    handler: async (params, extra) =>
-      respond(
-        await getCaller(extra).product.patchExternalIds(params),
-        slimProductDetail,
+    call: async (context, params) =>
+      productExternalIdCollisionsOut.parse(
+        await findProductExternalIdCollisions(context.readDb, params),
       ),
   });
 
   registerBatchTool(server, {
     name: "patch_products_external_ids",
     description:
-      "Patch identifier slots on up to 50 products in request order. Each item uses the same validation and preconditions as patch_product_external_ids; a failed item does not roll back successful items. Use this to apply an enrichment sweep's identifier findings in one call.",
+      "Patch named (source, kind) identifier slots on up to 50 products in request order, without replacing unrelated Product identifiers. A slot holds ONE primary plus any number of secondaries — Amazon lists one item twice, so a product legitimately carries two ASINs. An upsert replaces the primary; pass isPrimary: false to add an additional identifier alongside it, addressed by its own value. Every removal must include the exact current external ID, all of an item's preconditions are checked before it changes anything, and removing a primary promotes the oldest surviving secondary so the slot always has a value standing for it. A failed item does not roll back successful items. Use this to apply an enrichment sweep's identifier findings in one call.",
     itemInputSchema: patchProductExternalIdsInput,
     itemOutputSchema: productMcpDetailOut,
     projectReference: (item) => item.id,
     annotations: WRITE_CLOSED,
     refineItems: rejectDuplicateIds,
-    run: async (caller, item) =>
-      respond(await caller.product.patchExternalIds(item), slimProductDetail),
-  });
-
-  registerMcpTool(server, {
-    name: "verify_product_images",
-    description:
-      'Fetch every attached Product file from R2, backfill legacy integrity metadata, and record available, missing, or metadata-mismatch state. Returns the refreshed detailed Product; ordinary entity action="get", entity="product" performs no R2 requests.',
-    inputSchema: z.object({ id: idParam("product") }),
-    outputSchema: productMcpDetailOut,
-    annotations: WRITE_CLOSED,
-    handler: async (params, extra) =>
-      respond(
-        await getCaller(extra).product.verifyImages(params.id),
+    run: async (item, extra) => {
+      const context = getRequestContext(extra);
+      const id = await productShortcodes.one(context.db, item.id);
+      await patchProductExternalIds(context.db, id, item, context.actorContext);
+      return respond(
+        await getProductWithFood(context.db, context.usdaClient, id),
         slimProductDetail,
-      ),
+      );
+    },
   });
 
   registerBatchTool(server, {
     name: "verify_products_images",
     description:
-      'Run verify_product_images across up to 20 products in request order. Input is {items:[{id:"PRD-2ABC"}]}; this is a batch envelope, not {ids:[…]}. Capped lower than other batches because every item makes one R2 round trip per attached file, not a single database write.',
+      'For up to 20 products in request order, fetch every attached Product file from R2, backfill legacy integrity metadata, and record available, missing, or metadata-mismatch state; each result is the refreshed detailed Product. Ordinary entity action="get", entity="product" performs no R2 requests. Input is {items:[{id:"PRD-2ABC"}]}; this is a batch envelope, not {ids:[…]}. Capped lower than other batches because every item makes one R2 round trip per attached file, not a single database write.',
     itemInputSchema: z.object({ id: idParam("product") }),
     itemOutputSchema: productMcpDetailOut,
     projectReference: (item) => item.id,
@@ -130,21 +121,31 @@ export function registerProductTools(server: McpServer) {
     defaultResultDetail: "full",
     annotations: WRITE_CLOSED,
     refineItems: rejectDuplicateIds,
-    run: async (caller, item) =>
-      respond(await caller.product.verifyImages(item.id), slimProductDetail),
+    run: async (item, extra) => {
+      const context = getRequestContext(extra);
+      const id = await productShortcodes.one(context.db, item.id);
+      await verifyProductImages(context.db, id);
+      return respond(
+        await getProductWithFood(context.db, context.usdaClient, id),
+        slimProductDetail,
+      );
+    },
   });
 
-  registerMcpTool(server, {
+  registerRouterTool(server, {
     name: "lookup_upc",
     description:
       "Resolve a UPC barcode to an identity WITHOUT creating anything. Returns all three sources at once: the Product already claiming the barcode, the USDA branded-food match, and the UPC lookup service's record. Use this whenever the question is what a barcode names — verifying a scan, confirming a product page really describes the item you hold, or checking whether a barcode belongs to a bare tool or the kit it ships in. A barcode identifies the PACKAGE, so a kit and its bare-tool variant carry different UPCs; a manufacturer page reached by guessing a URL from a barcode is not evidence. Prefer this over find_or_create_product_by_upc unless you actually intend to create a Product.",
     inputSchema: z.object({ upc }),
     outputSchema: lookupUpcMcpOut,
     annotations: READ_ONLY_OPEN,
-    handler: async (params, extra) => {
-      const result = await getCaller(extra).product.lookupUpc({
-        upc: params.upc,
-      });
+    call: async (context, params) => {
+      const result = await lookupUPC(
+        context.readDb,
+        context.usdaClient,
+        context.upcLookupClient,
+        params.upc,
+      );
       return {
         ...result,
         localProduct: result.localProduct
@@ -154,7 +155,7 @@ export function registerProductTools(server: McpServer) {
     },
   });
 
-  registerMcpTool(server, {
+  registerRouterTool(server, {
     name: "find_or_create_product_by_upc",
     description:
       "Find or create a product by UPC barcode. Checks local DB, then USDA, then UPC lookup service. This WRITES — it mints a Product when nothing matches, using whatever name the lookup returned. To only ask what a barcode names, use lookup_upc instead.",
@@ -174,12 +175,15 @@ export function registerProductTools(server: McpServer) {
         ),
     }),
     annotations: WRITE_CLOSED,
-    handler: async (params, extra) => {
-      const caller = getCaller(extra);
-      const { product, sideEffects } = await caller.product.findOrCreateByUPC({
-        upc: params.upc,
-        defaultName: params.defaultName,
-      });
+    call: async (context, params) => {
+      const { product, sideEffects } = await findOrCreateByUPC(
+        context.db,
+        context.usdaClient,
+        context.upcLookupClient,
+        params.upc,
+        params.defaultName,
+        context.actorContext,
+      );
       return {
         ...respond(product, slimProduct),
         warnings: sideEffects.warnings,
@@ -194,20 +198,9 @@ export function registerProductTools(server: McpServer) {
     inputSchema: productResolveNamesInput,
     outputSchema: productResolveNamesMcpOut,
     annotations: READ_ONLY_CLOSED,
-    call: async (caller, params) => ({
-      results: await caller.product.resolveNames({ names: params.names }),
+    call: async (context, params) => ({
+      results: await resolveProductNames(context.readDb, params.names),
     }),
-  });
-
-  registerRouterTool(server, {
-    name: "propose_product_match",
-    description:
-      'Propose that two Products are the same real item, for a person to review and merge in the product match queue (Recommendations workbench). Use it when you hold evidence the automatic detector cannot see — typically a photo-created Product (e.g. "Gray crew t-shirt — M", stocked, never bought) and a purchase-created Product for the same item, confirmed against the vendor\'s product page. This never merges anything: it records the pair with your evidence, ranked above detector suggestions. Re-proposing the same pair (either order) replaces the evidence and sources; a pair the person already dismissed stays dismissed and comes back with state "dismissed".',
-    inputSchema: proposeProductMatchInput,
-    outputSchema: proposeProductMatchOut,
-    annotations: WRITE_CLOSED,
-    call: async (caller, params) =>
-      caller.recommendations.proposeProductMatch(params),
   });
 
   registerRouterTool(server, {
@@ -219,8 +212,8 @@ export function registerProductTools(server: McpServer) {
     // shape the MCP SDK rejects outright. See `productComponentsMcpOut`.
     outputSchema: productComponentsMcpOut,
     annotations: READ_ONLY_CLOSED,
-    call: async (caller, params) => ({
-      items: await caller.product.components(params),
+    call: async (context, params) => ({
+      items: await listProductComponentsWorkflow(context, params),
     }),
   });
 }

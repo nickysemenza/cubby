@@ -45,11 +45,21 @@ export const imageProcessingContract = defineContract("imageProcessing", {
     output: validateImageProcessingCompanionMessageOutput,
   }),
   status: query({
+    mcp: {
+      name: "get_image_processing",
+      description:
+        "Read an image's durable description and transparent-cutout processing status.",
+    },
     native: "Image processing status",
     input: imageProcessingStatusInput,
     output: imageProcessingStatusOutput,
   }),
   schedule: mutation({
+    mcp: {
+      name: "schedule_image_processing",
+      description:
+        "Schedule description and/or transparent-cutout processing for an uploaded image.",
+    },
     native: "Schedule image processing",
     input: scheduleImageProcessingInput,
     output: scheduleImageProcessingOutput,
@@ -60,6 +70,10 @@ export const imageProcessingContract = defineContract("imageProcessing", {
     output: evaluateAppleImageDescriptionOutput,
   }),
   correctDescription: mutation({
+    mcp: {
+      name: "correct_image_description",
+      description: "Save a confirmed correction for an image description.",
+    },
     native: "Confirm image description correction",
     input: imageDescriptionCorrectionInput,
     output: imageDescriptionCorrectionOutput,

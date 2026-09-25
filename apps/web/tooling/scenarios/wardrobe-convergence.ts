@@ -16,13 +16,13 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
-import { registerProductTools } from "~/server/mcp/tools/product.tools";
+import { registerContractTools } from "~/server/mcp/tools/contract-tools";
 import { registerPurchaseTools } from "~/server/mcp/tools/purchase.tools";
 import { startOrResumeImportRun } from "~/server/purchase-import/run-service";
 import { classifyOrderCapture } from "~/server/purchase-import/order-list";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { proposeProductMatch } from "~/server/services/product-match.service";
+import { recommendationsHandlers } from "~/server/recommendations-browser.server";
 
 import {
   buildKernelContext,
@@ -873,7 +873,7 @@ export async function runWardrobeConvergenceScenario({
       name: "wardrobe-match-sim",
       version: "1.0",
     });
-    registerProductTools(proposalServer);
+    registerContractTools(proposalServer, recommendationsHandlers);
     const proposed = await callMcpTool(
       proposalServer,
       "propose_product_match",
@@ -882,11 +882,7 @@ export async function runWardrobeConvergenceScenario({
         evidence: matchEvidence,
         sourceUrls: ["https://shop.example.test/products/crew-tee"],
       },
-      {
-        recommendations: {
-          proposeProductMatch: (input) => proposeProductMatch(db, input),
-        },
-      },
+      { db, readDb: db },
       { entityKernel: kernel },
     );
     if (

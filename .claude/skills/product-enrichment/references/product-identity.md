@@ -36,7 +36,7 @@ identifier is the proof.
 
 Purchase prep only reports `exactIdentifierMatch` for identifiers stored as
 external ids, never for text in `notes`. When a photo shows a legible barcode,
-record it with `patch_product_external_ids` (`source: "gtin"`,
+record it with `patch_products_external_ids` (`source: "gtin"`,
 `kind: "gtin_14"`); prep matches a numeric order-line SKU against it. A style
 number printed on a brand's own tag may also be stored as `retailer_sku`
 under that brand's vendor source slug when the brand sells direct. Otherwise

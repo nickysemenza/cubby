@@ -5,7 +5,7 @@ import {
 
 import type { ToolExtra } from "./tools/tool-registration";
 
-/** The MCP request's explicit entity-kernel capability; workflow tools use caller instead. */
+/** The MCP request's explicit entity-kernel capability; other tools read `getRequestContext`. */
 export function getEntityKernelContext(extra: ToolExtra): EntityKernelContext {
   const context = extra.authInfo?.extra?.entityKernel;
   if (!context)

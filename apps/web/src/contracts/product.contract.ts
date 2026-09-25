@@ -47,7 +47,14 @@ export const productContract = defineContract("product", {
   }),
   getByShortcodes: query({ ...productWorkflowSchemas.getByShortcodes }),
   merge: mutation({ ...productWorkflowSchemas.merge }),
-  projectUses: query({ ...productWorkflowSchemas.projectUses }),
+  projectUses: query({
+    ...productWorkflowSchemas.projectUses,
+    mcp: {
+      name: "list_product_project_uses",
+      description:
+        "Show every exact project on which a reusable Cubby tool or software Product is explicitly recorded as used. Tool rows include purchase/use economics; software rows include non-additive spend charged during each project's effective window.",
+    },
+  }),
   purchases: query({ ...productWorkflowSchemas.purchases }),
   components: query({ ...productWorkflowSchemas.components }),
   kitComponentRows: query({ ...productWorkflowSchemas.kitComponentRows }),

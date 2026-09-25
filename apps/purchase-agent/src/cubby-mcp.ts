@@ -25,7 +25,7 @@ const PHOTO_INVENTORY_TOOLS = [
   "find_similar_entities",
   "propose_photo_groups",
   "list_photo_group_proposals",
-  "patch_product_external_ids",
+  "patch_products_external_ids",
 ];
 
 async function rewriteMcpRequest(

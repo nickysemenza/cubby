@@ -4,10 +4,6 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
-import {
-  type EntityKernelContext,
-  entityKernelContextSchema,
-} from "~/server/entity-kernel";
 import { getEntityKernelContext } from "~/server/mcp/kernel-context";
 import {
   executePurchaseAgentMutation,
@@ -15,13 +11,12 @@ import {
 } from "~/server/mcp/purchase-agent-protocol";
 
 import {
-  type Caller,
   describeToolError,
-  getCaller,
   operationContextFromExtra,
   registerMcpTool,
   type McpToolRegistrationRuntime,
   type ToolErrorDetail,
+  type ToolExtra,
   toolErrorDetailSchema,
 } from "./tool-registration";
 
@@ -100,14 +95,10 @@ export function registerBatchTool<
       items: Array<z.output<TItemInput>>,
       ctx: z.core.$RefinementCtx,
     ) => void;
-    /**
-     * `context` is the request's entity-kernel capability (same as
-     * `registerRouterTool`); workflow-shaped batches ignore it and use `caller`.
-     */
+    /** `extra` is the item's prepared tool extra (transactional for a trusted purchase agent). */
     run: (
-      caller: Caller,
       item: z.output<TItemInput>,
-      context: EntityKernelContext | undefined,
+      extra: ToolExtra,
     ) => Promise<z.output<TItemOutput>>;
   },
   runtime?: McpToolRegistrationRuntime,
@@ -183,31 +174,10 @@ export function registerBatchTool<
                     runId: execution!.runId,
                     operationId: execution!.itemOperationIds![index]!,
                   },
-                  run: async (transactionExtra) => {
-                    const context =
-                      transactionExtra.authInfo?.extra?.entityKernel ===
-                      undefined
-                        ? undefined
-                        : entityKernelContextSchema.parse(
-                            transactionExtra.authInfo.extra.entityKernel,
-                          );
-                    return config.run(
-                      getCaller(transactionExtra),
-                      item,
-                      context,
-                    );
-                  },
+                  run: (transactionExtra) => config.run(item, transactionExtra),
                   baseExtra: extra,
                 })
-              : await config.run(
-                  getCaller(extra),
-                  item,
-                  extra.authInfo?.extra?.entityKernel === undefined
-                    ? undefined
-                    : entityKernelContextSchema.parse(
-                        extra.authInfo.extra.entityKernel,
-                      ),
-                );
+              : await config.run(item, extra);
             stage = "output";
             const produced = config.itemOutputSchema.parse(producedValue);
             const success: BatchSuccess<z.output<TItemOutput>> = {

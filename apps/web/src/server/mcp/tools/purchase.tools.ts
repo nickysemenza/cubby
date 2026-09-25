@@ -22,7 +22,6 @@
 
 import { expenseOut } from "@cubby/schemas/project";
 import {
-  linkExpensesToPurchaseInput,
   purchaseOut,
   purchaseProductsInput,
   reclassifyPurchaseDocumentInput,
@@ -60,7 +59,12 @@ import {
   purchaseImportOperationStatus,
   validatePurchaseImport,
 } from "~/server/purchase-import/import-orders";
+import { reclassifyPurchaseDocument } from "~/server/repo/purchase";
 import { getVendorCoverage } from "~/server/repo/vendor";
+import {
+  purchaseProductsWorkflow,
+  splitExpenseWorkflow,
+} from "~/server/workflows/purchase.server";
 
 import { getEntityKernelContext } from "../kernel-context";
 import {
@@ -234,7 +238,8 @@ export function registerPurchaseTools(server: McpServer) {
     inputSchema: reclassifyPurchaseDocumentInput,
     outputSchema: purchaseOut,
     annotations: WRITE_CLOSED,
-    call: (caller, params) => caller.purchase.reclassifyDocument(params),
+    call: (context, params) =>
+      reclassifyPurchaseDocument(context.db, params, context.actorContext),
   });
 
   registerRouterTool(server, {
@@ -248,13 +253,10 @@ export function registerPurchaseTools(server: McpServer) {
     inputSchema: splitExpenseInput,
     outputSchema: splitExpenseMcpOut,
     annotations: WRITE_CLOSED,
-    call: async (caller, params, context) => {
-      if (!context) {
-        throw new Error("Authenticated entity-kernel context is missing");
-      }
+    call: async (context, params, extra) => {
       // Read before the split runs — the original row is soft-deleted by the
       // time `purchase.split` returns, so its cost has to be captured first.
-      const original = await executeEntity(context, {
+      const original = await executeEntity(getEntityKernelContext(extra), {
         action: "get",
         entity: "expense",
         id: params.expenseId,
@@ -263,25 +265,13 @@ export function registerPurchaseTools(server: McpServer) {
       if (original.action !== "get" || !original.item) {
         throw new Error("Entity kernel returned the wrong expense detail");
       }
-      const items = await caller.purchase.split(params);
+      const items = await splitExpenseWorkflow(context, params);
       const { originalCost, partsSum, delta } = splitExpenseDelta(
         expenseOut.parse(original.item).cost,
         params.parts.map((part) => part.cost),
       );
       return { items, originalCost, partsSum, delta };
     },
-  });
-
-  registerRouterTool(server, {
-    name: "link_expenses_to_purchase",
-    description:
-      "Re-parent existing Expenses onto ONE existing purchase — e.g. one plumbing transaction that spans both rough-in and fixtures. This only rewrites `purchaseId` on the given expenses; it creates no money, changes no cost/trade/costType/project on any Expense, and leaves the target purchase's identity (vendorId/orderId/date/statedTotal/documents) untouched aside from gaining those expenses. " +
-      "NOT for payment schedules: a contractor's progress payments are separate transactions and therefore separate purchases. Do not combine them just because they share a project or vendor; use the Project rollup for that view. " +
-      "REFUSES when `purchaseId` does not resolve to a live purchase.",
-    inputSchema: linkExpensesToPurchaseInput,
-    outputSchema: purchaseOut,
-    annotations: WRITE_CLOSED,
-    call: (caller, params) => caller.purchase.link(params),
   });
 
   registerRouterTool(server, {
@@ -292,8 +282,8 @@ export function registerPurchaseTools(server: McpServer) {
     // `{items}`, like every other list tool — see `purchaseProductsMcpOut`.
     outputSchema: purchaseProductsMcpOut,
     annotations: READ_ONLY_CLOSED,
-    call: async (caller, params) => ({
-      items: await caller.purchase.products(params),
+    call: async (context, params) => ({
+      items: await purchaseProductsWorkflow(context, params),
     }),
   });
 }

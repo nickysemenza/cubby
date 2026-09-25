@@ -3,6 +3,25 @@ import {
   productStreamsContract,
 } from "~/contracts/product.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import {
+  getCategoryDistribution,
+  getProductExternalIdSourceOptions,
+  getProductManufacturerOptions,
+  getProductsByShortcodes,
+  getProductTagOptions,
+  resolveProductNames,
+} from "~/server/repo/product";
+import {
+  listKitComponentRows,
+  listKitMembership,
+} from "~/server/repo/product-components";
+import { listProductProjectUses } from "~/server/repo/project";
+import { listProductPurchases } from "~/server/repo/purchase-products";
+import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
+import {
+  findOrCreateByCode,
+  findOrCreateByUPC,
+} from "~/server/services/product-orchestration.service";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import {
   applyProductUpcDataWorkflow,
@@ -11,50 +30,76 @@ import {
   createManyProductsWorkflow,
   detachProductComponentsWorkflow,
   discardProductWorkflow,
-  findOrCreateProductByCodeWorkflow,
-  findOrCreateProductByUpcWorkflow,
-  getProductCategoryDistributionWorkflow,
-  getProductExternalIdSourceOptionsWorkflow,
   getProductInventoryEntriesWorkflow,
-  getProductManufacturerOptionsWorkflow,
   getProductQuantitySummariesWorkflow,
   getProductSummariesWorkflow,
-  getProductsByShortcodesWorkflow,
-  getProductTagOptionsWorkflow,
-  listKitComponentRowsWorkflow,
-  listKitMembershipWorkflow,
   listProductComponentsWorkflow,
-  listProductProjectUsesWorkflow,
-  listProductPurchasesWorkflow,
   markProductsUsdaUnavailableWorkflow,
   mergeProductsWorkflow,
   quickCreateProductWorkflow,
-  resolveProductNamesWorkflow,
   searchProductsWorkflow,
   setProductProjectUsesWorkflow,
 } from "~/server/workflows/product.server";
 
+const productShortcodes = bindShortcodeResolver("product");
+
 export const productHandlers = implementOperationDomain(productContract, {
   search: searchProductsWorkflow,
-  resolveNames: resolveProductNamesWorkflow,
+  resolveNames: (context, input) =>
+    resolveProductNames(context.readDb, input.names),
   summaries: getProductSummariesWorkflow,
   quantitySummaries: getProductQuantitySummariesWorkflow,
   inventoryEntriesByIds: getProductInventoryEntriesWorkflow,
   quickCreate: quickCreateProductWorkflow,
   applyUpcData: applyProductUpcDataWorkflow,
-  findOrCreateByUPC: findOrCreateProductByUpcWorkflow,
-  findOrCreateByCode: findOrCreateProductByCodeWorkflow,
-  tagOptions: getProductTagOptionsWorkflow,
-  categoryDistribution: getProductCategoryDistributionWorkflow,
-  manufacturerOptions: getProductManufacturerOptionsWorkflow,
-  externalIdSourceOptions: getProductExternalIdSourceOptionsWorkflow,
-  getByShortcodes: getProductsByShortcodesWorkflow,
+  findOrCreateByUPC: (context, input) =>
+    findOrCreateByUPC(
+      context.db,
+      context.usdaClient,
+      context.upcLookupClient,
+      input.upc,
+      input.defaultName,
+      context.actorContext,
+    ),
+  findOrCreateByCode: (context, input) =>
+    findOrCreateByCode(
+      context.db,
+      context.usdaClient,
+      context.upcLookupClient,
+      input,
+      context.actorContext,
+    ),
+  tagOptions: (context) => getProductTagOptions(context.readDb),
+  categoryDistribution: (context) => getCategoryDistribution(context.readDb),
+  manufacturerOptions: (context) =>
+    getProductManufacturerOptions(context.readDb),
+  externalIdSourceOptions: (context) =>
+    getProductExternalIdSourceOptions(context.readDb),
+  getByShortcodes: (context, input) =>
+    getProductsByShortcodes(context.readDb, input.shortcodes),
   merge: mergeProductsWorkflow,
-  projectUses: listProductProjectUsesWorkflow,
-  purchases: listProductPurchasesWorkflow,
+  projectUses: async (context, input) =>
+    listProductProjectUses(
+      context.readDb,
+      await productShortcodes.one(context.readDb, input.productId),
+    ),
+  purchases: async (context, input) =>
+    listProductPurchases(
+      context.readDb,
+      await productShortcodes.one(context.readDb, input.productId),
+    ),
   components: listProductComponentsWorkflow,
-  kitComponentRows: listKitComponentRowsWorkflow,
-  kitMembership: listKitMembershipWorkflow,
+  kitComponentRows: async (context, input) =>
+    listKitComponentRows(
+      context.readDb,
+      await productShortcodes.all(context.readDb, input.parentProductIds),
+      context.usdaClient,
+    ),
+  kitMembership: async (context, input) =>
+    listKitMembership(
+      context.readDb,
+      await productShortcodes.one(context.readDb, input.productId),
+    ),
   attachComponents: attachProductComponentsWorkflow,
   detachComponents: detachProductComponentsWorkflow,
   setProjectUses: setProductProjectUsesWorkflow,

@@ -226,13 +226,10 @@ export function registerEntityTools(
         `${result.entity}:${String(result.proposed.id ?? "preview")}`,
       annotations: READ_ONLY_CLOSED,
       telemetryEntity: ({ items }) => items[0]?.entity,
-      run: async (_caller, item, context) => {
-        if (!context)
-          throw new Error("Authenticated entity-kernel context is missing");
-        return entityPreviewOutputSchema.parse(
-          await previewEntity(context, item),
-        );
-      },
+      run: async (item, extra) =>
+        entityPreviewOutputSchema.parse(
+          await previewEntity(getEntityKernelContext(extra), item),
+        ),
     },
     runtime,
   );
@@ -248,11 +245,10 @@ export function registerEntityTools(
       projectReference: (result) => result.item.id,
       annotations: WRITE_DESTRUCTIVE_CLOSED,
       telemetryEntity: ({ items }) => items[0]?.entity,
-      run: async (_caller, item, context) => {
-        if (!context)
-          throw new Error("Authenticated entity-kernel context is missing");
-        return entityBatchItemOutput.parse(await runEntity(context, item));
-      },
+      run: async (item, extra) =>
+        entityBatchItemOutput.parse(
+          await runEntity(getEntityKernelContext(extra), item),
+        ),
     },
     runtime,
   );

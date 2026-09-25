@@ -2,10 +2,6 @@
  * Entity-integrity MCP tools — advisory attach/detach planning before a write.
  */
 
-import {
-  entityConnectionsInput,
-  entityConnectionsOut,
-} from "@cubby/schemas/entity-connections";
 import { previewOperationSchema } from "@cubby/schemas/entity-integrity";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
@@ -13,6 +9,7 @@ import {
   generatedMcpEntityRelationCommandSchema,
   generatedMcpEntityRelationPreviewInputSchema,
 } from "~/server/generated/entity-relation-contracts.gen";
+import { previewOperation } from "~/server/workflows/entity-integrity-preview.server";
 
 import { READ_ONLY_CLOSED, registerRouterTool } from "./_shared";
 
@@ -25,20 +22,11 @@ export function registerEntityIntegrityTools(server: McpServer) {
     outputSchema: previewOperationSchema,
     annotations: READ_ONLY_CLOSED,
     readPolicy: () => "strong",
-    call: (caller, params) =>
-      caller.entityIntegrity.previewOperation(
+    call: (context, params) =>
+      previewOperation(
+        context.readDb,
         generatedMcpEntityRelationCommandSchema.parse(params),
+        new Date(),
       ),
-  });
-
-  registerRouterTool(server, {
-    name: "get_entity_connections",
-    description:
-      'One-hop physical connections of any entity: what points at it (`incoming`) and what it points at (`outgoing`), grouped by edge with a count and the first linked records. A merged-away code reads its survivor and reports `redirectedFrom`. Pass `operation: "delete"` or `"merge"` to see each incoming group\'s declared disposition (block, detach, repoint, ...) before running it; the preview is advisory and the mutation re-validates.',
-    inputSchema: entityConnectionsInput,
-    outputSchema: entityConnectionsOut,
-    annotations: READ_ONLY_CLOSED,
-    readPolicy: () => "strong",
-    call: (caller, params) => caller.entityGraph.connections(params),
   });
 }

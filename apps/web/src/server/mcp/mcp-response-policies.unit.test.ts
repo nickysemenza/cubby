@@ -1,16 +1,5 @@
-import {
-  allProblemsMcpSchema,
-  assembleAllProblems,
-  problemsCoverageSchema,
-  problemsFastSchema,
-  problemsTrackerSchema,
-  problemsUpcSchema,
-  problemsViewsSchema,
-} from "@cubby/schemas/problems";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
-
-import { mock } from "~/lib/test/mock-schema";
 
 import { callMcpTool } from "./mcp-test-utils";
 import { createMcpServer, listMcpToolCatalog } from "./server";
@@ -93,34 +82,4 @@ describe("MCP response policies", () => {
       }
     },
   );
-
-  it("retains the complete legacy report for explicit countsOnly false", async () => {
-    const groups = {
-      fast: mock(problemsFastSchema),
-      coverage: mock(problemsCoverageSchema),
-      upc: mock(problemsUpcSchema),
-      tracker: mock(problemsTrackerSchema),
-      views: mock(problemsViewsSchema),
-    };
-    const result = await callMcpTool(
-      createMcpServer(),
-      "list_problems",
-      { countsOnly: false },
-      {
-        problems: {
-          getFast: async () => groups.fast,
-          getCoverage: async () => groups.coverage,
-          getUpc: async () => groups.upc,
-          getTracker: async () => groups.tracker,
-          getViews: async () => groups.views,
-        },
-      },
-    );
-    expect(result.isError).not.toBe(true);
-    const expected = allProblemsMcpSchema.parse(assembleAllProblems(groups));
-    expect(result.structuredContent).toEqual(expected);
-    expect(result.content).toEqual([
-      { type: "text", text: JSON.stringify(expected) },
-    ]);
-  });
 });

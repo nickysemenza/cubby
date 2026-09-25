@@ -8,8 +8,6 @@ import {
   type AuthenticatedRequestContext,
 } from "~/server/request-context";
 
-import { createMcpWorkflowCaller } from "./workflow-caller";
-
 /**
  * Resolves the database once for one MCP tool execution. It deliberately has
  * no cache: a later tool call must observe a write made by an earlier one.
@@ -19,7 +17,7 @@ export class McpOperationContext {
 
   private prepared(selected: AuthenticatedRequestContext) {
     return {
-      caller: createMcpWorkflowCaller(selected),
+      requestContext: selected,
       entityKernel: {
         db: selected.db,
         readDb: selected.readDb,

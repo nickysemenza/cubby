@@ -5,7 +5,6 @@ import {
 
 import { usdaFoodContract } from "~/contracts/usda.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { findUsdaFoodWorkflow } from "~/server/workflows/usda.server";
 
 export const usdaFoodHandlers = implementOperationDomain(usdaFoodContract, {
   list: {
@@ -26,6 +25,6 @@ export const usdaFoodHandlers = implementOperationDomain(usdaFoodContract, {
     run: (context, input) => context.usdaService.getFoodSummaryByID(input.id),
   },
   alternateId: {
-    run: (context, input) => findUsdaFoodWorkflow(context.usdaService, input),
+    run: (context, input) => context.usdaService.findFood(input),
   },
 });

@@ -16,11 +16,12 @@ export { installMockStrippedListToolsHandler } from "./tool-catalog";
 export { idParam, strictFilterInput } from "./tool-input";
 export { stripMockFromJsonSchema } from "./tool-json-schema";
 export {
-  type Caller,
-  getCaller,
+  getRequestContext,
+  type McpRequestContext,
   READ_ONLY_CLOSED,
   READ_ONLY_OPEN,
   registerMcpTool,
+  type ToolExtra,
   WRITE_CLOSED,
   WRITE_DESTRUCTIVE_CLOSED,
 } from "./tool-registration";
