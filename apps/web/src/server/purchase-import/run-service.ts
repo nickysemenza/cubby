@@ -55,7 +55,7 @@ import type {
   PhotoImportFinalizeInput,
   PhotoImportFinalizeOutput,
 } from "~/contracts/photo-import.contract";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   aiUsage,
   entityAttachment,
@@ -109,6 +109,45 @@ import { attachPendingOrderMailEvidence } from "./gmail/process";
 import { classifyOrderCapture } from "./order-list";
 import { loadReceiptEvidenceForRun } from "./receipt-evidence";
 import { importVendorOrder } from "./writer";
+
+/** The Flue coordinator every new run is dispatched to (purchase-agent pins it too). */
+const COORDINATOR_MODEL = "gpt-6-sol";
+
+/**
+ * The target rows "Start new run with same inputs" copies, with the public
+ * codes the run detail shows for them. One selection for both, so the inputs
+ * a member reads are exactly the inputs a restart replays.
+ */
+function selectRestartTargets(
+  client: DrizzleClient | DrizzleTransaction,
+  runId: ImportRunId,
+) {
+  return client
+    .select({
+      purchaseId: importRunTarget.purchaseId,
+      productId: importRunTarget.productId,
+      imageId: importRunTarget.imageId,
+      position: importRunTarget.position,
+      vendorAccountId: importRunTarget.vendorAccountId,
+      sourceKind: importRunTarget.sourceKind,
+      sourceExternalKey: importRunTarget.sourceExternalKey,
+      targetFingerprint: importRunTarget.targetFingerprint,
+      purchaseCode: purchase.shortcode,
+      productCode: product.shortcode,
+      imageCode: image.shortcode,
+      vendorAccountCode: vendorAccount.shortcode,
+    })
+    .from(importRunTarget)
+    .leftJoin(purchase, eq(purchase.id, importRunTarget.purchaseId))
+    .leftJoin(product, eq(product.id, importRunTarget.productId))
+    .leftJoin(image, eq(image.id, importRunTarget.imageId))
+    .leftJoin(
+      vendorAccount,
+      eq(vendorAccount.id, importRunTarget.vendorAccountId),
+    )
+    .where(eq(importRunTarget.runId, runId))
+    .orderBy(asc(importRunTarget.position), asc(importRunTarget.createdAt));
+}
 
 const ACTIVE_RUN_STATUSES = [
   "running",
@@ -398,7 +437,7 @@ export async function startOrResumeImportRun(
             ? importRunId.parse(input.predecessorRunId)
             : null,
           trigger,
-          coordinatorModel: "gpt-6-sol",
+          coordinatorModel: COORDINATOR_MODEL,
           skillRevision: input.skillRevision ?? "purchase-import@1",
           runtimeRevision: input.runtimeRevision ?? "flue@1",
           agentSessionId: importRunAgentIdentity(id, "account_sync"),
@@ -524,7 +563,7 @@ export async function startTargetedImportRun(
         purpose,
         trigger,
         dispatchEventId: eventId,
-        coordinatorModel: "gpt-6-sol",
+        coordinatorModel: COORDINATOR_MODEL,
         agentSessionId: importRunAgentIdentity(
           id,
           flueImportRunPurpose.parse(purpose),
@@ -2879,6 +2918,7 @@ export async function loadImportRunByShortcode(
     targets,
     evidence,
     agentModelUsage,
+    restartTargets,
   ] = await Promise.all([
     run.predecessorRunId
       ? database
@@ -3042,6 +3082,7 @@ export async function loadImportRunByShortcode(
           notDeleted(aiUsage),
         ),
       ),
+    selectRestartTargets(database, run.id),
   ]);
   return {
     publicId: run.publicId,
@@ -3100,6 +3141,28 @@ export async function loadImportRunByShortcode(
     },
     predecessorRunPublicId: predecessor[0]?.publicId ?? null,
     successorRunPublicId: successor[0]?.publicId ?? null,
+    // What `restart` writes to its successor: this run's settings and targets.
+    restartInputs: flueImportRunPurpose.safeParse(run.purpose).success
+      ? {
+          purpose: run.purpose,
+          trigger: "manual",
+          coordinatorModel: COORDINATOR_MODEL,
+          vendorAccount: run.vendorAccountShortcode,
+          notes: run.notes,
+          skillRevision: run.skillRevision,
+          runtimeRevision: run.runtimeRevision,
+          targets: restartTargets.map((target) => ({
+            position: target.position,
+            image: target.imageCode,
+            purchase: target.purchaseCode,
+            product: target.productCode,
+            vendorAccount: target.vendorAccountCode,
+            sourceKind: target.sourceKind,
+            sourceExternalKey: target.sourceExternalKey,
+            targetFingerprint: target.targetFingerprint,
+          })),
+        }
+      : null,
     coordinatorModel: run.coordinatorModel,
     skillRevision: run.skillRevision,
     runtimeRevision: run.runtimeRevision,
@@ -3312,19 +3375,18 @@ export async function controlImportRun(
           );
         if (!flueImportRunPurpose.safeParse(locked.purpose).success)
           throw new Error("Only agent import runs can be started again");
-        const sourceTargets = await tx
-          .select({
-            purchaseId: importRunTarget.purchaseId,
-            productId: importRunTarget.productId,
-            imageId: importRunTarget.imageId,
-            position: importRunTarget.position,
-            vendorAccountId: importRunTarget.vendorAccountId,
-            sourceKind: importRunTarget.sourceKind,
-            sourceExternalKey: importRunTarget.sourceExternalKey,
-            targetFingerprint: importRunTarget.targetFingerprint,
-          })
-          .from(importRunTarget)
-          .where(eq(importRunTarget.runId, scope.public.runId));
+        const sourceTargets = (
+          await selectRestartTargets(tx, scope.public.runId)
+        ).map((target) => ({
+          purchaseId: target.purchaseId,
+          productId: target.productId,
+          imageId: target.imageId,
+          position: target.position,
+          vendorAccountId: target.vendorAccountId,
+          sourceKind: target.sourceKind,
+          sourceExternalKey: target.sourceExternalKey,
+          targetFingerprint: target.targetFingerprint,
+        }));
         if (locked.purpose !== "account_sync" && sourceTargets.length === 0)
           throw new Error("This run has no inputs to start again");
         if (
@@ -3356,7 +3418,7 @@ export async function controlImportRun(
             purpose: locked.purpose,
             trigger: "manual",
             notes: locked.notes,
-            coordinatorModel: "gpt-6-sol",
+            coordinatorModel: COORDINATOR_MODEL,
             skillRevision: locked.skillRevision,
             runtimeRevision: locked.runtimeRevision,
             dispatchEventId,
@@ -3384,12 +3446,12 @@ export async function controlImportRun(
           successorRunId: successorId,
           successorRunPublicId: successor.publicId,
           successorStatus: successor.status,
-          successorCoordinatorModel: "gpt-6-sol",
+          successorCoordinatorModel: COORDINATOR_MODEL,
           created: true,
           dispatchRunId: successorId,
           dispatchPublicId: successor.publicId,
           dispatchPurpose: locked.purpose,
-          dispatchCoordinatorModel: "gpt-6-sol",
+          dispatchCoordinatorModel: COORDINATOR_MODEL,
           dispatchEventId,
         };
       }
@@ -3420,7 +3482,7 @@ export async function controlImportRun(
             endedAt: null,
             dispatchEventId,
             dispatchError: null,
-            coordinatorModel: "gpt-6-sol",
+            coordinatorModel: COORDINATOR_MODEL,
             updatedAt: new Date(),
           })
           .where(eq(importRun.id, scope.public.runId));
@@ -3430,7 +3492,7 @@ export async function controlImportRun(
           dispatchRunId: scope.public.runId,
           dispatchPublicId: input.runPublicId,
           dispatchPurpose: locked.purpose,
-          dispatchCoordinatorModel: "gpt-6-sol",
+          dispatchCoordinatorModel: COORDINATOR_MODEL,
           dispatchEventId,
         };
       }
@@ -3483,7 +3545,7 @@ export async function controlImportRun(
             purpose: "purchase_validation",
             trigger: "manual",
             status: isUnavailable ? "needs_review" : "dispatch_failed",
-            coordinatorModel: "gpt-6-sol",
+            coordinatorModel: COORDINATOR_MODEL,
             dispatchEventId,
             failureCode: isUnavailable ? "no_evidence_available" : null,
             dispatchError: isUnavailable
@@ -3531,11 +3593,11 @@ export async function controlImportRun(
           successorRunId: successorId,
           successorRunPublicId: successor.publicId,
           successorStatus: successor.status,
-          successorCoordinatorModel: "gpt-6-sol",
+          successorCoordinatorModel: COORDINATOR_MODEL,
           dispatchRunId: null,
           dispatchPublicId: successor.publicId,
           dispatchPurpose: "purchase_validation" as const,
-          dispatchCoordinatorModel: "gpt-6-sol",
+          dispatchCoordinatorModel: COORDINATOR_MODEL,
           dispatchEventId,
           created: true,
         };
@@ -3569,7 +3631,7 @@ export async function controlImportRun(
             successorRunId: existingSuccessor.id,
             successorRunPublicId: existingSuccessor.publicId,
             successorStatus: existingSuccessor.status,
-            successorCoordinatorModel: "gpt-6-sol",
+            successorCoordinatorModel: COORDINATOR_MODEL,
             created: false,
           };
         }
@@ -3593,7 +3655,7 @@ export async function controlImportRun(
             purpose: locked.purpose,
             trigger: locked.trigger,
             dispatchEventId,
-            coordinatorModel: "gpt-6-sol",
+            coordinatorModel: COORDINATOR_MODEL,
             skillRevision: locked.skillRevision,
             runtimeRevision: locked.runtimeRevision,
             decisionRevision: locked.decisionRevision + 1,
@@ -3666,12 +3728,12 @@ export async function controlImportRun(
           successorRunId: successorId,
           successorRunPublicId: successor.publicId,
           successorStatus: successor.status,
-          successorCoordinatorModel: "gpt-6-sol",
+          successorCoordinatorModel: COORDINATOR_MODEL,
           created: true,
           dispatchRunId: successorId,
           dispatchPublicId: successor.publicId,
           dispatchPurpose: locked.purpose,
-          dispatchCoordinatorModel: "gpt-6-sol",
+          dispatchCoordinatorModel: COORDINATOR_MODEL,
           dispatchEventId,
         };
       }
@@ -3776,7 +3838,7 @@ export async function controlImportRun(
           dispatchRunId: scope.public.runId,
           dispatchPublicId: input.runPublicId,
           dispatchPurpose: locked.purpose,
-          dispatchCoordinatorModel: "gpt-6-sol",
+          dispatchCoordinatorModel: COORDINATOR_MODEL,
           dispatchEventId,
         };
       }
