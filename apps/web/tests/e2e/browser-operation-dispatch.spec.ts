@@ -28,6 +28,11 @@ test("browser dispatch preserves operation dates and rejects foreign origins", a
     });
     expect(foreign.status()).toBe(403);
 
+    const http = await page.request.get("/api/v1/auditLog/list?limit=5", {
+      headers: { Origin: baseURL! },
+    });
+    expect(http.status(), await http.text()).toBe(200);
+
     const response = await page.request.post(BROWSER_OPERATION_PATH, {
       data: payload,
       headers: { Origin: baseURL! },
