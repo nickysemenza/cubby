@@ -29,31 +29,21 @@ import {
   startOperationTraceName,
 } from "./lib/start-operation-observability";
 import type { BackgroundQueueBatch } from "./server/background-queue-types";
-import {
-  calendarFeedStateFor,
-  externalCalendarFeedStateFor,
-  handleCalDavRequest,
-} from "./server/calendar/client";
-import { createCalendarFeedHandler } from "./server/calendar/feed";
 import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
 import { recordDatabaseWrite } from "./server/database-freshness/client";
 import { withRequestDb, withRequestDbClient } from "./server/db";
+import {
+  IMAGE_PROCESSING_SOCKET_PATH,
+  PURCHASE_IMPORT_SOCKET_PATH,
+} from "./server/direct-socket-paths";
 import {
   reportServerError,
   withErrorReporting,
 } from "./server/errors/report-error";
 import {
-  handleImageProcessingSocketUpgrade,
-  isImageProcessingSocketUpgrade,
-} from "./server/image-processing/direct-socket-route";
-import {
   resolvePurchaseAgentBrowserOperation,
   type PurchaseAgentCommand,
 } from "./server/purchase-import/agent-browser-command";
-import {
-  handleDirectBrowserSocketUpgrade,
-  isDirectBrowserSocketUpgrade,
-} from "./server/purchase-import/direct-socket-route";
 import type { SearchDocumentCursor } from "./server/repo/search-document";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
 import { getRequestId, withManualTrace, withTrace } from "./server/tracing";
@@ -74,10 +64,6 @@ const getHttpApi = () => {
   httpApiPromise ??= import("./server/http-api");
   return httpApiPromise;
 };
-
-const calendarFeedHandler = createCalendarFeedHandler((origin) =>
-  externalCalendarFeedStateFor(origin),
-);
 
 // Per-request holder for the console.error-intercepted error, scoped via
 // AsyncLocalStorage — mirrors withRequestDb's per-request pool store in
@@ -166,7 +152,10 @@ const handler = {
                 ? withTrace("cf.caldav", async () => {
                     const response = await runWithExecutionCtx(
                       ctx,
-                      () => handleCalDavRequest(request),
+                      async () =>
+                        (
+                          await import("./server/calendar/client")
+                        ).handleCalDavRequest(request),
                       url.origin,
                     );
                     span.setAttribute(
@@ -184,7 +173,16 @@ const handler = {
                   ? withTrace("cf.calendarFeed", async () => {
                       const response = await runWithExecutionCtx(
                         ctx,
-                        async () => await calendarFeedHandler({ request }),
+                        async () => {
+                          const [{ createCalendarFeedHandler }, calendar] =
+                            await Promise.all([
+                              import("./server/calendar/feed"),
+                              import("./server/calendar/client"),
+                            ]);
+                          return createCalendarFeedHandler(
+                            calendar.externalCalendarFeedStateFor,
+                          )({ request });
+                        },
                         url.origin,
                       );
                       span.setAttribute(
@@ -203,23 +201,30 @@ const handler = {
                         boundedStale: env.HYPERDRIVE_CACHED.connectionString,
                       },
                       async () => {
-                        if (
-                          isDirectBrowserSocketUpgrade(request) ||
-                          isImageProcessingSocketUpgrade(request)
-                        ) {
+                        const imageProcessingSocket =
+                          url.pathname === IMAGE_PROCESSING_SOCKET_PATH;
+                        const purchaseImportSocket =
+                          url.pathname === PURCHASE_IMPORT_SOCKET_PATH;
+                        if (imageProcessingSocket || purchaseImportSocket) {
                           const response = await withTrace(
-                            isImageProcessingSocketUpgrade(request)
+                            imageProcessingSocket
                               ? "cf.imageProcessingSocket"
                               : "cf.purchaseImportSocket",
                             () =>
                               runWithExecutionCtx(
                                 ctx,
-                                () =>
-                                  isImageProcessingSocketUpgrade(request)
-                                    ? handleImageProcessingSocketUpgrade(
+                                async () =>
+                                  imageProcessingSocket
+                                    ? (
+                                        await import("./server/image-processing/direct-socket-route")
+                                      ).handleImageProcessingSocketUpgrade(
                                         request,
                                       )
-                                    : handleDirectBrowserSocketUpgrade(request),
+                                    : (
+                                        await import("./server/purchase-import/direct-socket-route")
+                                      ).handleDirectBrowserSocketUpgrade(
+                                        request,
+                                      ),
                                 url.origin,
                               ),
                           );
@@ -478,7 +483,9 @@ const handler = {
                 "cf.scheduled.job",
                 async () =>
                   await (
-                    await calendarFeedStateFor(env.APP_ORIGIN)
+                    await (
+                      await import("./server/calendar/client")
+                    ).calendarFeedStateFor(env.APP_ORIGIN)
                   ).refreshNow("cron.daily"),
                 { "cubby.scheduled.job": "calendar-feed" },
               );

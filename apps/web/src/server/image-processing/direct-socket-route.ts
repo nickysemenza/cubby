@@ -1,7 +1,6 @@
 import { getImageProcessingNamespace } from "~/server/cf-env";
+import { IMAGE_PROCESSING_SOCKET_PATH } from "~/server/direct-socket-paths";
 import { createRequestContext, requireActor } from "~/server/request-context";
-
-const IMAGE_PROCESSING_SOCKET_PATH = "/api/companion/image-processing/socket";
 
 export function isImageProcessingSocketUpgrade(request: Request): boolean {
   return new URL(request.url).pathname === IMAGE_PROCESSING_SOCKET_PATH;
