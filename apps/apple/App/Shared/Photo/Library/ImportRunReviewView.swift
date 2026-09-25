@@ -90,11 +90,13 @@ struct ImportRunReviewView: View {
     private let isPreview: Bool
 
     @Environment(AppModel.self) private var appModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var model = ImportRunReviewModel()
     @State private var confirmingGroup: String?
     @State private var confirmingAll = false
     @State private var discardingGroup: String?
     @State private var autoStartAttempted = false
+    @State private var selectedGroupKey: String?
 
     init(runID: String, previewModel: ImportRunReviewModel? = nil) {
         self.runID = runID
@@ -318,9 +320,7 @@ struct ImportRunReviewView: View {
 
             if !proposed.isEmpty {
                 Section {
-                    ForEach(proposed, id: \.groupKey) { group in
-                        proposal(group, images: review.images)
-                    }
+                    reviewWorkspace(review)
                 } header: {
                     HStack {
                         Text("Proposed items · \(proposed.count)")
@@ -355,28 +355,106 @@ struct ImportRunReviewView: View {
                 }
             }
 
-            Section("Photos") {
-                ForEach(review.images, id: \.id) { image in
-                    HStack(alignment: .top) {
-                        Thumb(url: URL(string: image.originalUrl), size: 58)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(
-                                image.description
-                                    ?? "Photo \(image.position.map { String($0 + 1) } ?? image.id.rawValue)"
-                            )
-                            .font(.subheadline).lineLimit(2)
-                            Label(
-                                image.localAnalysisReady ? "Device ready" : "Device analysis pending",
-                                systemImage: image.localAnalysisReady ? "checkmark.circle" : "clock")
-                            processingLabel("Cutout", state: image.cutout, reason: image.cutoutReason)
-                            processingLabel(
-                                "AI description", state: image.describe, reason: image.describeReason)
-                        }
-                        .font(.caption)
-                    }
-                }
+            if proposed.isEmpty {
+                Section("Photos") { evidenceRegion(review.images) }
             }
         }
+    }
+
+    private func reviewWorkspace(_ review: PhotoRunReviewResponse) -> some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                stackedReviewWorkspace(review.images)
+                    .frame(maxWidth: 720, alignment: .leading)
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: PorcelainTokens.Space.lg) {
+                        groupRegion
+                            .frame(width: 190, alignment: .topLeading)
+                        decisionRegion(review.images)
+                            .frame(width: 340, alignment: .topLeading)
+                        evidenceRegion(review.images)
+                            .frame(width: 260, alignment: .topLeading)
+                    }
+                    .frame(minWidth: 822, alignment: .leading)
+
+                    stackedReviewWorkspace(review.images)
+                }
+                .frame(maxWidth: 1180, alignment: .leading)
+            }
+        }
+        .accessibilityIdentifier("review.workspace")
+    }
+
+    private func stackedReviewWorkspace(_ images: [PhotoRunImage]) -> some View {
+        VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+            groupRegion
+            decisionRegion(images)
+            evidenceRegion(images)
+        }
+    }
+
+    private var selectedProposal: PhotoGroupProposal? {
+        proposed.first { $0.groupKey == selectedGroupKey } ?? proposed.first
+    }
+
+    private var groupRegion: some View {
+        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+            Text("Groups").font(.headline)
+            ForEach(proposed, id: \.groupKey) { group in
+                Button {
+                    selectedGroupKey = group.groupKey
+                } label: {
+                    HStack {
+                        Text(groupName(group)).lineLimit(2)
+                        Spacer(minLength: 4)
+                        if selectedProposal?.groupKey == group.groupKey {
+                            Image(systemName: "checkmark").accessibilityHidden(true)
+                        }
+                    }
+                    .frame(minHeight: PorcelainTokens.touchTarget, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selectedProposal?.groupKey == group.groupKey ? .isSelected : [])
+            }
+        }
+        .accessibilityIdentifier("review.groups")
+    }
+
+    @ViewBuilder private func decisionRegion(_ images: [PhotoRunImage]) -> some View {
+        if let group = selectedProposal {
+            VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+                Text("Product decision").font(.headline)
+                proposal(group, images: images)
+            }
+            .accessibilityIdentifier("review.decision")
+        }
+    }
+
+    private func evidenceRegion(_ images: [PhotoRunImage]) -> some View {
+        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+            Text("Photo evidence").font(.headline)
+            ForEach(images, id: \.id) { image in
+                HStack(alignment: .top, spacing: PorcelainTokens.Space.sm) {
+                    Thumb(url: URL(string: image.originalUrl), size: 58)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(
+                            image.description
+                                ?? "Photo \(image.position.map { String($0 + 1) } ?? image.id.rawValue)"
+                        )
+                        .font(.subheadline).lineLimit(3)
+                        Label(
+                            image.localAnalysisReady ? "Device ready" : "Device analysis pending",
+                            systemImage: image.localAnalysisReady ? "checkmark.circle" : "clock")
+                        processingLabel("Cutout", state: image.cutout, reason: image.cutoutReason)
+                        processingLabel("AI description", state: image.describe, reason: image.describeReason)
+                    }
+                    .font(.caption)
+                }
+                Divider()
+            }
+        }
+        .accessibilityIdentifier("review.evidence")
     }
 
     private func photoProcessing(_ images: [PhotoRunImage]) -> some View {
@@ -998,4 +1076,22 @@ private struct PhotoGroupDraftEditView: View {
             runID: ImportRunReviewPreviewFixture.runID,
             previewModel: ImportRunReviewPreviewFixture.model())
     }
+}
+
+#Preview("Photo review — intermediate", traits: .modifier(SignedInPreview())) {
+    NavigationStack {
+        ImportRunReviewView(
+            runID: ImportRunReviewPreviewFixture.runID,
+            previewModel: ImportRunReviewPreviewFixture.model())
+    }
+    .frame(width: 760, height: 900)
+}
+
+#Preview("Photo review — wide", traits: .modifier(SignedInPreview())) {
+    NavigationStack {
+        ImportRunReviewView(
+            runID: ImportRunReviewPreviewFixture.runID,
+            previewModel: ImportRunReviewPreviewFixture.model())
+    }
+    .frame(width: 1360, height: 900)
 }

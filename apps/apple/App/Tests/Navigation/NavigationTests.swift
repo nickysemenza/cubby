@@ -182,7 +182,7 @@ struct NavigationTests {
 
         #if os(iOS)
             #expect(navigator.section == .photos)
-            #expect(navigator.paths[.photos] == [.dev])
+            #expect(navigator.paths[.browse] == [.dev])
             #expect(!AppSection.tabs.contains(.dev))
         #else
             #expect(navigator.section == .dev)
@@ -190,6 +190,41 @@ struct NavigationTests {
             #expect(AppSection.tabs.contains(.dev))
         #endif
     }
+
+    #if os(iOS)
+        @Test func phoneTabsKeepIndependentNavigationPaths() {
+            let navigator = Navigator()
+            let work = navigator.path(for: PhoneTab.work)
+            let library = navigator.path(for: PhoneTab.library)
+            work.wrappedValue = [.activityList]
+            library.wrappedValue = [.photosLibrary]
+
+            navigator.phoneTab = .find
+            #expect(navigator.phoneTab == .find)
+            #expect(work.wrappedValue == [.activityList])
+            #expect(library.wrappedValue == [.photosLibrary])
+        }
+
+        @Test func legacyLinksLandInVisiblePhoneDestinations() {
+            let navigator = Navigator()
+
+            navigator.open(.photos)
+            #expect(navigator.phoneTab == .library)
+            #expect(navigator.path(for: PhoneTab.library).wrappedValue == [.photosLibrary])
+
+            navigator.open(.activity(run: "RUN-4K7M"))
+            #expect(navigator.phoneTab == .work)
+            #expect(navigator.path(for: PhoneTab.work).wrappedValue == [.activityList])
+            #expect(navigator.selectedActivity == .serverRun("RUN-4K7M"))
+
+            navigator.openPhotoReview(runID: "RUN-4K7M")
+            #expect(navigator.selectedActivity == nil)
+            #expect(
+                navigator.path(for: PhoneTab.work).wrappedValue == [
+                    .activityList, .photoReview("RUN-4K7M"),
+                ])
+        }
+    #endif
 
     private func record(_ key: EntityKey, _ id: String) -> RecordSelection {
         RecordSelection(key: key, id: id)

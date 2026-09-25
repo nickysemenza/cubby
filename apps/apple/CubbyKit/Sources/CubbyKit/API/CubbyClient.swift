@@ -713,6 +713,14 @@ public actor CubbyClient {
         try await perform { try await api.activity_devices().ok.body.json }
     }
 
+    /// Household-wide audit entries, newest first. The opaque cursor is passed back unchanged.
+    public func auditHistory(cursor: String? = nil, limit: Int = 50) async throws -> AuditLogListOut {
+        try await perform {
+            try await api.auditLog_list(query: .init(limit: Double(limit), cursor: cursor))
+                .ok.body.json
+        }
+    }
+
     /// The device-run local analysis persisted at import time (`photo-local-analysis`), or `nil`
     /// when none has been recorded yet (`image.analysis` turns a `null` result into a 404, per
     /// `router.ts`'s nullable-output convention — the same shape `row(_:id:)` above unwraps).

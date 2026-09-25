@@ -5,7 +5,7 @@ import SwiftUI
 struct PhotoDestinationSheet: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.developerOverlays) private var developerOverlays
     let manifest: PhotoImportManifest
     let onDone: ([String]) -> Void
@@ -227,11 +227,6 @@ struct PhotoDestinationSheet: View {
                 .accessibilityIdentifier("photos.manifest.undo")
             }
         }
-        // At regular width the button sits under the filmstrip in the side column (see
-        // `reviewLayout`); in the toolbar it would land beside Cancel in macOS's bottom bar.
-        if horizontalSizeClass != .regular {
-            ToolbarItem(placement: .primaryAction) { selectAllButton }
-        }
         ToolbarItemGroup(placement: Self.commitBarPlacement) {
             Text("\(manifest.items.count) photo\(manifest.items.count == 1 ? "" : "s")")
                 .foregroundStyle(.secondary)
@@ -346,11 +341,10 @@ struct PhotoDestinationSheet: View {
         }
     }
 
-    /// Keep a bounded side column when the window has room. A narrow regular-size window uses
-    /// the same compact, list-first layout as a phone instead of clipping a fixed-width sidebar.
+    /// Keep a bounded side column when the sheet has room for the review list beside it.
     @ViewBuilder private var reviewLayout: some View {
         GeometryReader { geometry in
-            if horizontalSizeClass == .regular && geometry.size.width >= 640 {
+            if !dynamicTypeSize.isAccessibilitySize && geometry.size.width >= 640 {
                 HStack(spacing: 0) {
                     sideColumn(width: min(300, max(220, geometry.size.width * 0.32)))
                     Divider()
@@ -359,15 +353,13 @@ struct PhotoDestinationSheet: View {
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     hero(heightCap: (220, 0.22), compact: true)
-                    if horizontalSizeClass == .regular {
-                        HStack {
-                            Text(manifest.reviewSelectionStatus)
-                                .font(.subheadline).foregroundStyle(.secondary)
-                            Spacer()
-                            selectAllButton
-                        }
-                        .padding(.horizontal)
+                    HStack {
+                        Text(manifest.reviewSelectionStatus)
+                            .font(.subheadline).foregroundStyle(.secondary)
+                        Spacer()
+                        selectAllButton
                     }
+                    .padding(.horizontal)
                     analysisStatus
                     List {
                         if !manifest.selectedIDs.isEmpty {

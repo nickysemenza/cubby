@@ -43,6 +43,7 @@ filter:
     - activity.events
     - activity.list
     - activity.submission
+    - auditLog.list
     - calendar.range
     - collection.referenceDetail
     - cookbook.detail

@@ -14,6 +14,7 @@ import {
   createFixtureWithContext,
 } from "./context";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
 
 export const SIM_PRODUCT_NAME = "Synthetic Atlas Lantern";
 export const SIM_PRODUCT_UPDATED_NAME = "Synthetic Atlas Lantern Updated";
@@ -29,6 +30,18 @@ export async function seedSimulatorPhotoActor(pool: Pool, userId: string) {
     kind: "member",
     userId: testUserId(userId),
   });
+}
+
+/** A synthetic run for native navigation and review presentation checks. */
+export async function seedSimulatorLayoutRun(
+  pool: Pool,
+  userId: string,
+): Promise<string> {
+  await seedSimulatorPhotoActor(pool, userId);
+  const run = await startPhotoInventoryRun(buildScenarioDatabase(pool), {
+    actorUserId: testUserId(userId),
+  });
+  return run.publicId;
 }
 
 /** One named product makes the native read/write contract unambiguous. */

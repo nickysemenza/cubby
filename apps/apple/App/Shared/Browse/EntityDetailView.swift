@@ -386,6 +386,8 @@ struct EntityDetailContent: View {
             Section { RawRecordDisclosure(raw: row.raw) }
         }
         .formStyle(.grouped)
+        .frame(maxWidth: 900)
+        .frame(maxWidth: .infinity, alignment: .top)
         .accessibilityIdentifier("detail.\(descriptor.key.rawValue)")
         .task(id: row.id) { await loadTimelineIfDeclared() }
         .sheet(item: $reviewedRelationship) { review in

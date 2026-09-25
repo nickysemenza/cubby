@@ -33,32 +33,41 @@ const photo = process.argv.slice(2).includes("--photo");
 const purchase = process.argv.slice(2).includes("--purchase");
 const watch = process.argv.slice(2).includes("--watch");
 const video = process.argv.slice(2).includes("--video");
+const layout = process.argv.slice(2).includes("--layout");
 if (
   (watch && video) ||
   (video && headless) ||
+  (layout && (headless || photo || purchase || watch)) ||
   (photo && (!headless || watch)) ||
   (purchase && !photo) ||
   process.argv
     .slice(2)
     .some(
       (argument) =>
-        !["--headless", "--watch", "--video", "--photo", "--purchase"].includes(
-          argument,
-        ),
+        ![
+          "--headless",
+          "--watch",
+          "--video",
+          "--photo",
+          "--purchase",
+          "--layout",
+        ].includes(argument),
     )
 )
   throw new Error(
-    "Usage: sim-e2e.ts [--video | --watch | --headless [--watch | --photo [--purchase]]]",
+    "Usage: sim-e2e.ts [--video | --layout [--video] | --watch | --headless [--watch | --photo [--purchase]]]",
   );
-const lane = purchase
-  ? "headless-wardrobe-e2e"
-  : photo
-    ? "headless-photo-e2e"
-    : headless
-      ? "headless-e2e"
-      : watch
-        ? "sim-dev"
-        : "sim-e2e";
+const lane = layout
+  ? "sim-layout-e2e"
+  : purchase
+    ? "headless-wardrobe-e2e"
+    : photo
+      ? "headless-photo-e2e"
+      : headless
+        ? "headless-e2e"
+        : watch
+          ? "sim-dev"
+          : "sim-e2e";
 dotenv.config({ path: path.join(webRoot, ".env") });
 for (const [key, value] of Object.entries({
   R2_ACCESS_KEY_ID: "cubby-sim",
@@ -1070,9 +1079,11 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
         ? "test:e2e:headless:photo"
         : headless
           ? "test:e2e:headless"
-          : video
-            ? "test:e2e:sim:video"
-            : "test:e2e:sim";
+          : layout
+            ? "test:e2e:sim:layout"
+            : video
+              ? "test:e2e:sim:video"
+              : "test:e2e:sim";
     const manifest = writeE2ERunBundle({
       repoRoot,
       outputDir: artifacts,
@@ -1092,6 +1103,63 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
       `${lane} could not save its E2E artifact`,
     );
   }
+}
+
+async function seedNativeScenario(userId: string): Promise<{
+  productId: string;
+  layoutRunID?: string;
+}> {
+  const seedPool = new Pool({ connectionString: databaseURL });
+  try {
+    const {
+      seedSimulatorPhotoActor,
+      seedSimulatorScenario,
+      seedSimulatorLayoutRun,
+    } = await import("./scenarios/simulator");
+    await seedSimulatorPhotoActor(seedPool, userId);
+    return {
+      productId: photo ? "" : await seedSimulatorScenario(seedPool, userId),
+      layoutRunID: layout
+        ? await seedSimulatorLayoutRun(seedPool, userId)
+        : undefined,
+    };
+  } finally {
+    await seedPool.end();
+  }
+}
+
+async function runNativeJourney(
+  deviceID: string,
+  common: string[],
+  productId: string,
+  layoutRunID?: string,
+): Promise<void> {
+  const stopRecording = video
+    ? await recordSimulatorVideo(deviceID)
+    : undefined;
+  try {
+    await run("pnpm", [
+      "exec",
+      "agent-device",
+      "test",
+      layout
+        ? "apps/apple/e2e/native-layout.ad"
+        : "apps/apple/e2e/product-edit.ad",
+      ...common,
+      "--artifacts-dir",
+      artifacts,
+      "--reporter",
+      "default",
+      "--reporter",
+      `junit:${path.join(artifacts, "junit.xml")}`,
+      "-e",
+      `PRODUCT_ID=${productId}`,
+      ...(layoutRunID ? ["-e", `RUN_ID=${layoutRunID}`] : []),
+    ]);
+  } finally {
+    await stopRecording?.();
+  }
+  if (!layout) await assertNativeEdit(productId);
 }
 
 async function main(): Promise<void> {
@@ -1207,15 +1275,9 @@ async function main(): Promise<void> {
     } finally {
       await context.dispose();
     }
-    const seedPool = new Pool({ connectionString: databaseURL });
-    try {
-      const { seedSimulatorPhotoActor, seedSimulatorScenario } =
-        await import("./scenarios/simulator");
-      await seedSimulatorPhotoActor(seedPool, userId);
-      if (!photo) productId = await seedSimulatorScenario(seedPool, userId);
-    } finally {
-      await seedPool.end();
-    }
+    const seeded = await seedNativeScenario(userId);
+    productId = seeded.productId;
+    const layoutRunID = seeded.layoutRunID;
     console.log(
       `[${lane}] Workerd at ${url.origin}${productId ? `; seeded product ${productId}` : ""}`,
     );
@@ -1321,29 +1383,7 @@ async function main(): Promise<void> {
             launch,
           });
         } else {
-          const stopRecording = video
-            ? await recordSimulatorVideo(device.udid)
-            : undefined;
-          try {
-            await run("pnpm", [
-              "exec",
-              "agent-device",
-              "test",
-              "apps/apple/e2e/product-edit.ad",
-              ...common,
-              "--artifacts-dir",
-              artifacts,
-              "--reporter",
-              "default",
-              "--reporter",
-              `junit:${path.join(artifacts, "junit.xml")}`,
-              "-e",
-              `PRODUCT_ID=${productId}`,
-            ]);
-          } finally {
-            await stopRecording?.();
-          }
-          await assertNativeEdit(productId);
+          await runNativeJourney(device.udid, common, productId, layoutRunID);
         }
       } catch (error) {
         await run("xcrun", [

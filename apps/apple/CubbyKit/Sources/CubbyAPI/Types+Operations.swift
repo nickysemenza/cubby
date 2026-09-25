@@ -956,6 +956,271 @@ public enum Operations {
             }
         }
     }
+    /// - Remark: HTTP `GET /api/v1/auditLog/list`.
+    /// - Remark: Generated from `#/paths//api/v1/auditLog/list/get(auditLog.list)`.
+    public enum AuditLog_list {
+        public static let id: Swift.String = "auditLog.list"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/query/entityType`.
+                @frozen public enum EntityTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case product = "product"
+                    case recipe = "recipe"
+                    case ingredient = "ingredient"
+                    case cookbook = "cookbook"
+                    case location = "location"
+                    case inventory = "inventory"
+                    case meal = "meal"
+                    case ledgerParty = "ledgerParty"
+                    case ledgerTransfer = "ledgerTransfer"
+                    case project = "project"
+                    case task = "task"
+                    case vendor = "vendor"
+                    case purchase = "purchase"
+                    case financialAccount = "financialAccount"
+                    case financialTransaction = "financialTransaction"
+                    case wish = "wish"
+                    case expense = "expense"
+                    case planting = "planting"
+                    case gardenEntry = "gardenEntry"
+                    case vendorAccount = "vendorAccount"
+                    case productCategory = "productCategory"
+                    case device = "device"
+                    case imageSighting = "imageSighting"
+                    case plant = "plant"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/query/entityType`.
+                public var entityType: Operations.AuditLog_list.Input.Query.EntityTypePayload?
+                /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/query/entityId`.
+                public var entityId: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/query/ChannelPayload`.
+                @frozen public enum ChannelPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case web = "web"
+                    case api = "api"
+                    case mcp = "mcp"
+                    case caldav = "caldav"
+                    case system = "system"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/query/channel`.
+                public typealias ChannelPayload = [Operations.AuditLog_list.Input.Query.ChannelPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/query/channel`.
+                public var channel: Operations.AuditLog_list.Input.Query.ChannelPayload?
+                /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/query/oauthClient`.
+                public var oauthClient: Swift.String?
+                /// device shortcode, e.g. DEV-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/query/deviceId`.
+                public var deviceId: Swift.String?
+                /// importRun shortcode, e.g. RUN-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/query/runId`.
+                public var runId: Swift.String?
+                /// Inclusive lower bound on createdAt, as an ISO date string
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/query/createdAtFrom`.
+                public var createdAtFrom: Swift.String?
+                /// Inclusive upper bound on createdAt, as an ISO date string
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/query/createdAtTo`.
+                public var createdAtTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/query/limit`.
+                public var limit: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/query/cursor`.
+                public var cursor: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - entityType:
+                ///   - entityId:
+                ///   - channel:
+                ///   - oauthClient:
+                ///   - deviceId: device shortcode, e.g. DEV-4K7M
+                ///   - runId: importRun shortcode, e.g. RUN-4K7M
+                ///   - createdAtFrom: Inclusive lower bound on createdAt, as an ISO date string
+                ///   - createdAtTo: Inclusive upper bound on createdAt, as an ISO date string
+                ///   - limit:
+                ///   - cursor:
+                public init(
+                    entityType: Operations.AuditLog_list.Input.Query.EntityTypePayload? = nil,
+                    entityId: Swift.String? = nil,
+                    channel: Operations.AuditLog_list.Input.Query.ChannelPayload? = nil,
+                    oauthClient: Swift.String? = nil,
+                    deviceId: Swift.String? = nil,
+                    runId: Swift.String? = nil,
+                    createdAtFrom: Swift.String? = nil,
+                    createdAtTo: Swift.String? = nil,
+                    limit: Swift.Double? = nil,
+                    cursor: Swift.String? = nil
+                ) {
+                    self.entityType = entityType
+                    self.entityId = entityId
+                    self.channel = channel
+                    self.oauthClient = oauthClient
+                    self.deviceId = deviceId
+                    self.runId = runId
+                    self.createdAtFrom = createdAtFrom
+                    self.createdAtTo = createdAtTo
+                    self.limit = limit
+                    self.cursor = cursor
+                }
+            }
+            public var query: Operations.AuditLog_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AuditLog_list.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AuditLog_list.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.AuditLog_list.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.AuditLog_list.Input.Query = .init(),
+                headers: Operations.AuditLog_list.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.AuditLogListOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.AuditLogListOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.AuditLog_list.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.AuditLog_list.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/auditLog/list/get(auditLog.list)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.AuditLog_list.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.AuditLog_list.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/auditLog/list/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.AuditLog_list.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.AuditLog_list.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/auditLog/list/get(auditLog.list)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.AuditLog_list.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.AuditLog_list.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `GET /api/v1/calendar/range`.
     /// - Remark: Generated from `#/paths//api/v1/calendar/range/get(calendar.range)`.
     public enum Calendar_range {

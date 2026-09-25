@@ -28,11 +28,36 @@ struct SectionView: View {
     }
 }
 
+/// iOS destinations stay stable even while a nested Activity or Photos screen is visible.
+#if os(iOS)
+    struct PhoneTabRootView: View {
+        let tab: PhoneTab
+
+        var body: some View {
+            Group {
+                switch tab {
+                case .work: WorkRootView()
+                case .capture: CaptureView()
+                case .library: LibraryHomeView()
+                case .find: SearchView()
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: Route.self) { RouteDestinationView(route: $0) }
+        }
+    }
+#endif
+
 /// Sheet-owned stacks need destinations for links followed from image associations too.
 struct RouteDestinationView: View {
     let route: Route
     var body: some View {
         switch route {
+        case .activityList: ActivityView()
+        case .auditHistory: AuditHistoryView()
+        case .photosLibrary: PhotosRootView()
+        case .browseCatalog: BrowseRootView()
+        case .photoReview(let id): ImportRunReviewView(runID: id)
         case .graph(let root): GraphWorkspaceView(initialRoot: root)
         case .nutrition(let day): DailyNutritionView(day: day)
         case .activityDetail(let id): ActivityDetailView(id: id)
