@@ -21,7 +21,7 @@
     "test:file:postgres": "node ../../scripts/test-services.ts -- vitest run --project integration",
     "test:watch": "pnpm test:prepare && vitest --ui",
     "test:e2e": "NODE_ENV=test node ../../scripts/test-services.ts -- playwright test",
-    "eval:flue-models": "pnpm run build:cf && pnpm --dir ../purchase-agent run build && FLUE_MODEL_EVAL=1 NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project integration src/server/purchase-import/flue-model-eval.integration.test.ts",
+    "eval:flue-models": "pnpm run build:cf && pnpm --dir ../purchase-agent run build && NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project live-eval src/server/purchase-import/flue-model-eval.live-eval.ts",
     "test:e2e:affected": "NODE_ENV=test node scripts/e2e-affected.ts",
     "test:e2e:watch": "NODE_ENV=test node ../../scripts/test-services.ts --warm -- concurrently -k -n build,test \"pnpm run build:cf:watch\" \"playwright test --ui\"",
     "test:e2e:ci:desktop": "NODE_ENV=test node ../../scripts/test-services.ts -- playwright test --project='Unauthenticated tests' --project='Authenticated tests'",

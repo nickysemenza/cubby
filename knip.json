@@ -40,6 +40,8 @@
         // generator reads them, nothing in the web app does.
         "src/entities/generated/entity-lists.gen.ts!",
         "src/**/*.test.{ts,tsx}!",
+        // Opt-in `live-eval` vitest project (billed model evals).
+        "src/**/*.live-eval.ts!",
         "tests/**/*.{ts,tsx}!",
         "scripts/check-client-bundle.ts!",
         "scripts/check-client-bundle.unit.test.ts!",
