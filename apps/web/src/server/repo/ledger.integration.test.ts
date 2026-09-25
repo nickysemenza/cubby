@@ -21,7 +21,7 @@ import {
   updateFinancialAccount,
 } from "~/server/repo/financial-account";
 import {
-  deleteFinancialTransactions,
+  financialTransactionRepository,
   updateFinancialTransaction,
 } from "~/server/repo/financial-transaction";
 import {
@@ -32,7 +32,7 @@ import {
 } from "~/server/repo/ledger-party";
 import {
   createLedgerTransfer,
-  deleteLedgerTransfers,
+  ledgerTransferRepository,
   getLedgerTransferByShortcode,
   updateLedgerTransfer,
 } from "~/server/repo/ledger-transfer";
@@ -314,17 +314,19 @@ describe("consolidated household ledger", () => {
     ).toBe(true);
     await expect(
       deleteLedgerParties(ctx.db, [member.output.id], ctx.actor),
-    ).rejects.toThrow(
-      "A ledger party with live attributions, accounts, inventory ownership, transfers, meal portions, meal food entries, or reported image sightings cannot be deleted.",
-    );
+    ).rejects.toThrow("Cannot delete ledger party:");
     await expect(
-      deleteFinancialTransactions(
+      financialTransactionRepository.delete(
         ctx.db,
         [parseShortcodeFor("financialTransaction", inflow.shortcode)],
         ctx.actor,
       ),
     ).rejects.toThrow("cannot be deleted until the transfer releases it");
-    await deleteLedgerTransfers(ctx.db, [transfer.output!.id], ctx.actor);
+    await ledgerTransferRepository.delete(
+      ctx.db,
+      [transfer.output!.id],
+      ctx.actor,
+    );
     const [cleared] = await unwrapDb(ctx.db)
       .select({ id: financialTransaction.id })
       .from(financialTransaction)
@@ -355,7 +357,7 @@ describe("consolidated household ledger", () => {
         [guest.output.id, guest.output.id],
         ctx.actor,
       ),
-    ).resolves.toEqual({ deleted: 1 });
+    ).resolves.toMatchObject({ deleted: 1 });
   });
 
   it("merges same-kind parties by folding weights and repointing transfers", async () => {

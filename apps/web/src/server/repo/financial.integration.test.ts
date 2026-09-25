@@ -16,7 +16,7 @@ import { getDb } from "./database-helpers";
 import { createExpense } from "./expense";
 import {
   createFinancialAccount,
-  deleteFinancialAccounts,
+  financialAccountRepository,
   financialAccountOptions,
   listFinancialAccounts,
   updateFinancialAccount,
@@ -24,7 +24,7 @@ import {
 import { previewFinancialStatementImport } from "./financial-statement-preview";
 import {
   createFinancialTransaction,
-  deleteFinancialTransactions,
+  financialTransactionRepository,
   financialTransactionSourceOptions,
   listFinancialTransactions,
   updateFinancialTransaction,
@@ -188,7 +188,7 @@ describe("financial repositories — critical invariants", () => {
         ctx.actor,
       )
     ).output;
-    await deleteFinancialAccounts(ctx.db, [retired.id], ctx.actor);
+    await financialAccountRepository.delete(ctx.db, [retired.id], ctx.actor);
 
     const txn = (accountId: string, sources: string[], amount: number) =>
       createFinancialTransaction(
@@ -232,7 +232,7 @@ describe("financial repositories — critical invariants", () => {
     // The id is the shortcode the filter brands, not the uuid.
     expect(accounts[0]?.id).toMatch(/^FAC-/);
 
-    await deleteFinancialTransactions(ctx.db, [doomed.id], ctx.actor);
+    await financialTransactionRepository.delete(ctx.db, [doomed.id], ctx.actor);
     expect(await financialTransactionSourceOptions(ctx.db)).toEqual([
       { source: "monarch", count: 3 },
       { source: "amazon-order-export", count: 1 },
@@ -737,9 +737,9 @@ describe("financial repositories — critical invariants", () => {
     );
 
     await expect(
-      deleteFinancialAccounts(ctx.db, [acct.id], ctx.actor),
+      financialAccountRepository.delete(ctx.db, [acct.id], ctx.actor),
     ).rejects.toMatchObject({
-      reason: "FINANCIAL_ACCOUNT_HAS_STATEMENT_ROWS",
+      reason: "ENTITY_DELETE_BLOCKED",
     });
     // The child survives with its triage intact — the half a fail-open guard
     // would destroy.
@@ -757,7 +757,7 @@ describe("financial repositories — critical invariants", () => {
       ctx.actor,
     );
     await expect(
-      deleteFinancialAccounts(ctx.db, [acct.id], ctx.actor),
+      financialAccountRepository.delete(ctx.db, [acct.id], ctx.actor),
     ).resolves.toBeDefined();
   });
 
@@ -809,9 +809,9 @@ describe("financial repositories — critical invariants", () => {
       )
     ).output;
     await expect(
-      deleteFinancialAccounts(ctx.db, [a.id], ctx.actor),
+      financialAccountRepository.delete(ctx.db, [a.id], ctx.actor),
     ).rejects.toMatchObject({
-      reason: "FINANCIAL_ACCOUNT_HAS_TRANSACTIONS",
+      reason: "ENTITY_DELETE_BLOCKED",
     });
     await expect(
       createFinancialTransaction(
@@ -1159,7 +1159,11 @@ describe("financial repositories — critical invariants", () => {
         ctx.actor,
       )
     ).output;
-    await deleteFinancialTransactions(ctx.db, [deletedRefund.id], ctx.actor);
+    await financialTransactionRepository.delete(
+      ctx.db,
+      [deletedRefund.id],
+      ctx.actor,
+    );
     const adjustedReconciliation = (
       await getPurchaseByID(ctx.db, adjusted.uuid)
     ).financialReconciliation;
@@ -1211,7 +1215,11 @@ describe("financial repositories — critical invariants", () => {
         ctx.actor,
       )
     ).output;
-    await deleteFinancialTransactions(ctx.db, [deleted.id], ctx.actor);
+    await financialTransactionRepository.delete(
+      ctx.db,
+      [deleted.id],
+      ctx.actor,
+    );
     const result = await getPurchaseByID(ctx.db, mismatch.uuid);
     expect(result.expenseTotal).toBe(10);
     expect(result.financialReconciliation).toMatchObject({
@@ -1416,7 +1424,7 @@ describe("financial repositories — critical invariants", () => {
     }
 
     // Soft-deleting frees the pair for a replacement account.
-    await deleteFinancialAccounts(ctx.db, [a.id], ctx.actor);
+    await financialAccountRepository.delete(ctx.db, [a.id], ctx.actor);
     await expect(storedValue("Credit A new", memberA)).resolves.toBeDefined();
     expect(shared.ledgerPartyId).toBeNull();
   });

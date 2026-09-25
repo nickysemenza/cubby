@@ -236,7 +236,7 @@ describe("vendor repository — deletion guard", () => {
     await expect(
       deleteVendors(ctx.db, [vendorShortcode], ctx.actor),
     ).rejects.toMatchObject({
-      reason: "VENDOR_HAS_PURCHASES",
+      reason: "ENTITY_DELETE_BLOCKED",
     });
 
     await deletePurchases(

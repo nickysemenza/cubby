@@ -23,7 +23,7 @@ import {
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { deleteImages } from "~/server/repo/image";
 import { mergeLedgerParties } from "~/server/repo/ledger-party";
-import { deleteProductCategories } from "~/server/repo/product-category";
+import { productCategoryRepository } from "~/server/repo/product-category";
 import { mergeProducts } from "~/server/repo/product/merge";
 import {
   createImageFixture,
@@ -792,7 +792,7 @@ describe("photo group proposals", () => {
       },
       ctx.actor,
     );
-    await deleteProductCategories(
+    await productCategoryRepository.delete(
       ctx.db,
       [parseShortcodeFor("productCategory", category.shortcode)],
       ctx.actor,

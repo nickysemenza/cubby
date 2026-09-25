@@ -30,7 +30,6 @@ import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   formatSearchTerm,
   getDb,
-  lockAndValidateForDelete,
   notDeleted,
   unwrapDb,
   updateLiveAndReturn,
@@ -45,9 +44,7 @@ import {
   resolveProductPricing,
 } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { removeEntity } from "~/server/repo/removal";
 import {
-  resolveAllOrThrow,
   resolveLiveShortcodes,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
@@ -510,36 +507,10 @@ export const updateWish = async (
   return { output: await getWishByID(db, id), entityId: id };
 };
 
-export const deleteWishes = async (
-  db: Database,
-  shortcodes: WishShortcode[],
-  actor: ActorContext,
-): Promise<{ deleted: number }> => {
-  const ids = await resolveAllOrThrow(db, "wish", shortcodes);
-  return await withTransaction(db, async (tx) => {
-    await lockAndValidateForDelete(tx, wish, ids, "Wish");
-    const { deleted } = await removeEntity(tx, {
-      entity: "wish",
-      ids,
-      removal: "soft",
-      actor,
-      children: [
-        {
-          table: wishCandidate,
-          parentColumns: [wishCandidate.wishId],
-          auditKey: "cascadedCandidates",
-        },
-      ],
-    });
-    return { deleted };
-  });
-};
-
-export const wishRepository = entityRepository({
+export const wishRepository = entityRepository("wish", {
   lifecycle: { delete: WISH_DELETE_EDGE_POLICY },
   get: getWishByShortcode,
   list: wishList,
   create: createWish,
   update: updateWish,
-  delete: deleteWishes,
 });

@@ -30,12 +30,7 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import {
-  expense,
-  expenseAttribution,
-  ledgerSourceClaim,
-  purchase,
-} from "~/server/db/schema";
+import { expense, purchase } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
@@ -45,7 +40,6 @@ import {
 import {
   buildPartialUpdateValues,
   getDb,
-  lockAndValidateForDelete,
   notDeleted,
   relations,
   unwrapDb,
@@ -68,7 +62,7 @@ import {
   foldChargeInto,
   renameChargeOrderId,
 } from "~/server/repo/purchase";
-import { removeEntity } from "~/server/repo/removal";
+import { deleteByPolicy } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -1079,8 +1073,6 @@ export const deleteExpensesWithPurchaseEffects = async (
 
   return await withTransaction(db, async (tx) => {
     const ids = await resolveAllOrThrow(tx, "expense", shortcodes);
-    await lockAndValidateForDelete(tx, expense, ids, "Expense");
-
     const qualityTargets = await tx.query.expense.findMany({
       where: and(inArray(expense.id, ids), notDeleted(expense)),
       columns: { shortcode: true, productId: true, purchaseId: true },
@@ -1095,23 +1087,13 @@ export const deleteExpensesWithPurchaseEffects = async (
       pricingProductIds(qualityTargets.map((row) => row.productId)),
     );
 
-    const { deleted } = await removeEntity(tx, {
+    // The generic delete (policy dispositions + removal) joins this
+    // transaction; the purchase and pricing effects around it are expense's.
+    const { deleted } = await deleteByPolicy(tx, {
       entity: "expense",
+      policy: EXPENSE_DELETE_EDGE_POLICY,
       ids,
-      removal: "soft",
       actor,
-      children: [
-        {
-          table: expenseAttribution,
-          parentColumns: [expenseAttribution.expenseId],
-          auditKey: "cascadedExpenseAttributions",
-        },
-        {
-          table: ledgerSourceClaim,
-          parentColumns: [ledgerSourceClaim.expenseId],
-          auditKey: "cascadedLedgerSourceClaims",
-        },
-      ],
     });
 
     await touchDataQualityTargets(tx, {

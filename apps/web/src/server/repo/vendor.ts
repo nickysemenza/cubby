@@ -5,7 +5,6 @@ import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
-  type ImageShortcode,
   type PurchaseId,
   parseEntityId,
   parseShortcodeFor,
@@ -47,7 +46,6 @@ import {
   correlated,
   countWhere,
   getDb,
-  imageCascadeChild,
   type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
@@ -60,7 +58,6 @@ import {
   displayableImageSql,
   displayableImageWhere,
 } from "~/server/repo/image-displayability";
-import { countByTarget } from "~/server/repo/impact";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import {
   finalizeMerge,
@@ -70,9 +67,8 @@ import {
 } from "~/server/repo/merge";
 import { foldChargeInto } from "~/server/repo/purchase";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { removeEntity } from "~/server/repo/removal";
+import { policyDelete } from "~/server/repo/removal";
 import {
-  resolveAllOrThrow,
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
@@ -932,67 +928,7 @@ export const mergeVendors = async (
 };
 
 /**
- * Soft-delete vendors, refusing while live charges still reference them —
- * mirroring `PROJECT_HAS_EXPENSES` one level up the chain. A vendor with
- * charges is load-bearing history: dropping it would leave every one of those
- * charges resolving `vendorName` to null, which reads as "no vendor recorded"
- * and is a lie.
- *
- * The re-point paths are `mergePurchases` (one vendor's charges) and
- * `mergeVendors` (two spellings of one vendor) — never a cascading delete.
- *
- * The blocking count is `countByTarget` over `Purchase.vendorId` rather than a
- * hand-rolled groupBy, so a single query names both the total and which
- * vendors have live charges.
+ * A vendor delete is its declared policy: live purchases, accounts and import
+ * provenance block it; its logo attachment goes with it (ADR 0006).
  */
-export const deleteVendors = async (
-  db: Database,
-  shortcodes: VendorShortcode[],
-  actor: ActorContext,
-): Promise<{
-  detachedImageKeys: string[];
-  deletedImageShortcodes: ImageShortcode[];
-  deleted: number;
-}> => {
-  if (shortcodes.length === 0) {
-    return {
-      detachedImageKeys: [],
-      deletedImageShortcodes: [],
-      deleted: 0,
-    };
-  }
-
-  const ids = await resolveAllOrThrow(db, "vendor", shortcodes);
-
-  return await withTransaction(db, async (tx) => {
-    await lockAndValidateForDelete(tx, vendor, ids, "Vendor");
-
-    const blocking = await countByTarget(tx, purchase, purchase.vendorId, ids);
-
-    if (Object.keys(blocking).length > 0) {
-      const detail = Object.entries(blocking)
-        .map(([vendorId, n]) => `${vendorId} (${n})`)
-        .join(", ");
-      throw createAppError(
-        "VENDOR_HAS_PURCHASES",
-        `Cannot delete a vendor with purchases still pointing at it: ${detail}. Move or delete those purchases first.`,
-      );
-    }
-
-    // The logo is an attachment (ADR 0006): the cascade detaches it and
-    // reaps it only when no other entity shares the image.
-    const { deleted, detachedImageKeys, deletedImageShortcodes } =
-      await removeEntity(tx, {
-        entity: "vendor",
-        ids,
-        removal: "soft",
-        actor,
-        children: [imageCascadeChild()],
-      });
-    return {
-      detachedImageKeys,
-      deletedImageShortcodes,
-      deleted,
-    };
-  });
-};
+export const deleteVendors = policyDelete("vendor", VENDOR_DELETE_EDGE_POLICY);

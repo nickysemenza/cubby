@@ -40,11 +40,7 @@ import {
   photoGroupProposal,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  computeChanges,
-  logAuditEntries,
-  logAuditEntry,
-} from "~/server/repo/audit-log";
+import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   buildPartialUpdateValues,
@@ -58,11 +54,8 @@ import { applyInventoryOwnershipInTransaction } from "~/server/repo/inventory/ow
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge/core";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { removeEntity } from "~/server/repo/removal/entity";
-import {
-  resolveAllOrThrow,
-  resolveOrThrow,
-} from "~/server/repo/shortcode-resolver";
+import { policyDelete } from "~/server/repo/removal";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
@@ -466,152 +459,27 @@ export async function updateLedgerParty(
   return { output: await reader.getByID(db, id), entityId: id };
 }
 
-export async function deleteLedgerParties(
-  db: Database,
-  shortcodes: LedgerPartyShortcode[],
-  actor: ActorContext,
-) {
-  const ids = uniq(await resolveAllOrThrow(db, "ledgerParty", shortcodes));
-  return withTransaction(db, async (tx) => {
-    const parties = await tx
-      .select()
-      .from(ledgerParty)
-      .where(and(inArray(ledgerParty.id, ids), notDeleted(ledgerParty)))
-      .for("update");
-    if (parties.length !== ids.length)
-      throw createAppError(
-        "LEDGER_PARTY_NOT_FOUND",
-        "A ledger party selected for deletion is no longer live.",
-      );
-    if (parties.some((party) => party.kind === "household"))
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "The singleton household ledger party cannot be deleted.",
-      );
-    const [refs] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(expenseAttribution)
-      .where(
-        and(
-          inArray(expenseAttribution.ledgerPartyId, ids),
-          notDeleted(expenseAttribution),
-        ),
-      );
-    const [portions] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(mealRecipePortion)
-      .where(
-        and(
-          inArray(mealRecipePortion.ledgerPartyId, ids),
-          notDeleted(mealRecipePortion),
-        ),
-      );
-    const [foodEntries] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(mealFoodEntry)
-      .where(
-        and(
-          inArray(mealFoodEntry.ledgerPartyId, ids),
-          notDeleted(mealFoodEntry),
-        ),
-      );
-    const [accounts] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(financialAccount)
-      .where(
-        and(
-          inArray(financialAccount.ledgerPartyId, ids),
-          notDeleted(financialAccount),
-        ),
-      );
-    const [inventoryOwners] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(inventoryEntry)
-      .where(
-        and(
-          inArray(inventoryEntry.ownerLedgerPartyId, ids),
-          notDeleted(inventoryEntry),
-        ),
-      );
-    const [sightings] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(imageSighting)
-      .where(
-        and(
-          inArray(imageSighting.ledgerPartyId, ids),
-          notDeleted(imageSighting),
-        ),
-      );
-    const [transfers] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(ledgerTransfer)
-      .where(
-        and(
-          or(
-            inArray(ledgerTransfer.fromPartyId, ids),
-            inArray(ledgerTransfer.toPartyId, ids),
-          ),
-          notDeleted(ledgerTransfer),
-        ),
-      );
-    if (
-      (refs?.n ?? 0) +
-        (accounts?.n ?? 0) +
-        (inventoryOwners?.n ?? 0) +
-        (transfers?.n ?? 0) +
-        (portions?.n ?? 0) +
-        (foodEntries?.n ?? 0) +
-        (sightings?.n ?? 0) >
-      0
-    )
-      throw createAppError(
-        "LEDGER_PARTY_HAS_EDGES",
-        "A ledger party with live attributions, accounts, inventory ownership, transfers, meal portions, meal food entries, or reported image sightings cannot be deleted.",
-      );
-    // "Device.ledgerPartyId" is a "detach" disposition, not a block: a device
-    // survives its owner's deletion as an unowned install rather than
-    // blocking the member delete or being deleted itself.
-    const detachingDevices = await tx
-      .select({ id: device.id, ledgerPartyId: device.ledgerPartyId })
-      .from(device)
-      .where(and(inArray(device.ledgerPartyId, ids), notDeleted(device)));
-    if (detachingDevices.length > 0) {
-      await tx
-        .update(device)
-        .set({ ledgerPartyId: null })
-        .where(and(inArray(device.ledgerPartyId, ids), notDeleted(device)));
-      await logAuditEntries(
-        tx,
-        actor,
-        detachingDevices.map((row) => ({
-          entityType: "device" as const,
-          entityId: row.id,
-          action: "update" as const,
-          changes: { ledgerPartyId: { from: row.ledgerPartyId, to: null } },
-        })),
-      );
-    }
-    // "Image.capturedByPartyId" is also "detach": the image survives with no
-    // derived capturer rather than blocking the member delete. Image is not
-    // an auditable entity (`packages/schemas/src/audit.ts` excludes it), so
-    // this clears the FK without an audit entry, like every other Image write.
-    await tx
-      .update(image)
-      .set({ capturedByPartyId: null })
-      .where(and(inArray(image.capturedByPartyId, ids), notDeleted(image)));
-    await tx
-      .update(photoGroupProposal)
-      .set({ inventoryOwnerPartyId: null })
-      .where(inArray(photoGroupProposal.inventoryOwnerPartyId, ids));
-    const { deleted } = await removeEntity(tx, {
-      entity: "ledgerParty",
-      ids,
-      removal: "soft",
-      actor,
-    });
-    return { deleted };
-  });
-}
+const refuseHouseholdParty = async (
+  tx: DrizzleTransaction,
+  ids: LedgerPartyId[],
+) => {
+  const [household] = await tx
+    .select({ id: ledgerParty.id })
+    .from(ledgerParty)
+    .where(and(inArray(ledgerParty.id, ids), eq(ledgerParty.kind, "household")))
+    .limit(1);
+  if (household)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "The singleton household ledger party cannot be deleted.",
+    );
+};
+
+export const deleteLedgerParties = policyDelete(
+  "ledgerParty",
+  LEDGER_PARTY_DELETE_EDGE_POLICY,
+  { beforeDelete: refuseHouseholdParty },
+);
 
 const lockMealRecipePortionReferences = async (
   tx: DrizzleTransaction,

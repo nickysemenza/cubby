@@ -113,22 +113,6 @@ const UNCOVERED_EDGES: readonly string[] = [
   "productCategory PhotoGroupProposal.productCreateCategoryId",
 ];
 
-/**
- * Cases where the hand-written delete disagrees with its declared policy.
- * Pinned exactly, so a fix has to remove its line here.
- */
-const KNOWN_DIVERGENCES: readonly string[] = [
-  "ledgerParty VendorAccount.ledgerPartyId (block): delete was not refused",
-  "ledgerParty MerchantVendorRule.ledgerPartyId (block): delete was not refused",
-  "ledgerParty MailboxCursor.ledgerPartyId (block): delete was not refused",
-  "ledgerParty OrderMail.ledgerPartyId (block): delete was not refused",
-  "vendor VendorAccount.vendorId (block): delete was not refused",
-  "vendor MerchantVendorRule.vendorId (block): delete was not refused",
-  "vendor OrderMail.vendorId (block): delete was not refused",
-  "vendorAccount Purchase.vendorAccountId (block): delete was not refused",
-  "device AuditLog.deviceId (detach): a row was not detached",
-];
-
 const rowSchema = z.record(z.string(), z.unknown());
 type DbRow = z.infer<typeof rowSchema>;
 const rowsSchema = z.array(z.object({ row: rowSchema }));
@@ -578,7 +562,7 @@ describe("entity delete policy — declared dispositions at the DB boundary", ()
     expect(
       failures.join("\n"),
       `${failures.length} of ${covered} delete disposition(s) disagree with the database`,
-    ).toBe(KNOWN_DIVERGENCES.join("\n"));
+    ).toBe("");
     expect(uncovered).toEqual(UNCOVERED_EDGES);
   }, 300_000);
 });

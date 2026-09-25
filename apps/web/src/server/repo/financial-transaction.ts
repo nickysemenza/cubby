@@ -41,7 +41,6 @@ import {
   eqAny,
   getDb,
   type ListReadIntent,
-  lockAndValidateForDelete,
   notDeleted,
   unwrapDb,
   withTransaction,
@@ -63,7 +62,6 @@ import { listScaffold } from "~/server/repo/list-scaffold";
 import { enrichFinancialTransactionsWithVendorInference } from "~/server/repo/merchant-vendor-inference";
 import { cents } from "~/server/repo/money";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -737,67 +735,46 @@ export const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
   OperationDisposition
 >;
 
-export async function deleteFinancialTransactions(
-  db: Database,
-  shortcodes: FinancialTransactionShortcode[],
-  actor: ActorContext,
-): Promise<{ deleted: number }> {
-  const ids = uniq(
-    await resolveAllOrThrow(db, "financialTransaction", shortcodes),
-  );
-  return await withTransaction(db, async (tx) => {
-    await lockAndValidateForDelete(
-      tx,
-      financialTransaction,
-      ids,
-      "FinancialTransaction",
+/** Evidence for a ledger transfer stays until the transfer releases it. */
+const refuseTransferEvidence = async (
+  tx: DrizzleTransaction,
+  ids: FinancialTransactionId[],
+) => {
+  const [linkedEvidence] = await tx
+    .select({ id: financialTransaction.id })
+    .from(financialTransaction)
+    .where(
+      and(
+        inArray(financialTransaction.id, ids),
+        sql`${financialTransaction.ledgerTransferId} IS NOT NULL`,
+      ),
+    )
+    .limit(1);
+  if (linkedEvidence)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A financial transaction that evidences a ledger transfer cannot be deleted until the transfer releases it.",
     );
-    const [linkedEvidence] = await tx
-      .select({ id: financialTransaction.id })
-      .from(financialTransaction)
-      .where(
-        and(
-          inArray(financialTransaction.id, ids),
-          sql`${financialTransaction.ledgerTransferId} IS NOT NULL`,
-          notDeleted(financialTransaction),
-        ),
-      )
-      .limit(1);
-    if (linkedEvidence)
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "A financial transaction that evidences a ledger transfer cannot be deleted until the transfer releases it.",
-      );
-    // Quality targets come from the allocations as well as the mirror: a
-    // transaction split across two purchases has a NULL mirror, so reading only
-    // that column would leave both purchases' data-quality exceptions stale.
-    const allocationTargets =
-      await tx.query.financialTransactionAllocation.findMany({
-        where: and(
-          inArray(financialTransactionAllocation.transactionId, ids),
-          notDeleted(financialTransactionAllocation),
-        ),
-        columns: { purchaseId: true },
-      });
-    const { deleted } = await removeEntity(tx, {
-      entity: "financialTransaction",
-      ids,
-      removal: "soft",
-      actor,
-      children: [
-        {
-          table: financialTransactionAllocation,
-          parentColumns: [financialTransactionAllocation.transactionId],
-          auditKey: "cascadedSettlementAllocations",
-        },
-      ],
-    });
-    await touchDataQualityTargets(tx, {
-      purchaseIds: uniq(allocationTargets.map((row) => row.purchaseId)),
-    });
-    return { deleted };
+};
+
+/**
+ * Quality targets come from the allocations as well as the mirror: a
+ * transaction split across two purchases has a NULL mirror, so reading only
+ * that column would leave both purchases' data-quality exceptions stale.
+ */
+const touchAllocatedPurchases = async (
+  tx: DrizzleTransaction,
+  ids: FinancialTransactionId[],
+) => {
+  // includes-deleted: this delete just tombstoned the allocations.
+  const allocations = await tx
+    .select({ purchaseId: financialTransactionAllocation.purchaseId })
+    .from(financialTransactionAllocation)
+    .where(inArray(financialTransactionAllocation.transactionId, ids));
+  await touchDataQualityTargets(tx, {
+    purchaseIds: uniq(allocations.map((row) => row.purchaseId)),
   });
-}
+};
 
 /**
  * Distinct `sourceRefs[].source` values across live transactions, with counts.
@@ -823,11 +800,17 @@ export async function financialTransactionSourceOptions(
   }));
 }
 
-export const financialTransactionRepository = entityRepository({
-  lifecycle: { delete: FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY },
-  get: getFinancialTransactionByShortcode,
-  list: listFinancialTransactions,
-  create: createFinancialTransaction,
-  update: updateFinancialTransaction,
-  delete: deleteFinancialTransactions,
-});
+export const financialTransactionRepository = entityRepository(
+  "financialTransaction",
+  {
+    lifecycle: { delete: FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY },
+    get: getFinancialTransactionByShortcode,
+    list: listFinancialTransactions,
+    create: createFinancialTransaction,
+    update: updateFinancialTransaction,
+    deleteHooks: {
+      beforeDelete: refuseTransferEvidence,
+      afterDelete: touchAllocatedPurchases,
+    },
+  },
+);

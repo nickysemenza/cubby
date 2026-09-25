@@ -229,7 +229,7 @@ describe("meal food entry lifecycle", () => {
     await expect(
       deleteIngredients(ctx.db, [source.id], ctx.actor),
     ).rejects.toMatchObject({
-      reason: "INGREDIENT_HAS_MEAL_FOOD_ENTRIES",
+      reason: "ENTITY_DELETE_BLOCKED",
     });
 
     await getDb(ctx.db)
@@ -238,7 +238,7 @@ describe("meal food entry lifecycle", () => {
       .where(eq(mealFoodEntry.id, entry.id));
     await expect(
       deleteIngredients(ctx.db, [source.id], ctx.actor),
-    ).resolves.toEqual({ deleted: 1 });
+    ).resolves.toMatchObject({ deleted: 1 });
   });
 
   it("re-points live and removed ingredient entries during a hard-delete merge", async () => {

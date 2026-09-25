@@ -4,7 +4,6 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type CookbookId,
-  type ImageShortcode,
   parseEntityId,
   parseShortcodeFor,
   type RecipeId,
@@ -32,7 +31,6 @@ import {
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { countBy } from "es-toolkit";
 import { match, P } from "ts-pattern";
 
 import { collectSubRecipeIds } from "~/lib/recipe-graph";
@@ -59,10 +57,8 @@ import {
   eqAnyRequested,
   getDb,
   idSetPresence,
-  imageCascadeChild,
   imageJoinBindings,
   type ListReadIntent,
-  lockAndValidateForDelete,
   notDeleted,
   presenceCondition,
   rangeConditions,
@@ -70,14 +66,13 @@ import {
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
-  withTransactionOn,
 } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { recipeHasImages } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { removeEntity } from "~/server/repo/removal";
+import { deleteByPolicy } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -1012,137 +1007,63 @@ export const updateRecipe = async (
 };
 
 /**
+ * The graph's second hop, which no recipe edge names: the lines under its
+ * sections, and the portions sourced from its meal-plan occurrences. The
+ * sub-recipe pointer (`Ingredient.recipeId`) is `preserve`: the router
+ * recomputes parents, with findParentRecipesWithDeletedSubRecipes as the
+ * backstop detector.
+ */
+const removeRecipeGrandchildren = async (
+  tx: DrizzleTransaction,
+  ids: RecipeId[],
+) => {
+  const now = new Date();
+  const sections = tx
+    .select({ id: recipeSection.id })
+    .from(recipeSection)
+    .where(
+      and(inArray(recipeSection.recipeId, ids), notDeleted(recipeSection)),
+    );
+  await tx
+    .update(recipeSectionIngredient)
+    .set({ deletedAt: now })
+    .where(
+      and(
+        inArray(recipeSectionIngredient.recipeSectionId, sections),
+        notDeleted(recipeSectionIngredient),
+      ),
+    );
+  const occurrences = tx
+    .select({ id: mealRecipe.id })
+    .from(mealRecipe)
+    .where(and(inArray(mealRecipe.recipeId, ids), notDeleted(mealRecipe)));
+  await tx
+    .update(mealRecipePortion)
+    .set({ deletedAt: now })
+    .where(
+      and(
+        inArray(mealRecipePortion.mealRecipeId, occurrences),
+        notDeleted(mealRecipePortion),
+      ),
+    );
+};
+
+/**
  * Soft-deletes the recipe graph in the caller's transaction when provided.
  * Returned R2 keys must not be dropped until that outer transaction commits.
  */
-export const deleteRecipes = async (
+export const deleteRecipes = (
   dbOrTx: Database | DrizzleTransaction,
   ids: RecipeId[],
   actor: ActorContext,
-): Promise<{
-  detachedImageKeys: string[];
-  deletedImageShortcodes: ImageShortcode[];
-  deleted: number;
-}> => {
-  if (ids.length === 0)
-    return { detachedImageKeys: [], deletedImageShortcodes: [], deleted: 0 };
-
-  return await withTransactionOn(dbOrTx, async (tx) => {
-    // Lock live rows before cascading so concurrent deletes cannot interleave.
-    await lockAndValidateForDelete(tx, recipe, ids, "Recipe");
-
-    const now = new Date();
-
-    const sections = await tx.query.recipeSection.findMany({
-      where: and(
-        inArray(recipeSection.recipeId, ids),
-        notDeleted(recipeSection),
-      ),
-      columns: { id: true, recipeId: true },
-    });
-
-    const sectionIds = sections.map((s) => s.id);
-
-    // Meal-plan membership. This is a cascade, not a guard, for two reasons: the
-    // removal-path invariant says a delete cleans up its dependents in the same
-    // transaction, and a guard here would make deleteCookbook's unconditional
-    // recipe cascade throw mid-transaction. Without this the MealRecipe row
-    // outlives its recipe and the meal keeps counting it.
-    //
-    // The other incoming edge, `ingredient.recipeId` (the sub-recipe pointer), is
-    // deliberately NOT touched: the router resolves parents and calls
-    // dispatchRecompute, with findParentRecipesWithDeletedSubRecipes as the
-    // backstop detector. Cascading or guarding it would break sub-recipe deletion.
-    const cascadedMealRecipes = await tx
-      .select({ id: mealRecipe.id, recipeId: mealRecipe.recipeId })
-      .from(mealRecipe)
-      .where(and(inArray(mealRecipe.recipeId, ids), notDeleted(mealRecipe)))
-      .orderBy(mealRecipe.id)
-      .for("update");
-    const cascadedMealRecipeIds = cascadedMealRecipes.map((row) => row.id);
-
-    let cascadedIngredients: Array<{ recipeSectionId: string }> = [];
-    if (sectionIds.length > 0) {
-      cascadedIngredients = await tx.query.recipeSectionIngredient.findMany({
-        where: and(
-          inArray(recipeSectionIngredient.recipeSectionId, sectionIds),
-          notDeleted(recipeSectionIngredient),
-        ),
-        columns: { recipeSectionId: true },
-      });
-    }
-
-    const sectionToRecipe = new Map(sections.map((s) => [s.id, s.recipeId]));
-    const sectionsByRecipe = countBy(sections, (s) => s.recipeId);
-    const mealRecipesByRecipe = countBy(
-      cascadedMealRecipes,
-      (mr) => mr.recipeId,
-    );
-    const ingredientsByRecipe = countBy(
-      cascadedIngredients
-        .map((ing) => sectionToRecipe.get(ing.recipeSectionId))
-        .filter((id): id is RecipeId => id != null),
-      (id) => id,
-    );
-
-    if (sectionIds.length > 0) {
-      await tx
-        .update(recipeSectionIngredient)
-        .set({ deletedAt: now })
-        .where(
-          and(
-            inArray(recipeSectionIngredient.recipeSectionId, sectionIds),
-            notDeleted(recipeSectionIngredient),
-          ),
-        );
-    }
-
-    await tx
-      .update(recipeSection)
-      .set({ deletedAt: now })
-      .where(
-        and(inArray(recipeSection.recipeId, ids), notDeleted(recipeSection)),
-      );
-
-    // Fork lineage is a pointer only ("Recipe.forkedFromRecipeId" in
-    // RECIPE_DELETE_EDGE_POLICY, effect "detach"): a fork is a full,
-    // independent recipe, so deleting the recipe it was forked from clears
-    // the pointer rather than cascading to the fork itself.
-    await tx
-      .update(recipe)
-      .set({ forkedFromRecipeId: null })
-      .where(and(inArray(recipe.forkedFromRecipeId, ids), notDeleted(recipe)));
-
-    await tx
-      .update(mealRecipe)
-      .set({ deletedAt: now })
-      .where(and(inArray(mealRecipe.recipeId, ids), notDeleted(mealRecipe)));
-    if (cascadedMealRecipeIds.length > 0)
-      await tx
-        .update(mealRecipePortion)
-        .set({ deletedAt: now })
-        .where(
-          and(
-            inArray(mealRecipePortion.mealRecipeId, cascadedMealRecipeIds),
-            notDeleted(mealRecipePortion),
-          ),
-        );
-
-    // Declaring entityAttachment lets removeEntity reap unreferenced Image/R2 rows.
-    return await removeEntity(tx, {
-      entity: "recipe",
-      ids,
-      removal: "soft",
-      actor,
-      children: [imageCascadeChild()],
-      extraCounts: {
-        cascadedSections: sectionsByRecipe,
-        cascadedIngredients: ingredientsByRecipe,
-        cascadedMealRecipes: mealRecipesByRecipe,
-      },
-    });
+) =>
+  deleteByPolicy(dbOrTx, {
+    entity: "recipe",
+    policy: RECIPE_DELETE_EDGE_POLICY,
+    ids,
+    actor,
+    beforeDelete: removeRecipeGrandchildren,
   });
-};
 
 export const deleteRecipesByCookbookTx = async (
   tx: DrizzleTransaction,

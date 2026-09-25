@@ -18,7 +18,7 @@ import { getDb } from "./database-helpers";
 import { createFinancialAccount } from "./financial-account";
 import {
   createFinancialTransaction,
-  deleteFinancialTransactions,
+  financialTransactionRepository,
 } from "./financial-transaction";
 import {
   deleteStatementRows,
@@ -299,7 +299,11 @@ describe("statement row ledger", () => {
     });
 
     // A soft-deleted transaction is not evidence.
-    await deleteFinancialTransactions(ctx.db, [transaction.id], ctx.actor);
+    await financialTransactionRepository.delete(
+      ctx.db,
+      [transaction.id],
+      ctx.actor,
+    );
     const afterDelete = (await listStatementRows(ctx.db, {})).data[0];
     expect(afterDelete).toMatchObject({
       matchState: "unmatched",

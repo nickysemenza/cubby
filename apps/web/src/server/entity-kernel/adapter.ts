@@ -19,7 +19,12 @@ import {
   type EntitySchemaBindingMap,
 } from "~/server/generated/entity-bindings.gen";
 import type { MealMutationHooks } from "~/server/repo/meal/crud";
-import { executeDeleteWithEffects } from "~/server/repo/removal";
+import {
+  type DeleteHooks,
+  executeDeleteWithEffects,
+  policyDelete,
+  type RemovableEntity,
+} from "~/server/repo/removal";
 import type { TaskMutationHooks } from "~/server/repo/task/crud";
 import {
   type MutationSideEffectEntity,
@@ -91,16 +96,39 @@ export const deletedWithImages = <E extends EntitySchemaBindingEntity>(
  * What a standard repository object declares beside its `(db, input, actor)`
  * methods; the generated binding module builds its kernel adapter.
  */
-export interface StandardRepositoryOptions {
+export interface StandardRepositoryOptions<
+  E extends EntitySchemaBindingEntity,
+> {
   lifecycle: EntityLifecycleContract;
   /** `false` when writes have no dependents to refresh. */
   sideEffects?: boolean;
+  /** Named entity-specific effects around the policy-driven delete. */
+  deleteHooks?: DeleteHooks<Extract<E, RemovableEntity>>;
 }
 
-/** Declare a standard repository object (see `StandardRepositoryOptions`). */
-export const entityRepository = <T extends StandardRepositoryOptions>(
+/**
+ * Declare a standard repository object. Its `delete` is the entity's declared
+ * `lifecycle.delete` policy (`deleteByPolicy`) plus `deleteHooks`.
+ */
+export const entityRepository = <
+  E extends EntitySchemaBindingEntity,
+  T extends StandardRepositoryOptions<E>,
+>(
+  entity: E,
   repository: T,
-): T & StandardRepositoryOptions => repository;
+): T &
+  StandardRepositoryOptions<E> & {
+    delete: ReturnType<typeof policyDelete<Extract<E, RemovableEntity>>>;
+  } => ({
+  ...repository,
+  delete: policyDelete(
+    // SAFETY: only an auditable entity declares a delete; the generated
+    // adapter never calls `delete` for one whose manifest delete is null.
+    entity as Extract<E, RemovableEntity>,
+    repository.lifecycle.delete,
+    repository.deleteHooks,
+  ),
+});
 
 /** A standard repository delete's return, reported as kernel references. */
 export const standardDeleteResult = <E extends EntitySchemaBindingEntity>(

@@ -23,15 +23,10 @@ import {
   productCategorySummary,
 } from "@cubby/schemas/product-category-fields";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import {
-  photoGroupProposal,
-  product,
-  productCategory,
-} from "~/server/db/schema";
+import { product, productCategory } from "~/server/db/schema";
 import { entityRepository } from "~/server/entity-kernel/adapter";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
@@ -42,10 +37,8 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { listScaffold } from "~/server/repo/list-scaffold";
-import { removeEntity } from "~/server/repo/removal";
 import {
   lookupEntityReferences,
-  resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -487,35 +480,18 @@ export async function updateProductCategory(
   return { output: await reader.getByID(db, id), entityId: id };
 }
 
-export async function deleteProductCategories(
-  db: Database,
-  shortcodes: ProductCategoryShortcode[],
-  actor: ActorContext,
-) {
-  const ids = uniq(await resolveAllOrThrow(db, "productCategory", shortcodes));
-  return withTransaction(db, async (tx) => {
-    const bound = await unwrapDb(tx)
-      .select({ feature: productCategory.feature })
-      .from(productCategory)
-      .where(
-        and(inArray(productCategory.id, ids), notDeleted(productCategory)),
-      );
-    if (bound.some((row) => row.feature !== null)) {
-      throw new Error("A category with a behavior binding cannot be deleted");
-    }
-    await tx
-      .update(photoGroupProposal)
-      .set({ productCreateCategoryId: null })
-      .where(inArray(photoGroupProposal.productCreateCategoryId, ids));
-    await removeEntity(tx, {
-      entity: "productCategory",
-      ids,
-      removal: "soft",
-      actor,
-    });
-    return { deleted: ids.length };
-  });
-}
+/** A category bound to a behavior feature is structural; it cannot go. */
+const refuseBoundCategories = async (
+  tx: DrizzleTransaction,
+  ids: ProductCategoryId[],
+) => {
+  const bound = await tx
+    .select({ feature: productCategory.feature })
+    .from(productCategory)
+    .where(inArray(productCategory.id, ids));
+  if (bound.some((row) => row.feature !== null))
+    throw new Error("A category with a behavior binding cannot be deleted");
+};
 
 /** The inherited behavior binding for one category; null means no binding. */
 export async function getCategoryFeature(
@@ -642,11 +618,11 @@ export async function loadCategorySummaries(
   );
 }
 
-export const productCategoryRepository = entityRepository({
+export const productCategoryRepository = entityRepository("productCategory", {
   lifecycle: { delete: PRODUCT_CATEGORY_DELETE_EDGE_POLICY },
   get: getProductCategoryByShortcode,
   list: listProductCategories,
   create: createProductCategory,
   update: updateProductCategory,
-  delete: deleteProductCategories,
+  deleteHooks: { beforeDelete: refuseBoundCategories },
 });

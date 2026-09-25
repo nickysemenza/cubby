@@ -19,7 +19,6 @@ import type {
 import { ledgerTransferOut } from "@cubby/schemas/ledger-transfer";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -34,7 +33,6 @@ import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   buildPartialUpdateValues,
-  lockAndValidateForDelete,
   notDeleted,
   unwrapDb,
   withTransaction,
@@ -44,11 +42,9 @@ import { lockLedgerPartiesForReference } from "~/server/repo/ledger-party-refere
 import {
   assertExplicitSourceClaimsForAmountChange,
   replaceLedgerSourceClaims,
-  softDeleteLedgerSourceClaims,
 } from "~/server/repo/ledger-source-claim";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { cents } from "~/server/repo/money";
-import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -468,33 +464,6 @@ export async function updateLedgerTransfer(
   return { output: await reader.getByID(db, id), entityId: id };
 }
 
-export async function deleteLedgerTransfers(
-  db: Database,
-  shortcodes: LedgerTransferShortcode[],
-  actor: ActorContext,
-) {
-  const ids = uniq(await resolveAllOrThrow(db, "ledgerTransfer", shortcodes));
-  return withTransaction(db, async (tx) => {
-    await lockAndValidateForDelete(tx, ledgerTransfer, ids, "LedgerTransfer");
-    await tx
-      .update(financialTransaction)
-      .set({ ledgerTransferId: null })
-      .where(
-        and(
-          inArray(financialTransaction.ledgerTransferId, ids),
-          notDeleted(financialTransaction),
-        ),
-      );
-    await softDeleteLedgerSourceClaims(tx, { ledgerTransferIds: ids });
-    return removeEntity(tx, {
-      entity: "ledgerTransfer",
-      ids,
-      removal: "soft",
-      actor,
-    });
-  });
-}
-
 const ledgerTransferScaffold = listScaffold("ledgerTransfer", ledgerTransfer);
 
 export async function buildLedgerTransferWhere(
@@ -535,12 +504,11 @@ export const listLedgerTransfers = async (
     },
   );
 
-export const ledgerTransferRepository = entityRepository({
+export const ledgerTransferRepository = entityRepository("ledgerTransfer", {
   sideEffects: false,
   lifecycle: { delete: LEDGER_TRANSFER_DELETE_EDGE_POLICY },
   get: getLedgerTransferByShortcode,
   list: listLedgerTransfers,
   create: createLedgerTransfer,
   update: updateLedgerTransfer,
-  delete: deleteLedgerTransfers,
 });

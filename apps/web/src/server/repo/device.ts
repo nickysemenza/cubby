@@ -34,10 +34,8 @@ import {
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { currentMemberLedgerParty } from "~/server/repo/member-login";
-import { removeEntity } from "~/server/repo/removal";
 import {
   lookupEntityReferences,
-  resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -227,46 +225,30 @@ export async function updateDevice(
   });
 }
 
-export async function deleteDevices(
-  db: Database,
-  shortcodes: DeviceShortcode[],
-  actor: ActorContext,
-) {
-  const ids = uniq(await resolveAllOrThrow(db, "device", shortcodes));
-  return withTransaction(db, async (tx) => {
-    // "ImageSighting.deviceId" is a "hard-delete" (cascade) disposition: a
-    // sighting reported by this device has no meaning once the device is
-    // gone. Every affected image is re-derived in this same transaction so
-    // its capture fields never reflect a sighting that no longer exists.
-    const cascadedSightings = await tx
-      .select({ imageId: imageSighting.imageId })
-      .from(imageSighting)
-      .where(
-        and(inArray(imageSighting.deviceId, ids), notDeleted(imageSighting)),
-      );
-    if (cascadedSightings.length > 0) {
-      await tx
-        .delete(imageSighting)
-        .where(inArray(imageSighting.deviceId, ids));
-      for (const imageId of uniq(cascadedSightings.map((row) => row.imageId))) {
-        await deriveAndStoreImageCapture(tx, parseEntityId("image", imageId));
-      }
-    }
-    await removeEntity(tx, {
-      entity: "device",
-      ids,
-      removal: "soft",
-      actor,
-    });
-    return { deleted: ids.length };
-  });
-}
+/**
+ * A device's reported sightings go with it, and every affected image is
+ * re-derived in the same transaction so its capture fields never reflect a
+ * sighting that no longer exists.
+ */
+const deleteDeviceSightings = async (
+  tx: DrizzleTransaction,
+  ids: DeviceId[],
+) => {
+  const removed = await tx
+    .delete(imageSighting)
+    .where(inArray(imageSighting.deviceId, ids))
+    .returning({ imageId: imageSighting.imageId });
+  for (const imageId of uniq(removed.map((row) => row.imageId)))
+    await deriveAndStoreImageCapture(tx, parseEntityId("image", imageId));
+};
 
-export const deviceRepository = entityRepository({
+export const deviceRepository = entityRepository("device", {
   lifecycle: { delete: DEVICE_DELETE_EDGE_POLICY },
   get: getDeviceByShortcode,
   list: listDevices,
   create: createDevice,
   update: updateDevice,
-  delete: deleteDevices,
+  deleteHooks: {
+    overrides: { "ImageSighting.deviceId": deleteDeviceSightings },
+  },
 });

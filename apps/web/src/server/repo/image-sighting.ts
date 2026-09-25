@@ -36,7 +36,6 @@ import {
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { currentMemberLedgerParty } from "~/server/repo/member-login";
-import { removeEntity } from "~/server/repo/removal";
 import {
   lookupEntityReferences,
   resolveAllOrThrow,
@@ -407,38 +406,25 @@ export async function updateImageSighting(
   });
 }
 
-export async function deleteImageSightings(
-  db: Database,
-  shortcodes: ImageSightingShortcode[],
-  actor: ActorContext,
-) {
-  const ids = uniq(await resolveAllOrThrow(db, "imageSighting", shortcodes));
-  return withTransaction(db, async (tx) => {
-    // Read the affected images BEFORE the soft delete — `notDeleted` would
-    // otherwise exclude these very rows from the read that finds them.
-    const rows = await unwrapDb(tx)
-      .select({ imageId: imageSighting.imageId })
-      .from(imageSighting)
-      .where(and(inArray(imageSighting.id, ids), notDeleted(imageSighting)));
-    const affectedImageIds = uniq(rows.map((row) => row.imageId));
-    await removeEntity(tx, {
-      entity: "imageSighting",
-      ids,
-      removal: "soft",
-      actor,
-    });
-    for (const imageId of affectedImageIds) {
-      await deriveAndStoreImageCapture(tx, parseEntityId("image", imageId));
-    }
-    return { deleted: ids.length };
-  });
-}
+/** Re-derive each affected image's capture once its sightings are gone. */
+const rederiveSightingImages = async (
+  tx: DrizzleTransaction,
+  ids: ImageSightingId[],
+) => {
+  // includes-deleted: these sightings were tombstoned by this very delete.
+  const rows = await tx
+    .select({ imageId: imageSighting.imageId })
+    .from(imageSighting)
+    .where(inArray(imageSighting.id, ids));
+  for (const imageId of uniq(rows.map((row) => row.imageId)))
+    await deriveAndStoreImageCapture(tx, parseEntityId("image", imageId));
+};
 
-export const imageSightingRepository = entityRepository({
+export const imageSightingRepository = entityRepository("imageSighting", {
   lifecycle: { delete: IMAGE_SIGHTING_DELETE_EDGE_POLICY },
   get: getImageSightingByShortcode,
   list: listImageSightings,
   create: createImageSighting,
   update: updateImageSighting,
-  delete: deleteImageSightings,
+  deleteHooks: { afterDelete: rederiveSightingImages },
 });

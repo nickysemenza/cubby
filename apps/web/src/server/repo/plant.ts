@@ -22,7 +22,7 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { ingredient, plant, planting, product } from "~/server/db/schema";
+import { ingredient, plant } from "~/server/db/schema";
 import {
   guideWindowsFor,
   plantDisplayName,
@@ -32,14 +32,12 @@ import {
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
-  assertNoDependents,
   buildPartialUpdateValues,
   notDeleted,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
-import { countByTarget } from "~/server/repo/impact";
 import { resolveOrCreateIngredients } from "~/server/repo/ingredient/crud";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import {
@@ -47,10 +45,8 @@ import {
   repointEdge,
   resolveMergeTargets,
 } from "~/server/repo/merge";
-import { removeEntity } from "~/server/repo/removal";
 import {
   lookupEntityReferences,
-  resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -233,42 +229,6 @@ export async function updatePlant(
       actor,
     );
     return { output, entityId: id };
-  });
-}
-
-export async function deletePlants(
-  db: Database,
-  shortcodes: PlantShortcode[],
-  actor: ActorContext,
-) {
-  const ids = uniq(await resolveAllOrThrow(db, "plant", shortcodes));
-  return withTransaction(db, async (tx) => {
-    const fetchNames = (failedIds: PlantId[]) =>
-      tx.query.plant.findMany({
-        where: inArray(plant.id, failedIds),
-        columns: { name: true },
-      });
-    // PLANT_DELETE_EDGE_POLICY declares both edges `block`; nothing generic
-    // enforces `block`, so the repository must.
-    const [plantings, products] = await Promise.all([
-      countByTarget(tx, planting, planting.plantId, ids),
-      countByTarget(tx, product, product.growsPlantId, ids),
-    ]);
-    await assertNoDependents({
-      offendingParentIds: ids.filter((id) => plantings[id]),
-      fetchNames,
-      reason: "PLANT_HAS_PLANTINGS",
-      message: (count, names) =>
-        `Cannot delete ${count} plant(s): ${names} are grown by a planting.`,
-    });
-    await assertNoDependents({
-      offendingParentIds: ids.filter((id) => products[id]),
-      fetchNames,
-      reason: "PLANT_HAS_PRODUCTS",
-      message: (count, names) =>
-        `Cannot delete ${count} plant(s): ${names} are named by a seed or plant product.`,
-    });
-    return removeEntity(tx, { entity: "plant", ids, removal: "soft", actor });
   });
 }
 

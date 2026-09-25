@@ -15,7 +15,6 @@ import type {
 } from "@cubby/schemas/vendor-account";
 import { vendorAccountOut } from "@cubby/schemas/vendor-account";
 import { and, eq } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -30,10 +29,8 @@ import {
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { patchEntityRows } from "~/server/repo/entity-patch";
 import { listScaffold } from "~/server/repo/list-scaffold";
-import { removeEntity } from "~/server/repo/removal";
 import {
   lookupEntityReferences,
-  resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -231,28 +228,10 @@ export async function updateVendorAccount(
   return { output: await reader.getByID(db, id), entityId: id };
 }
 
-export async function deleteVendorAccounts(
-  db: Database,
-  shortcodes: VendorAccountShortcode[],
-  actor: ActorContext,
-) {
-  const ids = uniq(await resolveAllOrThrow(db, "vendorAccount", shortcodes));
-  return withTransaction(db, async (tx) => {
-    await removeEntity(tx, {
-      entity: "vendorAccount",
-      ids,
-      removal: "soft",
-      actor,
-    });
-    return { deleted: ids.length };
-  });
-}
-
-export const vendorAccountRepository = entityRepository({
+export const vendorAccountRepository = entityRepository("vendorAccount", {
   lifecycle: { delete: VENDOR_ACCOUNT_DELETE_EDGE_POLICY },
   get: getVendorAccountByShortcode,
   list: listVendorAccounts,
   create: createVendorAccount,
   update: updateVendorAccount,
-  delete: deleteVendorAccounts,
 });

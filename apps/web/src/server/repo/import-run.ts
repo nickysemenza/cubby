@@ -129,7 +129,7 @@ export const getImportRunByShortcode = reader.getByShortcode;
  * Read-only: the run service and the import writer own every write, and the
  * manifest declares `delete: null`, so the generated adapter refuses one.
  */
-export const importRunRepository = entityRepository({
+export const importRunRepository = entityRepository("importRun", {
   lifecycle: { delete: {} },
   get: getImportRunByShortcode,
   list: listImportRuns,

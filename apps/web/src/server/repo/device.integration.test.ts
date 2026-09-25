@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createDevice,
-  deleteDevices,
+  deviceRepository,
   getDeviceByID,
   updateDevice,
 } from "~/server/repo/device";
@@ -92,7 +92,7 @@ describe("device", () => {
     expect(updated.output.remotePaused).toBe(true);
     expect(updated.output.appVersion).toBe("1.1");
 
-    await deleteDevices(ctx.db, [created.output.id], ctx.actor);
+    await deviceRepository.delete(ctx.db, [created.output.id], ctx.actor);
     expect(
       await getDeviceByID(ctx.db, created.entityId).catch(() => null),
     ).toBeNull();

@@ -25,8 +25,11 @@ export const taskEntityAdapter = defineEntityAdapter({
     update: (ctx, id, data) =>
       updateTask(ctx.db, id, data, ctx.actorContext, ctx.caldavHooks?.task),
     delete: async (ctx, ids) => {
-      const { deletedShortcodes, detachedImageKeys, deletedImageShortcodes } =
-        await deleteTasks(ctx.db, ids, ctx.actorContext);
+      const {
+        shortcodes: deletedShortcodes,
+        detachedImageKeys,
+        deletedImageShortcodes,
+      } = await deleteTasks(ctx.db, ids, ctx.actorContext);
       return {
         deletedReferences: deletedWithImages(
           "task",

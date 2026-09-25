@@ -148,6 +148,8 @@ export const AppErrors = {
   PURCHASE_NOT_EMPTY: "PRECONDITION_FAILED",
   FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT: "CONFLICT",
   LEDGER_PARTY_HAS_EDGES: "PRECONDITION_FAILED",
+  // A declared `block` edge of a policy-driven delete still has live rows.
+  ENTITY_DELETE_BLOCKED: "PRECONDITION_FAILED",
   LEDGER_SOURCE_CLAIM_CONFLICT: "CONFLICT",
   FINANCIAL_TRANSACTION_POSTED_DATE_REQUIRED: "BAD_REQUEST",
   // A vendor can't be deleted while charges still point at it — same rule as

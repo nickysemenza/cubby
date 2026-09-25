@@ -1,12 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
-/** Purchase repository: one vendor event per row; Expense is the authoritative spend ledger. */
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   type ExpenseId,
-  type FinancialTransactionId,
-  type ImageShortcode,
   type ProductId,
   type PurchaseId,
   type PurchaseShortcode,
@@ -82,7 +79,6 @@ import {
   correlated,
   eqAny,
   getDb,
-  imageCascadeChild,
   imageJoinBindings,
   type ListReadIntent,
   lockAndValidateForDelete,
@@ -125,7 +121,9 @@ import {
   type PurchaseFinancialAggregate,
 } from "~/server/repo/purchase-financial-aggregates";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { cascadeRemoval, removeEntity } from "~/server/repo/removal";
+/** Purchase repository: one vendor event per row; Expense is the authoritative spend ledger. */
+import { deleteByPolicy } from "~/server/repo/removal";
+import { cascadeRemoval } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveLiveShortcode,
@@ -1994,186 +1992,80 @@ export const mergePurchases = async (
 };
 
 /**
- * Soft-delete charges.
+ * Soft-delete charges through the declared policy.
  *
- * Removal-path invariant (root AGENTS.md, guard-enforced): the same transaction
- * soft-deletes the Purchase's `PurchaseImage` rows and NULLS `purchaseId` on its
- * expenses. Nulling rather than cascading is the point — an expense is the money,
- * and deleting a charge must never delete spend. Those rows fall back to reading
- * as "no vendor recorded", which is exactly what they are once the charge is gone.
+ * Removal-path invariant (root AGENTS.md, guard-enforced): the same
+ * transaction soft-deletes the Purchase's attachments and NULLS `purchaseId`
+ * on its expenses (audited). Nulling rather than cascading is the point — an
+ * expense is the money, and deleting a charge must never delete spend.
  *
- * Purchase embeddings are retired in the same transaction. Callers refresh the
- * detached expenses/financial transactions after the mutation commits.
+ * Returns the detached expenses and every transaction that held a slice, for
+ * the caller to refresh after the commit.
  */
-const deletePurchasesWithPolicy = async (
+export const deletePurchases = (
   db: Database,
   shortcodes: PurchaseShortcode[],
   actor: ActorContext,
-  policy: "detach-references" | "require-empty",
-): Promise<{
-  expenseIds: ExpenseId[];
-  financialTransactionIds: FinancialTransactionId[];
-  /** R2 objects the image cascade reaped; drop them after this commit. */
-  detachedImageKeys: string[];
-  deletedImageShortcodes: ImageShortcode[];
-  deleted: number;
-}> => {
-  if (shortcodes.length === 0)
-    return {
-      expenseIds: [],
-      financialTransactionIds: [],
-      detachedImageKeys: [],
-      deletedImageShortcodes: [],
-      deleted: 0,
-    };
-
-  const ids = await resolveAllOrThrow(db, "purchase", shortcodes);
-
-  return withTransaction(db, async (tx) => {
-    await lockAndValidateForDelete(tx, purchase, ids, "Purchase");
-
-    // Detaching a line is an audited change to its `purchaseId`, same as every
-    // other writer of that column. Without these rows, spend silently loses its
-    // vendor attribution with only the charge's own `delete` entry to hint at it —
-    // and since `vendor`/`orderId` resolve THROUGH this column, the row's whole
-    // provenance goes with it.
+) =>
+  withTransaction(db, async (tx) => {
+    const ids = await resolveAllOrThrow(tx, "purchase", shortcodes);
     const detaching = await tx
-      .select({ id: expense.id, purchaseId: expense.purchaseId })
+      .select({ id: expense.id })
       .from(expense)
       .where(and(inArray(expense.purchaseId, ids), notDeleted(expense)));
-
     // Every transaction holding a slice of any purchase being deleted — the
     // mirror alone would miss a split one, whose mirror is NULL.
     const affectedTransactionIds = await transactionIdsAllocatedTo(tx, ids);
-
-    if (
-      policy === "require-empty" &&
-      (detaching.length > 0 || affectedTransactionIds.length > 0)
-    ) {
-      const expensesByPurchase: Record<string, number> = {};
-      for (const row of detaching) {
-        if (row.purchaseId)
-          expensesByPurchase[row.purchaseId] =
-            (expensesByPurchase[row.purchaseId] ?? 0) + 1;
-      }
-      const blockedDetail = Object.entries(expensesByPurchase)
-        .map(([purchaseId, n]) => `${purchaseId} (${n} expense(s))`)
-        .join(", ");
-      // Settlement allocations are keyed by transaction, not by purchase, so
-      // that half stays a count — attributing a split allocation back to one
-      // purchase is exactly the ambiguity `transactionIdsAllocatedTo` exists to
-      // avoid asserting.
-      const transactionDetail =
-        affectedTransactionIds.length > 0
-          ? `${affectedTransactionIds.length} linked Financial Transaction(s) hold settlement allocations`
-          : "";
-      throw createAppError(
-        "PURCHASE_NOT_EMPTY",
-        [
-          "Cannot delete non-empty Purchases through MCP.",
-          blockedDetail && `Still carrying expenses: ${blockedDetail}.`,
-          transactionDetail && `${transactionDetail}.`,
-          "Delete linked Expenses first and unlink or delete linked Financial Transactions and their settlement allocations.",
-        ]
-          .filter(Boolean)
-          .join(" "),
-      );
-    }
-
-    if (policy === "detach-references") {
-      await preservePurchaseItemAttribution(tx, ids, null);
-      await tx
-        .update(expense)
-        .set({ purchaseId: null })
-        .where(and(inArray(expense.purchaseId, ids), notDeleted(expense)));
-
-      await logAuditEntries(
-        tx,
-        actor,
-        detaching.map((row) => ({
-          entityType: "expense" as const,
-          entityId: row.id,
-          action: "update" as const,
-          changes: { purchaseId: { from: row.purchaseId, to: null } },
-        })),
-      );
-
-      // Drop ALL slices of every affected transaction, not just the slices
-      // belonging to the purchases being deleted. A partial allocation set is
-      // not a legal state — a transaction has either none, or a set summing to
-      // its amount — whereas zero is legal, meaningful and re-enterable
-      // ("unlinked evidence"). So a split transaction losing one of its two
-      // purchases reverts entirely to unlinked rather than being left standing
-      // in permanent violation. For the ordinary single-allocation transaction
-      // this is exactly equivalent to detaching it.
-      if (affectedTransactionIds.length > 0) {
-        const allocationsBefore = await readAllocations(
-          tx,
-          affectedTransactionIds,
-        );
-        await tx
-          .update(financialTransactionAllocation)
-          .set({ deletedAt: new Date() })
-          .where(
-            and(
-              inArray(
-                financialTransactionAllocation.transactionId,
-                affectedTransactionIds,
-              ),
-              notDeleted(financialTransactionAllocation),
-            ),
+    const removed = await deleteByPolicy(tx, {
+      entity: "purchase",
+      policy: PURCHASE_DELETE_EDGE_POLICY,
+      ids,
+      actor,
+      beforeDelete: (inner) =>
+        preservePurchaseItemAttribution(inner, ids, null),
+      overrides: {
+        // Replay tombstones keep no pointer at a dead purchase.
+        "ImportSourceClaim.purchaseId": async (inner) => {
+          await inner
+            .update(importSourceClaim)
+            .set({ purchaseId: null, updatedAt: new Date() })
+            .where(inArray(importSourceClaim.purchaseId, ids));
+        },
+        // Drop ALL slices of every affected transaction, not just this
+        // purchase's: a partial allocation set is not a legal state, whereas
+        // zero is ("unlinked evidence"), so a split transaction reverts
+        // entirely to unlinked.
+        "FinancialTransactionAllocation.purchaseId": async (inner) => {
+          if (affectedTransactionIds.length === 0) return;
+          const allocationsBefore = await readAllocations(
+            inner,
+            affectedTransactionIds,
           );
-        await applyAllocationChanges(tx, {
-          transactionIds: affectedTransactionIds,
-          before: allocationsBefore,
-          actor,
-        });
-      }
-    }
-
-    await tx
-      .update(importSourceClaim)
-      .set({ purchaseId: null, updatedAt: new Date() })
-      .where(inArray(importSourceClaim.purchaseId, ids));
-
-    // `{actor}`, not a caller-owned buffer: the detach `update` entries above
-    // were already flushed, and the delete entries must follow them.
-    const { detachedImageKeys, deletedImageShortcodes, deleted } =
-      await removeEntity(tx, {
-        entity: "purchase",
-        ids,
-        removal: "soft",
-        actor,
-        children: [
-          {
-            table: purchasePaymentEvidence,
-            parentColumns: [purchasePaymentEvidence.purchaseId],
-            mode: "hard",
-          },
-          {
-            table: purchaseProduct,
-            parentColumns: [purchaseProduct.purchaseId],
-            auditKey: "cascadedPurchaseProducts",
-          },
-          imageCascadeChild("cascadedPurchaseImages"),
-        ],
-      });
-
+          await inner
+            .update(financialTransactionAllocation)
+            .set({ deletedAt: new Date() })
+            .where(
+              and(
+                inArray(
+                  financialTransactionAllocation.transactionId,
+                  affectedTransactionIds,
+                ),
+                notDeleted(financialTransactionAllocation),
+              ),
+            );
+          await applyAllocationChanges(inner, {
+            transactionIds: affectedTransactionIds,
+            before: allocationsBefore,
+            actor,
+          });
+        },
+      },
+    });
     return {
       expenseIds: detaching.map((row) => row.id),
-      // Union of the mirror and the allocations: a split transaction's mirror is
-      // NULL, so the mirror alone would leave its embedding stale — that text
-      // carries the vendor and order id resolved through its purchase.
       financialTransactionIds: affectedTransactionIds,
-      detachedImageKeys,
-      deletedImageShortcodes,
-      deleted,
+      detachedImageKeys: removed.detachedImageKeys,
+      deletedImageShortcodes: removed.deletedImageShortcodes,
+      deleted: removed.deleted,
     };
   });
-};
-
-export const deletePurchases = async (
-  db: Database,
-  shortcodes: PurchaseShortcode[],
-  actor: ActorContext,
-) => deletePurchasesWithPolicy(db, shortcodes, actor, "detach-references");
