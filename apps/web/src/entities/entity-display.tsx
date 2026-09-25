@@ -550,6 +550,53 @@ const entityDetailFields = (
   });
 };
 
+/**
+ * The compact facts a record's preview shows: its declared hero stats, then
+ * the first detail `fields` section in order, skipping the title, the hero
+ * chip and breadcrumb (the card header carries those), structured values,
+ * and empty fields — a preview spends its few rows on what is known.
+ */
+export function entityPreviewFacts<TRecord extends object>(
+  entity: Entity,
+  record: TRecord,
+  limit = 4,
+): { label: string; value: ReactNode }[] {
+  const presentation = entitySummary[entity];
+  const { hero } = presentation.detail;
+  const firstSection = presentation.detail.sections.find(
+    (section) => section.kind === "fields",
+  );
+  const keys = [
+    ...new Set([
+      ...hero.stats,
+      ...(firstSection?.kind === "fields" ? firstSection.fields : []),
+    ]),
+  ].filter(
+    (key) =>
+      key !== presentation.titleField &&
+      key !== hero.chip &&
+      key !== hero.breadcrumb,
+  );
+  const fields = entityFieldModels[entity].fields;
+  const facts: { label: string; value: ReactNode }[] = [];
+  for (const key of keys) {
+    if (facts.length >= limit) break;
+    const field = fields.find((candidate) => candidate.key === key);
+    if (!field || field.kind === "json") continue;
+    const reference = readReferenceField(record, field);
+    const known = reference
+      ? reference.items.length > 0
+      : field.readKey !== null &&
+        copyScalarField(entity, record, field) !== null;
+    if (!known) continue;
+    facts.push({
+      label: field.label,
+      value: renderCompactFieldValue(entity, record, field),
+    });
+  }
+  return facts;
+}
+
 /** The field keys of one declared `fields` detail section. */
 export const entitySectionFields = (
   entity: Entity,
