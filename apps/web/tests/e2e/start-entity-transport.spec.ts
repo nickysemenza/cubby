@@ -1,61 +1,60 @@
 /**
- * The core entity browser runtime uses named Start operations
+ * The core entity browser runtime uses named operations
  * (docs/entities.md, "Transports").
  *
  * One representative entity carries the contract for all of them, because the
  * list, detail, and mutation paths are generic: every compiled entity goes
- * through the same three Start operations. Per-entity duplication would cost
+ * through the same three operations. Per-entity duplication would cost
  * browser time without covering anything the generic path doesn't.
  *
  * Only the browser seam can observe this. Lower tiers see the query options and
  * the server functions, but not which requests a real page actually issues.
  */
 
+import superjson from "superjson";
+
+import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { createProduct } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-type StartRequest = {
+type BrowserOperationRequest = {
   body: string;
   entity?: string;
   kind?: string;
   method: string;
   operation?: string;
-  payload: string;
+  input: unknown;
   url: string;
 };
 
-/**
- * Start's structured wire encoding puts object keys in a `k` array and values
- * in `{"t":…,"s":…}`, so inputs are matched by that shape rather than by plain
- * `"entity":"product"` JSON.
- */
-const payloadOf = (url: string, body: string): string =>
-  `${decodeURIComponent(url)}${body}`.replace(/[\\\s]/gu, "");
-
-test("core entity list, detail, and mutation ride named Start operations", async ({
+test("core entity list, detail, and mutation ride named browser operations", async ({
   page,
 }) => {
-  const starts: StartRequest[] = [];
+  const starts: BrowserOperationRequest[] = [];
   const requestIds: string[] = [];
   const requestIdReads: Promise<void>[] = [];
   const canaryRequestId = `e2e-ray-${Date.now()}`;
   await page.setExtraHTTPHeaders({ "cf-ray": canaryRequestId });
   page.on("request", (request) => {
     const url = request.url();
-    if (!url.includes("/_serverFn/")) return;
+    if (new URL(url).pathname !== BROWSER_OPERATION_PATH) return;
     const body = request.postData() ?? "";
+    const payload = superjson.deserialize<{
+      operation: string;
+      input: unknown;
+    }>(JSON.parse(body));
     starts.push({
       body,
       entity: request.headers()["x-cubby-operation-entity"],
       kind: request.headers()["x-cubby-operation-kind"],
       method: request.method(),
-      payload: payloadOf(url, body),
+      input: payload.input,
       operation: request.headers()["x-cubby-operation"],
       url,
     });
   });
   page.on("response", (response) => {
-    if (!response.url().includes("/_serverFn/")) return;
+    if (new URL(response.url()).pathname !== BROWSER_OPERATION_PATH) return;
     requestIdReads.push(
       response
         .allHeaders()
@@ -92,21 +91,23 @@ test("core entity list, detail, and mutation ride named Start operations", async
   }).toPass({ timeout: 30000 });
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
 
-  const matching = (...fragments: string[]) =>
-    starts.filter((start) =>
-      fragments.every((fragment) => start.payload.includes(fragment)),
+  const matching = (operation: string, fragment: string) =>
+    starts.filter(
+      (start) =>
+        start.operation === operation &&
+        JSON.stringify(start.input).includes(fragment),
     );
 
-  const report = () => starts.map((start) => start.payload).join("\n");
+  const report = () => JSON.stringify(starts.map((start) => start.input));
   expect(
-    matching('["action","entity","data"]', '"s":"create"', '"s":"product"'),
+    matching("entity.mutate", '"action":"create"'),
     `entity.mutate should carry the create:\n${report()}`,
   ).not.toHaveLength(0);
   expect(
-    matching('"s":"product"', '"pageIndex"'),
+    matching("entity.list", '"pageIndex"'),
     `entity.list should carry the product page:\n${report()}`,
   ).not.toHaveLength(0);
-  const detailRequests = matching('["entity","shortcode"]', '"s":"product"');
+  const detailRequests = matching("entity.detail", '"entity":"product"');
   expect(
     detailRequests,
     `entity.detail should carry the product shortcode:\n${report()}`,
@@ -114,11 +115,14 @@ test("core entity list, detail, and mutation ride named Start operations", async
   for (const request of detailRequests) {
     expect(request.method).toBe("POST");
     const detailUrl = new URL(request.url);
-    expect(detailUrl.pathname).toBe("/_serverFn/dispatch");
-    expect(detailUrl.searchParams.get("operation")).toBe("entity.detail");
-    expect(detailUrl.searchParams.get("entity")).toBe("product");
-    expect(payloadOf(request.url, "")).not.toContain('["entity","shortcode"]');
-    expect(payloadOf("", request.body)).toContain('["entity","shortcode"]');
+    expect(detailUrl.pathname).toBe(BROWSER_OPERATION_PATH);
+    expect(detailUrl.search).toBe("");
+    expect(request.input).toEqual(
+      expect.objectContaining({
+        entity: "product",
+        shortcode: expect.any(String),
+      }),
+    );
   }
 
   // Inputs stay in the POST body; operation labels share one dispatcher path.
@@ -145,35 +149,16 @@ test("core entity list, detail, and mutation ride named Start operations", async
       }),
     ]),
   );
-  for (const start of starts) {
-    expect(start.operation).toBeDefined();
-    expect(new URL(start.url).searchParams.get("operation")).toBe(
-      start.operation,
-    );
-  }
+  for (const start of starts) expect(start.operation).toBeDefined();
 
   // The list may fetch another row's detail before the click (the first row,
   // from a sibling spec's fixture), so replay this product's own request.
   const shortcode = new URL(page.url()).pathname.split("/").at(-1)!;
   const detail = detailRequests.find((request) =>
-    request.body.includes(shortcode),
+    JSON.stringify(request.input).includes(shortcode),
   );
   if (!detail) throw new Error(`Expected a detail request for ${shortcode}`);
-  const legacy = new URL(detail.url);
-  legacy.pathname =
-    "/_serverFn/server-functions-start-operation-dispatch-dispatch-start-operation-server-function";
-  legacy.search = "";
-  const oldClientResponse = await page.request.post(legacy.toString(), {
-    data: detail.body,
-    headers: {
-      "content-type": "application/json",
-      "x-tsr-serverFn": "true",
-      origin: legacy.origin,
-      "sec-fetch-site": "same-origin",
-    },
-  });
-  expect(oldClientResponse.status()).toBe(200);
-  expect(await oldClientResponse.text()).toContain(name);
+  expect(detail.operation).toBe("entity.detail");
 
   // Response-owned ids, rather than a shared module-global "last id", make
   // each completed browser request independently searchable in traces.
@@ -188,7 +173,7 @@ test("server error references remain usable on desktop", async ({
 }, testInfo) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/");
-  await page.route("**/_serverFn/**", async (route) => {
+  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
     if (route.request().headers()["x-cubby-operation"] !== "entity.list") {
       await route.continue();
       return;

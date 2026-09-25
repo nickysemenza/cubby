@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 import {
   isStartOperationEntity,
   registeredStartOperationKind,
@@ -11,10 +9,11 @@ import type {
   UnparsedStartOperationData,
 } from "~/server/start-operation.contract";
 import {
-  publicStartOperationErrorSchema,
   unparsedStartOperationDataSchema,
+  unparsedStartOperationResultSchema,
 } from "~/server/start-operation.contract";
 
+import { dispatchBrowserOperation } from "./browser-operation-transport";
 import type { CubbyOperationMeta } from "./operation-meta";
 import {
   beginObservedOperation,
@@ -108,23 +107,30 @@ export interface StartTransportRuntime {
   ): Promise<StartOperationResult<UnparsedStartOperationData>>;
 }
 
-const unparsedStartOperationResultSchema = z.discriminatedUnion("ok", [
-  z.object({ ok: z.literal(true), data: unparsedStartOperationDataSchema }),
-  z.object({ ok: z.literal(false), error: publicStartOperationErrorSchema }),
-]);
-
 async function dispatchStartOperation<Input>(
   operation: StartOperationId,
   input: Input,
   transport: { signal?: AbortSignal; headers: HeadersInit },
 ): Promise<StartOperationResult<UnparsedStartOperationData>> {
-  const { dispatchStartOperationTransport } =
-    await import("~/server-functions/start-operation-dispatch.functions");
+  const [
+    { getRequest },
+    { dispatchStartOperation: dispatchOnServer },
+    { startOperationDispatchInput },
+  ] = await Promise.all([
+    import("@tanstack/react-start/server"),
+    import("~/server/start-operation-dispatch.server"),
+    import("~/server/start-operation-dispatch.contract"),
+  ]);
+  const request = getRequest();
+  const parsed = startOperationDispatchInput.parse({ operation, input });
+  const headers = new Headers(request.headers);
+  new Headers(transport.headers).forEach((value, name) =>
+    headers.set(name, value),
+  );
   return unparsedStartOperationResultSchema.parse(
-    await dispatchStartOperationTransport({
-      data: { operation, input },
-      signal: transport.signal,
-      headers: transport.headers,
+    await dispatchOnServer({
+      ...parsed,
+      request: { headers, signal: transport.signal ?? request.signal },
     }),
   );
 }
@@ -148,8 +154,12 @@ export function overrideStartDispatch(
 }
 
 const productionStartTransportRuntime: StartTransportRuntime = {
-  dispatch: (operation, input, transport) =>
-    (dispatchOverride ?? dispatchStartOperation)(operation, input, transport),
+  dispatch: async (operation, input, transport) => {
+    if (dispatchOverride) return dispatchOverride(operation, input, transport);
+    if (!import.meta.env.SSR)
+      return dispatchBrowserOperation(operation, input, transport);
+    return dispatchStartOperation(operation, input, transport);
+  },
 };
 
 export interface StartOperation<Input, Output> {
