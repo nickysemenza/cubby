@@ -345,10 +345,26 @@ export default defineConfig({
             sequence: { groupOrder: 3 },
           },
         },
+        {
+          // Opt-in, billed model evals (`*.live-eval.ts`) on the integration
+          // database harness. Never part of test:postgres; select explicitly.
+          extends: true,
+          test: {
+            globalSetup: ["./tooling/test-setup.ts"],
+            setupFiles: ["./tooling/integration-teardown.ts"],
+            name: "live-eval",
+            include: ["src/**/*.live-eval.ts"],
+            pool: "forks",
+            testTimeout: 24 * 60 * 60_000,
+            hookTimeout: 30000,
+          },
+        },
       ] satisfies TestProjectConfiguration[]
     ).filter((project) => {
       if (project.test.name === "integration") return wantsIntegrationTier();
       if (project.test.name === "preview") return wantsPreviewTier();
+      if (project.test.name === "live-eval")
+        return explicitlySelectsProject("live-eval");
       return true;
     }),
 
