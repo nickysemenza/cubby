@@ -6,6 +6,7 @@ import { type EntityOutputs, renderApiTypes } from "./api-types.ts";
 import { isObjectSchema, type JsonSchema } from "./document-passes.ts";
 import type { OpenApiDocument } from "./openapi.ts";
 import {
+  renderClientOperations,
   renderEntityOperations,
   resourceEntitiesFor,
 } from "./swift-operations.ts";
@@ -261,7 +262,7 @@ ${entityKeys.map((entity) => `  ${JSON.stringify(entity)}: ${JSON.stringify(nati
 /**
  * Everything the native app derives from the OpenAPI document: the route
  * table, the swift-openapi-generator config, the per-entity operation bridge,
- * and the web's native-coverage table.
+ * the `CubbyClient` pass-through methods, and the web's native-coverage table.
  */
 export const renderNativeArtifacts = (
   document: OpenApiDocument,
@@ -299,6 +300,7 @@ export const renderNativeArtifacts = (
       generatedOperationIds,
       nativeOperations,
     ),
+    renderClientOperations(document, swiftRoutes, generatedOperationIds),
     renderNativeCoverage(
       document,
       components,

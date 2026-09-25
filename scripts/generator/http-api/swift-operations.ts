@@ -599,3 +599,142 @@ extension JSONValue {
 `,
   };
 };
+
+/**
+ * `CubbyClient` methods that are exactly one generated call: the operation
+ * takes no path or query parameters, its JSON body (if any) is the method's
+ * only argument, and its 200 body is the result. Keyed by operation id; the
+ * value is the public method name call sites use and an optional doc line.
+ * Anything that maps, converts, branches or unwraps stays hand-written in
+ * `CubbyClient.swift`.
+ */
+const CLIENT_PASSTHROUGH_METHODS: Readonly<
+  Record<string, Readonly<{ method: string; doc?: string }>>
+> = {
+  "activity.devices": { method: "activityDevices" },
+  "dashboard.counts": { method: "dashboardCounts" },
+  "inventory.confirmOwnership": {
+    method: "confirmInventoryOwnership",
+    doc: "Pins the currently inferred owner using the evidence fingerprint returned with the detail. The server rejects stale evidence so native cannot confirm a different acquisition than the one the person reviewed.",
+  },
+  "inventory.setOwnership": {
+    method: "setInventoryOwnership",
+    doc: "Applies a stored ownership choice to all or part of one inventory row. A partial quantity may split the row; callers must refresh the returned entry ids rather than assuming the original row is the only record changed.",
+  },
+  "photoImport.commit": { method: "commitPhotoImport" },
+  "photoImport.createRun": {
+    method: "createPhotoImportRun",
+    doc: "Starts a native-tagged photo-inventory run (`PhotoImportRunUploader`'s bulk-upload entry point). Distinct from the manifest-based `stage`/`commit` pair: a run has no per-photo destination, only ordered positions finalized in chunks.",
+  },
+  "photoImport.finalize": {
+    method: "finalizePhotoImportRun",
+    doc: "Finalizes one chunk (≤100 images) of a bulk upload into `input.runId`. Idempotent: a retry after a transport error replays safely, since a previously finalized image comes back in `alreadyFinalized` rather than erroring.",
+  },
+  "photoImport.stage": { method: "stagePhotoImport" },
+  "photoImport.updateDraft": { method: "updatePhotoGroupDraft" },
+  "problems.getCounts": { method: "problemCounts" },
+  "purchaseImport.initiateRunEvidenceUpload": {
+    method: "initiateRunEvidenceUpload",
+    doc: "Stages immutable browser/manual evidence for one explicit targeted-import scope. The server allocates R2 directly; this must never use the shared Image/Document pathways.",
+  },
+  "statementRow.commitCsv": { method: "commitStatementCsv" },
+  "statementRow.previewCsv": { method: "previewStatementCsv" },
+  "task.todayBriefing": {
+    method: "todayBriefing",
+    doc: "The complete ranked task briefing, including summary counts outside the visible prefix.",
+  },
+};
+
+const jsonRef = z
+  .object({
+    content: z.object({
+      "application/json": z.object({ schema: z.object({ $ref: z.string() }) }),
+    }),
+  })
+  .transform(({ content }) =>
+    content["application/json"].schema.$ref.replace(
+      "#/components/schemas/",
+      "",
+    ),
+  );
+const passthroughOperation = z.looseObject({
+  requestBody: jsonRef.optional(),
+  responses: z.looseObject({ "200": jsonRef }),
+});
+
+/** Wraps `text` into `///` lines that fit swift-format's 110 columns at `indent`. */
+const swiftDocLines = (text: string, indent: string): string[] => {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(" ")) {
+    const next = line === "" ? word : `${line} ${word}`;
+    if (`${indent}/// ${next}`.length > 110 && line !== "") {
+      lines.push(`${indent}/// ${line}`);
+      line = word;
+    } else line = next;
+  }
+  if (line !== "") lines.push(`${indent}/// ${line}`);
+  return lines;
+};
+
+/**
+ * `Generated/ClientOperations.swift`: the `CubbyClient` extension holding
+ * every `CLIENT_PASSTHROUGH_METHODS` wrapper, typed from the document (the
+ * body and 200 components, spelled by their `APITypes.swift` alias names).
+ */
+export const renderClientOperations = (
+  document: OpenApiDocument,
+  swiftRoutes: readonly SwiftRoute[],
+  generatedOperationIds: ReadonlySet<string>,
+): EntityArtifacts => {
+  const aliasName = (component: string, id: string) => {
+    if (!/^[A-Z][A-Za-z0-9]*$/u.test(component))
+      throw new Error(
+        `${id}: #/components/schemas/${component} has no APITypes.swift alias, so its CubbyClient method must be hand-written`,
+      );
+    return component;
+  };
+  const methods = Object.entries(CLIENT_PASSTHROUGH_METHODS)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([id, { method, doc }]) => {
+      const route = swiftRoutes.find((entry) => entry.id === id);
+      if (route === undefined || !generatedOperationIds.has(id))
+        throw new Error(
+          `${id} is a CubbyClient pass-through but not a native operation`,
+        );
+      if (route.pathParameters.length > 0 || route.queryParameters.length > 0)
+        throw new Error(
+          `${id} takes path or query parameters; its CubbyClient method must be hand-written`,
+        );
+      const item = Object.entries(document.paths).find(
+        ([path]) => path === route.route,
+      )?.[1];
+      const operation = passthroughOperation.parse(
+        Object.entries(item ?? {}).find(
+          ([method]) => `.${method}` === route.method,
+        )?.[1],
+      );
+      const output = aliasName(operation.responses["200"], id);
+      const input =
+        operation.requestBody === undefined
+          ? null
+          : aliasName(operation.requestBody, id);
+      const call = `api.${id.replaceAll(".", "_")}(${input === null ? "" : "body: .json(input)"})`;
+      return [
+        ...(doc === undefined ? [] : swiftDocLines(doc, "    ")),
+        `    public func ${method}(${input === null ? "" : `_ input: ${input}`}) async throws -> ${output} {`,
+        `        try await perform { try await ${call}.ok.body.json }`,
+        "    }",
+      ].join("\n");
+    });
+  return {
+    relativePath:
+      "apps/apple/CubbyKit/Sources/CubbyKit/Generated/ClientOperations.swift",
+    source:
+      `${generatedHeader}// swift-format-ignore-file\n\n` +
+      "import CubbyAPI\n\n" +
+      "/// The `CubbyClient` methods that are one generated call and nothing else, from\n" +
+      "/// `CLIENT_PASSTHROUGH_METHODS` in `scripts/generator/http-api/swift-operations.ts`.\n" +
+      `extension CubbyClient {\n${methods.join("\n\n")}\n}\n`,
+  };
+};
