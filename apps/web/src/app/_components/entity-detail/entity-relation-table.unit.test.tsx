@@ -1,5 +1,6 @@
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { testShortcode } from "@cubby/schemas/testing";
+import { formatCategoryLabel } from "@cubby/shared";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -13,6 +14,7 @@ import {
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
+import { categorySummaryFixture } from "../../../../tooling/product-category-fixtures";
 import {
   EntityRelationTable,
   planRelationSection,
@@ -211,11 +213,14 @@ describe("EntityRelationTable", () => {
     expect(screen.queryByText(/No .* yet\./)).toBeNull();
   });
 
-  // Regression: an ingredient's products section crashed on a product row
-  // because `externalIds` is a `text-array` kind whose list read is an array
-  // of objects; the generic cell now renders it as readable JSON.
-  it("renders a target row whose text-array field carries structured values", async () => {
-    const product = mock(productListItem, { seed: 3 });
+  // An embedded products table must use the same category and identifier
+  // presentation as the product list, even without that page's overrides.
+  it("renders product domain values without dumping structured payloads", async () => {
+    const category = categorySummaryFixture("tools");
+    const product = mock(productListItem, {
+      seed: 3,
+      overrides: { category, categoryId: category.id },
+    });
     expect(product.externalIds.length).toBeGreaterThan(0);
     const list = entityList.list.withTransport(async () => ({
       items: [product],
@@ -233,6 +238,12 @@ describe("EntityRelationTable", () => {
     expect(
       await screen.findByRole("link", { name: product.name }),
     ).toBeVisible();
+    const row = screen.getByRole("link", { name: product.name }).closest("tr");
+    expect(row).not.toBeNull();
+    expect(row).toHaveTextContent(formatCategoryLabel(category));
+    expect(row).toHaveTextContent(product.externalIds[0]!.source);
+    expect(row).not.toHaveTextContent('"externalId"');
+    expect(row?.querySelector("pre")).toBeNull();
   });
 
   // Regression: the embedded table used to build its columns with no

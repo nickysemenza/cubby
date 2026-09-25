@@ -12,7 +12,7 @@ import {
 import type { GroupConfig } from "~/app/_components/data-table/useGroupedList";
 import type { InfiniteScrollControls } from "~/app/_components/hooks/useInfiniteTableList";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { renderDetailFieldValue } from "~/entities/entity-display";
+import { renderCompactFieldValue } from "~/entities/entity-display";
 
 /**
  * A list row as the shelf reads it: its id, its server-resolved cover
@@ -64,7 +64,7 @@ function shelfSubtitle(entity: BrowserRoutedEntity, row: ShelfRow): ReactNode {
       (Array.isArray(value) && value.length === 0)
     )
       continue;
-    return renderDetailFieldValue(entity, row, field);
+    return renderCompactFieldValue(entity, row, field);
   }
   return undefined;
 }

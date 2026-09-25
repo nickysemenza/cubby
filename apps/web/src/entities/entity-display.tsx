@@ -59,6 +59,7 @@ import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { formatCurrency } from "~/lib/utils";
 
+import { compactFieldRendererFor } from "./compact-field-renderers";
 import { recordFieldClearing } from "./editing/field-clearing";
 import { entities, entityPluralLabel, isBrowserRoutedEntity } from "./entities";
 import { readReferenceField, type ReferenceItem } from "./entity-references";
@@ -378,6 +379,34 @@ export function renderDetailFieldValue<TRecord extends object>(
     readScalarField(entity, record, field),
     "detail",
   );
+}
+
+/** Dense surfaces prefer a row-backed domain value before scalar fallback. */
+export function renderCompactFieldValue<TRecord extends object>(
+  entity: Entity,
+  record: TRecord,
+  field: DisplayField,
+): ReactNode {
+  const domainRenderer = compactFieldRendererFor(entity, field.key);
+  const domainValue = domainRenderer?.(record);
+  if (domainValue !== undefined) return domainValue;
+  const reference = readReferenceField(record, field);
+  if (reference !== null) {
+    if (reference.items.length === 0) return <NoneValue />;
+    return (
+      <span className="flex max-w-full min-w-0 flex-wrap gap-x-2 gap-y-0.5">
+        {reference.items.map((item) => (
+          <span key={item.id} className="flex max-w-full min-w-0">
+            {referenceLink(reference.entity, item)}
+          </span>
+        ))}
+      </span>
+    );
+  }
+  const value = readScalarField(entity, record, field);
+  if (isProseField(field.key, field.control) && field.display.format === null)
+    return renderProseValue(value, "list");
+  return renderFormattedScalar(field.display.format, value, "list");
 }
 
 /** A ledger row's filter icon keeps its 40px phone target as a pseudo-element
@@ -1078,7 +1107,14 @@ export function createEntityDisplayColumns<TRecord extends object>(
                 trigger="pencil"
                 clipboard={specFromCellData(cellData, row.original)}
                 renderValue={(item) =>
-                  item ? referenceLink(referenceEntity, item) : <NoneValue />
+                  item ? (
+                    (compactFieldRendererFor(
+                      entity,
+                      field.key,
+                    )?.(row.original) ?? referenceLink(referenceEntity, item))
+                  ) : (
+                    <NoneValue />
+                  )
                 }
               />
             ),
@@ -1122,7 +1158,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             }),
             cell: ({ row }) =>
               readable ? (
-                renderDetailFieldValue(entity, row.original, field)
+                renderCompactFieldValue(entity, row.original, field)
               ) : (
                 <NoneValue />
               ),
@@ -1416,10 +1452,14 @@ export function createEntityDisplayColumns<TRecord extends object>(
             }),
             cell: ({ row }) => {
               const value = readScalarField(entity, row.original, field);
-              const rendered = (isProseField(field.key, field.control) &&
-              format === null
-                ? renderProseValue(value, "list")
-                : renderFormattedScalar(format, value)) ?? <NoneValue />;
+              const domainValue = compactFieldRendererFor(
+                entity,
+                field.key,
+              )?.(row.original);
+              const rendered = domainValue ??
+                (isProseField(field.key, field.control) && format === null
+                  ? renderProseValue(value, "list")
+                  : renderFormattedScalar(format, value)) ?? <NoneValue />;
               const recordId = explainedRecordSchema.safeParse(row.original);
               if (
                 countFilter === null ||

@@ -13,7 +13,10 @@ import { locationCreateInput } from "@cubby/schemas/location";
 import { ledgerPartyCreateInput } from "@cubby/schemas/ledger-party";
 import { saveMealFoodInput } from "@cubby/schemas/meal";
 import { plantingCreateInput } from "@cubby/schemas/planting";
-import { productCreateInput } from "@cubby/schemas/product";
+import {
+  productCreateInput,
+  type ProductCreateInput,
+} from "@cubby/schemas/product";
 import { productCategoryCreateInput } from "@cubby/schemas/product-category";
 import { type TaskStatus, taskCreateInput } from "@cubby/schemas/project";
 import { testUserId } from "@cubby/schemas/testing";
@@ -232,6 +235,7 @@ export const seedProductPrerequisite = (
     manufacturer?: string;
     categoryId?: string;
     growsPlantId?: string;
+    externalIds?: ProductCreateInput["externalIds"];
   },
 ) =>
   createFixture(
@@ -244,6 +248,7 @@ export const seedProductPrerequisite = (
         opts.categoryId,
       ),
       growsPlantId: opts.growsPlantId,
+      externalIds: opts.externalIds,
     }),
   );
 

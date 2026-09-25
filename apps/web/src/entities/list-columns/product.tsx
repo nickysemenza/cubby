@@ -40,7 +40,6 @@ import { useProductTagOptions } from "~/app/_components/hooks/useProductTagOptio
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { useCreateInventoryMutation } from "~/app/_components/inventory/hooks";
 import { InventoryEntriesQuickEditDialog } from "~/app/_components/inventory/inventory-entries-quick-edit-dialog";
-import { CategoryLabel } from "~/app/_components/products/CategoryLabel";
 import { TruncatedList } from "~/app/_components/TruncatedList";
 import { UnitPriceLine } from "~/app/_components/units/unit-price-line";
 import {
@@ -61,6 +60,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { compactFieldRendererFor } from "~/entities/compact-field-renderers";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
 import {
@@ -329,7 +329,11 @@ export const productListOverride = defineListOverride<
                 className: "w-48",
                 mobile: { slot: "subtitle", priority: 30 },
               },
-              cell: (info) => <CategoryLabel category={info.getValue()} />,
+              cell: (info) =>
+                compactFieldRendererFor(
+                  "product",
+                  "categoryId",
+                )?.(info.row.original),
             }),
           );
           add(
@@ -468,15 +472,11 @@ export const productListOverride = defineListOverride<
                 className: "w-36",
                 mobile: { slot: "meta", priority: 85 },
               },
-              cell: (info) => {
-                const ids = info.getValue();
-                if (!ids.length) return <NoneValue />;
-                return (
-                  <span className="text-xs text-muted-foreground">
-                    {ids.map((externalId) => externalId.source).join(", ")}
-                  </span>
-                );
-              },
+              cell: (info) =>
+                compactFieldRendererFor(
+                  "product",
+                  "externalIds",
+                )?.(info.row.original),
             }),
           );
           add(
