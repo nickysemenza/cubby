@@ -1,11 +1,11 @@
 import { type StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
-import type { StartOperationDispatchInput } from "~/server-functions/start-operation-dispatch.functions";
 import { withErrorReporting } from "~/server/errors/report-error";
 import {
   START_OPERATION_HANDLER_LOADERS,
   type LoadedStartOperationHandler,
   type StartOperationDispatchResult,
 } from "~/server/generated/start-operation-handlers.gen";
+import type { StartOperationDispatchInput } from "~/server/start-operation-dispatch.contract";
 import {
   type StartOperationRequest,
   type OperationStage,

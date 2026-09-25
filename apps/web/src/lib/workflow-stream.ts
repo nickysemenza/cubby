@@ -1,4 +1,4 @@
-import superjson, { type SuperJSONResult } from "superjson";
+import superjson from "superjson";
 import { z } from "zod";
 
 import {
@@ -8,17 +8,8 @@ import {
 } from "~/integrations/tanstack-query/operation-recorder";
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
+import { superJsonResultSchema } from "~/lib/superjson-wire";
 import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";
-
-const superJsonStructureSchema = z.object({
-  json: z.json(),
-  meta: z.object({}).loose().optional(),
-});
-
-const superJsonResultSchema = z.custom<SuperJSONResult>(
-  (value): value is SuperJSONResult =>
-    superJsonStructureSchema.safeParse(value).success,
-);
 
 const streamFrameSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("event"), payload: superJsonResultSchema }),

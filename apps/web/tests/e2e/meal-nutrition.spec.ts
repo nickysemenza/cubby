@@ -1,5 +1,6 @@
 import type { Route } from "@playwright/test";
 
+import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { seedMealNutritionPrerequisite } from "./e2e-fixtures";
 import { selectComboboxItem, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
@@ -43,10 +44,8 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   );
   await dialog.getByRole("button", { name: "Add food" }).click();
   const dispatcherUrl = (await firstSaveRequest).url();
-  expect(new URL(dispatcherUrl).pathname).toBe("/_serverFn/dispatch");
-  expect(new URL(dispatcherUrl).searchParams.get("operation")).toBe(
-    "meal.saveFood",
-  );
+  expect(new URL(dispatcherUrl).pathname).toBe(BROWSER_OPERATION_PATH);
+  expect(new URL(dispatcherUrl).search).toBe("");
   await expect(dialog).not.toBeVisible();
 
   const member = page.getByRole("region", {

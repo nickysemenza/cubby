@@ -1,4 +1,5 @@
 import { seedInventoryPrerequisites } from "./e2e-fixtures";
+import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import {
   SHORTCODE,
   gotoAuthenticatedPage,
@@ -36,7 +37,7 @@ test("recount is current-pass scoped, resumable, and completes with a summary", 
     releaseUnknown = resolve;
   });
   let unknownRequested = false;
-  await page.route("**/_serverFn/**", async (route) => {
+  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
     const request = route.request();
     const operation = request.headers()["x-cubby-operation"] ?? "";
     if (`${request.url()} ${operation}`.includes("ensureGlobalUnknown")) {

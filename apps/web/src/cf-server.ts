@@ -11,6 +11,7 @@ import * as Sentry from "@sentry/cloudflare";
 import type * as ServerEntry from "@tanstack/react-start/server-entry";
 import { WorkerEntrypoint } from "cloudflare:workers";
 
+import { BROWSER_OPERATION_PATH } from "./lib/browser-operation-path";
 import {
   TELEMETRY_SCHEMA_VERSION,
   withHtmlNoCache,
@@ -63,6 +64,14 @@ let httpApiPromise: Promise<typeof import("./server/http-api")>;
 const getHttpApi = () => {
   httpApiPromise ??= import("./server/http-api");
   return httpApiPromise;
+};
+
+let browserOperationPromise: Promise<
+  typeof import("./server/browser-operation-dispatch")
+>;
+const getBrowserOperation = () => {
+  browserOperationPromise ??= import("./server/browser-operation-dispatch");
+  return browserOperationPromise;
 };
 
 const isHttpOperationPath = (pathname: string) =>
@@ -243,17 +252,25 @@ const handler = {
                           // non-standard WebSocket slot verbatim.
                           return response;
                         }
-                        const invoke = isHttpOperationPath(url.pathname)
-                          ? (
-                              await withTrace("cf.importHttpApi", () =>
-                                getHttpApi(),
-                              )
-                            ).handleHttpOperation
-                          : (
-                              await withTrace("cf.importHandler", () =>
-                                getHandler(),
-                              )
-                            ).default.fetch;
+                        const invoke =
+                          url.pathname === BROWSER_OPERATION_PATH
+                            ? (
+                                await withTrace(
+                                  "cf.importBrowserOperation",
+                                  getBrowserOperation,
+                                )
+                              ).handleBrowserOperationDispatch
+                            : isHttpOperationPath(url.pathname)
+                              ? (
+                                  await withTrace("cf.importHttpApi", () =>
+                                    getHttpApi(),
+                                  )
+                                ).handleHttpOperation
+                              : (
+                                  await withTrace("cf.importHandler", () =>
+                                    getHandler(),
+                                  )
+                                ).default.fetch;
                         // Scoped here rather than around the whole handler body: this
                         // is the only region where request-scoped work runs, and
                         // waitUntil must belong to THIS request's context.

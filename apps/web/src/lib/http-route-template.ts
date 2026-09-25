@@ -1,5 +1,7 @@
 import { generatedBrowserRoutes } from "~/entities/generated/entity-routes.gen";
 
+import { BROWSER_OPERATION_PATH } from "./browser-operation-path";
+
 export const UNMATCHED_TRACE_ROUTE = "/:unmatched";
 export const SERVER_FUNCTION_TRACE_ROUTE = "/_serverFn/:functionId";
 
@@ -26,6 +28,7 @@ const STATIC_TRACE_ROUTES = new Set([
   "/activity",
   "/ai-smoke-test",
   "/ai-usage",
+  BROWSER_OPERATION_PATH,
   "/api/debug/timing",
   "/api/import/agent/accounts",
   "/api/import/agent/debug-events",

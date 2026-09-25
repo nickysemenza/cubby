@@ -5,6 +5,8 @@ import {
   type Response,
 } from "@playwright/test";
 
+import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+
 async function nextAnimationFrame(locator: Locator) {
   await locator.evaluate(
     () =>
@@ -59,7 +61,7 @@ export async function waitForDndMutation(
     if (
       !committed &&
       response.request().method() === "POST" &&
-      response.url().includes("/_serverFn/") &&
+      new URL(response.url()).pathname === BROWSER_OPERATION_PATH &&
       operationHeader(response, "-kind") === "mutation" &&
       operationHeader(response, "-entity") === entity &&
       response.ok()

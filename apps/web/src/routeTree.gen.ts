@@ -123,6 +123,7 @@ import { Route as AuthenticatedVendorsShortcodeRouteImport } from './routes/_aut
 import { Route as AuthenticatedWishesIndexRouteImport } from './routes/_authenticated/wishes.index'
 import { Route as AuthenticatedWishesShortcodeRouteImport } from './routes/_authenticated/wishes.$shortcode'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiBrowserDispatchRouteImport } from './routes/api/browser/dispatch'
 import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
 import { Route as ApiImportMerchantRulesRouteImport } from './routes/api/import/merchant-rules'
 import { Route as ApiImportRunLogsRouteImport } from './routes/api/import/run-logs'
@@ -806,6 +807,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiBrowserDispatchRoute = ApiBrowserDispatchRouteImport.update({
+  id: '/api/browser/dispatch',
+  path: '/api/browser/dispatch',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiDebugTimingRoute = ApiDebugTimingRouteImport.update({
   id: '/api/debug/timing',
   path: '/api/debug/timing',
@@ -1073,6 +1079,7 @@ export interface FileRoutesByFullPath {
   '/vendors/$shortcode': typeof AuthenticatedVendorsShortcodeRoute
   '/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/browser/dispatch': typeof ApiBrowserDispatchRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/import/merchant-rules': typeof ApiImportMerchantRulesRoute
   '/api/import/run-logs': typeof ApiImportRunLogsRoute
@@ -1220,6 +1227,7 @@ export interface FileRoutesByTo {
   '/vendors/$shortcode': typeof AuthenticatedVendorsShortcodeRoute
   '/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/browser/dispatch': typeof ApiBrowserDispatchRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/import/merchant-rules': typeof ApiImportMerchantRulesRoute
   '/api/import/run-logs': typeof ApiImportRunLogsRoute
@@ -1370,6 +1378,7 @@ export interface FileRoutesById {
   '/_authenticated/vendors/$shortcode': typeof AuthenticatedVendorsShortcodeRoute
   '/_authenticated/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/browser/dispatch': typeof ApiBrowserDispatchRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/import/merchant-rules': typeof ApiImportMerchantRulesRoute
   '/api/import/run-logs': typeof ApiImportRunLogsRoute
@@ -1520,6 +1529,7 @@ export interface FileRouteTypes {
     | '/vendors/$shortcode'
     | '/wishes/$shortcode'
     | '/api/auth/$'
+    | '/api/browser/dispatch'
     | '/api/debug/timing'
     | '/api/import/merchant-rules'
     | '/api/import/run-logs'
@@ -1667,6 +1677,7 @@ export interface FileRouteTypes {
     | '/vendors/$shortcode'
     | '/wishes/$shortcode'
     | '/api/auth/$'
+    | '/api/browser/dispatch'
     | '/api/debug/timing'
     | '/api/import/merchant-rules'
     | '/api/import/run-logs'
@@ -1816,6 +1827,7 @@ export interface FileRouteTypes {
     | '/_authenticated/vendors/$shortcode'
     | '/_authenticated/wishes/$shortcode'
     | '/api/auth/$'
+    | '/api/browser/dispatch'
     | '/api/debug/timing'
     | '/api/import/merchant-rules'
     | '/api/import/run-logs'
@@ -1896,6 +1908,7 @@ export interface RootRouteChildren {
   AuthNativeRoute: typeof AuthNativeRoute
   OauthConsentRoute: typeof OauthConsentRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiBrowserDispatchRoute: typeof ApiBrowserDispatchRoute
   ApiDebugTimingRoute: typeof ApiDebugTimingRoute
   ApiImportMerchantRulesRoute: typeof ApiImportMerchantRulesRoute
   ApiImportRunLogsRoute: typeof ApiImportRunLogsRoute
@@ -2717,6 +2730,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/browser/dispatch': {
+      id: '/api/browser/dispatch'
+      path: '/api/browser/dispatch'
+      fullPath: '/api/browser/dispatch'
+      preLoaderRoute: typeof ApiBrowserDispatchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/debug/timing': {
       id: '/api/debug/timing'
       path: '/api/debug/timing'
@@ -3321,6 +3341,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthNativeRoute: AuthNativeRoute,
   OauthConsentRoute: OauthConsentRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiBrowserDispatchRoute: ApiBrowserDispatchRoute,
   ApiDebugTimingRoute: ApiDebugTimingRoute,
   ApiImportMerchantRulesRoute: ApiImportMerchantRulesRoute,
   ApiImportRunLogsRoute: ApiImportRunLogsRoute,

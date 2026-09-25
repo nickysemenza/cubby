@@ -610,19 +610,20 @@ Extensions delegate to those services instead of branching inside the kernel.
 
 ## Transports
 
-TanStack Start is the browser entity adapter. Generic detail, list, deferred
-filter-option, and write operations use authenticated Start functions and
-generated entity-to-input/output maps. Image, USDA Food, and Cookbook retain
-explicit browser projections because their shapes are specialized, but those
-projections use the same Start operation module for authentication, validation,
-errors, cancellation checkpoints, tracing, and console observability. Every
-entity browser operation uses this Start transport.
+Generic detail, list, deferred filter-option, and write operations use one
+authenticated operation dispatcher and generated entity-to-input/output maps.
+Image, USDA Food, and Cookbook retain explicit browser projections because
+their shapes are specialized, but those projections use the same operation
+module for authentication, validation, errors, cancellation checkpoints,
+tracing, and console observability.
 
-Ordinary browser calls share `/_serverFn/dispatch`. The global Start fetch hook
-adds validated `operation` and optional `entity` query labels for DevTools;
-dispatch still reads the validated POST body. The previous production dispatcher
-path is internally rewritten at both server entries for already-open clients.
-SSR invokes the operation locally without fetching this URL.
+Ordinary browser calls POST a SuperJSON operation envelope to
+`/api/browser/dispatch`. The Worker routes this path directly to the shared
+dispatcher; operation and entity labels remain in request headers for DevTools
+and tracing. SSR invokes that dispatcher in-process. A browser that reaches an
+older Worker without this endpoint retries through the Start function. That
+function remains available to already-open clients, including its legacy alias
+rewrite at both server entries.
 
 The server operation boundary chooses one database adapter before invoking a
 handler and exposes that adapter through both context handles. Ordinary queries

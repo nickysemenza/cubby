@@ -76,3 +76,8 @@ export type PublicStartOperationError = z.infer<
 export type StartOperationResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: PublicStartOperationError };
+
+export const unparsedStartOperationResultSchema = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), data: unparsedStartOperationDataSchema }),
+  z.object({ ok: z.literal(false), error: publicStartOperationErrorSchema }),
+]);
