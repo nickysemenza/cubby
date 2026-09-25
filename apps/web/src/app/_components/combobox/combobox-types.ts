@@ -73,5 +73,6 @@ export type PickerEntity =
   | "financialAccount"
   | "purchase"
   | "ledgerParty"
+  | "vendorAccount"
   | "plant"
   | "planting";

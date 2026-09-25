@@ -2,7 +2,7 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { TableCellWorkbench } from "~/app/_components/data-table/table-cell-workbench";
@@ -30,6 +30,8 @@ import {
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { formatFieldProvenance } from "~/entities/field-provenance";
+import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/utils";
 
 import { LinkedTransactions } from "../finance/linked-transactions";
@@ -130,6 +132,7 @@ function MatchStatementTransaction({
     mutationFn: entityMutationOptionsFactory("financialTransaction", "update"),
     entity: "financialTransaction",
   });
+  const queryClient = useQueryClient();
   return (
     <>
       <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
@@ -206,6 +209,12 @@ function MatchStatementTransaction({
                   id: selected.id,
                   data: { purchaseId: purchase.id },
                 });
+                // The global handler fires this ripple without awaiting it;
+                // await it so the panel is fresh before the dialog closes.
+                await invalidateOperationTags(
+                  queryClient,
+                  entityRipple("financialTransaction"),
+                );
                 setOpen(false);
                 setSelected(null);
               }}

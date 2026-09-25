@@ -6,7 +6,13 @@ import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
-import { defineConfig, loadEnv, type Plugin, type PluginOption } from "vite";
+import {
+  defineConfig,
+  loadEnv,
+  type BuildEnvironmentOptions,
+  type Plugin,
+  type PluginOption,
+} from "vite";
 import wasm from "vite-plugin-wasm";
 import { isGitWorktree } from "./tooling/git-worktree.ts";
 import { assertDevDatabaseUrl } from "./tooling/dev-db-guard.ts";
@@ -173,6 +179,19 @@ function cfWasmPlugin(): Plugin {
  * SSR-only: the client build keeps the real package (browser tracing needs it).
  * See src/lib/sentry-cf-shim.ts for the exports it has to cover.
  */
+/**
+ * A shimmed or stubbed module missing a named export (e.g. a `Sentry.*` call
+ * absent from sentry-cf-shim.ts) is `undefined` at runtime and only throws on
+ * the error path. Fail the SSR build instead. Vite's own handler only logs an
+ * "error"-level log, so this has to throw.
+ */
+const failOnUndefinedImport: NonNullable<
+  BuildEnvironmentOptions["rolldownOptions"]
+>["onLog"] = (level, log, handler) => {
+  if (log.code === "IMPORT_IS_UNDEFINED") throw new Error(log.message);
+  handler(level, log);
+};
+
 function cfSentryShim(): Plugin {
   const shim = path.resolve(__dirname, "src/lib/sentry-cf-shim.ts");
   return {
@@ -246,6 +265,11 @@ export default defineConfig(async ({ command, mode }) => {
               codeSplitting: { groups: clientCodeSplittingGroups },
             },
           },
+        },
+      },
+      ssr: {
+        build: {
+          rolldownOptions: { onLog: failOnUndefinedImport },
         },
       },
     },

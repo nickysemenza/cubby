@@ -1,7 +1,10 @@
 import type { EntityId } from "@cubby/schemas/identifiers";
 import { createFileRoute } from "@tanstack/react-router";
 
-import { importRunsResponse } from "~/lib/purchase-import-run-detail";
+import {
+  importRunsResponse,
+  type ImportRunSummary,
+} from "~/lib/purchase-import-run-detail";
 import {
   listProductImportRuns,
   listImportRuns,
@@ -75,21 +78,29 @@ export const Route = createFileRoute("/api/import/runs")({
           : await listImportRuns(context.db, party.id, purchaseId);
         return Response.json(
           importRunsResponse.parse({
-            runs: runs.map((run) => ({
-              vendorAccountLabel: run.vendorAccountLabel,
-              vendorName: run.vendorName,
-              trigger: run.trigger,
-              purpose: run.purpose,
-              status: run.status,
-              startedAt: run.startedAt.toISOString(),
-              endedAt: run.endedAt?.toISOString() ?? null,
-              ordersSeen: run.ordersSeen,
-              imported: run.imported,
-              updated: run.updated,
-              skipped: run.skipped,
-              failureCode: run.failureCode,
-              estimatedCost: run.estimatedCost,
-            })),
+            // `satisfies` so a dropped field fails typecheck; `.parse` takes unknown.
+            runs: runs.map(
+              (run) =>
+                ({
+                  publicId: run.publicId,
+                  vendorAccountLabel: run.vendorAccountLabel,
+                  vendorName: run.vendorName,
+                  trigger: run.trigger,
+                  purpose: run.purpose,
+                  status: run.status,
+                  startedAt: run.startedAt.toISOString(),
+                  endedAt: run.endedAt?.toISOString() ?? null,
+                  ordersSeen: run.ordersSeen,
+                  imported: run.imported,
+                  updated: run.updated,
+                  skipped: run.skipped,
+                  failureCode: run.failureCode,
+                  estimatedCost: run.estimatedCost,
+                }) satisfies Record<
+                  keyof ImportRunSummary,
+                  string | number | null | undefined
+                >,
+            ),
           }),
         );
       },

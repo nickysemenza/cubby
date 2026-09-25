@@ -34,6 +34,61 @@ struct PhotoImportFlowTests {
                 group: group, images: [settled], runStatus: .needsReview) != nil)
     }
 
+    // Regression for issue #9 (import run detail screen): the "ready to group" copy and the
+    // "Start grouping" action appeared with zero uploaded photos, and with photos still mid
+    // description. Both must wait for at least one settled (ready/skipped/failed) description.
+    @Test func groupingReadinessWaitsForPhotosBeforeOfferingToStart() {
+        #expect(
+            PhotoReviewPolicy.groupingReadiness(images: [], runStatus: .running) == .waitingForPhotos)
+    }
+
+    @Test func groupingReadinessWaitsForDescriptionsToSettleBeforeOfferingToStart() {
+        let pending = PhotoRunImage(
+            id: ImageCode("IMG-2345"), targetState: .pending, originalUrl: "synthetic://shirt",
+            describe: .pending, localAnalysisReady: false)
+        let working = PhotoRunImage(
+            id: ImageCode("IMG-2346"), targetState: .pending, originalUrl: "synthetic://label",
+            describe: .leased, localAnalysisReady: false)
+
+        #expect(
+            PhotoReviewPolicy.groupingReadiness(images: [pending], runStatus: .running) == .processing)
+        #expect(
+            PhotoReviewPolicy.groupingReadiness(images: [working], runStatus: .running) == .processing)
+    }
+
+    @Test func groupingReadinessOffersStartOnceSettledAndRunning() {
+        let ready = PhotoRunImage(
+            id: ImageCode("IMG-2345"), targetState: .pending, originalUrl: "synthetic://shirt",
+            describe: .ready, localAnalysisReady: true)
+        let skipped = PhotoRunImage(
+            id: ImageCode("IMG-2346"), targetState: .pending, originalUrl: "synthetic://label",
+            describe: .skipped, localAnalysisReady: true)
+
+        #expect(
+            PhotoReviewPolicy.groupingReadiness(images: [ready, skipped], runStatus: .running)
+                == .readyToStart)
+        #expect(
+            PhotoReviewPolicy.groupingReadiness(images: [ready], runStatus: .completed) == .working)
+    }
+
+    @Test func groupingReadinessSendsToWebWhenRunNeedsReviewAndPhotosExist() {
+        let ready = PhotoRunImage(
+            id: ImageCode("IMG-2345"), targetState: .pending, originalUrl: "synthetic://shirt",
+            describe: .ready, localAnalysisReady: true)
+
+        #expect(
+            PhotoReviewPolicy.groupingReadiness(images: [ready], runStatus: .needsReview)
+                == .needsReviewOnWeb)
+    }
+
+    // Zero photos wins over `.needsReview`: there is nothing to review on the web either, so the
+    // waiting message (not a dead-end web link) is what belongs on screen.
+    @Test func groupingReadinessStaysWaitingForPhotosEvenWhenRunNeedsReview() {
+        #expect(
+            PhotoReviewPolicy.groupingReadiness(images: [], runStatus: .needsReview)
+                == .waitingForPhotos)
+    }
+
     @Test func manifestKeepsUnassignedPhotosOutOfCommitUntilMoved() throws {
         let first = try selection(filename: "first.jpg")
         let second = try selection(filename: "second.jpg")

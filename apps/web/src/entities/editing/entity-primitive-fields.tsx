@@ -662,6 +662,67 @@ export function requiredFieldModel(
   return field;
 }
 
+/** A singular reference: the target's search picker, or a shortcode text
+ * input for a target with no picker. */
+function renderSingularReference({
+  field,
+  form,
+  reference,
+  scopedValueRecord,
+}: {
+  field: PrimitiveFieldModel;
+  form: UseFormReturn<FieldValues>;
+  reference: NonNullable<PrimitiveFieldModel["reference"]>;
+  scopedValueRecord: EntityEditValueBag;
+}): ReactNode {
+  if (!isReferencePickerEntity(reference.entity)) {
+    // A target with no picker (device-reported provenance) takes its
+    // shortcode as text; server validation stays final. Throwing here would
+    // take the whole form down.
+    return (
+      <UnifiedTextField
+        key={field.key}
+        form={form}
+        // SAFETY: `field.key` is one of this entity's declared model keys.
+        name={field.key as never}
+        label={field.label}
+        placeholder={`${field.label} code`}
+        nullable={field.nullable}
+      />
+    );
+  }
+  const referenceEntity = reference.entity;
+  const scope = referenceScopeFor(reference, scopedValueRecord);
+  return (
+    <div key={field.key} className="space-y-1">
+      <EntityValueField
+        form={form}
+        // SAFETY: `field.key` is one of this entity's own declared
+        // model field keys; RHF's conditional path type cannot express
+        // a runtime-selected field roster.
+        name={field.key as never}
+        // SAFETY: `referenceEntity` is a manifest-declared reference
+        // target, always one of the picker's supported entities.
+        entity={referenceEntity as never}
+        label={field.label}
+        clearable={field.nullable}
+        description={<FieldProvenance provenance={field.provenance} />}
+        SearchProvider={referenceEntitySearch(referenceEntity)}
+        scope={scope}
+        suggestField={suggestFieldFor(
+          Boolean(field.control?.suggest),
+          field.key,
+        )}
+      />
+      <IntentFieldResolution
+        form={form}
+        field={field.key}
+        enabled={Boolean(field.resolution && !field.control?.suggest)}
+      />
+    </div>
+  );
+}
+
 /** One rendered intent field, in `EntityIntentFields`' own dispatch order: a
  * singular reference gets the search-backed picker, a `control.kind:
  * "specialized"` field dispatches to `controlRendererCoverage`, and
@@ -693,38 +754,13 @@ export function renderIntentField({
   record?: EntityEditRecord | undefined;
   scopedValueRecord: EntityEditValueBag;
 }): ReactNode {
-  if (field.reference && !field.reference.multiple) {
-    const referenceEntity = field.reference.entity;
-    const scope = referenceScopeFor(field.reference, scopedValueRecord);
-    return (
-      <div key={field.key} className="space-y-1">
-        <EntityValueField
-          form={form}
-          // SAFETY: `field.key` is one of this entity's own declared
-          // model field keys; RHF's conditional path type cannot express
-          // a runtime-selected field roster.
-          name={field.key as never}
-          // SAFETY: `referenceEntity` is a manifest-declared reference
-          // target, always one of the picker's supported entities.
-          entity={referenceEntity as never}
-          label={field.label}
-          clearable={field.nullable}
-          description={<FieldProvenance provenance={field.provenance} />}
-          SearchProvider={referenceEntitySearch(referenceEntity)}
-          scope={scope}
-          suggestField={suggestFieldFor(
-            Boolean(field.control?.suggest),
-            field.key,
-          )}
-        />
-        <IntentFieldResolution
-          form={form}
-          field={field.key}
-          enabled={Boolean(field.resolution && !field.control?.suggest)}
-        />
-      </div>
-    );
-  }
+  if (field.reference && !field.reference.multiple)
+    return renderSingularReference({
+      field,
+      form,
+      reference: field.reference,
+      scopedValueRecord,
+    });
   const presentation = entityFieldPresentation(entity, field.key, mode);
   if (presentation.control.kind === "specialized") {
     const Renderer = specializedRendererFor(

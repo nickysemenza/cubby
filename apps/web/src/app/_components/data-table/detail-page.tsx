@@ -199,6 +199,28 @@ const SectionVisibilityRegistryContext = createContext<
   ((id: string, visible: boolean) => void) | null
 >(null);
 
+/**
+ * Sections still on their first `hideWhenEmpty` fetch. Index-only: the card
+ * renders as usual. An absent id is not pending.
+ */
+const SectionIndexPendingRegistryContext = createContext<
+  ((id: string, pending: boolean) => void) | null
+>(null);
+
+/** Keep a `hideWhenEmpty` section out of the jump index until its first fetch resolves. */
+export function useSectionIndexPending(pending: boolean) {
+  const registerPending = useContext(SectionIndexPendingRegistryContext);
+  const sectionId = useContext(SectionIdContext);
+  useEffect(() => {
+    if (!sectionId) return;
+    registerPending?.(sectionId, pending);
+    return () => registerPending?.(sectionId, false);
+  }, [registerPending, sectionId, pending]);
+}
+
+/** The enclosing `SectionCard`'s id, for section-keyed registry hooks. */
+const SectionIdContext = createContext<string | null>(null);
+
 function SectionCard({
   section,
   className,
@@ -295,13 +317,15 @@ function SectionCard({
           ) : null}
         </div>
         {open ? (
-          <SectionCountContext.Provider value={setCount}>
-            <SectionCollapsedContext.Provider value={setBodyCollapsed}>
-              <div className="mt-2 md:mt-1.5" hidden={bodyCollapsed}>
-                {section.content}
-              </div>
-            </SectionCollapsedContext.Provider>
-          </SectionCountContext.Provider>
+          <SectionIdContext.Provider value={sectionId}>
+            <SectionCountContext.Provider value={setCount}>
+              <SectionCollapsedContext.Provider value={setBodyCollapsed}>
+                <div className="mt-2 md:mt-1.5" hidden={bodyCollapsed}>
+                  {section.content}
+                </div>
+              </SectionCollapsedContext.Provider>
+            </SectionCountContext.Provider>
+          </SectionIdContext.Provider>
         ) : null}
       </section>
     </SectionVisibilityContext.Provider>
@@ -431,10 +455,11 @@ function DetailAnchorIndex({
 
   return (
     <>
-      {/* md+: an inline anchor list, hairline-left, same IntersectionObserver. */}
+      {/* md+: one scrolling line (never wraps, so the strip keeps its
+          height), hairline-left, same IntersectionObserver. */}
       <nav
         aria-label="Section index"
-        className="hidden min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-l border-border pl-2 text-xs text-muted-foreground md:flex"
+        className="hidden min-w-0 [scrollbar-width:none] flex-nowrap items-center gap-x-3 gap-y-1 overflow-x-auto border-l border-border [mask-image:linear-gradient(to_right,black_calc(100%-20px),transparent)] pl-2 text-xs text-nowrap text-muted-foreground [-ms-overflow-style:none] md:flex [&::-webkit-scrollbar]:hidden"
       >
         {indexed.map((section) => (
           <a
@@ -442,7 +467,7 @@ function DetailAnchorIndex({
             href={`#${section.id}`}
             aria-current={activeId === section.id ? "location" : undefined}
             className={cn(
-              "transition-colors hover:text-foreground",
+              "shrink-0 transition-colors hover:text-foreground",
               activeId === section.id && "font-medium text-foreground",
             )}
             onClick={(event) => {
@@ -738,6 +763,17 @@ export const DetailSections: FC<DetailSectionsProps> = ({
       prev.get(id) === next ? prev : new Map(prev).set(id, next),
     );
   }, []);
+  const [sectionIndexPending, setSectionIndexPending] = useState<
+    Map<string, boolean>
+  >(new Map());
+  const registerSectionIndexPending = useCallback(
+    (id: string, next: boolean) => {
+      setSectionIndexPending((prev) =>
+        prev.get(id) === next ? prev : new Map(prev).set(id, next),
+      );
+    },
+    [],
+  );
   const visibleSections = useMemo(
     () =>
       sections.filter(
@@ -846,12 +882,12 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     setHash(sectionId, true);
   };
 
-  // A `hideWhenEmpty` section currently hidden (per `sectionVisibility`, kept
-  // live by `SectionCard`/`reportVisible`) drops out of the jump index even
-  // though it stays mounted in the overview layout below — a section absent
-  // from the map hasn't reported yet and counts as visible.
+  // Hidden `hideWhenEmpty` sections stay mounted but leave the index; one still
+  // on its first fetch is left out too, so it can't appear and then vanish.
   const indexEligibleSections = overviewSections.filter(
-    (section) => sectionVisibility.get(section.id) !== false,
+    (section) =>
+      sectionVisibility.get(section.id) !== false &&
+      sectionIndexPending.get(section.id) !== true,
   );
   const hasOverviewTools =
     indexEligibleSections.filter((section) => section.includeInIndex !== false)
@@ -865,64 +901,68 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     <SectionVisibilityRegistryContext.Provider
       value={registerSectionVisibility}
     >
-      <Tabs
-        value={activeMode}
-        onValueChange={selectMode}
-        className="gap-4 md:gap-2"
+      <SectionIndexPendingRegistryContext.Provider
+        value={registerSectionIndexPending}
       >
-        <DetailCommandStrip
-          activeMode={activeMode}
-          hasRelations={hasRelations}
-          hasActivity={hasActivity}
-          hasOverviewTools={hasOverviewTools}
-          overviewSections={indexEligibleSections}
-          onSelectOverviewSection={selectOverviewSection}
-        />
+        <Tabs
+          value={activeMode}
+          onValueChange={selectMode}
+          className="gap-4 md:gap-2"
+        >
+          <DetailCommandStrip
+            activeMode={activeMode}
+            hasRelations={hasRelations}
+            hasActivity={hasActivity}
+            hasOverviewTools={hasOverviewTools}
+            overviewSections={indexEligibleSections}
+            onSelectOverviewSection={selectOverviewSection}
+          />
 
-        {activeMode === "overview" ? (
-          <TabsContent value="overview" className="text-sm/5">
-            <div className="space-y-4 md:space-y-2">
+          {activeMode === "overview" ? (
+            <TabsContent value="overview" className="text-sm/5">
+              <div className="space-y-4 md:space-y-2">
+                <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
+                  {renderResponsiveLayout({
+                    sections: overviewSections,
+                    visual,
+                  })}
+                </div>
+
+                {isDebugEnabled && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle as="h2">Raw Details</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <JsonRenderer input={rawData} pretty />
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </TabsContent>
+          ) : null}
+
+          {activeMode === "relations" && relationshipSection ? (
+            <TabsContent value="relations" className="text-sm/5">
               <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
                 {renderResponsiveLayout({
-                  sections: overviewSections,
-                  visual,
+                  sections: [{ ...relationshipSection, placement: "full" }],
                 })}
               </div>
+            </TabsContent>
+          ) : null}
 
-              {isDebugEnabled && (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle as="h2">Raw Details</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <JsonRenderer input={rawData} pretty />
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </TabsContent>
-        ) : null}
-
-        {activeMode === "relations" && relationshipSection ? (
-          <TabsContent value="relations" className="text-sm/5">
-            <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
-              {renderResponsiveLayout({
-                sections: [{ ...relationshipSection, placement: "full" }],
-              })}
-            </div>
-          </TabsContent>
-        ) : null}
-
-        {activeMode === "activity" && resolvedActivitySection ? (
-          <TabsContent value="activity" className="text-sm/5">
-            <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
-              {renderResponsiveLayout({
-                sections: [{ ...resolvedActivitySection, placement: "full" }],
-              })}
-            </div>
-          </TabsContent>
-        ) : null}
-      </Tabs>
+          {activeMode === "activity" && resolvedActivitySection ? (
+            <TabsContent value="activity" className="text-sm/5">
+              <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
+                {renderResponsiveLayout({
+                  sections: [{ ...resolvedActivitySection, placement: "full" }],
+                })}
+              </div>
+            </TabsContent>
+          ) : null}
+        </Tabs>
+      </SectionIndexPendingRegistryContext.Provider>
     </SectionVisibilityRegistryContext.Provider>
   );
 };

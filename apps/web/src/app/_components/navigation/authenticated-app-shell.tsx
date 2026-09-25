@@ -290,7 +290,10 @@ function WorkspaceSidebar({
         </Link>
       </div>
       <nav
-        className="min-h-0 flex-1 overflow-y-auto px-2 py-2"
+        // `relative`: the nav's sr-only counts are absolutely positioned; without
+        // a positioned scroller they escape its clip and stretch the document
+        // past the shell, so scrolling a button into view drags the shell up.
+        className="relative min-h-0 flex-1 overflow-y-auto px-2 py-2"
         aria-label="Cubby"
       >
         <SidebarHome active={activeTo === homeNavItem.to} expanded={expanded} />

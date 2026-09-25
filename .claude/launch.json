@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "web-local",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@cubby/web", "dev:local"],
+      "port": 3000
+    },
+    {
       "name": "web",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "web", "dev"],

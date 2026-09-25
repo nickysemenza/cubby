@@ -255,9 +255,17 @@ struct ActivityView: View {
 
     @ViewBuilder private var localExecution: some View {
         let activities = appModel.backgroundActivity.visibleActivities
+        let elsewhere = model.runs.filter(\.active).count
         Section {
             if activities.isEmpty {
-                ContentUnavailableView("Nothing running on this device", systemImage: "checkmark.circle")
+                if elsewhere > 0 {
+                    ContentUnavailableView(
+                        elsewhere == 1
+                            ? "1 run in progress elsewhere" : "\(elsewhere) runs in progress elsewhere",
+                        systemImage: "antenna.radiowaves.left.and.right")
+                } else {
+                    ContentUnavailableView("Nothing running on this device", systemImage: "checkmark.circle")
+                }
             } else {
                 ForEach(activities) { activity in
                     LocalActivityRow(activity: activity) {
@@ -704,7 +712,9 @@ struct ActivityDetailView: View {
     }
 }
 
-private extension ActivityKind {
+/// Human labels for the raw enum, shared by every activity list/row (Today's inbox, the Activity
+/// screen, run detail) so a run never surfaces its wire value directly.
+extension ActivityKind {
     var title: String {
         switch self {
         case .purchaseImport: "Purchase import"

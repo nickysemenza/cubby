@@ -6,6 +6,7 @@ import { useProductCategories } from "~/app/_components/hooks/useProductCategori
 import {
   WithFinancialAccountSearch,
   WithPurchaseSearch,
+  WithVendorAccountSearch,
 } from "~/app/finance/financial-selectors";
 
 import type { ComboboxItem, PickerEntity } from "./combobox-types";
@@ -114,6 +115,7 @@ const referencePickerEntities = new Set<PickerEntity>([
   "ledgerParty",
   "plant",
   "planting",
+  "vendorAccount",
 ]);
 
 export const isReferencePickerEntity = (
@@ -140,6 +142,9 @@ export function referenceEntitySearch(
       // SAFETY: see financialAccount — the reference mutation accepts the
       // manifest's string identifier and server validation remains final.
       return WithPurchaseSearch as never;
+    case "vendorAccount":
+      // SAFETY: see financialAccount.
+      return WithVendorAccountSearch as never;
     case "vendor":
       // SAFETY: this is the persisted-shortcode vendor provider, not the
       // name-minting picker used by the specialized expense editor.

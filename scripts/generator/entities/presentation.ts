@@ -383,7 +383,9 @@ export const compilePresentation = (
           {
             kind: "fields" as const,
             id: "overview",
-            title: "Overview",
+            // Not "Overview": that is the detail page's mode tab, and the
+            // jump index sits beside it. The id stays the hash anchor.
+            title: "Details",
             placement: "supporting" as const,
             collapsed: false,
             fields: overviewFields,

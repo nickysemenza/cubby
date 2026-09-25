@@ -407,6 +407,8 @@ export default defineEntity({
     sort: {
       fields: ["observedAt", "capturedAt", "createdAt", "updatedAt"],
     },
+    // Sightings are device-reported: image and device are provenance, so an
+    // edit offers only what `update` allows.
     intents: {
       fields: {
         full: [
@@ -433,9 +435,10 @@ export default defineEntity({
           "aspectGate",
           "observedAt",
         ],
+        correction: ["placeName", "capturedAt"],
       },
       create: ["full"],
-      update: ["full"],
+      update: ["correction"],
     },
     output: [
       "id",
