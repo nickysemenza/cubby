@@ -1,44 +1,30 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import {
-  parseEntityId,
-  parseShortcodeFor,
-  type PlantingId,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { gardenEntryPlanting, planting } from "~/server/db/schema";
 import {
+  bulkUpdatedWithSideEffects,
   defineEntityAdapter,
   deletedWithImages,
-  entityMutationReferences,
 } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
+import { diffUnorderedIdSet, logAuditEntries } from "~/server/repo/audit-log";
 import {
-  type AuditEntryInput,
-  computeChanges,
-  diffUnorderedIdSet,
-  logAuditEntries,
-} from "~/server/repo/audit-log";
-import {
-  buildPartialUpdateValues,
   imageCascadeChild,
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { bulkPatchEntities } from "~/server/repo/entity-patch";
 import { removeEntity } from "~/server/repo/removal";
 import {
   bindShortcodeResolver,
   resolveLiveShortcode,
 } from "~/server/repo/shortcode-resolver";
-import {
-  mutationEvents,
-  refreshDerivedSearchRefs,
-  runMutationSideEffectsForEntities,
-} from "~/server/services/mutation-side-effects";
+import { refreshDerivedSearchRefs } from "~/server/services/mutation-side-effects";
 
 import {
   createGardenEntry,
@@ -91,97 +77,32 @@ const raiseMissingLocation = (): never => {
   );
 };
 
-/**
- * Mirrors `updateTasksInBulk` (`repo/task/crud.ts`): one complete patch, one
- * transaction, per-row audit `changes` computed on the `model.bulk` roster
- * (`status`, `finishedOn`, `locationId`).
- */
-const updatePlantingsInBulk = async (
+const updatePlantingsInBulk = (
   db: Database,
   shortcodes: readonly string[],
   data: PlantingBulkPatch,
   actor: ActorContext,
-): Promise<{ updatedIds: PlantingId[]; updatedShortcodes: string[] }> => {
-  if (new Set(shortcodes).size !== shortcodes.length) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Bulk planting IDs must be unique.",
-    );
-  }
-  const hasPatch =
-    data.status !== undefined ||
-    data.finishedOn !== undefined ||
-    data.locationId !== undefined;
-  if (!hasPatch) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "A bulk planting patch must supply at least one field.",
-    );
-  }
-
-  return await withTransaction(db, async (tx: DrizzleTransaction) => {
-    const locationId =
-      data.locationId === undefined
-        ? undefined
-        : data.locationId === null
-          ? null
-          : ((await resolveLiveShortcode(tx, data.locationId, "location")) ??
-            raiseMissingLocation());
-    const ids = await plantings.all(tx, shortcodes);
-    const before = await tx
-      .select({
-        id: planting.id,
-        shortcode: planting.shortcode,
-        status: planting.status,
-        outcome: planting.outcome,
-        finishedOn: planting.finishedOn,
-        locationId: planting.locationId,
-      })
-      .from(planting)
-      .where(and(inArray(planting.id, ids), notDeleted(planting)))
-      .for("update");
-    if (before.length !== ids.length) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "One or more plantings are missing.",
-      );
-    }
-
-    const values = buildPartialUpdateValues({
-      status: data.status,
-      outcome: data.outcome,
-      finishedOn: data.finishedOn,
-      locationId,
-    });
-    await tx
-      .update(planting)
-      .set(values)
-      .where(and(inArray(planting.id, ids), notDeleted(planting)));
-
-    const auditEntries: AuditEntryInput[] = [];
-    for (const row of before) {
-      const changes = computeChanges(row, { ...row, ...values }, [
-        ...entityFieldModels.planting.bulk,
-      ]);
-      if (changes) {
-        auditEntries.push({
-          entityType: "planting",
-          entityId: row.id,
-          action: "update",
-          changes,
-        });
-      }
-    }
-    await logAuditEntries(tx, actor, auditEntries);
-
-    return {
-      updatedIds: before.map((row) => parseEntityId("planting", row.id)),
-      updatedShortcodes: before.map((row) =>
-        parseShortcodeFor("planting", row.shortcode),
-      ),
-    };
-  });
-};
+) =>
+  bulkPatchEntities(
+    db,
+    actor,
+    {
+      entity: "planting",
+      table: planting,
+      values: async (tx) => ({
+        status: data.status,
+        outcome: data.outcome,
+        finishedOn: data.finishedOn,
+        locationId:
+          data.locationId == null
+            ? data.locationId
+            : ((await resolveLiveShortcode(tx, data.locationId, "location")) ??
+              raiseMissingLocation()),
+      }),
+    },
+    shortcodes,
+    data,
+  );
 
 export const plantingEntityAdapter = defineEntityAdapter({
   entity: "planting",
@@ -337,30 +258,12 @@ export const plantingEntityAdapter = defineEntityAdapter({
         detachedImageKeys,
       };
     },
-    /** One complete patch, one transaction, then one side-effect fan-out. */
-    bulkUpdate: async (ctx, ids, data) => {
-      const result = await updatePlantingsInBulk(
-        ctx.db,
-        ids,
-        data,
-        ctx.actorContext,
-      );
-      await runMutationSideEffectsForEntities(
-        ctx.db,
-        mutationEvents(
-          "planting",
-          "updated",
-          result.updatedIds,
-          "planting.bulkUpdate",
-        ),
-      );
-      return {
-        updatedReferences: entityMutationReferences(
-          "planting",
-          result.updatedShortcodes,
-        ),
-      };
-    },
+    bulkUpdate: async (ctx, ids, data) =>
+      bulkUpdatedWithSideEffects(
+        ctx,
+        "planting",
+        await updatePlantingsInBulk(ctx.db, ids, data, ctx.actorContext),
+      ),
   },
 });
 

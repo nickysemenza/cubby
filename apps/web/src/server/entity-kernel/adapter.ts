@@ -21,6 +21,11 @@ import {
 import type { MealMutationHooks } from "~/server/repo/meal/crud";
 import { executeDeleteWithEffects } from "~/server/repo/removal";
 import type { TaskMutationHooks } from "~/server/repo/task/crud";
+import {
+  type MutationSideEffectEntity,
+  mutationEvents,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import type { USDAService } from "~/server/services/usda.service";
 export interface EntityKernelContext {
@@ -114,6 +119,31 @@ export const standardDeleteResult = <E extends EntitySchemaBindingEntity>(
   ),
   detachedImageKeys: result?.detachedImageKeys,
 });
+
+/** A bulk patch's kernel result, after its one side-effect fan-out. */
+export const bulkUpdatedWithSideEffects = async <
+  E extends EntitySchemaBindingEntity & MutationSideEffectEntity,
+>(
+  ctx: EntityKernelContext,
+  entity: E,
+  result: { updatedIds: EntityId<E>[]; updatedShortcodes: readonly string[] },
+) => {
+  await runMutationSideEffectsForEntities(
+    ctx.db,
+    mutationEvents(
+      entity,
+      "updated",
+      result.updatedIds,
+      `${entity}.bulkUpdate`,
+    ),
+  );
+  return {
+    updatedReferences: entityMutationReferences(
+      entity,
+      result.updatedShortcodes,
+    ),
+  };
+};
 
 interface EntityKernelDeleteResult {
   deletedReferences: EntityMutationReference[];
