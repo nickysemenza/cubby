@@ -6,7 +6,6 @@ import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail
 import { expense } from "~/app/expenses/expense.functions";
 import { task } from "~/app/tasks/task.functions";
 import { Description } from "~/components/ui/description";
-import { entityListFor } from "~/entities/entity-list.functions";
 import { splitExpenseSpend } from "~/lib/spend";
 
 import { BudgetStrip } from "./BudgetStrip";
@@ -15,7 +14,6 @@ import type { PivotCostKey } from "./charts/trade-cost-pivot";
 import { ProjectContributionSection } from "./project-contribution-section";
 import { ProjectDetailAnalyticsView } from "./project-detail-analytics-view";
 import {
-  projectGanttSubtreeQueryParams,
   projectSubtreeExpensesFilters,
   projectSubtreeTasksFilters,
 } from "./project-query-params";
@@ -72,12 +70,6 @@ export const ProjectAnalytics: DetailSlotComponent<"project"> = ({
   const { data: chartExpenses = NO_EXPENSES } = useQuery(
     expense.chartData.queryOptions(projectSubtreeExpensesFilters(project.id)),
   );
-  const { data: ganttSubtreePage } = useQuery(
-    entityListFor("project").queryOptions(
-      projectGanttSubtreeQueryParams(project.id),
-    ),
-  );
-  const subtreeProjects = ganttSubtreePage?.items ?? [];
   const [activeMatrixCell, setActiveMatrixCell] =
     useState<TradeCostCell | null>(null);
   const toggleMatrixCell = (
@@ -89,11 +81,7 @@ export const ProjectAnalytics: DetailSlotComponent<"project"> = ({
         ? null
         : { trade, costType },
     );
-  if (
-    chartExpenses.length === 0 &&
-    subtreeTasks.length === 0 &&
-    subtreeProjects.length === 0
-  )
+  if (chartExpenses.length === 0 && subtreeTasks.length === 0)
     return (
       <Description size="xs">
         Nothing to chart yet — expenses and tasks feed these views.
@@ -101,13 +89,10 @@ export const ProjectAnalytics: DetailSlotComponent<"project"> = ({
     );
   return (
     <ProjectDetailAnalyticsView
-      projectId={project.id}
       costEstimate={project.rollup.subtree.costEstimate}
       hasSubtree={project.rollup.subtree.projectCount > 0}
       expenses={chartExpenses}
-      tasks={subtreeTasks}
       topLevelTasks={topLevelTasks}
-      subtreeProjects={subtreeProjects}
       activeMatrixCell={activeMatrixCell}
       onMatrixCellClick={toggleMatrixCell}
     />

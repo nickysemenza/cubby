@@ -10,7 +10,6 @@ import { format } from "date-fns";
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import { useEntityDisplayImage } from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { todayPlain } from "~/app/projects/charts/gantt/gantt-date";
 import { formatDateRange } from "~/app/projects/project-formatting";
 import { TradeBadge } from "~/app/projects/shared";
 import { Row, Stack } from "~/components/layout";
@@ -31,6 +30,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { householdLocalDate } from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import { cn } from "~/lib/utils";
 
@@ -155,7 +155,7 @@ export function TaskCard({
     task.dueDate != null &&
     task.status !== "done" &&
     effectiveDue != null &&
-    effectiveDue < todayPlain();
+    effectiveDue < householdLocalDate();
 
   // Blocker names resolve best-effort from the board's loaded dataset — a
   // blocker that's a subtask or outside the current scope stays unnamed, so

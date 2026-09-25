@@ -1,5 +1,5 @@
 /**
- * Trade -> build-phase colour for the Gantt. Porcelain Transit keeps ordinary
+ * Trade -> build-phase colour for task board columns. Porcelain Transit keeps ordinary
  * data surfaces neutral, so 20 trades cannot each get a distinct hue without
  * turning the chart into a rainbow that fights the five domain lines. The
  * trades instead fold into **six muted build-phase families** — enough colour
@@ -8,7 +8,7 @@
  * and row label.
  *
  * Alias-free (no `~/`) so it can sit under the vitest `unit` project alongside
- * the other gantt logic.
+ * the other pure project helpers.
  */
 
 import { tradeSchema, type Trade } from "@cubby/schemas/project";

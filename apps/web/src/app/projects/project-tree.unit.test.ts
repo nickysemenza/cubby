@@ -140,7 +140,7 @@ describe("buildProjectTree", () => {
     const rows = buildProjectTree(chain);
     // The chain is acyclic, so nodes past the depth cap are dropped (not
     // promoted as spurious extra roots) — same "just stop walking deeper"
-    // behaviour as gantt-model.ts. Only the single true root survives.
+    // behaviour as the schedule model. Only the single true root survives.
     expect(rows).toHaveLength(1);
     expect(rows[0]?.id).toBe(testShortcode("project", "n0"));
     const flat = flatten(rows);
