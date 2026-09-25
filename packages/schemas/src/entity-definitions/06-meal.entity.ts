@@ -88,7 +88,13 @@ export default defineEntity({
           kind: "date",
           initial: "today",
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          format: "plainDate",
+          mobile: { slot: "subtitle", priority: 10 },
+        },
         validation: {
           read: mealDate,
           create: mealDate,

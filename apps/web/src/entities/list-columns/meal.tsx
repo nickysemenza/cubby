@@ -1,7 +1,6 @@
 import type { MealFilters, MealOut } from "@cubby/schemas/meal";
 import { useMemo } from "react";
 
-import { createPlainDateColumn } from "~/app/_components/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -56,32 +55,6 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
       entityLabel: "Meal",
       entity: "meal",
     });
-
-    const overrides = useMemo(
-      () =>
-        createCubbyColumnCollection<MealOut>((add) => {
-          add(
-            createPlainDateColumn(columnHelper, "date", {
-              header: "Date",
-              className: "w-32",
-              mobile: { slot: "subtitle", priority: 10 },
-              editable: {
-                onSave: async (newDate, meal) => {
-                  // A meal's date is required (never nullable): a cleared
-                  // date-picker input is discarded rather than sent as null.
-                  if (!newDate) return;
-                  await updateMealMutation.mutateAsync({
-                    id: meal.id,
-                    data: { date: newDate },
-                  });
-                },
-              },
-            }),
-          );
-        }),
-      // oxlint-disable-next-line react/exhaustive-deps -- updateMealMutation changes every render but is functionally stable
-      [nameEditable],
-    );
 
     const compose = useMemo(
       () => (declared: CubbyColumnCollection<MealOut>) =>
@@ -170,6 +143,6 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
       }),
       [deletable, nameEditable],
     );
-    return { overrides, compose, list };
+    return { compose, list };
   },
 });

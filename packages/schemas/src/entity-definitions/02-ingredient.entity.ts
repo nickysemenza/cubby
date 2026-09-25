@@ -45,7 +45,7 @@ export default defineEntity({
         key: "name",
         kind: "text",
         control: { kind: "text" },
-        display: { list: true, detail: true },
+        display: { list: true, detail: true, width: "lg" },
         validation: {
           read: z
             .string()
@@ -70,7 +70,12 @@ export default defineEntity({
         key: "aliases",
         kind: "text-array",
         control: { kind: "specialized", renderer: "tag-list" },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "md",
+          mobile: { slot: "subtitle", priority: 20 },
+        },
         validation: {
           read: z
             .array(z.string())
@@ -101,7 +106,12 @@ export default defineEntity({
         description:
           "Assume I have enough for recipe planning. Recorded inventory stays separate.",
         control: { kind: "checkbox" },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "md",
+          mobile: { slot: "meta", priority: 25 },
+        },
         validation: {
           read: z.boolean(),
           create: z.boolean().optional().default(false),

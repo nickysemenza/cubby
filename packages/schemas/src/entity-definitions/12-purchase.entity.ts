@@ -163,7 +163,12 @@ export default defineEntity({
           sectionOverride: "identity",
           placeholder: "e.g. pocket hole jig + bits",
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "lg",
+          mobile: { slot: "subtitle", priority: 5, interactive: true },
+        },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().optional(),
@@ -204,6 +209,7 @@ export default defineEntity({
           detail: true,
           format: "currency",
           mobile: { slot: "trailing", priority: 1 },
+          width: "sm",
         },
         validation: {
           read: wholeCentAmount.nullable(),
@@ -427,7 +433,11 @@ export default defineEntity({
       {
         key: "documentCount",
         kind: "number",
-        display: { list: true },
+        display: {
+          list: true,
+          width: "xs",
+          mobile: { slot: "meta", priority: 70 },
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],

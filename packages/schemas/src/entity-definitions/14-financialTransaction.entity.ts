@@ -77,6 +77,8 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          width: "md",
+          mobile: { slot: "subtitle", priority: 10, interactive: true },
         },
         validation: {
           read: financialAccountShortcode,
@@ -92,7 +94,7 @@ export default defineEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         // Detail shows `allocations` instead: this mirror is NULL exactly
         // when a charge settles more than one purchase.
-        display: { list: true, detail: false },
+        display: { list: true, detail: false, width: "sm" },
         validation: {
           read: purchaseShortcode.nullable(),
           create: purchaseShortcode.nullable().default(null),

@@ -1,5 +1,4 @@
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
-import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
 import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 
@@ -14,7 +13,6 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
-import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { FinancialSettlementCell } from "~/app/purchases/financial-settlement";
 import { ReconciliationStatus } from "~/app/purchases/purchase-reconciliation";
@@ -23,7 +21,6 @@ import { Grid, Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatTile } from "~/components/ui/stat-tile";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
 import {
   labeledFieldProvenance,
@@ -92,10 +89,6 @@ export const purchaseListOverride = defineListOverride<
       vendor: vendorOptions,
       project: projectOptions,
     });
-    const update = useUpdateMutation({
-      mutationFn: entityMutationOptionsFactory("purchase", "update"),
-      entity: "purchase",
-    });
 
     const overrides = useMemo(
       () =>
@@ -143,39 +136,6 @@ export const purchaseListOverride = defineListOverride<
                 ) : (
                   <NoneValue />
                 ),
-            }),
-          );
-          add(
-            createTextColumn(columnHelper, "displayLabel", {
-              header: "Display label",
-              placeholder: "e.g. pocket hole jig + bits",
-              className: "w-56",
-              mobile: { slot: "subtitle", priority: 5, interactive: true },
-              editable: {
-                onSave: async (displayLabel, purchase) => {
-                  await update.mutateAsync({
-                    id: purchase.id,
-                    data: { displayLabel },
-                  });
-                },
-              },
-            }),
-          );
-          // Hand-rolled rather than `createCurrencyColumn`: that factory
-          // footers a column total, and a summed `statedTotal` reads as spend.
-          add(
-            columnHelper.accessor((row) => row.statedTotal, {
-              id: "statedTotal",
-              header: "Stated",
-              meta: {
-                numeric: true,
-                className: "w-24",
-                mobile: { slot: "meta", priority: 40 },
-              },
-              cell: (info) => {
-                const value = info.getValue();
-                return value == null ? <NoneValue /> : formatCurrency(value);
-              },
             }),
           );
           add(
@@ -242,28 +202,7 @@ export const purchaseListOverride = defineListOverride<
               ),
             }),
           );
-          add(
-            columnHelper.accessor((row) => row.documentCount, {
-              id: "documentCount",
-              header: "Documents",
-              meta: {
-                numeric: true,
-                className: "w-20",
-                mobile: { slot: "meta", priority: 70 },
-              },
-              cell: (info) =>
-                info.getValue() > 0 ? (
-                  <Row align="center" justify="end" gap="xs">
-                    <FileTextIcon className="size-3.5 text-muted-foreground" />
-                    <span className="tabular-nums">{info.getValue()}</span>
-                  </Row>
-                ) : (
-                  <NoneValue />
-                ),
-            }),
-          );
         }),
-      // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
       [],
     );
 

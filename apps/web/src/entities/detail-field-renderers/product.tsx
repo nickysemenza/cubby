@@ -1,4 +1,3 @@
-import { displayGtin } from "@cubby/schemas/external-id";
 import {
   collectionSlugFromTag,
   formatCollectionLabel,
@@ -11,10 +10,13 @@ import {
 } from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { CategoryLabel } from "~/app/_components/products/CategoryLabel";
+import {
+  ProductGtin,
+  productGtinLabel,
+} from "~/components/entity/product-gtin";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
-import { wasm } from "~/lib/wasm";
 
 import type { EntityDetailFieldRenderers } from "./index";
 
@@ -60,28 +62,12 @@ export const productDetailFields = {
       </Link>
     ) : undefined,
   }),
-  // Rendered as the printed encoding, not the stored GTIN-14 — the operator
-  // is comparing this against the barcode on the package, and the USDA page
-  // is keyed the same way. A book barcode reads as its ISBN-13.
-  "product-primary-gtin": (product) => {
-    const isbn = product.primaryGtin
-      ? wasm.isbn_from_gtin(product.primaryGtin)
-      : null;
-    return {
-      label: isbn ? "ISBN-13" : "UPC",
-      value: isbn ? (
-        <span className="font-mono tabular-nums">{isbn.isbn13}</span>
-      ) : product.primaryGtin ? (
-        <Link
-          to="/usda/upc/$code"
-          params={{ code: displayGtin(product.primaryGtin) }}
-          className="text-primary hover:underline"
-        >
-          {displayGtin(product.primaryGtin)}
-        </Link>
-      ) : undefined,
-    };
-  },
+  "product-primary-gtin": (product) => ({
+    label: productGtinLabel(product.primaryGtin),
+    value: product.primaryGtin ? (
+      <ProductGtin gtin={product.primaryGtin} />
+    ) : undefined,
+  }),
   "product-fdc-id": (product) => ({
     value: product.fdc_id ? (
       <Link

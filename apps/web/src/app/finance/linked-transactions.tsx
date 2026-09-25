@@ -14,20 +14,13 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
-import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { useEntityFieldSave } from "~/app/_components/hooks/useUpdateMutation";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { createEntityDisplayColumns } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { formatCurrency } from "~/lib/utils";
-
-import {
-  createFinancialTransactionAccountColumn,
-  createFinancialTransactionAmountColumn,
-  createFinancialTransactionPostedDateColumn,
-  createFinancialTransactionStatusColumn,
-} from "./financial-transaction-columns";
 
 const EMBEDDED_TABLE_STATE = {
   initialSort: "postedDate",
@@ -90,10 +83,7 @@ export function LinkedTransactions({
   onAddTransaction?: () => void;
   onEditTransaction?: (transaction: FinancialTransactionOut) => void;
 }) {
-  const update = useUpdateMutation({
-    mutationFn: entityMutationOptionsFactory("financialTransaction", "update"),
-    entity: "financialTransaction",
-  });
+  const onSaveField = useEntityFieldSave("financialTransaction");
   const listQueryOptions = useCallback(
     (params: Parameters<LinkedTransactionsOperations["list"]>[0]) =>
       operations.list(params),
@@ -116,27 +106,27 @@ export function LinkedTransactions({
   const columns = useMemo(
     () =>
       createCubbyColumnCollection<FinancialTransactionOut>((add) => {
-        if (!accountId) {
-          add(createFinancialTransactionAccountColumn(helper, "w-32"));
-        }
-        add(
-          createFinancialTransactionStatusColumn(helper, {
-            onSave: async (status, transaction) => {
-              await update.mutateAsync({
-                id: transaction.id,
-                data: { status },
-              });
-            },
-          }),
-        );
-        add(createFinancialTransactionPostedDateColumn(helper, "w-24"));
-        add(
-          createFinancialTransactionAmountColumn(helper, {
-            className: "w-36",
-            render: (transaction) =>
-              linkedTransactionAmount(transaction, purchaseId),
-          }),
-        );
+        createEntityDisplayColumns(
+          "financialTransaction",
+          helper,
+          createCubbyColumnCollection<FinancialTransactionOut>((override) =>
+            override(
+              helper.accessor("amount", {
+                cell: (info) =>
+                  linkedTransactionAmount(info.row.original, purchaseId),
+              }),
+            ),
+          ),
+          {
+            only: [
+              ...(accountId ? [] : ["accountId"]),
+              "status",
+              "postedDate",
+              "amount",
+            ],
+            onSaveField,
+          },
+        ).visit(add);
         if (onEditTransaction) {
           add(
             helper.display({
@@ -165,7 +155,7 @@ export function LinkedTransactions({
           );
         }
       }),
-    [accountId, helper, onEditTransaction, purchaseId, update],
+    [accountId, helper, onEditTransaction, onSaveField, purchaseId],
   );
   const list = useEntityList<
     FinancialTransactionOut,

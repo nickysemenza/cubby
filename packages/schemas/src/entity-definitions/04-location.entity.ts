@@ -295,7 +295,13 @@ export default defineEntity({
         key: "lastBulkInventory",
         kind: "timestamp",
         nullable: true,
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          format: "timestamp",
+          mobile: { slot: "meta", priority: 90 },
+        },
         validation: {
           read: z.date().nullable(),
           create: null,

@@ -74,7 +74,7 @@ export default defineEntity({
         key: "provisional",
         kind: "boolean",
         control: { kind: "checkbox", sectionOverride: "details" },
-        display: { list: true, detail: true },
+        display: { list: true, detail: true, width: "sm" },
         validation: {
           read: z.boolean(),
           create: z.boolean().default(false),
@@ -139,6 +139,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          width: "md",
         },
         validation: {
           read: ledgerPartyShortcode.nullable(),

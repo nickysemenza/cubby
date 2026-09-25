@@ -245,7 +245,13 @@ export default defineEntity({
         key: "verifiedAt",
         kind: "timestamp",
         nullable: true,
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          format: "timestamp",
+          mobile: { slot: "meta", priority: 60 },
+        },
         validation: {
           read: z
             .date()

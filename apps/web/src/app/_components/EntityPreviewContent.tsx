@@ -1,4 +1,3 @@
-import { displayGtin } from "@cubby/schemas/external-id";
 import {
   currentLast4,
   type FinancialAccountOut,
@@ -33,6 +32,10 @@ import {
 import { ProjectMark, ProjectMarkById } from "~/app/projects/project-mark";
 import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 import { wishPriceRange } from "~/app/wishes/wish-price-range";
+import {
+  ProductGtin,
+  productGtinLabel,
+} from "~/components/entity/product-gtin";
 import { Row } from "~/components/layout";
 import { cookbook } from "~/entities/cookbook.functions";
 import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
@@ -282,12 +285,8 @@ function productCardBody(data: EntityDetailByEntity["product"]): BodyBlock[] {
     });
   if (data.primaryGtin !== null)
     stats.push({
-      label: "UPC",
-      value: (
-        <span className="font-mono text-xs">
-          {displayGtin(data.primaryGtin)}
-        </span>
-      ),
+      label: productGtinLabel(data.primaryGtin),
+      value: <ProductGtin gtin={data.primaryGtin} className="text-xs" />,
     });
   if (data.onHandUnits != null)
     stats.push({ label: "On hand", value: data.onHandUnits });

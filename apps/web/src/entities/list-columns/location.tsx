@@ -12,7 +12,6 @@ import {
   createImageColumn,
   createInventoryEntriesColumn,
   createSingleEntityInlineLinkColumn,
-  createTimestampColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
@@ -126,14 +125,6 @@ export const locationListOverride = defineListOverride<
                 },
               },
             ),
-          );
-          add(
-            createTimestampColumn(columnHelper, "lastBulkInventory", {
-              header: "Last Bulk Inventory",
-              className: "w-32",
-              fallback: "Never",
-              mobile: { slot: "meta", priority: 90 },
-            }),
           );
         }),
       [],

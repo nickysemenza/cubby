@@ -8,7 +8,6 @@ import type {
   FinancialTransactionOut,
   FinancialTransactionSourceOptionsOut,
 } from "@cubby/schemas/financial-transaction";
-import type { LedgerPartyShortcode } from "@cubby/schemas/identifiers";
 import type {
   LedgerPartyFilters,
   LedgerPartyOut,
@@ -20,11 +19,7 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import {
-  createBooleanColumn,
-  renderOptionCell,
-} from "~/app/_components/data-table/columnHelpers";
-import { EditableEntityCell } from "~/app/_components/data-table/editable-entity-cell";
+import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -32,31 +27,13 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
-import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { TableLink } from "~/app/_components/table/TableLink";
 import {
   financialAccount,
   financialTransaction,
 } from "~/app/finance/finance.functions";
-import {
-  accountIdentityKindOptions,
-  provisionalOptions,
-} from "~/app/finance/financial-account-options";
-import { WithLedgerPartySearch } from "~/app/finance/financial-selectors";
-import {
-  createFinancialTransactionAccountColumn,
-  createFinancialTransactionAmountColumn,
-} from "~/app/finance/financial-transaction-columns";
-import { createLedgerPartyIdentityColumn } from "~/app/finance/ledger-party-columns";
-import {
-  createLedgerTransferAmountColumn,
-  createLedgerTransferEvidenceCountColumn,
-  createLedgerTransferFromPartyColumn,
-  createLedgerTransferToPartyColumn,
-} from "~/app/finance/ledger-transfer-columns";
+import { accountIdentityKindOptions } from "~/app/finance/financial-account-options";
 import { PossibleVendor } from "~/app/finance/possible-vendor";
 import { NoneValue } from "~/components/ui/none-value";
-import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
 import { relationshipFieldProvenance } from "~/entities/field-provenance";
@@ -79,74 +56,15 @@ export const financialAccountListOverride = defineListOverride<
       mutationFn: entityMutationOptionsFactory("financialAccount", "delete"),
       entity: "financialAccount",
     });
-    const updateAccountMutation = useUpdateMutation({
-      mutationFn: entityMutationOptionsFactory("financialAccount", "update"),
-      entity: "financialAccount",
-    });
     const overrides = useMemo(
       () =>
         createCubbyColumnCollection<FinancialAccountOut>((add) => {
-          // Load-bearing: an Expense's funder is DERIVED from the paying
-          // account's owner, so an unowned account is spend the contribution
-          // report cannot attribute.
-          add(
-            accountHelper.accessor("ledgerPartyName", {
-              id: "ledgerPartyId",
-              header: "Owner",
-              meta: { className: "w-36" },
-              cell: (i) => {
-                const account = i.row.original;
-                const partyId = account.ledgerPartyId;
-                return (
-                  <EditableEntityCell<LedgerPartyShortcode>
-                    value={
-                      partyId
-                        ? {
-                            id: partyId,
-                            shortcode: partyId,
-                            name: i.getValue() ?? partyId,
-                          }
-                        : null
-                    }
-                    label="ledgerParty"
-                    SearchProvider={WithLedgerPartySearch}
-                    clearable
-                    onSave={async (ledgerPartyId) => {
-                      await updateAccountMutation.mutateAsync({
-                        id: account.id,
-                        data: { ledgerPartyId },
-                      });
-                    }}
-                    renderValue={(party) =>
-                      party ? <span>{party.name}</span> : <NoneValue />
-                    }
-                  />
-                );
-              },
-            }),
-          );
           add(
             accountHelper.accessor("identity", {
               header: "Identity",
               meta: { className: "w-40" },
               cell: (i) =>
                 renderOptionCell(i.getValue().kind, accountIdentityKindOptions),
-            }),
-          );
-          add(
-            createBooleanColumn(accountHelper, "provisional", {
-              header: "Status",
-              className: "w-28",
-              trueFalseOptions: provisionalOptions,
-              editable: {
-                // `NOT NULL DEFAULT false`: no undecided state to clear to.
-                onSave: async (provisional, account) => {
-                  await updateAccountMutation.mutateAsync({
-                    id: account.id,
-                    data: { provisional: provisional ?? false },
-                  });
-                },
-              },
             }),
           );
           add(
@@ -157,7 +75,6 @@ export const financialAccountListOverride = defineListOverride<
             }),
           );
         }),
-      // oxlint-disable-next-line react/exhaustive-deps -- mutations change every render but are functionally stable
       [],
     );
     const list = useMemo(() => ({ deletable }), [deletable]);
@@ -216,28 +133,6 @@ export const financialTransactionListOverride = defineListOverride<
     const overrides = useMemo(
       () =>
         createCubbyColumnCollection<FinancialTransactionOut>((add) => {
-          add(createFinancialTransactionAccountColumn(transactionHelper));
-          add(createFinancialTransactionAmountColumn(transactionHelper));
-          add(
-            transactionHelper.accessor("purchaseId", {
-              header: "Purchase",
-              meta: { className: "w-32" },
-              cell: (i) => {
-                const purchaseId = i.getValue();
-                return purchaseId ? (
-                  <TableLink
-                    to={entities.purchase.routes.detail}
-                    params={entityDetailParams(purchaseId)}
-                    variant="mono"
-                  >
-                    {purchaseId}
-                  </TableLink>
-                ) : (
-                  "—"
-                );
-              },
-            }),
-          );
           add(
             transactionHelper.accessor("vendorInference", {
               id: "vendorInference",
@@ -314,33 +209,18 @@ export const financialTransactionListOverride = defineListOverride<
 /* Ledger parties and transfers                                            */
 /* ---------------------------------------------------------------------- */
 
-const partyHelper = createCubbyColumnHelper<LedgerPartyOut>();
-const partyOverrides = createCubbyColumnCollection<LedgerPartyOut>((add) => {
-  add(createLedgerPartyIdentityColumn(partyHelper));
-});
-
 /** Read-only: created through the household contribution ledger. */
 export const ledgerPartyListOverride = defineListOverride<
   LedgerPartyOut,
   LedgerPartyFilters
 >({
-  use: () => ({ overrides: partyOverrides }),
+  use: () => ({}),
 });
-
-const transferHelper = createCubbyColumnHelper<LedgerTransferOut>();
-const transferOverrides = createCubbyColumnCollection<LedgerTransferOut>(
-  (add) => {
-    add(createLedgerTransferFromPartyColumn(transferHelper));
-    add(createLedgerTransferToPartyColumn(transferHelper));
-    add(createLedgerTransferAmountColumn(transferHelper));
-    add(createLedgerTransferEvidenceCountColumn(transferHelper));
-  },
-);
 
 /** Read-only: transfers are recorded through the contribution ledger. */
 export const ledgerTransferListOverride = defineListOverride<
   LedgerTransferOut,
   LedgerTransferFilters
 >({
-  use: () => ({ overrides: transferOverrides }),
+  use: () => ({}),
 });
