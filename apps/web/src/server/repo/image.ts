@@ -39,6 +39,7 @@ import {
   desc,
   eq,
   exists,
+  getTableColumns,
   inArray,
   isNotNull,
   isNull,
@@ -55,13 +56,14 @@ import { match } from "ts-pattern";
 
 import { localPhotoAnalysisSchema } from "~/contracts/photo-import.contract";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
-import type {
-  IncomingEdgeKey,
-  IncomingEdgePolicy,
+import {
+  INCOMING_EDGES,
+  type IncomingEdge,
+  type IncomingEdgeKey,
+  type IncomingEdgePolicy,
 } from "~/server/db/entity-incoming-edges";
 import {
   imageDerivative,
-  imageDescriptionCorrection,
   imageProcessingOrphan,
   imageProcessingAttempt,
   imageProcessingJob,
@@ -1639,272 +1641,100 @@ type ImageEdgeOperation = {
   ) => Promise<string[]>;
   joinColumn?: PgColumn;
   /** Processing metadata must cascade on delete but is never user ownership. */
-  countsAsOwnership?: boolean;
+  countsAsOwnership: boolean;
 };
 
-const parseImageIds = (imageIds: readonly string[]): ImageId[] =>
-  imageIds.map((imageId) => parseEntityId("image", imageId));
+/** Edges that record processing of an image, never who owns it. */
+const PROCESSING_EDGES: ReadonlySet<string> = new Set([
+  "ImportRunTarget.imageId",
+  "ImageProcessingJob.imageId",
+  "ImageDerivative.imageId",
+  "ImageDescriptionCorrection.imageId",
+  "ImageSighting.imageId",
+]);
 
-const IMAGE_EDGE_OPERATIONS = {
-  "ImportRunTarget.imageId": {
-    countsAsOwnership: false,
-    clear: async (tx: DrizzleTransaction, imageIds: string[]) => {
-      await tx
-        .delete(importRunTarget)
-        .where(inArray(importRunTarget.imageId, parseImageIds(imageIds)));
-      // The photo also leaves any proposed group of that run; settled groups
-      // keep their history.
-      const keep = (column: SQL) =>
-        sql`COALESCE((SELECT jsonb_agg(entry) FROM jsonb_array_elements(${column}) entry
-          WHERE NOT ((entry->>'imageId')::uuid = ANY(${uuidArrayParam(imageIds)}))), '[]'::jsonb)`;
-      await tx
-        .update(photoGroupProposal)
-        .set({
-          images: keep(sql`${photoGroupProposal.images}`),
-          skip: keep(sql`${photoGroupProposal.skip}`),
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(photoGroupProposal.state, "proposed"),
-            sql`EXISTS (
-              SELECT 1 FROM jsonb_array_elements(${photoGroupProposal.images} || ${photoGroupProposal.skip}) entry
-              WHERE (entry->>'imageId')::uuid = ANY(${uuidArrayParam(imageIds)})
-            )`,
-          ),
-        );
-    },
-    findReferenced: async (
-      dbc: DrizzleClient | DrizzleTransaction,
-      imageIds?: string[],
-    ) => {
-      const rows = await dbc
-        .select({ imageId: importRunTarget.imageId })
-        .from(importRunTarget)
-        .where(
-          and(
-            isNotNull(importRunTarget.imageId),
-            imageIds
-              ? inArray(importRunTarget.imageId, parseImageIds(imageIds))
-              : undefined,
-          ),
-        );
-      return rows.flatMap(({ imageId }) => (imageId ? [imageId] : []));
-    },
-    joinColumn: undefined,
-  },
-  // Job rows refer to derivatives as well as originals, so they must go first.
-  "ImageProcessingJob.imageId": {
-    countsAsOwnership: false,
-    clear: async (tx: DrizzleTransaction, imageIds: string[]) => {
-      await tx
-        .delete(imageProcessingJob)
-        .where(inArray(imageProcessingJob.imageId, parseImageIds(imageIds)));
-    },
-    findReferenced: async (
-      dbc: DrizzleClient | DrizzleTransaction,
-      imageIds?: string[],
-    ) => {
-      const rows = await dbc
-        .select({ imageId: imageProcessingJob.imageId })
-        .from(imageProcessingJob)
-        .where(
-          imageIds
-            ? inArray(imageProcessingJob.imageId, parseImageIds(imageIds))
-            : undefined,
-        );
-      return rows.map(({ imageId }) => imageId);
-    },
-    joinColumn: undefined,
-  },
-  "ImageDerivative.imageId": {
-    countsAsOwnership: false,
-    clear: async (tx: DrizzleTransaction, imageIds: string[]) => {
-      await tx
-        .delete(imageDerivative)
-        .where(inArray(imageDerivative.imageId, parseImageIds(imageIds)));
-    },
-    findReferenced: async (
-      dbc: DrizzleClient | DrizzleTransaction,
-      imageIds?: string[],
-    ) => {
-      const rows = await dbc
-        .select({ imageId: imageDerivative.imageId })
-        .from(imageDerivative)
-        .where(
-          imageIds
-            ? inArray(imageDerivative.imageId, parseImageIds(imageIds))
-            : undefined,
-        );
-      return rows.map(({ imageId }) => imageId);
-    },
-    joinColumn: undefined,
-  },
-  "ImageDescriptionCorrection.imageId": {
-    countsAsOwnership: false,
-    clear: async (tx: DrizzleTransaction, imageIds: string[]) => {
-      await tx
-        .delete(imageDescriptionCorrection)
-        .where(
-          inArray(imageDescriptionCorrection.imageId, parseImageIds(imageIds)),
-        );
-    },
-    findReferenced: async (
-      dbc: DrizzleClient | DrizzleTransaction,
-      imageIds?: string[],
-    ) => {
-      const rows = await dbc
-        .select({ imageId: imageDescriptionCorrection.imageId })
-        .from(imageDescriptionCorrection)
-        .where(
-          imageIds
-            ? inArray(
-                imageDescriptionCorrection.imageId,
-                parseImageIds(imageIds),
-              )
-            : undefined,
-        );
-      return rows.map(({ imageId }) => imageId);
-    },
-    joinColumn: undefined,
-  },
-  "ImageSighting.imageId": {
-    countsAsOwnership: false,
-    clear: async (tx: DrizzleTransaction, imageIds: string[]) => {
-      await tx
-        .delete(imageSighting)
-        .where(inArray(imageSighting.imageId, parseImageIds(imageIds)));
-    },
-    findReferenced: async (
-      dbc: DrizzleClient | DrizzleTransaction,
-      imageIds?: string[],
-    ) => {
-      const rows = await dbc
-        .select({ imageId: imageSighting.imageId })
-        .from(imageSighting)
-        .where(
-          imageIds
-            ? inArray(imageSighting.imageId, parseImageIds(imageIds))
-            : undefined,
-        );
-      return rows.map(({ imageId }) => imageId);
-    },
-    joinColumn: undefined,
-  },
-  "ImportPreparedOrder.primaryDocumentImageId": {
+/**
+ * A removed photo also leaves any proposed group of its import run; settled
+ * groups keep their history.
+ */
+const dropFromProposedGroups = async (
+  tx: DrizzleTransaction,
+  imageIds: string[],
+) => {
+  const keep = (column: SQL) =>
+    sql`COALESCE((SELECT jsonb_agg(entry) FROM jsonb_array_elements(${column}) entry
+      WHERE NOT ((entry->>'imageId')::uuid = ANY(${uuidArrayParam(imageIds)}))), '[]'::jsonb)`;
+  await tx
+    .update(photoGroupProposal)
+    .set({
+      images: keep(sql`${photoGroupProposal.images}`),
+      skip: keep(sql`${photoGroupProposal.skip}`),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(photoGroupProposal.state, "proposed"),
+        sql`EXISTS (
+          SELECT 1 FROM jsonb_array_elements(${photoGroupProposal.images} || ${photoGroupProposal.skip}) entry
+          WHERE (entry->>'imageId')::uuid = ANY(${uuidArrayParam(imageIds)})
+        )`,
+      ),
+    );
+};
+
+/**
+ * One operation per incoming image edge, generated from the edge and its
+ * {@link IMAGE_HARD_DELETE} disposition: `hard-delete` removes the
+ * referencing row, `detach` clears the FK. Job rows refer to derivatives as
+ * well as originals, so policy order (jobs before derivatives) is kept.
+ */
+const imageEdgeOperations: ImageEdgeOperation[] = Object.entries(
+  IMAGE_HARD_DELETE,
+).map(([key, disposition]) => {
+  // SAFETY: IMAGE_HARD_DELETE `satisfies` IncomingEdgePolicy<"image">, and
+  // INCOMING_EDGES is built only from Postgres schema columns.
+  const column = (INCOMING_EDGES.image as Record<string, IncomingEdge>)[key]!
+    .column as PgColumn;
+  // SAFETY: as above — a Postgres column's table is a PgTable.
+  const table = column.table as PgTable;
+  const columns = getTableColumns(table);
+  const property = Object.entries(columns).find(([, c]) => c === column)?.[0];
+  if (!property) throw new Error(`No column property for image edge ${key}`);
+  const live =
+    "deletedAt" in columns
+      ? // SAFETY: the `deletedAt` column was just found on this table.
+        notDeleted(table as PgTable & { deletedAt: PgColumn })
+      : undefined;
+  return {
+    countsAsOwnership: !PROCESSING_EDGES.has(key),
+    joinColumn: table === entityAttachment ? column : undefined,
     clear: async (tx, imageIds) => {
-      await tx
-        .update(importPreparedOrder)
-        .set({ primaryDocumentImageId: null })
-        .where(inArray(importPreparedOrder.primaryDocumentImageId, imageIds));
+      if (disposition.effect === "hard-delete")
+        await tx.delete(table).where(inArray(column, imageIds));
+      else
+        await tx
+          .update(table)
+          .set({ [property]: null })
+          .where(inArray(column, imageIds));
+      if (table === importRunTarget) await dropFromProposedGroups(tx, imageIds);
     },
     findReferenced: async (dbc, imageIds) => {
       const rows = await dbc
-        .select({ imageId: importPreparedOrder.primaryDocumentImageId })
-        .from(importPreparedOrder)
+        .select({ imageId: column })
+        .from(table)
         .where(
           and(
-            isNotNull(importPreparedOrder.primaryDocumentImageId),
-            imageIds
-              ? inArray(importPreparedOrder.primaryDocumentImageId, imageIds)
-              : undefined,
+            isNotNull(column),
+            imageIds ? inArray(column, imageIds) : undefined,
+            live,
           ),
         );
-      return rows.flatMap(({ imageId }) => (imageId ? [imageId] : []));
+      return rows.flatMap(({ imageId }) =>
+        imageId == null ? [] : [String(imageId)],
+      );
     },
-    joinColumn: undefined,
-  },
-  "ImportPreparedOrder.screenshotImageId": {
-    clear: async (tx, imageIds) => {
-      await tx
-        .update(importPreparedOrder)
-        .set({ screenshotImageId: null })
-        .where(inArray(importPreparedOrder.screenshotImageId, imageIds));
-    },
-    findReferenced: async (dbc, imageIds) => {
-      const rows = await dbc
-        .select({ imageId: importPreparedOrder.screenshotImageId })
-        .from(importPreparedOrder)
-        .where(
-          and(
-            isNotNull(importPreparedOrder.screenshotImageId),
-            imageIds
-              ? inArray(importPreparedOrder.screenshotImageId, imageIds)
-              : undefined,
-          ),
-        );
-      return rows.flatMap(({ imageId }) => (imageId ? [imageId] : []));
-    },
-    joinColumn: undefined,
-  },
-  "ImportHunt.receiptImageId": {
-    clear: async (tx, imageIds) => {
-      await tx
-        .update(importHunt)
-        .set({ receiptImageId: null })
-        .where(inArray(importHunt.receiptImageId, imageIds));
-    },
-    findReferenced: async (dbc, imageIds) => {
-      const rows = await dbc
-        .select({ imageId: importHunt.receiptImageId })
-        .from(importHunt)
-        .where(
-          and(
-            isNotNull(importHunt.receiptImageId),
-            imageIds ? inArray(importHunt.receiptImageId, imageIds) : undefined,
-          ),
-        );
-      return rows.flatMap(({ imageId }) => (imageId ? [imageId] : []));
-    },
-    joinColumn: undefined,
-  },
-  "OrderMailAttachment.imageId": {
-    clear: async (tx, imageIds) => {
-      await tx
-        .update(orderMailAttachment)
-        .set({ imageId: null })
-        .where(inArray(orderMailAttachment.imageId, imageIds));
-    },
-    findReferenced: async (dbc, imageIds) => {
-      const rows = await dbc
-        .select({ imageId: orderMailAttachment.imageId })
-        .from(orderMailAttachment)
-        .where(
-          and(
-            isNotNull(orderMailAttachment.imageId),
-            imageIds
-              ? inArray(orderMailAttachment.imageId, imageIds)
-              : undefined,
-          ),
-        );
-      return rows.flatMap(({ imageId }) => (imageId ? [imageId] : []));
-    },
-    joinColumn: undefined,
-  },
-  "EntityAttachment.imageId": {
-    clear: async (tx, imageIds) => {
-      await tx
-        .delete(entityAttachment)
-        .where(inArray(entityAttachment.imageId, imageIds));
-    },
-    findReferenced: async (dbc, imageIds) => {
-      const rows = await dbc
-        .select({ imageId: entityAttachment.imageId })
-        .from(entityAttachment)
-        .where(
-          and(
-            imageIds ? inArray(entityAttachment.imageId, imageIds) : undefined,
-            notDeleted(entityAttachment),
-          ),
-        );
-      return rows.map(({ imageId }) => imageId);
-    },
-    joinColumn: entityAttachment.imageId,
-  },
-} satisfies Record<IncomingEdgeKey<"image">, ImageEdgeOperation>;
-const imageEdgeOperations: ImageEdgeOperation[] = Object.values(
-  IMAGE_EDGE_OPERATIONS,
-);
+  };
+});
 
 /**
  * Resolve `imageIds` down to the subset that actually exists — bogus or
