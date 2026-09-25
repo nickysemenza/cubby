@@ -244,7 +244,7 @@ const detach = async (
  * Apply every non-root disposition: blocks, then detaches and overrides.
  * Returns the child removals, in policy order, for `removeEntity`.
  */
-export const applyDispositions = async <E extends RemovableEntity>(
+const applyDispositions = async <E extends RemovableEntity>(
   tx: Tx,
   args: {
     entity: E;
