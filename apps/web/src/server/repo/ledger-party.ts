@@ -1,5 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
@@ -10,7 +9,6 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   LedgerPartyCreateInput,
   LedgerPartyFilters,
-  LedgerPartyKind,
   LedgerPartyOptionsOut,
   LedgerPartyOut,
   LedgerPartyUpdateData,
@@ -21,8 +19,7 @@ import {
   mealFoodAmountFromStored,
 } from "@cubby/schemas/meal";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { buildTakeSkip } from "@cubby/schemas/pagination";
-import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -48,24 +45,17 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
-  dataQualityFilterPredicates,
-  dataQualitySortResolver,
-  loadDataQualities,
-} from "~/server/repo/data-quality";
-import {
-  auditDateWhereConditions,
   buildPartialUpdateValues,
-  countWhere,
-  executeListQueryWithCount,
   getDb,
   notDeleted,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { applyInventoryOwnershipInTransaction } from "~/server/repo/inventory/ownership-mutations";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge/core";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal/entity";
@@ -282,43 +272,34 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
   },
 } as const satisfies IncomingEdgePolicy<"ledgerParty", OperationDisposition>;
 
-const columns = {
-  id: ledgerParty.id,
-  shortcode: ledgerParty.shortcode,
-  name: ledgerParty.name,
-  kind: ledgerParty.kind,
-  notes: ledgerParty.notes,
-  createdAt: ledgerParty.createdAt,
-  updatedAt: ledgerParty.updatedAt,
-} as const;
+type LedgerPartyRow = typeof ledgerParty.$inferSelect;
 
-type LedgerPartyRow = {
-  id: LedgerPartyId;
-  shortcode: string;
-  name: string;
-  kind: LedgerPartyKind;
-  notes: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+const hydrate = async (
+  db: Database | DrizzleTransaction,
+  rows: LedgerPartyRow[],
+): Promise<LedgerPartyOut[]> => {
+  const dataQualities = await loadDataQualities(
+    db,
+    "ledgerParty",
+    rows.map((row) => row.id),
+  );
+  return rows.map((row) =>
+    ledgerPartyOut.parse({
+      ...row,
+      id: parseShortcodeFor("ledgerParty", row.shortcode),
+      dataQuality: dataQualities.get(row.id),
+    }),
+  );
 };
 
-const toOut = (row: LedgerPartyRow, dataQuality: DataQuality): LedgerPartyOut =>
-  ledgerPartyOut.parse({
-    id: parseShortcodeFor("ledgerParty", row.shortcode),
-    name: row.name,
-    kind: row.kind,
-    notes: row.notes,
-    dataQuality,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  });
+const scaffold = listScaffold("ledgerParty", ledgerParty);
 
 const getById = async (
   db: Database | DrizzleTransaction,
   id: LedgerPartyId,
 ): Promise<LedgerPartyRow | undefined> => {
   const [row] = await unwrapDb(db)
-    .select(columns)
+    .select()
     .from(ledgerParty)
     .where(and(eq(ledgerParty.id, id), notDeleted(ledgerParty)))
     .limit(1);
@@ -332,80 +313,35 @@ const reader = createEntityReader<
 >({
   entity: "ledgerParty",
   fetchById: getById,
-  fromDB: async (db, row) => {
-    const dataQualities = await loadDataQualities(db, "ledgerParty", [row.id]);
-    // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
-    return toOut(row, dataQualities.get(row.id)!);
-  },
+  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
 });
 
 export const getLedgerPartyByShortcode = reader.getByShortcode;
 
-/**
- * The complete WHERE for this entity's list. Not on `listScaffold`: the list
- * composes its declared predicates and sort stack below.
- */
+/** The complete WHERE for this entity's list; `search` and `kind` are declared. */
 export const buildLedgerPartyWhere = (filters: LedgerPartyFilters) =>
-  and(
-    notDeleted(ledgerParty),
-    ...auditDateWhereConditions(ledgerParty, filters),
-    // `search` (trimmed, over name) and `kind` are declared stored filters.
-    ...declaredFilterPredicates("ledgerParty", ledgerParty, filters),
+  scaffold.where(filters, [
     ...relatedWhereConditions("ledgerParty", filters, ledgerParty.id),
-    ...dataQualityFilterPredicates("ledgerParty", ledgerParty, filters),
-  );
+  ]);
 
-export async function listLedgerParties(
+export const listLedgerParties = (
   db: Database,
   filters: LedgerPartyFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-) {
-  const where = buildLedgerPartyWhere(filters);
-  const orderBy = (
-    sorts.length ? sorts : [{ orderBy: "name", direction: "asc" as const }]
-  ).flatMap((order) => {
-    const dataQualityOrderBy = dataQualitySortResolver(
-      "ledgerParty",
-      ledgerParty,
-    )(order);
-    if (dataQualityOrderBy) return dataQualityOrderBy;
-    const column = (() => {
-      switch (order.orderBy) {
-        case "kind":
-          return ledgerParty.kind;
-        case "createdAt":
-          return ledgerParty.createdAt;
-        case "updatedAt":
-          return ledgerParty.updatedAt;
-        default:
-          return ledgerParty.name;
-      }
-    })();
-    return [order.direction === "desc" ? desc(column) : asc(column)];
-  });
-  const { take, skip } = buildTakeSkip(pagination);
-  const { data, count } = await executeListQueryWithCount(
-    getDb(db)
-      .select(columns)
-      .from(ledgerParty)
-      .where(where)
-      .orderBy(...orderBy, asc(ledgerParty.shortcode), asc(ledgerParty.id))
-      .limit(take)
-      .offset(skip),
-    countWhere(db, ledgerParty, where),
-  );
-  const dataQualities = await loadDataQualities(
+) =>
+  scaffold.list(
     db,
-    "ledgerParty",
-    data.map((row) => row.id),
+    {
+      filters,
+      sorts: sorts.length ? sorts : [{ orderBy: "name", direction: "asc" }],
+      pagination,
+    },
+    {
+      where: buildLedgerPartyWhere(filters),
+      hydrate: (rows) => hydrate(db, rows),
+    },
   );
-  return {
-    // SAFETY: `row` came from `data`, which `dataQualities` was loaded for.
-    data: data.map((row) => toOut(row, dataQualities.get(row.id)!)),
-    count,
-  };
-}
 
 /**
  * The ledger-party picklist — feeds the accounts table's Owner editor.
@@ -474,7 +410,7 @@ export async function updateLedgerParty(
   const id = await resolveOrThrow(db, "ledgerParty", shortcode);
   await withTransaction(db, async (tx) => {
     const [before] = await tx
-      .select(columns)
+      .select()
       .from(ledgerParty)
       .where(and(eq(ledgerParty.id, id), notDeleted(ledgerParty)))
       .for("update")
@@ -538,7 +474,7 @@ export async function deleteLedgerParties(
   const ids = uniq(await resolveAllOrThrow(db, "ledgerParty", shortcodes));
   return withTransaction(db, async (tx) => {
     const parties = await tx
-      .select(columns)
+      .select()
       .from(ledgerParty)
       .where(and(inArray(ledgerParty.id, ids), notDeleted(ledgerParty)))
       .for("update");
@@ -827,7 +763,7 @@ export async function mergeLedgerParties(
   let deviceEdgesRepointed = 0;
   await withTransaction(db, async (tx) => {
     const parties = await tx
-      .select(columns)
+      .select()
       .from(ledgerParty)
       .where(
         and(

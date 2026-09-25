@@ -35,14 +35,12 @@ import {
   statementRow,
   vendor,
 } from "~/server/db/schema";
+import { entityRepository } from "~/server/entity-kernel/adapter";
 import { createAppError, createBlockedError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
-  auditDateWhereConditions,
   buildPartialUpdateValues,
-  countWhere,
-  executeListQueryWithCount,
   getDb,
   lockAndValidateForDelete,
   matchesStringValues,
@@ -114,15 +112,21 @@ const columns = {
   transactionCount,
 } as const;
 
-type FinancialAccountRow = Omit<
-  typeof financialAccount.$inferSelect,
-  "ledgerPartyId" | "providerVendorId" | "deletedAt"
-> & {
-  transactionCount: number;
-  ledgerPartyShortcode: string | null;
-  ledgerPartyName: string | null;
-  providerVendorShortcode: string | null;
-  providerVendorName: string | null;
+const selectAccounts = (db: Database | DrizzleTransaction) =>
+  unwrapDb(db).select(columns).from(financialAccount);
+type FinancialAccountRow = Awaited<ReturnType<typeof selectAccounts>>[number];
+
+const hydrate = async (
+  db: Database | DrizzleTransaction,
+  rows: FinancialAccountRow[],
+): Promise<FinancialAccountOut[]> => {
+  const dataQualities = await loadDataQualities(
+    db,
+    "financialAccount",
+    rows.map((row) => row.id),
+  );
+  // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+  return rows.map((row) => toOut(row, dataQualities.get(row.id)!));
 };
 
 const toOut = (
@@ -205,7 +209,6 @@ export const buildFinancialAccountWhere = (filters: FinancialAccountFilters) =>
   // `name` (text) and `provisional` (boolean) are declared stored filters —
   // applied by `.where` before the conditions below.
   financialAccountScaffold.where(filters, [
-    ...auditDateWhereConditions(financialAccount, filters),
     ...relatedWhereConditions("financialAccount", filters, financialAccount.id),
     // `matchesStringValues`, NOT sql`expr = ANY(${arr})`: drizzle expands a
     // JS array in a template into a row constructor (`ANY(($1, $2))`), which
@@ -239,46 +242,30 @@ export const buildFinancialAccountWhere = (filters: FinancialAccountFilters) =>
         : undefined,
   ]);
 
-export async function listFinancialAccounts(
+export const listFinancialAccounts = (
   db: Database,
   filters: FinancialAccountFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-): Promise<{ data: FinancialAccountOut[]; count: number }> {
-  const where = buildFinancialAccountWhere(filters);
-  const { take, skip } = financialAccountScaffold.page(pagination);
-  const { data: rows, count } = await executeListQueryWithCount(
-    getDb(db)
-      .select(columns)
-      .from(financialAccount)
-      .where(where)
-      .orderBy(
-        ...financialAccountScaffold.orderBy(
-          sorts,
-          {
-            resolve: (sort) =>
-              sort.orderBy === "transactionCount"
-                ? [(sort.direction === "asc" ? asc : desc)(transactionCount)]
-                : null,
-          },
-          filters,
-        ),
-      )
-      .limit(take)
-      .offset(skip),
-    countWhere(db, financialAccount, where),
-  );
-  const dataQualities = await loadDataQualities(
+): Promise<{ data: FinancialAccountOut[]; count: number }> =>
+  financialAccountScaffold.list(
     db,
-    "financialAccount",
-    rows.map((row) => row.id),
+    { filters, sorts, pagination },
+    {
+      where: buildFinancialAccountWhere(filters),
+      resolveSort: (sort) =>
+        sort.orderBy === "transactionCount"
+          ? [(sort.direction === "asc" ? asc : desc)(transactionCount)]
+          : null,
+      select: (page) =>
+        selectAccounts(db)
+          .where(page.where)
+          .orderBy(...page.orderBy)
+          .limit(page.limit)
+          .offset(page.offset),
+      hydrate: (rows) => hydrate(db, rows),
+    },
   );
-  return {
-    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-    data: rows.map((row) => toOut(row, dataQualities.get(row.id)!)),
-    count,
-  };
-}
 
 const financialAccountReader = createEntityReader<
   FinancialAccountRow,
@@ -288,20 +275,12 @@ const financialAccountReader = createEntityReader<
 >({
   entity: "financialAccount",
   fetchById: async (db, id) => {
-    const [row] = await unwrapDb(db)
-      .select(columns)
-      .from(financialAccount)
+    const [row] = await selectAccounts(db)
       .where(and(eq(financialAccount.id, id), notDeleted(financialAccount)))
       .limit(1);
     return row;
   },
-  fromDB: async (db, row) => {
-    const dataQualities = await loadDataQualities(db, "financialAccount", [
-      row.id,
-    ]);
-    // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
-    return toOut(row, dataQualities.get(row.id)!);
-  },
+  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
 });
 
 const getFinancialAccountByID = financialAccountReader.getByID;
@@ -672,3 +651,12 @@ async function assertNoBlockingCounts(
     blockers,
   );
 }
+
+export const financialAccountRepository = entityRepository({
+  lifecycle: { delete: FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY },
+  get: getFinancialAccountByShortcode,
+  list: listFinancialAccounts,
+  create: createFinancialAccount,
+  update: updateFinancialAccount,
+  delete: deleteFinancialAccounts,
+});

@@ -65,7 +65,6 @@ import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   assertNoDependents,
   associatePendingImages,
-  auditDateWhereConditions,
   buildOrderBy,
   buildPartialUpdateValues,
   countWhere,
@@ -801,7 +800,6 @@ export const buildLocationWhere = async (
   // `nameFilter`, `type` and `aiDescriptionPresenceFilter` are declared stored
   // filters — applied by `locationScaffold.where` before the conditions below.
   return locationScaffold.where(filters, [
-    ...auditDateWhereConditions(location, filters),
     ...relatedWhereConditions("location", filters, location.id),
     parentCondition,
     productCondition,

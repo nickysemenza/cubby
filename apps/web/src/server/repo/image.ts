@@ -95,7 +95,6 @@ import {
 } from "~/server/repo/data-quality";
 import {
   associatePendingImages,
-  auditDateWhereConditions,
   countWhere,
   eqAny,
   eqAnyRequested,
@@ -1168,7 +1167,6 @@ export const buildImageWhere = async (
     // and the `dataStatus`/`dataGap`/`dataQuality`-sort filters bind inside
     // `imageScaffold.where` itself; only the resolved-shortcode and
     // subquery predicates stay hand-written here.
-    ...auditDateWhereConditions(listImage, filters),
     referencePresence,
     importTargetCondition,
     eqAnyRequested(listImage.capturedByPartyId, capturedByPartyIds),

@@ -597,8 +597,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/image-sighting.entity-adapter",
-        export: "imageSightingEntityAdapter",
+        module: "~/server/repo/image-sighting",
+        export: "imageSightingRepository",
       },
     },
   },

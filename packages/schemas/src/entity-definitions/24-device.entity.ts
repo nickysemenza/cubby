@@ -451,8 +451,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/device.entity-adapter",
-        export: "deviceEntityAdapter",
+        module: "~/server/repo/device",
+        export: "deviceRepository",
       },
     },
   },

@@ -32,9 +32,6 @@ import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   associatePendingImages,
-  auditDateWhereConditions,
-  countWhere,
-  executeListQueryWithCount,
   getDb,
   imageCascadeChild,
   imageJoinBindings,
@@ -241,7 +238,6 @@ export const buildMealWhere = (
   // unslotted") and `mealKind` are declared stored filters — applied by
   // `mealScaffold.where` before the conditions below.
   return mealScaffold.where(filters, [
-    ...auditDateWhereConditions(meal, filters),
     // `mealFilterFields` spreads `mealRelatedFilterFields` (the recipe trio) and
     // the manifest renders its control — omitting this is the #588 drift, where
     // the UI sends a filter the server silently ignores.
@@ -261,7 +257,6 @@ export const mealList = async (
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
 ) => {
-  const dbClient = getDb(db);
   // `mealType` must sort by slot, not by slug: a plain text ordering puts
   // dessert before dinner, which reads as a broken table. `mealTypeValues`
   // declaration order IS clock order (the calendar sorts a day by it), so
@@ -278,47 +273,31 @@ export const mealList = async (
         : sql`${rank} desc nulls last`,
     ];
   };
-  const orderByArray = mealScaffold.orderBy(
-    sorts,
+  return mealScaffold.list(
+    db,
+    { filters, sorts, pagination, readIntent },
     {
-      resolve: resolveMealSort,
+      where: buildMealWhere(db, filters),
+      resolveSort: resolveMealSort,
       // An unnamed meal displays as its date, so a name sort would otherwise
       // dump every one of them into an arbitrarily-ordered NULL block. This
       // orders that block the way its visible label reads.
       tieBreaker: sql`${meal.date} desc`,
+      select: (page) =>
+        getDb(db).query.meal.findMany({ ...page, ...relations.meal.full }),
+      hydrate: async (rows) => {
+        const qualities = await loadDataQualities(
+          db,
+          "meal",
+          rows.map((row) => row.id),
+        );
+        return withDisplayImages(db, "meal", rows, (row) =>
+          // SAFETY: `row` came from `rows`, which `qualities` was loaded for.
+          dbMealToAPI(row, qualities.get(row.id)!),
+        );
+      },
     },
-    filters,
   );
-  const { take, skip } = mealScaffold.page(pagination);
-
-  const whereCondition = buildMealWhere(db, filters);
-
-  const { data: rows, count } = await executeListQueryWithCount({
-    kind: readIntent,
-    rows: () =>
-      dbClient.query.meal.findMany({
-        where: whereCondition,
-        orderBy: orderByArray,
-        limit: take,
-        offset: skip,
-        ...relations.meal.full,
-      }),
-    count: () => countWhere(db, meal, whereCondition),
-  });
-  if (readIntent === "count") {
-    return { data: [], count };
-  }
-
-  const qualities = await loadDataQualities(
-    db,
-    "meal",
-    rows.map((row) => row.id),
-  );
-  const items = await withDisplayImages(db, "meal", rows, (row) =>
-    // SAFETY: `row` came from `rows`, which `qualities` was loaded for.
-    dbMealToAPI(row, qualities.get(row.id)!),
-  );
-  return { data: items, count };
 };
 
 export const createMealWithEntityId = async (

@@ -56,10 +56,7 @@ import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   associatePendingImages,
-  auditDateWhereConditions,
-  countWhere,
   eqAnyRequested,
-  executeListQueryWithCount,
   getDb,
   idSetPresence,
   imageCascadeChild,
@@ -457,7 +454,6 @@ export const buildRecipeWhere = async (
   // declared stored filters — applied by `recipeScaffold.where` before the
   // conditions below.
   return recipeScaffold.where(filters, [
-    ...auditDateWhereConditions(recipe, filters),
     ...relatedWhereConditions("recipe", filters, recipe.id),
     // `eqAnyRequested` + `presenceCondition` rather than `eqAnyOrPresence`:
     // the id half must distinguish "no cookbook filter" (unrestricted) from
@@ -501,9 +497,6 @@ export const recipeList = async (
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
 ) => {
-  const dbClient = getDb(db);
-  const whereClause = await buildRecipeWhere(db, filters);
-
   const resolveRecipeSort = (s: SortParams): SQL[] | null => {
     const isAsc = s.direction === "asc";
     const dir = (col: AnyColumn): SQL =>
@@ -539,53 +532,40 @@ export const recipeList = async (
       ];
     return null;
   };
-  const orderByClause = recipeScaffold.orderBy(
-    sorts,
+  return recipeScaffold.list(
+    db,
+    { filters, sorts, pagination, readIntent },
     {
-      resolve: resolveRecipeSort,
+      where: await buildRecipeWhere(db, filters),
+      resolveSort: resolveRecipeSort,
       tieBreaker: sql`${recipe.name} asc`,
+      // List reads fetch flat rows and scalar counts; never full graphs. The
+      // thumbnail comes from the display-image resolver, not an images join.
+      select: (page) =>
+        getDb(db).query.recipe.findMany({
+          ...page,
+          extras: {
+            mealCount: sql<number>`${sql.raw(
+              liveMealCountForRecipeSql('"recipe"."id"'),
+            )}`.as("mealCount"),
+            sectionCount: sql<number>`${sql.raw(
+              liveSectionCountForRecipeSql('"recipe"."id"'),
+            )}`.as("sectionCount"),
+          },
+        }),
+      hydrate: async (rows) => {
+        const qualities = await loadDataQualities(
+          db,
+          "recipe",
+          rows.map((row) => row.id),
+        );
+        return withDisplayImages(db, "recipe", rows, (row, displayImages) =>
+          // SAFETY: `row` came from `rows`, which `qualities` was loaded for.
+          dbRecipeToListAPI(row, displayImages, qualities.get(row.id)!),
+        );
+      },
     },
-    filters,
   );
-
-  const { take, skip } = recipeScaffold.page(pagination);
-
-  // List reads fetch flat rows and scalar counts; never full graphs. The
-  // thumbnail comes from the display-image resolver, not an images join.
-  const { data: results, count: totalCount } = await executeListQueryWithCount({
-    kind: readIntent,
-    rows: () =>
-      dbClient.query.recipe.findMany({
-        where: whereClause,
-        orderBy: orderByClause,
-        limit: take,
-        offset: skip,
-        extras: {
-          mealCount: sql<number>`${sql.raw(
-            liveMealCountForRecipeSql('"recipe"."id"'),
-          )}`.as("mealCount"),
-          sectionCount: sql<number>`${sql.raw(
-            liveSectionCountForRecipeSql('"recipe"."id"'),
-          )}`.as("sectionCount"),
-        },
-      }),
-    count: () => countWhere(db, recipe, whereClause),
-  });
-
-  const qualities = await loadDataQualities(
-    db,
-    "recipe",
-    results.map((row) => row.id),
-  );
-  const items = await withDisplayImages(
-    db,
-    "recipe",
-    results,
-    (row, displayImages) =>
-      // SAFETY: `row` came from `results`, which `qualities` was loaded for.
-      dbRecipeToListAPI(row, displayImages, qualities.get(row.id)!),
-  );
-  return { data: items, count: totalCount };
 };
 
 export type CookbookRef = { id: CookbookId; name: string };

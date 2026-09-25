@@ -44,7 +44,6 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
-  auditDateWhereConditions,
   correlated,
   countWhere,
   getDb,
@@ -425,7 +424,6 @@ const vendorScaffold = listScaffold("vendor", vendor);
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export const buildVendorWhereClause = (filters: VendorFilters) =>
   vendorScaffold.where(filters, [
-    ...auditDateWhereConditions(vendor, filters),
     ...rangeConditions(vendorPurchaseCount, filters, "purchaseCount"),
     ...rangeConditions(vendorSpend, filters, "spend"),
     filters.latestPurchaseDatePresenceFilter === "has"

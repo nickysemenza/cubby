@@ -464,6 +464,49 @@ export async function lookupEntityLabels(
   return names;
 }
 
+/**
+ * FK display pairs — `{id: shortcode, name}` keyed by uuid — in one query for
+ * a page of rows. By default a soft-deleted target is absent, so its field
+ * reads null exactly like a per-row `findFirst(notDeleted)`; `includeDeleted`
+ * is for a required FK whose target may be tombstoned after the fact.
+ */
+export async function lookupEntityReferences<E extends ShortcodeEntity>(
+  db: Database | DrizzleTransaction,
+  entity: E,
+  ids: readonly (string | null | undefined)[],
+  opts: { includeDeleted?: boolean } = {},
+): Promise<Map<string, { id: ShortcodeFor<E>; name: string | null }>> {
+  const wanted = uniq(ids.filter((id): id is string => typeof id === "string"));
+  const result = new Map<
+    string,
+    { id: ShortcodeFor<E>; name: string | null }
+  >();
+  if (wanted.length === 0) return result;
+  const table: ShortcodeTable = SHORTCODE_TABLE[entity];
+  const nameColumn: PgColumn | null = DISPLAY_NAME_COLUMN[entity];
+  const rows = await unwrapDb(db)
+    .select({
+      id: table.id,
+      shortcode: table.shortcode,
+      name: nameColumn ?? table.shortcode,
+    })
+    .from(table)
+    .where(
+      and(
+        inArray(table.id, wanted),
+        opts.includeDeleted ? undefined : notDeleted(table),
+      ),
+    );
+  for (const row of rows) {
+    const name = z.string().safeParse(row.name);
+    result.set(String(row.id), {
+      id: parseShortcodeFor(entity, String(row.shortcode)),
+      name: name.success ? name.data : null,
+    });
+  }
+  return result;
+}
+
 /** Inventory labels are relational: `product · location`. */
 async function inventoryEntryLabels(
   db: Database | DrizzleTransaction,

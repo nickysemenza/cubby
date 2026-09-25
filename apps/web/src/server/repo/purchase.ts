@@ -78,12 +78,9 @@ import {
   touchDataQualityTargets,
 } from "~/server/repo/data-quality";
 import {
-  auditDateWhereConditions,
   buildPartialUpdateValues,
   correlated,
-  countWhere,
   eqAny,
-  executeListQueryWithCount,
   getDb,
   imageCascadeChild,
   imageJoinBindings,
@@ -566,7 +563,6 @@ export const buildPurchaseWhereClause = async (
   // `statedTotal` presence and the `date` bounds are declared stored
   // filters — applied by `purchaseScaffold.where` before the conditions below.
   return purchaseScaffold.where(filters, [
-    ...auditDateWhereConditions(purchase, filters),
     vendorCondition,
     ...relatedWhereConditions("purchase", filters, purchase.id),
     eqAny(purchase.orderId, filters.orderId),
@@ -607,53 +603,37 @@ export const purchaseList = async (
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
 ): Promise<{ data: PurchaseListItemOut[]; count: number }> => {
-  const whereClause = await buildPurchaseWhereClause(db, filters);
-  const { take, skip } = purchaseScaffold.page(pagination);
-
-  const { data: rows, count } = await executeListQueryWithCount({
-    kind: readIntent,
-    rows: () =>
-      getDb(db)
-        .select(purchaseColumns)
-        .from(purchase)
-        .where(whereClause)
-        .orderBy(
-          ...purchaseScaffold.orderBy(
-            sorts,
-            { resolve: resolvePurchaseSort },
-            filters,
+  return purchaseScaffold.list(
+    db,
+    { filters, sorts, pagination, readIntent },
+    {
+      where: await buildPurchaseWhereClause(db, filters),
+      resolveSort: resolvePurchaseSort,
+      select: (page) =>
+        getDb(db)
+          .select(purchaseColumns)
+          .from(purchase)
+          .where(page.where)
+          .orderBy(...page.orderBy)
+          .limit(page.limit)
+          .offset(page.offset),
+      hydrate: async (rows) => {
+        const ids = rows.map((row) => row.id);
+        const [financialByPurchase, dataQualities] = await Promise.all([
+          loadPurchaseFinancialAggregates(db, ids),
+          loadDataQualities(db, "purchase", ids),
+        ]);
+        return withDisplayImages(db, "purchase", rows, (row) =>
+          dbPurchaseToAPI(
+            row,
+            dataQualities.get(row.id)!,
+            [],
+            financialByPurchase.get(row.id),
           ),
-        )
-        .limit(take)
-        .offset(skip),
-    count: () => countWhere(db, purchase, whereClause),
-  });
-  if (readIntent === "count") {
-    return { data: [], count };
-  }
-  const [financialByPurchase, dataQualities] = await Promise.all([
-    loadPurchaseFinancialAggregates(
-      db,
-      rows.map((row) => row.id),
-    ),
-    loadDataQualities(
-      db,
-      "purchase",
-      rows.map((row) => row.id),
-    ),
-  ]);
-
-  return {
-    data: await withDisplayImages(db, "purchase", rows, (row) =>
-      dbPurchaseToAPI(
-        row,
-        dataQualities.get(row.id)!,
-        [],
-        financialByPurchase.get(row.id),
-      ),
-    ),
-    count,
-  };
+        );
+      },
+    },
+  );
 };
 
 export const getPurchaseByID = async (

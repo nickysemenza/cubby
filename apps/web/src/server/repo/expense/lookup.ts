@@ -25,10 +25,7 @@ import type { Database } from "~/server/db";
 import { expense, purchase } from "~/server/db/schema";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
-  auditDateWhereConditions,
-  countWhere,
   eqAny,
-  executeListQueryWithCount,
   formatSearchTerm,
   getDb,
   type ListReadIntent,
@@ -38,7 +35,7 @@ import {
   shortcodeSetCondition,
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { type ListPage, listScaffold } from "~/server/repo/list-scaffold";
 import { disposalPurchaseIds } from "~/server/repo/product/ownership";
 import { matchingEmbeddedProjectIds } from "~/server/repo/project/dashboard-shared";
 import {
@@ -325,7 +322,6 @@ export const buildExpenseWhereClause = async (
   // sub-select — see its doc above.
   const storedFilters = { ...filters, trade: undefined };
   return expenseScaffold.where(storedFilters, [
-    ...auditDateWhereConditions(expense, filters),
     ...relatedWhereConditions("expense", filters, expense.id),
     filters.ledgerPartyId === undefined
       ? undefined
@@ -472,30 +468,29 @@ export const expenseList = async (
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
 ): Promise<{ data: ExpenseListItemOut[]; count: number }> => {
-  const whereClause = await buildExpenseWhereClause(db, filters);
-
-  const orderByArray = expenseScaffold.orderBy(
-    sorts,
+  return expenseScaffold.list(
+    db,
+    { filters, sorts, pagination, readIntent },
     {
-      resolve: resolveExpenseSort,
+      where: await buildExpenseWhereClause(db, filters),
+      resolveSort: resolveExpenseSort,
+      select: (page) => selectExpensePage(db, page),
+      hydrate: (rows) => hydrateExpenseRows(db, rows),
     },
-    filters,
   );
-  const { take, skip } = expenseScaffold.page(pagination);
+};
 
-  const { data: rows, count } = await executeListQueryWithCount({
-    kind: readIntent,
-    rows: () =>
-      getDb(db).query.expense.findMany({
-        where: whereClause,
-        orderBy: orderByArray,
-        limit: take,
-        offset: skip,
-        extras: expenseInheritanceReadExtras(),
-        ...relations.expense.withProject,
-      }),
-    count: () => countWhere(db, expense, whereClause),
+const selectExpensePage = (db: Database, page: ListPage) =>
+  getDb(db).query.expense.findMany({
+    ...page,
+    extras: expenseInheritanceReadExtras(),
+    ...relations.expense.withProject,
   });
+
+const hydrateExpenseRows = async (
+  db: Database,
+  rows: Awaited<ReturnType<typeof selectExpensePage>>,
+): Promise<ExpenseListItemOut[]> => {
   const [allocations, dataQualities] = await Promise.all([
     loadExpenseProjectAllocations(
       db,
@@ -517,17 +512,14 @@ export const expenseList = async (
     allocationsByExpense.set(allocation.expenseId, existing);
   }
 
-  return {
-    data: await withDisplayImages(
-      db,
-      "expense",
-      rows.map((row) => ({
-        ...row,
-        projectAllocations: allocationsByExpense.get(row.id) ?? [],
-      })),
-      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-      (row) => dbExpenseToAPI(row, dataQualities.get(row.id)!),
-    ),
-    count,
-  };
+  return withDisplayImages(
+    db,
+    "expense",
+    rows.map((row) => ({
+      ...row,
+      projectAllocations: allocationsByExpense.get(row.id) ?? [],
+    })),
+    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+    (row) => dbExpenseToAPI(row, dataQualities.get(row.id)!),
+  );
 };

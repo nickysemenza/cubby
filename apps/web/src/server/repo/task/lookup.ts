@@ -25,10 +25,8 @@ import type { Database } from "~/server/db";
 import { product, task } from "~/server/db/schema";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
-  auditDateWhereConditions,
   countWhere,
   eqAnyOrPresence,
-  executeListQueryWithCount,
   formatSearchTerm,
   getDb,
   type ListReadIntent,
@@ -265,7 +263,6 @@ export const buildTaskWhere = async (
   // `status` is declared stored; trade is resolved below instead of reading the
   // applies them via `declaredFilterPredicates` before the conditions below.
   return taskScaffold.where(filters, [
-    ...auditDateWhereConditions(task, filters),
     ...relatedWhereConditions("task", filters, task.id),
     searchCondition(),
     // Carries `projectPresenceFilter` too — it ORs with the id selection, so
@@ -306,57 +303,44 @@ export const taskList = async (
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
 ) => {
-  const dbClient = getDb(db);
   const [whereClause, countWhereClause] = await Promise.all([
     buildTaskWhere(db, filters, "task"),
     buildTaskWhere(db, filters),
   ]);
-
-  const orderByArray = taskScaffold.orderBy(
-    sorts,
+  return taskScaffold.list(
+    db,
+    { filters, sorts, pagination, readIntent },
     {
-      resolve: resolveTaskSort,
+      where: whereClause,
+      count: () => countWhere(db, task, countWhereClause),
+      resolveSort: resolveTaskSort,
+      select: (page) =>
+        getDb(db).query.task.findMany({
+          ...page,
+          ...relations.task.withProject,
+        }),
+      hydrate: async (rows) => {
+        const ids = rows.map((r) => r.id);
+        const [deps, subtaskCounts, dataQualities, hydratedRows] =
+          await Promise.all([
+            taskDependencyIds(db, ids),
+            taskSubtaskCounts(db, ids),
+            loadDataQualities(db, "task", ids),
+            hydrateTaskInheritanceRows(db, rows),
+          ]);
+        return withDisplayImages(db, "task", hydratedRows, (row) => {
+          const counts = subtaskCounts.get(row.id);
+          return dbTaskToAPI(
+            row,
+            deps.blockedBy.get(row.id) ?? [],
+            deps.blocking.get(row.id) ?? [],
+            counts?.count ?? 0,
+            counts?.doneCount ?? 0,
+            // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+            dataQualities.get(row.id)!,
+          );
+        });
+      },
     },
-    filters,
   );
-  const { take, skip } = taskScaffold.page(pagination);
-
-  const { data: rows, count } = await executeListQueryWithCount({
-    kind: readIntent,
-    rows: () =>
-      dbClient.query.task.findMany({
-        where: whereClause,
-        orderBy: orderByArray,
-        limit: take,
-        offset: skip,
-        ...relations.task.withProject,
-      }),
-    count: () => countWhere(db, task, countWhereClause),
-  });
-  if (readIntent === "count") {
-    return { data: [], count };
-  }
-
-  const ids = rows.map((r) => r.id);
-  const [deps, subtaskCounts, dataQualities] = await Promise.all([
-    taskDependencyIds(db, ids),
-    taskSubtaskCounts(db, ids),
-    loadDataQualities(db, "task", ids),
-  ]);
-
-  const hydratedRows = await hydrateTaskInheritanceRows(db, rows);
-  const data = await withDisplayImages(db, "task", hydratedRows, (row) => {
-    const counts = subtaskCounts.get(row.id);
-    return dbTaskToAPI(
-      row,
-      deps.blockedBy.get(row.id) ?? [],
-      deps.blocking.get(row.id) ?? [],
-      counts?.count ?? 0,
-      counts?.doneCount ?? 0,
-      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-      dataQualities.get(row.id)!,
-    );
-  });
-
-  return { data, count };
 };

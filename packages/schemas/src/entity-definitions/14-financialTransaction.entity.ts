@@ -1076,8 +1076,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/financial-transaction.entity-adapter",
-        export: "financialTransactionEntityAdapter",
+        module: "~/server/repo/financial-transaction",
+        export: "financialTransactionRepository",
       },
       search: "document",
     },

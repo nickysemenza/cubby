@@ -433,8 +433,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/ledger-transfer.entity-adapter",
-        export: "ledgerTransferEntityAdapter",
+        module: "~/server/repo/ledger-transfer",
+        export: "ledgerTransferRepository",
       },
     },
   },

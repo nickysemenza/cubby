@@ -698,8 +698,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/financial-account.entity-adapter",
-        export: "financialAccountEntityAdapter",
+        module: "~/server/repo/financial-account",
+        export: "financialAccountRepository",
       },
       search: "document",
     },

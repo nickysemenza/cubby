@@ -82,6 +82,39 @@ export const deletedWithImages = <E extends EntitySchemaBindingEntity>(
   ...entityMutationReferences("image", imageShortcodes),
 ];
 
+/**
+ * What a standard repository object declares beside its `(db, input, actor)`
+ * methods; the generated binding module builds its kernel adapter.
+ */
+export interface StandardRepositoryOptions {
+  lifecycle: EntityLifecycleContract;
+  /** `false` when writes have no dependents to refresh. */
+  sideEffects?: boolean;
+}
+
+/** Declare a standard repository object (see `StandardRepositoryOptions`). */
+export const entityRepository = <T extends StandardRepositoryOptions>(
+  repository: T,
+): T & StandardRepositoryOptions => repository;
+
+/** A standard repository delete's return, reported as kernel references. */
+export const standardDeleteResult = <E extends EntitySchemaBindingEntity>(
+  entity: E,
+  ids: readonly string[],
+  result: {
+    deleted?: number;
+    detachedImageKeys?: string[];
+    deletedImageShortcodes?: readonly string[];
+  } | void,
+): EntityKernelDeleteResult => ({
+  deletedReferences: deletedWithImages(
+    entity,
+    ids,
+    result?.deletedImageShortcodes ?? [],
+  ),
+  detachedImageKeys: result?.detachedImageKeys,
+});
+
 interface EntityKernelDeleteResult {
   deletedReferences: EntityMutationReference[];
   detachedImageKeys?: string[];

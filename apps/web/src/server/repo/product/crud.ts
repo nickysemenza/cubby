@@ -91,7 +91,6 @@ import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   assertNoDependents,
   associatePendingImages,
-  auditDateWhereConditions,
   countWhere,
   executeListQueryWithCount,
   formatSearchTerm,
@@ -826,7 +825,6 @@ export const buildProductWhere = async (
       AND pei."deletedAt" IS NULL))`;
 
   const classificationConditions = () => [
-    ...auditDateWhereConditions(product, filters),
     ...relatedWhereConditions("product", filters, product.id),
     requestedIngredientCodes.length > 0 && selectedIngredientIds.length === 0
       ? sql`false`
