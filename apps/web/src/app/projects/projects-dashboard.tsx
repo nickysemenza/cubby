@@ -25,7 +25,6 @@ import {
 } from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import type { PreviewPresentation } from "~/app/_components/hooks/useEntityPreview";
-import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { ProjectMark } from "~/app/projects/project-mark";
 import type { ProjectPortfolioAnalyticsViewProps } from "~/app/projects/project-portfolio-analytics-view";
 import { DashboardSectionLoading } from "~/components/feedback/loading-skeletons";
@@ -50,6 +49,7 @@ import {
 } from "~/components/ui/empty";
 import { Image } from "~/components/ui/image";
 import { Skeleton } from "~/components/ui/skeleton";
+import type { SummaryItem } from "~/components/ui/stat-tile";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { image, type ProjectImageSummaries } from "~/entities/image.functions";

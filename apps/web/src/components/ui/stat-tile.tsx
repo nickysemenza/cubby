@@ -1,7 +1,18 @@
 import type * as React from "react";
-import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { Grid } from "~/components/layout";
+
+export interface SummaryItem {
+  label: string;
+  value: string | number;
+  formatter?: (value: string | number) => string;
+  /** Optional small muted caption rendered beneath the value. */
+  caption?: string;
+  /** Optional hover tooltip for the caption. */
+  captionTitle?: string;
+  /** Optional secondary line rendered beneath the value. */
+  subValue?: string;
+}
 
 /**
  * One ledger metric: a mono eyebrow label over a big tabular number, with an

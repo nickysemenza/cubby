@@ -1,4 +1,3 @@
-import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import type { Entity } from "@cubby/schemas/entity";
 import { BookmarkIcon } from "@phosphor-icons/react/dist/csr/Bookmark";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
@@ -16,6 +15,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSubmenu,
+  DropdownMenuSubmenuContent,
+  DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
@@ -66,19 +68,6 @@ interface DataTableToolbarProps<TData extends RowData> {
   actionsMenuExtra?: ReactNode;
 }
 
-/**
- * Visually matches `DropdownMenuItem`/`DropdownMenuContent`
- * (`~/components/ui/dropdown-menu.tsx`) but is hand-built here rather than
- * imported: that file has no submenu primitive, and Lane A does not own it
- * (only its `DropdownMenuLabel` region is spoken for). These classes are
- * copy-once, not a fork to maintain — the underlying `@base-ui/react/menu`
- * primitives are the same ones the shared component wraps.
- */
-const submenuTriggerClass =
-  "focus:bg-accent focus:text-accent-foreground relative flex min-h-8 cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-xs/relaxed outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5";
-const submenuContentClass =
-  "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 border-[var(--border)] bg-popover text-popover-foreground z-50 max-h-(--available-height) w-(--anchor-width) min-w-56 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg border p-1 shadow-[var(--shadow-overlay)] duration-150 outline-none data-closed:overflow-hidden";
-
 function SavedViewsSubmenu<TData extends RowData>({
   table,
   entity,
@@ -88,25 +77,16 @@ function SavedViewsSubmenu<TData extends RowData>({
 }) {
   if (viewsForEntity(entity).length === 0) return null;
   return (
-    <MenuPrimitive.SubmenuRoot>
-      <MenuPrimitive.SubmenuTrigger className={submenuTriggerClass}>
+    <DropdownMenuSubmenu>
+      <DropdownMenuSubmenuTrigger>
         <BookmarkIcon />
         Saved views
         <CaretRightIcon className="ml-auto" />
-      </MenuPrimitive.SubmenuTrigger>
-      <MenuPrimitive.Portal>
-        <MenuPrimitive.Positioner
-          className="isolate z-50 outline-none"
-          side="right"
-          align="start"
-          sideOffset={2}
-        >
-          <MenuPrimitive.Popup className={submenuContentClass}>
-            <TableSavedViewsMenuItems table={table} entity={entity} />
-          </MenuPrimitive.Popup>
-        </MenuPrimitive.Positioner>
-      </MenuPrimitive.Portal>
-    </MenuPrimitive.SubmenuRoot>
+      </DropdownMenuSubmenuTrigger>
+      <DropdownMenuSubmenuContent>
+        <TableSavedViewsMenuItems table={table} entity={entity} />
+      </DropdownMenuSubmenuContent>
+    </DropdownMenuSubmenu>
   );
 }
 
