@@ -48,9 +48,11 @@ function PhotoRunProgress({
         ? "Review complete"
         : readyGroups > 0
           ? `${readyGroups} item ${readyGroups === 1 ? "group" : "groups"} ready for your review`
-          : run.dispatch?.eventId
-            ? "Agent is preparing item groups"
-            : "Photos uploaded; ready to group";
+          : run.status === "needs_review"
+            ? "Agent stopped; group photos for review"
+            : run.dispatch?.eventId
+              ? "Agent is preparing item groups"
+              : "Photos uploaded; ready to group";
   return (
     <Card>
       <CardHeader>

@@ -15,6 +15,11 @@ import {
   photoGroupProposal,
   product,
 } from "~/server/db/schema";
+import {
+  latestImportRunProgress,
+  reconcileSettledImportRun,
+  stopImportRunForReview,
+} from "~/server/purchase-import/run-service";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { deleteImages } from "~/server/repo/image";
 import { mergeLedgerParties } from "~/server/repo/ledger-party";
@@ -114,6 +119,78 @@ describe("photo group proposals", () => {
       );
     return row;
   };
+
+  it("hands a saved photo proposal to human review when the agent ends without a final progress call", async () => {
+    const { run, codes } = await seedRun(2);
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [createGroup("shirt", codes)],
+    });
+
+    const settled = await reconcileSettledImportRun(
+      ctx.db,
+      {
+        getByName: () => {
+          throw new Error("A photo run has no vendor browser");
+        },
+      },
+      { runId: run.id, operationId: "synthetic-photo-settle" },
+    );
+    expect(settled).toEqual({ reconciled: false, status: "running" });
+    expect(await latestImportRunProgress(ctx.db, run.id)).toMatchObject({
+      phase: "awaiting_approval",
+      awaitingApproval: true,
+    });
+    expect(
+      (await listPhotoGroupProposals(ctx.db, run.shortcode)).runStatus,
+    ).toBe("running");
+
+    const approved = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode, groupKeys: ["shirt"] },
+      ctx.actor,
+    );
+    expect(approved.results).toEqual([
+      { groupKey: "shirt", outcome: "committed" },
+    ]);
+    expect(approved.runStatus).toBe("completed");
+  });
+
+  it("lets a reviewer finish a photo proposal stranded in needs-review", async () => {
+    const { run, codes } = await seedRun(3);
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [
+        createGroup("shirt", codes.slice(0, 2)),
+        createGroup("hat", [codes[2]!]),
+      ],
+    });
+    await stopImportRunForReview(ctx.db, {
+      runId: run.id,
+      operationId: "synthetic-photo-review-stop",
+      kind: "other",
+      summary: "Agent ended before review handoff",
+    });
+
+    const review = await listPhotoGroupProposals(ctx.db, run.shortcode);
+    expect(review.runStatus).toBe("needs_review");
+    const approved = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode, groupKeys: ["shirt"] },
+      ctx.actor,
+    );
+    expect(approved.results).toEqual([
+      { groupKey: "shirt", outcome: "committed" },
+    ]);
+    expect(approved.runStatus).toBe("needs_review");
+    const final = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode, groupKeys: ["hat"] },
+      ctx.actor,
+    );
+    expect(final.results).toEqual([{ groupKey: "hat", outcome: "committed" }]);
+    expect(final.runStatus).toBe("completed");
+  });
 
   it("keeps photo roles and evidence when a reviewer selects an existing product", async () => {
     const { run, codes } = await seedRun(2);

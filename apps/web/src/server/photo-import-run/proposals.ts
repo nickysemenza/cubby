@@ -6,8 +6,9 @@
  * contract.
  *
  * Invariants:
- *  - every image a `proposed` row mentions is a `pending` target of its run
- *    when saved, and appears in exactly one `proposed` row (attached or
+ *  - every image a `proposed` row mentions is a reviewable target of its run
+ *    when saved (`pending`, or `unresolved` after a stopped photo run), and
+ *    appears in exactly one `proposed` row (attached or
  *    skipped); deleting an image later hard-deletes its target but leaves its
  *    id in the row's JSON, so every reader drops ids with no run target
  *    (`liveRoster`) instead of failing;
@@ -427,7 +428,10 @@ async function buildList(
     proposals: await toViews(db, rows, images.byId),
     unassignedImageIds: images.ordered
       .filter(
-        (entry) => entry.state === "pending" && !assigned.has(entry.imageId),
+        (entry) =>
+          (entry.state === "pending" ||
+            (run.status === "needs_review" && entry.state === "unresolved")) &&
+          !assigned.has(entry.imageId),
       )
       .map((entry) => entry.shortcode),
   });
@@ -450,7 +454,7 @@ type ResolvedGroup = {
   ownerPartyId: LedgerPartyId | null;
 };
 
-/** Resolve one group's codes, refusing any image that is not a still-pending target of this run. */
+/** Resolve one group's codes against targets still available for human review. */
 async function resolveGroup(
   db: Database,
   run: LoadedRun,
@@ -463,9 +467,12 @@ async function resolveGroup(
       throw new Error(
         `Image ${code} is not part of photo-inventory run ${run.shortcode}`,
       );
-    if (entry.state !== "pending")
+    if (
+      entry.state !== "pending" &&
+      !(run.status === "needs_review" && entry.state === "unresolved")
+    )
       throw new Error(
-        `Image ${code} is already ${entry.state} in run ${run.shortcode}; only pending images can be proposed`,
+        `Image ${code} is already ${entry.state} in run ${run.shortcode}; only reviewable images can be proposed`,
       );
     return entry.imageId;
   };
@@ -591,10 +598,14 @@ export async function proposePhotoGroups(
   const input = proposePhotoGroupsInput.parse(rawInput);
   const run = await loadRun(db, input.runId);
   // Dropping a proposed group commits nothing, so a reviewer can tidy a run
-  // after it stops; proposing new groups still needs a running run.
-  if (run.status !== "running" && input.groups.length > 0) {
+  // after it stops; a run stopped for human review can still refine proposals.
+  if (
+    run.status !== "running" &&
+    run.status !== "needs_review" &&
+    input.groups.length > 0
+  ) {
     throw new Error(
-      `Photo-inventory run ${run.shortcode} is not running (status: ${run.status})`,
+      `Photo-inventory run ${run.shortcode} is not open for review (status: ${run.status})`,
     );
   }
   const frozenGroupKeys = await withTransactionDatabase(db, async (txDb) => {
