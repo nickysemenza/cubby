@@ -10,11 +10,6 @@ import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
 
 import { db, withRequestDbClient } from "~/server/db";
-import { upsertDeviceFromHello } from "~/server/repo/device-participation";
-import {
-  assignImageProcessingExecutor,
-  isAssignedImageProcessingDevice,
-} from "~/server/repo/image-processing-history";
 
 import type { ImageProcessingCompanionRpc } from "./contracts";
 import { safeImageProcessingError } from "./safe-error";
@@ -124,6 +119,8 @@ export class ImageProcessingDurableObject
       );
     const target = compatible[0];
     if (!target) return false;
+    const { assignImageProcessingExecutor } =
+      await import("~/server/repo/image-processing-history");
     const assigned = await withRequestDbClient(
       this.env.HYPERDRIVE.connectionString,
       () =>
@@ -169,6 +166,8 @@ export class ImageProcessingDurableObject
       // The `Device` row is the durable half of participation — the
       // installationId (this hello's `deviceId`) is its unique key. The name
       // is a creation hint; a later hello refreshes versions and liveness.
+      const { upsertDeviceFromHello } =
+        await import("~/server/repo/device-participation");
       const { automaticWork, remotePaused } = await withRequestDbClient(
         this.env.HYPERDRIVE.connectionString,
         () =>
@@ -210,6 +209,8 @@ export class ImageProcessingDurableObject
         new Error(result.outcome.reason),
       );
     const deviceId = connection.deviceId;
+    const { isAssignedImageProcessingDevice } =
+      await import("~/server/repo/image-processing-history");
     if (
       !deviceId ||
       !(await withRequestDbClient(this.env.HYPERDRIVE.connectionString, () =>
