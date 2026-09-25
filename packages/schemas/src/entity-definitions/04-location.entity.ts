@@ -632,7 +632,6 @@ export default defineEntity({
         field: "parentId",
         kind: "idMulti",
         placeholder: "Filter parent...",
-        optionsKey: "parentLocation",
         brandRef: { entity: "location" },
         nullable: { field: "parentPresenceFilter", label: "parent" },
       },

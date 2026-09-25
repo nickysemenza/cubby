@@ -578,7 +578,6 @@ export default defineEntity({
         field: "cookbookId",
         kind: "idMulti",
         placeholder: "Filter by cookbook...",
-        optionsKey: "cookbook",
         brandRef: { entity: "cookbook" },
         nullable: { field: "cookbookPresenceFilter", label: "cookbook" },
       },

@@ -21,7 +21,6 @@ import {
 import type { GroupConfig } from "~/app/_components/data-table/useGroupedList";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
-import { useLocationParentOptions } from "~/app/_components/hooks/useLocationParentOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { InventoryValuationSummary } from "~/app/_components/locations/inventory-valuation-summary";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
@@ -72,12 +71,10 @@ export const locationListOverride = defineListOverride<
   use() {
     // Runtime picklists for the manifest's `parent` and `product` specs — the
     // latter scoped to products some location IS, not the whole catalog.
-    const { options: parentLocationOptions } = useLocationParentOptions();
     const locationProductOptions = useDeferredFilterOptions(
       "locationIdentityProduct",
     );
     const filterOptions = useFilterOptions({
-      parentLocation: parentLocationOptions,
       locationProducts: locationProductOptions,
     });
     const updateLocationMutation = useUpdateMutation({

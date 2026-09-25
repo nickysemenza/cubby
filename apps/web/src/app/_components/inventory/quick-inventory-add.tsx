@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
+import { useEntityListSource } from "~/app/_components/combobox/with-search-hook";
 import {
   getOptionalProductShortcode,
   requiredProductField,
@@ -45,7 +46,6 @@ import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
-import { WithEntitySearch } from "../combobox/with-search-hook";
 import { PendingImageUpload } from "../PendingImageUpload";
 import { IdentifyProductButton } from "../products/identify-product-with-ai";
 import { useUpcAwareCreate } from "../products/use-upc-aware-create";
@@ -311,6 +311,10 @@ export function QuickInventoryAdd({
   );
   // A pasted UPC creates + selects inline (via the lookup cascade) without
   // switching to the full create form; a plain name still opens create mode.
+  const { dialog: _productDialog, ...productSearch } = useEntityListSource(
+    "product",
+    { intent: "stock" },
+  );
   const onCreateNew = useUpcAwareCreate(handleCreateNew);
 
   const switchToSelectMode = useCallback(() => {
@@ -327,21 +331,14 @@ export function QuickInventoryAdd({
           <div className="flex flex-col gap-2">
             <Row align="end" gap="sm">
               <div className="flex-1">
-                <WithEntitySearch entity="product" intent="stock">
-                  {({ items, onSearchChange, isLoading, onOpenChange }) => (
-                    <ComboboxField
-                      entity="product"
-                      form={selectForm}
-                      name="product"
-                      label="Add Product"
-                      items={items}
-                      onSearchChange={onSearchChange}
-                      isLoading={isLoading}
-                      onCreateNew={onCreateNew}
-                      onOpenChange={onOpenChange}
-                    />
-                  )}
-                </WithEntitySearch>
+                <ComboboxField
+                  entity="product"
+                  form={selectForm}
+                  name="product"
+                  label="Add Product"
+                  {...productSearch}
+                  onCreateNew={onCreateNew}
+                />
               </div>
               <Button
                 type="button"

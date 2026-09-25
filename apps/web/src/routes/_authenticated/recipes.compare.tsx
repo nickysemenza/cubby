@@ -10,8 +10,7 @@ import { uniq } from "es-toolkit";
 import { useMemo } from "react";
 import { z } from "zod";
 
-import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
+import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
 import { useRecipeCostingData } from "~/app/_components/hooks/useRecipeCostingData";
 import {
   type ComparedRecipe,
@@ -162,24 +161,16 @@ function RecipeComparePage() {
           <RecipeCompareGrid compared={compared} onRemove={handleRemove} />
 
           <div className="mx-auto max-w-sm">
-            <WithEntitySearch entity="recipe">
-              {({ items, onSearchChange, isLoading, onOpenChange }) => (
-                <EntityPicker
-                  entity="recipe"
-                  label="recipe"
-                  items={items}
-                  value={null}
-                  placeholder="Add another recipe…"
-                  onSearchChange={onSearchChange}
-                  onOpenChange={onOpenChange}
-                  isLoading={isLoading}
-                  setValue={(recipe) => {
-                    if (!recipe) return;
-                    handleAdd(recipe.id);
-                  }}
-                />
-              )}
-            </WithEntitySearch>
+            <EntityReferencePicker
+              entity="recipe"
+              label="recipe"
+              value={null}
+              placeholder="Add another recipe…"
+              setValue={(recipe) => {
+                if (!recipe) return;
+                handleAdd(recipe.id);
+              }}
+            />
           </div>
         </div>
       )}

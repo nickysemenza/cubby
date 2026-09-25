@@ -24,8 +24,10 @@ export const pagination = {
   pageSize: 20,
 };
 
-/** The entities `WithEntitySearch` drives end-to-end (list + typed + exact-code + optional create). */
+/** The entities `useEntityListSource` drives end-to-end (list + typed + exact-code + optional create). */
 export type PickerSearchEntity =
+  | "financialAccount"
+  | "purchase"
   | "ingredient"
   | "ledgerParty"
   | "location"
@@ -214,6 +216,8 @@ const FALLBACK_BLANK_FILTER_KEY = {
   task: "search",
   plant: "search",
   planting: "searchQuery",
+  financialAccount: "search",
+  purchase: "search",
 } satisfies Record<Exclude<PickerSearchEntity, "vendor">, string>;
 
 /** Resolves the filter field a blank-query list request should key on. */

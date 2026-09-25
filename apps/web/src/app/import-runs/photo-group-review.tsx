@@ -26,8 +26,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
+import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
 import { referenceEntitySearch } from "~/app/_components/combobox/reference-entity-search";
-import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ProductVariantEvidence } from "~/app/_components/product-variant-evidence";
 import { showErrorToast } from "~/components/feedback/error-details";
@@ -439,24 +439,16 @@ function ProductPicker({
   placeholder: string;
 }) {
   return (
-    <WithEntitySearch entity="product">
-      {({ items, onSearchChange, isLoading, onOpenChange }) => (
-        <EntityPicker
-          entity="product"
-          label="existing product"
-          items={items}
-          value={null}
-          setValue={(item) => {
-            if (item) onPick(item.id);
-          }}
-          onSearchChange={onSearchChange}
-          onOpenChange={onOpenChange}
-          isLoading={isLoading}
-          disabled={disabled}
-          placeholder={placeholder}
-        />
-      )}
-    </WithEntitySearch>
+    <EntityReferencePicker
+      entity="product"
+      label="existing product"
+      value={null}
+      setValue={(item) => {
+        if (item) onPick(item.id);
+      }}
+      disabled={disabled}
+      placeholder={placeholder}
+    />
   );
 }
 
@@ -819,36 +811,28 @@ function InventoryFields({
     <Row gap="sm" align="end" className="min-w-0">
       <div className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
         <span className="text-muted-foreground">Receive into</span>
-        <WithEntitySearch entity="location">
-          {({ items, onSearchChange, isLoading, onOpenChange }) => (
-            <EntityPicker
-              entity="location"
-              label="location"
-              items={items}
-              value={selected}
-              setValue={(item) =>
-                save(() =>
-                  toGroupInput(proposal, {
-                    inventory: item
-                      ? {
-                          ownershipMode: inventory?.ownershipMode,
-                          ownerPartyId: inventory?.ownerPartyId,
-                          locationId: item.id,
-                          quantity,
-                        }
-                      : undefined,
-                  }),
-                )
-              }
-              onSearchChange={onSearchChange}
-              onOpenChange={onOpenChange}
-              isLoading={isLoading}
-              disabled={busy}
-              placeholder="No inventory entry"
-              clearable
-            />
-          )}
-        </WithEntitySearch>
+        <EntityReferencePicker
+          entity="location"
+          label="location"
+          value={selected}
+          setValue={(item) =>
+            save(() =>
+              toGroupInput(proposal, {
+                inventory: item
+                  ? {
+                      ownershipMode: inventory?.ownershipMode,
+                      ownerPartyId: inventory?.ownerPartyId,
+                      locationId: item.id,
+                      quantity,
+                    }
+                  : undefined,
+              }),
+            )
+          }
+          disabled={busy}
+          placeholder="No inventory entry"
+          clearable
+        />
       </div>
       {inventory?.locationId ? (
         <CommitInput

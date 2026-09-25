@@ -62,10 +62,9 @@ import { colorizeSelectOptions } from "~/lib/select-options";
 import { cn, formatCurrency } from "~/lib/utils";
 
 import {
-  buildIngredientComboboxItem,
   buildLocationComboboxItem,
   buildProductComboboxItem,
-  buildRecipeComboboxItem,
+  buildRecordComboboxItem,
 } from "../combobox/combobox-builders";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import {
@@ -1300,11 +1299,7 @@ function defineSingleEntityAdapter<TData>(
  */
 const singleEntityAdapters = {
   ingredient: defineSingleEntityAdapter(ingredientInlineSchema, {
-    buildItem: (data) =>
-      buildIngredientComboboxItem({
-        ...data,
-        id: parseShortcodeFor("ingredient", data.id),
-      }),
+    buildItem: (data) => buildRecordComboboxItem("ingredient", data),
     renderLink: (data) => (
       <CanonicalSingleEntityLink entity="ingredient" data={data} />
     ),
@@ -1344,11 +1339,7 @@ const singleEntityAdapters = {
     SearchProvider: (props) => <WithEntitySearch entity="product" {...props} />,
   }),
   recipe: defineSingleEntityAdapter(recipeInlineSchema, {
-    buildItem: (data) =>
-      buildRecipeComboboxItem({
-        ...data,
-        id: parseShortcodeFor("recipe", data.id),
-      }),
+    buildItem: (data) => buildRecordComboboxItem("recipe", data),
     renderLink: (data) => (
       <CanonicalSingleEntityLink entity="recipe" data={data} />
     ),
