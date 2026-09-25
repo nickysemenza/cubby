@@ -107,15 +107,23 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "purchase", label: "Purchase" },
-            { value: "refund", label: "Refund" },
-            { value: "account_transfer", label: "Account transfer" },
-            { value: "credit_card_payment", label: "Card payment" },
-            { value: "fee", label: "Fee" },
-            { value: "interest", label: "Interest" },
-            { value: "income", label: "Income" },
-            { value: "adjustment", label: "Adjustment" },
-            { value: "other", label: "Other" },
+            { value: "purchase", label: "Purchase", color: "var(--primary)" },
+            { value: "refund", label: "Refund", color: "var(--positive)" },
+            {
+              value: "account_transfer",
+              label: "Account transfer",
+              color: "var(--slate)",
+            },
+            {
+              value: "credit_card_payment",
+              label: "Card payment",
+              color: "var(--slate)",
+            },
+            { value: "fee", label: "Fee", color: "var(--warning)" },
+            { value: "interest", label: "Interest", color: "var(--warning)" },
+            { value: "income", label: "Income", color: "var(--positive)" },
+            { value: "adjustment", label: "Adjustment", color: "var(--slate)" },
+            { value: "other", label: "Other", color: "var(--slate)" },
           ],
         },
         display: {
@@ -135,10 +143,10 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "expected", label: "Expected" },
-            { value: "pending", label: "Pending" },
-            { value: "posted", label: "Posted" },
-            { value: "void", label: "Void" },
+            { value: "expected", label: "Expected", color: "var(--slate)" },
+            { value: "pending", label: "Pending", color: "var(--slate)" },
+            { value: "posted", label: "Posted", color: "var(--positive)" },
+            { value: "void", label: "Void", color: "var(--destructive)" },
           ],
         },
         display: {

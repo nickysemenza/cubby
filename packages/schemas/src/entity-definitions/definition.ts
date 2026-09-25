@@ -210,6 +210,8 @@ const buildMetadataSchemas = () => {
               label: nonEmptyString(),
               /** What choosing this option means, shown where it is displayed. */
               description: nonEmptyString().optional(),
+              /** Web swatch (a CSS custom property) the value's pill uses. */
+              color: nonEmptyString().optional(),
             })
             .strict(),
         )

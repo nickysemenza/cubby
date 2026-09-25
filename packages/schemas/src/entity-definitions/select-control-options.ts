@@ -31,10 +31,20 @@ import {
 const labeled = <Value extends string>(
   values: readonly Value[],
   labels: Record<Value, string>,
-) => values.map((value) => ({ value, label: labels[value] }));
+  colors?: Record<Value, string>,
+) =>
+  values.map((value) =>
+    colors
+      ? { value, label: labels[value], color: colors[value] }
+      : { value, label: labels[value] },
+  );
 
-/** Text-only select labels shared by generated web and Apple controls. Rich browser icons and
- * colors can decorate these values without defining another wording source. */
+/**
+ * Select labels shared by generated web and Apple controls, plus the web
+ * swatch each value tints its pill with (a CSS custom property; the Apple
+ * catalog renders value/label only). Rich browser icons can decorate these
+ * values without defining another wording source.
+ */
 export const selectControlOptions = {
   locationType: labeled(locationTypeValues, {
     house: "house",
@@ -51,9 +61,28 @@ export const selectControlOptions = {
     cabinet: "cabinet",
   }),
   mealType: labeled(mealTypeValues, MEAL_TYPE_LABELS),
-  mealKind: labeled(mealKindValues, MEAL_KIND_LABELS),
-  ledgerPartyKind: labeled(ledgerPartyKindValues, LEDGER_PARTY_KIND_LABELS),
-  projectStatus: labeled(projectStatusValues, PROJECT_STATUS_LABELS),
+  // `cooked` is the overwhelming default, so tone is spent on the exceptions:
+  // eat-out kinds share the accent (money left the house).
+  mealKind: labeled(mealKindValues, MEAL_KIND_LABELS, {
+    cooked: "var(--slate)",
+    leftovers: "var(--slate)",
+    eating_out: "var(--primary)",
+    takeout: "var(--primary)",
+    other: "var(--slate)",
+  }),
+  ledgerPartyKind: labeled(ledgerPartyKindValues, LEDGER_PARTY_KIND_LABELS, {
+    member: "var(--slate)",
+    guest: "var(--slate)",
+    household: "var(--primary)",
+  }),
+  // Same ink the status charts use, so the cell dot, the picklist swatch and
+  // the dashboard series agree.
+  projectStatus: labeled(projectStatusValues, PROJECT_STATUS_LABELS, {
+    planning: "var(--chart-5)",
+    not_started: "var(--chart-neutral)",
+    in_progress: "var(--chart-1)",
+    done: "var(--chart-positive)",
+  }),
   projectKind: labeled(projectKindValues, {
     furniture: "Furniture",
     workshop: "Workshop",
@@ -62,9 +91,31 @@ export const selectControlOptions = {
     garden: "Garden",
     trip: "Trip",
   }),
-  taskStatus: labeled(taskStatusValues, TASK_STATUS_LABELS),
+  taskStatus: labeled(taskStatusValues, TASK_STATUS_LABELS, {
+    not_started: "var(--chart-neutral)",
+    later: "var(--chart-2)",
+    in_progress: "var(--chart-1)",
+    blocked: "var(--chart-negative)",
+    done: "var(--chart-positive)",
+  }),
   trade: labeled(tradeValues, TRADE_LABELS),
-  expenseLineKind: labeled(expenseLineKindValues, EXPENSE_LINE_KIND_LABELS),
-  expenseLineBasis: labeled(expenseLineBasisValues, EXPENSE_LINE_BASIS_LABELS),
-  costType: labeled(costTypeValues, COST_TYPE_LABELS),
+  expenseLineKind: labeled(expenseLineKindValues, EXPENSE_LINE_KIND_LABELS, {
+    principal: "var(--slate)",
+    tax: "var(--slate)",
+    shipping: "var(--slate)",
+    discount: "var(--positive)",
+    fee: "var(--warning)",
+    tip: "var(--plum)",
+    other_adjustment: "var(--slate)",
+  }),
+  expenseLineBasis: labeled(expenseLineBasisValues, EXPENSE_LINE_BASIS_LABELS, {
+    item_line: "var(--slate)",
+    allocation: "var(--plum)",
+  }),
+  // The chip twin of the cost-type chart fills.
+  costType: labeled(costTypeValues, COST_TYPE_LABELS, {
+    materials: "var(--chart-1)",
+    tools: "var(--chart-5)",
+    services: "var(--chart-2)",
+  }),
 } as const;

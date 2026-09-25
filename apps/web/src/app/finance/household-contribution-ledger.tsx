@@ -29,11 +29,11 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { fieldEnumOptions } from "~/entities/enum-field-display";
 import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
 
 import { householdContribution } from "./household-contribution.functions";
-import { ledgerPartyKindOptions } from "./ledger-party-options";
 
 function CheckMark({ ok }: { ok: boolean }) {
   return ok ? (
@@ -179,7 +179,10 @@ export function HouseholdContributionLedgerReport({
                     >
                       {row.party.name}
                     </span>
-                    {renderOptionCell(row.party.kind, ledgerPartyKindOptions)}
+                    {renderOptionCell(
+                      row.party.kind,
+                      fieldEnumOptions("ledgerParty", "kind"),
+                    )}
                   </Stack>
                 </TableCell>
                 <MoneyCell value={row.consumed} />

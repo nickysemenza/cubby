@@ -11,8 +11,6 @@ import {
   SelectField,
   UnifiedTextField,
 } from "~/app/_components/form-utils";
-import { mealKindOptions, mealTypeOptions } from "~/app/meals/meal-options";
-import { taskStatusOptions } from "~/app/tasks/task-options";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -27,6 +25,7 @@ import { fieldClearing } from "~/entities/editing/field-clearing";
 import type { EntityMutationPort } from "~/entities/editing/types";
 import { useEntityEditSession } from "~/entities/editing/use-entity-edit-session";
 import { entityDetailLink } from "~/entities/entities";
+import { fieldEnumOptions } from "~/entities/enum-field-display";
 import { useIsMobile } from "~/hooks/useMobile";
 import { formatCurrency } from "~/lib/utils";
 
@@ -201,7 +200,7 @@ function EditableCalendarItem({
             form={session.form}
             name="mealType"
             label="Meal type"
-            options={mealTypeOptions}
+            options={fieldEnumOptions("meal", "mealType")}
             nullable
             suggestField="mealType"
           />
@@ -209,7 +208,7 @@ function EditableCalendarItem({
             form={session.form}
             name="mealKind"
             label="Kind"
-            options={mealKindOptions}
+            options={fieldEnumOptions("meal", "mealKind")}
             suggestField="mealKind"
           />
         </FieldSuggestionProvider>
@@ -225,7 +224,7 @@ function EditableCalendarItem({
             form={session.form}
             name="status"
             label="Status"
-            options={taskStatusOptions}
+            options={fieldEnumOptions("task", "status")}
           />
         </>
       )}

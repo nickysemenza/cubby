@@ -48,6 +48,19 @@ export function enumFieldOptions(
   return options;
 }
 
+/** `enumFieldOptions` by field key, for surfaces outside a field model loop
+ * (filters, dialogs, calendar chips). */
+export function fieldEnumOptions(
+  entity: Entity,
+  key: string,
+): EntitySelectOption[] {
+  const field = entityFieldModels[entity].fields.find(
+    (candidate) => candidate.key === key,
+  );
+  if (!field) throw new Error(`${entity}.${key} is not a declared field`);
+  return enumFieldOptions(entity, field);
+}
+
 function enumFieldOption(
   entity: Entity,
   field: EnumField,

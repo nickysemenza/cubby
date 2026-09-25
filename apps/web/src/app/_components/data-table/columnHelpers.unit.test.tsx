@@ -5,7 +5,6 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { type ReactNode, useMemo } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { provisionalOptions } from "~/app/finance/financial-account-options";
 import { booleanCellOptions } from "~/lib/select-options";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { formatCurrency } from "~/lib/utils";
@@ -743,6 +742,11 @@ describe("createCurrencyColumn zero handling", () => {
 
 describe("boolean tones come from the roster, not the factory", () => {
   type ProvisionalRow = { provisional: boolean | null };
+  // Inverted against the default: the unresolved state is the flagged one.
+  const provisionalOptions = booleanCellOptions(
+    { true: "Provisional", false: "Known" },
+    { true: "var(--warning)", false: "var(--positive)" },
+  );
 
   it("honours an inverted tone map and matches what other surfaces render", () => {
     const column = createBooleanColumn(

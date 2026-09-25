@@ -7,10 +7,10 @@ import { projectStatusSchema } from "@cubby/schemas/project";
 import { useState } from "react";
 import { z } from "zod";
 
-import { PROJECT_STATUS_OPTIONS } from "~/app/projects/project-options";
 import { expenseCaptureRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { fieldEnumOptions } from "~/entities/enum-field-display";
 
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { ProductDiscardDialog } from "../products/product-discard-dialog";
@@ -182,7 +182,7 @@ function useSetProjectStatusAction(): EntityActionHandles {
           if (!open) setItems([]);
         }}
         items={items}
-        options={PROJECT_STATUS_OPTIONS}
+        options={fieldEnumOptions("project", "status")}
         fieldLabel="Status"
         itemNoun="Project"
         currentValue={(item) => item.status}

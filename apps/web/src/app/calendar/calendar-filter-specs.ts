@@ -6,13 +6,9 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { createElement } from "react";
 
 import { futureFilterOptions } from "~/app/expenses/expense-options";
-import {
-  PROJECT_STATUS_OPTIONS,
-  projectKindOptions,
-} from "~/app/projects/project-options";
 import { tradeOptions } from "~/app/projects/trade-options";
-import { taskStatusOptions } from "~/app/tasks/task-options";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import { fieldEnumOptions } from "~/entities/enum-field-display";
 import type { FilterSpec } from "~/entities/filter-manifest";
 
 import { KIND_ICONS } from "./calendar-icons";
@@ -81,7 +77,7 @@ export const calendarFilterSpecs: readonly FilterSpec[] = [
     kind: "multiselect",
     label: "Task status",
     placeholder: "Filter by task status...",
-    options: taskStatusOptions,
+    options: fieldEnumOptions("task", "status"),
   },
   {
     columnId: "taskTrade",
@@ -113,7 +109,7 @@ export const calendarFilterSpecs: readonly FilterSpec[] = [
     kind: "multiselect",
     label: "Project status",
     placeholder: "Filter by project status...",
-    options: PROJECT_STATUS_OPTIONS,
+    options: fieldEnumOptions("project", "status"),
   },
   {
     // Keeps the pre-existing `?projectKinds=` URL key so old links still
@@ -125,7 +121,7 @@ export const calendarFilterSpecs: readonly FilterSpec[] = [
     kind: "multiselect",
     label: "Project kind",
     placeholder: "Filter by project kind...",
-    options: projectKindOptions,
+    options: fieldEnumOptions("project", "kind"),
     nullable: { field: "projectKindPresenceFilter", label: "kind" },
   },
 ];

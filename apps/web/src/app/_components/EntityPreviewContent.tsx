@@ -21,7 +21,6 @@ import { type ComponentType, type ReactNode, useEffect } from "react";
 
 import type { EntityActionRow } from "~/app/_components/actions/entity-actions";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
-import { costTypeLabels } from "~/app/expenses/expense-options";
 import {
   capitalize,
   formatDate,
@@ -727,7 +726,7 @@ export function toExpenseCard(
 ): ManifestCardProps {
   const identity =
     [
-      data.costType ? costTypeLabels[data.costType] : null,
+      enumFieldLabel("expense", "costType", data.costType),
       data.trade ? TRADE_LABELS[data.trade] : null,
     ]
       .filter(Boolean)
