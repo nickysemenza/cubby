@@ -8,6 +8,7 @@ import { and, desc, ilike, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { compareProductTitles } from "~/server/repo/product-variant-comparison";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
 
 const CANDIDATE_POOL_LIMIT = 240;
@@ -58,6 +59,7 @@ type CandidateFact = {
 type RankedCandidate = CandidateFact & {
   sharedNameTerms: string[];
   brandMatches: boolean;
+  variant: ReturnType<typeof compareProductTitles>;
 };
 
 /** Splits compact vendor titles like `ForgeWearMenPocketShirtBlackSmall`. */
@@ -93,6 +95,7 @@ export function rankPhotoProductCandidates(
       (candidate.manufacturer?.toLowerCase() === brand ||
         candidate.name.toLowerCase().includes(brand));
     if (sharedIdentity.length < (brandMatch ? 1 : 2)) return [];
+    const variant = compareProductTitles(name, candidate.name);
     // One additional identity word (often the exact color or size) must outrank
     // every provenance preference combined. Provenance breaks ties between
     // plausible variants; it cannot turn a different variant into the match.
@@ -105,8 +108,11 @@ export function rankPhotoProductCandidates(
       (!candidate.hasPhotoImport ? 8 : 0) +
       (candidate.hasPurchase ? 3 : 0) -
       (candidate.hasInventory ? 6 : 0);
-    const score = identityScore + provenanceScore;
-    return [{ candidate, score, sharedIdentity, brandMatch }];
+    const variantPenalty =
+      (variant.color.relation === "different" ? 80 : 0) +
+      (variant.size.relation === "different" ? 80 : 0);
+    const score = identityScore + provenanceScore - variantPenalty;
+    return [{ candidate, score, sharedIdentity, brandMatch, variant }];
   });
   return scored
     .sort(
@@ -115,10 +121,11 @@ export function rankPhotoProductCandidates(
         a.candidate.shortcode.localeCompare(b.candidate.shortcode),
     )
     .slice(0, SUGGESTION_LIMIT)
-    .map(({ candidate, sharedIdentity, brandMatch }) => ({
+    .map(({ candidate, sharedIdentity, brandMatch, variant }) => ({
       ...candidate,
       sharedNameTerms: sharedIdentity,
       brandMatches: brandMatch,
+      variant,
     }));
 }
 
@@ -207,6 +214,7 @@ export async function findPhotoProductCandidates(
       source: "catalog_name" as const,
       sharedNameTerms: candidate.sharedNameTerms,
       brandMatches: candidate.brandMatches,
+      variant: candidate.variant,
     },
     hasOwnPhoto: candidate.hasOwnPhoto,
     hasPhotoImport: candidate.hasPhotoImport,

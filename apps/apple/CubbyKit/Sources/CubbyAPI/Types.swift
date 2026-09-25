@@ -497,12 +497,21 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/recommendations/forEntity`.
     /// - Remark: Generated from `#/paths//api/v1/recommendations/forEntity/get(recommendations.forEntity)`.
     func recommendations_forEntity(_ input: Operations.Recommendations_forEntity.Input) async throws -> Operations.Recommendations_forEntity.Output
+    /// - Remark: HTTP `GET /api/v1/run/aiUsage`.
+    /// - Remark: Generated from `#/paths//api/v1/run/aiUsage/get(run.aiUsage)`.
+    func run_aiUsage(_ input: Operations.Run_aiUsage.Input) async throws -> Operations.Run_aiUsage.Output
     /// - Remark: HTTP `GET /api/v1/run/workSnapshot`.
     /// - Remark: Generated from `#/paths//api/v1/run/workSnapshot/get(run.workSnapshot)`.
     func run_workSnapshot(_ input: Operations.Run_workSnapshot.Input) async throws -> Operations.Run_workSnapshot.Output
     /// - Remark: HTTP `GET /api/v1/search/find`.
     /// - Remark: Generated from `#/paths//api/v1/search/find/get(search.find)`.
     func search_find(_ input: Operations.Search_find.Input) async throws -> Operations.Search_find.Output
+    /// - Remark: HTTP `POST /api/v1/statementRow/commitCsv`.
+    /// - Remark: Generated from `#/paths//api/v1/statementRow/commitCsv/post(statementRow.commitCsv)`.
+    func statementRow_commitCsv(_ input: Operations.StatementRow_commitCsv.Input) async throws -> Operations.StatementRow_commitCsv.Output
+    /// - Remark: HTTP `POST /api/v1/statementRow/previewCsv`.
+    /// - Remark: Generated from `#/paths//api/v1/statementRow/previewCsv/post(statementRow.previewCsv)`.
+    func statementRow_previewCsv(_ input: Operations.StatementRow_previewCsv.Input) async throws -> Operations.StatementRow_previewCsv.Output
     /// - Remark: HTTP `POST /api/v1/task/board`.
     /// - Remark: Generated from `#/paths//api/v1/task/board/post(task.board)`.
     func task_board(_ input: Operations.Task_board.Input) async throws -> Operations.Task_board.Output
@@ -2259,6 +2268,17 @@ extension APIProtocol {
             headers: headers
         ))
     }
+    /// - Remark: HTTP `GET /api/v1/run/aiUsage`.
+    /// - Remark: Generated from `#/paths//api/v1/run/aiUsage/get(run.aiUsage)`.
+    public func run_aiUsage(
+        query: Operations.Run_aiUsage.Input.Query,
+        headers: Operations.Run_aiUsage.Input.Headers = .init()
+    ) async throws -> Operations.Run_aiUsage.Output {
+        try await run_aiUsage(Operations.Run_aiUsage.Input(
+            query: query,
+            headers: headers
+        ))
+    }
     /// - Remark: HTTP `GET /api/v1/run/workSnapshot`.
     /// - Remark: Generated from `#/paths//api/v1/run/workSnapshot/get(run.workSnapshot)`.
     public func run_workSnapshot(
@@ -2279,6 +2299,28 @@ extension APIProtocol {
         try await search_find(Operations.Search_find.Input(
             query: query,
             headers: headers
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/statementRow/commitCsv`.
+    /// - Remark: Generated from `#/paths//api/v1/statementRow/commitCsv/post(statementRow.commitCsv)`.
+    public func statementRow_commitCsv(
+        headers: Operations.StatementRow_commitCsv.Input.Headers = .init(),
+        body: Operations.StatementRow_commitCsv.Input.Body? = nil
+    ) async throws -> Operations.StatementRow_commitCsv.Output {
+        try await statementRow_commitCsv(Operations.StatementRow_commitCsv.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/statementRow/previewCsv`.
+    /// - Remark: Generated from `#/paths//api/v1/statementRow/previewCsv/post(statementRow.previewCsv)`.
+    public func statementRow_previewCsv(
+        headers: Operations.StatementRow_previewCsv.Input.Headers = .init(),
+        body: Operations.StatementRow_previewCsv.Input.Body? = nil
+    ) async throws -> Operations.StatementRow_previewCsv.Output {
+        try await statementRow_previewCsv(Operations.StatementRow_previewCsv.Input(
+            headers: headers,
+            body: body
         ))
     }
     /// - Remark: HTTP `POST /api/v1/task/board`.

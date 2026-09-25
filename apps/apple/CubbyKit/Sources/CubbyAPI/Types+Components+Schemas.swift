@@ -488,6 +488,167 @@ extension Components {
                 case estimatedCost
             }
         }
+        /// - Remark: Generated from `#/components/schemas/AiRunUsageOut`.
+        public struct AiRunUsageOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/pricedSubtotal`.
+            public var pricedSubtotal: Swift.Double
+            /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/unpricedCount`.
+            public var unpricedCount: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload`.
+            public struct RecordsPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/id`.
+                public var id: Swift.String
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/createdAt`.
+                public var createdAt: Foundation.Date
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/feature`.
+                public var feature: Swift.String
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/operation`.
+                public var operation: Swift.String
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/provider`.
+                public var provider: Swift.String
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/model`.
+                public var model: Swift.String
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/attempt`.
+                public var attempt: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/inputTokens`.
+                public var inputTokens: Swift.Int?
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/outputTokens`.
+                public var outputTokens: Swift.Int?
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/cacheReadTokens`.
+                public var cacheReadTokens: Swift.Int?
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/cacheWriteTokens`.
+                public var cacheWriteTokens: Swift.Int?
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/durationMs`.
+                public var durationMs: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/status`.
+                @frozen public enum StatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case succeeded = "succeeded"
+                    case failed = "failed"
+                }
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/status`.
+                public var status: Components.Schemas.AiRunUsageOut.RecordsPayloadPayload.StatusPayload
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/gatewayLogId`.
+                public var gatewayLogId: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/cacheStatus`.
+                public var cacheStatus: Components.Schemas.AiUsageCacheStatus?
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/applicationCacheStatus`.
+                public var applicationCacheStatus: Components.Schemas.AiUsageCacheStatus?
+                /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/RecordsPayload/estimatedCost`.
+                public var estimatedCost: Components.Schemas.Money?
+                /// Creates a new `RecordsPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - createdAt:
+                ///   - feature:
+                ///   - operation:
+                ///   - provider:
+                ///   - model:
+                ///   - attempt:
+                ///   - inputTokens:
+                ///   - outputTokens:
+                ///   - cacheReadTokens:
+                ///   - cacheWriteTokens:
+                ///   - durationMs:
+                ///   - status:
+                ///   - gatewayLogId:
+                ///   - cacheStatus:
+                ///   - applicationCacheStatus:
+                ///   - estimatedCost:
+                public init(
+                    id: Swift.String,
+                    createdAt: Foundation.Date,
+                    feature: Swift.String,
+                    operation: Swift.String,
+                    provider: Swift.String,
+                    model: Swift.String,
+                    attempt: Swift.Int,
+                    inputTokens: Swift.Int? = nil,
+                    outputTokens: Swift.Int? = nil,
+                    cacheReadTokens: Swift.Int? = nil,
+                    cacheWriteTokens: Swift.Int? = nil,
+                    durationMs: Swift.Int,
+                    status: Components.Schemas.AiRunUsageOut.RecordsPayloadPayload.StatusPayload,
+                    gatewayLogId: Swift.String? = nil,
+                    cacheStatus: Components.Schemas.AiUsageCacheStatus? = nil,
+                    applicationCacheStatus: Components.Schemas.AiUsageCacheStatus? = nil,
+                    estimatedCost: Components.Schemas.Money? = nil
+                ) {
+                    self.id = id
+                    self.createdAt = createdAt
+                    self.feature = feature
+                    self.operation = operation
+                    self.provider = provider
+                    self.model = model
+                    self.attempt = attempt
+                    self.inputTokens = inputTokens
+                    self.outputTokens = outputTokens
+                    self.cacheReadTokens = cacheReadTokens
+                    self.cacheWriteTokens = cacheWriteTokens
+                    self.durationMs = durationMs
+                    self.status = status
+                    self.gatewayLogId = gatewayLogId
+                    self.cacheStatus = cacheStatus
+                    self.applicationCacheStatus = applicationCacheStatus
+                    self.estimatedCost = estimatedCost
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case id
+                    case createdAt
+                    case feature
+                    case operation
+                    case provider
+                    case model
+                    case attempt
+                    case inputTokens
+                    case outputTokens
+                    case cacheReadTokens
+                    case cacheWriteTokens
+                    case durationMs
+                    case status
+                    case gatewayLogId
+                    case cacheStatus
+                    case applicationCacheStatus
+                    case estimatedCost
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/records`.
+            public typealias RecordsPayload = [Components.Schemas.AiRunUsageOut.RecordsPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/records`.
+            public var records: Components.Schemas.AiRunUsageOut.RecordsPayload
+            /// - Remark: Generated from `#/components/schemas/AiRunUsageOut/nextCursor`.
+            public var nextCursor: Swift.String?
+            /// Creates a new `AiRunUsageOut`.
+            ///
+            /// - Parameters:
+            ///   - pricedSubtotal:
+            ///   - unpricedCount:
+            ///   - records:
+            ///   - nextCursor:
+            public init(
+                pricedSubtotal: Swift.Double,
+                unpricedCount: Swift.Int,
+                records: Components.Schemas.AiRunUsageOut.RecordsPayload,
+                nextCursor: Swift.String? = nil
+            ) {
+                self.pricedSubtotal = pricedSubtotal
+                self.unpricedCount = unpricedCount
+                self.records = records
+                self.nextCursor = nextCursor
+            }
+            public enum CodingKeys: String, CodingKey {
+                case pricedSubtotal
+                case unpricedCount
+                case records
+                case nextCursor
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/AiUsageCacheStatus`.
+        @frozen public enum AiUsageCacheStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case hit = "hit"
+            case miss = "miss"
+            case none = "none"
+        }
         /// - Remark: Generated from `#/components/schemas/Amount`.
         public struct Amount: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/Amount/value`.
@@ -10036,6 +10197,261 @@ extension Components {
                 case delta
             }
         }
+        /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewOut`.
+        public struct FinancialStatementImportPreviewOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewOut/rows`.
+            public var rows: [Components.Schemas.FinancialStatementImportPreviewRow]
+            /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewOut/summary`.
+            public struct SummaryPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewOut/summary/rowsIn`.
+                public var rowsIn: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewOut/summary/alreadyRecorded`.
+                public var alreadyRecorded: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewOut/summary/readyToCreate`.
+                public var readyToCreate: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewOut/summary/possibleExisting`.
+                public var possibleExisting: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewOut/summary/unresolvedAccount`.
+                public var unresolvedAccount: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewOut/summary/indistinguishableDuplicate`.
+                public var indistinguishableDuplicate: Swift.Int
+                /// Creates a new `SummaryPayload`.
+                ///
+                /// - Parameters:
+                ///   - rowsIn:
+                ///   - alreadyRecorded:
+                ///   - readyToCreate:
+                ///   - possibleExisting:
+                ///   - unresolvedAccount:
+                ///   - indistinguishableDuplicate:
+                public init(
+                    rowsIn: Swift.Int,
+                    alreadyRecorded: Swift.Int,
+                    readyToCreate: Swift.Int,
+                    possibleExisting: Swift.Int,
+                    unresolvedAccount: Swift.Int,
+                    indistinguishableDuplicate: Swift.Int
+                ) {
+                    self.rowsIn = rowsIn
+                    self.alreadyRecorded = alreadyRecorded
+                    self.readyToCreate = readyToCreate
+                    self.possibleExisting = possibleExisting
+                    self.unresolvedAccount = unresolvedAccount
+                    self.indistinguishableDuplicate = indistinguishableDuplicate
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case rowsIn
+                    case alreadyRecorded
+                    case readyToCreate
+                    case possibleExisting
+                    case unresolvedAccount
+                    case indistinguishableDuplicate
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewOut/summary`.
+            public var summary: Components.Schemas.FinancialStatementImportPreviewOut.SummaryPayload
+            /// Creates a new `FinancialStatementImportPreviewOut`.
+            ///
+            /// - Parameters:
+            ///   - rows:
+            ///   - summary:
+            public init(
+                rows: [Components.Schemas.FinancialStatementImportPreviewRow],
+                summary: Components.Schemas.FinancialStatementImportPreviewOut.SummaryPayload
+            ) {
+                self.rows = rows
+                self.summary = summary
+            }
+            public enum CodingKeys: String, CodingKey {
+                case rows
+                case summary
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow`.
+        public struct FinancialStatementImportPreviewRow: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/key`.
+            public var key: Swift.String
+            /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/status`.
+            public var status: Components.Schemas.FinancialStatementImportPreviewStatus
+            /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/accountId`.
+            public var accountId: Components.Schemas.FinancialAccountShortcode?
+            /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/accountName`.
+            public var accountName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/provisionalAccount`.
+            public struct ProvisionalAccountPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/provisionalAccount/name`.
+                public var name: Swift.String
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/provisionalAccount/identity`.
+                public var identity: Components.Schemas.FinancialAccountIdentity
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/provisionalAccount/cardNumbers`.
+                public var cardNumbers: Components.Schemas.FinancialAccountCardNumbers
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/provisionalAccount/provisional`.
+                public var provisional: Swift.Bool
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/provisionalAccount/sourceAliases`.
+                public var sourceAliases: Components.Schemas.FinancialAccountSourceAliases
+                /// Creates a new `ProvisionalAccountPayload`.
+                ///
+                /// - Parameters:
+                ///   - name:
+                ///   - identity:
+                ///   - cardNumbers:
+                ///   - provisional:
+                ///   - sourceAliases:
+                public init(
+                    name: Swift.String,
+                    identity: Components.Schemas.FinancialAccountIdentity,
+                    cardNumbers: Components.Schemas.FinancialAccountCardNumbers,
+                    provisional: Swift.Bool,
+                    sourceAliases: Components.Schemas.FinancialAccountSourceAliases
+                ) {
+                    self.name = name
+                    self.identity = identity
+                    self.cardNumbers = cardNumbers
+                    self.provisional = provisional
+                    self.sourceAliases = sourceAliases
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case name
+                    case identity
+                    case cardNumbers
+                    case provisional
+                    case sourceAliases
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/provisionalAccount`.
+            public var provisionalAccount: Components.Schemas.FinancialStatementImportPreviewRow.ProvisionalAccountPayload?
+            /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/proposed`.
+            public struct ProposedPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/proposed/sourceRef`.
+                public var sourceRef: Components.Schemas.FinancialTransactionSourceRef
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/proposed/amount`.
+                public var amount: Components.Schemas.FinancialTransactionNonZeroAmount
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/proposed/kind`.
+                public var kind: Components.Schemas.FinancialTransactionKind
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/proposed/status`.
+                @frozen public enum StatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case posted = "posted"
+                }
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/proposed/status`.
+                public var status: Components.Schemas.FinancialStatementImportPreviewRow.ProposedPayload.StatusPayload
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/proposed/transactionDate`.
+                public var transactionDate: Components.Schemas.PlainDate?
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/proposed/postedDate`.
+                public var postedDate: Components.Schemas.PlainDate
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/proposed/merchant`.
+                public var merchant: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/proposed/rawDescription`.
+                public var rawDescription: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/proposed/sourceCategory`.
+                public var sourceCategory: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/proposed/notes`.
+                public var notes: Swift.String?
+                /// Creates a new `ProposedPayload`.
+                ///
+                /// - Parameters:
+                ///   - sourceRef:
+                ///   - amount:
+                ///   - kind:
+                ///   - status:
+                ///   - transactionDate:
+                ///   - postedDate:
+                ///   - merchant:
+                ///   - rawDescription:
+                ///   - sourceCategory:
+                ///   - notes:
+                public init(
+                    sourceRef: Components.Schemas.FinancialTransactionSourceRef,
+                    amount: Components.Schemas.FinancialTransactionNonZeroAmount,
+                    kind: Components.Schemas.FinancialTransactionKind,
+                    status: Components.Schemas.FinancialStatementImportPreviewRow.ProposedPayload.StatusPayload,
+                    transactionDate: Components.Schemas.PlainDate? = nil,
+                    postedDate: Components.Schemas.PlainDate,
+                    merchant: Swift.String? = nil,
+                    rawDescription: Swift.String? = nil,
+                    sourceCategory: Swift.String? = nil,
+                    notes: Swift.String? = nil
+                ) {
+                    self.sourceRef = sourceRef
+                    self.amount = amount
+                    self.kind = kind
+                    self.status = status
+                    self.transactionDate = transactionDate
+                    self.postedDate = postedDate
+                    self.merchant = merchant
+                    self.rawDescription = rawDescription
+                    self.sourceCategory = sourceCategory
+                    self.notes = notes
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case sourceRef
+                    case amount
+                    case kind
+                    case status
+                    case transactionDate
+                    case postedDate
+                    case merchant
+                    case rawDescription
+                    case sourceCategory
+                    case notes
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/proposed`.
+            public var proposed: Components.Schemas.FinancialStatementImportPreviewRow.ProposedPayload
+            /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/existingTransactionIds`.
+            public var existingTransactionIds: [Components.Schemas.FinancialTransactionShortcode]
+            /// Advisory Vendor evidence only. Null for completed or duplicate rows. It neither matches nor links anything.
+            ///
+            /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewRow/vendorInference`.
+            public var vendorInference: Components.Schemas.MerchantVendorInference?
+            /// Creates a new `FinancialStatementImportPreviewRow`.
+            ///
+            /// - Parameters:
+            ///   - key:
+            ///   - status:
+            ///   - accountId:
+            ///   - accountName:
+            ///   - provisionalAccount:
+            ///   - proposed:
+            ///   - existingTransactionIds:
+            ///   - vendorInference: Advisory Vendor evidence only. Null for completed or duplicate rows. It neither matches nor links anything.
+            public init(
+                key: Swift.String,
+                status: Components.Schemas.FinancialStatementImportPreviewStatus,
+                accountId: Components.Schemas.FinancialAccountShortcode? = nil,
+                accountName: Swift.String? = nil,
+                provisionalAccount: Components.Schemas.FinancialStatementImportPreviewRow.ProvisionalAccountPayload? = nil,
+                proposed: Components.Schemas.FinancialStatementImportPreviewRow.ProposedPayload,
+                existingTransactionIds: [Components.Schemas.FinancialTransactionShortcode],
+                vendorInference: Components.Schemas.MerchantVendorInference? = nil
+            ) {
+                self.key = key
+                self.status = status
+                self.accountId = accountId
+                self.accountName = accountName
+                self.provisionalAccount = provisionalAccount
+                self.proposed = proposed
+                self.existingTransactionIds = existingTransactionIds
+                self.vendorInference = vendorInference
+            }
+            public enum CodingKeys: String, CodingKey {
+                case key
+                case status
+                case accountId
+                case accountName
+                case provisionalAccount
+                case proposed
+                case existingTransactionIds
+                case vendorInference
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/FinancialStatementImportPreviewStatus`.
+        @frozen public enum FinancialStatementImportPreviewStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case alreadyRecorded = "already_recorded"
+            case readyToCreate = "ready_to_create"
+            case possibleExisting = "possible_existing"
+            case unresolvedAccount = "unresolved_account"
+            case indistinguishableDuplicate = "indistinguishable_duplicate"
+        }
         /// - Remark: Generated from `#/components/schemas/FinancialTransactionAllocationInput`.
         public struct FinancialTransactionAllocationInput: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/FinancialTransactionAllocationInput/purchaseId`.
@@ -10445,6 +10861,18 @@ extension Components {
                 case redirectedFrom
                 case previousShortcodes
             }
+        }
+        /// - Remark: Generated from `#/components/schemas/FinancialTransactionKind`.
+        @frozen public enum FinancialTransactionKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case purchase = "purchase"
+            case refund = "refund"
+            case accountTransfer = "account_transfer"
+            case creditCardPayment = "credit_card_payment"
+            case fee = "fee"
+            case interest = "interest"
+            case income = "income"
+            case adjustment = "adjustment"
+            case other = "other"
         }
         /// - Remark: Generated from `#/components/schemas/FinancialTransactionListItem`.
         public struct FinancialTransactionListItem: Codable, Hashable, Sendable {
@@ -19427,6 +19855,8 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/InputShared3BF936B3EAAE0E65`.
         public typealias InputShared3BF936B3EAAE0E65 = [Swift.String]
+        /// - Remark: Generated from `#/components/schemas/InputShared3D2F57F08ADB742E`.
+        public typealias InputShared3D2F57F08ADB742E = Components.Schemas.StatementCsvColumnMapping
         /// ledgerParty shortcode, e.g. LPY-4K7M
         ///
         /// - Remark: Generated from `#/components/schemas/InputShared3F96AF0DB8D0AB42`.
@@ -25904,6 +26334,41 @@ extension Components {
                 }
             }
         }
+        /// - Remark: Generated from `#/components/schemas/OutputShared711EAE9B5297A664`.
+        public struct OutputShared711EAE9B5297A664: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OutputShared711EAE9B5297A664/first`.
+            public var first: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/OutputShared711EAE9B5297A664/second`.
+            public var second: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/OutputShared711EAE9B5297A664/relation`.
+            @frozen public enum RelationPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case same = "same"
+                case different = "different"
+                case unknown = "unknown"
+            }
+            /// - Remark: Generated from `#/components/schemas/OutputShared711EAE9B5297A664/relation`.
+            public var relation: Components.Schemas.OutputShared711EAE9B5297A664.RelationPayload
+            /// Creates a new `OutputShared711EAE9B5297A664`.
+            ///
+            /// - Parameters:
+            ///   - first:
+            ///   - second:
+            ///   - relation:
+            public init(
+                first: Swift.String? = nil,
+                second: Swift.String? = nil,
+                relation: Components.Schemas.OutputShared711EAE9B5297A664.RelationPayload
+            ) {
+                self.first = first
+                self.second = second
+                self.relation = relation
+            }
+            public enum CodingKeys: String, CodingKey {
+                case first
+                case second
+                case relation
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/OutputShared7B0849EC9B2CF5F4`.
         public struct OutputShared7B0849EC9B2CF5F4: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/OutputShared7B0849EC9B2CF5F4/id`.
@@ -28056,25 +28521,31 @@ extension Components {
                 public var sharedNameTerms: [Swift.String]
                 /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate/match/brandMatches`.
                 public var brandMatches: Swift.Bool
+                /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate/match/variant`.
+                public var variant: Components.Schemas.ProductVariantComparison
                 /// Creates a new `MatchPayload`.
                 ///
                 /// - Parameters:
                 ///   - source:
                 ///   - sharedNameTerms:
                 ///   - brandMatches:
+                ///   - variant:
                 public init(
                     source: Components.Schemas.PhotoProductCandidate.MatchPayload.SourcePayload,
                     sharedNameTerms: [Swift.String],
-                    brandMatches: Swift.Bool
+                    brandMatches: Swift.Bool,
+                    variant: Components.Schemas.ProductVariantComparison
                 ) {
                     self.source = source
                     self.sharedNameTerms = sharedNameTerms
                     self.brandMatches = brandMatches
+                    self.variant = variant
                 }
                 public enum CodingKeys: String, CodingKey {
                     case source
                     case sharedNameTerms
                     case brandMatches
+                    case variant
                 }
             }
             /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate/match`.
@@ -32269,6 +32740,29 @@ extension Components {
                 case pendingImagePurposes
                 case removeImageIds
                 case imageOrder
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ProductVariantComparison`.
+        public struct ProductVariantComparison: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProductVariantComparison/color`.
+            public var color: Components.Schemas.OutputShared711EAE9B5297A664
+            /// - Remark: Generated from `#/components/schemas/ProductVariantComparison/size`.
+            public var size: Components.Schemas.OutputShared711EAE9B5297A664
+            /// Creates a new `ProductVariantComparison`.
+            ///
+            /// - Parameters:
+            ///   - color:
+            ///   - size:
+            public init(
+                color: Components.Schemas.OutputShared711EAE9B5297A664,
+                size: Components.Schemas.OutputShared711EAE9B5297A664
+            ) {
+                self.color = color
+                self.size = size
+            }
+            public enum CodingKeys: String, CodingKey {
+                case color
+                case size
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut`.
@@ -37807,6 +38301,14 @@ extension Components {
             public var purpose: Components.Schemas.ImportRunPurpose
             /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/status`.
             public var status: Components.Schemas.ImportRunStatus
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/startedAt`.
+            public var startedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/endedAt`.
+            public var endedAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/coordinatorModel`.
+            public var coordinatorModel: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/agentModelMs`.
+            public var agentModelMs: Swift.Double
             /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/ordersSeen`.
             public var ordersSeen: Swift.Int
             /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/imported`.
@@ -37903,6 +38405,10 @@ extension Components {
             ///   - runId:
             ///   - purpose:
             ///   - status:
+            ///   - startedAt:
+            ///   - endedAt:
+            ///   - coordinatorModel:
+            ///   - agentModelMs:
             ///   - ordersSeen:
             ///   - imported:
             ///   - updated:
@@ -37915,6 +38421,10 @@ extension Components {
                 runId: Components.Schemas.ImportRunShortcode,
                 purpose: Components.Schemas.ImportRunPurpose,
                 status: Components.Schemas.ImportRunStatus,
+                startedAt: Foundation.Date,
+                endedAt: Foundation.Date? = nil,
+                coordinatorModel: Swift.String? = nil,
+                agentModelMs: Swift.Double,
                 ordersSeen: Swift.Int,
                 imported: Swift.Int,
                 updated: Swift.Int,
@@ -37927,6 +38437,10 @@ extension Components {
                 self.runId = runId
                 self.purpose = purpose
                 self.status = status
+                self.startedAt = startedAt
+                self.endedAt = endedAt
+                self.coordinatorModel = coordinatorModel
+                self.agentModelMs = agentModelMs
                 self.ordersSeen = ordersSeen
                 self.imported = imported
                 self.updated = updated
@@ -37940,6 +38454,10 @@ extension Components {
                 case runId
                 case purpose
                 case status
+                case startedAt
+                case endedAt
+                case coordinatorModel
+                case agentModelMs
                 case ordersSeen
                 case imported
                 case updated
@@ -38830,6 +39348,388 @@ extension Components {
                 case name
                 case totalCount
                 case sourceCounts
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping`.
+        public struct StatementCsvColumnMapping: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping/source`.
+            public var source: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping/account`.
+            public var account: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping/accountColumn`.
+            public var accountColumn: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping/date`.
+            public var date: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping/amount`.
+            public var amount: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping/description`.
+            public var description: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping/merchant`.
+            public var merchant: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping/category`.
+            public var category: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping/notes`.
+            public var notes: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping/direction`.
+            public var direction: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping/status`.
+            public var status: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping/pendingValue`.
+            public var pendingValue: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping/chargeValue`.
+            public var chargeValue: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping/creditValue`.
+            public var creditValue: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping/sign`.
+            @frozen public enum SignPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case chargesNegative = "charges-negative"
+                case chargesPositive = "charges-positive"
+                case directionColumn = "direction-column"
+            }
+            /// - Remark: Generated from `#/components/schemas/StatementCsvColumnMapping/sign`.
+            public var sign: Components.Schemas.StatementCsvColumnMapping.SignPayload
+            /// Creates a new `StatementCsvColumnMapping`.
+            ///
+            /// - Parameters:
+            ///   - source:
+            ///   - account:
+            ///   - accountColumn:
+            ///   - date:
+            ///   - amount:
+            ///   - description:
+            ///   - merchant:
+            ///   - category:
+            ///   - notes:
+            ///   - direction:
+            ///   - status:
+            ///   - pendingValue:
+            ///   - chargeValue:
+            ///   - creditValue:
+            ///   - sign:
+            public init(
+                source: Swift.String,
+                account: Swift.String,
+                accountColumn: Swift.String,
+                date: Swift.String,
+                amount: Swift.String,
+                description: Swift.String,
+                merchant: Swift.String,
+                category: Swift.String,
+                notes: Swift.String,
+                direction: Swift.String,
+                status: Swift.String,
+                pendingValue: Swift.String,
+                chargeValue: Swift.String,
+                creditValue: Swift.String,
+                sign: Components.Schemas.StatementCsvColumnMapping.SignPayload
+            ) {
+                self.source = source
+                self.account = account
+                self.accountColumn = accountColumn
+                self.date = date
+                self.amount = amount
+                self.description = description
+                self.merchant = merchant
+                self.category = category
+                self.notes = notes
+                self.direction = direction
+                self.status = status
+                self.pendingValue = pendingValue
+                self.chargeValue = chargeValue
+                self.creditValue = creditValue
+                self.sign = sign
+            }
+            public enum CodingKeys: String, CodingKey {
+                case source
+                case account
+                case accountColumn
+                case date
+                case amount
+                case description
+                case merchant
+                case category
+                case notes
+                case direction
+                case status
+                case pendingValue
+                case chargeValue
+                case creditValue
+                case sign
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.source = try container.decode(
+                    Swift.String.self,
+                    forKey: .source
+                )
+                self.account = try container.decode(
+                    Swift.String.self,
+                    forKey: .account
+                )
+                self.accountColumn = try container.decode(
+                    Swift.String.self,
+                    forKey: .accountColumn
+                )
+                self.date = try container.decode(
+                    Swift.String.self,
+                    forKey: .date
+                )
+                self.amount = try container.decode(
+                    Swift.String.self,
+                    forKey: .amount
+                )
+                self.description = try container.decode(
+                    Swift.String.self,
+                    forKey: .description
+                )
+                self.merchant = try container.decode(
+                    Swift.String.self,
+                    forKey: .merchant
+                )
+                self.category = try container.decode(
+                    Swift.String.self,
+                    forKey: .category
+                )
+                self.notes = try container.decode(
+                    Swift.String.self,
+                    forKey: .notes
+                )
+                self.direction = try container.decode(
+                    Swift.String.self,
+                    forKey: .direction
+                )
+                self.status = try container.decode(
+                    Swift.String.self,
+                    forKey: .status
+                )
+                self.pendingValue = try container.decode(
+                    Swift.String.self,
+                    forKey: .pendingValue
+                )
+                self.chargeValue = try container.decode(
+                    Swift.String.self,
+                    forKey: .chargeValue
+                )
+                self.creditValue = try container.decode(
+                    Swift.String.self,
+                    forKey: .creditValue
+                )
+                self.sign = try container.decode(
+                    Components.Schemas.StatementCsvColumnMapping.SignPayload.self,
+                    forKey: .sign
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "source",
+                    "account",
+                    "accountColumn",
+                    "date",
+                    "amount",
+                    "description",
+                    "merchant",
+                    "category",
+                    "notes",
+                    "direction",
+                    "status",
+                    "pendingValue",
+                    "chargeValue",
+                    "creditValue",
+                    "sign"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/StatementCsvCommitInput`.
+        public struct StatementCsvCommitInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StatementCsvCommitInput/fileName`.
+            public var fileName: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvCommitInput/text`.
+            public var text: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvCommitInput/mapping`.
+            public var mapping: Components.Schemas.InputShared3D2F57F08ADB742E?
+            /// - Remark: Generated from `#/components/schemas/StatementCsvCommitInput/previewOffset`.
+            public var previewOffset: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/StatementCsvCommitInput/SelectedPayload`.
+            public struct SelectedPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/StatementCsvCommitInput/SelectedPayload/key`.
+                public var key: Swift.String
+                /// - Remark: Generated from `#/components/schemas/StatementCsvCommitInput/SelectedPayload/kind`.
+                public var kind: Components.Schemas.FinancialTransactionKind
+                /// Creates a new `SelectedPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - key:
+                ///   - kind:
+                public init(
+                    key: Swift.String,
+                    kind: Components.Schemas.FinancialTransactionKind
+                ) {
+                    self.key = key
+                    self.kind = kind
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case key
+                    case kind
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/StatementCsvCommitInput/selected`.
+            public typealias SelectedPayload = [Components.Schemas.StatementCsvCommitInput.SelectedPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/StatementCsvCommitInput/selected`.
+            public var selected: Components.Schemas.StatementCsvCommitInput.SelectedPayload
+            /// Creates a new `StatementCsvCommitInput`.
+            ///
+            /// - Parameters:
+            ///   - fileName:
+            ///   - text:
+            ///   - mapping:
+            ///   - previewOffset:
+            ///   - selected:
+            public init(
+                fileName: Swift.String,
+                text: Swift.String,
+                mapping: Components.Schemas.InputShared3D2F57F08ADB742E? = nil,
+                previewOffset: Swift.Int? = nil,
+                selected: Components.Schemas.StatementCsvCommitInput.SelectedPayload
+            ) {
+                self.fileName = fileName
+                self.text = text
+                self.mapping = mapping
+                self.previewOffset = previewOffset
+                self.selected = selected
+            }
+            public enum CodingKeys: String, CodingKey {
+                case fileName
+                case text
+                case mapping
+                case previewOffset
+                case selected
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/StatementCsvCommitOut`.
+        public struct StatementCsvCommitOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StatementCsvCommitOut/transactions`.
+            public var transactions: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/StatementCsvCommitOut/evidence`.
+            public var evidence: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/StatementCsvCommitOut/alreadyPresent`.
+            public var alreadyPresent: Swift.Int
+            /// Creates a new `StatementCsvCommitOut`.
+            ///
+            /// - Parameters:
+            ///   - transactions:
+            ///   - evidence:
+            ///   - alreadyPresent:
+            public init(
+                transactions: Swift.Int,
+                evidence: Swift.Int,
+                alreadyPresent: Swift.Int
+            ) {
+                self.transactions = transactions
+                self.evidence = evidence
+                self.alreadyPresent = alreadyPresent
+            }
+            public enum CodingKeys: String, CodingKey {
+                case transactions
+                case evidence
+                case alreadyPresent
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/StatementCsvFileInput`.
+        public struct StatementCsvFileInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StatementCsvFileInput/fileName`.
+            public var fileName: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvFileInput/text`.
+            public var text: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StatementCsvFileInput/mapping`.
+            public var mapping: Components.Schemas.InputShared3D2F57F08ADB742E?
+            /// - Remark: Generated from `#/components/schemas/StatementCsvFileInput/previewOffset`.
+            public var previewOffset: Swift.Int?
+            /// Creates a new `StatementCsvFileInput`.
+            ///
+            /// - Parameters:
+            ///   - fileName:
+            ///   - text:
+            ///   - mapping:
+            ///   - previewOffset:
+            public init(
+                fileName: Swift.String,
+                text: Swift.String,
+                mapping: Components.Schemas.InputShared3D2F57F08ADB742E? = nil,
+                previewOffset: Swift.Int? = nil
+            ) {
+                self.fileName = fileName
+                self.text = text
+                self.mapping = mapping
+                self.previewOffset = previewOffset
+            }
+            public enum CodingKeys: String, CodingKey {
+                case fileName
+                case text
+                case mapping
+                case previewOffset
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/StatementCsvPreviewOut`.
+        public struct StatementCsvPreviewOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StatementCsvPreviewOut/headers`.
+            public var headers: [Swift.String]
+            /// - Remark: Generated from `#/components/schemas/StatementCsvPreviewOut/needsMapping`.
+            public var needsMapping: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/StatementCsvPreviewOut/source`.
+            public var source: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/StatementCsvPreviewOut/totalRows`.
+            public var totalRows: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/StatementCsvPreviewOut/pendingRows`.
+            public var pendingRows: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/StatementCsvPreviewOut/zeroValueRows`.
+            public var zeroValueRows: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/StatementCsvPreviewOut/previewOffset`.
+            public var previewOffset: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/StatementCsvPreviewOut/hasMore`.
+            public var hasMore: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/StatementCsvPreviewOut/preview`.
+            public var preview: Components.Schemas.FinancialStatementImportPreviewOut?
+            /// Creates a new `StatementCsvPreviewOut`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - needsMapping:
+            ///   - source:
+            ///   - totalRows:
+            ///   - pendingRows:
+            ///   - zeroValueRows:
+            ///   - previewOffset:
+            ///   - hasMore:
+            ///   - preview:
+            public init(
+                headers: [Swift.String],
+                needsMapping: Swift.Bool,
+                source: Swift.String? = nil,
+                totalRows: Swift.Int,
+                pendingRows: Swift.Int,
+                zeroValueRows: Swift.Int,
+                previewOffset: Swift.Int,
+                hasMore: Swift.Bool,
+                preview: Components.Schemas.FinancialStatementImportPreviewOut? = nil
+            ) {
+                self.headers = headers
+                self.needsMapping = needsMapping
+                self.source = source
+                self.totalRows = totalRows
+                self.pendingRows = pendingRows
+                self.zeroValueRows = zeroValueRows
+                self.previewOffset = previewOffset
+                self.hasMore = hasMore
+                self.preview = preview
+            }
+            public enum CodingKeys: String, CodingKey {
+                case headers
+                case needsMapping
+                case source
+                case totalRows
+                case pendingRows
+                case zeroValueRows
+                case previewOffset
+                case hasMore
+                case preview
             }
         }
         /// - Remark: Generated from `#/components/schemas/SubmitReceiptEvidenceInput`.

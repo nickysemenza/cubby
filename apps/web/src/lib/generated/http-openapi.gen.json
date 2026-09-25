@@ -25767,6 +25767,47 @@
         }
       }
     },
+    "/api/v1/statementRow/commitCsv": {
+      "post": {
+        "tags": [
+          "statementRow"
+        ],
+        "parameters": [],
+        "operationId": "statementRow.commitCsv",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatementCsvCommitInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementCsvCommitOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/statementRow/imports": {
       "get": {
         "tags": [
@@ -25834,6 +25875,47 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/StatementRowListOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/statementRow/previewCsv": {
+      "post": {
+        "tags": [
+          "statementRow"
+        ],
+        "parameters": [],
+        "operationId": "statementRow.previewCsv",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatementCsvFileInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementCsvPreviewOut"
                 }
               }
             }
@@ -50821,6 +50903,9 @@
           "type": "string"
         }
       },
+      "InputShared3D2F57F08ADB742E": {
+        "$ref": "#/components/schemas/StatementCsvColumnMapping"
+      },
       "InputShared3F96AF0DB8D0AB42": {
         "anyOf": [
           {
@@ -58160,6 +58245,36 @@
           "export"
         ]
       },
+      "OutputShared711EAE9B5297A664": {
+        "type": "object",
+        "properties": {
+          "first": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "second": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "relation": {
+            "type": "string",
+            "enum": [
+              "same",
+              "different",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "first",
+          "second",
+          "relation"
+        ]
+      },
       "OutputShared72E923B6CA75A2D2": {
         "type": "object",
         "properties": {
@@ -60069,12 +60184,16 @@
               },
               "brandMatches": {
                 "type": "boolean"
+              },
+              "variant": {
+                "$ref": "#/components/schemas/ProductVariantComparison"
               }
             },
             "required": [
               "source",
               "sharedNameTerms",
-              "brandMatches"
+              "brandMatches",
+              "variant"
             ]
           },
           "hasOwnPhoto": {
@@ -64796,6 +64915,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "variant": {
+            "$ref": "#/components/schemas/ProductVariantComparison"
           }
         },
         "required": [
@@ -64805,7 +64927,8 @@
           "evidence",
           "sourceUrls",
           "signals",
-          "warnings"
+          "warnings",
+          "variant"
         ]
       },
       "ProductMatchOwner": {
@@ -66081,6 +66204,21 @@
             }
           }
         }
+      },
+      "ProductVariantComparison": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "$ref": "#/components/schemas/OutputShared711EAE9B5297A664"
+          },
+          "size": {
+            "$ref": "#/components/schemas/OutputShared711EAE9B5297A664"
+          }
+        },
+        "required": [
+          "color",
+          "size"
+        ]
       },
       "ProductWithBetterUpcData": {
         "type": "object",
@@ -75007,6 +75145,29 @@
           "status": {
             "$ref": "#/components/schemas/ImportRunStatus"
           },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "endedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "coordinatorModel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "agentModelMs": {
+            "type": "number",
+            "minimum": 0
+          },
           "ordersSeen": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -75109,6 +75270,10 @@
           "runId",
           "purpose",
           "status",
+          "startedAt",
+          "endedAt",
+          "coordinatorModel",
+          "agentModelMs",
           "ordersSeen",
           "imported",
           "updated",
@@ -77006,6 +77171,231 @@
         "required": [
           "id",
           "name"
+        ]
+      },
+      "StatementCsvColumnMapping": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "account": {
+            "type": "string"
+          },
+          "accountColumn": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "merchant": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "direction": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "pendingValue": {
+            "type": "string"
+          },
+          "chargeValue": {
+            "type": "string"
+          },
+          "creditValue": {
+            "type": "string"
+          },
+          "sign": {
+            "type": "string",
+            "enum": [
+              "charges-negative",
+              "charges-positive",
+              "direction-column"
+            ]
+          }
+        },
+        "required": [
+          "source",
+          "account",
+          "accountColumn",
+          "date",
+          "amount",
+          "description",
+          "merchant",
+          "category",
+          "notes",
+          "direction",
+          "status",
+          "pendingValue",
+          "chargeValue",
+          "creditValue",
+          "sign"
+        ],
+        "additionalProperties": false
+      },
+      "StatementCsvCommitInput": {
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000000
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/InputShared3D2F57F08ADB742E"
+          },
+          "previewOffset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "selected": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "kind": {
+                  "$ref": "#/components/schemas/FinancialTransactionKind"
+                }
+              },
+              "required": [
+                "key",
+                "kind"
+              ]
+            }
+          }
+        },
+        "required": [
+          "fileName",
+          "text",
+          "selected"
+        ]
+      },
+      "StatementCsvCommitOut": {
+        "type": "object",
+        "properties": {
+          "transactions": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "evidence": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "alreadyPresent": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "transactions",
+          "evidence",
+          "alreadyPresent"
+        ]
+      },
+      "StatementCsvFileInput": {
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000000
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/InputShared3D2F57F08ADB742E"
+          },
+          "previewOffset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "fileName",
+          "text"
+        ]
+      },
+      "StatementCsvPreviewOut": {
+        "type": "object",
+        "properties": {
+          "headers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "needsMapping": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "totalRows": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "pendingRows": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "zeroValueRows": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "previewOffset": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "preview": {
+            "$ref": "#/components/schemas/FinancialStatementImportPreviewOut"
+          }
+        },
+        "required": [
+          "headers",
+          "needsMapping",
+          "source",
+          "totalRows",
+          "pendingRows",
+          "zeroValueRows",
+          "previewOffset",
+          "hasMore"
         ]
       },
       "StatementDateKind": {

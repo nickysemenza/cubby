@@ -3,6 +3,30 @@ import { describe, expect, it } from "vitest";
 
 import { forgeWearEvidence } from "../../../tests/fixtures/product-identity-evidence";
 import { rankPhotoProductCandidates } from "./photo-product-candidates";
+import { compareProductTitles } from "./product-variant-comparison";
+
+describe("explicit variant evidence", () => {
+  it("flags a different color and preserves an unknown size instead of guessing from loose fit", () => {
+    expect(
+      compareProductTitles(
+        "ForgeWear loose fit pocket shirt, navy, size unconfirmed",
+        "ForgeWear loose fit pocket shirt, black, Small",
+      ),
+    ).toEqual({
+      color: { first: "Navy", second: "Black", relation: "different" },
+      size: { first: null, second: "Small", relation: "unknown" },
+    });
+  });
+
+  it("treats two possible photo colors as unknown evidence", () => {
+    expect(
+      compareProductTitles("Pocket tee, navy/charcoal", "Pocket tee, navy"),
+    ).toEqual({
+      color: { first: null, second: "Navy", relation: "unknown" },
+      size: { first: null, second: null, relation: "unknown" },
+    });
+  });
+});
 
 describe("photo product candidate ranking", () => {
   it("keeps the observed color and size ahead of another variant's photo gap", () => {

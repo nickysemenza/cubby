@@ -246,7 +246,6 @@ function assertBeforeMerge(
     throw new Error(
       `Purchase changed stock or spend unexpectedly: ${JSON.stringify(facts)}`,
     );
-  assertStatementSettlement(facts);
 }
 
 function assertAfterMerge(
@@ -366,6 +365,130 @@ async function reviewMatchInBrowser(input: {
   }
 }
 
+async function verifyJoinedProductInBrowser(input: {
+  origin: string;
+  artifacts: string;
+  productId: string;
+}) {
+  const api = await request.newContext({
+    baseURL: input.origin,
+    extraHTTPHeaders: { Origin: input.origin },
+  });
+  try {
+    const login = await api.post("/api/auth/sign-in/email", {
+      data: { email: "sim@cubby.localhost", password: "cubby-sim-local-only" },
+    });
+    if (!login.ok())
+      throw new Error(`Joined item sign-in failed: ${await login.text()}`);
+    const state = await api.storageState();
+    state.cookies = state.cookies.filter(
+      (cookie) => !cookie.name.endsWith("session_data"),
+    );
+    const browser = await chromium.launch();
+    try {
+      const context = await browser.newContext({
+        storageState: state,
+        viewport: { width: 1280, height: 900 },
+        recordVideo: {
+          dir: input.artifacts,
+          size: { width: 1280, height: 900 },
+        },
+      });
+      const page = await context.newPage();
+      try {
+        await page.goto(`${input.origin}/products/${input.productId}`);
+        await expect(
+          page.getByRole("heading", { name: purchaseName, level: 1 }),
+        ).toBeVisible();
+        const finish = page.getByText("Finish this item").locator("..");
+        await expect(finish).toContainText("2 own photos");
+        await expect(finish).toContainText("Inventory recorded");
+        await expect(finish).toContainText("Statement matched");
+        await page.screenshot({
+          path: `${input.artifacts}/joined-product.png`,
+          fullPage: true,
+        });
+      } finally {
+        await context.close();
+        const videoPath = await page.video()?.path();
+        if (videoPath)
+          console.log(
+            `[headless-wardrobe-e2e] Joined item video: ${videoPath}`,
+          );
+      }
+    } finally {
+      await browser.close();
+    }
+  } finally {
+    await api.dispose();
+  }
+}
+
+async function reviewLateChargeInBrowser(input: {
+  origin: string;
+  artifacts: string;
+  purchaseId: string;
+}) {
+  const api = await request.newContext({
+    baseURL: input.origin,
+    extraHTTPHeaders: { Origin: input.origin },
+  });
+  try {
+    const login = await api.post("/api/auth/sign-in/email", {
+      data: { email: "sim@cubby.localhost", password: "cubby-sim-local-only" },
+    });
+    if (!login.ok())
+      throw new Error(`Late charge sign-in failed: ${await login.text()}`);
+    const state = await api.storageState();
+    state.cookies = state.cookies.filter(
+      (cookie) => !cookie.name.endsWith("session_data"),
+    );
+    const browser = await chromium.launch();
+    try {
+      const context = await browser.newContext({
+        storageState: state,
+        viewport: { width: 1280, height: 900 },
+        recordVideo: {
+          dir: input.artifacts,
+          size: { width: 1280, height: 900 },
+        },
+      });
+      const page = await context.newPage();
+      try {
+        await page.goto(`${input.origin}/purchases/${input.purchaseId}`);
+        await page
+          .getByRole("button", { name: "Match a statement charge" })
+          .click();
+        const dialog = page.getByRole("dialog", {
+          name: "Match statement charge",
+        });
+        await expect(
+          dialog.getByText("SYNTHETIC OUTFITTERS ORDER 1"),
+        ).toBeVisible();
+        await dialog
+          .getByRole("button", { name: /SYNTHETIC OUTFITTERS ORDER 1/ })
+          .click();
+        await dialog.getByRole("button", { name: "Confirm match" }).click();
+        await expect(dialog).toHaveCount(0);
+        await expect(
+          page.getByRole("button", { name: "Match a statement charge" }),
+        ).toHaveCount(0);
+      } finally {
+        await context.close();
+        const videoPath = await page.video()?.path();
+        if (videoPath)
+          console.log(
+            `[headless-wardrobe-e2e] Late charge review video: ${videoPath}`,
+          );
+      }
+    } finally {
+      await browser.close();
+    }
+  } finally {
+    await api.dispose();
+  }
+}
+
 async function importSyntheticMonarchCsv(
   pool: Pool,
   db: Database,
@@ -433,17 +556,21 @@ async function importSyntheticMonarchCsv(
       const page = await context.newPage();
       try {
         await page.goto(`${origin}/statement-rows/import`);
-        await page.getByLabel("Monarch CSV file").setInputFiles(csvPath);
+        const fileInput = page.getByLabel("Statement CSV file");
+        await expect(fileInput).toBeEnabled();
+        await fileInput.setInputFiles(csvPath);
         const preview = page.getByRole("region", { name: "Statement preview" });
         await expect(preview.getByText("Ready to record")).toHaveCount(2);
         await expect(preview).toContainText("Fixture Visa");
-        await expect(preview).toContainText("Monarch category: Clothing");
+        await expect(preview).toContainText("monarch category: Clothing");
         await expect(preview).toContainText(
-          "Monarch category: Credit Card Payment",
+          "monarch category: Credit Card Payment",
         );
         await preview
-          .getByRole("checkbox", { name: "Record SYNTHETIC CARD PAYMENT" })
-          .uncheck();
+          .getByRole("checkbox", {
+            name: "Record SYNTHETIC OUTFITTERS ORDER 1",
+          })
+          .check();
         await expect(
           preview.getByRole("button", { name: "Choose transaction kinds" }),
         ).toBeDisabled();
@@ -453,20 +580,20 @@ async function importSyntheticMonarchCsv(
           })
           .selectOption("purchase");
         await preview
-          .getByRole("button", { name: "Confirm 1 transaction" })
+          .getByRole("button", {
+            name: "Save rows and create 1 reviewed transactions",
+          })
           .click();
-        await expect(page.getByRole("status")).toContainText(
-          "1 transactions created · 2 new source rows · 1 held for review",
+        await expect(page.locator("output")).toContainText(
+          "1 transactions created · 2 new source rows",
         );
-        await page.getByLabel("Monarch CSV file").setInputFiles(csvPath);
+        await expect(fileInput).toBeEnabled();
+        await fileInput.setInputFiles(csvPath);
         await expect(preview.getByText("Already recorded")).toBeVisible();
         await preview
-          .getByRole("checkbox", { name: "Record SYNTHETIC CARD PAYMENT" })
-          .uncheck();
-        await preview
-          .getByRole("button", { name: "Confirm 0 transactions" })
+          .getByRole("button", { name: "Save 2 source rows" })
           .click();
-        await expect(page.getByRole("status")).toContainText(
+        await expect(page.locator("output")).toContainText(
           "0 transactions created · 0 new source rows",
         );
       } finally {
@@ -673,6 +800,13 @@ export async function runWardrobeConvergenceScenario({
     if (photo.rows.length !== 1 || !photoProduct)
       throw new Error("Photo review did not leave one synthetic shirt Product");
 
+    await insertWithShortcode(db, "location", {
+      name: "Home",
+      aliases: [],
+      tags: [],
+      type: "house",
+      parentId: null,
+    });
     const wardrobe = await createFixtureWithContext(
       kernel,
       "location",
@@ -681,7 +815,6 @@ export async function runWardrobeConvergenceScenario({
         aliases: [],
         tags: [],
         type: "room",
-        parentId: "LOC-HM3E",
       }),
     );
     await createFixtureWithContext(
@@ -693,6 +826,22 @@ export async function runWardrobeConvergenceScenario({
         amount: { value: 1, unit: "each" },
       }),
     );
+    const purchaseProduct = await importSyntheticPurchase(
+      pool,
+      db,
+      kernel,
+      userId,
+      photoProduct,
+    );
+    const beforeStatement = await readConvergenceFacts(
+      pool,
+      photoProduct.shortcode,
+      purchaseProduct.shortcode,
+    );
+    if (beforeStatement.settlements.length)
+      throw new Error(
+        "Purchase import invented a statement settlement before CSV upload",
+      );
     const statementTransactionId = await importSyntheticMonarchCsv(
       pool,
       db,
@@ -700,12 +849,24 @@ export async function runWardrobeConvergenceScenario({
       origin,
       artifacts,
     );
-    const purchaseProduct = await importSyntheticPurchase(
+    const afterStatement = await readConvergenceFacts(
       pool,
-      db,
-      kernel,
-      userId,
-      photoProduct,
+      photoProduct.shortcode,
+      purchaseProduct.shortcode,
+    );
+    if (afterStatement.settlements.length)
+      throw new Error("A late statement charge was allocated without review");
+    await reviewLateChargeInBrowser({
+      origin,
+      artifacts,
+      purchaseId: afterStatement.purchases[0]!.shortcode,
+    });
+    assertStatementSettlement(
+      await readConvergenceFacts(
+        pool,
+        photoProduct.shortcode,
+        purchaseProduct.shortcode,
+      ),
     );
 
     const proposalServer = new McpServer({
@@ -752,6 +913,11 @@ export async function runWardrobeConvergenceScenario({
       throw new Error(
         "Purchase settled against the wrong statement transaction",
       );
+    await verifyJoinedProductInBrowser({
+      origin,
+      artifacts,
+      productId: purchaseProduct.shortcode,
+    });
     console.log(
       "[headless-wardrobe-e2e] Product, inventory, purchase, expense, Monarch transaction, and photos linked",
     );

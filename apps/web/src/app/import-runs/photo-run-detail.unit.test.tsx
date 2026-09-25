@@ -332,6 +332,10 @@ describe("PhotoImportRunView", () => {
                 source: "catalog_name",
                 sharedNameTerms: ["pocket", "tee", "black", "small"],
                 brandMatches: true,
+                variant: {
+                  color: { first: null, second: "black", relation: "unknown" },
+                  size: { first: null, second: "small", relation: "unknown" },
+                },
               },
               hasOwnPhoto: false,
               hasPhotoImport: false,

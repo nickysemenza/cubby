@@ -532,6 +532,24 @@ public actor CubbyClient {
         }
     }
 
+    public func runAiUsage(_ runID: ImportRunShortcode) async throws -> AiRunUsageOut {
+        try await perform {
+            try await api.run_aiUsage(query: .init(runId: runID, limit: 1)).ok.body.json
+        }
+    }
+
+    public func previewStatementCsv(_ input: StatementCsvFileInput) async throws -> StatementCsvPreviewOut {
+        try await perform {
+            try await api.statementRow_previewCsv(body: .json(input)).ok.body.json
+        }
+    }
+
+    public func commitStatementCsv(_ input: StatementCsvCommitInput) async throws -> StatementCsvCommitOut {
+        try await perform {
+            try await api.statementRow_commitCsv(body: .json(input)).ok.body.json
+        }
+    }
+
     /// Finalizes one chunk (≤100 images) of a bulk upload into `input.runId`. Idempotent: a retry
     /// after a transport error replays safely, since a previously finalized image comes back in
     /// `alreadyFinalized` rather than erroring.

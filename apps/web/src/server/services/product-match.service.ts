@@ -35,6 +35,7 @@ import {
   productPairKey,
   upsertAgentProductMatch,
 } from "~/server/repo/product-match-candidate";
+import { compareProductTitles } from "~/server/repo/product-variant-comparison";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 import {
@@ -155,15 +156,27 @@ function candidate(
   details: Pick<ProductMatchCandidate, "evidence" | "sourceUrls" | "signals">,
 ): ProductMatchCandidate {
   const [keeper, other] = orient(a, b);
+  const variant = compareProductTitles(keeper.name, other.name);
+  const variantWarnings = [variant.color, variant.size].flatMap(
+    (fact, index) =>
+      fact.relation === "different"
+        ? [
+            `Different ${index === 0 ? "colors" : "sizes"} in Product titles: ${fact.first} and ${fact.second}. Check the photos and label before merging.`,
+          ]
+        : [],
+  );
   return {
     source,
     keeper: publicSide(keeper),
     other: publicSide(other),
     ...details,
-    warnings:
+    variant,
+    warnings: [
+      ...variantWarnings,
       keeper.inventoryCount > 0 && other.inventoryCount > 0
-        ? [BOTH_STOCKED_WARNING]
-        : [],
+        ? BOTH_STOCKED_WARNING
+        : null,
+    ].filter((warning): warning is string => warning !== null),
   };
 }
 

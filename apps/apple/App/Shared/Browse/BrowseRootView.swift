@@ -10,6 +10,19 @@ struct BrowseRootView: View {
 
     var body: some View {
         List {
+            if query.isEmpty {
+                Section {
+                    NavigationLink {
+                        StatementCsvImportView()
+                    } label: {
+                        Label("Import statement CSV", systemImage: "doc.text")
+                            .frame(minHeight: PorcelainTokens.touchTarget)
+                    }
+                    .accessibilityIdentifier("browse.importStatement")
+                } header: {
+                    headerTitle("Finance intake")
+                }
+            }
             #if os(iOS)
                 Section {
                     Button {

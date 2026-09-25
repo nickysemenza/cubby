@@ -115,6 +115,7 @@
     "./import-run": "./src/import-run.ts",
     "./import-run-agent": "./src/import-run-agent.ts",
     "./photo-import-run": "./src/photo-import-run.ts",
+    "./product-variant-comparison": "./src/product-variant-comparison.ts",
     "./purchase": "./src/purchase.ts",
     "./purchase-import": "./src/purchase-import.ts",
     "./purchase-fields": "./src/purchase-fields.ts",

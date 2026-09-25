@@ -23,6 +23,7 @@ import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { entityMutation } from "~/entities/entity-mutation.functions";
+import { useHydrationGate } from "~/hooks/useHydrated";
 import { pageTitle } from "~/lib/page-title";
 import { statementRow } from "~/lib/statement-row.functions";
 import { formatCurrency } from "~/lib/utils";
@@ -94,6 +95,7 @@ function StatementImportPage() {
   );
   const recordRows = useMutation(statementRow.record.mutationOptions());
   const [busy, setBusy] = useState(false);
+  const fileGate = useHydrationGate(busy);
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [result, setResult] = useState<{
@@ -292,7 +294,7 @@ function StatementImportPage() {
               type="file"
               accept=".csv,text/csv"
               className="sr-only"
-              disabled={busy}
+              {...fileGate}
               onChange={(event) => {
                 const file = event.currentTarget.files?.[0];
                 if (file) void openFile(file);

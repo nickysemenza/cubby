@@ -15,6 +15,7 @@ import { productImagePurpose } from "./image";
 import { imageProcessingJobState } from "./image-processing";
 import { inventoryOwnershipMode } from "./inventory-ownership";
 import { importRunTargetState } from "./purchase-import";
+import { productVariantComparison } from "./product-variant-comparison";
 
 const commitPhotoGroupImage = z.object({
   id: imageShortcode,
@@ -375,6 +376,7 @@ export const photoProductCandidate = z.object({
     source: z.literal("catalog_name"),
     sharedNameTerms: z.array(z.string()),
     brandMatches: z.boolean(),
+    variant: productVariantComparison,
   }),
   hasOwnPhoto: z.boolean(),
   hasPhotoImport: z.boolean(),

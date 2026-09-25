@@ -8,6 +8,7 @@ import {
 } from "./identifiers";
 import { duplicateProductIdentitySchema } from "./problems";
 import { embeddingReadinessSchema, relatednessOutSchema } from "./relatedness";
+import { productVariantComparison } from "./product-variant-comparison";
 
 export const recommendationWorkbenchInput = z.object({
   sourceId: productShortcode,
@@ -145,6 +146,8 @@ export const productMatchCandidate = z.object({
   signals: z.array(z.string()),
   /** Things to fix before merging, e.g. both sides stocked (merge sums them). */
   warnings: z.array(z.string()),
+  /** A comparison of explicit title words, not a visual or model conclusion. */
+  variant: productVariantComparison,
 });
 export type ProductMatchCandidate = z.infer<typeof productMatchCandidate>;
 

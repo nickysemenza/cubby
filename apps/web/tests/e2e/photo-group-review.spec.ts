@@ -192,6 +192,7 @@ test("suggests an existing variant and previews every merge decision for a creat
     group.getByText("Could this already be a product?"),
   ).toBeVisible();
   await expect(group.getByText(candidateName)).toBeVisible();
+  await expect(group.getByText("Gray in both titles")).toBeVisible();
   await group.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(
     page.getByRole("link", { name: "Gray crew t-shirt — M" }),
@@ -214,6 +215,7 @@ test("suggests an existing variant and previews every merge decision for a creat
   await settled.locator(`a[href*="candidate=${existing.id}"]`).click();
   await expect(page).toHaveURL(/recommendations\/workbench/);
   await expect(page.getByText(candidateName).first()).toBeVisible();
+  await expect(page.getByText("Variant words in Product titles")).toBeVisible();
   await page.getByRole("button", { name: "Review merge" }).click();
   const dialog = page.getByRole("dialog");
   await expect(

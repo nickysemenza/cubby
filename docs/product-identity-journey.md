@@ -14,7 +14,7 @@ not change what the result means.
 ## The whole journey
 
 Connect read-only Gmail in Cubby Settings, import a Monarch CSV through the
-web statement preview or MCP, and capture own-item and label photos on iPhone or Mac.
+web or native statement review (or MCP), and capture own-item and label photos on iPhone or Mac.
 These sources can arrive in any order. Cubby should converge them on one exact
 Product, an itemized Purchase, and a truthful settlement allocation. A human
 reviews uncertain identity, grouped photos, and ambiguous charges. Flue can
@@ -45,13 +45,13 @@ was bought. A delivered email and a card charge do not receive inventory.
 
 ### What works today and what still needs work
 
-| Part        | Current path                                                                                                                                                                               | Next product step                                                                         |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| Gmail       | Google connection in Settings grants read-only Gmail; order mail can feed discovery.                                                                                                       | Make source coverage and missing itemization obvious in one journey view.                 |
-| Monarch CSV | The web import screen parses locally, previews account and duplicate states, requires an explicit kind for each selected transaction, and retains every source row; MCP remains available. | Bring the same review to native and match late-arriving statements to existing Purchases. |
-| Photos      | Native upload creates a photo run; Flue proposes groups; web review approves them. Direct native Product photo attachment also exists.                                                     | Bring run status, group review, and Product match evidence into the native app.           |
-| Settlement  | Purchase import can allocate a unique complete payment set to a transaction already recorded.                                                                                              | Give ambiguous and reverse-arrival matches a single review worklist.                      |
-| Activity    | Flue conversation streams; the run record and system log refresh while active.                                                                                                             | Show one coherent event timeline and stage durations on desktop and phone.                |
+| Part        | Current path                                                                                                                                                                                             | Next product step                                                         |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Gmail       | Google connection in Settings grants read-only Gmail; order mail can feed discovery.                                                                                                                     | Make source coverage and missing itemization obvious in one journey view. |
+| Monarch CSV | Web and native previews check account and duplicate states, require an explicit kind for each chosen transaction, and retain source rows; native review pages through long files. MCP remains available. | Add PDF/OFX extraction and a simulator review of unfamiliar mapping.      |
+| Photos      | Native upload creates a photo run; Flue proposes groups; web and native review can approve them. Direct native Product photo attachment also exists.                                                     | Run a physical iPhone review with live device analysis.                   |
+| Settlement  | Purchase import can allocate a unique complete payment set to a transaction already recorded. Purchase detail also offers a review of unallocated, exact-amount charges arriving later.                  | Group split payments and refunds in one worklist.                         |
+| Activity    | Flue conversation streams; web and native run views show durable progress, known stages, elapsed time, and AI spend.                                                                                     | Verify visual timing and browser handoff on device.                       |
 
 The [shared photo skill](../.claude/skills/photo-inventory-import/SKILL.md)
 and [purchase skill](../.claude/skills/purchase-import/SKILL.md) apply to

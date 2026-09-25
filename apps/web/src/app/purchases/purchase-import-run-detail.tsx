@@ -29,6 +29,7 @@ import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { StatusText } from "~/components/ui/status-text";
+import { run as runOperations } from "~/entities/run.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { readJsonOrThrow } from "~/lib/http-error";
@@ -41,6 +42,7 @@ import {
   importRunDetailResponse,
   type ImportRunDetail,
 } from "~/lib/purchase-import-run-detail";
+import { formatCurrency } from "~/lib/utils";
 
 import {
   formatWorkDuration,
@@ -138,16 +140,44 @@ function RunControl({ run }: { run: ImportRunDetail }) {
   const active = ACTIVE_RUN_STATUSES.has(run.status);
   if (!active) return null;
   return (
-    <div className="flex flex-wrap gap-2">
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        onClick={() => update.mutate("cancel")}
-        disabled={update.isPending}
-      >
-        Stop run
-      </Button>
+    <div className="grid gap-2">
+      {run.status === "paused_auth" || run.status === "paused_offline" ? (
+        <div className="grid gap-2 border border-border bg-card p-3 text-sm">
+          <h2 className="font-semibold">
+            {run.status === "paused_auth"
+              ? `Sign in to ${run.vendorAccount?.label ?? "the retailer"}`
+              : "Reconnect the Mac browser"}
+          </h2>
+          <p className="text-muted-foreground">
+            {run.status === "paused_auth"
+              ? "Use the Cubby-managed browser tab on your Mac to finish sign-in. Leave the tab open; the agent will continue with the order page after you resume."
+              : "Open the Cubby Mac app and reconnect its browser bridge. Keep the retailer tab open before resuming."}
+          </p>
+          <div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => update.mutate("resume")}
+              disabled={update.isPending}
+            >
+              {run.status === "paused_auth"
+                ? "I've signed in — resume run"
+                : "Browser is connected — resume run"}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      <div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => update.mutate("cancel")}
+          disabled={update.isPending}
+        >
+          Stop run
+        </Button>
+      </div>
       {update.isError ? (
         <StatusText tone="destructive">{update.error.message}</StatusText>
       ) : null}
@@ -470,6 +500,13 @@ function AgentWorkOverview({
   settledGroups?: number;
   additionalWork?: AgentWorkItem[];
 }) {
+  const usage = useQuery({
+    ...runOperations.aiUsage.queryOptions({ runId: run.publicId, limit: 1 }),
+    refetchInterval:
+      run.status === "running" || run.status.startsWith("paused")
+        ? 5_000
+        : false,
+  });
   const work = [
     ...summarizeAgentWork(messages, run.operations),
     ...additionalWork,
@@ -515,6 +552,17 @@ function AgentWorkOverview({
         </strong>
         {run.endedAt ? null : " · still running"}
       </p>
+      {usage.data ? (
+        <p className="mt-1 text-xs text-muted-foreground" aria-live="polite">
+          AI spend to date{" "}
+          <strong className="font-semibold text-foreground tabular-nums">
+            {formatCurrency(usage.data.pricedSubtotal, 4)}
+          </strong>
+          {usage.data.unpricedCount
+            ? ` · ${usage.data.unpricedCount} calls unpriced`
+            : null}
+        </p>
+      ) : null}
       {work.length || plannedSteps.length || run.agentModelMs > 0 ? (
         <section
           className="mt-3 overflow-x-auto border-t border-border pt-2"

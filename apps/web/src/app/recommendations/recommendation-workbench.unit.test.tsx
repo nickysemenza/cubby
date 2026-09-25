@@ -178,6 +178,10 @@ describe("RecommendationWorkbench product matches", () => {
         sourceUrls: ["https://vendor.example/p/crew-tee"],
         signals: [],
         warnings: ["Both products have stock. Merging sums their quantities."],
+        variant: {
+          color: { first: "Gray", second: "Gray", relation: "same" as const },
+          size: { first: null, second: null, relation: "unknown" as const },
+        },
       },
     ],
   };

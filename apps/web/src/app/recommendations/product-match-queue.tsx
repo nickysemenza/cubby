@@ -19,6 +19,7 @@ import {
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
+import { ProductVariantEvidence } from "~/app/_components/product-variant-evidence";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -155,6 +156,16 @@ function ProductMatchCard({
         <div className="grid grid-cols-2 gap-3">
           <MatchSide side={item.keeper} caption="Keep" />
           <MatchSide side={item.other} caption="Merge in" />
+        </div>
+        <div className="border-t border-border pt-2">
+          <p className="mb-1 text-xs font-medium">
+            Variant words in Product titles
+          </p>
+          <ProductVariantEvidence
+            comparison={item.variant}
+            firstLabel="Keep"
+            secondLabel="Merge in"
+          />
         </div>
         {item.evidence && (
           <p className="text-sm whitespace-pre-line">{item.evidence}</p>

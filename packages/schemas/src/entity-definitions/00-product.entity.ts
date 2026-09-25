@@ -60,6 +60,7 @@ export default defineEntity({
         actionOverrides: ["edit", "addToInventory", "recordSale", "discard"],
       },
       additionalSectionOverrides: [
+        { kind: "slot", id: "import-runs", title: "Item journey" },
         {
           kind: "relation",
           id: "plantings",
@@ -97,7 +98,6 @@ export default defineEntity({
         { kind: "slot", id: "fits-with", title: "Fits with" },
         { kind: "slot", id: "cookbooks", title: "Cookbooks" },
         { kind: "slot", id: "recipe-appearances", title: "Appears in recipes" },
-        { kind: "slot", id: "import-runs", title: "Import runs" },
       ],
     },
     list: {
