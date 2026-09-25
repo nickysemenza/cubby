@@ -71,7 +71,7 @@ export const FILTER_KINDS = [
 ] as const;
 export type FilterKind = (typeof FILTER_KINDS)[number];
 export type EntityPresentation = z.output<
-  ReturnType<typeof metadataSchemas>["presentation"]
+  ReturnType<typeof buildMetadataSchemas>["presentation"]
 >;
 type EntityListTimeline = NonNullable<EntityPresentation["list"]["timeline"]>;
 type EntityTimelineLifecycle = NonNullable<EntityListTimeline["lifecycle"]>;
@@ -147,7 +147,7 @@ export const listViewId = (view: EntityListView): string =>
  * cloning, or reconstructing those instances, so defaults and refinements
  * continue to belong to their declaration modules.
  */
-const metadataSchemas = () => {
+const buildMetadataSchemas = () => {
   const declaredZodSchema = z.instanceof(z.ZodType, {
     error: "must be a Zod schema",
   });
@@ -1715,7 +1715,12 @@ const metadataSchemas = () => {
   };
 };
 
-type EntityMetadataSchemas = ReturnType<typeof metadataSchemas>;
+// Built lazily (the schemas are large) and once: rebuilding them per parse
+// made Zod re-JIT every object schema on each declaration.
+let metadataSchemaCache: ReturnType<typeof buildMetadataSchemas> | undefined;
+const metadataSchemas = () => (metadataSchemaCache ??= buildMetadataSchemas());
+
+type EntityMetadataSchemas = ReturnType<typeof buildMetadataSchemas>;
 export type EntityStorageMetadata = z.output<EntityMetadataSchemas["storage"]>;
 export type EntityFieldModelMetadata = z.output<
   EntityMetadataSchemas["fieldModel"]

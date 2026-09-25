@@ -46,18 +46,17 @@ struct OperationRoutesTests {
         #expect(accepting == OperationRoute.imageAttachableEntities)
     }
 
-    /// `apps/apple/openapi/openapi-generator-config.yaml` lists every operation id the generated
+    /// `Sources/CubbyAPI/openapi-generator-config.yaml` lists every operation id the generated
     /// client carries (`native:` flags on the web contracts and entity declarations, plus the
     /// automatic resource ids), written by `scripts/generator/http-api/native.ts`. Every id it
     /// lists must have made it into the generated table, or the config and the table have drifted.
     @Test func everyNativeOperationHasAGeneratedRoute() throws {
-        // Tests/CubbyKitTests/OperationRoutesTests.swift -> apps/apple/openapi/openapi-generator-config.yaml
+        // Tests/CubbyKitTests/OperationRoutesTests.swift -> Sources/CubbyAPI/openapi-generator-config.yaml
         let configURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()  // CubbyKitTests/
             .deletingLastPathComponent()  // Tests/
             .deletingLastPathComponent()  // CubbyKit/
-            .deletingLastPathComponent()  // apple/
-            .appendingPathComponent("openapi/openapi-generator-config.yaml")
+            .appendingPathComponent("Sources/CubbyAPI/openapi-generator-config.yaml")
         // Read only the flat `    - <id>` list under `operations:`. The same filter can also carry
         // schema-only native wire models, which deliberately have no HTTP route.
         let config = try String(contentsOf: configURL, encoding: .utf8)

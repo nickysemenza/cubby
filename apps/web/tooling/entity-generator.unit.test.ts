@@ -20,9 +20,8 @@ import {
 } from "../../../packages/schemas/src/entity-definitions/definition";
 import type { EntityDeclaration } from "../../../packages/schemas/src/entity-definitions/definition";
 import {
-  checkArtifacts,
-  findExtraArtifacts,
   generatedHeader,
+  removeExtraArtifacts,
 } from "../../../scripts/generator/artifacts";
 import {
   collectEntityOverrides,
@@ -1860,7 +1859,7 @@ describe("typed entity compiler", () => {
     ).toThrow('model.intents.create lacks "capture"');
   });
 
-  it("reports missing, stale and extraneous generated files", async () => {
+  it("removes only header-carrying files that no artifact claims", async () => {
     const root = await mkdtemp(join(tmpdir(), "cubby-entities-"));
     temporaryRoots.push(root);
     const artifacts = [
@@ -1869,30 +1868,25 @@ describe("typed entity compiler", () => {
         source: `${generatedHeader}export const alpha = 1;\n`,
       },
     ];
-    expect(await checkArtifacts(root, artifacts)).toEqual([
-      "missing: generated/entity-literal-alpha.gen.ts",
-    ]);
     await mkdir(join(root, "generated"));
     await writeFile(
       join(root, "generated/entity-literal-alpha.gen.ts"),
-      "stale",
+      artifacts[0]!.source,
     );
     // Extraneous detection reads the generator ownership header, not the
-    // filename: a stray file only counts if it carries that header — which
-    // catches a retired artifact name (nothing in the current artifact list
-    // matches it) exactly as it catches a still-current one.
+    // filename, so a retired artifact name is caught too.
     await writeFile(
       join(root, "generated/entity-retired-name.gen.ts"),
       `${generatedHeader}export const retired = 1;\n`,
     );
-    // A file with no generator header — even one shaped like a generated
-    // artifact's name — is left alone; it isn't ours to flag.
+    // A file with no generator header is not ours to delete.
     await writeFile(join(root, "generated/notes.gen.ts"), "// just a note\n");
-    expect(await checkArtifacts(root, artifacts)).toEqual([
-      "stale: generated/entity-literal-alpha.gen.ts",
-    ]);
-    expect(await findExtraArtifacts(root, artifacts)).toEqual([
+    expect(await removeExtraArtifacts(root, artifacts)).toEqual([
       "generated/entity-retired-name.gen.ts",
+    ]);
+    expect((await readdir(join(root, "generated"))).sort()).toEqual([
+      "entity-literal-alpha.gen.ts",
+      "notes.gen.ts",
     ]);
   });
 
@@ -2035,7 +2029,6 @@ describe("typed entity compiler", () => {
     expect(artifact("entity-filter-bindings.gen.ts")).toContain(
       'columnId:"related:product.tasks"',
     );
-    expect(artifact("shortcode-registry.gen.ts")).not.toContain("LEGACY");
     expect(artifact("entity-details.gen.ts")).toContain(
       '"product": withEntityDetailMedia(productWithFoodOut)',
     );

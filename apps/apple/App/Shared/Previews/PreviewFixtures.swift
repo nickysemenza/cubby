@@ -11,8 +11,21 @@ enum PreviewFixtures {
     /// A wire-shaped fixture, decoded exactly as the generated client decodes a response. A
     /// fixture that fails to decode is a programming error in the preview, not a runtime state.
     nonisolated static func decode<T: Decodable>(_ json: String) -> T {
+        decode(Data(json.utf8))
+    }
+
+    /// A generated fixture: `Fixtures/<name>.json`, written by `pnpm generate` from the zod
+    /// schemas (`apps/web/scripts/apple-preview-fixtures.ts`) and bundled as a resource.
+    nonisolated static func fixture<T: Decodable>(_ name: String) -> T {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "json"),
+            let data = try? Data(contentsOf: url)
+        else { fatalError("Preview fixture \(name).json is missing; run pnpm generate") }
+        return decode(data)
+    }
+
+    private nonisolated static func decode<T: Decodable>(_ data: Data) -> T {
         do {
-            return try JSONDecoder.cubby().decode(T.self, from: Data(json.utf8))
+            return try JSONDecoder.cubby().decode(T.self, from: data)
         } catch {
             fatalError("Preview fixture does not decode as \(T.self): \(error)")
         }
@@ -60,7 +73,7 @@ enum PreviewFixtures {
 
     /// A product movement timeline for `EntityTimelineView`'s preview: one confident interval,
     /// one open unconfirmed one, a sale marker, and two date groups.
-    static let sampleTimeline: EntityTimelineOut = decode(sampleTimelineJSON)
+    static let sampleTimeline: EntityTimelineOut = fixture("sampleTimeline")
 
     /// Ranked candidates for `IdentifyResultsSection` previews; distances are illustrative only.
     static let sampleCandidates: [IdentificationCandidate] = [
@@ -90,13 +103,13 @@ enum PreviewFixtures {
     }()
 
     /// `task.todayBriefing`'s `next` rows, for `TodayView`'s preview.
-    static let sampleTodayTasks: [TaskTodayBriefingItemOut] = decode(sampleTodayTasksJSON)
+    static let sampleTodayTasks: [TaskTodayBriefingItemOut] = fixture("sampleTodayTasks")
     static let sampleTodayBriefing = TaskTodayBriefingOut(
         next: sampleTodayTasks, nextCount: sampleTodayTasks.count + 1, laterCount: 2,
         blockedCount: 1, overdueCount: 0, dueThisWeekCount: 2)
 
     /// Today's `GET /api/v1/meals` rows, for `TodayView`'s preview.
-    static let sampleTodayMeals: [MealListItem] = decode(sampleTodayMealsJSON)
+    static let sampleTodayMeals: [MealListItem] = fixture("sampleTodayMeals")
 
     /// `PhotoDiagnosticsView`'s preview: one entity passing its routing policy, one missing, and a
     /// Foundation Models decision — enough to exercise every section without a real Vision run.
@@ -128,11 +141,11 @@ enum PreviewFixtures {
 
     /// `problems/getCounts`, for `TodayView`'s preview; every per-check count is zero. `byType`'s
     /// keys are read straight off the `ProblemsCount` zod schema at generation time (see
-    /// `apps/web/scripts/generate-apple-preview-fixtures.ts`), so a new check can never leave
+    /// `apps/web/scripts/apple-preview-fixtures.ts`), so a new check can never leave
     /// this preview silently rendering a stale shape — a missing key fails generation instead.
-    static let sampleTodayProblems: ProblemsCount = decode(sampleTodayProblemsJSON)
+    static let sampleTodayProblems: ProblemsCount = fixture("sampleTodayProblems")
 
-    static let sampleMealNutrition: MealNutritionOut = decode(sampleMealNutritionJSON)
+    static let sampleMealNutrition: MealNutritionOut = fixture("sampleMealNutrition")
 }
 
 struct SignedInPreview: PreviewModifier {

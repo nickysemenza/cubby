@@ -35,7 +35,6 @@ jobs:
       apple: ${{ steps.classify.outputs.apple }}
       docs: ${{ steps.classify.outputs.docs }}
       format: ${{ steps.classify.outputs.format }}
-      generator: ${{ steps.classify.outputs.generator }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -44,7 +43,7 @@ jobs:
             .nvmrc
             scripts/check-outward-text.ts
             scripts/ci-change-scope.ts
-            packages/shared/src/generated/shortcode-registry.gen.ts
+            packages/schemas/src/entity-definitions
           sparse-checkout-cone-mode: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
@@ -85,11 +84,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
-        if: needs.scope.outputs.validation == 'true' || needs.scope.outputs.generator == 'true'
+        if: needs.scope.outputs.validation == 'true'
         with:
           wasm: ${{ needs.scope.outputs.validation == 'true' && 'restore' || 'false' }}
       - uses: ./.github/actions/setup-node-with-deps
-        if: needs.scope.outputs.validation != 'true' && needs.scope.outputs.generator != 'true' && needs.scope.outputs.format == 'true'
+        if: needs.scope.outputs.validation != 'true' && needs.scope.outputs.format == 'true'
         with:
           wasm: "false"
           workspace-filter: "."
@@ -104,8 +103,6 @@ jobs:
         run: pnpm check:all
       - if: needs.scope.outputs.validation == 'true'
         run: pnpm dedupe:check
-      - if: needs.scope.outputs.generator == 'true' && needs.scope.outputs.validation != 'true'
-        run: pnpm generate:check
       - if: needs.scope.outputs.format == 'true' && needs.scope.outputs.validation != 'true'
         run: pnpm exec oxfmt --check .
       - name: Check relative Markdown links
@@ -408,6 +405,18 @@ jobs:
             test "$E2E_RESULT" = success || exit 1
           fi
 
+  # The Swift the Apple jobs compile from `pnpm generate` (never committed);
+  # generated here on Linux so the macOS jobs need no Node install.
+  apple-generated:
+    name: Apple generated inputs
+    needs: scope
+    if: needs.scope.outputs.apple == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/generate-apple-inputs
+
   # Host `swift test` for CubbyKit's package tests; not folded into test-apple
   # below. Measured 2026-09-21: running these on the iOS Simulator inside the
   # build job cost about 6 minutes to boot plus ~10 minutes of CPU starvation
@@ -416,7 +425,7 @@ jobs:
   # one.
   test-apple-package:
     name: Apple package tests
-    needs: scope
+    needs: [scope, apple-generated]
     if: needs.scope.outputs.apple == 'true'
     runs-on: macos-26
     timeout-minutes: 25
@@ -425,6 +434,7 @@ jobs:
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: mac
+      - uses: ./.github/actions/download-apple-inputs
       # The whole SwiftPM build directory is cached, not just the checkouts:
       # 367 tests run in ~3s, the other 2.5-4 minutes was a cold build.
       # stamp-source-mtimes.ts gives each tracked source an mtime derived
@@ -451,6 +461,10 @@ jobs:
       # otherwise be rebuilt and cached with every module.
       - name: Run CubbyKit Swift tests
         run: swift test --package-path apps/apple/CubbyKit --force-resolved-versions --disable-index-store
+      # The build plugin lets a generator warning (a silently dropped schema)
+      # through; this gate fails on one, reusing the build above.
+      - name: Check OpenAPI generator warnings
+        run: apps/apple/scripts/check-openapi-warnings.sh
       # Saved here rather than by actions/cache's post step so a red test run
       # still keeps the build for the next attempt. Only main saves once a
       # prefix exists: a PR's cache is private to its ref and a ~1 GB copy
@@ -469,7 +483,7 @@ jobs:
 
   test-apple:
     name: Apple checks
-    needs: scope
+    needs: [scope, apple-generated]
     if: needs.scope.outputs.apple == 'true'
     runs-on: macos-26
     timeout-minutes: 40
@@ -478,6 +492,7 @@ jobs:
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: sim
+      - uses: ./.github/actions/download-apple-inputs
       - uses: ./.github/actions/setup-apple-tools
         id: apple-tools
       # DerivedData is cached like CubbyKit's .build above: apple-check.sh's
@@ -517,22 +532,9 @@ jobs:
             !apps/apple/DerivedData/Logs
           key: ${{ steps.derived-data.outputs.cache-primary-key }}
       # Saved here rather than by actions/cache's post step so a red build
-      # still keeps the generator build and SPM clones for the next attempt.
-      # A concurrent job may have saved the same key first; that 409 is
-      # harmless and must never fail the check.
-      # Never save an empty generator directory: a run that fails before the
-      # generator is built would otherwise poison the exact key for good.
-      - name: Check OpenAPI generator binary
-        id: generator-built
-        if: always() && steps.apple-tools.outputs.openapi-generator-cache-hit != 'true'
-        run: test -x "$CUBBY_OPENAPI_GENERATOR_BIN" && echo "present=true" >> "$GITHUB_OUTPUT" || true
-      - name: Save OpenAPI generator cache
-        if: always() && steps.generator-built.outputs.present == 'true'
-        continue-on-error: true
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: ${{ env.CUBBY_OPENAPI_GENERATOR_BIN_DIR }}
-          key: ${{ steps.apple-tools.outputs.openapi-generator-cache-key }}
+      # still keeps the SPM clones for the next attempt. A concurrent job may
+      # have saved the same key first; that 409 is harmless and must never
+      # fail the check.
       # ~1.1 GB per entry, and a PR's copy is private to its ref: seven of
       # them were 8.3 GB of the repo's 10 GB cache on 2026-09-22.
       - name: Save SPM clone cache

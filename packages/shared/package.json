@@ -8,13 +8,15 @@
   "exports": {
     ".": "./src/index.ts",
     "./collection-tag": "./src/collection-tag.ts",
+    "./constants": "./src/constants.ts",
     "./external-fetch": "./src/external-fetch.ts",
+    "./location-type-theme": "./src/location-type-theme.ts",
     "./redundant-tokens": "./src/redundant-tokens.ts",
     "./text-case": "./src/text-case.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "typecheck": "node ../../scripts/generator/ensure.ts && tsc --noEmit",
+    "test": "node ../../scripts/generator/ensure.ts && vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {

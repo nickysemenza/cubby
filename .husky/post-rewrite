@@ -1,7 +1,0 @@
-#!/usr/bin/env sh
-
-# Args: $1 = amend | rebase. After a rebase, regenerate any generated files the
-# cubby-generated merge driver auto-resolved (scripts/regenerate-after-merge.sh).
-[ "$1" = "rebase" ] || exit 0
-ROOT="$(git rev-parse --show-toplevel)"
-sh "$ROOT/scripts/regenerate-after-merge.sh"

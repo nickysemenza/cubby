@@ -24,7 +24,10 @@ import type {
 import { z } from "zod";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
-const SPEC_DIRECTORY = resolve(ROOT, "packages/schemas/src/entity-definitions");
+export const SPEC_DIRECTORY = resolve(
+  ROOT,
+  "packages/schemas/src/entity-definitions",
+);
 
 export type DeclarationValue =
   | string

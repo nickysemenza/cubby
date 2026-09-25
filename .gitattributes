@@ -1,63 +1,6 @@
-# Generated outputs remain reviewable, but GitHub collapses their diffs by
-# default and excludes them from language statistics.
-**/*.gen.ts linguist-generated
-**/*.gen.json linguist-generated
-**/src/generated/** linguist-generated
+# Generated outputs are gitignored (`pnpm generate` writes them on install and
+# before build, typecheck and test). These remaining ones are committed.
 **/drizzle/meta/*.json linguist-generated
 **/migrations/meta/*.json linguist-generated
 **/worker-configuration.d.ts linguist-generated
-apps/web/src/routeTree.gen.ts linguist-generated
-# Generated entity route modules (`pnpm generate`); TanStack's file router
-# needs them as physical files beside the hand-written routes.
-apps/web/src/routes/_authenticated/cookbooks.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/expenses.$shortcode.tsx linguist-generated
-apps/web/src/routes/_authenticated/expenses.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/financial-accounts.$shortcode.tsx linguist-generated
-apps/web/src/routes/_authenticated/financial-accounts.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/financial-transactions.$shortcode.tsx linguist-generated
-apps/web/src/routes/_authenticated/financial-transactions.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/garden-entries.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/images.$shortcode.tsx linguist-generated
-apps/web/src/routes/_authenticated/ingredients.$shortcode.tsx linguist-generated
-apps/web/src/routes/_authenticated/runs.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/ingredients.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/inventory.$shortcode.tsx linguist-generated
-apps/web/src/routes/_authenticated/inventory.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/ledger-parties.$shortcode.tsx linguist-generated
-apps/web/src/routes/_authenticated/ledger-parties.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/ledger-transfers.$shortcode.tsx linguist-generated
-apps/web/src/routes/_authenticated/ledger-transfers.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/locations.$shortcode.tsx linguist-generated
-apps/web/src/routes/_authenticated/locations.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/meals.$shortcode.tsx linguist-generated
-apps/web/src/routes/_authenticated/meals.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/plantings.$shortcode.tsx linguist-generated
-apps/web/src/routes/_authenticated/plantings.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/products.$shortcode.tsx linguist-generated
-apps/web/src/routes/_authenticated/products.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/projects.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/purchases.$shortcode.tsx linguist-generated
-apps/web/src/routes/_authenticated/purchases.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/recipes.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/tasks.$shortcode.tsx linguist-generated
-apps/web/src/routes/_authenticated/tasks.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/vendors.$shortcode.tsx linguist-generated
-apps/web/src/routes/_authenticated/vendors.index.tsx linguist-generated
-apps/web/src/routes/_authenticated/wishes.$shortcode.tsx linguist-generated
-apps/web/src/routes/_authenticated/wishes.index.tsx linguist-generated
 apps/web/src/server/db/__snapshots__/application-schema.json linguist-generated
-apps/apple/CubbyKit/Sources/CubbyKit/Generated/** linguist-generated
-apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated/** linguist-generated
-apps/apple/CubbyKit/Sources/CubbyAPI/** linguist-generated
-apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift linguist-generated
-
-# Generated outputs are never hand-merged: scripts/merge-generated.sh keeps
-# the current side and the post-merge/post-rewrite hooks regenerate them from
-# the merged inputs (scripts/regenerate-after-merge.sh). Without the driver
-# registered (`pnpm install` does it), these conflict like any text file.
-**/*.gen.ts merge=cubby-generated
-**/*.gen.json merge=cubby-generated
-**/src/generated/** merge=cubby-generated
-apps/apple/CubbyKit/Sources/CubbyKit/Generated/** merge=cubby-generated
-apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated/** merge=cubby-generated
-apps/apple/CubbyKit/Sources/CubbyAPI/** merge=cubby-generated

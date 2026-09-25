@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Body of the former `runAppleCheck` (scripts/ci-scope.ts, deleted): native
-# formatting, OpenAPI drift, and a build (plus, locally, package tests). Backs
+# formatting and a build (plus, locally, package tests). Backs
 # the `apple` Nx target (apps/apple/project.json) and `pnpm apple check`. Run
 # from the workspace root.
 #
@@ -71,10 +71,9 @@ swift format lint --strict --configuration apps/apple/.swift-format --recursive 
 # on the host, in the `Apple package tests` job.
 if [ "$mode" = "full" ]; then
   swift test --package-path apps/apple/CubbyKit --force-resolved-versions
+  # Hosted CI runs this in the `Apple package tests` job instead.
+  apps/apple/scripts/check-openapi-warnings.sh
 fi
-
-# Fails when the committed CubbyAPI client no longer matches the OpenAPI document.
-apps/apple/scripts/generate-openapi.sh --check
 
 # Same DerivedData as `pnpm apple`, so this build is incremental over the dev
 # loop's instead of a second full compile of CubbyKit.

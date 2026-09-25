@@ -1,14 +1,10 @@
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 import { connectedViews } from "../../packages/schemas/src/connected-view-definitions.ts";
-import { relationshipProvenanceSchema } from "../../packages/schemas/src/entity-integrity.ts";
 import type { CompiledEntity } from "./entities/declarations.ts";
-import {
-  checkArtifacts,
-  findExtraArtifacts,
-  sealArtifacts,
-  writeArtifacts,
-} from "./artifacts.ts";
+import { removeExtraArtifacts, writeArtifacts } from "./artifacts.ts";
 import {
   EntityDeclarationError,
   loadEntityDeclarationBundle,
@@ -29,10 +25,14 @@ import {
   missingBrowserRouteFiles,
   missingListSources,
 } from "./entities/render/routes.ts";
+import { writeRouteTree } from "./route-tree.ts";
+import { renderShortcodeRegistryArtifact } from "./entities/shortcode-registry.ts";
 import { renderSearchArtifacts } from "./entities/render/search.ts";
 import { renderTimelineArtifacts } from "./entities/render/entity-timelines.ts";
-import { renderHttpApiArtifacts } from "./http-api/openapi.ts";
-import { renderStartOperationArtifacts } from "./start-operations/render.ts";
+
+// `relationshipProvenanceSchema`'s local-path member; the schema module itself
+// imports generated files, which do not exist yet when this validation runs.
+const localPathProvenance = z.object({ kind: z.literal("local-path") });
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -60,13 +60,9 @@ const validateConnectedViews = (entities: readonly CompiledEntity[]) => {
           const relation = byKey
             .get(current)
             ?.relations.find((candidate) => candidate.key === key);
-          const provenance = relationshipProvenanceSchema.safeParse(
-            relation?.provenance,
-          );
           if (
             !relation ||
-            !provenance.success ||
-            provenance.data.kind !== "local-path"
+            !localPathProvenance.safeParse(relation.provenance).success
           ) {
             throw new EntityDeclarationError(
               `Connected view ${source}.${view.key} has no local ${current}.${key} relation`,
@@ -84,38 +80,29 @@ const validateConnectedViews = (entities: readonly CompiledEntity[]) => {
 };
 
 /**
- * `pnpm generate` runs three stages in order. Each later stage imports the
- * previous stage's files from disk (contracts runtime-import
- * `~/entities/generated/*.gen.ts`; the OpenAPI stage imports
- * `http-contract.gen.ts`), so every stage's artifacts are written before the
- * next stage renders. With `--check` nothing is written: each stage renders
- * against the committed files and the problems are reported together.
+ * `pnpm generate` writes every generated output; none is committed. The
+ * stages run in order because each later stage imports the earlier stages'
+ * files from disk (declarations import the shortcode registry; contracts
+ * runtime-import `~/entities/generated/*.gen.ts`; the OpenAPI stage imports
+ * `http-contract.gen.ts`), so the later stages load only after the earlier
+ * ones are written.
  */
 const main = async () => {
-  const check = process.argv.slice(2).includes("--check");
-  const unknownArguments = process.argv
-    .slice(2)
-    .filter((argument) => argument !== "--check");
+  const unknownArguments = process.argv.slice(2);
   if (unknownArguments.length > 0) {
     throw new EntityDeclarationError(
       `Unknown arguments: ${unknownArguments.join(", ")}.`,
     );
   }
 
-  const problems: string[] = [];
   const written: EntityArtifacts[] = [];
   const changed: string[] = [];
   const settle = async (artifacts: readonly EntityArtifacts[]) => {
-    if (check) {
-      problems.push(...(await checkArtifacts(ROOT, artifacts)));
-    } else {
-      changed.push(
-        ...(await writeArtifacts(ROOT, await sealArtifacts(ROOT, artifacts))),
-      );
-    }
+    changed.push(...(await writeArtifacts(ROOT, artifacts)));
     written.push(...artifacts);
   };
 
+  await settle([await renderShortcodeRegistryArtifact()]);
   const { entities, declarations } = await loadEntityDeclarationBundle();
   validateConnectedViews(entities);
   await settle([await renderAgentPromptArtifact(ROOT)]);
@@ -142,6 +129,13 @@ const main = async () => {
     );
   }
 
+  // The later stages import the earlier stages' artifacts, so they load only
+  // after those are on disk: a fresh checkout has no generated files at all.
+  const { renderStartOperationArtifacts } =
+    await import("./start-operations/render.ts");
+  const { renderHttpApiArtifacts } = await import("./http-api/openapi.ts");
+  const { renderApplePreviewFixtures } =
+    await import("../../apps/web/scripts/apple-preview-fixtures.ts");
   const resources = httpResourcesFor(entities);
   const startOperations = await renderStartOperationArtifacts(resources);
   await settle(startOperations.artifacts);
@@ -153,27 +147,32 @@ const main = async () => {
       entities,
     ),
   );
+  await settle(renderApplePreviewFixtures());
 
   // Extraneous files are judged once, over every stage: the stages share
-  // output directories, so a per-stage scan would flag the others' files.
-  problems.push(
-    ...(await findExtraArtifacts(ROOT, written)).map(
-      (path) => `extraneous: ${path}`,
-    ),
+  // output directories, so a per-stage scan would remove the others' files.
+  const removed = await removeExtraArtifacts(ROOT, written);
+  await writeRouteTree(ROOT);
+  // ensure.ts reruns generation when any of these is missing.
+  const outputs = resolve(ROOT, "node_modules/.cache/cubby-generate.outputs");
+  await mkdir(dirname(outputs), { recursive: true });
+  await writeFile(
+    outputs,
+    [
+      ...written.map(({ relativePath }) => relativePath),
+      "apps/web/src/routeTree.gen.ts",
+    ]
+      .sort()
+      .join("\n") + "\n",
   );
-  if (problems.length > 0) {
-    throw new EntityDeclarationError(
-      check
-        ? `Generated artifacts are out of date; run pnpm generate:\n${problems.join("\n")}`
-        : `Generated artifacts left files nothing generates; delete them:\n${problems.join("\n")}`,
-    );
-  }
-  if (!check)
-    console.log(
-      changed.length === 0
-        ? "Generated artifacts are unchanged."
-        : `Generated ${changed.length} changed artifacts:\n${changed.map((path) => `- ${path}`).join("\n")}`,
-    );
+  console.log(
+    changed.length === 0 && removed.length === 0
+      ? "Generated artifacts are unchanged."
+      : [
+          `Generated ${changed.length} changed artifacts.`,
+          ...removed.map((path) => `Removed ${path}`),
+        ].join("\n"),
+  );
 };
 
 void main().catch((error) => {

@@ -65,11 +65,11 @@ A change under `apps/apple/` or `cubby-ffi/` selects the `apple` Nx target
 (`scripts/apple-check.sh`, the former `ci-scope.ts` `runAppleCheck` body).
 `apps/apple/scripts/prepare-project.sh` (extracted from the check script so
 the hosted job can call it before `pnpm install` has ever run) does `node
-scripts/ensure-apple-ffi.ts` (Nx-cached xcframework + UniFFI shim; a stale
-committed `cubby_ffi.swift` fails as a dirty tree) and `xcodegen
+scripts/ensure-apple-ffi.ts` (Nx-cached xcframework + UniFFI shim), `pnpm
+generate` when `node_modules` exists (the generated Swift and the OpenAPI
+inputs of the `CubbyAPI` build plugin; none is committed), and `xcodegen
 generate --use-cache`. `apple-check.sh` then runs the `@State`/`@StateObject`
-grep, `swift format lint`, `apps/apple/scripts/generate-openapi.sh --check`,
-and one of three modes: `full` (local default) additionally runs
+grep, `swift format lint`, and one of three modes: `full` (local default) additionally runs
 `swift test --package-path apps/apple/CubbyKit` and a generic-simulator
 `xcodebuild build`; `app` skips the package tests and only builds; `ci`
 (hosted only) also skips the package tests and only builds, but passes
@@ -93,13 +93,22 @@ for whichever caller — local or hosted — ends up running that scheme there.
 
 Two hosted macOS jobs cover the Apple surface, both gated on the `scope`
 job's `apple` output. The scope job reads the PR file list or the files in a
-`main` push. Native source, FFI, Rust bridge, shared API schemas, and CI policy
-changes select Apple; an Apple README alone does not. A skipped job still
+`main` push. Native source, FFI, Rust bridge, shared API schemas, the web
+contracts and HTTP API layer (they feed the generated Swift), and CI policy
+changes select Apple; an Apple README alone does not. The macOS jobs install no
+Node dependencies: the Linux `Apple generated inputs` job runs `pnpm generate`
+and uploads the generated Swift inputs as the `apple-generated` artifact
+(`.github/actions/generate-apple-inputs`), which both download before building,
+and `scripts/stamp-source-mtimes.ts` gives those files content-derived mtimes
+like tracked sources so the restored build caches still apply. A skipped job still
 satisfies its required status check. `Apple package tests` runs `swift test --package-path
 apps/apple/CubbyKit --force-resolved-versions` on the macOS host — no
 simulator — restoring/saving an exact-key cache of
 `apps/apple/CubbyKit/.build/{checkouts,repositories}` keyed on
-`Package.resolved` (SPM fetch+resolve was 53s of that job otherwise). `Apple
+`Package.resolved` (SPM fetch+resolve was 53s of that job otherwise). It then
+runs `apps/apple/scripts/check-openapi-warnings.sh`, which fails on any
+swift-openapi-generator warning (a schema the `CubbyAPI` build plugin would
+silently drop). `Apple
 checks` runs `sh scripts/apple-check.sh ci`, a generic-simulator
 `xcodebuild build` with no tests. Both were previously one merged job that
 also ran `xcodebuild test` on a concrete simulator; that was reverted after
@@ -107,22 +116,21 @@ measuring a hosted runner's first simulator boot at about 6 minutes plus
 roughly 10 minutes of CPU starvation on top of it (a 5s script took 2.6
 minutes, the compile itself doubled) — the merged job took 13 minutes even
 with every cache warm, so two separate jobs are faster than one.
-`.github/actions/setup-apple-tools` installs XcodeGen and restores two more
-caches, both used only by `Apple checks`: the `swift-openapi-generator` 1.13.1
-binary it builds from source (keyed on the generator package's inputs and the
-Swift toolchain version, so a warm cache skips rebuilding it from scratch —
-previously about 140s every run), and `apps/apple/SourcePackages`, the
-`xcodebuild`-resolved SPM clones for Sentry, GRDB, and Nuke (previously an
-uncached "Resolve Package Graph" on every run). Both are separate from the
+`.github/actions/setup-apple-tools` installs XcodeGen and restores
+`apps/apple/SourcePackages`, the `xcodebuild`-resolved SPM clones for Sentry,
+GRDB, Nuke and swift-openapi-generator (previously an uncached "Resolve Package
+Graph" on every run), used only by `Apple checks`. It is separate from the
 target-specific FFI output cache (`.github/actions/setup-apple-ffi`) and the
-package-test job's SPM checkout cache described above.
+package-test job's build cache described above.
 
 ## Hosted suite
 
 The `CI` workflow runs automatically for pull requests to `main` and pushes to
 `main`. `Scope` and `Validation` retain stable required names. A documentation-only
-change runs Oxfmt and offline relative-link validation; generated Markdown also
-runs `generate:check`. Every Markdown file under `docs/` is rendered in the web
+change runs Oxfmt and offline relative-link validation. Generated output is never
+committed; every job that installs dependencies generates it (`postinstall`), and
+`Validation`'s `generate` gate checks that it generates cleanly and that the OpenAPI
+document lints. Every Markdown file under `docs/` is rendered in the web
 app, so edits there select the web lanes.
 Native, auxiliary, Rust, web, and PostgreSQL/E2E lanes run only when their inputs
 can affect them. A manual run selects all lanes. `Web checks` is the stable

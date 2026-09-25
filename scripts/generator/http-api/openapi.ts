@@ -556,6 +556,12 @@ export async function renderHttpApiArtifacts(
       relativePath: "apps/web/src/lib/generated/http-openapi.gen.json",
       source: serialized,
     },
+    // swift-openapi-generator's SwiftPM build plugin reads the document and
+    // its config from the CubbyAPI target's own source directory.
+    {
+      relativePath: "apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json",
+      source: serialized,
+    },
     ...renderNativeArtifacts(
       document,
       components,

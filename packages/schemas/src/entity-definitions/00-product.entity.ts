@@ -1,5 +1,5 @@
 import { defineEntity } from "./definition.js";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared/constants";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
   externalIdInputs,

@@ -1,18 +1,12 @@
 name: "Prepare Apple release project"
 description: >-
-  Regenerates the committed OpenAPI client, fails on drift, and regenerates
-  Cubby.xcodeproj. Shared by both legs of the apple-testflight archive matrix.
+  Regenerates Cubby.xcodeproj over the generated Swift inputs the caller
+  downloaded (the `apple-generated` artifact). Shared by both legs of the
+  apple-testflight archive matrix.
 
 runs:
   using: "composite"
   steps:
-    - name: Generate the OpenAPI client and Xcode project
+    - name: Generate the Xcode project
       shell: bash
-      run: |
-        set -euo pipefail
-        apps/apple/scripts/generate-openapi.sh
-        git diff --exit-code -- \
-          apps/apple/CubbyKit/Sources/CubbyAPI \
-          apps/apple/CubbyKit/Sources/CubbyKit/Generated \
-          apps/apple/openapi/openapi-generator-config.yaml
-        apps/apple/scripts/prepare-project.sh
+      run: apps/apple/scripts/prepare-project.sh

@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { join } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -8,6 +8,13 @@ import topLevelAwait from "vite-plugin-top-level-await";
 import wasm from "vite-plugin-wasm";
 import { defineConfig, type TestProjectConfiguration } from "vitest/config";
 import { readR2PublicUrlFromWrangler } from "./tooling/wrangler-public-config.ts";
+
+// Generated output is never committed; bring it current before any module
+// graph (or TanStack's route scan) reads it. A no-op when inputs are unchanged.
+execFileSync(process.execPath, ["../../scripts/generator/ensure.ts"], {
+  cwd: import.meta.dirname,
+  stdio: "inherit",
+});
 
 const gitCommit = execSync("git rev-parse --short HEAD", {
   encoding: "utf-8",

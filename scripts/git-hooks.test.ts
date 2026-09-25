@@ -68,15 +68,17 @@ function fixture(t: TestContext) {
     "apps/web/src/server/db/schema.ts",
     "apps/web/src/server/db/generated/entity-columns.gen.ts",
     "scripts/check-outward-text.ts",
-    "scripts/install-merge-driver.sh",
-    "packages/shared/src/generated/shortcode-registry.gen.ts",
+    "scripts/generator/ensure.ts",
   ]) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
     cpSync(join(source, path), join(root, path));
   }
-  cpSync(join(source, "tools", "oxlint"), join(root, "tools", "oxlint"), {
-    recursive: true,
-  });
+  for (const directory of [
+    "tools/oxlint",
+    // check-outward-text.ts reads the shortcode prefixes from these.
+    "packages/schemas/src/entity-definitions",
+  ])
+    cpSync(join(source, directory), join(root, directory), { recursive: true });
   symlinkSync(join(source, "node_modules"), join(root, "node_modules"), "dir");
   for (const path of ["example file.ts", "unrelated.ts", "deleted.ts"]) {
     write(path, "export const value = 1;\n");

@@ -80,7 +80,9 @@ jobs:
       - uses: ./.github/actions/deploy-worker
         with:
           package: "@cubby/purchase-agent"
-          workspace-filter: "@cubby/purchase-agent..."
+          # `@cubby/web...` too: the Worker imports generated modules, and
+          # `pnpm generate` (its build's first step) runs the web app's code.
+          workspace-filter: "@cubby/purchase-agent... @cubby/web..."
           wasm: "false"
           deploy-command: "pnpm --filter @cubby/purchase-agent run deploy"
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
