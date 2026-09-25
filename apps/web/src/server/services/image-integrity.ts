@@ -2,6 +2,7 @@ import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { imageDimensionsFromData } from "image-dimensions";
 
 import { createAppError } from "~/server/errors/app-error";
+import { sha256Hex } from "~/server/semantic/hash";
 
 const dimensionMimeType = (dimensionType: string): string | undefined => {
   switch (dimensionType) {
@@ -70,13 +71,6 @@ export type InspectedImageFile = {
   verifiedAt: Date;
 };
 
-const sha256 = async (bytes: Uint8Array): Promise<string> => {
-  const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(bytes));
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-};
-
 export const inspectImageFile = async (
   bytes: Uint8Array,
   declaredContentType: string,
@@ -106,7 +100,7 @@ export const inspectImageFile = async (
       width: null,
       height: null,
       detectedContentType: signature,
-      sha256: await sha256(bytes),
+      sha256: await sha256Hex(bytes),
       renderStatus: "verified",
       storageStatus: "available",
       verifiedAt: new Date(),
@@ -126,7 +120,7 @@ export const inspectImageFile = async (
     width: dimensions.width,
     height: dimensions.height,
     detectedContentType,
-    sha256: await sha256(bytes),
+    sha256: await sha256Hex(bytes),
     renderStatus: "verified",
     storageStatus: "available",
     verifiedAt: new Date(),

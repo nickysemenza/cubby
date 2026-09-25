@@ -77,6 +77,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { loadImageRepresentations } from "~/server/repo/image-processing";
+import { currentMemberLedgerParty } from "~/server/repo/member-login";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
@@ -112,17 +113,7 @@ export async function assertPhotoRunReviewer(
   actor: ActorContext,
   runShortcode: string,
 ): Promise<void> {
-  const [member] = await getDb(db)
-    .select({ id: ledgerParty.id })
-    .from(ledgerParty)
-    .where(
-      and(
-        eq(ledgerParty.userId, actor.userId),
-        eq(ledgerParty.kind, "member"),
-        notDeleted(ledgerParty),
-      ),
-    )
-    .limit(1);
+  const member = await currentMemberLedgerParty(db, actor);
   if (!member) throw new PhotoRunNotFoundError(runShortcode);
   await loadRun(db, runShortcode);
 }

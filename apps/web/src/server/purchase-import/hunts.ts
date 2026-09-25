@@ -14,13 +14,13 @@ import {
   financialTransaction,
   financialTransactionAllocation,
   importHunt,
-  ledgerParty,
   merchantVendorRule,
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
 import type { PurchaseAgentQueueProducer } from "~/server/purchase-agent-queue-types";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { currentMemberLedgerParty } from "~/server/repo/member-login";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import { dispatchImportRunEvent } from "./dispatch";
@@ -35,17 +35,7 @@ export async function confirmMerchantVendorRule(
   actor: ActorContext,
 ) {
   const input = confirmMerchantVendorRuleInput.parse(rawInput);
-  const [party] = await getDb(db)
-    .select({ id: ledgerParty.id })
-    .from(ledgerParty)
-    .where(
-      and(
-        eq(ledgerParty.userId, actor.userId),
-        eq(ledgerParty.kind, "member"),
-        notDeleted(ledgerParty),
-      ),
-    )
-    .limit(1);
+  const party = await currentMemberLedgerParty(db, actor);
   if (!party) throw new Error("Member identity is not configured.");
   const vendorId = await resolveOrThrow(db, "vendor", input.vendorId);
   const normalizedMerchant = normalizeMerchant(input.merchant);

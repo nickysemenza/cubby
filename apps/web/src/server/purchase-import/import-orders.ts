@@ -66,6 +66,7 @@ import { deleteImages } from "~/server/repo/image";
 import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
 import { assertProductCategoryChange } from "~/server/repo/product/classification";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { sha256Hex } from "~/server/semantic/hash";
 import { scheduleImageProcessingJobs } from "~/server/services/image-processing.service";
 import {
   deleteStoredObjects,
@@ -77,16 +78,6 @@ import { learnPurchaseProductExternalId } from "./external-id-learning";
 import { attachPendingOrderMailEvidence } from "./gmail/process";
 import { auditAllImportBatches, loadRunScope } from "./run-service";
 import { buildPurchaseImportPlan, importVendorOrder } from "./writer";
-
-const sha256 = async (value: string): Promise<string> => {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-};
 
 const operationArgs = (input: {
   prepareOperationId: string;
@@ -275,7 +266,7 @@ async function computeTargetFingerprint(
         .where(and(eq(expense.purchaseId, target.id), notDeleted(expense)))
         .orderBy(asc(expense.id))
     : [];
-  return sha256(
+  return sha256Hex(
     JSON.stringify({
       claim: claim
         ? { ...claim, updatedAt: claim.updatedAt.toISOString() }
@@ -298,7 +289,7 @@ const computeEvidenceFingerprint = (input: {
   extraction: unknown;
   primaryDocumentImageId: string | null;
   screenshotImageId: string | null;
-}) => sha256(JSON.stringify(input));
+}) => sha256Hex(JSON.stringify(input));
 
 type StoredPreparation = {
   order: typeof importPreparedOrder.$inferSelect;
@@ -368,7 +359,7 @@ export async function preparePurchaseImport(
     );
   if (!scope.vendorId) throw new Error("Purchase import run has no vendor");
   const vendorId = scope.vendorId;
-  const inputFingerprint = await sha256(JSON.stringify(input.orders));
+  const inputFingerprint = await sha256Hex(JSON.stringify(input.orders));
 
   return withTransactionDatabase(db, async (transactionDb) => {
     const database = getDb(transactionDb);
@@ -575,7 +566,7 @@ export async function commitPurchaseImport(
   if (!scope.vendorId) throw new Error("Purchase import run has no vendor");
   const vendorId = scope.vendorId;
   const args = operationArgs(input);
-  const argsFingerprint = await sha256(JSON.stringify(args));
+  const argsFingerprint = await sha256Hex(JSON.stringify(args));
   let transactionResult: {
     result: z.infer<typeof commitPurchaseImportOut>;
     requiresReview: boolean;
@@ -884,7 +875,7 @@ export async function validatePurchaseImport(
     );
   if (scope.public.status !== "running")
     throw new Error(`Import run is fenced in status ${scope.public.status}`);
-  const argsFingerprint = await sha256(JSON.stringify(input));
+  const argsFingerprint = await sha256Hex(JSON.stringify(input));
   return withTransactionDatabase(
     db,
     // eslint-disable-next-line complexity -- Validation compares the complete immutable plan inside one read-only transaction.
@@ -1110,7 +1101,7 @@ export async function commitProductEnrichment(
   const database = getDb(db);
   const changes = input.changes;
   const operationId = input._runExecution.operationId;
-  const fingerprint = await sha256(JSON.stringify(input));
+  const fingerprint = await sha256Hex(JSON.stringify(input));
   const [existing] = await database
     .select({
       inputFingerprint: importRunOperation.inputFingerprint,
@@ -1251,7 +1242,7 @@ export async function commitProductEnrichment(
           .limit(1)
           .for("update");
         if (!live) throw new Error("Product enrichment target was not found");
-        const currentTargetFingerprint = await sha256(
+        const currentTargetFingerprint = await sha256Hex(
           JSON.stringify({ product: live }),
         );
         if (currentTargetFingerprint !== input.targetFingerprint)
@@ -1394,7 +1385,9 @@ export async function commitProductEnrichment(
           targetId: productId,
           mutationKind: "update",
           fields: changedFields,
-          postFingerprint: await sha256(JSON.stringify({ productId, changes })),
+          postFingerprint: await sha256Hex(
+            JSON.stringify({ productId, changes }),
+          ),
         });
         await tx
           .update(importRunTarget)
@@ -1500,7 +1493,7 @@ export async function overwriteProductEnrichment(
       .limit(1);
     if (!live) throw new Error("Product enrichment target was not found");
     if (
-      (await sha256(JSON.stringify({ product: live }))) !==
+      (await sha256Hex(JSON.stringify({ product: live }))) !==
       input.targetFingerprint
     )
       throw new Error("Product enrichment target changed after proposal");

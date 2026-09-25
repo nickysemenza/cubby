@@ -2,10 +2,7 @@ import { type AuditChannel, buildActorContext } from "@cubby/schemas/context";
 import {
   type DeviceId,
   type ImportRunId,
-  type LedgerPartyId,
-  type LedgerPartyShortcode,
   type UserId,
-  parseShortcodeFor,
   userId,
 } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
@@ -19,13 +16,14 @@ import { USDAClient } from "~/server/clients/usda";
 import { readDatabaseFreshness } from "~/server/database-freshness/client";
 import type { Database } from "~/server/db";
 import { boundedStaleDb, db } from "~/server/db";
-import { device, ledgerParty } from "~/server/db/schema";
+import { device } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   decideReadConsistency,
   type ReadConsistencyDecision,
 } from "~/server/read-consistency";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { currentMemberLedgerParty } from "~/server/repo/member-login";
 import {
   findProductsByFoodIdentifier,
   getFoodLookupsForLinkedProducts,
@@ -105,40 +103,11 @@ async function resolveRequestDevice(
   return row?.id ?? null;
 }
 
-export type CurrentParty = {
-  id: LedgerPartyId;
-  shortcode: LedgerPartyShortcode;
-  name: string;
-};
+export type { CurrentParty } from "~/server/repo/member-login";
 
 /** Resolve the authenticated member's claimed ledger party at use time. */
-export const currentParty = async (
-  database: Database,
-  authenticatedUserId: UserId,
-): Promise<CurrentParty | null> => {
-  const [party] = await getDb(database)
-    .select({
-      id: ledgerParty.id,
-      shortcode: ledgerParty.shortcode,
-      name: ledgerParty.name,
-    })
-    .from(ledgerParty)
-    .where(
-      and(
-        eq(ledgerParty.userId, authenticatedUserId),
-        eq(ledgerParty.kind, "member"),
-        notDeleted(ledgerParty),
-      ),
-    )
-    .limit(1);
-  return party
-    ? {
-        id: party.id,
-        shortcode: parseShortcodeFor("ledgerParty", party.shortcode),
-        name: party.name,
-      }
-    : null;
-};
+export const currentParty = (database: Database, authenticatedUserId: UserId) =>
+  currentMemberLedgerParty(database, { userId: authenticatedUserId });
 
 interface ReadDatabaseSelection {
   readDb: Database;

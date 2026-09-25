@@ -99,6 +99,7 @@ import { createImageProcessingSubmission } from "~/server/repo/image-processing-
 import { persistImageProcessingSubmission } from "~/server/repo/image-processing-submission";
 import { getImportRunByShortcode } from "~/server/repo/import-run";
 import { withPhotoImportTransaction } from "~/server/repo/photo-import";
+import { sha256Hex } from "~/server/semantic/hash";
 import { publishImageProcessingWakeups } from "~/server/services/image-processing.service";
 import {
   productionPhotoImportCommitPorts,
@@ -155,16 +156,6 @@ export type StartTargetedImportRunInput = {
 
 const OFFLINE_EXPIRY_MS = 24 * 60 * 60_000;
 
-const sha256 = async (value: string): Promise<string> => {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-};
-
 /**
  * Postgres-side replay ledger for Flue tools. A completed operation returns its
  * original result even after the run becomes terminal. A concurrent delivery
@@ -187,7 +178,7 @@ export async function runImportOperation<T extends object | null>(
   work: () => Promise<T>,
 ): Promise<T> {
   const runId = importRunId.parse(input.runId);
-  const fingerprint = await sha256(JSON.stringify(input.payload));
+  const fingerprint = await sha256Hex(JSON.stringify(input.payload));
   const database = getDb(db);
   const [inserted] = await database
     .insert(importRunOperation)
@@ -292,7 +283,7 @@ export async function runImportOperation<T extends object | null>(
 }
 
 const operationUuid = async (runId: string, operationId: string) => {
-  const hex = await sha256(`${runId}:${operationId}`);
+  const hex = await sha256Hex(`${runId}:${operationId}`);
   const bytes = Uint8Array.from(
     hex.slice(0, 32).match(/.{2}/gu) ?? [],
     (value) => Number.parseInt(value, 16),
@@ -1735,7 +1726,7 @@ export async function issueBrowserCommand(
       throw new Error("Navigation URL is outside the vendor allowlist");
   }
   const commandId = await operationUuid(input.runId, input.operationId);
-  const fingerprint = await sha256(
+  const fingerprint = await sha256Hex(
     JSON.stringify({
       protocolVersion: 2,
       id: commandId,
@@ -2144,7 +2135,7 @@ export async function importBrowserOrderEvidence(
     links: capture.links.map(({ url, label }) => ({ url, label })),
     images: capture.images.map(({ url, alt }) => ({ url, alt })),
   };
-  const checksum = await sha256(JSON.stringify(stableEvidence));
+  const checksum = await sha256Hex(JSON.stringify(stableEvidence));
   const writeResult = await importVendorOrder(
     db,
     {
@@ -2353,7 +2344,7 @@ export async function auditImportBatch(
       !batchExpenseIds.has(parseEntityId("expense", relinkExpenseId))
     )
       continue;
-    const evidenceFingerprint = await sha256(JSON.stringify(finding));
+    const evidenceFingerprint = await sha256Hex(JSON.stringify(finding));
     const [inserted] = await getDb(db)
       .insert(importFinding)
       .values({
@@ -2443,7 +2434,7 @@ export async function stopImportRunForReview(
       "other",
     ])
     .parse(input.kind);
-  const fingerprint = await sha256(`${kind}:${summary}`);
+  const fingerprint = await sha256Hex(`${kind}:${summary}`);
   if (scope.public.purpose === "account_sync") {
     await auditAllImportBatches(db, {
       runId: input.runId,
@@ -3636,7 +3627,7 @@ export async function controlImportRun(
               state: isUnavailable ? "unavailable" : "needs_evidence",
               outcome: isUnavailable ? "unavailable" : null,
               evidenceFingerprint: isUnavailable
-                ? await sha256(
+                ? await sha256Hex(
                     `unavailable:${target.evidenceFingerprint ?? target.targetFingerprint}`,
                   )
                 : null,
