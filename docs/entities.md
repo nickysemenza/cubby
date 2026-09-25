@@ -25,8 +25,11 @@ Browser metadata is generated separately and contains no executable schemas.
 Generated detail and list type maps derive from their schema maps, preserving
 the entity key's input/output correlation. These schema-contract artifacts remain
 separate from browser metadata and executable server bindings.
-A transitive import guard protects this boundary; shared identifier and field
-primitives compose domain projections without importing generated schema maps.
+An oxlint `no-restricted-imports` override on the declarations and the helper
+modules they import protects this boundary (`.oxlintrc.json`); a helper a
+declaration newly imports joins that override's file list. Shared identifier
+and field primitives compose domain projections without importing generated
+schema maps.
 
 Run:
 
