@@ -16,6 +16,7 @@ usage() {
   echo "common env: MARKETING_VERSION TESTFLIGHT_OUTPUT_DIR" >&2
   echo "archive additionally needs: <PLATFORM>_BUILD_NUMBER <PLATFORM>_PROFILES_JSON" >&2
   echo "export additionally needs: <PLATFORM>_PROFILES_JSON ASC_API_KEY_PATH APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID" >&2
+  echo "  (iOS archive and export also need IOS_LIVE_ACTIVITY_PROFILES_JSON)" >&2
   echo "  (macOS also needs MAC_INSTALLER_SIGNING_CERTIFICATE)" >&2
 }
 
@@ -54,6 +55,7 @@ require MARKETING_VERSION TESTFLIGHT_OUTPUT_DIR
 
 readonly team_id="Y9A97FXT63"
 readonly bundle_id="com.nickysemenza.cubby"
+readonly live_activity_bundle_id="$bundle_id.LiveActivity"
 readonly project="apps/apple/Cubby.xcodeproj"
 readonly derived_data="$TESTFLIGHT_OUTPUT_DIR/DerivedData"
 readonly ios_archive="$TESTFLIGHT_OUTPUT_DIR/Cubby-iOS.xcarchive"
@@ -65,6 +67,7 @@ resolve_profile() {
   local expected_name="$2"
   local expected_type="$3"
   local extension="$4"
+  local profile_bundle_id="${5:-$bundle_id}"
   local matches uuid path decoded identifier_key profile_app_identifier associated_domains
 
   matches="$(jq --arg name "$expected_name" --arg type "$expected_type" \
@@ -82,7 +85,7 @@ resolve_profile() {
     exit 1
   }
 
-  decoded="$TESTFLIGHT_OUTPUT_DIR/${expected_type}.plist"
+  decoded="$TESTFLIGHT_OUTPUT_DIR/${uuid}.plist"
   security cms -D -i "$path" > "$decoded"
   [[ "$(plutil -extract Name raw -o - "$decoded")" == "$expected_name" ]]
   [[ "$(plutil -extract TeamIdentifier.0 raw -o - "$decoded")" == "$team_id" ]]
@@ -91,16 +94,23 @@ resolve_profile() {
   profile_app_identifier="$(
     /usr/libexec/PlistBuddy -c "Print :Entitlements:$identifier_key" "$decoded"
   )"
-  [[ "$profile_app_identifier" == "$team_id.$bundle_id" ]]
-  # App Store profiles authorize the capability with `*`; the signed app's
-  # entitlements retain the exact applinks domain from the target.
-  associated_domains="$(
-    /usr/libexec/PlistBuddy \
-      -c 'Print :Entitlements:com.apple.developer.associated-domains' "$decoded"
-  )"
-  grep -Eq '^\*$|applinks:cubby\.nickysemenza\.com' <<< "$associated_domains"
+  [[ "$profile_app_identifier" == "$team_id.$profile_bundle_id" ]]
+  if [[ "$profile_bundle_id" == "$bundle_id" ]]; then
+    # App Store profiles authorize the capability with `*`; the signed app's
+    # entitlements retain the exact applinks domain from the target.
+    associated_domains="$(
+      /usr/libexec/PlistBuddy \
+        -c 'Print :Entitlements:com.apple.developer.associated-domains' "$decoded"
+    )"
+    grep -Eq '^\*$|applinks:cubby\.nickysemenza\.com' <<< "$associated_domains"
+  fi
 
   printf '%s' "$uuid"
+}
+
+resolve_live_activity_profile() {
+  resolve_profile "$IOS_LIVE_ACTIVITY_PROFILES_JSON" \
+    "AppStore $live_activity_bundle_id iOS" IOS_APP_STORE mobileprovision "$live_activity_bundle_id"
 }
 
 write_export_options() {
@@ -108,6 +118,7 @@ write_export_options() {
   local profile_uuid="$2"
   local destination="upload"
   local installer_certificate="${3:-}"
+  local live_activity_profile_uuid="${4:-}"
 
   printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
@@ -117,6 +128,10 @@ write_export_options() {
   /usr/libexec/PlistBuddy -c 'Add :method string app-store-connect' "$path"
   /usr/libexec/PlistBuddy -c 'Add :provisioningProfiles dict' "$path"
   /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$bundle_id string $profile_uuid" "$path"
+  if [[ -n "$live_activity_profile_uuid" ]]; then
+    /usr/libexec/PlistBuddy \
+      -c "Add :provisioningProfiles:$live_activity_bundle_id string $live_activity_profile_uuid" "$path"
+  fi
   /usr/libexec/PlistBuddy -c 'Add :signingCertificate string Apple Distribution' "$path"
   /usr/libexec/PlistBuddy -c 'Add :signingStyle string manual' "$path"
   /usr/libexec/PlistBuddy -c "Add :teamID string $team_id" "$path"
@@ -210,7 +225,10 @@ if [[ "$command" == "archive" ]]; then
   case "$platform" in
     ios)
       profile_uuid="$(resolve_profile "$profiles_json" "AppStore com.nickysemenza.cubby iOS" IOS_APP_STORE mobileprovision)"
-      archive_platform Cubby-iOS 'generic/platform=iOS' "$ios_archive" "$profile_uuid" "$build_number"
+      require IOS_LIVE_ACTIVITY_PROFILES_JSON
+      live_activity_profile_uuid="$(resolve_live_activity_profile)"
+      archive_platform Cubby-iOS 'generic/platform=iOS' "$ios_archive" "$profile_uuid" "$build_number" \
+        CUBBY_LIVE_ACTIVITY_PROVISIONING_PROFILE_SPECIFIER="$live_activity_profile_uuid"
       verify_archive \
         "$ios_archive" \
         "$ios_archive/Products/Applications/Cubby.app" \
@@ -249,8 +267,10 @@ elif [[ "$command" == "export" ]]; then
   case "$platform" in
     ios)
       profile_uuid="$(resolve_profile "$profiles_json" "AppStore com.nickysemenza.cubby iOS" IOS_APP_STORE mobileprovision)"
+      require IOS_LIVE_ACTIVITY_PROFILES_JSON
+      live_activity_profile_uuid="$(resolve_live_activity_profile)"
       ios_export_options="$TESTFLIGHT_OUTPUT_DIR/ExportOptions-iOS.plist"
-      write_export_options "$ios_export_options" "$profile_uuid"
+      write_export_options "$ios_export_options" "$profile_uuid" "" "$live_activity_profile_uuid"
       export_platform "$ios_archive" "$TESTFLIGHT_OUTPUT_DIR/exports/ios" "$ios_export_options"
       ;;
     macos)

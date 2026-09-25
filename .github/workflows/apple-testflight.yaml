@@ -143,6 +143,17 @@ jobs:
           api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
 
+      - name: Download Live Activity provisioning profile
+        id: live-activity-profile
+        if: matrix.platform == 'ios'
+        uses: ./.github/actions/download-apple-profile
+        with:
+          bundle-id: com.nickysemenza.cubby.LiveActivity
+          profile-type: IOS_APP_STORE
+          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+
       - name: Archive ${{ matrix.platform }}
         shell: bash
         env:
@@ -150,6 +161,7 @@ jobs:
           IOS_BUILD_NUMBER: ${{ needs.coordinates.outputs.build }}
           MACOS_BUILD_NUMBER: ${{ needs.coordinates.outputs.build }}
           IOS_PROFILES_JSON: ${{ matrix.platform == 'ios' && steps.profile.outputs.profiles || '' }}
+          IOS_LIVE_ACTIVITY_PROFILES_JSON: ${{ steps.live-activity-profile.outputs.profiles }}
           MACOS_PROFILES_JSON: ${{ matrix.platform == 'macos' && steps.profile.outputs.profiles || '' }}
           TESTFLIGHT_OUTPUT_DIR: ${{ runner.temp }}/CubbyTestFlight
         run: apps/apple/scripts/testflight.sh archive '${{ matrix.platform }}'
@@ -265,6 +277,16 @@ jobs:
           api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
 
+      - name: Download Live Activity provisioning profile
+        id: live-activity-profile
+        uses: ./.github/actions/download-apple-profile
+        with:
+          bundle-id: com.nickysemenza.cubby.LiveActivity
+          profile-type: IOS_APP_STORE
+          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+
       - name: Download macOS provisioning profile
         id: macos-profile
         uses: ./.github/actions/download-apple-profile
@@ -279,6 +301,7 @@ jobs:
         env:
           MARKETING_VERSION: ${{ needs.coordinates.outputs.version }}
           IOS_PROFILES_JSON: ${{ steps.ios-profile.outputs.profiles }}
+          IOS_LIVE_ACTIVITY_PROFILES_JSON: ${{ steps.live-activity-profile.outputs.profiles }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: apps/apple/scripts/testflight.sh export ios
