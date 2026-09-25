@@ -14,7 +14,7 @@ test("routes docs and native changes without code tests", () => {
   assert.deepEqual(active(["apps/apple/project.yml"]), ["apple", "format"]);
 });
 
-test("routes the docs tree and generated documents to the web app", () => {
+test("routes the docs tree to the web app", () => {
   assert.deepEqual(active(["docs/inventory-audit.md"]), [
     "web",
     "docs",
@@ -25,16 +25,20 @@ test("routes the docs tree and generated documents to the web app", () => {
     "docs",
     "format",
   ]);
-  assert.deepEqual(active(["docs/how-values-are-determined.md"]), [
-    "web",
-    "docs",
-    "format",
-    "generator",
-  ]);
 });
 
 test("routes web, shared, auxiliary, Rust, and Apple dependencies", () => {
   assert.deepEqual(active(["apps/web/src/page.tsx"]), ["validation", "web"]);
+  assert.deepEqual(active(["apps/web/src/contracts/task.contract.ts"]), [
+    "validation",
+    "web",
+    "apple",
+  ]);
+  assert.deepEqual(active(["apps/web/scripts/apple-preview-fixtures.ts"]), [
+    "validation",
+    "web",
+    "apple",
+  ]);
   assert.deepEqual(active(["packages/shared/src/index.ts"]), [
     "validation",
     "web",

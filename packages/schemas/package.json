@@ -141,8 +141,8 @@
     "./image-capture-fields": "./src/image-capture-fields.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "typecheck": "node ../../scripts/generator/ensure.ts && tsc --noEmit",
+    "test": "node ../../scripts/generator/ensure.ts && vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {

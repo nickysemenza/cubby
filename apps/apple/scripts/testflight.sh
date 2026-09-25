@@ -143,6 +143,7 @@ archive_platform() {
     -destination "$destination" \
     -archivePath "$archive" \
     -derivedDataPath "$derived_data" \
+    -skipPackagePluginValidation \
     CUBBY_PROVISIONING_PROFILE_SPECIFIER="$profile_uuid" \
     MARKETING_VERSION="$MARKETING_VERSION" \
     CURRENT_PROJECT_VERSION="$build_number" \

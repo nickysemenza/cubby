@@ -4,10 +4,10 @@ import Testing
 
 @testable import Cubby
 
-/// Backstop for `PreviewFixtures+Generated.swift`: `PreviewFixtures.decode(_:)` `fatalError`s on a
+/// Backstop for the generated `Fixtures/*.json`: `PreviewFixtures.fixture(_:)` `fatalError`s on a
 /// fixture that no longer decodes, which crashes a `#Preview` instead of failing a test. The
-/// generator's `--check` (the `preview-fixtures` target in `pnpm check:all`) catches schema drift first; this catches a decode
-/// regression even when that step was skipped.
+/// fixtures are generated from the same zod schemas as the API document, so this catches a
+/// wire-shape decode regression.
 @Suite struct PreviewFixturesDecodingTests {
     nonisolated enum Fixture: CaseIterable, Sendable {
         case timeline, todayTasks, todayMeals, todayProblems, mealNutrition
@@ -16,15 +16,16 @@ import Testing
     @Test(arguments: Fixture.allCases)
     func generatedFixtureDecodes(_ fixture: Fixture) throws {
         switch fixture {
-        case .timeline: try decode(EntityTimelineOut.self, PreviewFixtures.sampleTimelineJSON)
-        case .todayTasks: try decode([TaskTodayBriefingItemOut].self, PreviewFixtures.sampleTodayTasksJSON)
-        case .todayMeals: try decode([MealListItem].self, PreviewFixtures.sampleTodayMealsJSON)
-        case .todayProblems: try decode(ProblemsCount.self, PreviewFixtures.sampleTodayProblemsJSON)
-        case .mealNutrition: try decode(MealNutritionOut.self, PreviewFixtures.sampleMealNutritionJSON)
+        case .timeline: try decode(EntityTimelineOut.self, "sampleTimeline")
+        case .todayTasks: try decode([TaskTodayBriefingItemOut].self, "sampleTodayTasks")
+        case .todayMeals: try decode([MealListItem].self, "sampleTodayMeals")
+        case .todayProblems: try decode(ProblemsCount.self, "sampleTodayProblems")
+        case .mealNutrition: try decode(MealNutritionOut.self, "sampleMealNutrition")
         }
     }
 
-    private func decode<T: Decodable>(_: T.Type, _ json: String) throws {
-        _ = try JSONDecoder.cubby().decode(T.self, from: Data(json.utf8))
+    private func decode<T: Decodable>(_: T.Type, _ name: String) throws {
+        let url = try #require(Bundle.main.url(forResource: name, withExtension: "json"))
+        _ = try JSONDecoder.cubby().decode(T.self, from: Data(contentsOf: url))
     }
 }

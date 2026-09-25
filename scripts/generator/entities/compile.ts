@@ -1300,6 +1300,21 @@ const compiledInspector = (
   ),
 });
 
+// The override-comparison audit recompiles the whole catalog once per
+// override with one declaration changed; the others are the same objects, so
+// their (slow, recursive) metadata parse is reused.
+const parsedDeclarations = new WeakMap<
+  DeclarationObject,
+  ReturnType<typeof parseEntityDeclarationMetadata>
+>();
+const parseDeclaration = (declared: DeclarationObject, context: string) => {
+  const declaration =
+    parsedDeclarations.get(declared) ??
+    parseEntityDeclarationMetadata(declared, context);
+  parsedDeclarations.set(declared, declaration);
+  return declaration;
+};
+
 // One compiler pass keeps cross-field capability errors attached to the exact
 // entity declaration rather than losing context across partial validators.
 export const compileEntity = (
@@ -1312,7 +1327,7 @@ export const compileEntity = (
   const declared = raw;
   let declaration;
   try {
-    declaration = parseEntityDeclarationMetadata(declared, context);
+    declaration = parseDeclaration(declared, context);
   } catch (error) {
     if (error instanceof Error) throw new EntityDeclarationError(error.message);
     throw error;

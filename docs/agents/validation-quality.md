@@ -19,8 +19,8 @@ maintained source, CSS, Markdown, MDX, YAML, and TOML; generated files,
 the pnpm lockfile, and vendored/build output remain excluded. Do not weaken a
 gate to accommodate a change.
 
-Never hand-merge a generated file. With the `cubby-generated` merge driver
-registered (`pnpm install` does it), a conflicting generated file keeps the
-current side and the post-merge/post-rewrite hook reruns `pnpm generate` (and
-the CubbyAPI generator when the OpenAPI document changed); commit what it
-regenerates. Without the driver, take either side and run `pnpm generate`.
+Generated output is never committed. `pnpm install`, `build`, `typecheck` and
+every test entry point run `scripts/generator/ensure.ts`, which reruns
+`pnpm generate` when its inputs changed; `pnpm generate` forces a run. The
+Swift OpenAPI client is built by the swift-openapi-generator SwiftPM plugin
+and the UniFFI shim by `apps/apple/scripts/build-rust.sh`.

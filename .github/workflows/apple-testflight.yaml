@@ -57,12 +57,23 @@ jobs:
             echo "build=$build"
           } >> "$GITHUB_OUTPUT"
 
+  # The generated Swift (never committed), written on Linux so the macOS
+  # archive legs need no Node install.
+  apple-generated:
+    name: Apple generated inputs
+    needs: coordinates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/generate-apple-inputs
+
   # One matrix leg per platform so the Rust FFI build (the dominant cold-cache
   # cost) only compiles the target that platform needs, and both archives run
   # concurrently instead of the historical single serial job.
   archive:
     name: Archive ${{ matrix.platform }}
-    needs: coordinates
+    needs: [coordinates, apple-generated]
     runs-on: macos-26
     timeout-minutes: 60
     strategy:
@@ -92,6 +103,8 @@ jobs:
         with:
           targets: ${{ steps.platform.outputs.ffi-target }}
           profile: dist
+
+      - uses: ./.github/actions/download-apple-inputs
 
       - uses: ./.github/actions/setup-apple-tools
         id: apple-tools
@@ -147,20 +160,6 @@ jobs:
       # hosted Apple checks job. `continue-on-error` because another
       # concurrent job racing the same key is a harmless 409, never a
       # reason to fail this one.
-      # Never save an empty generator directory: a run that fails before the
-      # generator is built would otherwise poison the exact key for good.
-      - name: Check OpenAPI generator binary
-        id: generator-built
-        if: always() && steps.apple-tools.outputs.openapi-generator-cache-hit != 'true'
-        run: test -x "$CUBBY_OPENAPI_GENERATOR_BIN" && echo "present=true" >> "$GITHUB_OUTPUT" || true
-      - name: Save OpenAPI generator cache
-        if: always() && steps.generator-built.outputs.present == 'true'
-        continue-on-error: true
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: ${{ env.CUBBY_OPENAPI_GENERATOR_BIN_DIR }}
-          key: ${{ steps.apple-tools.outputs.openapi-generator-cache-key }}
-
       - name: Save SPM clone cache
         if: always() && steps.apple-tools.outputs.spm-clones-cache-hit != 'true'
         continue-on-error: true

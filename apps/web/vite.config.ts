@@ -17,6 +17,13 @@ import { readR2PublicUrlFromWrangler } from "./tooling/wrangler-public-config.ts
 
 const isCloudflare = process.env.DEPLOY_TARGET === "cloudflare";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Generated output is never committed; bring it current before any module
+// graph (or TanStack's route scan) reads it. A no-op when inputs are unchanged.
+execFileSync(process.execPath, ["../../scripts/generator/ensure.ts"], {
+  cwd: import.meta.dirname,
+  stdio: "inherit",
+});
+
 const gitCommit = execSync("git rev-parse --short HEAD", {
   encoding: "utf-8",
 }).trim();

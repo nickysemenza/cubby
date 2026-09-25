@@ -12,18 +12,17 @@ contracts and [the backlog](../../docs/todos.md) for deeper inventory and web pa
 ## Build order
 
 1. `apps/apple/scripts/build-rust.sh` — builds `cubby-ffi` for iOS device/sim + macOS, generates
-   Swift bindings, stages `CubbyKit/Frameworks/CubbyFFI.xcframework` (gitignored) and commits
-   `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift`.
-2. `apps/apple/scripts/generate-openapi.sh` — runs the CLI `swift-openapi-generator` against
-   `apps/web/src/lib/generated/http-openapi.gen.json`, writes committed sources under
-   `CubbyKit/Sources/CubbyAPI/{Types,Client}.swift`. That output is its own SPM target so a
-   hand-written CubbyKit edit no longer recompiles ~58k generated lines; app code names its
-   types through the aliases `pnpm generate` writes to `CubbyKit/Generated/APITypes.swift`, with
-   the branded codes and `PlainDate` supplied by the tiny `CubbyAPISupport` target.
-   `generate-openapi.sh --check` fails when the committed client is stale.
-   On macOS, `pnpm generate:api` runs the web generator and this Swift generator
-   in order; unchanged generated files are left untouched. Anonymous shared
-   components use structural names, so inserting another schema does not renumber them.
+   Swift bindings, stages `CubbyKit/Frameworks/CubbyFFI.xcframework` and
+   `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift` (both gitignored).
+2. `pnpm generate` (run by `pnpm install`, `pnpm apple gen` and the Xcode schemes' build
+   pre-action) — writes the gitignored generated Swift: `CubbyKit/Generated/*.swift`, the
+   `openapi.json` and `openapi-generator-config.yaml` that swift-openapi-generator's SwiftPM
+   build plugin turns into the `CubbyAPI` target at build time, and the preview fixtures. That
+   target is separate so a hand-written CubbyKit edit does not recompile ~58k generated lines;
+   app code names its types through the aliases in `CubbyKit/Generated/APITypes.swift`, with the
+   branded codes and `PlainDate` supplied by the tiny `CubbyAPISupport` target. The first
+   Xcode build asks to trust the `OpenAPIGenerator` plugin; command-line builds pass
+   `-skipPackagePluginValidation`.
 3. `xcodegen generate --spec apps/apple/project.yml` — produces `Cubby.xcodeproj` (gitignored).
 4. Optional: `brew install getsentry/tools/sentry-cli` and put an org auth token in
    `~/.sentryclirc`. Only the `Upload dSYMs to Sentry` archive phase needs it (project
@@ -40,23 +39,19 @@ xcframework and `cubby_ffi.swift` are outputs of the Nx-cached `apple-ffi` targe
 unchanged Rust restores both in seconds instead of recompiling the path crates for three targets;
 a matching fingerprint marker inside the xcframework skips Nx entirely. `build-rust.sh` itself
 always builds (cargo's fingerprints make an unchanged rerun cheap) — run it directly for one-slice
-iteration (`--targets sim`). The generator build for step 2 is likewise shared across worktrees
-under `~/.cache/cubby/openapi-generator-build`.
+iteration (`--targets sim`).
 
 ## Generated files (read-only here)
 
-- `CubbyKit/Sources/CubbyKit/Generated/{EntityCatalog,OperationRoutes,EntityOperations,APITypes}.swift`
-  and `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift` — emitted by
-  `scripts/generator/` from the entity spine and the OpenAPI document. Regenerate with
-  `pnpm generate` from the repo root.
-- `CubbyKit/Sources/CubbyAPI/*.swift` — the whole `CubbyAPI` target is swift-openapi-generator's
-  output (`Client.swift` plus `Types*.swift`). Regenerate with
-  `apps/apple/scripts/generate-openapi.sh`; `generate-openapi.sh --check` fails when stale.
-- `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift` — emitted by `uniffi-bindgen` from `cubby-ffi/`.
-  Regenerate with `apps/apple/scripts/build-rust.sh`.
+- `CubbyKit/Sources/CubbyKit/Generated/{EntityCatalog,OperationRoutes,EntityOperations,APITypes}.swift`,
+  `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift`, the `CubbyAPI` target's
+  `openapi.json` + `openapi-generator-config.yaml`, and `App/Shared/Previews/Fixtures/*.json` —
+  written by `scripts/generator/` (`pnpm generate`) from the entity spine and the OpenAPI document.
+- The `CubbyAPI` Swift — generated at build time by the swift-openapi-generator plugin.
+- `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift` — emitted by `uniffi-bindgen` from `cubby-ffi/`
+  (`apps/apple/scripts/build-rust.sh`).
 
-All are committed; hand-editing any of them fails the relevant staleness gate (for
-`cubby_ffi.swift`, the pre-push check regenerates it and fails on a dirty tree).
+None is committed; edit the generator or its inputs, never the output.
 
 ## Running
 

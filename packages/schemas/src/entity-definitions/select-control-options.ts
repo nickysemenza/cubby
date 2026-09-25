@@ -1,4 +1,4 @@
-import { locationTypeValues } from "@cubby/shared";
+import { locationTypeValues } from "@cubby/shared/location-type-theme";
 import { COST_TYPE_LABELS, costTypeValues } from "../expense-fields.js";
 import {
   EXPENSE_LINE_BASIS_LABELS,

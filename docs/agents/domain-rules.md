@@ -132,17 +132,17 @@ an index is eligible but unexercised, not droppable — audit every call site wi
 
 ## Generated files
 
-Generated output is identified by its generated header or `.gitattributes`, not
-by a directory or suffix: generated routes and Swift bindings have different
-paths. Never hand-edit one — edit its generator or input and regenerate. A
-missing expected output means run its owning generator and investigate the
-reported failure.
+Generated output is gitignored and never committed; it is identified by its
+generated header. Never hand-edit one — edit its generator or input and run
+`pnpm generate` (install, build, typecheck and tests run it when inputs
+changed). A missing expected output means run its owning generator and
+investigate the reported failure.
 
 Entity route modules: the generator emits the list/detail modules from
 `route.list` / `route.detail` (`apps/web/src/routes/_authenticated/<basePath>.index.tsx`
-and `.$shortcode.tsx`) sit beside the hand-written routes with no `.gen.`
+and `.$shortcode.tsx`) beside the hand-written routes with no `.gen.`
 suffix, because TanStack's file router needs physical files there and a
-`__virtual.ts` would take over the whole directory. They carry the generated
-header, so `generate:check` still catches a stale or hand-edited one, and each
-is listed explicitly in `.gitattributes`. To customize one, set that
-`route.list` / `route.detail` to `null` in the declaration and write the file.
+`__virtual.ts` would take over the whole directory. A generated `.gitignore`
+in that directory ignores them, and `pnpm generate` deletes one it no longer
+emits. To customize one, set that `route.list` / `route.detail` to `null` in
+the declaration and write the file.

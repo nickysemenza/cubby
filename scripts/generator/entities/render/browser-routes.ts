@@ -1,4 +1,4 @@
-import { generatedHeader } from "../../artifacts.ts";
+import { generatedHeader, yamlGeneratedHeader } from "../../artifacts.ts";
 import type {
   CompiledEntity,
   EntityArtifacts,
@@ -154,7 +154,7 @@ const renderDetailRoute = (
  * `route.detail` declaration. They live beside the hand-written routes
  * (TanStack's file router needs physical files, and a `__virtual.ts` would
  * take over the whole directory), carrying the generated header so the
- * staleness and extraneous-file checks cover them.
+ * extraneous-file cleanup covers them.
  */
 export const renderBrowserRouteArtifacts = (
   entities: readonly CompiledEntity[],
@@ -162,14 +162,14 @@ export const renderBrowserRouteArtifacts = (
   const listed = new Set(
     entityProjectionMaps(entities).list.map((entity) => entity.key),
   );
-  return entities
+  const directory = "apps/web/src/routes/_authenticated";
+  const modules = entities
     .filter(
       (entity): entity is RoutedEntity =>
         entity.route !== null && entity.descriptor.browserRoutes !== false,
     )
     .flatMap((entity) => {
       const { basePath, detailParam } = browserRoutes(entity);
-      const directory = "apps/web/src/routes/_authenticated";
       return [
         ...(entity.route.list === null
           ? []
@@ -189,4 +189,22 @@ export const renderBrowserRouteArtifacts = (
             ]),
       ];
     });
+  // The modules sit beside hand-written routes, so the directory's own
+  // ignore file (itself generated, and ignoring itself) keeps them out of git.
+  return [
+    ...modules,
+    {
+      relativePath: `${directory}/.gitignore`,
+      source:
+        yamlGeneratedHeader +
+        [
+          ".gitignore",
+          ...modules.map(({ relativePath }) =>
+            relativePath.slice(directory.length + 1),
+          ),
+        ]
+          .map((name) => `/${name}\n`)
+          .join(""),
+    },
+  ];
 };

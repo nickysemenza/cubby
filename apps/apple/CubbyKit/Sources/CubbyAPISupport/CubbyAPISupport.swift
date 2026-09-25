@@ -2,7 +2,7 @@ import Foundation
 
 /// Hand-written types the generated `CubbyAPI` client uses in place of its own: the branded
 /// shortcodes and the `YYYY-MM-DD` plain date (`typeOverrides.schemas` in
-/// `openapi/openapi-generator-config.yaml`, written by `scripts/generator/http-api/native.ts`).
+/// `Sources/CubbyAPI/openapi-generator-config.yaml`, written by `scripts/generator/http-api/native.ts`).
 /// Each is a single JSON string on the wire, so `RawRepresentable` supplies `Codable`.
 
 /// A calendar day with no time or zone, as the API spells `PlainDate`. `date` interprets it in

@@ -8,7 +8,6 @@ export interface CiChangeScope {
   apple: boolean;
   docs: boolean;
   format: boolean;
-  generator: boolean;
 }
 
 const emptyScope = (): CiChangeScope => ({
@@ -19,7 +18,6 @@ const emptyScope = (): CiChangeScope => ({
   apple: false,
   docs: false,
   format: false,
-  generator: false,
 });
 
 const fullScope = (): CiChangeScope => ({
@@ -30,13 +28,18 @@ const fullScope = (): CiChangeScope => ({
   apple: true,
   docs: true,
   format: true,
-  generator: true,
 });
 
 const markdown = /\.(?:md|mdx|markdown)$/i;
 const formatOnly = /\.(?:ya?ml|toml)$/i;
-const generatedMarkdown = "docs/how-values-are-determined.md";
-const generatedAppleConfig = "apps/apple/openapi/openapi-generator-config.yaml";
+// The Swift client and catalog are generated (never committed) from the
+// entity declarations and the HTTP contracts, so those inputs rebuild Apple.
+const appleGeneratorInputs = [
+  "apps/web/src/contracts/",
+  "apps/web/src/lib/http-api/",
+  "apps/web/scripts/apple-preview-fixtures.ts",
+  "apps/web/src/lib/test/mock-schema.ts",
+];
 
 const sharedConfig = new Set([
   "package.json",
@@ -63,7 +66,6 @@ const affectedByPath = (path: string): Partial<CiChangeScope> | null => {
     return {
       docs: true,
       format: true,
-      ...(path === generatedMarkdown && { generator: true }),
       ...(path.startsWith("docs/") && { web: true }),
     };
   if (
@@ -73,10 +75,7 @@ const affectedByPath = (path: string): Partial<CiChangeScope> | null => {
   )
     return null;
   if (path.startsWith("apps/apple/") || path.startsWith("cubby-ffi/"))
-    return {
-      apple: true,
-      ...(path === generatedAppleConfig && { generator: true }),
-    };
+    return { apple: true };
   if (path.startsWith("recipebridge/"))
     return {
       validation: true,
@@ -92,7 +91,14 @@ const affectedByPath = (path: string): Partial<CiChangeScope> | null => {
       auxiliary: true,
       ...(path.startsWith("packages/schemas/") && { apple: true }),
     };
-  if (path.startsWith("apps/web/")) return { validation: true, web: true };
+  if (path.startsWith("apps/web/"))
+    return {
+      validation: true,
+      web: true,
+      ...(appleGeneratorInputs.some((prefix) => path.startsWith(prefix)) && {
+        apple: true,
+      }),
+    };
   if (
     path.startsWith("apps/mcp-apps/") ||
     path.startsWith("apps/purchase-agent/")

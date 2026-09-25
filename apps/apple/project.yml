@@ -126,6 +126,17 @@ targetTemplates:
           CODE_SIGN_IDENTITY: Apple Distribution
           DEVELOPMENT_TEAM: Y9A97FXT63
           PROVISIONING_PROFILE_SPECIFIER: "$(CUBBY_PROVISIONING_PROFILE_SPECIFIER)"
+    preBuildScripts:
+      # Fails the build when the scheme pre-action's `pnpm generate` failed (see `schemes`).
+      - name: Check generated sources
+        basedOnDependencyAnalysis: false
+        script: |
+          marker="${PROJECT_DIR}/Cubby.xcodeproj/generate-failed.log"
+          if [ -f "$marker" ]; then
+            echo "error: pnpm generate failed; the generated Swift may be stale:"
+            sed 's/^/    /' "$marker"
+            exit 1
+          fi
     postBuildScripts:
       # Archives only (`runOnlyWhenInstalling`): a Debug build has no dSYM to upload. Org + auth
       # come from the org token in ~/.sentryclirc — Xcode run scripts do not inherit the shell
@@ -258,7 +269,23 @@ targets:
 
 schemes:
   Cubby-iOS:
-    build:
+    build: &generatedBuild
+      # Generated Swift (CubbyKit/Generated, the CubbyAPI OpenAPI inputs) is gitignored and
+      # written by `pnpm generate`. A scheme pre-action, not a target script phase: CubbyKit is
+      # a package dependency, so it compiles before any app-target phase would run. Xcode
+      # ignores a pre-action's exit status, so a failure writes the marker that the app
+      # targets' first build phase (`Check generated sources`) fails on; the stale output is
+      # never shipped. Hosted Apple CI has no node_modules and receives the generated files as
+      # an artifact instead, so this is a no-op there.
+      preActions:
+        - settingsTarget: Cubby-iOS
+          script: |
+            export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+            marker="${PROJECT_DIR}/Cubby.xcodeproj/generate-failed.log"
+            rm -f "$marker"
+            cd "${PROJECT_DIR}/../.."
+            [ -d node_modules/.bin ] || exit 0
+            node scripts/generator/ensure.ts > "$marker" 2>&1 && rm -f "$marker"
       targets:
         Cubby-iOS: all
         Cubby-iOS-Tests: [test]
@@ -276,6 +303,7 @@ schemes:
       config: Debug
   Cubby-macOS:
     build:
+      <<: *generatedBuild
       targets:
         Cubby-macOS: all
         Cubby-macOS-Tests: [test]
@@ -291,6 +319,7 @@ schemes:
   # screen on device. These schemes launch without the debugger for fast UI iteration.
   Cubby-iOS-NoDebugger:
     build:
+      <<: *generatedBuild
       targets:
         Cubby-iOS: all
     run:
@@ -298,6 +327,7 @@ schemes:
       debugEnabled: false
   Cubby-macOS-NoDebugger:
     build:
+      <<: *generatedBuild
       targets:
         Cubby-macOS: all
     run:

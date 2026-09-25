@@ -6,5 +6,5 @@ ROOT="$(git rev-parse --show-toplevel)"
 node "$ROOT/scripts/ensure-wasm.ts"
 # Same for the generated Xcode project (see post-checkout).
 . "$ROOT/scripts/ensure-xcodeproj.sh"
-# Generated files auto-resolved by scripts/merge-generated.sh are rebuilt here.
-sh "$ROOT/scripts/regenerate-after-merge.sh"
+# Generated outputs are gitignored; bring them current for the merged inputs.
+node "$ROOT/scripts/generator/ensure.ts" || true

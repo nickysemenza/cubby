@@ -44,7 +44,7 @@
         "scripts/check-client-bundle.ts!",
         "scripts/check-client-bundle.unit.test.ts!",
         "scripts/ensure-db-extensions.ts!",
-        "scripts/generate-apple-preview-fixtures.ts!",
+        "scripts/apple-preview-fixtures.ts!",
         "tooling/**/*.{ts,tsx}!",
         "tooling/e2e-db-watchdog.mjs!",
         "drizzle.config.ts!",
@@ -144,8 +144,14 @@
       "ignoreDependencies": ["cloudflare"]
     }
   },
+  // Run with --no-gitignore (project.json): generated modules are gitignored
+  // but import hand-written code, so knip must read them. These are the
+  // gitignored trees that are not source.
   "ignore": [
-    ".claude/workflows/**",
+    ".claude/**",
+    "**/dist/**",
+    "**/.wrangler/**",
+    "apps/apple/**",
     "apps/web/src/components/ui/context-menu.tsx"
   ],
   "ignoreDependencies": ["zod"],

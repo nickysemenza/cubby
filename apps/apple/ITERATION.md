@@ -28,7 +28,7 @@ booted and the relevant build artifacts warm while working on one feature.
    `PreviewFixtures` contain synthetic, wire-shaped states and intentionally
    block network reads. Add focused states such as empty, loading, error, dark,
    and large text when they expose the change. The generated fixture JSON comes
-   from `pnpm --dir apps/web run gen:apple-preview-fixtures`.
+   from `pnpm generate`.
 3. When the change needs repeated real interactions, start `pnpm dev:sim:watch`.
    The first run builds and installs the Debug app, then signs in and edits a
    synthetic product. Press Enter to seed another product and replay the shorter

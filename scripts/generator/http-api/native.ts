@@ -132,7 +132,8 @@ const renderGeneratorConfig = (
     .map((line) => `${line}\n`)
     .join("");
   return {
-    relativePath: "apps/apple/openapi/openapi-generator-config.yaml",
+    relativePath:
+      "apps/apple/CubbyKit/Sources/CubbyAPI/openapi-generator-config.yaml",
     source: `${yamlGeneratedHeader}# Every resources.*.{list,get,create,update,timeline} operation in the HTTP
 # document, plus the RPC ids flagged \`native:\` in apps/web/src/contracts.
 generate:

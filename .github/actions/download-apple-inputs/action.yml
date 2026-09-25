@@ -1,0 +1,13 @@
+name: "Download Apple inputs"
+description: >-
+  Restores the `apple-generated` artifact (generate-apple-inputs) into
+  apps/apple, so a macOS job compiles the Swift that `pnpm generate` writes
+  without installing Node dependencies.
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+      with:
+        name: apple-generated
+        path: apps/apple

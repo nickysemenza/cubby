@@ -766,11 +766,6 @@ export const renderEntityArtifacts = (
       return `z.object({action:z.literal("merge"),entity:z.literal(${JSON.stringify(entity.key)}),item:${entity.contract.mcpOutput.export},mergeSummary:z.json(),sideEffects:mutationSideEffectsSchema})`;
     })
     .join(",\n  ");
-  const shortcodePrefixes = Object.fromEntries(
-    entities.flatMap(({ key, shortcode }) =>
-      shortcode === null ? [] : [[key, shortcode]],
-    ),
-  );
   const inspectorMetadata = Object.fromEntries(
     entities.map((entity) => {
       const lifecycle = lifecycleFor(entity);
@@ -1011,17 +1006,6 @@ export const renderEntityArtifacts = (
     ...renderDataQualityArtifacts(entities),
     ...renderImagePolicyArtifacts(entities),
     ...renderFieldExplanationReference(entities),
-    {
-      relativePath: "packages/shared/src/generated/shortcode-registry.gen.ts",
-      source:
-        generatedHeader +
-        renderRecord({
-          name: "SHORTCODE_PREFIX",
-          entries: shortcodePrefixes,
-          comment: "// Generated shortcode registry stays one entity per line.",
-        }) +
-        "export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;\n",
-    },
     {
       relativePath:
         "packages/schemas/src/generated/entity-manifest-data.gen.ts",

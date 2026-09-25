@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// CI-only: sets every tracked file under the given paths to an mtime derived
-// from its git blob hash, so a cached Swift build directory restored onto a
+// CI-only: sets every tracked or generated (gitignored) file under the given
+// paths to an mtime derived from its git blob hash, so a cached Swift build directory restored onto a
 // fresh checkout sees unchanged sources as unchanged. A checkout stamps every
 // file with "now", which makes SwiftPM/Xcode recompile all of our own modules
 // (the 91k-line generated CubbyAPI client included) even when only the
@@ -56,5 +56,36 @@ for (const entry of entries) {
   const seconds = blobMtime(sha);
   utimesSync(join(ROOT, path), seconds, seconds);
   stamped += 1;
+}
+// Generated output (the Swift `pnpm generate` writes, downloaded as an
+// artifact) is gitignored, so it has no index entry; hash its content the
+// same way git would.
+const ignored = execFileSync(
+  "git",
+  ["ls-files", "-o", "-i", "--exclude-standard", "-z", "--", ...paths],
+  { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+)
+  .split("\0")
+  // Only generated sources: SPM clones, build products and the gitignored
+  // xcodeproj/xcframework are ignored too but are not sources.
+  .filter(
+    (path) =>
+      /\/(?:Sources|Previews)\//u.test(path) &&
+      !/(?:^|\/)(?:SourcePackages|\.build|DerivedData)\//u.test(path),
+  );
+if (ignored.length > 0) {
+  const shas = execFileSync("git", ["hash-object", "--stdin-paths"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    input: ignored.join("\n"),
+    maxBuffer: 64 * 1024 * 1024,
+  })
+    .trim()
+    .split("\n");
+  ignored.forEach((path, index) => {
+    const seconds = blobMtime(shas[index] ?? "");
+    utimesSync(join(ROOT, path), seconds, seconds);
+    stamped += 1;
+  });
 }
 console.log(`stamp-source-mtimes: ${stamped} files under ${paths.join(" ")}`);

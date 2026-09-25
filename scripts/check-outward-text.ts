@@ -6,17 +6,25 @@
  *
  * Usage: `node scripts/check-outward-text.ts <file>` or `--stdin`.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
-const root = resolve(import.meta.dirname, "..");
-const registry = readFileSync(
-  resolve(root, "packages/shared/src/generated/shortcode-registry.gen.ts"),
-  "utf8",
+// Read from the entity declarations' source: the generated registry is not
+// committed, and this runs in hooks and a sparse CI checkout with no install.
+const declarations = resolve(
+  import.meta.dirname,
+  "../packages/schemas/src/entity-definitions",
 );
-const prefixes = [...registry.matchAll(/:"([A-Z]+-)"/g)].map(([, p]) => p!);
+const prefixes = readdirSync(declarations)
+  .filter((name) => name.endsWith(".entity.ts"))
+  .flatMap((name) => [
+    ...readFileSync(resolve(declarations, name), "utf8").matchAll(
+      /\bshortcode: "([A-Z]+-)"/g,
+    ),
+  ])
+  .map(([, prefix]) => prefix!);
 if (prefixes.length === 0)
-  throw new Error("No shortcode prefixes found in the generated registry");
+  throw new Error("No shortcode prefixes found in the entity declarations");
 
 // The one sanctioned example body, used by docs and error messages.
 const EXAMPLE_BODY = "4K7M";

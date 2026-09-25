@@ -169,20 +169,7 @@ const imageRoutes = (entities: readonly CompiledEntity[]): ImageRoute[] =>
 export const renderImagePolicyArtifacts = (
   entities: readonly CompiledEntity[],
 ): EntityArtifacts[] => {
-  const owners = entities
-    .filter((entity) => entity.imagePolicy.storage !== false)
-    .map((entity) => ({
-      entity: entity.key,
-      storage: entity.imagePolicy.storage,
-      append: entity.imagePolicy.storage === "gallery",
-      requiresReplaceConfirmation:
-        entity.imagePolicy.storage === "cover" ||
-        entity.imagePolicy.storage === "logo",
-    }));
   const routes = imageRoutes(entities);
-  const routesById = Object.fromEntries(
-    routes.map((route) => [route.routeId, route]),
-  );
   const displayBindings = Object.fromEntries(
     entities.map((entity) => [
       entity.key,
@@ -267,13 +254,7 @@ export const renderImagePolicyArtifacts = (
     "export type ImagePolicy = { readonly storage: ImageStorage; readonly displaySources: readonly ImageDisplayBinding[]; readonly ingress: readonly ImageIngressRoute[]; readonly routing: ImageRoutingPolicy | null };\n\n" +
     `export const imagePolicyCatalog = ${JSON.stringify(policyCatalog)} as const satisfies Record<Entity, ImagePolicy>;\n\n` +
     "export type PhotoCategory = { readonly key: PhotoCategoryKey; readonly label: string; readonly emoji: string; readonly classifierLabels: readonly string[]; readonly entities: readonly Entity[] };\n" +
-    `export const photoCategories = ${JSON.stringify(categoryCatalog)} as const satisfies Record<PhotoCategoryKey, PhotoCategory>;\n\n` +
-    `export const imageOwners = ${JSON.stringify(owners)} as const;\n` +
-    "export type ImageOwner = (typeof imageOwners)[number];\n\n" +
-    `export const imageIngressRoutes = ${JSON.stringify(routes)} as const satisfies readonly ImageIngressRoute[];\n` +
-    'export type ImageIngressRouteId = (typeof imageIngressRoutes)[number]["routeId"];\n' +
-    `export const imageIngressRouteById = ${JSON.stringify(routesById)} as const satisfies Record<ImageIngressRouteId, ImageIngressRoute>;\n\n` +
-    `export const imageDisplayBindings = ${JSON.stringify(displayBindings)} as const satisfies Record<Entity, readonly ImageDisplayBinding[]>;\n`;
+    `export const photoCategories = ${JSON.stringify(categoryCatalog)} as const satisfies Record<PhotoCategoryKey, PhotoCategory>;\n`;
   /** Wire string ("source-field") -> Swift enum case identifier (sourceField). `self` is a Swift
    * keyword, so that one case is backticked; the same identifier is valid at both the
    * declaration site and every `.<case>` reference. */
