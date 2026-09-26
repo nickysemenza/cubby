@@ -44,6 +44,7 @@ import {
 } from "~/lib/purchase-import-run-detail";
 import { formatCurrency } from "~/lib/utils";
 
+import { AgentContextPerCall } from "./agent-context-breakdown";
 import {
   formatWorkDuration,
   plannedPhotoWorkSteps,
@@ -609,6 +610,7 @@ function AgentWorkOverview({
             : null}
         </p>
       ) : null}
+      <AgentContextPerCall messages={messages} />
       {work.length || plannedSteps.length || run.agentModelMs > 0 ? (
         <section
           className="mt-3 overflow-x-auto border-t border-border pt-2"

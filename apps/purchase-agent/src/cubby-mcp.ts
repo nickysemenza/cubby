@@ -1,4 +1,7 @@
-import type { FlueImportRunPurpose } from "@cubby/schemas/import-run-agent";
+import {
+  importRunAgentManifest,
+  type FlueImportRunPurpose,
+} from "@cubby/schemas/import-run-agent";
 import type { McpConnectionDefinition } from "@flue/runtime";
 import { z } from "zod";
 
@@ -14,19 +17,6 @@ const mcpAccess = z.object({
 // reaches this host: the custom fetch below rewrites it to the URL authorized
 // by Cubby's run-bound access grant, then sends it over the service binding.
 const MCP_PLACEHOLDER_URL = "https://cubby-mcp.invalid/mcp";
-
-// Flue includes every mounted MCP tool schema in each model request. The
-// household-wide catalog makes a two-photo run pay for unrelated workflows.
-const PHOTO_INVENTORY_TOOLS = [
-  "get_photo_run_context",
-  "get_image_processing",
-  "suggest_photo_product_candidates",
-  "resolve_products",
-  "find_similar_entities",
-  "propose_photo_groups",
-  "list_photo_group_proposals",
-  "patch_product_external_ids",
-];
 
 async function rewriteMcpRequest(
   request: Request,
@@ -81,6 +71,8 @@ export function cubbyMcpConnection(
       return serviceForRun().mcpFetch(await rewriteMcpRequest(request, mcpUrl));
     },
   };
-  if (purpose === "photo_inventory") connection.tools = PHOTO_INVENTORY_TOOLS;
+  // Flue sends every mounted tool's schema on every model call, so each
+  // purpose mounts only its manifest list, never the household catalog.
+  connection.tools = [...importRunAgentManifest[purpose].mcpTools];
   return connection;
 }

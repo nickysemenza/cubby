@@ -16,6 +16,11 @@ src/...`. Read a failed run's ending and
 `apps/web/.vitest-failures.txt` before deciding what to change; do not rerun an
 unchanged tier to rediscover its failures.
 
+Before a PR, run only what CI cannot: `pnpm test:e2e:local` for the
+local-only native/simulator lanes, plus focused tests for the change. CI runs
+the PostgreSQL, fast, typecheck, lint, and knip tiers on every PR; do not
+repeat them locally as a gate.
+
 One root agent owns any broad validation that the change needs. A subagent runs
 only focused tests and returns its result, command, duration, relevant output,
 and limits. Reuse valid results at handoff; choose checks for the changed behavior

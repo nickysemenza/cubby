@@ -27,7 +27,7 @@ const pairsOf = (groups: readonly (readonly string[])[]) =>
 function acceptable(match: ExpectedMatch, product: string | null) {
   if (match.kind === "create") return product === null;
   if (match.kind === "existing") return product === match.product;
-  return product !== match.product;
+  return product === null || !match.products.includes(product);
 }
 
 export function scoreProposals(

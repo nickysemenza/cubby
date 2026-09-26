@@ -52,17 +52,18 @@ describe("scoreProposals", () => {
     expect(score.exact).toBe(false);
   });
 
-  it("accepts any outcome but the forbidden variant for notExisting", () => {
+  it("accepts any outcome but the forbidden variants for notExisting", () => {
     const trap = [
-      { photos: ["x"], match: { kind: "notExisting" as const, product: "L" } },
+      {
+        photos: ["x"],
+        match: { kind: "notExisting" as const, products: ["S", "L"] },
+      },
     ];
-    expect(
-      scoreProposals(trap, ["x"], [{ photos: ["x"], product: null }])
-        .matchAccuracy,
-    ).toBe(1);
-    expect(
-      scoreProposals(trap, ["x"], [{ photos: ["x"], product: "L" }])
-        .matchAccuracy,
-    ).toBe(0);
+    const accuracy = (product: string | null) =>
+      scoreProposals(trap, ["x"], [{ photos: ["x"], product }]).matchAccuracy;
+    expect(accuracy(null)).toBe(1);
+    expect(accuracy("M")).toBe(1);
+    expect(accuracy("S")).toBe(0);
+    expect(accuracy("L")).toBe(0);
   });
 });

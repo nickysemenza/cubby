@@ -12,6 +12,7 @@ import {
 } from "./cubby-ai-provider";
 import { internalAgentRoute } from "./internal-agent-route";
 import { PurchaseImportRun } from "./purchase-import-run";
+import { contextCapture } from "./context-breakdown-scope";
 
 // This named binding exists only in the workerd harness configuration. It is
 // deliberately not declared in wrangler.jsonc, so deployed requests fail
@@ -34,7 +35,11 @@ instrument(createCloudflareTracing({ content: false }));
 
 // Every production model request, including Flue compaction and retries, uses
 // the same Universal Gateway/BYOK transport as Cubby's web Worker.
-for (const provider of cubbyAiGatewayProviders(() => env.AI, testModel)) {
+for (const provider of cubbyAiGatewayProviders(
+  () => env.AI,
+  testModel,
+  contextCapture,
+)) {
   setProvider(provider);
 }
 

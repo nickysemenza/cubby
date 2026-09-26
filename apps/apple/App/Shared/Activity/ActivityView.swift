@@ -636,7 +636,8 @@ struct ActivityDetailView: View {
             }
             LabeledContent("Work", value: detail.run.kind.title)
             LabeledContent("Subject", value: detail.run.subjectName)
-            LabeledContent("State", value: detail.run.state)
+            LabeledContent(
+                "State", value: detail.run.state.replacingOccurrences(of: "_", with: " ").capitalized)
             LabeledContent("Started") { Text(detail.run.createdAt, style: .relative) }
             if let cost = detail.run.estimatedCost {
                 LabeledContent("Estimated cost", value: cost, format: .currency(code: "USD"))

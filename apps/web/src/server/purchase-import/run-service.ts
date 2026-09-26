@@ -18,6 +18,7 @@ import {
 import {
   flueImportRunPurpose,
   importRunAgentIdentity,
+  importRunAgentManifest,
 } from "@cubby/schemas/import-run-agent";
 import {
   browserBridgeOperation,
@@ -110,8 +111,12 @@ import { classifyOrderCapture } from "./order-list";
 import { loadReceiptEvidenceForRun } from "./receipt-evidence";
 import { importVendorOrder } from "./writer";
 
-/** The Flue coordinator every new run is dispatched to (purchase-agent pins it too). */
-const COORDINATOR_MODEL = "gpt-6-sol";
+/** The Flue coordinator model for a run purpose; purchase-agent reads the same manifest. */
+function coordinatorModelFor(purpose: string) {
+  const parsed = flueImportRunPurpose.safeParse(purpose);
+  return importRunAgentManifest[parsed.success ? parsed.data : "account_sync"]
+    .model;
+}
 
 /**
  * The target rows "Start new run with same inputs" copies, with the public
@@ -437,7 +442,7 @@ export async function startOrResumeImportRun(
             ? importRunId.parse(input.predecessorRunId)
             : null,
           trigger,
-          coordinatorModel: COORDINATOR_MODEL,
+          coordinatorModel: coordinatorModelFor("account_sync"),
           skillRevision: input.skillRevision ?? "purchase-import@1",
           runtimeRevision: input.runtimeRevision ?? "flue@1",
           agentSessionId: importRunAgentIdentity(id, "account_sync"),
@@ -563,7 +568,7 @@ export async function startTargetedImportRun(
         purpose,
         trigger,
         dispatchEventId: eventId,
-        coordinatorModel: COORDINATOR_MODEL,
+        coordinatorModel: coordinatorModelFor(purpose),
         agentSessionId: importRunAgentIdentity(
           id,
           flueImportRunPurpose.parse(purpose),
@@ -677,6 +682,7 @@ export async function startPhotoInventoryRun(
         vendorId: null,
         vendorAccountId: null,
         purpose: importRunPurpose.enum.photo_inventory,
+        coordinatorModel: coordinatorModelFor("photo_inventory"),
         trigger: importRunTrigger.enum.manual,
         notes: input.notes ?? null,
         agentSessionId: importRunAgentIdentity(id, "photo_inventory"),
@@ -3146,7 +3152,7 @@ export async function loadImportRunByShortcode(
       ? {
           purpose: run.purpose,
           trigger: "manual",
-          coordinatorModel: COORDINATOR_MODEL,
+          coordinatorModel: coordinatorModelFor(run.purpose),
           vendorAccount: run.vendorAccountShortcode,
           notes: run.notes,
           skillRevision: run.skillRevision,
@@ -3418,7 +3424,7 @@ export async function controlImportRun(
             purpose: locked.purpose,
             trigger: "manual",
             notes: locked.notes,
-            coordinatorModel: COORDINATOR_MODEL,
+            coordinatorModel: coordinatorModelFor(locked.purpose),
             skillRevision: locked.skillRevision,
             runtimeRevision: locked.runtimeRevision,
             dispatchEventId,
@@ -3446,12 +3452,12 @@ export async function controlImportRun(
           successorRunId: successorId,
           successorRunPublicId: successor.publicId,
           successorStatus: successor.status,
-          successorCoordinatorModel: COORDINATOR_MODEL,
+          successorCoordinatorModel: coordinatorModelFor(locked.purpose),
           created: true,
           dispatchRunId: successorId,
           dispatchPublicId: successor.publicId,
           dispatchPurpose: locked.purpose,
-          dispatchCoordinatorModel: COORDINATOR_MODEL,
+          dispatchCoordinatorModel: coordinatorModelFor(locked.purpose),
           dispatchEventId,
         };
       }
@@ -3482,7 +3488,7 @@ export async function controlImportRun(
             endedAt: null,
             dispatchEventId,
             dispatchError: null,
-            coordinatorModel: COORDINATOR_MODEL,
+            coordinatorModel: coordinatorModelFor(locked.purpose),
             updatedAt: new Date(),
           })
           .where(eq(importRun.id, scope.public.runId));
@@ -3492,7 +3498,7 @@ export async function controlImportRun(
           dispatchRunId: scope.public.runId,
           dispatchPublicId: input.runPublicId,
           dispatchPurpose: locked.purpose,
-          dispatchCoordinatorModel: COORDINATOR_MODEL,
+          dispatchCoordinatorModel: coordinatorModelFor(locked.purpose),
           dispatchEventId,
         };
       }
@@ -3545,7 +3551,7 @@ export async function controlImportRun(
             purpose: "purchase_validation",
             trigger: "manual",
             status: isUnavailable ? "needs_review" : "dispatch_failed",
-            coordinatorModel: COORDINATOR_MODEL,
+            coordinatorModel: coordinatorModelFor(locked.purpose),
             dispatchEventId,
             failureCode: isUnavailable ? "no_evidence_available" : null,
             dispatchError: isUnavailable
@@ -3593,11 +3599,11 @@ export async function controlImportRun(
           successorRunId: successorId,
           successorRunPublicId: successor.publicId,
           successorStatus: successor.status,
-          successorCoordinatorModel: COORDINATOR_MODEL,
+          successorCoordinatorModel: coordinatorModelFor(locked.purpose),
           dispatchRunId: null,
           dispatchPublicId: successor.publicId,
           dispatchPurpose: "purchase_validation" as const,
-          dispatchCoordinatorModel: COORDINATOR_MODEL,
+          dispatchCoordinatorModel: coordinatorModelFor(locked.purpose),
           dispatchEventId,
           created: true,
         };
@@ -3631,7 +3637,7 @@ export async function controlImportRun(
             successorRunId: existingSuccessor.id,
             successorRunPublicId: existingSuccessor.publicId,
             successorStatus: existingSuccessor.status,
-            successorCoordinatorModel: COORDINATOR_MODEL,
+            successorCoordinatorModel: coordinatorModelFor(locked.purpose),
             created: false,
           };
         }
@@ -3655,7 +3661,7 @@ export async function controlImportRun(
             purpose: locked.purpose,
             trigger: locked.trigger,
             dispatchEventId,
-            coordinatorModel: COORDINATOR_MODEL,
+            coordinatorModel: coordinatorModelFor(locked.purpose),
             skillRevision: locked.skillRevision,
             runtimeRevision: locked.runtimeRevision,
             decisionRevision: locked.decisionRevision + 1,
@@ -3728,12 +3734,12 @@ export async function controlImportRun(
           successorRunId: successorId,
           successorRunPublicId: successor.publicId,
           successorStatus: successor.status,
-          successorCoordinatorModel: COORDINATOR_MODEL,
+          successorCoordinatorModel: coordinatorModelFor(locked.purpose),
           created: true,
           dispatchRunId: successorId,
           dispatchPublicId: successor.publicId,
           dispatchPurpose: locked.purpose,
-          dispatchCoordinatorModel: COORDINATOR_MODEL,
+          dispatchCoordinatorModel: coordinatorModelFor(locked.purpose),
           dispatchEventId,
         };
       }
@@ -3838,7 +3844,7 @@ export async function controlImportRun(
           dispatchRunId: scope.public.runId,
           dispatchPublicId: input.runPublicId,
           dispatchPurpose: locked.purpose,
-          dispatchCoordinatorModel: COORDINATOR_MODEL,
+          dispatchCoordinatorModel: coordinatorModelFor(locked.purpose),
           dispatchEventId,
         };
       }
