@@ -266,8 +266,12 @@ function useProductFilterOptions() {
 
 const groupKeyFn = (item: ProductTreeRow) => formatCategoryLabel(item.category);
 const groupColorFn = (_key: string) => "var(--chart-neutral)";
-const PRODUCT_GROUP_CONFIG: GroupConfig<ProductTreeRow> = {
-  field: "category",
+export const PRODUCT_GROUP_CONFIG: GroupConfig<ProductTreeRow> = {
+  // Must be the server's `groupable` allowlist entry for this entity
+  // (`packages/schemas/src/entity-definitions/00-product.entity.ts`), not
+  // the row field the label is derived from — `parseGroupBy` rejects
+  // anything else. See group-config.unit.test.ts.
+  field: "categoryId",
   keyFn: groupKeyFn,
   colorFn: groupColorFn,
 };

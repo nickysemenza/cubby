@@ -104,7 +104,7 @@ describe("isBlockedRefusal", () => {
     ).toBe(true);
     // Unattributed: the older `createAppError` guards say it with the code.
     expect(
-      isBlockedRefusal(createAppError("LOCATION_HAS_CHILDREN", "blocked")),
+      isBlockedRefusal(createAppError("PROJECT_HAS_TASKS", "blocked")),
     ).toBe(true);
   });
 

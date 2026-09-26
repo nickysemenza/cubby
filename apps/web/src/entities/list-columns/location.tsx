@@ -42,7 +42,7 @@ const LOCATION_INITIAL_COLUMN_VISIBILITY = {
   ...entityListHiddenColumns("location"),
 };
 
-const LOCATION_GROUP_CONFIG: GroupConfig<LocationListItemOut> = {
+export const LOCATION_GROUP_CONFIG: GroupConfig<LocationListItemOut> = {
   field: "type",
   keyFn: (item) => item.type,
   colorFn: (key) => {

@@ -698,8 +698,8 @@ describe("financial repositories — critical invariants", () => {
    * have ever been deleted in production, so the path has never run for real.
    *
    * Deliberately a separate account from the transactions test below: reusing
-   * that one would trip `FINANCIAL_ACCOUNT_HAS_TRANSACTIONS` first and leave
-   * this policy unexercised.
+   * that one would trip the `FinancialTransaction.financialAccountId` block
+   * (`ENTITY_DELETE_BLOCKED`) first and leave this policy unexercised.
    */
   it("blocks account deletion while a live statement row still points at it", async () => {
     const acct = (
