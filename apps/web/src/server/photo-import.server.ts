@@ -1,5 +1,9 @@
 import { photoImportContract } from "~/contracts/photo-import.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import {
+  linkablePhotoGroupExpenses,
+  linkPhotoGroupExpense,
+} from "~/server/photo-import-run/expense-link";
 import { startPhotoGroupingForActor } from "~/server/photo-import-run/grouping";
 import {
   approvePhotoGroupProposals,
@@ -56,7 +60,26 @@ export const photoImportHandlers = implementOperationDomain(
         (item) => item.groupKey === input.groupKey,
       );
       if (!group) throw new Error("Photo group was not found");
-      return { candidates: await photoProductCandidates(context.db, group) };
+      const images = await listPhotoRunImages(context.db, input.runId);
+      return {
+        candidates: await photoProductCandidates(context.db, group, images),
+      };
+    },
+    linkableExpenses: async (context, input) => {
+      await assertPhotoRunReviewer(
+        context.db,
+        context.actorContext,
+        input.runId,
+      );
+      return linkablePhotoGroupExpenses(context.db, input);
+    },
+    linkExpense: async (context, input) => {
+      await assertPhotoRunReviewer(
+        context.db,
+        context.actorContext,
+        input.runId,
+      );
+      return linkPhotoGroupExpense(context.db, input, context.actorContext);
     },
     chooseExisting: async (context, input) => {
       await assertPhotoRunReviewer(

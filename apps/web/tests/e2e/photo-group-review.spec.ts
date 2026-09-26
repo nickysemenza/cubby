@@ -1,6 +1,10 @@
 import {
   seedPhotoGroupReviewRun,
   seedProductPrerequisite,
+  seedInventoryPrerequisites,
+  seedUnlinkedExpensePrerequisite,
+  seedPhotoReviewProcessingFailure,
+  seedPhotoReviewLabelText,
 } from "./e2e-fixtures";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
@@ -24,7 +28,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await gotoAuthenticatedPage(
     page,
     `/runs/${seed.runId}`,
-    page.getByRole("heading", { name: "Proposed items" }),
+    page.getByRole("heading", { name: "Photo review" }),
   );
 
   await expect(
@@ -78,10 +82,11 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     )
     .toBe(2);
 
-  const g2Card = page.locator('[data-slot="card"]').filter({
-    has: page.getByRole("heading", { name: g2Name }),
-  });
-  await expect(g2Card).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Photo item groups" })
+      .getByRole("button", { name: new RegExp(g2Name) }),
+  ).toBeVisible();
   if (recording) await page.waitForTimeout(1_500);
 
   await g1Card
@@ -113,21 +118,28 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await g1Card
     .getByRole("textbox", { name: "New product name" })
     .fill(correctedName);
-  await g1Card.getByRole("button", { name: "Approve", exact: true }).click();
-  const settledCard = page.getByRole("region", { name: "Settled groups" });
-  await expect(settledCard).toBeVisible();
+  await g1Card.getByRole("button", { name: "Approve item" }).click();
+  await expect(page.getByRole("link", { name: correctedName })).toBeVisible();
   await expect(
-    settledCard.getByRole("link", { name: correctedName }),
-  ).toBeVisible();
-  await expect(
-    settledCard.getByText("Approved", { exact: true }),
+    page
+      .getByRole("navigation", { name: "Photo item groups" })
+      .getByText("Approved", { exact: true }),
   ).toBeVisible();
   if (recording) await page.waitForTimeout(1_500);
 
   // Discard G2: nothing is left pending and the run completes.
+  await page
+    .getByRole("navigation", { name: "Photo item groups" })
+    .getByRole("button", { name: new RegExp(g2Name) })
+    .click();
+  const g2Card = page
+    .locator('[data-slot="card"]')
+    .filter({ has: page.getByRole("heading", { name: g2Name }) });
   await g2Card.getByRole("button", { name: "Discard", exact: true }).click();
   await expect(
-    settledCard.getByText("Discarded", { exact: true }),
+    page
+      .getByRole("navigation", { name: "Photo item groups" })
+      .getByText("Discarded", { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText("Every proposed group has been approved or discarded.", {
@@ -176,7 +188,7 @@ test("suggests an existing variant and previews every merge decision for a creat
   await gotoAuthenticatedPage(
     page,
     `/runs/${seed.runId}`,
-    page.getByRole("heading", { name: "Proposed items" }),
+    page.getByRole("heading", { name: "Photo review" }),
   );
   const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
     data: { runId: seed.runId, groups: seed.groups },
@@ -188,12 +200,10 @@ test("suggests an existing variant and previews every merge decision for a creat
   const group = page.locator('[data-slot="card"]').filter({
     has: page.getByRole("heading", { name: "Gray crew t-shirt — M" }),
   });
-  await expect(
-    group.getByText("Could this already be a product?"),
-  ).toBeVisible();
+  await expect(group.getByText("Product comparison")).toBeVisible();
   await expect(group.getByText(candidateName)).toBeVisible();
-  await expect(group.getByText("Gray in both titles")).toBeVisible();
-  await group.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(group.getByText("Gray in both sources")).toBeVisible();
+  await group.getByRole("button", { name: "Approve item" }).click();
   await expect(
     page.getByRole("link", { name: "Gray crew t-shirt — M" }),
   ).toBeVisible();
@@ -206,11 +216,8 @@ test("suggests an existing variant and previews every merge decision for a creat
   )?.committedProduct?.id;
   expect(createdId).toBeTruthy();
 
-  const settled = page.getByRole("region", { name: "Settled groups" });
-  await settled
-    .getByRole("button", { name: "Review possible matches" })
-    .click();
-  await settled.locator(`a[href*="candidate=${existing.id}"]`).click();
+  await page.getByText("Review possible matches", { exact: true }).click();
+  await page.locator(`a[href*="candidate=${existing.id}"]`).click();
   await expect(page).toHaveURL(/recommendations\/workbench/);
   await expect(page.getByText(candidateName).first()).toBeVisible();
   await expect(page.getByText("Variant words in Product titles")).toBeVisible();
@@ -234,4 +241,228 @@ test("suggests an existing variant and previews every merge decision for a creat
     );
   }
   expect(existing.id).not.toBe(createdId);
+});
+
+test("reviews an occupied location and links a chosen unlinked Expense after photo approval", async ({
+  page,
+  e2eRuntime,
+  baseURL,
+}) => {
+  const name = `Photo decision ${Date.now()}`;
+  const existingName = `Gray crew t-shirt M ${name}`;
+  const stock = await seedInventoryPrerequisites(page, {
+    locationName: `${name} shelf`,
+    products: [{ name: existingName, quantity: 2, unit: "each" }],
+  });
+  const expense = await seedUnlinkedExpensePrerequisite(
+    page,
+    `${existingName} purchase line`,
+  );
+  const seed = await seedPhotoGroupReviewRun(
+    page,
+    name,
+    e2eRuntime.objectStorageUrl,
+  );
+  const groups = [
+    {
+      ...seed.groups[0]!,
+      product: { kind: "existing" as const, existingId: stock.products[0]!.id },
+      inventory: {
+        locationId: stock.location.id,
+        quantity: 1,
+        ownershipMode: "inherit" as const,
+      },
+    },
+    seed.groups[1]!,
+  ];
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}`,
+    page.getByRole("heading", { name: "Photo review" }),
+  );
+  const saved = await page.request.post("/api/v1/photoImport/saveGroups", {
+    data: { runId: seed.runId, groups },
+    headers: { Origin: baseURL! },
+  });
+  expect(saved.ok(), await saved.text()).toBeTruthy();
+  const comparison = page.getByRole("region", { name: "Product comparison" });
+  await expect(comparison.getByText(existingName)).toBeVisible();
+  await expect(comparison.getByText("Counted now").first()).toBeVisible();
+  await expect(comparison.getByText("Ledger expected").first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add to existing entry" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Add to existing entry" }).click();
+  await expect(page.getByText(/Add 1 to 2 already at/)).toBeVisible();
+  for (const width of [402, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  }
+  await page.getByRole("button", { name: "Approve item" }).click();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Photo item groups" })
+      .getByText("Approved", { exact: true }),
+  ).toBeVisible();
+  const review = await page.request.get(
+    `/api/v1/photoImport/review?runId=${seed.runId}`,
+  );
+  const body = await review.json();
+  expect(
+    body.review.proposals.find(
+      (group: { groupKey: string }) => group.groupKey === "g1",
+    )?.committedInventoryId,
+  ).toBeTruthy();
+  const linkSection = page.getByRole("region", {
+    name: "Unlinked purchase lines",
+  });
+  await expect(
+    linkSection.getByText(`${existingName} purchase line`),
+  ).toBeVisible();
+  await expect(
+    linkSection.getByText(/expected quantity remains uncertain/),
+  ).toBeVisible();
+  await linkSection.getByRole("button", { name: "Link this line" }).click();
+  await expect(
+    linkSection.getByText(`${existingName} purchase line`),
+  ).toHaveCount(0);
+  const repeated = await page.request.post("/api/v1/photoImport/linkExpense", {
+    data: { runId: seed.runId, groupKey: "g1", expenseId: expense.id },
+    headers: { Origin: baseURL! },
+  });
+  expect(repeated.ok()).toBe(false);
+});
+
+test("distinguishes blocking description failure from optional cutout failure", async ({
+  page,
+  e2eRuntime,
+  baseURL,
+}) => {
+  const name = `Photo processing ${Date.now()}`;
+  const seed = await seedPhotoGroupReviewRun(
+    page,
+    name,
+    e2eRuntime.objectStorageUrl,
+  );
+  await seedPhotoReviewProcessingFailure(
+    seed.itemImage.shortcode,
+    "describe_image",
+    "Synthetic description failure",
+  );
+  await seedPhotoReviewProcessingFailure(
+    seed.soloImage.shortcode,
+    "subject_lift",
+    "Synthetic cutout failure",
+  );
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}`,
+    page.getByRole("heading", { name: "Photo review" }),
+  );
+  const saved = await page.request.post("/api/v1/photoImport/saveGroups", {
+    data: { runId: seed.runId, groups: seed.groups },
+    headers: { Origin: baseURL! },
+  });
+  expect(saved.ok(), await saved.text()).toBeTruthy();
+  await expect(
+    page.getByText(/Description failed: Synthetic description failure/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Approve item" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("link", { name: "Open photo to retry" }),
+  ).toHaveAttribute("href", new RegExp(seed.itemImage.shortcode));
+  await page
+    .getByRole("navigation", { name: "Photo item groups" })
+    .getByRole("button", { name: new RegExp(`${name} solo find`) })
+    .click();
+  await expect(
+    page.getByText(/Optional cutout failed: Synthetic cutout failure/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Approve item" }),
+  ).toBeEnabled();
+});
+
+test("shows an exact label identifier and a conflicting numeric boot size", async ({
+  page,
+  e2eRuntime,
+  baseURL,
+}) => {
+  const name = `Boot label ${Date.now()}`;
+  const wrongSize = await seedProductPrerequisite(page, {
+    name: "ForgeWear work boots tan size 9",
+    manufacturer: "ForgeWear",
+    externalIds: [
+      {
+        source: "synthetic-vendor",
+        kind: "retailer_sku",
+        externalId: "FW-7744",
+      },
+    ],
+  });
+  await seedProductPrerequisite(page, {
+    name: "ForgeWear work boots tan size 7",
+    manufacturer: "ForgeWear",
+  });
+  const seed = await seedPhotoGroupReviewRun(
+    page,
+    name,
+    e2eRuntime.objectStorageUrl,
+  );
+  await seedPhotoReviewLabelText(
+    seed.labelImage.shortcode,
+    "SKU FW-7744 · US 7",
+  );
+  const groups = [
+    { ...seed.groups[0]!, skip: [] },
+    {
+      ...seed.groups[1]!,
+      images: [
+        { id: seed.soloImage.shortcode, purpose: "item" as const },
+        { id: seed.labelImage.shortcode, purpose: "label" as const },
+      ],
+      product: {
+        kind: "create" as const,
+        create: {
+          name: "ForgeWear work boots tan size 7",
+          manufacturer: "ForgeWear",
+        },
+      },
+    },
+  ];
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}`,
+    page.getByRole("heading", { name: "Photo review" }),
+  );
+  const saved = await page.request.post("/api/v1/photoImport/saveGroups", {
+    data: { runId: seed.runId, groups },
+    headers: { Origin: baseURL! },
+  });
+  expect(saved.ok(), await saved.text()).toBeTruthy();
+  await page
+    .getByRole("navigation", { name: "Photo item groups" })
+    .getByRole("button", { name: /ForgeWear work boots tan size 7/ })
+    .click();
+  await expect(page.getByText(/OCR: SKU FW-7744/)).toBeVisible();
+  const comparison = page.getByRole("region", { name: "Product comparison" });
+  await expect(
+    comparison.getByText("Exact label identifier: FW-7744"),
+  ).toBeVisible();
+  const wrongRow = comparison
+    .getByRole("article")
+    .filter({ hasText: "ForgeWear work boots tan size 9" });
+  await expect(
+    wrongRow.getByText(/Proposal: US 7; Product: US 9 — check evidence/),
+  ).toBeVisible();
+  await expect(
+    wrongRow.getByRole("button", { name: "Use product" }),
+  ).toBeVisible();
+  expect(wrongSize.id).toBeTruthy();
 });

@@ -27,6 +27,8 @@ export const run = defineOperationDomain(runContract, {
 export const photoImport = defineOperationDomain(photoImportContract, {
   review: RUN_TAGS,
   candidates: { tags: [["photoImport", "candidates"]] },
+  linkableExpenses: RUN_TAGS,
+  linkExpense: RUN_WRITE,
   startGrouping: RUN_WRITE,
   saveGroups: RUN_WRITE,
   approveGroups: RUN_WRITE,

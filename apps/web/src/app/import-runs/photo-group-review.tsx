@@ -357,52 +357,112 @@ function GroupPhotos({
     ),
   ]);
   return (
-    <PhotoGrid
-      images={[...entries.keys()].flatMap((id) =>
-        photoTile(imagesById.get(id)),
-      )}
-      renderOverlay={(tile) => {
-        const { purpose = null, reason } = entries.get(tile.id) ?? {};
-        return (
-          <>
-            {purpose === null ? (
-              <div
-                className="absolute inset-0 bg-background/50"
-                title={reason}
-              />
-            ) : null}
-            <Badge
-              variant={
-                purpose === "item"
-                  ? "default"
-                  : purpose === "label"
-                    ? "outline"
-                    : "secondary"
-              }
-              className="absolute bottom-1 left-1 bg-card"
-            >
-              {purpose === "item"
-                ? "Item"
-                : purpose === "label"
-                  ? "Label"
-                  : "Skipped"}
-            </Badge>
-            {editable ? (
-              <div className="absolute top-1 right-1">
-                <ImageMenu
-                  imageId={tile.id}
-                  groupKey={proposal.groupKey}
-                  purpose={purpose}
-                  proposals={proposals}
-                  save={save}
-                  disabled={busy}
+    <div className="min-w-0 space-y-2">
+      <PhotoGrid
+        className="grid-cols-2 sm:grid-cols-2 md:grid-cols-2"
+        images={[...entries.keys()].flatMap((id) =>
+          photoTile(imagesById.get(id)),
+        )}
+        renderOverlay={(tile) => {
+          const { purpose = null, reason } = entries.get(tile.id) ?? {};
+          return (
+            <>
+              {purpose === null ? (
+                <div
+                  className="absolute inset-0 bg-background/50"
+                  title={reason}
                 />
-              </div>
-            ) : null}
-          </>
-        );
-      }}
-    />
+              ) : null}
+              <Badge
+                variant={
+                  purpose === "item"
+                    ? "default"
+                    : purpose === "label"
+                      ? "outline"
+                      : "secondary"
+                }
+                className="absolute bottom-1 left-1 bg-card"
+              >
+                {purpose === "item"
+                  ? "Item"
+                  : purpose === "label"
+                    ? "Label"
+                    : "Skipped"}
+              </Badge>
+              {editable ? (
+                <div className="absolute top-1 right-1">
+                  <ImageMenu
+                    imageId={tile.id}
+                    groupKey={proposal.groupKey}
+                    purpose={purpose}
+                    proposals={proposals}
+                    save={save}
+                    disabled={busy}
+                  />
+                </div>
+              ) : null}
+            </>
+          );
+        }}
+      />
+      <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
+        {[...entries].map(([id, role]) => {
+          const photo = imagesById.get(id);
+          if (!photo) return null;
+          return (
+            <div
+              key={id}
+              className="min-w-0 border-t border-border pt-2 text-xs"
+            >
+              <p className="font-medium">
+                {role.purpose === "label"
+                  ? "Label photo"
+                  : role.purpose === "item"
+                    ? "Item photo"
+                    : "Skipped photo"}{" "}
+                · original upload
+              </p>
+              {photo.description && (
+                <p className="mt-1 text-muted-foreground">
+                  <span className="text-foreground">Description:</span>{" "}
+                  {photo.description}
+                </p>
+              )}
+              {photo.recognizedText && (
+                <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                  <span className="text-foreground">OCR:</span>{" "}
+                  {photo.recognizedText}
+                </p>
+              )}
+              {photo.describe === "failed" && (
+                <p className="mt-1 text-destructive">
+                  Description failed:{" "}
+                  {photo.describeReason || "No reason available"}.{" "}
+                  <a
+                    className="underline"
+                    href={`/images/${encodeURIComponent(id)}`}
+                  >
+                    Open photo to retry
+                  </a>
+                </p>
+              )}
+              {photo.cutout === "failed" && (
+                <p className="mt-1 text-muted-foreground">
+                  Optional cutout failed:{" "}
+                  {photo.cutoutReason || "No reason available"}.{" "}
+                  <a
+                    className="underline"
+                    href={`/images/${encodeURIComponent(id)}`}
+                  >
+                    Open photo to retry
+                  </a>
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -500,6 +560,12 @@ function ProductPanel({
           </Button>
         ) : null}
       </Row>
+      <PhotoProductSuggestions
+        runId={runId}
+        proposal={proposal}
+        onPick={attachExisting}
+        busy={busy}
+      />
       {product.kind === "existing" ? (
         product.existing ? (
           <Row gap="sm" align="center" className="min-w-0">
@@ -529,12 +595,6 @@ function ProductPanel({
         )
       ) : (
         <Stack gap="sm">
-          <PhotoProductSuggestions
-            runId={runId}
-            proposal={proposal}
-            onPick={attachExisting}
-            busy={busy}
-          />
           <CommitInput
             label="New product name"
             value={product.create.name}
@@ -646,7 +706,12 @@ function ProductPanel({
         </Stack>
       ) : null}
 
-      <InventoryFields proposal={proposal} save={saveGroup} busy={busy} />
+      <InventoryFields
+        runId={runId}
+        proposal={proposal}
+        save={saveGroup}
+        busy={busy}
+      />
 
       {proposal.evidence ? (
         <details className="border-t border-border pt-2 text-xs text-muted-foreground">
@@ -695,168 +760,400 @@ function PhotoProductSuggestions({
     );
   if (!suggestions.data.candidates.length) return null;
   return (
-    <div className="min-w-0 rounded-md border border-border bg-muted/30 p-2">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <p className="text-xs font-semibold">
-          {settled
-            ? "Possible product matches"
-            : "Could this already be a product?"}
-        </p>
-        <Badge variant="outline">Database search</Badge>
+    <section
+      className="min-w-0 border-t border-border pt-3"
+      aria-label="Product comparison"
+    >
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <h4 className="text-sm font-semibold">Product comparison</h4>
+        <span className="text-2xs text-muted-foreground">
+          {suggestions.data.candidates.length} ranked results · heuristic
+          scores, not probabilities
+        </span>
       </div>
-      <p className="mb-2 text-2xs text-muted-foreground">
-        Shared product names and brand rank these results. Purchase and photo
-        history also affect their order; Jev and frontier AI did not select
-        them.
-      </p>
-      <div className="space-y-1">
-        {suggestions.data.candidates.slice(0, 3).map((candidate) => (
-          <div
-            key={candidate.id}
-            className="flex min-w-0 items-center gap-2 rounded-sm bg-card p-1.5"
-          >
-            <Image
-              src={candidate.coverUrl ?? undefined}
-              alt={candidate.name}
-              displayWidth={44}
-              className="size-11 shrink-0 rounded-sm border border-border object-cover"
-            />
-            <div className="min-w-0 flex-1">
-              <p
-                className="truncate text-xs font-medium"
-                title={candidate.name}
-              >
-                {candidate.name}
-              </p>
-              <p className="text-2xs text-muted-foreground">
-                {candidate.match.brandMatches ? "Brand name matches · " : ""}
-                Shared name:{" "}
-                {candidate.match.sharedNameTerms.slice(0, 5).join(", ")}
-                {candidate.match.sharedNameTerms.length > 5
-                  ? ` +${candidate.match.sharedNameTerms.length - 5} more`
-                  : ""}
-              </p>
-              <p className="text-2xs text-muted-foreground">
-                {[
-                  candidate.hasPurchase ? "Purchase linked" : null,
-                  !candidate.hasOwnPhoto ? "No own photo" : null,
-                  !candidate.hasPhotoImport ? "No prior photo import" : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ") || "Compare details"}
-              </p>
-              <ProductVariantEvidence
-                comparison={candidate.match.variant}
-                firstLabel="Proposal"
-                secondLabel="Product"
-              />
-            </div>
-            {settled && proposal.committedProduct ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="min-h-11 shrink-0"
-                render={
-                  <Link
-                    to="/recommendations/workbench"
-                    search={{
-                      kind: "product-match",
-                      source: proposal.committedProduct.id,
-                      candidate: candidate.id,
-                    }}
-                  />
-                }
-              >
-                Review match
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                className="min-h-11 shrink-0"
-                disabled={busy}
-                onClick={() => onPick?.(candidate.id)}
-              >
-                Use product
-              </Button>
-            )}
-          </div>
-        ))}
+      <div className="divide-y divide-border border-y border-border">
+        {/* eslint-disable-next-line complexity -- Each evidence state stays next to its candidate in the comparison row. */}
+        {suggestions.data.candidates.map((candidate, index) => {
+          const q = candidate.quantity;
+          const ledger = q?.quantityLedger;
+          return (
+            <article
+              key={candidate.id}
+              className="grid min-w-0 gap-3 py-3 xl:grid-cols-[minmax(0,1fr)_minmax(17rem,0.85fr)]"
+            >
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-start gap-3">
+                  <figure className="shrink-0 text-center">
+                    <Image
+                      src={candidate.coverUrl ?? undefined}
+                      alt={candidate.name}
+                      displayWidth={72}
+                      className="size-18 rounded-md border border-border object-cover"
+                    />
+                    <figcaption className="text-2xs text-muted-foreground">
+                      Product cover
+                    </figcaption>
+                  </figure>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <p className="text-sm font-semibold break-words">
+                        {index + 1}.{" "}
+                        <EntityInlineLink
+                          entity="product"
+                          data={{ id: candidate.id, name: candidate.name }}
+                          displayImage={null}
+                        />
+                      </p>
+                      <span className="font-mono text-xs text-muted-foreground tabular-nums">
+                        Score {candidate.match.score ?? "—"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-2xs text-muted-foreground">
+                      {candidate.match.factors
+                        ?.map(
+                          (factor) =>
+                            `${factor.label} ${factor.points > 0 ? "+" : ""}${factor.points}`,
+                        )
+                        .join(" · ") || "Name and brand heuristic"}
+                    </p>
+                    <p className="mt-1 text-2xs text-muted-foreground">
+                      Shared terms:{" "}
+                      {candidate.match.sharedNameTerms.join(", ") || "none"} ·{" "}
+                      {candidate.match.brandMatches
+                        ? "Brand matches"
+                        : "Brand unverified"}
+                    </p>
+                    <p className="mt-1 text-2xs text-muted-foreground">
+                      {candidate.hasPurchase
+                        ? "Purchase relation found"
+                        : "No purchase relation"}{" "}
+                      ·{" "}
+                      {candidate.hasOwnPhoto
+                        ? "Own photo found"
+                        : "No own photo"}{" "}
+                      ·{" "}
+                      {candidate.hasPhotoImport
+                        ? "Prior photo import"
+                        : "No prior photo import"}
+                    </p>
+                    {candidate.match.matchedIdentifiers?.length ? (
+                      <p className="mt-1 text-2xs font-medium">
+                        Exact label identifier:{" "}
+                        {candidate.match.matchedIdentifiers.join(", ")}
+                      </p>
+                    ) : null}
+                    <ProductVariantEvidence
+                      comparison={candidate.match.variant}
+                      firstLabel="Proposal"
+                      secondLabel="Product"
+                    />
+                    {candidate.variantEvidence?.length ? (
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-2xs text-muted-foreground">
+                        {candidate.variantEvidence.map((fact) => (
+                          <span
+                            key={`${fact.source}-${fact.dimension}-${fact.value}-${fact.raw}`}
+                          >
+                            <b className="text-foreground">
+                              {fact.dimension} {fact.value}
+                            </b>{" "}
+                            · “{fact.raw}” · {fact.source.replaceAll("_", " ")}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-2xs text-muted-foreground">
+                        Size and color unknown in available text.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
+                  <div className="flex flex-wrap gap-1">
+                    {candidate.ownPhotos?.map((photo) => (
+                      <figure key={photo.id} className="text-center">
+                        <Image
+                          src={photo.url}
+                          alt="Existing own photo"
+                          displayWidth={48}
+                          className="size-12 rounded-sm border border-border object-cover"
+                        />
+                        <figcaption className="text-2xs text-muted-foreground">
+                          Own photo
+                        </figcaption>
+                      </figure>
+                    ))}
+                    {!candidate.ownPhotos?.length && (
+                      <span className="text-2xs text-muted-foreground">
+                        No own photo ·{" "}
+                        {candidate.hasPhotoImport
+                          ? "Prior photo import"
+                          : "No prior photo import"}
+                      </span>
+                    )}
+                  </div>
+                  {settled && proposal.committedProduct ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      render={
+                        <Link
+                          to="/recommendations/workbench"
+                          search={{
+                            kind: "product-match",
+                            source: proposal.committedProduct.id,
+                            candidate: candidate.id,
+                          }}
+                        />
+                      }
+                    >
+                      Review match
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => onPick?.(candidate.id)}
+                    >
+                      Use product
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="min-w-0 text-xs">
+                <div className="grid grid-cols-3 gap-x-2 border-b border-border pb-2 tabular-nums">
+                  <div>
+                    <span className="block text-muted-foreground">
+                      Counted now
+                    </span>
+                    <b>{q?.onHandUnits == null ? "No count" : q.onHandUnits}</b>
+                  </div>
+                  <div>
+                    <span className="block text-muted-foreground">
+                      Ledger expected
+                    </span>
+                    <b>{ledger?.expectedQuantity ?? 0}</b>
+                  </div>
+                  <div>
+                    <span className="block text-muted-foreground">
+                      Variance
+                    </span>
+                    <b>
+                      {q?.quantityVariance == null ? "—" : q.quantityVariance}
+                    </b>
+                  </div>
+                </div>
+                <p className="py-1 text-2xs text-muted-foreground">
+                  Acquired {ledger?.acquiredUnits ?? 0} · Exited{" "}
+                  {ledger?.exitedUnits ?? 0} · Unknown quantity{" "}
+                  {(ledger?.unknownAcquisitionLines ?? 0) +
+                    (ledger?.unknownExitLines ?? 0)}{" "}
+                  lines
+                </p>
+                {candidate.inventoryEntries?.length ? (
+                  <p className="text-2xs">
+                    Locations:{" "}
+                    {candidate.inventoryEntries
+                      .map(
+                        (entry) =>
+                          `${entry.location.name} (${entry.amount.value} ${entry.amount.unit})`,
+                      )
+                      .join(" · ")}
+                  </p>
+                ) : (
+                  <p className="text-2xs text-muted-foreground">
+                    No Inventory location
+                  </p>
+                )}
+                <div className="mt-2 max-h-36 overflow-auto border-t border-border pt-1">
+                  {(candidate.purchaseLineCount ?? 0) >
+                  (candidate.purchaseLines?.length ?? 0) ? (
+                    <p className="text-2xs text-muted-foreground">
+                      Showing {candidate.purchaseLines?.length ?? 0} of{" "}
+                      {candidate.purchaseLineCount} recent ledger lines
+                    </p>
+                  ) : null}
+                  {candidate.purchaseLines?.length ? (
+                    candidate.purchaseLines.map((line) => (
+                      <p key={line.expenseId} className="py-0.5 text-2xs">
+                        <EntityInlineLink
+                          entity="expense"
+                          data={{ id: line.expenseId, name: line.name }}
+                          displayImage={null}
+                        />{" "}
+                        · {line.date ?? "Undated"} ·{" "}
+                        {line.cost == null
+                          ? "Cost unknown"
+                          : `$${line.cost.toFixed(2)}`}{" "}
+                        ·{" "}
+                        {line.productQuantity == null
+                          ? "Quantity unknown"
+                          : `${line.productQuantity} units`}{" "}
+                        · {line.movement}
+                        {line.purchaseId ? (
+                          <>
+                            {" "}
+                            ·{" "}
+                            <Link
+                              to="/purchases/$shortcode"
+                              params={{ shortcode: line.purchaseId }}
+                              className="underline"
+                            >
+                              {line.purchaseLabel || "Purchase"}
+                            </Link>
+                          </>
+                        ) : null}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-2xs text-muted-foreground">
+                      No linked purchase or refund lines
+                    </p>
+                  )}
+                </div>
+                <p className="mt-1 text-2xs text-muted-foreground">
+                  A return changes the ledger count when units are known; it
+                  does not establish whether this photographed item is present.
+                </p>
+              </div>
+            </article>
+          );
+        })}
       </div>
-      {!settled && (
-        <p className="mt-2 text-2xs text-muted-foreground">
-          Compare the exact size and color before approval.
-        </p>
-      )}
-    </div>
+    </section>
   );
 }
 
+// eslint-disable-next-line complexity -- Inventory selection previews create and add paths in one review form.
 function InventoryFields({
+  runId,
   proposal,
   save,
   busy,
 }: {
+  runId: string;
   proposal: PhotoGroupProposal;
   save: SaveGroup;
   busy: boolean;
 }) {
   const inventory = proposal.inventory;
   const quantity = inventory?.quantity ?? 1;
+  const candidates = useQuery(
+    photoImport.candidates.queryOptions({ runId, groupKey: proposal.groupKey }),
+  );
+  const chosenProductId =
+    proposal.product.kind === "existing" ? proposal.product.existing?.id : null;
+  const chosen = candidates.data?.candidates.find(
+    (candidate) => candidate.id === chosenProductId,
+  );
+  const occupied = chosen?.inventoryEntries?.find(
+    (entry) =>
+      entry.location.id === inventory?.locationId &&
+      entry.placement === "stock" &&
+      entry.amount.unit === "each",
+  );
   const selected =
     inventory?.locationId && inventory.locationName
       ? { id: inventory.locationId, name: inventory.locationName }
       : null;
   return (
-    <Row gap="sm" align="end" className="min-w-0">
-      <div className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
-        <span className="text-muted-foreground">Receive into</span>
-        <EntityReferencePicker
-          entity="location"
-          label="location"
-          value={selected}
-          setValue={(item) =>
-            save(() =>
-              toGroupInput(proposal, {
-                inventory: item
-                  ? {
-                      ownershipMode: inventory?.ownershipMode,
-                      ownerPartyId: inventory?.ownerPartyId,
-                      locationId: item.id,
-                      quantity,
-                    }
-                  : undefined,
-              }),
-            )
-          }
-          disabled={busy}
-          placeholder="No inventory entry"
-          clearable
-        />
-      </div>
+    <div className="border-t border-border pt-3">
+      <h4 className="mb-2 text-sm font-semibold">Inventory decision</h4>
+      <Row gap="sm" align="end" className="min-w-0">
+        <div className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
+          <span className="text-muted-foreground">Receive into</span>
+          <EntityReferencePicker
+            entity="location"
+            label="location"
+            value={selected}
+            setValue={(item) =>
+              save(() =>
+                toGroupInput(proposal, {
+                  inventory: item
+                    ? {
+                        ownershipMode: inventory?.ownershipMode,
+                        ownerPartyId: inventory?.ownerPartyId,
+                        locationId: item.id,
+                        quantity,
+                        mode: "create",
+                        existingEntryId: undefined,
+                      }
+                    : undefined,
+                }),
+              )
+            }
+            disabled={busy}
+            placeholder="No inventory entry"
+            clearable
+          />
+        </div>
+        {inventory?.locationId ? (
+          <CommitInput
+            label="Qty"
+            type="number"
+            className="w-20"
+            value={String(quantity)}
+            disabled={busy}
+            onCommit={(next) => {
+              const parsed = Number.parseInt(next, 10);
+              if (Number.isInteger(parsed) && parsed > 0)
+                save(() => {
+                  const input = toGroupInput(proposal);
+                  return input.inventory
+                    ? {
+                        ...input,
+                        inventory: { ...input.inventory, quantity: parsed },
+                      }
+                    : input;
+                });
+            }}
+          />
+        ) : null}
+      </Row>
       {inventory?.locationId ? (
-        <CommitInput
-          label="Qty"
-          type="number"
-          className="w-20"
-          value={String(quantity)}
-          disabled={busy}
-          onCommit={(next) => {
-            const parsed = Number.parseInt(next, 10);
-            if (Number.isInteger(parsed) && parsed > 0)
-              save(() => {
-                const input = toGroupInput(proposal);
-                return input.inventory
-                  ? {
-                      ...input,
-                      inventory: { ...input.inventory, quantity: parsed },
-                    }
-                  : input;
-              });
-          }}
-        />
+        <p className="mt-2 text-xs text-muted-foreground">
+          {inventory.mode === "add" && occupied
+            ? `Add ${quantity} to ${occupied.amount.value} already at ${inventory.locationName}: ${occupied.amount.value + quantity} after approval.`
+            : `Create a count of ${quantity} at ${inventory.locationName}.`}
+        </p>
+      ) : (
+        <p className="mt-2 text-xs text-muted-foreground">
+          No location selected: approval attaches photos only, with no
+          possession or Inventory claim.
+        </p>
+      )}
+      {occupied && inventory?.locationId ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant={inventory.mode === "add" ? "default" : "outline"}
+            disabled={busy}
+            onClick={() =>
+              save(() =>
+                toGroupInput(proposal, {
+                  inventory: {
+                    locationId: inventory.locationId!,
+                    quantity,
+                    ownershipMode: inventory.ownershipMode,
+                    ownerPartyId: inventory.ownerPartyId,
+                    mode: "add",
+                    existingEntryId: occupied.id,
+                  },
+                }),
+              )
+            }
+          >
+            Add to existing entry
+          </Button>
+          {inventory.mode !== "add" && (
+            <span className="self-center text-xs text-warning">
+              This location already has an entry. Choose how to receive it
+              before approval.
+            </span>
+          )}
+        </div>
       ) : null}
-    </Row>
+    </div>
   );
 }
 
@@ -978,39 +1275,21 @@ function ProposalCard({
               <TrashIcon />
               Discard
             </Button>
-            <Button
-              size="sm"
-              className="min-h-11 flex-1 sm:min-h-0 sm:flex-none"
-              disabled={
-                working ||
-                stale ||
-                descriptionsPending.length > 0 ||
-                (proposal.product.kind === "existing" &&
-                  !proposal.product.existing)
-              }
-              onClick={() =>
-                action.mutate({
-                  action: "approve",
-                  groupKeys: [proposal.groupKey],
-                })
-              }
-            >
-              <CheckIcon />
-              Approve
-            </Button>
           </Row>
         </Row>
       </CardHeader>
       <CardContent>
-        <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)]">
-          <GroupPhotos
-            proposal={proposal}
-            proposals={proposals}
-            imagesById={imagesById}
-            save={save}
-            editable
-            busy={working}
-          />
+        <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
+          <div className="min-w-0 xl:sticky xl:top-20">
+            <GroupPhotos
+              proposal={proposal}
+              proposals={proposals}
+              imagesById={imagesById}
+              save={save}
+              editable
+              busy={working}
+            />
+          </div>
           <ProductPanel
             runId={runId}
             proposal={proposal}
@@ -1045,93 +1324,40 @@ function ProposalCard({
             Last approval failed: {proposal.lastError}
           </StatusText>
         ) : null}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+          <p className="max-w-2xl text-xs text-muted-foreground">
+            Approve {proposal.images.length} photo
+            {proposal.images.length === 1 ? "" : "s"} (
+            {proposal.images.map((image) => image.purpose).join(", ")}) for{" "}
+            <strong className="text-foreground">
+              {proposalName(proposal)}
+            </strong>
+            .{" "}
+            {proposal.inventory?.locationId
+              ? `${proposal.inventory.mode === "add" ? "Add" : "Receive"} ${proposal.inventory.quantity} at ${proposal.inventory.locationName}.`
+              : "No Inventory entry or possession claim."}
+          </p>
+          <Button
+            disabled={
+              working ||
+              stale ||
+              descriptionsPending.length > 0 ||
+              (proposal.product.kind === "existing" &&
+                !proposal.product.existing)
+            }
+            onClick={() =>
+              action.mutate({
+                action: "approve",
+                groupKeys: [proposal.groupKey],
+              })
+            }
+          >
+            <CheckIcon />
+            Approve item
+          </Button>
+        </div>
       </CardContent>
     </Card>
-  );
-}
-
-function SettledRow({
-  runId,
-  proposal,
-  imagesById,
-}: {
-  runId: string;
-  proposal: PhotoGroupProposal;
-  imagesById: ImagesById;
-}) {
-  const committed = proposal.committedProduct;
-  const [showMatches, setShowMatches] = useState(false);
-  return (
-    <>
-      <TableRow>
-        <TableCell>
-          <Row gap="xs">
-            {[...proposal.images, ...proposal.skip].slice(0, 6).map((entry) => (
-              <PhotoThumb
-                key={entry.id}
-                image={imagesById.get(entry.id)}
-                size={32}
-                dimmed={proposal.state === "discarded"}
-              />
-            ))}
-          </Row>
-        </TableCell>
-        <TableCell className="max-w-72">
-          {committed ? (
-            <Stack gap="xs" className="min-w-0">
-              <EntityInlineLink
-                entity="product"
-                data={{ id: committed.id, name: committed.name }}
-                displayImage={null}
-                truncate
-                className="min-w-0 text-xs"
-              />
-              {proposal.product.kind === "create" && (
-                <>
-                  <Button
-                    size="sm"
-                    variant="link"
-                    className="h-auto w-fit p-0 text-xs"
-                    onClick={() => setShowMatches((value) => !value)}
-                  >
-                    {showMatches
-                      ? "Hide possible matches"
-                      : "Review possible matches"}
-                  </Button>
-                </>
-              )}
-            </Stack>
-          ) : (
-            <span className="text-xs text-muted-foreground">
-              {proposal.state === "discarded"
-                ? "Photos skipped"
-                : proposalName(proposal)}
-            </span>
-          )}
-        </TableCell>
-        <TableCell>
-          <Badge
-            variant={proposal.state === "committed" ? "positive" : "secondary"}
-          >
-            {proposal.state === "committed" ? "Approved" : "Discarded"}
-          </Badge>
-        </TableCell>
-        <TableCell className="font-mono text-2xs text-muted-foreground">
-          {proposal.groupKey}
-        </TableCell>
-      </TableRow>
-      {showMatches && (
-        <TableRow>
-          <TableCell colSpan={4}>
-            <PhotoProductSuggestions
-              runId={runId}
-              proposal={proposal}
-              settled
-            />
-          </TableCell>
-        </TableRow>
-      )}
-    </>
   );
 }
 
@@ -1393,11 +1619,129 @@ function PhotoTable({
   );
 }
 
+function ExpenseLinkReview({
+  runId,
+  proposal,
+}: {
+  runId: string;
+  proposal: PhotoGroupProposal;
+}) {
+  const [search, setSearch] = useState("");
+  const queryClient = useQueryClient();
+  const lines = useQuery(
+    photoImport.linkableExpenses.queryOptions({
+      runId,
+      groupKey: proposal.groupKey,
+      search,
+    }),
+  );
+  const link = useMutation({
+    ...photoImport.linkExpense.mutationOptions(),
+    onSuccess: () => {
+      toast.success("Expense line linked to Product");
+      void invalidateOperationTags(queryClient, ripple.runOnly);
+    },
+    onError: (error) => showErrorToast(error),
+  });
+  return (
+    <section
+      className="mt-4 border-t border-border pt-3"
+      aria-label="Unlinked purchase lines"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h4 className="text-sm font-semibold">
+          Missing Expense → Product link
+        </h4>
+        <span className="text-2xs text-muted-foreground">
+          Separate from photo approval · cost and quantity stay unchanged
+        </span>
+      </div>
+      <Input
+        aria-label="Search unlinked purchase lines"
+        placeholder="Search unlinked purchase lines"
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        className="mt-2 max-w-md"
+      />
+      {lines.isPending ? (
+        <StatusText tone="muted">Searching eligible lines…</StatusText>
+      ) : lines.isError ? (
+        <StatusText tone="destructive">{lines.error.message}</StatusText>
+      ) : lines.data.lines.length ? (
+        <div className="mt-2 divide-y divide-border border-y border-border">
+          {lines.data.lines.map((line) => (
+            <div
+              key={line.expenseId}
+              className="flex flex-wrap items-center justify-between gap-2 py-2 text-xs"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">
+                  <EntityInlineLink
+                    entity="expense"
+                    data={{ id: line.expenseId, name: line.name }}
+                    displayImage={null}
+                  />
+                </p>
+                <p className="text-muted-foreground">
+                  {line.date ?? "Undated"} ·{" "}
+                  {line.cost == null
+                    ? "Cost unknown"
+                    : `$${line.cost.toFixed(2)}`}{" "}
+                  ·{" "}
+                  {line.productQuantity == null
+                    ? "Quantity unknown"
+                    : `${line.productQuantity} units`}{" "}
+                  · expected quantity{" "}
+                  {line.expectedQuantityDelta == null
+                    ? "remains uncertain"
+                    : `${line.expectedQuantityDelta > 0 ? "+" : ""}${line.expectedQuantityDelta}`}
+                  {line.purchaseId ? (
+                    <>
+                      {" "}
+                      ·{" "}
+                      <Link
+                        to="/purchases/$shortcode"
+                        params={{ shortcode: line.purchaseId }}
+                        className="underline"
+                      >
+                        {line.purchaseLabel || "Purchase"}
+                      </Link>
+                    </>
+                  ) : null}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={link.isPending}
+                onClick={() =>
+                  link.mutate({
+                    runId,
+                    groupKey: proposal.groupKey,
+                    expenseId: line.expenseId,
+                  })
+                }
+              >
+                Link this line
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-muted-foreground">
+          No eligible unlinked lines found. Search by a name or label phrase.
+        </p>
+      )}
+    </section>
+  );
+}
+
 /**
  * The reviewer's workbench for a photo-inventory run: the agent's proposed
  * item groups (edit, approve, discard), photos no group claims yet, settled
  * groups, and every photo's processing state.
  */
+// eslint-disable-next-line complexity -- The workbench owns the selected group and its distinct review states.
 export function PhotoGroupReview({
   runId,
   runStatus,
@@ -1405,7 +1749,16 @@ export function PhotoGroupReview({
   runId: string;
   runStatus: string;
 }) {
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const query = usePhotoRunReview(runId, runStatus);
+  useEffect(() => {
+    if (selectedKey) return;
+    const first =
+      query.data?.review.proposals.find(
+        (proposal) => proposal.state === "proposed",
+      ) ?? query.data?.review.proposals[0];
+    if (first) setSelectedKey(first.groupKey);
+  }, [selectedKey, query.data]);
   const action = useReviewAction(runId);
   const save: Save = (build) => {
     let edit: ProposalEdit;
@@ -1446,34 +1799,17 @@ export function PhotoGroupReview({
         labelImages.add(entry.id);
     }
   const busy = action.isPending;
-  const hasStaleGroups = proposed.some((proposal) =>
-    isStaleGroup(proposal, imagesById, review.runStatus),
-  );
-  const hasPendingDescriptions = proposed.some(
-    (proposal) => awaitingDescriptions(proposal, imagesById).length > 0,
-  );
+  const selected =
+    review.proposals.find((proposal) => proposal.groupKey === selectedKey) ??
+    proposed[0] ??
+    settled[0];
 
   return (
     <Stack gap="lg">
       <Section
-        title="Proposed items"
+        title="Photo review"
         description={`${proposed.length} to review · ${settled.length} settled · ${review.unassignedImageIds.length} photos not in a group`}
       >
-        <Row align="center" justify="end" wrap gap="sm">
-          <Button
-            className="min-h-11 w-full sm:w-auto"
-            disabled={
-              busy ||
-              proposed.length === 0 ||
-              hasStaleGroups ||
-              hasPendingDescriptions
-            }
-            onClick={() => action.mutate({ action: "approve" })}
-          >
-            <CheckIcon />
-            Approve all {proposed.length ? `(${proposed.length})` : ""}
-          </Button>
-        </Row>
         {proposed.length === 0 ? (
           settled.length ? (
             <StatusText tone="muted">
@@ -1493,20 +1829,147 @@ export function PhotoGroupReview({
           )
         ) : null}
       </Section>
-
-      {proposed.map((proposal) => (
-        <ProposalCard
-          key={proposal.groupKey}
-          runId={runId}
-          runStatus={review.runStatus}
-          proposal={proposal}
-          proposals={review.proposals}
-          imagesById={imagesById}
-          busy={busy}
-          save={save}
-          action={action}
-        />
-      ))}
+      {selected ? (
+        <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(12rem,15rem)_minmax(0,1fr)]">
+          <nav
+            aria-label="Photo item groups"
+            className="min-w-0 border-y border-border lg:sticky lg:top-16 lg:max-h-[calc(100vh-5rem)] lg:overflow-auto"
+          >
+            {review.proposals.map((proposal) => (
+              <button
+                key={proposal.groupKey}
+                type="button"
+                onClick={() => setSelectedKey(proposal.groupKey)}
+                aria-current={
+                  selected.groupKey === proposal.groupKey ? "true" : undefined
+                }
+                className={`flex w-full min-w-0 items-center gap-2 border-b border-border px-2 py-2 text-left hover:bg-muted/50 ${selected.groupKey === proposal.groupKey ? "bg-muted/70" : ""}`}
+              >
+                <PhotoThumb
+                  image={
+                    proposal.images[0]
+                      ? imagesById.get(proposal.images[0].id)
+                      : proposal.skip[0]
+                        ? imagesById.get(proposal.skip[0].id)
+                        : undefined
+                  }
+                  size={40}
+                  dimmed={proposal.state === "discarded"}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-medium">
+                    {proposalName(proposal)}
+                  </span>
+                  <span className="block text-2xs text-muted-foreground">
+                    {proposal.images
+                      .map((entry) => entry.purpose)
+                      .join(" + ") || "No attached photos"}
+                    {proposal.skip.length
+                      ? ` · ${proposal.skip.length} skipped`
+                      : ""}
+                    {proposal.committedInventoryId
+                      ? ` · ${proposal.committedInventoryId}`
+                      : ""}
+                    {proposal.state === "committed"
+                      ? " · Check Expense links"
+                      : ""}
+                  </span>
+                </span>
+                <Badge
+                  variant={
+                    proposal.state === "committed"
+                      ? "positive"
+                      : proposal.state === "proposed"
+                        ? "default"
+                        : "secondary"
+                  }
+                >
+                  {proposal.state === "proposed"
+                    ? "Review"
+                    : proposal.state === "committed"
+                      ? "Approved"
+                      : "Discarded"}
+                </Badge>
+              </button>
+            ))}
+          </nav>
+          <div className="min-w-0">
+            {selected.state === "proposed" ? (
+              <ProposalCard
+                key={selected.groupKey}
+                runId={runId}
+                runStatus={review.runStatus}
+                proposal={selected}
+                proposals={review.proposals}
+                imagesById={imagesById}
+                busy={busy}
+                save={save}
+                action={action}
+              />
+            ) : (
+              <section className="min-w-0 border border-border bg-card p-4">
+                <h3 className="text-lg font-semibold">
+                  {selected.state === "committed" ? "Approved" : "Discarded"} ·{" "}
+                  {proposalName(selected)}
+                </h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {selected.images
+                    .map((entry) => `${entry.purpose} ${entry.id}`)
+                    .join(" · ") || "No attached photos"}
+                </p>
+                {selected.committedProduct && (
+                  <p className="mt-2 text-sm">
+                    <EntityInlineLink
+                      entity="product"
+                      data={{
+                        id: selected.committedProduct.id,
+                        name: selected.committedProduct.name,
+                      }}
+                      displayImage={null}
+                    />
+                  </p>
+                )}
+                {selected.committedInventoryId ? (
+                  <p className="mt-1 text-xs">
+                    Inventory entry{" "}
+                    <EntityInlineLink
+                      entity="inventory"
+                      data={{
+                        id: selected.committedInventoryId,
+                        name:
+                          selected.inventory?.locationName ||
+                          selected.committedInventoryId,
+                      }}
+                      displayImage={null}
+                    />{" "}
+                    · {selected.inventory?.quantity ?? 0} received
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    No Inventory write
+                  </p>
+                )}
+                {selected.state === "committed" && (
+                  <ExpenseLinkReview runId={runId} proposal={selected} />
+                )}
+                {selected.state === "committed" &&
+                  selected.product.kind === "create" && (
+                    <details className="mt-4 border-t border-border pt-3">
+                      <summary className="cursor-pointer text-xs font-medium">
+                        Review possible matches
+                      </summary>
+                      <PhotoProductSuggestions
+                        runId={runId}
+                        proposal={selected}
+                        settled
+                      />
+                    </details>
+                  )}
+              </section>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {review.unassignedImageIds.length ? (
         <Section
@@ -1530,31 +1993,6 @@ export function PhotoGroupReview({
               </div>
             )}
           />
-        </Section>
-      ) : null}
-
-      {settled.length ? (
-        <Section aria-label="Settled groups" title="Settled groups">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Photos</TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead>Outcome</TableHead>
-                <TableHead>Group</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {settled.map((proposal) => (
-                <SettledRow
-                  key={proposal.groupKey}
-                  runId={runId}
-                  proposal={proposal}
-                  imagesById={imagesById}
-                />
-              ))}
-            </TableBody>
-          </Table>
         </Section>
       ) : null}
 

@@ -452,4 +452,53 @@ describe("commitPhotoGroup", () => {
     const targets = await readTargetStates(run.id);
     expect(targets.every((target) => target.state === "pending")).toBe(true);
   });
+
+  it("adds to an explicitly chosen entry once, including on approval replay", async () => {
+    const party = await seedMember();
+    const run = await seedRun(party);
+    const images = await seedImages(1);
+    await seedTargets(run.id, images);
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Canvas work boot" }),
+      ctx.actor,
+    );
+    const location = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Boot shelf", parentId: TEST_HOME_SHORTCODE }),
+      ctx.actor,
+    );
+    const [entry] = await getDb(ctx.db)
+      .insert(inventoryEntry)
+      .values({
+        productId: product.entityId,
+        locationId: location.entityId,
+        shortcode: generateShortcode("inventory"),
+        amount: { value: 2, unit: "each" },
+        ownershipMode: "person",
+        ownerLedgerPartyId: party.id,
+      })
+      .returning();
+    const input = {
+      runId: run.shortcode,
+      groupKey: "group-add",
+      images: [{ id: images[0]!.shortcode, purpose: "item" as const }],
+      product: { kind: "existing" as const, existingId: product.id },
+      inventory: {
+        locationId: location.id,
+        quantity: 1,
+        mode: "add" as const,
+        existingEntryId: entry!.shortcode,
+      },
+    };
+    const first = await commitPhotoGroup(ctx.db, input, ctx.actor);
+    const replay = await commitPhotoGroup(ctx.db, input, ctx.actor);
+    expect(first.inventoryId).toBe(entry!.shortcode);
+    expect(replay.inventoryId).toBe(first.inventoryId);
+    const [after] = await getDb(ctx.db)
+      .select({ amount: inventoryEntry.amount })
+      .from(inventoryEntry)
+      .where(eq(inventoryEntry.id, entry!.id));
+    expect(after?.amount).toEqual({ value: 3, unit: "each" });
+  });
 });
