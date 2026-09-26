@@ -57,12 +57,6 @@ export const AppErrors = {
   LOCATION_CYCLE_DETECTED: "PRECONDITION_FAILED",
   IMAGE_PRECONDITION_FAILED: "PRECONDITION_FAILED",
   PRODUCT_EXTERNAL_ID_PRECONDITION_FAILED: "PRECONDITION_FAILED",
-  LOCATION_HAS_INVENTORY: "PRECONDITION_FAILED",
-  LOCATION_HAS_CHILDREN: "PRECONDITION_FAILED",
-  LOCATION_HAS_PLANTINGS: "PRECONDITION_FAILED",
-  LOCATION_HAS_GARDEN_HISTORY: "PRECONDITION_FAILED",
-  PLANT_HAS_PLANTINGS: "PRECONDITION_FAILED",
-  PLANT_HAS_PRODUCTS: "PRECONDITION_FAILED",
   PRODUCT_HAS_INVENTORY: "PRECONDITION_FAILED",
   PRODUCT_HAS_EXPENSES: "PRECONDITION_FAILED",
   PRODUCT_HAS_TASKS: "PRECONDITION_FAILED",
@@ -123,8 +117,6 @@ export const AppErrors = {
   // a Cubby label, barcode or ISBN, or a label for the wrong entity. The
   // message is the same sentence the web scanner shows.
   SCAN_CODE_UNRECOGNIZED: "BAD_REQUEST",
-  INGREDIENT_HAS_PRODUCTS: "PRECONDITION_FAILED",
-  INGREDIENT_HAS_MEAL_FOOD_ENTRIES: "PRECONDITION_FAILED",
   INGREDIENT_HAS_RECIPES: "PRECONDITION_FAILED",
   // A merge that names its own keeper among the rows to merge away. One code
   // for all four merges: the resolver refuses the whole call rather than
@@ -133,12 +125,6 @@ export const AppErrors = {
   MERGE_SELF_REFERENCE: "BAD_REQUEST",
   PROJECT_HAS_TASKS: "PRECONDITION_FAILED",
   PROJECT_HAS_EXPENSES: "PRECONDITION_FAILED",
-  FINANCIAL_ACCOUNT_HAS_TRANSACTIONS: "PRECONDITION_FAILED",
-  // The second blocking edge on a financial account, and until now a declared
-  // policy entry with no runtime: `StatementRow.accountId` is nullable, so a
-  // detach would have succeeded silently — discarding the triage judgment that
-  // assigned the row while leaving the row itself looking untriaged.
-  FINANCIAL_ACCOUNT_HAS_STATEMENT_ROWS: "PRECONDITION_FAILED",
   FINANCIAL_ACCOUNT_SOURCE_ALIAS_CONFLICT: "CONFLICT",
   // Two refusals that are business rules rather than FK edges, so they cannot
   // live in an edge policy. Both previously shared the generic
@@ -147,14 +133,10 @@ export const AppErrors = {
   LOCATION_IS_ROOT: "PRECONDITION_FAILED",
   PURCHASE_NOT_EMPTY: "PRECONDITION_FAILED",
   FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT: "CONFLICT",
-  LEDGER_PARTY_HAS_EDGES: "PRECONDITION_FAILED",
   // A declared `block` edge of a policy-driven delete still has live rows.
   ENTITY_DELETE_BLOCKED: "PRECONDITION_FAILED",
   LEDGER_SOURCE_CLAIM_CONFLICT: "CONFLICT",
   FINANCIAL_TRANSACTION_POSTED_DATE_REQUIRED: "BAD_REQUEST",
-  // A vendor can't be deleted while charges still point at it — same rule as
-  // PROJECT_HAS_EXPENSES, one level up the Vendor ──< Purchase ──< Expense chain.
-  VENDOR_HAS_PURCHASES: "PRECONDITION_FAILED",
   // Two charges can't both survive a merge while both carry a non-null orderId:
   // the partial-unique (vendorId, orderId) index makes that a no-op, not a merge.
   PURCHASE_MERGE_ORDER_COLLISION: "BAD_REQUEST",
@@ -183,7 +165,6 @@ export const AppErrors = {
   PRODUCT_MERGE_DISTINCT_ISBNS: "BAD_REQUEST",
   // project.parentProjectId: arbitrary-depth sub-projects (WBS) — a project
   // can't become its own descendant.
-  PROJECT_HAS_CHILDREN: "PRECONDITION_FAILED",
   PROJECT_CYCLE: "BAD_REQUEST",
   // ProjectDependency and TaskDependency are DAGs. The repository checks the
   // whole projected graph under a per-family transaction lock before replace.

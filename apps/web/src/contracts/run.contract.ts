@@ -9,6 +9,12 @@ import {
   runBrowserListInput,
   runListResponse,
   runOut,
+  targetedImportPurpose,
+  targetedImportStartInput,
+  targetedImportStartOutput,
+  type TargetedImportPurpose,
+  type TargetedImportStartInput,
+  type TargetedImportStartOutput,
 } from "@cubby/schemas/run";
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { z } from "zod";
@@ -234,11 +240,7 @@ const merchantRules = z.object({
   vendors: z.array(z.object({ shortcode: z.string(), name: z.string() })),
 });
 
-export const targetedImportPurpose = z.enum([
-  "purchase_validation",
-  "product_enrichment",
-]);
-export type TargetedImportPurpose = z.infer<typeof targetedImportPurpose>;
+export { targetedImportPurpose, type TargetedImportPurpose };
 
 const targetedImportSource = z.object({
   id: z.string().min(1),
@@ -285,52 +287,17 @@ const targetedImportLaunch = z.object({
 });
 export type TargetedImportLaunch = z.infer<typeof targetedImportLaunch>;
 
-/**
- * Targeted import launch. Entity targets use public shortcodes; an opaque
- * source-claim id is resolved again against the actor's own claims.
- */
-const targetedImportStartInput = z.discriminatedUnion("purpose", [
-  z.object({
-    purpose: z.literal("purchase_validation"),
-    purchaseId: purchaseShortcode,
-    sourceId: z.string().min(1).nullable(),
-  }),
-  z.object({
-    purpose: z.literal("product_enrichment"),
-    targets: z
-      .array(
-        z.object({
-          productId: productShortcode,
-          sourceId: z.string().min(1).nullable(),
-          vendorAccountId: z.string().min(1).nullable(),
-        }),
-      )
-      .min(1),
-  }),
-]);
-export type TargetedImportStartInput = z.input<typeof targetedImportStartInput>;
-
-const targetedImportStartOutput = z.object({
-  runs: z.array(
-    z.object({
-      created: z.boolean(),
-      run: z
-        .object({
-          id: runShortcode,
-          status: z.string().min(1),
-          purpose: targetedImportPurpose,
-          dispatchEventId: z.string().nullable(),
-        })
-        .nullable(),
-      blockingRun: z
-        .object({ id: runShortcode, status: z.string().min(1) })
-        .nullable(),
-    }),
-  ),
-});
-export type TargetedImportStartOutput = z.infer<
-  typeof targetedImportStartOutput
->;
+// The input/output schemas themselves live in `@cubby/schemas/run` (see the
+// doc comment there): the OpenAPI generator only names a discriminated
+// union's members when the union is a named export of a scanned schema
+// module, and this operation is now HTTP-visible (not browser-only), so its
+// members must resolve to real components.
+export {
+  targetedImportStartInput,
+  targetedImportStartOutput,
+  type TargetedImportStartInput,
+  type TargetedImportStartOutput,
+};
 
 /**
  * Run reads for the generic list and detail pages. A Run has no create/update
@@ -443,8 +410,7 @@ export const runContract = defineContract("run", {
     output: targetedImportLaunch,
   }),
   startTargeted: mutation({
-    // The HTTP document cannot name this union's members; browser-only.
-    http: false,
+    native: "Launch a targeted purchase-validation or product-enrichment run",
     input: targetedImportStartInput,
     output: targetedImportStartOutput,
   }),

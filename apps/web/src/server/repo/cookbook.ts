@@ -48,7 +48,6 @@ import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   getDb,
-  imageCascadeChild,
   notDeleted,
   updateAndReturn,
   withTransaction,
@@ -64,7 +63,7 @@ import {
   getCookbookRecipeIdsByTitle,
   getCookbookRecipeTitles,
 } from "~/server/repo/recipe";
-import { removeEntity } from "~/server/repo/removal";
+import { deleteByPolicy } from "~/server/repo/removal";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   replaceSingularAttachment,
@@ -474,11 +473,13 @@ export const getCookbookRecipePhotoSource = async (
 
 /**
  * Delete a cookbook and everything imported from it, in one transaction: the
- * recipe cascade (sections / ingredients / images / embeddings / audit) runs via
- * {@link deleteRecipesByCookbookTx}, then the `Cookbook` row is soft-deleted so
- * the book leaves the browse index instead of lingering as an empty shell.
- * Returns the deleted recipe ids so the caller can run mutation side-effects and
- * recompute the surviving parent recipes.
+ * `"Recipe.cookbookId"` edge is overridden to run the recipe cascade
+ * ({@link deleteRecipesByCookbookTx} — sections / ingredients / images /
+ * embeddings / audit) instead of the policy's default per-column soft-delete,
+ * and the `Cookbook` row itself (plus its cover attachment, per
+ * {@link COOKBOOK_DELETE_EDGE_POLICY}) is removed by the same
+ * {@link deleteByPolicy} call. Returns the deleted recipe ids so the caller
+ * can run mutation side-effects and recompute the surviving parent recipes.
  */
 export const deleteCookbook = async (
   db: Database,
@@ -490,28 +491,30 @@ export const deleteCookbook = async (
     throw createAppError("COOKBOOK_NOT_FOUND", `Cookbook ${id} not found`);
   }
 
-  return withTransaction(db, async (tx) => {
-    // A whole second entity's removal path, nested in this one's transaction so
-    // a book can't survive its recipes. It covers the recipes' rows, cascades,
-    // and embeddings; the call below covers the book's own.
-    const { recipeIds: deletedRecipeIds, detachedImageKeys: recipeImageKeys } =
-      await deleteRecipesByCookbookTx(tx, id, actor);
+  // The override can't return a value, so the recipe cascade's ids/detached
+  // keys are captured here and merged with the root removal's own result
+  // below.
+  let deletedRecipeIds: RecipeId[] = [];
+  let recipeImageKeys: string[] = [];
 
-    // The cover is an attachment like any gallery photo (ADR 0006): it is
-    // detached with the book and reaped when nothing else uses it.
-    const { detachedImageKeys } = await removeEntity(tx, {
-      entity: "cookbook",
-      ids: [id],
-      removal: "soft",
-      actor,
-      children: [imageCascadeChild()],
-    });
-
-    return {
-      deletedRecipeIds,
-      detachedImageKeys: [...recipeImageKeys, ...detachedImageKeys],
-    };
+  const { detachedImageKeys } = await deleteByPolicy(db, {
+    entity: "cookbook",
+    policy: COOKBOOK_DELETE_EDGE_POLICY,
+    ids: [id],
+    actor,
+    overrides: {
+      "Recipe.cookbookId": async (tx) => {
+        const result = await deleteRecipesByCookbookTx(tx, id, actor);
+        deletedRecipeIds = result.recipeIds;
+        recipeImageKeys = result.detachedImageKeys;
+      },
+    },
   });
+
+  return {
+    deletedRecipeIds,
+    detachedImageKeys: [...recipeImageKeys, ...detachedImageKeys],
+  };
 };
 
 export type CookbookReprocessSelection = {
