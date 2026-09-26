@@ -8,7 +8,6 @@ import {
   getProductExternalIdSourceOptions,
   getProductManufacturerOptions,
   getProductsByShortcodes,
-  getProductTagOptions,
   resolveProductNames,
 } from "~/server/repo/product";
 import {
@@ -67,7 +66,6 @@ export const productHandlers = implementOperationDomain(productContract, {
       input,
       context.actorContext,
     ),
-  tagOptions: (context) => getProductTagOptions(context.readDb),
   categoryDistribution: (context) => getCategoryDistribution(context.readDb),
   manufacturerOptions: (context) =>
     getProductManufacturerOptions(context.readDb),

@@ -1,11 +1,15 @@
-import type { MealShortcode } from "@cubby/schemas/identifiers";
+import type {
+  LedgerPartyShortcode,
+  MealShortcode,
+} from "@cubby/schemas/identifiers";
 import type { MealOut } from "@cubby/schemas/meal";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { addDays, format, parseISO, subDays } from "date-fns";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { ledgerParty } from "../../finance/finance.functions";
+import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
+
 import { meal as mealOperations } from "../meal.functions";
 import type {
   MealPreparationsView,
@@ -94,7 +98,14 @@ export function useMealPreparationController({
     enabled: mealDate != null && sourcePickerOpen,
   });
   const eatersQuery = useQuery({
-    ...ledgerParty.options.queryOptions(null),
+    ...entityFilterOptions.filterOptions.queryOptions({
+      source: "entity",
+      entity: "ledgerParty",
+      search: "",
+      selectedIds: [],
+      include: ["kind"],
+      limit: 1000,
+    }),
     enabled: openMealRecipeId != null,
   });
   const targetMeals: PreparationTargetOption[] =
@@ -109,9 +120,18 @@ export function useMealPreparationController({
         left.id === mealId ? -1 : right.id === mealId ? 1 : 0,
       ) ?? [];
   const eaters: PreparationEaterOption[] =
-    eatersQuery.data?.filter(
-      (party): party is PreparationEaterOption =>
-        party.kind === "member" || party.kind === "guest",
+    eatersQuery.data?.items.flatMap((party) =>
+      party.kind === "member" || party.kind === "guest"
+        ? [
+            {
+              // SAFETY: `entity: "ledgerParty"` filter options always publish
+              // the entity's own branded shortcode as `id`.
+              id: party.id as LedgerPartyShortcode,
+              name: party.label,
+              kind: party.kind,
+            },
+          ]
+        : [],
     ) ?? [];
   const sourceChoices = sourceChoicesFor(
     sourceMealsQuery?.data,

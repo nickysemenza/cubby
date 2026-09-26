@@ -39,7 +39,6 @@ export const productContract = defineContract("product", {
     native: "Search tab create from a barcode or ISBN",
     ...productWorkflowSchemas.findOrCreateByCode,
   }),
-  tagOptions: query({ ...productWorkflowSchemas.tagOptions }),
   categoryDistribution: query({
     ...productWorkflowSchemas.categoryDistribution,
   }),

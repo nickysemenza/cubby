@@ -1,8 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
 import type { FC } from "react";
 
 import { ChipsInput } from "~/app/_components/forms/chips-input";
-import { recipe } from "~/app/recipes/recipe.functions";
+import { useTagOptions } from "~/app/_components/hooks/useEntityOptions";
 import { Description } from "~/components/ui/description";
 
 import {
@@ -30,7 +29,7 @@ interface TagInputProps {
  * Tag input with autocomplete for recipe tags — a themed wrapper around the
  * generic {@link ChipsInput}: recipe-tag-specific normalization (lowercase),
  * prefix/color/icon theming (`tag-theme.ts`), and suggestions sourced from
- * `recipe.getAllTags` plus the known `TAG_PREFIXES`. Supports prefixed tags
+ * `useTagOptions("recipe")` plus the known `TAG_PREFIXES`. Supports prefixed tags
  * like "cuisine:thai" or plain tags like "quick" — same behavior/visuals as
  * before the `ChipsInput` extraction.
  */
@@ -44,7 +43,8 @@ export const TagInput: FC<TagInputProps> = ({
   onEmptyEnter,
 }) => {
   const tags = value ?? [];
-  const { data: existingTags } = useQuery(recipe.getAllTags.queryOptions());
+  const { options: existingTagOptions } = useTagOptions("recipe");
+  const existingTags = existingTagOptions.map((option) => option.value);
 
   const getSuggestions = (inputValue: string): string[] => {
     const input = inputValue.toLowerCase();

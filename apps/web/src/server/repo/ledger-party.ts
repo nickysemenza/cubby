@@ -9,7 +9,6 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   LedgerPartyCreateInput,
   LedgerPartyFilters,
-  LedgerPartyOptionsOut,
   LedgerPartyOut,
   LedgerPartyUpdateData,
 } from "@cubby/schemas/ledger-party";
@@ -19,7 +18,7 @@ import {
   mealFoodAmountFromStored,
 } from "@cubby/schemas/meal";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -44,7 +43,6 @@ import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   buildPartialUpdateValues,
-  getDb,
   notDeleted,
   unwrapDb,
   withTransaction,
@@ -335,35 +333,6 @@ export const listLedgerParties = (
       hydrate: (rows) => hydrate(db, rows),
     },
   );
-
-/**
- * The ledger-party picklist — feeds the accounts table's Owner editor.
- *
- * Deliberately eager and unpaginated, unlike the search-as-you-type reference
- * pickers: the household has a handful of parties, so the
- * whole roster is cheaper to ship than a query per keystroke. `kind` rides
- * along because the editor labels a party by it (Member / Guest / Household)
- * rather than by name alone.
- */
-export const ledgerPartyOptions = async (
-  db: Database,
-): Promise<LedgerPartyOptionsOut> => {
-  const rows = await getDb(db)
-    .select({
-      shortcode: ledgerParty.shortcode,
-      name: ledgerParty.name,
-      kind: ledgerParty.kind,
-    })
-    .from(ledgerParty)
-    .where(notDeleted(ledgerParty))
-    .orderBy(asc(ledgerParty.name));
-
-  return rows.map((row) => ({
-    id: parseShortcodeFor("ledgerParty", row.shortcode),
-    name: row.name,
-    kind: row.kind,
-  }));
-};
 
 export async function createLedgerParty(
   db: Database,

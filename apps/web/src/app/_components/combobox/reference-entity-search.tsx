@@ -7,8 +7,9 @@ import { useProductCategories } from "~/app/_components/hooks/useProductCategori
 import type { ComboboxItem, PickerEntity } from "./combobox-types";
 import { treePickerItems } from "./tree-items";
 import {
-  WithEntitySearch,
-  type WithEntitySearchProps,
+  useEntityListSource,
+  type EntitySearchEntity,
+  type SearchProviderProps,
 } from "./with-search-hook";
 import { WithVendorShortcodeSearch } from "./with-vendor-search";
 
@@ -69,9 +70,7 @@ export function productCategorySearchItems(
     });
 }
 
-function WithProductCategorySearch({
-  children,
-}: WithEntitySearchProps<string>) {
+function WithProductCategorySearch({ children }: SearchProviderProps<string>) {
   const [query, setQuery] = useState("");
   const { categories, isLoading } = useProductCategories();
   const onSearchChange = useCallback((next: string) => setQuery(next), []);
@@ -121,11 +120,28 @@ export const isReferencePickerEntity = (
   return referencePickerEntities.has(entity as PickerEntity);
 };
 
+/** The generic (non-vendor, non-productCategory) picker's search provider: a
+ * direct `useEntityListSource` call in the render-prop shape `PickerEntity`'s
+ * other providers share. */
+function GenericEntitySearch({
+  entity,
+  scope,
+  children,
+}: { entity: EntitySearchEntity } & SearchProviderProps<string>): ReactNode {
+  const { dialog, ...search } = useEntityListSource(entity, { scope });
+  return (
+    <>
+      {dialog}
+      {children(search)}
+    </>
+  );
+}
+
 /** One manifest target -> one established picker/search path. The picker is
  * intentionally ID-based at the write boundary; labels are display-only. */
 export function referenceEntitySearch(
   entity: PickerEntity,
-): (props: WithEntitySearchProps<string>) => ReactNode {
+): (props: SearchProviderProps<string>) => ReactNode {
   switch (entity) {
     case "productCategory":
       return WithProductCategorySearch;
@@ -135,9 +151,9 @@ export function referenceEntitySearch(
       return WithVendorShortcodeSearch as never;
     default:
       // SAFETY: the switch removed all specialized providers; remaining
-      // PickerEntity literals are exactly WithEntitySearch's entity union.
+      // PickerEntity literals are exactly EntitySearchEntity's union.
       return (props) => (
-        <WithEntitySearch entity={entity as never} {...props} />
+        <GenericEntitySearch entity={entity as never} {...props} />
       );
   }
 }

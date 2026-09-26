@@ -28,7 +28,6 @@ import {
   productShortcodesInput,
   productSummariesInput,
   productSummariesOut,
-  productTagOptionsOut,
   productTopLevelOut,
   productWithFoodAndSideEffectsOut,
 } from "./product";
@@ -130,7 +129,6 @@ export const productWorkflowSchemas = {
     input: productFindOrCreateByCodeInput,
     output: productFindOrCreateByUPCOut,
   },
-  tagOptions: { input: z.undefined(), output: productTagOptionsOut },
   categoryDistribution: {
     input: z.undefined(),
     output: productCategoryDistributionOut,

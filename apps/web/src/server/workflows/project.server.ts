@@ -18,7 +18,6 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   getProjectDependencyGraph,
   projectDashboardSummary,
-  projectNameOptions,
   projectPortfolioAnalytics,
   projectToolMatrix,
   projectToolGallery,
@@ -93,11 +92,6 @@ export const projectPortfolioAnalyticsWorkflow = defineWorkflowOperation(
   "project.portfolioAnalytics",
   projectPortfolioAnalytics,
 );
-export const projectOptionsWorkflow = defineWorkflowOperation(
-  "project.options",
-  (db: Database) => projectNameOptions(db),
-);
-
 export const projectCreateFromTasksWorkflow = bindWorkflow(
   workflow<MutationContext, CreateFromTasksInput>("project.createFromTasks")
     .commit("created", async ({ context }, { input }) =>

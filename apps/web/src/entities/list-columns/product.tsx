@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { treePickerItems } from "~/app/_components/combobox/tree-items";
-import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
+import { useEntityListSource } from "~/app/_components/combobox/with-search-hook";
 import {
   createBooleanColumn,
   createExternalLinkColumn,
@@ -29,10 +29,10 @@ import {
 import type { GroupConfig } from "~/app/_components/data-table/useGroupedList";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
+import { useTagOptions } from "~/app/_components/hooks/useEntityOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useProductCategories } from "~/app/_components/hooks/useProductCategories";
-import { useProductTagOptions } from "~/app/_components/hooks/useProductTagOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { useCreateInventoryMutation } from "~/app/_components/inventory/hooks";
 import { InventoryEntriesQuickEditDialog } from "~/app/_components/inventory/inventory-entries-quick-edit-dialog";
@@ -169,7 +169,7 @@ function ProductFoodCell({ product }: { product: ProductListItem }) {
 
 function useProductFilterOptions() {
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
-  const { options: tagOptions } = useProductTagOptions();
+  const { options: tagOptions } = useTagOptions("product");
   const { categories } = useProductCategories();
   const projectOptions = useDeferredFilterOptions("project");
   const locationOptions = useDeferredFilterOptions("locationWithInventory");
@@ -772,9 +772,18 @@ export const productListOverride = defineListOverride<
                 provenance: relationshipFieldProvenance("product", "inventory"),
                 onQuickEdit: (product) => setQuickEditProductId(product.id),
                 inlineEdit: {
-                  SearchProvider: (props) => (
-                    <WithEntitySearch entity="location" {...props} />
-                  ),
+                  SearchProvider: (props) => {
+                    const { dialog, ...search } = useEntityListSource(
+                      "location",
+                      { scope: props.scope },
+                    );
+                    return (
+                      <>
+                        {dialog}
+                        {props.children(search)}
+                      </>
+                    );
+                  },
                   onMoveEntry: async (entry, locationId) => {
                     await updateInventoryMutation.mutateAsync({
                       id: entry.id,

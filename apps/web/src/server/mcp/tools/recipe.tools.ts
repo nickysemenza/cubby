@@ -11,17 +11,18 @@ import {
   scrapeRecipeMcpOut,
 } from "@cubby/schemas/mcp";
 import { nutritionEstimate } from "@cubby/schemas/nutrition";
+import { recipeTagsOut } from "@cubby/schemas/recipe";
 import type { RecipeCostingExplain } from "@cubby/schemas/recipe-shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { groupBy } from "es-toolkit";
 import { z } from "zod";
 
 import { cookbookContract } from "~/contracts/cookbook.contract";
-import { recipeContract } from "~/contracts/recipe.contract";
 import { scaleTotals } from "~/lib/nutrition-estimates";
 import { executeEntity } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 import { listCookbooks } from "~/server/repo/cookbook";
+import { getAllTags } from "~/server/repo/recipe";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { recipeUsagesWorkflow } from "~/server/workflows/ingredient.server";
 import {
@@ -30,7 +31,6 @@ import {
 } from "~/server/workflows/recipe-import.server";
 import {
   explainCostingWorkflow,
-  getAllTagsWorkflow,
   getMakeableWorkflow,
 } from "~/server/workflows/recipe.server";
 
@@ -55,10 +55,8 @@ const cookbookSummariesMcpOut = mcpItemsEnvelope(
   fromContract(cookbookContract.ops.list),
 );
 
-/** `{items}` over `recipe.getAllTags`'s own output — see `mcpItemsEnvelope`. */
-const recipeTagsListOut = mcpItemsEnvelope(
-  fromContract(recipeContract.ops.getAllTags),
-);
+/** `{items}` over `getAllTags`'s own output — see `mcpItemsEnvelope`. */
+const recipeTagsListOut = mcpItemsEnvelope(recipeTagsOut);
 
 const recipeNutritionInput = z.object({
   recipeId: idParam("recipe"),
@@ -394,7 +392,7 @@ export function registerRecipeTools(server: McpServer) {
     outputSchema: recipeTagsListOut,
     annotations: READ_ONLY_CLOSED,
     call: async (context) => ({
-      items: await getAllTagsWorkflow(context.readDb),
+      items: await getAllTags(context.readDb),
     }),
   });
 

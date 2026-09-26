@@ -4,10 +4,13 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 
 import { RankedBarBreakdown } from "~/app/_components/charts/kit";
-import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { entityDetailLink } from "~/entities/entities";
 
-import { ProjectChartLabel, ProjectChartTick } from "../project-mark";
+import {
+  ProjectChartLabel,
+  ProjectChartTick,
+  useProjectIconById,
+} from "../project-mark";
 import { ChartTooltip } from "./ChartTooltip";
 
 /**
@@ -26,7 +29,7 @@ export function OpenTasksByProject({
   data: ProjectPortfolioAnalyticsOut["taskHeatmap"];
 }) {
   const navigate = useNavigate();
-  const { iconById } = useProjectOptions();
+  const { iconById } = useProjectIconById();
 
   const openRows = useMemo(
     () => rows.filter((r) => r.openTaskCount > 0),

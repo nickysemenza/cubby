@@ -59,7 +59,15 @@ export interface EntitySearchResult<TId extends string> {
   onOpenChange: (open: boolean) => void;
 }
 
-export interface WithEntitySearchProps<TId extends string = string> {
+/**
+ * The render-prop contract every "search provider" component in this codebase
+ * implements — `referenceEntitySearch`'s per-entity providers, the vendor
+ * providers in `with-vendor-search.tsx`, and any inline `SearchProvider` a
+ * caller builds by hand around `useEntityListSource`. Kept independent of
+ * `useEntityListSource` itself so those components can wrap it directly
+ * rather than through a shared `<WithEntitySearch>` component.
+ */
+export interface SearchProviderProps<TId extends string = string> {
   /** Candidate filters derived from the owning editor's dependent fields. */
   scope?: EntitySearchScope | null;
   /**
@@ -339,24 +347,4 @@ export function useEntityListSource<E extends EntitySearchEntity>(
     onCreateNew,
     dialog,
   };
-}
-
-/** Render-prop form of `useEntityListSource`, for `SearchProvider` slots and
- * pickers rendered inside loops. */
-export function WithEntitySearch<E extends EntitySearchEntity>({
-  entity,
-  intent,
-  scope,
-  children,
-}: {
-  entity: E;
-  intent?: ProductPickerIntent;
-} & WithEntitySearchProps<ShortcodeFor<E>>): ReactNode {
-  const { dialog, ...search } = useEntityListSource(entity, { intent, scope });
-  return (
-    <>
-      {dialog}
-      {children(search)}
-    </>
-  );
 }

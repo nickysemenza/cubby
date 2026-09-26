@@ -2,10 +2,13 @@ import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
 import { CurrencyDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
 import { useMemo } from "react";
 
-import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { formatCurrency } from "~/lib/utils";
 
-import { ProjectChartLabel, ProjectChartTick } from "../project-mark";
+import {
+  ProjectChartLabel,
+  ProjectChartTick,
+  useProjectIconById,
+} from "../project-mark";
 import { nivoBarChrome, nivoChartTheme } from "../shared";
 import { ChartEmpty } from "./chart-empty";
 import { ChartTooltip } from "./ChartTooltip";
@@ -41,7 +44,7 @@ export function CostVsEstimate({
 }: {
   data: ProjectPortfolioAnalyticsOut["costVsEstimate"];
 }) {
-  const { iconById } = useProjectOptions();
+  const { iconById } = useProjectIconById();
   const data = useMemo(() => {
     return (
       rows

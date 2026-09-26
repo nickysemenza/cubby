@@ -4,7 +4,6 @@ import {
   projectCreateFromTasksWorkflow,
   projectDashboardSummaryWorkflow,
   projectDependencyGraphWorkflow,
-  projectOptionsWorkflow,
   projectPortfolioAnalyticsWorkflow,
   projectSetToolUsageWorkflow,
   projectToolMatrixWorkflow,
@@ -21,7 +20,6 @@ export const projectHandlers = implementOperationDomain(projectContract, {
     projectDashboardSummaryWorkflow(context.db, input),
   portfolioAnalytics: (context, input) =>
     projectPortfolioAnalyticsWorkflow(context.db, input),
-  options: (context) => projectOptionsWorkflow(context.db),
   createFromTasks: (context, input) =>
     projectCreateFromTasksWorkflow(context.db, input, context.actorContext),
   toolSuggestions: (context, input) =>

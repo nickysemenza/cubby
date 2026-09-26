@@ -13,7 +13,6 @@ export const project = defineOperationDomain(projectContract, {
     tags: [["project", "portfolioAnalytics"]],
     cache: "stable",
   },
-  options: { tags: [["project", "options"]] },
   createFromTasks: { invalidates: ripple.taskProject },
   toolSuggestions: {
     tags: [

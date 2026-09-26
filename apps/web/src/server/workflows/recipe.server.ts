@@ -28,7 +28,6 @@ import type { Database } from "~/server/db";
 import { getMultiMeasureRecipeIngredients } from "~/server/repo/equivalences";
 import {
   duplicateRecipe,
-  getAllTags,
   getIngredientCooccurrence,
   getIngredientUsage,
   getRecipeDependencyGraph,
@@ -68,11 +67,6 @@ export const getManyByIDsWorkflow = bindWorkflow(
     context: db,
     input,
   }),
-);
-
-export const getAllTagsWorkflow = defineWorkflowOperation(
-  "recipe.getAllTags",
-  (db: Database) => getAllTags(db),
 );
 
 export const duplicateWorkflow = bindWorkflow(

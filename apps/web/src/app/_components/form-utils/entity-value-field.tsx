@@ -18,7 +18,7 @@ import { useAutoFieldSuggestion } from "~/app/_components/ai/use-auto-field-sugg
 import type { ComboboxItem, PickerEntity } from "../combobox/combobox-types";
 import { EntityPicker } from "../combobox/entity-picker";
 import type { EntitySearchScope } from "../combobox/entity-search-hooks";
-import type { WithEntitySearchProps } from "../combobox/with-search-hook";
+import type { SearchProviderProps } from "../combobox/with-search-hook";
 import { FormFieldGroup } from "../forms/form-field-group";
 
 /** React Hook Form adapter for assignments whose persisted value is the id. */
@@ -42,7 +42,7 @@ export function EntityValueField<
   entity: E;
   label?: string;
   placeholder?: string;
-  SearchProvider: (props: WithEntitySearchProps<ShortcodeFor<E>>) => ReactNode;
+  SearchProvider: (props: SearchProviderProps<ShortcodeFor<E>>) => ReactNode;
   clearable?: boolean;
   description?: ReactNode;
   /** Dependent-field filters for the candidate picker; null keeps it scoped but idle. */

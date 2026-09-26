@@ -68,8 +68,9 @@ import {
 } from "../combobox/combobox-builders";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import {
-  WithEntitySearch,
-  type WithEntitySearchProps,
+  useEntityListSource,
+  type EntitySearchEntity,
+  type SearchProviderProps,
 } from "../combobox/with-search-hook";
 import { useEntityDisplayImage } from "../entity-media/entity-display-images";
 import { EntityInlineLink } from "../EntityInlineLink";
@@ -755,9 +756,9 @@ export function createInventoryEntriesColumn<
      * LocationList's Products column, or the "stacked" layout).
      */
     inlineEdit?: {
-      /** `WithEntitySearch entity="location"` — injected so unit tests can stub it. */
+      /** `useEntityListSource("location", ...)` — injected so unit tests can stub it. */
       SearchProvider: (
-        props: WithEntitySearchProps<LocationShortcode>,
+        props: SearchProviderProps<LocationShortcode>,
       ) => ReactNode;
       onMoveEntry: (
         entry: TEntry,
@@ -1253,7 +1254,7 @@ type SingleEntityAdapter = {
     value: unknown,
     dedupe: boolean,
   ) => ReactNode;
-  SearchProvider?: (props: WithEntitySearchProps<string>) => ReactNode;
+  SearchProvider?: (props: SearchProviderProps<string>) => ReactNode;
 };
 
 function defineSingleEntityAdapter<TData>(
@@ -1263,7 +1264,7 @@ function defineSingleEntityAdapter<TData>(
     renderLink: (data: TData) => ReactNode;
     renderCollection?: (items: TData[]) => ReactNode;
     collectionId?: (item: TData) => string;
-    SearchProvider?: (props: WithEntitySearchProps<string>) => ReactNode;
+    SearchProvider?: (props: SearchProviderProps<string>) => ReactNode;
   },
 ): SingleEntityAdapter {
   const collectionSchema = z.array(schema);
@@ -1291,6 +1292,28 @@ function defineSingleEntityAdapter<TData>(
 }
 
 /**
+ * One entity's `SearchProvider`: a `useEntityListSource(entity, ...)` call
+ * wrapped in the render-prop shape `SingleEntityAdapter.SearchProvider`
+ * expects, so each adapter below can name its own target without repeating
+ * the dialog/children plumbing.
+ */
+function inlineSearchProvider<E extends EntitySearchEntity>(
+  entity: E,
+): (props: SearchProviderProps<string>) => ReactNode {
+  return function InlineSearchProvider(props) {
+    const { dialog, ...search } = useEntityListSource(entity, {
+      scope: props.scope,
+    });
+    return (
+      <>
+        {dialog}
+        {props.children(search)}
+      </>
+    );
+  };
+}
+
+/**
  * The complete relation-picker roster. Each entry owns the schema for its
  * projected value, the item converter used by editable cells, its real inline
  * link, and (when this relation can be edited) the deferred search provider.
@@ -1313,9 +1336,7 @@ const singleEntityAdapters = {
       />
     ),
     collectionId: (item) => item.id,
-    SearchProvider: (props) => (
-      <WithEntitySearch entity="ingredient" {...props} />
-    ),
+    SearchProvider: inlineSearchProvider("ingredient"),
   }),
   product: defineSingleEntityAdapter(productInlineSchema, {
     buildItem: (data) =>
@@ -1336,7 +1357,7 @@ const singleEntityAdapters = {
       />
     ),
     collectionId: (item) => item.id,
-    SearchProvider: (props) => <WithEntitySearch entity="product" {...props} />,
+    SearchProvider: inlineSearchProvider("product"),
   }),
   recipe: defineSingleEntityAdapter(recipeInlineSchema, {
     buildItem: (data) => buildRecordComboboxItem("recipe", data),
@@ -1353,7 +1374,7 @@ const singleEntityAdapters = {
       />
     ),
     collectionId: (item) => item.id,
-    SearchProvider: (props) => <WithEntitySearch entity="recipe" {...props} />,
+    SearchProvider: inlineSearchProvider("recipe"),
   }),
   location: defineSingleEntityAdapter(locationInlineSchema, {
     buildItem: (data) =>
@@ -1374,9 +1395,7 @@ const singleEntityAdapters = {
       />
     ),
     collectionId: (item) => item.id,
-    SearchProvider: (props) => (
-      <WithEntitySearch entity="location" {...props} />
-    ),
+    SearchProvider: inlineSearchProvider("location"),
   }),
   "usda-food": defineSingleEntityAdapter(usdaFoodInlineSchema, {
     renderLink: (data) => (

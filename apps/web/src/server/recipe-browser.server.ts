@@ -12,7 +12,6 @@ import * as recipe from "~/server/workflows/recipe.server";
 export const recipeHandlers = implementOperationDomain(recipeDomainContract, {
   getManyByIDs: (context, input) =>
     recipe.getManyByIDsWorkflow(context.db, input),
-  getAllTags: (context) => recipe.getAllTagsWorkflow(context.db),
   duplicate: (context, input) => recipe.duplicateWorkflow(context, input),
   getIngredientCooccurrence: (context, input) =>
     recipe.getIngredientCooccurrenceWorkflow(context.db, input),
