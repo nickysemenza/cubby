@@ -313,6 +313,80 @@ const compileFieldProvenance = (
   };
 };
 
+/**
+ * Compiles a declared `model.sort` roster: every `fields`/`default`/
+ * `groupable`/`computed` cross-reference, plus the one opt-in
+ * `grouping` contract a list's web/native detail renders group by
+ * (`field` must itself be `groupable` — the compiler-enforced half of
+ * the list-grouping contract; see `entity-definitions/definition.ts`
+ * and `docs/entities.md`).
+ */
+// oxlint-disable-next-line eslint/complexity -- Sort compilation enforces cross-property roster invariants in one pass.
+const compileSort = (
+  sortValue: EntityFieldModelMetadata["sort"],
+  fieldKeys: readonly string[],
+  fields: EntityField[],
+  context: string,
+): EntityFieldModel["sort"] => {
+  if (sortValue === undefined) return null;
+  const sortContext = `${context}.sort`;
+  const computed = sortValue.computed ?? [];
+  const groupable = sortValue.groupable ?? [];
+  const [first, ...rest] = sortValue.fields;
+  if (first === undefined)
+    throw new EntityDeclarationError(`${sortContext}.fields is empty.`);
+  const defaultField = sortValue.default ?? first;
+  for (const key of sortValue.fields) {
+    if (computed.includes(key)) continue;
+    if (!fieldKeys.includes(key))
+      throw new EntityDeclarationError(
+        `${sortContext}.fields references undeclared field ${key}.`,
+      );
+  }
+  if (!sortValue.fields.includes(defaultField))
+    throw new EntityDeclarationError(
+      `${sortContext}.default ${defaultField} must be one of sort.fields.`,
+    );
+  for (const key of groupable) {
+    if (!sortValue.fields.includes(key))
+      throw new EntityDeclarationError(
+        `${sortContext}.groupable ${key} must be one of sort.fields.`,
+      );
+  }
+  for (const key of computed) {
+    if (!sortValue.fields.includes(key))
+      throw new EntityDeclarationError(
+        `${sortContext}.computed ${key} must be one of sort.fields.`,
+      );
+  }
+  const grouping = sortValue.grouping ?? null;
+  if (grouping !== null && !groupable.includes(grouping.field))
+    throw new EntityDeclarationError(
+      `${sortContext}.grouping.field ${grouping.field} must be one of sort.groupable.`,
+    );
+  return {
+    fields: [first, ...rest] as const,
+    default: defaultField,
+    computed,
+    groupable,
+    grouping:
+      grouping === null
+        ? null
+        : {
+            field: grouping.field,
+            nullGroupKey: grouping.nullGroupKey,
+            labelField: grouping.labelField ?? null,
+          },
+    direction:
+      sortValue.direction ??
+      (["text", "enum"].includes(
+        fields.find((field) => field.key === defaultField)?.kind ?? "",
+      )
+        ? "asc"
+        : "desc"),
+  };
+};
+
 // oxlint-disable-next-line eslint/complexity -- Field compilation enforces cross-property model invariants in one pass.
 const compileFieldModel = (
   value: EntityFieldModelMetadata | undefined,
@@ -517,55 +591,7 @@ const compileFieldModel = (
     }
     return values;
   };
-  const sortValue = model.sort;
-  const sort: EntityFieldModel["sort"] =
-    sortValue === undefined
-      ? null
-      : (() => {
-          const sortContext = `${context}.sort`;
-          const computed = sortValue.computed ?? [];
-          const groupable = sortValue.groupable ?? [];
-          const [first, ...rest] = sortValue.fields;
-          if (first === undefined)
-            throw new EntityDeclarationError(`${sortContext}.fields is empty.`);
-          const defaultField = sortValue.default ?? first;
-          for (const key of sortValue.fields) {
-            if (computed.includes(key)) continue;
-            if (!fieldKeys.includes(key))
-              throw new EntityDeclarationError(
-                `${sortContext}.fields references undeclared field ${key}.`,
-              );
-          }
-          if (!sortValue.fields.includes(defaultField))
-            throw new EntityDeclarationError(
-              `${sortContext}.default ${defaultField} must be one of sort.fields.`,
-            );
-          for (const key of groupable) {
-            if (!sortValue.fields.includes(key))
-              throw new EntityDeclarationError(
-                `${sortContext}.groupable ${key} must be one of sort.fields.`,
-              );
-          }
-          for (const key of computed) {
-            if (!sortValue.fields.includes(key))
-              throw new EntityDeclarationError(
-                `${sortContext}.computed ${key} must be one of sort.fields.`,
-              );
-          }
-          return {
-            fields: [first, ...rest] as const,
-            default: defaultField,
-            computed,
-            groupable,
-            direction:
-              sortValue.direction ??
-              (["text", "enum"].includes(
-                fields.find((field) => field.key === defaultField)?.kind ?? "",
-              )
-                ? "asc"
-                : "desc"),
-          };
-        })();
+  const sort = compileSort(model.sort, fieldKeys, fields, context);
   const compiled = {
     fields,
     storage,

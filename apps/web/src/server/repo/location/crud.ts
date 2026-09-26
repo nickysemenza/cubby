@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type LocationId,
   type ProductId,
@@ -20,7 +21,6 @@ import type {
 import { locationPickerSortableFields } from "@cubby/schemas/location";
 import {
   buildTakeSkip,
-  LOCATION_UNSPECIFIED_GROUP_KEY,
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
@@ -757,6 +757,13 @@ export const buildLocationWhere = async (
   ]);
 };
 
+// Read from the manifest instead of re-hardcoding: `sort.grouping` on
+// `04-location.entity.ts` is this entity's one declared list-grouping
+// contract, compiler-checked to name a `sort.groupable` field.
+const LOCATION_GROUPING = generatedEntitySort.location.grouping;
+if (!LOCATION_GROUPING)
+  throw new Error("location entity declares no list-grouping contract.");
+
 export const locationList = async (
   db: Database,
   filters: LocationFilters,
@@ -770,7 +777,7 @@ export const locationList = async (
   const orderByClause = locationScaffold.orderBy(
     sorts,
     {
-      groupBy: groupBy === "type" ? undefined : groupBy,
+      groupBy: groupBy === LOCATION_GROUPING.field ? undefined : groupBy,
       // `valuation` is computed on read, not a stored column; sort by direct
       // value because that is what the list cell renders in compact mode.
       resolve: (s) => {
@@ -810,10 +817,11 @@ export const locationList = async (
   );
 
   const groupDirection =
-    sorts.find((sort) => sort.orderBy === "type")?.direction ?? "asc";
+    sorts.find((sort) => sort.orderBy === LOCATION_GROUPING.field)?.direction ??
+    "asc";
   const groupOrder = sql`${location.type} ${sql.raw(groupDirection)} nulls last`;
   const groups =
-    groupBy === "type" && readIntent === "page"
+    groupBy === LOCATION_GROUPING.field && readIntent === "page"
       ? await getDb(db)
           .select({ type: location.type, count: sql<number>`count(*)::int` })
           .from(location)
@@ -876,7 +884,7 @@ export const locationList = async (
     ? {
         ...result,
         groups: groups.map(({ type, count }) => ({
-          key: type ?? LOCATION_UNSPECIFIED_GROUP_KEY,
+          key: type ?? LOCATION_GROUPING.nullGroupKey,
           label: type ?? "(unspecified)",
           count,
         })),

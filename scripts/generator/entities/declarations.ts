@@ -243,11 +243,17 @@ export type EntityStorageField = Readonly<{
   reference: string | null;
   specialized: string | null;
 }>;
+export type EntityFieldModelGrouping = Readonly<{
+  field: string;
+  nullGroupKey: string;
+  labelField: string | null;
+}>;
 type EntityFieldModelSort = Readonly<{
   fields: readonly [string, ...string[]];
   default: string;
   computed: readonly string[];
   groupable: readonly string[];
+  grouping: EntityFieldModelGrouping | null;
   direction: "asc" | "desc";
 }>;
 type EntityEditIntents = Readonly<{

@@ -393,7 +393,7 @@ struct RelationSectionView: View {
         case .loaded:
             // `collapseWhenEmpty` folds an empty section down to its header and create button.
             if list.rows.isEmpty && !model.spec.collapseWhenEmpty {
-                Text("None").foregroundStyle(.secondary)
+                Text(model.spec.empty ?? "None").foregroundStyle(.secondary)
             }
             ForEach(list.rows) { row in
                 VStack(alignment: .leading, spacing: 5) {

@@ -1,3 +1,4 @@
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type ProductFilters,
   type ProductListItem,
@@ -264,15 +265,23 @@ function useProductFilterOptions() {
   });
 }
 
+const productGrouping = generatedEntitySort.product.grouping;
+if (!productGrouping)
+  throw new Error("product entity declares no list-grouping contract.");
+
+// UI-only: the local (groups-less) fallback groups by the category's
+// formatted path, and every group gets the same neutral swatch — unlike
+// Location, categories have no inherent color. The server-key match once
+// full-set groups load is generic (`useEntityList.tsx`'s
+// `effectiveGroupConfig`, keyed by the declared `field`/`nullGroupKey`
+// above), so this `keyFn` only has to look right before that data arrives.
 const groupKeyFn = (item: ProductTreeRow) => formatCategoryLabel(item.category);
 const groupColorFn = (_key: string) => "var(--chart-neutral)";
 export const PRODUCT_GROUP_CONFIG: GroupConfig<ProductTreeRow> = {
-  // Must be the server's `groupable` allowlist entry for this entity
-  // (`packages/schemas/src/entity-definitions/00-product.entity.ts`), not
-  // the row field the label is derived from — `parseGroupBy` rejects
-  // anything else. See group-config.unit.test.ts.
-  field: "categoryId",
+  field: productGrouping.field,
   keyFn: groupKeyFn,
+  // The raw value the server grouped on — the category id, not its label.
+  rawKeyFn: (item) => item.categoryId,
   colorFn: groupColorFn,
 };
 

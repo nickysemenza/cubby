@@ -1,3 +1,4 @@
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type LocationListItemOut,
   locationType,
@@ -42,9 +43,16 @@ const LOCATION_INITIAL_COLUMN_VISIBILITY = {
   ...entityListHiddenColumns("location"),
 };
 
+const locationGrouping = generatedEntitySort.location.grouping;
+if (!locationGrouping)
+  throw new Error("location entity declares no list-grouping contract.");
+
+// UI-only: each location type's color swatch has no server-side meaning.
 export const LOCATION_GROUP_CONFIG: GroupConfig<LocationListItemOut> = {
-  field: "type",
+  field: locationGrouping.field,
   keyFn: (item) => item.type,
+  // Already the raw value the server grouped on — no separate label field.
+  rawKeyFn: (item) => item.type,
   colorFn: (key) => {
     const parsedType = locationType.safeParse(key);
     return getLocationTypeColor(parsedType.success ? parsedType.data : null);
