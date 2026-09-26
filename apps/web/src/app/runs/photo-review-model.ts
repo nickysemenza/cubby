@@ -49,6 +49,8 @@ export function toGroupInput(
       quantity: proposal.inventory.quantity,
       ownershipMode: proposal.inventory.ownershipMode,
       ownerPartyId: proposal.inventory.ownerPartyId,
+      mode: proposal.inventory.mode,
+      existingEntryId: proposal.inventory.existingEntryId,
     };
   return {
     groupKey: proposal.groupKey,

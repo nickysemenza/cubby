@@ -824,7 +824,11 @@ function TerminalAgentSurface({ run }: { run: RunDetail }) {
   );
 }
 
+// eslint-disable-next-line complexity -- Active agent and awaiting-review states share this run surface.
 function ActiveAgentSurface({ run }: { run: RunDetail }) {
+  const awaitingReview =
+    run.status === "needs_review" ||
+    Boolean(run.latestProgress?.awaitingApproval);
   const [prompt, setPrompt] = useState("");
   const queryClient = useQueryClient();
   const client = useMemo(
@@ -866,9 +870,15 @@ function ActiveAgentSurface({ run }: { run: RunDetail }) {
     <Section
       title={
         <Row gap="sm" align="center">
-          Live agent
-          <Badge variant={agent.phase === "live" ? "positive" : "secondary"}>
-            {agent.phase}
+          {awaitingReview ? "Awaiting review" : "Live agent"}
+          <Badge
+            variant={
+              !awaitingReview && agent.phase === "live"
+                ? "positive"
+                : "secondary"
+            }
+          >
+            {awaitingReview ? "Review" : agent.phase}
           </Badge>
         </Row>
       }
@@ -1269,7 +1279,6 @@ export function RunPhotoBatch({ record }: { record: RunOut }) {
         <>
           <RunControls run={run} />
           <PhotoImportRunView run={run} />
-          <RunProgress run={run} />
           {run.dispatch?.eventId ? <AgentSurface run={run} /> : null}
           <details className="border border-border bg-card p-4">
             <summary className="cursor-pointer font-medium">

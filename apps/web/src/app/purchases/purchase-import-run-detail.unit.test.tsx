@@ -277,8 +277,10 @@ it("shows durable progress and diagnostics alongside photo group review", async 
     wrapper: harness.wrapper,
   });
 
-  expect(await screen.findByText("Proposed items")).toBeInTheDocument();
-  expect(screen.getByText("Run progress")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("heading", { name: "Photo review" }),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("Run progress")).not.toBeInTheDocument();
   expect(screen.getByText("Timeline and system log")).toBeInTheDocument();
   expect(screen.getByLabelText("Import run transcript")).toHaveTextContent(
     "group-1",

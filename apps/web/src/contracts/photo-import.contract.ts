@@ -2,6 +2,7 @@ import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
   imageShortcode,
   runShortcode,
+  expenseShortcode,
   productCategoryShortcode,
   productShortcode,
 } from "@cubby/schemas/identifiers";
@@ -268,6 +269,40 @@ export const photoImportContract = defineContract("photoImport", {
       groupKey: z.string().min(1).max(200),
     }),
     output: photoProductCandidatesResponse,
+  }),
+  linkableExpenses: query({
+    input: z.object({
+      runId: runShortcode,
+      groupKey: z.string().min(1).max(200),
+      search: z.string().trim().max(200).optional(),
+    }),
+    output: z.object({
+      productId: productShortcode,
+      productName: z.string(),
+      lines: z.array(
+        z.object({
+          expenseId: expenseShortcode,
+          name: z.string(),
+          date: z.string().nullable(),
+          cost: z.number().nullable(),
+          productQuantity: z.number().nullable(),
+          purchaseId: z.string().nullable(),
+          purchaseLabel: z.string().nullable(),
+          expectedQuantityDelta: z.number().nullable(),
+        }),
+      ),
+    }),
+  }),
+  linkExpense: mutation({
+    input: z.object({
+      runId: runShortcode,
+      groupKey: z.string().min(1).max(200),
+      expenseId: expenseShortcode,
+    }),
+    output: z.object({
+      expenseId: expenseShortcode,
+      productId: productShortcode,
+    }),
   }),
   chooseExisting: mutation({
     native: "Select an existing Product for a proposed photo group",

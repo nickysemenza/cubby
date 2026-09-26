@@ -36,6 +36,7 @@ import {
   run as runTable,
   runMutation,
   runTarget,
+  inventoryEntry,
   product,
 } from "~/server/db/schema";
 import { assertRunCapability } from "~/server/purchase-import/capabilities";
@@ -49,7 +50,10 @@ import {
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
 import { attachExistingImageToEntity } from "~/server/repo/image";
-import { createInventoryEntry } from "~/server/repo/inventory/crud";
+import {
+  createInventoryEntry,
+  updateInventoryEntry,
+} from "~/server/repo/inventory/crud";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/request-context";
 import { sha256Hex } from "~/server/semantic/hash";
@@ -371,6 +375,7 @@ async function resolveProduct(
  * member, but an explicit `person` mode without `ownerPartyId` is refused
  * rather than silently guessing who owns it (see `commitPhotoGroupInventory`).
  */
+// eslint-disable-next-line complexity -- The commit boundary validates ownership, placement, and add-mode invariants atomically.
 async function receiveInventory(
   txDb: Database,
   scope: RunScope,
@@ -407,17 +412,69 @@ async function receiveInventory(
     ownershipMode = requestedMode;
     ownerLedgerPartyId = null;
   }
-  const entry = await createInventoryEntry(
-    txDb,
-    {
-      productId,
-      locationId,
-      amount: { value: input.inventory.quantity, unit: "each" },
-      ownershipMode,
-      ownerLedgerPartyId,
-    },
-    actor,
-  );
+  const targetEntryId = input.inventory.existingEntryId;
+  if (input.inventory.mode === "add" && !targetEntryId)
+    throw new Error("Adding Inventory requires an explicit existing entry");
+  if (input.inventory.mode !== "add" && targetEntryId)
+    throw new Error("An existing Inventory entry requires add mode");
+  const targetId = targetEntryId
+    ? await resolveOrThrow(txDb, "inventory", targetEntryId)
+    : null;
+  const [before] = targetId
+    ? await getDb(txDb)
+        .select({
+          productId: inventoryEntry.productId,
+          locationId: inventoryEntry.locationId,
+          placement: inventoryEntry.placement,
+          ownershipMode: inventoryEntry.ownershipMode,
+          ownerLedgerPartyId: inventoryEntry.ownerLedgerPartyId,
+          amount: inventoryEntry.amount,
+        })
+        .from(inventoryEntry)
+        .where(and(eq(inventoryEntry.id, targetId), notDeleted(inventoryEntry)))
+        .for("update")
+    : [];
+  if (
+    targetId &&
+    (!before ||
+      before.productId !== productId ||
+      before.locationId !== locationId ||
+      before.placement !== "stock" ||
+      before.ownershipMode !== ownershipMode ||
+      before.ownerLedgerPartyId !== ownerLedgerPartyId)
+  )
+    throw new Error(
+      "Existing Inventory entry no longer matches the Product, location, placement, or owner",
+    );
+  if (
+    before &&
+    (before.amount?.unit !== "each" || !Number.isFinite(before.amount.value))
+  )
+    throw new Error("Existing Inventory entry must have a numeric each count");
+  const entry =
+    targetId && before
+      ? await updateInventoryEntry(
+          txDb,
+          targetId,
+          {
+            amount: {
+              value: before.amount!.value + input.inventory.quantity,
+              unit: "each",
+            },
+          },
+          actor,
+        )
+      : await createInventoryEntry(
+          txDb,
+          {
+            productId,
+            locationId,
+            amount: { value: input.inventory.quantity, unit: "each" },
+            ownershipMode,
+            ownerLedgerPartyId,
+          },
+          actor,
+        );
   const inventoryShortcodeStr = entry.id;
   const inventoryEntityId: InventoryId = await resolveOrThrow(
     txDb,
@@ -430,7 +487,7 @@ async function receiveInventory(
       runId: scope.public.runId,
       targetKind: "inventory",
       targetId: inventoryEntityId,
-      mutationKind: "create",
+      mutationKind: targetId ? "update" : "create",
       fields: ["amount", "ownershipMode", "ownerLedgerPartyId"],
       postFingerprint: await sha256Hex(
         JSON.stringify({

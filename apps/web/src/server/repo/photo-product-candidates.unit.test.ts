@@ -3,9 +3,48 @@ import { describe, expect, it } from "vitest";
 
 import { forgeWearEvidence } from "../../../tests/fixtures/product-identity-evidence";
 import { rankPhotoProductCandidates } from "./photo-product-candidates";
-import { compareProductTitles } from "./product-variant-comparison";
+import {
+  compareProductTitles,
+  extractVariantFacts,
+} from "./product-variant-comparison";
 
 describe("explicit variant evidence", () => {
+  it("distinguishes numeric US boot sizes and reads wheat as an explicit color", () => {
+    expect(
+      compareProductTitles(
+        "ForgeWear work boots — tan, size 7",
+        "ForgeWear safety boots, wheat, 9.5 US",
+      ),
+    ).toEqual({
+      color: { first: "Tan", second: "Wheat", relation: "different" },
+      size: { first: "US 7", second: "US 9.5", relation: "different" },
+    });
+  });
+
+  it("does not turn an unrelated model number into a clothing size", () => {
+    expect(
+      compareProductTitles("ForgeWear jacket model 7", "ForgeWear jacket 9"),
+    ).toEqual({
+      color: { first: null, second: null, relation: "unknown" },
+      size: { first: null, second: null, relation: "unknown" },
+    });
+  });
+
+  it("parses garment waist context without treating inseam or model numbers as size", () => {
+    expect(extractVariantFacts("Denim jeans W30 L32").size).toEqual({
+      value: "W 30",
+      raw: "W30",
+    });
+    expect(extractVariantFacts("Denim jeans model 30").size).toBeNull();
+  });
+
+  it("keeps the source phrase beside a normalized variant fact", () => {
+    expect(extractVariantFacts("Work boots — wheat, 9.5 US")).toMatchObject({
+      color: { value: "Wheat", raw: "wheat" },
+      size: { value: "US 9.5", raw: "9.5 US" },
+    });
+  });
+
   it("flags a different color and preserves an unknown size instead of guessing from loose fit", () => {
     expect(
       compareProductTitles(
@@ -29,6 +68,32 @@ describe("explicit variant evidence", () => {
 });
 
 describe("photo product candidate ranking", () => {
+  it("uses label size evidence to rank a matching boot over a conflicting size", () => {
+    const candidate = (name: string) => ({
+      id: parseEntityId("product", crypto.randomUUID()),
+      shortcode: name.endsWith("7") ? "PRD-4K7M" : "PRD-8B2Q",
+      name,
+      manufacturer: "ForgeWear",
+      hasOwnPhoto: true,
+      hasPhotoImport: true,
+      hasPurchase: false,
+      hasInventory: false,
+    });
+    const ranked = rankPhotoProductCandidates(
+      "ForgeWear tan work boots",
+      "ForgeWear",
+      [
+        candidate("ForgeWear tan work boots size 9"),
+        candidate("ForgeWear tan work boots size 7"),
+      ],
+      ["US 7"],
+    );
+    expect(ranked.map((item) => item.shortcode)).toEqual([
+      "PRD-4K7M",
+      "PRD-8B2Q",
+    ]);
+    expect(ranked[1]?.variant.size.relation).toBe("different");
+  });
   it("keeps the observed color and size ahead of another variant's photo gap", () => {
     const ranked = rankPhotoProductCandidates(
       forgeWearEvidence.observedName,

@@ -71,7 +71,7 @@ function PhotoRunProgress({
         </p>
         {imageWork.length ? (
           <div
-            className="grid gap-2 border-t border-border pt-3 sm:grid-cols-3"
+            className="flex flex-wrap gap-x-5 gap-y-2 border-t border-border pt-3"
             aria-live="polite"
           >
             {[
@@ -79,15 +79,12 @@ function PhotoRunProgress({
               { label: "Cloud description", done: described, optional: false },
               { label: "Subject lift", done: cutoutsSettled, optional: true },
             ].map((work) => (
-              <div
-                key={work.label}
-                className="rounded-md bg-muted/50 px-3 py-2"
-              >
+              <div key={work.label} className="flex items-baseline gap-2">
                 <p className="text-2xs text-muted-foreground">
                   {work.label}
                   {work.optional ? " · optional" : ""}
                 </p>
-                <p className="font-mono text-sm font-semibold tabular-nums">
+                <p className="font-mono text-xs font-semibold tabular-nums">
                   {work.done} / {imageWork.length}
                 </p>
               </div>

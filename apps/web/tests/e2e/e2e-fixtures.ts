@@ -1,4 +1,5 @@
 import "./build-constants";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 import { taxonomyShortcode } from "../../tooling/product-category-fixtures";
@@ -254,6 +255,66 @@ export const seedProductPrerequisite = (
 
 export const seedProjectPrerequisite = (page: Page, name: string) =>
   createFixture(page, "project", { name });
+
+export const seedUnlinkedExpensePrerequisite = (page: Page, name: string) =>
+  createFixture(page, "expense", {
+    name,
+    cost: 87,
+    date: "2026-01-05",
+    costType: "materials",
+    trade: "other",
+    lineKind: "principal",
+    lineBasis: "item_line",
+  });
+
+export async function seedPhotoReviewProcessingFailure(
+  imageCode: ImageShortcode,
+  kind: "subject_lift" | "describe_image",
+  reason: string,
+) {
+  const db = getFixtureDb();
+  const [row] = await getDb(db)
+    .select({ id: schema.image.id, sha256: schema.image.sha256 })
+    .from(schema.image)
+    .where(eq(schema.image.shortcode, imageCode));
+  if (!row?.sha256) throw new Error("Synthetic photo needs a content hash");
+  await getDb(db)
+    .insert(schema.imageProcessingJob)
+    .values({
+      imageId: parseEntityId("image", row.id),
+      kind,
+      state: "failed",
+      sourceContentHash: row.sha256,
+      processorRevision: 1,
+      lastError: reason,
+    });
+}
+
+export async function seedPhotoReviewLabelText(
+  imageCode: ImageShortcode,
+  text: string,
+) {
+  const db = getFixtureDb();
+  const [row] = await getDb(db)
+    .select({ id: schema.image.id })
+    .from(schema.image)
+    .where(eq(schema.image.shortcode, imageCode));
+  if (!row) throw new Error("Synthetic label photo not found");
+  await getDb(db)
+    .insert(schema.aiAnalysis)
+    .values({
+      entityKind: "image",
+      entityId: row.id,
+      feature: "photo-local-analysis",
+      model: "synthetic",
+      promptVersion: "v1",
+      inputFingerprint: crypto.randomUUID(),
+      result: {
+        classifications: [],
+        recognizedText: [{ text, confidence: 1 }],
+      },
+    });
+}
 
 export async function seedPlantPurchasePrerequisite(
   page: Page,
@@ -1009,6 +1070,7 @@ export async function seedPhotoGroupReviewRun(
       width: 640,
       height: 640,
       detectedContentType: "image/png",
+      sha256: createHash("sha256").update(bytes).digest("hex"),
       renderStatus: "verified",
       storageStatus: "available",
       verifiedAt: new Date(),

@@ -68,7 +68,7 @@ export default defineEntity({
       },
       additionalSectionOverrides: [
         { kind: "slot", id: "import-workflow", title: "Import" },
-        { kind: "slot", id: "photo-batch", title: "Photos" },
+        { kind: "slot", id: "photo-batch", title: "Photos", placement: "full" },
         { kind: "slot", id: "ai-usage", title: "AI usage" },
         { kind: "slot", id: "changes", title: "Changes" },
         {

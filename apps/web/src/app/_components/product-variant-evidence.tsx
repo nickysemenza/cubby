@@ -1,6 +1,6 @@
 import type { ProductVariantComparison } from "@cubby/schemas/product-variant-comparison";
 
-/** Title evidence only; the person's photo and label remain the authority. */
+/** Explicit text evidence; the reviewer decides identity from the photos and records. */
 export function ProductVariantEvidence({
   comparison,
   firstLabel,
@@ -25,7 +25,7 @@ export function ProductVariantEvidence({
               }
             >
               {fact.relation === "same"
-                ? `${fact.first} in both titles`
+                ? `${fact.first} in both sources`
                 : fact.relation === "different"
                   ? `${firstLabel}: ${fact.first}; ${secondLabel}: ${fact.second} — check evidence`
                   : `${firstLabel}: ${fact.first ?? "unknown"}; ${secondLabel}: ${fact.second ?? "unknown"}`}
