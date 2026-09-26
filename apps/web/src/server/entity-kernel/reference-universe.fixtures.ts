@@ -5,6 +5,7 @@
  * list smoke matrix and the delete-policy matrix.
  */
 import { testUserId } from "@cubby/schemas/testing";
+import { eq } from "drizzle-orm";
 import {
   seedEntity,
   TEST_HOME_SHORTCODE,
@@ -16,7 +17,10 @@ import type { Database } from "~/server/db";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
+import { getDb } from "~/server/repo/database-helpers";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { financialAccount as financialAccountTable, planting as plantingTable } from "~/server/db/schema";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -198,7 +202,7 @@ export async function seedReferenceUniverse(
 
   await seed("product");
   const project = await seed("project");
-  await seed("vendor");
+  const vendor = await seed("vendor");
   await seed("ingredient");
   // Before planting: a planting's required plantId resolves through it.
   await seed("plant");
@@ -238,7 +242,7 @@ export async function seedReferenceUniverse(
     locationId: storageLocation ? storageLocation.id : TEST_HOME_SHORTCODE,
   });
 
-  await seed("recipe");
+  const recipe = await seed("recipe");
   await seed("meal");
   await seed("wish");
   const ledgerPartyA = await seed("ledgerParty");
@@ -288,6 +292,69 @@ export async function seedReferenceUniverse(
   if (device) sightingOverrides.deviceId = device.id;
   if (ledgerPartyA) sightingOverrides.ledgerPartyId = ledgerPartyA.id;
   await seed("imageSighting", sightingOverrides);
+
+  // Everything below is appended after the whole dependency-ordered pipeline
+  // above rather than interleaved with it: `seed()`'s unseeded `mock()` calls
+  // draw from a shared, order-sensitive generator, so inserting an extra call
+  // (or changing an existing one's override shape) earlier in the sequence
+  // silently reshuffles every later entity's random sample — including ones
+  // that happen to collide with a uniqueness constraint. Each addition here
+  // either seeds last (nothing after it can be perturbed) or writes directly
+  // to columns a schema-validated create already produced, covering an edge
+  // the pipeline above cannot reach without disturbing it.
+
+  // A second recipe forking the first covers the self-edge
+  // `Recipe.forkedFromRecipeId` (the fork survives as the live target). An
+  // explicit name avoids the name collision `mock()`'s deterministic default
+  // sample produces for a second, unseeded call against the same schema.
+  if (recipe)
+    await seed("recipe", {
+      forkedFromRecipeId: recipe.id,
+      name: "Delete policy forked recipe",
+    });
+
+  // A location nested under `storageLocation` (itself non-root) covers the
+  // self-edge `Location.parentId`: deleting a non-home location and observing
+  // its own child location needs two non-home locations, not one.
+  const nestedLocation = storageLocation
+    ? await seed("location", {
+        parentId: storageLocation.id,
+        type: "shelf",
+        name: "Delete policy nested location",
+      })
+    : null;
+  if (nestedLocation) {
+    // Re-point the already-seeded planting onto it directly (not through
+    // another `seed()` call — see the note above): covers `Planting.locationId`
+    // for a location delete, which the pipeline above leaves on the house root.
+    const [plantingId, nestedLocationId] = await Promise.all([
+      resolveOrThrow(db, "planting", planting.id),
+      resolveOrThrow(db, "location", nestedLocation.id),
+    ]);
+    await getDb(db)
+      .update(plantingTable)
+      .set({ locationId: nestedLocationId })
+      .where(eq(plantingTable.id, plantingId));
+    record(nestedLocation.id);
+  }
+
+  // A stored-value identity lets `providerVendorId` name a real vendor,
+  // covering `FinancialAccount.providerVendorId`'s vendor-delete disposition
+  // — set directly on the row a schema-validated create already produced,
+  // rather than through the create schema (see the note above).
+  if (financialAccount && vendor) {
+    const [financialAccountId, vendorId] = await Promise.all([
+      resolveOrThrow(db, "financialAccount", financialAccount.id),
+      resolveOrThrow(db, "vendor", vendor.id),
+    ]);
+    await getDb(db)
+      .update(financialAccountTable)
+      .set({
+        identity: { kind: "stored_value", provider: "Delete policy fixture" },
+        providerVendorId: vendorId,
+      })
+      .where(eq(financialAccountTable.id, financialAccountId));
+  }
 
   // `image` (and any other entity this sequence never attempted) still needs
   // to be recorded as skipped for the report below.

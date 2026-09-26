@@ -22,7 +22,10 @@ import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
  * An edge the universe does not populate is reported as uncovered, and the
  * uncovered set is pinned: coverage can only grow by a test change.
  */
-import { entityManifest } from "@cubby/schemas/entity-manifest";
+import {
+  entityManifest,
+  type ShortcodeEntity,
+} from "@cubby/schemas/entity-manifest";
 import { attachableImageEntityId } from "@cubby/schemas/image";
 import { generateShortcode } from "@cubby/shared";
 import { getTableColumns, type SQL, sql } from "drizzle-orm";
@@ -42,7 +45,27 @@ import {
   INCOMING_EDGES,
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
-import { run as runTable, importSourceClaim } from "~/server/db/schema";
+import {
+  run as runTable,
+  expenseAttribution,
+  importHunt,
+  importPreparedOrder,
+  importSourceClaim,
+  imageDerivative,
+  imageProcessingJob,
+  ledgerSourceClaim,
+  mealFoodEntry,
+  mealRecipe,
+  mealRecipePortion,
+  orderMail,
+  orderMailAttachment,
+  photoGroupProposal,
+  productMatchCandidate,
+  runFinding,
+  runTarget,
+  statementImport,
+  statementRow,
+} from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import {
   ENTITY_KERNEL_ENTITIES,
@@ -58,54 +81,29 @@ import {
   setAtPath,
 } from "~/server/entity-kernel/reference-universe.fixtures";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
-import { databaseForTransaction, getDb } from "~/server/repo/database-helpers";
+import {
+  databaseForTransaction,
+  getDb,
+  insertAndReturn,
+} from "~/server/repo/database-helpers";
 import { attachExistingImageToEntity } from "~/server/repo/image";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { SHORTCODE_TABLE } from "~/server/repo/shortcode-utils";
+import {
+  insertWithShortcode,
+  SHORTCODE_TABLE,
+} from "~/server/repo/shortcode-utils";
 
 /**
  * Edges the seeded universe leaves without a live referencing row. Each is a
  * disposition this matrix cannot see; shrinking the list is the goal.
+ *
+ * Empty: every declared incoming edge now has a live source row somewhere in
+ * the universe (the base reference universe, `enrichUniverse`'s second pass,
+ * or this file's direct staging-table seeds for the tables no kernel create
+ * reaches), so this matrix currently sees every edge's real disposition.
  */
-const UNCOVERED_EDGES: readonly string[] = [
-  "product MealFoodEntry.productId",
-  "product Cookbook.productId",
-  "product ProductMatchCandidate.productAId",
-  "product ProductMatchCandidate.productBId",
-  "product PhotoGroupProposal.productId",
-  "recipe Recipe.forkedFromRecipeId",
-  "ingredient MealFoodEntry.ingredientId",
-  "location Location.parentId",
-  "location PhotoGroupProposal.inventoryLocationId",
-  "location Planting.locationId",
-  "meal MealFoodEntry.mealId",
-  "meal MealRecipePortion.mealId",
-  "ledgerParty RunFinding.ledgerPartyId",
-  "ledgerParty ImportHunt.ledgerPartyId",
-  "ledgerParty ExpenseAttribution.ledgerPartyId",
-  "ledgerParty InventoryEntry.ownerLedgerPartyId",
-  "ledgerParty MealRecipePortion.ledgerPartyId",
-  "ledgerParty MealFoodEntry.ledgerPartyId",
-  "ledgerParty PhotoGroupProposal.inventoryOwnerPartyId",
-  "ledgerTransfer LedgerSourceClaim.ledgerTransferId",
-  "vendor FinancialAccount.providerVendorId",
-  "vendor ImportHunt.vendorId",
-  "financialAccount StatementRow.accountId",
-  "financialTransaction ImportHunt.financialTransactionId",
-  "expense ExpenseAttribution.expenseId",
-  "expense LedgerSourceClaim.expenseId",
-  "image ImageProcessingJob.imageId",
-  "image ImageDerivative.imageId",
-  "image ImportPreparedOrder.primaryDocumentImageId",
-  "image ImportPreparedOrder.screenshotImageId",
-  "image ImportHunt.receiptImageId",
-  "image OrderMailAttachment.imageId",
-  "vendorAccount RunTarget.vendorAccountId",
-  "vendorAccount ImportHunt.vendorAccountId",
-  "productCategory PhotoGroupProposal.productCreateCategoryId",
-  "device RunTarget.deviceWorkDeviceId",
-];
+const UNCOVERED_EDGES: readonly string[] = [];
 
 const rowSchema = z.record(z.string(), z.unknown());
 type DbRow = z.infer<typeof rowSchema>;
@@ -487,14 +485,15 @@ async function enrichUniverse(
  * An import run, and a source claim on the seeded purchase: no kernel create
  * writes either, and the synthetic insert cannot satisfy the claim's `kind`
  * check. The run also lets synthetic rows of the run-owned tables insert.
+ * Returns the run's id so other staging-table seeds (below) can reuse it.
  */
 async function seedImportSourceClaim(
   db: Database,
   shortcodeByPrefix: ReadonlyMap<string, string>,
-) {
+): Promise<string | null> {
   const purchaseCode = shortcodeByPrefix.get("PUR-");
   const partyCode = shortcodeByPrefix.get("LPY-");
-  if (!purchaseCode || !partyCode) return;
+  if (!purchaseCode || !partyCode) return null;
   const { actorContext } = buildKernelContext(db);
   const [run] = await getDb(db)
     .insert(runTable)
@@ -520,6 +519,300 @@ async function seedImportSourceClaim(
       lastRunId: run!.id,
       outputFingerprint: "delete-policy",
     });
+  return run!.id;
+}
+
+/**
+ * Direct inserts into staging/child tables the kernel never creates
+ * (import/photo/statement/ledger-evidence rows), covering the remaining
+ * incoming edges `UNCOVERED_EDGES` used to list: meal food entries and recipe
+ * portions (require `amount`, not a `grams` column), the import-run staging
+ * tables (`ImportHunt`, `ImportPreparedOrder`, `RunTarget`, `RunFinding`,
+ * `PhotoGroupProposal`, `OrderMailAttachment`), review/settlement metadata
+ * (`ProductMatchCandidate`, `LedgerSourceClaim`, `StatementRow`), and image
+ * processing rows (`ImageProcessingJob`, `ImageDerivative`). Each write
+ * targets real seeded rows resolved through `shortcodeByPrefix`, so a
+ * subsequent delete of one of those rows exercises the edge's real
+ * disposition.
+ */
+async function seedDeletePolicyStagingRows(
+  db: Database,
+  shortcodeByPrefix: ReadonlyMap<string, string>,
+  runId: string | null,
+) {
+  const resolve = async <E extends ShortcodeEntity>(
+    entity: E,
+    prefix: string,
+  ) => {
+    const code = shortcodeByPrefix.get(prefix);
+    return code ? resolveOrThrow(db, entity, code) : null;
+  };
+
+  const mealId = await resolve("meal", "MEL-");
+  const ledgerPartyId = await resolve("ledgerParty", "LPY-");
+  const productId = await resolve("product", "PRD-");
+  const ingredientId = await resolve("ingredient", "ING-");
+  const recipeId = await resolve("recipe", "RCP-");
+  const purchaseId = await resolve("purchase", "PUR-");
+  const expenseId = await resolve("expense", "EXP-");
+  const ledgerTransferId = await resolve("ledgerTransfer", "LTR-");
+  const financialAccountId = await resolve("financialAccount", "FAC-");
+  const financialTransactionId = await resolve(
+    "financialTransaction",
+    "FTX-",
+  );
+  const vendorId = await resolve("vendor", "VEN-");
+  const vendorAccountId = await resolve("vendorAccount", "VACCT-");
+  const deviceId = await resolve("device", "DEV-");
+  const imageId = await resolve("image", "IMG-");
+  const productCategoryId = await resolve("productCategory", "CAT-");
+  // The last-seeded (non-home) location — see reference-universe.fixtures.ts.
+  const locationId = await resolve("location", "LOC-");
+
+  // MealFoodEntry (product- and ingredient-sourced) and MealRecipePortion:
+  // child rows of a meal, not kernel-creatable entities. `amount` is a jsonb
+  // `{ value, unit }` shape — there is no `grams` column.
+  if (mealId && ledgerPartyId) {
+    if (productId)
+      await insertAndReturn(db, mealFoodEntry, {
+        mealId,
+        ledgerPartyId,
+        productId,
+        sourceKind: "product",
+        amount: { value: 1, unit: "g" },
+      }).catch(() => undefined);
+    if (ingredientId)
+      await insertAndReturn(db, mealFoodEntry, {
+        mealId,
+        ledgerPartyId,
+        ingredientId,
+        sourceKind: "ingredient",
+        amount: { value: 1, unit: "g" },
+      }).catch(() => undefined);
+    if (recipeId) {
+      const recipe = await insertAndReturn(db, mealRecipe, {
+        mealId,
+        recipeId,
+      }).catch(() => undefined);
+      if (recipe)
+        await insertAndReturn(db, mealRecipePortion, {
+          mealRecipeId: recipe.id,
+          mealId,
+          ledgerPartyId,
+          amount: { value: 1, unit: "g" },
+        }).catch(() => undefined);
+    }
+  }
+
+  // A second live product, ordered against the first, for
+  // `ProductMatchCandidate`'s canonical-pair check (`productAId < productBId`).
+  if (productId) {
+    const other = await insertWithShortcode(db, "product", {
+      name: "Delete policy fixture product",
+      manufacturer: "Delete policy",
+    }).catch(() => undefined);
+    if (other) {
+      const [productAId, productBId] = [productId, other.id].sort();
+      await insertAndReturn(db, productMatchCandidate, {
+        productAId: productAId!,
+        productBId: productBId!,
+        source: "detector",
+        state: "open",
+      }).catch(() => undefined);
+    }
+  }
+
+  // LedgerSourceClaim: exactly one of expenseId/ledgerTransferId, never both.
+  const claimEvidence = {
+    normalizedEvidence: { amount: 10 },
+    targetAmountAtClaim: 10,
+    reconciliationDecision: "amounts_match" as const,
+    sourceKeyVersion: 1,
+  };
+  if (expenseId)
+    await insertAndReturn(db, ledgerSourceClaim, {
+      ...claimEvidence,
+      expenseId,
+      source: "delete-policy",
+      sourceKey: "delete-policy-expense-claim",
+    }).catch(() => undefined);
+  if (ledgerTransferId)
+    await insertAndReturn(db, ledgerSourceClaim, {
+      ...claimEvidence,
+      ledgerTransferId,
+      source: "delete-policy",
+      sourceKey: "delete-policy-transfer-claim",
+    }).catch(() => undefined);
+
+  // StatementRow.accountId.
+  if (financialAccountId) {
+    const batch = await insertAndReturn(db, statementImport, {
+      source: "delete-policy",
+      label: "Delete policy fixture",
+      fingerprint: "delete-policy-1",
+    }).catch(() => undefined);
+    if (batch)
+      await insertAndReturn(db, statementRow, {
+        batchId: batch.id,
+        source: "delete-policy",
+        // `externalId` must be `v1:<64 lowercase hex chars>` (a content hash).
+        externalId: `v1:${"a".repeat(64)}`,
+        accountDescriptor: "Delete policy card",
+        statementDate: "2024-01-15",
+        amount: 10,
+        providerAmount: 10,
+        rawDescription: "Delete policy fixture row",
+        accountId: financialAccountId,
+      }).catch(() => undefined);
+  }
+
+  // Cookbook.productId: createInput is null (not kernel-creatable — see
+  // SKIPPED_ENTITIES-style entities in reference-universe.fixtures.ts).
+  if (productId)
+    await insertWithShortcode(db, "cookbook", {
+      name: "Delete policy fixture cookbook",
+      sourceLabel: "delete-policy",
+      rawJson: {},
+      productId,
+    }).catch(() => undefined);
+
+  // ExpenseAttribution: covers both `expense`'s and `ledgerParty`'s edge.
+  if (expenseId && ledgerPartyId)
+    await insertAndReturn(db, expenseAttribution, {
+      expenseId,
+      role: "funder",
+      ledgerPartyId,
+      weight: 1,
+    }).catch(() => undefined);
+
+  // InventoryEntry.ownerLedgerPartyId: the base universe's single inventory
+  // row uses the default `ownershipMode: "inherit"` (no owner); a second,
+  // person-owned row covers the owner-delete disposition.
+  if (productId && locationId && ledgerPartyId)
+    await insertWithShortcode(db, "inventory", {
+      productId,
+      amount: { value: 1, unit: "each" },
+      locationId,
+      ownershipMode: "person",
+      ownerLedgerPartyId: ledgerPartyId,
+    }).catch(() => undefined);
+
+  // Everything below needs the import run seeded alongside the source claim.
+  if (!runId) return;
+
+  if (ledgerPartyId && financialTransactionId)
+    await insertAndReturn(db, importHunt, {
+      ledgerPartyId,
+      financialTransactionId,
+      vendorId: vendorId ?? undefined,
+      vendorAccountId: vendorAccountId ?? undefined,
+      receiptImageId: imageId ?? undefined,
+      dateFrom: "2024-01-01",
+      dateTo: "2024-01-31",
+    }).catch(() => undefined);
+
+  if (purchaseId)
+    await insertAndReturn(db, runTarget, {
+      runId,
+      purchaseId,
+      vendorAccountId: vendorAccountId ?? undefined,
+      deviceWorkDeviceId: deviceId ?? undefined,
+      targetFingerprint: "delete-policy-runtarget",
+    }).catch(() => undefined);
+
+  if (ledgerPartyId && purchaseId)
+    await insertAndReturn(db, runFinding, {
+      runId,
+      ledgerPartyId,
+      targetKind: "purchase",
+      targetId: purchaseId,
+      kind: "delete-policy-finding",
+      summary: "Delete policy fixture finding",
+      evidenceFingerprint: "delete-policy-finding-fp",
+    }).catch(() => undefined);
+
+  if (imageId)
+    await insertAndReturn(db, importPreparedOrder, {
+      runId,
+      prepareOperationId: "delete-policy-prepare-1",
+      itemOperationId: "delete-policy-item-1",
+      stableOrderId: "delete-policy-order-1",
+      sourceKind: "vendor_export",
+      sourceExternalKey: "delete-policy-order-1",
+      sourceChecksum: "delete-policy",
+      evidenceChecksum: "delete-policy",
+      extractionRevision: "1",
+      extraction: {},
+      primaryDocumentImageId: imageId,
+      screenshotImageId: imageId,
+      targetFingerprint: "delete-policy-prepared-order",
+      evidenceFingerprint: "delete-policy-prepared-order",
+    }).catch(() => undefined);
+
+  if (productId && productCategoryId && locationId && ledgerPartyId)
+    await insertAndReturn(db, photoGroupProposal, {
+      runId,
+      groupKey: "delete-policy-group-1",
+      productKind: "existing",
+      productId,
+      productCreateCategoryId: productCategoryId,
+      inventoryLocationId: locationId,
+      inventoryOwnerPartyId: ledgerPartyId,
+    }).catch(() => undefined);
+
+  if (ledgerPartyId && imageId) {
+    // A dedicated, disposable party — not the shared `ledgerPartyId` every
+    // other edge above also uses — for `OrderMail.ledgerPartyId`. `OrderMail`
+    // has no `deletedAt`, and this row's own `OrderMailAttachment` FK makes
+    // it undeletable; sharing the target party would make every OTHER
+    // ledgerParty block edge's cleanup step try (and fail) to hard-delete
+    // this row whenever ITS target is measured, marking that other edge
+    // uncovered as a side effect. A party nothing else references isolates
+    // the failure to `OrderMail.ledgerPartyId` alone (still covered: the
+    // block disposition only requires the delete be refused).
+    const orderMailParty = await insertWithShortcode(db, "ledgerParty", {
+      name: "Delete policy order mail party",
+      kind: "guest",
+    }).catch(() => undefined);
+    const mail = orderMailParty
+      ? await insertAndReturn(db, orderMail, {
+          ledgerPartyId: orderMailParty.id,
+          messageId: "delete-policy-msg-1",
+          sender: "vendor@example.test",
+          subject: "Delete policy fixture",
+          receivedAt: new Date(),
+          rawChecksum: "delete-policy-checksum",
+        }).catch(() => undefined)
+      : undefined;
+    if (mail)
+      await insertAndReturn(db, orderMailAttachment, {
+        orderMailId: mail.id,
+        providerAttachmentId: "delete-policy-attachment-1",
+        filename: "receipt.pdf",
+        mimeType: "application/pdf",
+        checksum: "delete-policy-attachment-checksum",
+        imageId,
+      }).catch(() => undefined);
+  }
+
+  if (imageId) {
+    const derivative = await insertAndReturn(db, imageDerivative, {
+      imageId,
+      purpose: "transparent",
+      status: "pending",
+      key: "delete-policy-derivative-key",
+      sourceContentHash: "delete-policy-hash",
+      processorRevision: 1,
+    }).catch(() => undefined);
+    void derivative;
+    await insertAndReturn(db, imageProcessingJob, {
+      imageId,
+      kind: "describe_image",
+      state: "pending",
+      sourceContentHash: "delete-policy-hash",
+      processorRevision: 1,
+    }).catch(() => undefined);
+  }
 }
 
 describe("entity delete policy — declared dispositions at the DB boundary", () => {
@@ -528,7 +821,8 @@ describe("entity delete policy — declared dispositions at the DB boundary", ()
   it("applies every block, detach and cascade disposition", async () => {
     const universe = await seedReferenceUniverse(ctx.db);
     await enrichUniverse(ctx.db, universe.shortcodeByPrefix);
-    await seedImportSourceClaim(ctx.db, universe.shortcodeByPrefix);
+    const runId = await seedImportSourceClaim(ctx.db, universe.shortcodeByPrefix);
+    await seedDeletePolicyStagingRows(ctx.db, universe.shortcodeByPrefix, runId);
 
     const failures: string[] = [];
     const uncovered: string[] = [];
