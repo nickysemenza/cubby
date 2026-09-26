@@ -8,6 +8,9 @@
  *   are compared by absolute value (a refund resolving a charge hunt, or an
  *   order confirmation resolving a statement credit);
  * - combined-charge subset matching sums refund events into a charge;
+ * - order mail processed before its statement charge never resolves the
+ *   charge's later hunt, or an unmatched hunt goes to the browser before the
+ *   next mail sync could resolve it;
  * - a second, equal partial refund is dropped because one is already booked;
  * - order mail and order history arriving in either order leave two
  *   Purchases, a lost PDF, or a duplicated attachment.
@@ -38,7 +41,11 @@ import {
 } from "~/server/services/image-storage.service";
 
 import { resolveImportFinding } from "../findings";
-import { discoverImportHunts, dispatchImportHunts } from "../hunts";
+import {
+  discoverImportHunts,
+  dispatchImportHunts,
+  MAIL_GRACE_MS,
+} from "../hunts";
 import {
   importOrderHistory,
   liveExpenseCents,
@@ -341,6 +348,116 @@ describe("Gmail order mail processing", () => {
       "FW-SYN-0801",
       "FW-SYN-0803",
     ]);
+  });
+
+  // Regression: confirmation mail usually arrives days before the statement
+  // charge, so the mail path found no hunt and every hunt fell to the browser.
+  it("matches a new hunt to order mail processed before the statement charge", async () => {
+    const seed = await seedForgeWear();
+    await receiveMail(
+      seed,
+      "msg-early-confirmation",
+      "2026-09-08T15:00:00.000Z",
+      placed("FW-SYN-4001", 51.75, "2026-09-08T15:00:00.000Z"),
+    );
+    // Outside the charge's ±7 day window, same amount.
+    await receiveMail(
+      seed,
+      "msg-stale-confirmation",
+      "2026-08-20T15:00:00.000Z",
+      placed("FW-SYN-3999", 51.75, "2026-08-20T15:00:00.000Z"),
+    );
+    // Combined charge: two earlier orders that only together equal it.
+    await receiveMail(
+      seed,
+      "msg-combined-a",
+      "2026-09-09T10:00:00.000Z",
+      placed("FW-SYN-4101", 12, "2026-09-09T10:00:00.000Z"),
+    );
+    await receiveMail(
+      seed,
+      "msg-combined-b",
+      "2026-09-09T11:00:00.000Z",
+      placed("FW-SYN-4102", 7.5, "2026-09-09T11:00:00.000Z"),
+    );
+    const charge = await statementRow(seed, 51.75, "2026-09-12");
+    const combined = await statementRow(seed, 19.5, "2026-09-12");
+    const unmatched = await statementRow(seed, 99, "2026-09-12");
+
+    await expect(discoverImportHunts(ctx.db)).resolves.toBe(3);
+    expect(await huntFor(charge.id)).toMatchObject({
+      state: "pending_browser",
+      matchedOrderIds: ["FW-SYN-4001"],
+    });
+    const combinedHunt = await huntFor(combined.id);
+    expect(combinedHunt.state).toBe("pending_browser");
+    expect([...combinedHunt.matchedOrderIds].sort()).toEqual([
+      "FW-SYN-4101",
+      "FW-SYN-4102",
+    ]);
+    expect(await huntFor(unmatched.id)).toMatchObject({
+      state: "pending_mail",
+      matchedOrderIds: [],
+    });
+  });
+
+  it("never matches earlier refund mail to a new charge hunt", async () => {
+    const seed = await seedForgeWear();
+    await receiveMail(
+      seed,
+      "msg-earlier-refund",
+      "2026-09-09T09:00:00.000Z",
+      refunded("FW-SYN-4201", 33, "2026-09-09T09:00:00.000Z"),
+    );
+    const charge = await statementRow(seed, 33, "2026-09-10");
+    const credit = await statementRow(seed, -33, "2026-09-10");
+
+    await discoverImportHunts(ctx.db);
+    expect(await huntFor(charge.id)).toMatchObject({
+      state: "pending_mail",
+      matchedOrderIds: [],
+    });
+    expect(await huntFor(credit.id)).toMatchObject({
+      state: "pending_browser",
+      matchedOrderIds: ["FW-SYN-4201"],
+    });
+  });
+
+  it("holds an unmatched hunt for the mail grace window before browser dispatch", async () => {
+    const seed = await seedForgeWear();
+    const charge = await statementRow(seed, 27, "2026-09-10");
+    await discoverImportHunts(ctx.db);
+    const sent: PurchaseAgentEvent[] = [];
+    const queue = {
+      send: async (event: PurchaseAgentEvent) => {
+        sent.push(event);
+      },
+    };
+    const now = Date.now();
+
+    await expect(dispatchImportHunts(ctx.db, queue)).resolves.toBe(0);
+    await expect(
+      dispatchImportHunts(
+        ctx.db,
+        queue,
+        new Date(now + MAIL_GRACE_MS - 60_000),
+      ),
+    ).resolves.toBe(0);
+    expect(sent).toHaveLength(0);
+    expect((await huntFor(charge.id)).state).toBe("pending_mail");
+
+    await expect(
+      dispatchImportHunts(
+        ctx.db,
+        queue,
+        new Date(now + MAIL_GRACE_MS + 60_000),
+      ),
+    ).resolves.toBe(1);
+    expect(sent).toHaveLength(1);
+    expect(await huntFor(charge.id)).toMatchObject({
+      state: "browser_queued",
+      attempts: 1,
+    });
   });
 
   it("files a refund finding for a second equal partial refund after the first is booked", async () => {
