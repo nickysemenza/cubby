@@ -3,7 +3,21 @@ import {
   photoCategories,
   photoCategoryKeys,
 } from "../../../../packages/schemas/src/photo-categories.ts";
+import { updateInputImages } from "../../../../packages/schemas/src/image.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
+
+/**
+ * Every entity-create-body key that stages an image action rather than a real field
+ * (`pendingImageIds`, `removeImageIds`, `imageOrder`) — `updateInputImages` is the wire
+ * schema's own definition of that trio (`packages/schemas/src/image.ts`), so this list
+ * cannot drift from it. Emitted into `PhotoImportCatalog.imageFieldKeys` for
+ * `PhotoRelatedCreateEditor.renders(_:)` to hide, instead of a hand-maintained Swift literal.
+ */
+// SAFETY: `Object.keys` always returns `string[]`; the assertion only narrows away the
+// wider `(keyof typeof updateInputImages.shape)[]` inference to a plain readonly array.
+const IMAGE_FIELD_KEYS = Object.keys(
+  updateInputImages.shape,
+) as readonly string[];
 
 /**
  * Single source of truth for the manifest vocabularies shared by the TS union
@@ -342,7 +356,9 @@ export const renderImagePolicyArtifacts = (
     "public struct PhotoLifecycleFilter: Sendable, Hashable {\n  public let field: String\n  public let equals: String?\n  public let oneOf: [String]\n}\n\n" +
     "public struct PhotoRoutingPolicy: Sendable, Hashable {\n  public let candidateFields: [String]\n  public let temporalFields: [String]\n  public let lifecycleFilters: [PhotoLifecycleFilter]\n  public let ocrFields: [String]\n  public let classifierLabels: [String]\n  public let minimumScore: Double\n  public let minimumMargin: Double\n  public let category: String\n}\n\n" +
     "public struct PhotoCategory: Sendable, Hashable {\n  public let key: String\n  public let label: String\n  public let emoji: String\n  /** Base labels UNION every member entity's own classifier labels — computed by the\n   * generator (scripts/generator/entities/render/image-policy.ts); never recompute here. */\n  public let classifierLabels: [String]\n  public let entities: [EntityKey]\n}\n\n" +
-    "public enum PhotoImportCatalog {\n  public static let categories: [PhotoCategory] = [\n" +
+    "public enum PhotoImportCatalog {\n" +
+    `  /** Entity-create-body keys that stage an image action rather than a real field —\n   * derived from \`updateInputImages\` (packages/schemas/src/image.ts) so it cannot drift\n   * from the wire schema's own list. */\n  public static let imageFieldKeys: Set<String> = [${IMAGE_FIELD_KEYS.map((key) => JSON.stringify(key)).join(", ")}]\n` +
+    "  public static let categories: [PhotoCategory] = [\n" +
     swiftCategories +
     "\n  ]\n  public static let ingressRoutes: [PhotoIngressRoute] = [\n" +
     swiftRoutes +

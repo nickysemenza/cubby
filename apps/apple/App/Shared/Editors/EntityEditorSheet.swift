@@ -47,8 +47,10 @@ struct EntityEditorSheet: View {
         return unsupportedFields.filter(\.requiredOnCreate)
     }
 
-    /// Keys the photo block owns; they never render as field controls.
-    private static let imageKeys: Set<String> = ["pendingImageIds", "removeImageIds", "imageOrder"]
+    /// Keys the photo block owns; they never render as field controls. Derived from
+    /// `image-policy.gen.ts`'s `updateInputImages` (see `PhotoImportCatalog.imageFieldKeys`)
+    /// so this can't drift from the wire schema's own list.
+    private static let imageKeys = PhotoImportCatalog.imageFieldKeys
 
     var body: some View {
         NavigationStack {

@@ -28,12 +28,21 @@ struct EntityDetailView: View {
 
     var body: some View {
         let model = model
-        content
+        let titled =
+            content
             .porcelainScreen()
             .navigationTitle(model?.row?.title ?? descriptor.singular)
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
+            .toolbar { detailToolbar }
+        sheets(on: lifecycle(on: titled, model: model))
+    }
+
+    /// Extracted so `body` stays under the project's 200ms type-check budget: the load/refresh
+    /// `.task`s, pull-to-refresh, and the Handoff `.userActivity`.
+    private func lifecycle<V: View>(on view: V, model: GenericEntityDetailModel?) -> some View {
+        view
             .task(id: id) { await setup() }
             .task(id: appModel.entityMutationRevision) {
                 guard appModel.entityMutationRevision > 0,
@@ -54,7 +63,11 @@ struct EntityDetailView: View {
                 // Handoff-only.
                 activity.isEligibleForSearch = false
             }
-            .toolbar { detailToolbar }
+    }
+
+    /// Extracted so `body` stays under the project's 200ms type-check budget: the four sheets.
+    private func sheets<V: View>(on view: V) -> some View {
+        view
             .sheet(item: $photoCapture) { capture in
                 AddPhotoSheet(capture: capture) { _ in
                     Task { await model?.refresh(id: model?.row?.id ?? id) }
