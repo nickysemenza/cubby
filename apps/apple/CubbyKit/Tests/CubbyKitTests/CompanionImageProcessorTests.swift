@@ -61,6 +61,38 @@ struct CompanionImageProcessorTests {
         #expect(try Data(contentsOf: fixtureURL) == sourceBytes)
     }
 
+    // Regression: full-resolution lifts from 48 MP photos exceeded the server's 64 MB decode
+    // limit and every such cutout failed.
+    @Test("Caps the uploaded cutout's longer side", .requiresVisionHardware)
+    func capsCutoutPixelSize() async throws {
+        let sourceBytes = try ImageEncoding.encode(
+            TestImages.canvas(width: 5000, height: 5000, subject: true), as: .png)
+        let upload = UploadProbe()
+        let processor = CompanionImageProcessor(
+            download: { _ in sourceBytes },
+            put: { data, url, contentType in
+                await upload.record(data, url: url, contentType: contentType)
+            })
+
+        let result = try await processor.makeTransparentCutout(
+            source: CompanionImageSource(
+                url: URL(string: "https://images.example.invalid/large.png")!,
+                sha256: Self.sha256(sourceBytes), contentType: "image/png"),
+            output: CompanionImageOutput(
+                uploadURL: URL(string: "https://uploads.example.invalid/cutout.png")!,
+                contentType: "image/png"))
+
+        guard case .completed(let artifact) = result else {
+            Issue.record("Expected Vision to lift the generated foreground subject")
+            return
+        }
+        let captured = try #require(await upload.latest)
+        let pixelSize = try #require(ImageEncoding.pixelSize(of: captured.data))
+        #expect(max(pixelSize.width, pixelSize.height) == CompanionImageProcessor.maximumCutoutPixelSize)
+        #expect(pixelSize.width == artifact.width)
+        #expect(pixelSize.height == artifact.height)
+    }
+
     @Test("Retains an already transparent original without uploading another cutout")
     func transparentOriginalDoesNotUpload() async throws {
         let context = try #require(

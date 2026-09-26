@@ -235,6 +235,59 @@ describe("PhotoImportRunView", () => {
     );
   });
 
+  // Regression: a coordinator started while descriptions were still queued
+  // saw bare photos and stopped for review without grouping any of them.
+  it("waits for photo descriptions before starting grouping", async () => {
+    window.history.replaceState(null, "", "/runs/RUN-4K7M?startGrouping=1");
+    const describing: PhotoRunReview = {
+      ...review,
+      review: { ...review.review, proposals: [] },
+      images: review.images.map((image) => ({
+        ...image,
+        targetState: "pending",
+        describe: "pending",
+      })),
+    };
+    harness.queryClient.setQueryData(
+      ["purchase-import", "run", RUN_ID, "photo-review"],
+      describing,
+    );
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) =>
+        Response.json(
+          init?.method === "POST"
+            ? { runId: RUN_ID, started: true }
+            : describing,
+        ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <PhotoImportRunView
+        run={{
+          ...run,
+          status: "running",
+          endedAt: null,
+          targets: run.targets.map((target) => ({
+            ...target,
+            state: "pending",
+          })),
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(
+      await screen.findByText(/Grouping starts once descriptions are ready/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Start grouping" }),
+    ).toBeDisabled();
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method === "POST"),
+    ).toHaveLength(0);
+  });
+
   // The run's status, owner, times and notes render in the generic Run
   // detail's hero and overview; this slot owns only the worklist.
   it("shows the progress tally and every run photo with its cutout and description", async () => {

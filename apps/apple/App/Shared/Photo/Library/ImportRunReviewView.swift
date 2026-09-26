@@ -189,21 +189,12 @@ struct ImportRunReviewView: View {
         .task(id: runID) {
             guard !isPreview else { return }
             await refresh()
-            if !autoStartAttempted,
-                model.snapshot?.status == .running,
-                let review = model.review,
-                !review.images.isEmpty,
-                review.review.proposals.isEmpty
-            {
-                autoStartAttempted = true
-                await model.act(runID: runID, client: appModel.client) {
-                    try await appModel.client.startPhotoGrouping(runID)
-                }
-            }
+            await autoStartGroupingWhenAnalyzed()
             while !Task.isCancelled, model.snapshot?.status == .running {
                 try? await Task.sleep(for: .seconds(3))
                 guard !Task.isCancelled else { break }
                 await refresh()
+                await autoStartGroupingWhenAnalyzed()
             }
         }
         .confirmationDialog(
@@ -487,7 +478,14 @@ struct ImportRunReviewView: View {
                         Label(
                             image.localAnalysisReady ? "Device ready" : "Device analysis pending",
                             systemImage: image.localAnalysisReady ? "checkmark.circle" : "clock")
-                        processingLabel("Cutout", state: image.cutout, reason: image.cutoutReason)
+                        // The server parks a cutout as waiting-for-device until the description
+                        // decides whether the photo is worth cutting out.
+                        if image.cutout == .waitingForDevice, image.describe != .ready {
+                            Label("Cutout: Waiting for description", systemImage: "clock")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            processingLabel("Cutout", state: image.cutout, reason: image.cutoutReason)
+                        }
                         processingLabel("AI description", state: image.describe, reason: image.describeReason)
                     }
                     .font(.caption)
@@ -591,6 +589,22 @@ struct ImportRunReviewView: View {
             }
         }
         .padding(.vertical, PorcelainTokens.Space.xs)
+    }
+
+    /// Starts grouping once every photo's description has settled; the server applies the
+    /// same gate (`startPhotoGroupingForActor`), since a coordinator started earlier sees bare
+    /// photos and stops for review.
+    private func autoStartGroupingWhenAnalyzed() async {
+        guard !autoStartAttempted,
+            let review = model.review,
+            review.review.proposals.isEmpty,
+            PhotoReviewPolicy.groupingReadiness(
+                images: review.images, runStatus: model.snapshot?.status) == .readyToStart
+        else { return }
+        autoStartAttempted = true
+        await model.act(runID: runID, client: appModel.client) {
+            try await appModel.client.startPhotoGrouping(runID)
+        }
     }
 
     private func groupName(_ group: PhotoGroupProposal) -> String {

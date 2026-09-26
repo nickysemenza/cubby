@@ -92,6 +92,8 @@ public struct CompanionImageProcessor: Sendable {
         case unsupportedOutputContentType(String)
     }
 
+    static let maximumCutoutPixelSize = 2048
+
     private let download: Download
     private let put: Put
 
@@ -156,7 +158,11 @@ public struct CompanionImageProcessor: Sendable {
         guard lifted.foundSubject else { return .noSubject }
         try Task.checkCancellation()
 
-        let png = try ImageEncoding.encode(lifted.image, as: .png)
+        // The server decodes the derivative to verify transparency and rejects more than 64 MB of
+        // RGBA (`image-transparency.ts`); a full-resolution 48 MP lift is ~195 MB.
+        let cutout = try ImageEncoding.downscaled(
+            lifted.image, maxPixelSize: Self.maximumCutoutPixelSize)
+        let png = try ImageEncoding.encode(cutout, as: .png)
         let processingMilliseconds = Self.milliseconds(since: processingStarted)
         let digest = Self.sha256(png)
         let uploadStarted = ContinuousClock.now
@@ -165,12 +171,12 @@ public struct CompanionImageProcessor: Sendable {
         return .completed(
             CompanionCutoutArtifact(
                 sha256: digest, contentType: output.contentType,
-                width: lifted.image.width, height: lifted.image.height,
+                width: cutout.width, height: cutout.height,
                 diagnostics: .init(
                     decodeMilliseconds: decodeMilliseconds,
                     processingMilliseconds: processingMilliseconds,
                     uploadMilliseconds: uploadMilliseconds,
-                    width: lifted.image.width, height: lifted.image.height,
+                    width: cutout.width, height: cutout.height,
                     orientation: orientation)))
     }
 

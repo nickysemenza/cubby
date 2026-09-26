@@ -61,6 +61,14 @@ public actor CompanionImageWorker {
     private var connectionGeneration = 0
     private var connectionTask: Task<Void, Never>?
     private var socket: URLSessionWebSocketTask?
+    /// The server dispatches every queued job at once; executing each inline in the receive loop
+    /// ran a photo run's describe and cutout jobs strictly one after another. Commands now run
+    /// concurrently up to this bound, and each command's own deadline still applies while queued.
+    static let maximumConcurrentCommands = 4
+    private var commandTasks: [String: Task<Void, Never>] = [:]
+    private var running: [String: CompanionImageWorkerActivity] = [:]
+    private var runningCount = 0
+    private var slotWaiters: [CheckedContinuation<Void, Never>] = []
 
     public init(
         baseURL: URL,
@@ -104,6 +112,7 @@ public actor CompanionImageWorker {
         connectionGeneration += 1
         connectionTask?.cancel()
         connectionTask = nil
+        cancelCommands()
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
         activityObserver?(.init(phase: .stopped))
@@ -143,6 +152,7 @@ public actor CompanionImageWorker {
             connectionGeneration += 1
             connectionTask?.cancel()
             connectionTask = nil
+            cancelCommands()
             socket?.cancel(with: .goingAway, reason: nil)
             socket = nil
             return
@@ -260,16 +270,65 @@ public actor CompanionImageWorker {
                 try await send(.companionResult(completed), on: socket)
                 return
             }
-            activityObserver?(
-                .init(
-                    phase: .processing, jobID: command.companionJobID,
-                    kind: command.companionKind, startedAt: .now))
-            let result = await executor.execute(command)
-            try Task.checkCancellation()
-            try await outbox.record(result, for: key)
-            try await send(.companionResult(result), on: socket)
-            activityObserver?(.init(phase: .idle))
+            guard commandTasks[key] == nil else { return }
+            commandTasks[key] = Task { [weak self] in
+                await self?.run(command, key: key, socket: socket)
+            }
         }
+    }
+
+    private func run(
+        _ command: ImageProcessingCommand, key: String, socket: URLSessionWebSocketTask
+    ) async {
+        await acquireSlot()
+        defer {
+            releaseSlot()
+            commandTasks[key] = nil
+        }
+        guard !Task.isCancelled else { return }
+        running[key] = .init(
+            phase: .processing, jobID: command.companionJobID, kind: command.companionKind,
+            startedAt: .now)
+        reportActivity()
+        let result = await executor.execute(command)
+        running[key] = nil
+        reportActivity()
+        guard !Task.isCancelled else { return }
+        do {
+            try await outbox.record(result, for: key)
+            // A reconnect replays the outbox, so a result from a dropped socket is not lost.
+            guard self.socket === socket else { return }
+            try await send(.companionResult(result), on: socket)
+        } catch {
+            failureObserver?(error)
+        }
+    }
+
+    private func acquireSlot() async {
+        guard runningCount >= Self.maximumConcurrentCommands else {
+            runningCount += 1
+            return
+        }
+        await withCheckedContinuation { slotWaiters.append($0) }
+    }
+
+    private func releaseSlot() {
+        if slotWaiters.isEmpty {
+            runningCount -= 1
+        } else {
+            slotWaiters.removeFirst().resume()
+        }
+    }
+
+    private func cancelCommands() {
+        for task in commandTasks.values { task.cancel() }
+        running = [:]
+    }
+
+    private func reportActivity() {
+        guard shouldRun else { return }
+        let oldest = running.values.min { ($0.startedAt ?? .distantPast) < ($1.startedAt ?? .distantPast) }
+        activityObserver?(oldest ?? .init(phase: .idle, remotePaused: remotePaused))
     }
 
     private func send(

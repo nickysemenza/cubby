@@ -246,7 +246,12 @@ export const photoImportContract = defineContract("photoImport", {
   startGrouping: mutation({
     native: "Start photo grouping after a finalized upload",
     input: z.object({ runId: importRunShortcode }),
-    output: z.object({ runId: importRunShortcode, started: z.boolean() }),
+    output: z.object({
+      runId: importRunShortcode,
+      started: z.boolean(),
+      /** Pending photos whose description is still queued or running; grouping waits for them. */
+      waitingForAnalysis: z.number().int().nonnegative(),
+    }),
   }),
   review: query({
     native: "Review proposed photo groups and processing status in Apple apps",
