@@ -26,6 +26,7 @@ export interface ListWorkbenchModel<TItem extends RowData> {
   error?: unknown;
   timing?: QueryTiming;
   bulkActionBar?: ReactNode;
+  bulkActionPreview?: RTableProps<TItem>["bulkActionPreview"];
   /**
    * The entity each row is *about*, when different from `entity`. Publishing
    * it is what makes that entity's actions reachable from these rows.
@@ -188,6 +189,7 @@ export function ListWorkbench<TItem extends RowData>({
         error={model.error}
         timing={model.timing}
         bulkActionBar={model.bulkActionBar}
+        bulkActionPreview={model.bulkActionPreview}
         infiniteScroll={model.infiniteScroll}
         refreshControls={model.refreshControls}
         groupConfig={model.groupConfig}

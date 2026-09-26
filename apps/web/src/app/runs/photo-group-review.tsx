@@ -72,6 +72,7 @@ import {
 import {
   mergeGroups,
   moveImage,
+  reviewOutcomeToasts,
   toGroupInput,
   type ProposalEdit,
 } from "./photo-review-model";
@@ -130,33 +131,8 @@ function useReviewAction(runId: string) {
       );
       // Approval changes photo states and may complete the run.
       void invalidateOperationTags(queryClient, ripple.runOnly);
-      const problems = data.results.filter(
-        (result) =>
-          result.outcome === "conflict" || result.outcome === "failed",
-      );
-      const committed = data.results.length - problems.length;
-      if (problems.length) {
-        toast.warning(
-          `${committed} approved · ${problems.length} need attention`,
-          {
-            description: problems
-              .map(
-                (result) =>
-                  `${result.groupKey}: ${result.outcome === "conflict" ? "name matches an existing product" : result.error}`,
-              )
-              .join("\n"),
-          },
-        );
-      } else if (committed) {
-        toast.success(
-          committed === 1 ? "Group approved" : `${committed} groups approved`,
-        );
-      }
-      if (data.frozenGroupKeys.length) {
-        toast.warning("Some groups were already settled", {
-          description: `Left unchanged: ${data.frozenGroupKeys.join(", ")}`,
-        });
-      }
+      for (const { tone, title, description } of reviewOutcomeToasts(data))
+        toast[tone](title, description ? { description } : undefined);
     },
     onError: (error) => showErrorToast(error),
   });

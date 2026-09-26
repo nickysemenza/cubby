@@ -24,7 +24,10 @@ import {
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 
 import type { EntityActionSubject } from "../actions/entity-actions";
-import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
+import {
+  bulkActionPreview,
+  type BulkActionsConfig,
+} from "../data-table/bulk-actions.types";
 import type { RowLinkResolver } from "../data-table/columnHelpers";
 import type { ServerListWorkbenchModel } from "../data-table/ListWorkbench";
 import { problemWorklistState } from "../data-table/problem-worklist";
@@ -612,6 +615,9 @@ export function useEntityList<
       error,
       timing,
       bulkActionBar,
+      bulkActionPreview: bulkActionPreview(
+        presentationState.listBulkActions.config,
+      ),
       rowActions: presentationState.listBulkActions.rowActions,
       actionDialogs: presentationState.listBulkActions.actionDialogs,
       subjectEntity: subject?.entity,
