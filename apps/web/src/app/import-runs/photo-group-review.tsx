@@ -1157,6 +1157,7 @@ function InventoryFields({
   );
 }
 
+// eslint-disable-next-line complexity -- Approval and editing states remain visible together at the commit boundary.
 function ProposalCard({
   runId,
   runStatus,
@@ -1166,6 +1167,7 @@ function ProposalCard({
   busy,
   save,
   action,
+  approve,
 }: {
   runId: string;
   runStatus: string;
@@ -1175,7 +1177,9 @@ function ProposalCard({
   busy: boolean;
   save: Save;
   action: ReturnType<typeof useReviewAction>;
+  approve: (groupKey: string) => Promise<void>;
 }) {
+  const [approvalQueued, setApprovalQueued] = useState(false);
   const working = busy;
   const mergeTargets = proposals.filter(
     (other) =>
@@ -1339,18 +1343,19 @@ function ProposalCard({
           </p>
           <Button
             disabled={
-              working ||
+              approvalQueued ||
+              (working && action.variables?.action !== "save") ||
               stale ||
               descriptionsPending.length > 0 ||
               (proposal.product.kind === "existing" &&
                 !proposal.product.existing)
             }
-            onClick={() =>
-              action.mutate({
-                action: "approve",
-                groupKeys: [proposal.groupKey],
-              })
-            }
+            onClick={() => {
+              setApprovalQueued(true);
+              void approve(proposal.groupKey).finally(() =>
+                setApprovalQueued(false),
+              );
+            }}
           >
             <CheckIcon />
             Approve item
@@ -1760,19 +1765,45 @@ export function PhotoGroupReview({
     if (first) setSelectedKey(first.groupKey);
   }, [selectedKey, query.data]);
   const action = useReviewAction(runId);
+  // A focused field saves on blur. Safari can drop the following click when
+  // that save rerenders the button, so approval waits for the save explicitly.
+  const pendingSave = useRef<Promise<void> | null>(null);
+  const failedSaveBuild = useRef(false);
   const save: Save = (build) => {
     let edit: ProposalEdit;
     try {
       edit = build();
     } catch (error) {
       showErrorToast(error);
+      failedSaveBuild.current = true;
       return;
     }
-    action.mutate({
-      action: "save",
-      groups: edit.groups,
-      removeGroupKeys: edit.removeGroupKeys,
-    });
+    failedSaveBuild.current = false;
+    const pending = action
+      .mutateAsync({
+        action: "save",
+        groups: edit.groups,
+        removeGroupKeys: edit.removeGroupKeys,
+      })
+      .then(() => undefined);
+    pendingSave.current = pending;
+    void pending.then(
+      () => {
+        if (pendingSave.current === pending) pendingSave.current = null;
+      },
+      () => {
+        // SILENT: the mutation's onError displays the failure; retain the rejected promise so approval stops.
+      },
+    );
+  };
+  const approve = async (groupKey: string) => {
+    if (failedSaveBuild.current) return;
+    try {
+      await pendingSave.current;
+      await action.mutateAsync({ action: "approve", groupKeys: [groupKey] });
+    } catch {
+      // SILENT: the save or approval mutation's onError already displays its failure.
+    }
   };
 
   if (query.isLoading && !query.data)
@@ -1905,6 +1936,7 @@ export function PhotoGroupReview({
                 busy={busy}
                 save={save}
                 action={action}
+                approve={approve}
               />
             ) : (
               <section className="min-w-0 border border-border bg-card p-4">
