@@ -134,7 +134,7 @@ describe("meal nutrition service", () => {
             action: "set",
             mealId: mealCode(targetMeal.shortcode),
             ledgerPartyId: partyCode(eater.shortcode),
-            grams: 100,
+            amount: { value: 100, unit: "g" },
             confirmed: false,
           },
         ],
@@ -148,7 +148,7 @@ describe("meal nutrition service", () => {
         mealId: mealCode(sourceMeal.shortcode),
         ledgerPartyId: partyCode(eater.shortcode),
         productId: productCode(labelledProduct.shortcode),
-        grams: 25,
+        amount: { value: 25, unit: "g" },
       },
       ctx.actor,
     );
@@ -159,7 +159,6 @@ describe("meal nutrition service", () => {
         mealId: mealCode(targetMeal.shortcode),
         ledgerPartyId: partyCode(eater.shortcode),
         name: "Manual garnish",
-        grams: null,
         nutrients: { kcal: 20, protein: 0, fat: 1 },
       },
       ctx.actor,
@@ -275,7 +274,7 @@ describe("meal nutrition service", () => {
       mealRecipeId: occurrence.id,
       mealId: targetMeal.id,
       ledgerPartyId: eater.id,
-      grams: 50,
+      amount: { value: 50, unit: "g" },
     });
 
     const result = await getMealNutrition(
@@ -308,7 +307,7 @@ describe("meal nutrition service", () => {
         mealId: mealCode(meal.shortcode),
         ledgerPartyId: partyCode(eater.shortcode),
         name: "Editable snack",
-        grams: 30,
+        amount: { value: 30, unit: "g" },
         nutrients: { kcal: 10, protein: 0 },
       },
       ctx.actor,
@@ -321,7 +320,6 @@ describe("meal nutrition service", () => {
         mealId: mealCode(meal.shortcode),
         ledgerPartyId: partyCode(eater.shortcode),
         name: "Corrected snack",
-        grams: null,
         nutrients: { kcal: 35, protein: 2 },
       },
       ctx.actor,
@@ -379,7 +377,7 @@ describe("meal nutrition service", () => {
         mealId: mealCode(meal.shortcode),
         ledgerPartyId: partyCode(eater.shortcode),
         productId: productCode(labelledProduct.shortcode),
-        grams: 25,
+        amount: { value: 25, unit: "g" },
       },
       ctx.actor,
     );
@@ -414,10 +412,9 @@ describe("meal nutrition service", () => {
     });
     const stored = await getDb(ctx.db).query.mealFoodEntry.findFirst({
       where: eq(mealFoodEntry.id, saved.id),
-      columns: { amount: true, grams: true },
+      columns: { amount: true },
     });
     expect(stored?.amount).toEqual({ value: 25, unit: "g" });
-    expect(stored?.grams).toBeNull();
   });
 
   it("keeps a stale product entry visible with unavailable nutrition and refuses new saves to the deleted source", async () => {
@@ -431,7 +428,7 @@ describe("meal nutrition service", () => {
       mealId: mealCode(meal.shortcode),
       ledgerPartyId: partyCode(eater.shortcode),
       productId: productCode(labelledProduct.shortcode),
-      grams: 40,
+      amount: { value: 40, unit: "g" },
     };
     const saved = await saveMealFood(ctx.db, input, ctx.actor);
     await getDb(ctx.db)
@@ -516,9 +513,9 @@ describe("meal nutrition service", () => {
     expect(
       await getDb(ctx.db).query.mealFoodEntry.findFirst({
         where: eq(mealFoodEntry.id, saved.id),
-        columns: { amount: true, grams: true },
+        columns: { amount: true },
       }),
-    ).toEqual({ amount: { value: 1, unit: "cup" }, grams: null });
+    ).toEqual({ amount: { value: 1, unit: "cup" } });
   });
 
   it("records unmapped product amounts and resolves them when a source mapping is added", async () => {

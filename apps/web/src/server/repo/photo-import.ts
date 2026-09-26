@@ -255,7 +255,7 @@ export async function persistLocalImageAnalysis(
 ): Promise<void> {
   const store = getDb(db);
   const activeLegacyAnalysis = and(
-    eq(aiAnalysis.entityType, "image"),
+    eq(aiAnalysis.entityKind, "image"),
     eq(aiAnalysis.entityId, imageId),
     eq(aiAnalysis.feature, "photo-local-analysis"),
     eq(aiAnalysis.model, "vision-local"),
@@ -275,7 +275,7 @@ export async function persistLocalImageAnalysis(
   const inserted = await store
     .insert(aiAnalysis)
     .values({
-      entityType: "image",
+      entityKind: "image",
       entityId: imageId,
       feature: "photo-local-analysis",
       model: "vision-local",
@@ -311,7 +311,7 @@ export async function getLocalImageAnalysis(
     .from(aiAnalysis)
     .where(
       and(
-        eq(aiAnalysis.entityType, "image"),
+        eq(aiAnalysis.entityKind, "image"),
         eq(aiAnalysis.entityId, imageId),
         eq(aiAnalysis.feature, "photo-local-analysis"),
         isNull(aiAnalysis.deletedAt),

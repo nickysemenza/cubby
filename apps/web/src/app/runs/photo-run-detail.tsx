@@ -33,6 +33,9 @@ function PhotoRunProgress({
   const deviceDone = imageWork.filter(
     (photo) => photo.localAnalysisReady,
   ).length;
+  const deviceFailed = imageWork.filter(
+    (photo) => photo.deviceWorkState === "failed",
+  ).length;
   const described = imageWork.filter(
     (photo) => photo.describe === "ready" || photo.describe === "skipped",
   ).length;
@@ -90,6 +93,12 @@ function PhotoRunProgress({
               </div>
             ))}
           </div>
+        ) : null}
+        {deviceFailed > 0 ? (
+          <StatusText tone="destructive">
+            {deviceFailed} {deviceFailed === 1 ? "photo" : "photos"} failed
+            on-device processing. Retry from the Cubby app.
+          </StatusText>
         ) : null}
         {children}
       </CardContent>

@@ -42,7 +42,7 @@ async function loadNewestAnalysisByImage(
     .innerJoin(image, eq(image.id, aiAnalysis.entityId))
     .where(
       and(
-        eq(aiAnalysis.entityType, "image"),
+        eq(aiAnalysis.entityKind, "image"),
         inArray(image.shortcode, [...imageShortcodes]),
         eq(aiAnalysis.feature, feature),
         isNull(aiAnalysis.deletedAt),

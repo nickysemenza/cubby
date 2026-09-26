@@ -133,7 +133,12 @@ const photo = (
   id: string,
   position: number,
   targetState: PhotoRunImage["targetState"],
-  text: { description?: string; recognizedText?: string; cutout?: boolean },
+  text: {
+    description?: string;
+    recognizedText?: string;
+    cutout?: boolean;
+    deviceWorkState?: PhotoRunImage["deviceWorkState"];
+  },
 ): PhotoRunImage => ({
   id: imageShortcode.parse(id),
   position,
@@ -151,6 +156,9 @@ const photo = (
   describeReason: null,
   description: text.description ?? null,
   recognizedText: text.recognizedText ?? null,
+  deviceWorkState: text.deviceWorkState ?? null,
+  deviceWorkError: null,
+  deviceWorkAttempts: 0,
 });
 
 const review: PhotoRunReview = {

@@ -2,6 +2,7 @@ import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
 import {
   type EntityId,
   type EntityRef,
+  type RunId,
   parseEntityId,
 } from "@cubby/schemas/identifiers";
 import {
@@ -74,6 +75,8 @@ export type MutationSideEffectEvent = {
   // Gates the location AI refresh: vision analysis only re-runs when images
   // actually changed (see enqueueLocationAiRefresh). Absent ⇒ no AI refresh.
   locationImagesChanged?: boolean;
+  /** The mutation's actor run, when the caller has one; threaded onto the queued task so its handler can attribute AI usage to it instead of a fresh background run. */
+  runId?: RunId;
 };
 
 const mutationSideEffectEntitySet = new Set<string>(mutationSideEffectEntities);
@@ -645,8 +648,18 @@ async function enqueueLocationAiRefresh(ctx: HandlerContext): Promise<void> {
   await ctx.ports.publishTasks(
     ctx.db,
     [
-      { kind: "location-ai.description.refresh", requestedAt, locationId },
-      { kind: "location-ai.inventory.refresh", requestedAt, locationId },
+      {
+        kind: "location-ai.description.refresh",
+        requestedAt,
+        locationId,
+        runId: ctx.event.runId,
+      },
+      {
+        kind: "location-ai.inventory.refresh",
+        requestedAt,
+        locationId,
+        runId: ctx.event.runId,
+      },
     ],
     { source: `${ctx.event.source}:${ctx.event.action}` },
   );

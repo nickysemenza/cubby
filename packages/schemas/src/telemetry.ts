@@ -65,7 +65,7 @@ export const aiUsageTelemetrySchema = z.strictObject({
   durationMs: z.number().int().nonnegative(),
   cacheStatus: z.enum(["hit", "miss", "none"]).nullable(),
   applicationCacheStatus: z.enum(["hit", "miss", "none"]).nullable().optional(),
-  entityType: z.string().min(1).nullable(),
+  entityKind: z.string().min(1).nullable(),
   entityId: z.uuid().nullable(),
   // The caller's own cost figure (the cookbook crate prices every model it
   // calls); absent on messages minted before this field existed and for

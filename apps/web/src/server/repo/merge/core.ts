@@ -165,7 +165,7 @@ export const finalizeMerge = async <E extends RemovableEntity>(
       .from(runFinding)
       .where(
         and(
-          eq(runFinding.targetType, entity),
+          eq(runFinding.targetKind, entity),
           inArray(runFinding.targetId, ids),
         ),
       );
@@ -178,7 +178,7 @@ export const finalizeMerge = async <E extends RemovableEntity>(
               .where(
                 and(
                   eq(runFinding.ledgerPartyId, finding.ledgerPartyId),
-                  eq(runFinding.targetType, entity),
+                  eq(runFinding.targetKind, entity),
                   eq(runFinding.targetId, keepId),
                   eq(runFinding.kind, finding.kind),
                   eq(

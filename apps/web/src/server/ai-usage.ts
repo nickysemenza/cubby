@@ -35,7 +35,7 @@ export type RecordAiUsageInput = {
   durationMs: number;
   cacheStatus?: "hit" | "miss" | "none" | null;
   applicationCacheStatus?: "hit" | "miss" | "none" | null;
-  entity?: { entityType: string; entityId: string } | null;
+  entity?: { entityKind: string; entityId: string } | null;
 };
 
 /** Best-effort AI usage telemetry; never changes the owning AI operation. */
@@ -69,7 +69,7 @@ export async function recordAiUsage(
       durationMs: input.durationMs,
       cacheStatus: input.cacheStatus ?? null,
       applicationCacheStatus: input.applicationCacheStatus ?? null,
-      entityType: input.entity?.entityType ?? null,
+      entityKind: input.entity?.entityKind ?? null,
       entityId: input.entity?.entityId ?? null,
       estimatedCost: input.estimatedCost ?? null,
     });

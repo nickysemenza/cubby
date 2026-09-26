@@ -17,6 +17,15 @@ import { inventoryOwnershipMode } from "./inventory-ownership";
 import { runTargetState } from "./purchase-import";
 import { productVariantComparison } from "./product-variant-comparison";
 
+export const runTargetDeviceWorkState = z.enum([
+  "queued",
+  "running",
+  "paused",
+  "failed",
+  "completed",
+]);
+export type RunTargetDeviceWorkState = z.infer<typeof runTargetDeviceWorkState>;
+
 const commitPhotoGroupImage = z.object({
   id: imageShortcode,
   purpose: productImagePurpose,
@@ -364,6 +373,10 @@ export const photoRunImage = z.object({
   describeReason: z.string().nullable(),
   description: z.string().nullable(),
   recognizedText: z.string().nullable(),
+  /** Device-reported processing state for this photo; null = no device has picked it up yet. */
+  deviceWorkState: runTargetDeviceWorkState.nullable(),
+  deviceWorkError: z.string().nullable(),
+  deviceWorkAttempts: z.number().int().nonnegative(),
 });
 export type PhotoRunImage = z.infer<typeof photoRunImage>;
 

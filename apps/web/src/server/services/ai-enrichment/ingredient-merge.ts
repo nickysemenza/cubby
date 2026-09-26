@@ -82,7 +82,7 @@ export async function suggestIngredientMerge(
         runId,
         operation: "suggestIngredientMerge",
         cacheStatus: "none",
-        entity: { entityType: "ingredient", entityId: source.id },
+        entity: { entityKind: "ingredient", entityId: source.id },
       },
     },
   );

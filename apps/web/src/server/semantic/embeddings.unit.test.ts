@@ -154,7 +154,7 @@ describe("embedTexts usage recording", () => {
         feature: "entity-embedding",
         operation: "entityEmbeddingBackfill",
         entity: {
-          entityType: "product",
+          entityKind: "product",
           entityId: "00000000-0000-4000-8000-000000000002",
         },
       },

@@ -139,15 +139,15 @@ async function refundStillUnbooked(
 
 const assertFixTargetsFinding = (
   finding: {
-    targetType: string;
+    targetKind: string;
     targetId: string;
   },
   fix: ProposedImportFix,
 ) => {
   const targetMatches =
     fix.kind === "relink_product"
-      ? finding.targetType === "expense" && finding.targetId === fix.expenseId
-      : finding.targetType === "purchase" &&
+      ? finding.targetKind === "expense" && finding.targetId === fix.expenseId
+      : finding.targetKind === "purchase" &&
         finding.targetId === fix.purchaseId;
   if (!targetMatches) {
     throw new Error(
@@ -160,7 +160,7 @@ const assertRunProvenance = async (
   tx: DrizzleTransaction,
   finding: {
     runId: string | null;
-    targetType: string;
+    targetKind: string;
     targetId: string;
   },
 ) => {
@@ -174,7 +174,7 @@ const assertRunProvenance = async (
     .where(
       and(
         eq(runMutation.runId, finding.runId),
-        eq(runMutation.targetType, finding.targetType),
+        eq(runMutation.targetKind, finding.targetKind),
         eq(runMutation.targetId, finding.targetId),
       ),
     )
@@ -184,7 +184,7 @@ const assertRunProvenance = async (
       "The import run did not write this finding's target; refusing a stale automated fix.",
     );
   }
-  const auditEntity = auditEntitySchema.parse(finding.targetType);
+  const auditEntity = auditEntitySchema.parse(finding.targetKind);
   const [laterHumanWrite] = await tx
     .select({ id: auditLog.id })
     .from(auditLog)
@@ -356,7 +356,7 @@ export async function resolveRunFinding(
         proposedFix: runFinding.proposedFix,
         runId: runFinding.runId,
         ledgerPartyId: runFinding.ledgerPartyId,
-        targetType: runFinding.targetType,
+        targetKind: runFinding.targetKind,
         targetId: runFinding.targetId,
       })
       .from(runFinding)
@@ -456,7 +456,7 @@ export async function resolveArrivedFindingsForPurchase(
       )
       .where(
         and(
-          eq(runFinding.targetType, "purchase"),
+          eq(runFinding.targetKind, "purchase"),
           eq(runFinding.targetId, input.purchaseId),
           eq(runFinding.kind, "arrived"),
           eq(runFinding.status, "open"),

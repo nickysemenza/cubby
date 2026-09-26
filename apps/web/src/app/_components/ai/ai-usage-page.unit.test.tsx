@@ -36,7 +36,7 @@ describe("UsageEntityLink", () => {
     render(
       <UsageEntityLink
         row={{
-          entityType: "product",
+          entityKind: "product",
           entityId: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
         }}
       />,
@@ -51,7 +51,7 @@ describe("UsageEntityLink", () => {
     seedProduct("PRD-4K7M", "Fixture product");
 
     render(
-      <UsageEntityLink row={{ entityType: "product", entityId: "PRD-4K7M" }} />,
+      <UsageEntityLink row={{ entityKind: "product", entityId: "PRD-4K7M" }} />,
       { wrapper: harness.wrapper },
     );
 
@@ -62,7 +62,7 @@ describe("UsageEntityLink", () => {
 
   it("renders the fallback when the shortcode's type does not match entityType", () => {
     render(
-      <UsageEntityLink row={{ entityType: "product", entityId: "LOC-4K7M" }} />,
+      <UsageEntityLink row={{ entityKind: "product", entityId: "LOC-4K7M" }} />,
       { wrapper: harness.wrapper },
     );
 

@@ -239,7 +239,7 @@ describe("activity image processing projection", () => {
       .insert(aiAnalysis)
       .values([
         ...Array.from({ length: 25 }, (_, index) => ({
-          entityType: "image" as const,
+          entityKind: "image" as const,
           entityId: imageId,
           feature: "image-description",
           provider: "apple",
@@ -255,7 +255,7 @@ describe("activity image processing projection", () => {
           createdAt: new Date(base + index),
         })),
         {
-          entityType: "image" as const,
+          entityKind: "image" as const,
           entityId: imageId,
           feature: "image-description",
           provider: "legacy",

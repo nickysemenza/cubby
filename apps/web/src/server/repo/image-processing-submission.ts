@@ -1,3 +1,4 @@
+import type { RunId } from "@cubby/schemas/identifiers";
 import type { ImageProcessingJobKind } from "@cubby/schemas/image-processing";
 import { and, eq, isNull } from "drizzle-orm";
 
@@ -30,6 +31,8 @@ export async function persistImageProcessingSubmission(
     kinds: readonly ImageProcessingJobKind[];
     automatic?: boolean;
     submission?: { id: string; publicId: string };
+    /** The Run that requested this submission, when the caller has one. */
+    runId?: RunId | null;
   },
 ): Promise<ScheduledImageProcessing> {
   return withTransactionDatabase(db, async (transactionDb) => {
@@ -80,6 +83,7 @@ export async function persistImageProcessingSubmission(
             // Every actual dispatch rotates this placeholder to a fresh key.
             key: `pending/${crypto.randomUUID()}.png`,
             reviveLabelOnlySkip: !input.automatic,
+            runId: input.runId,
           },
         );
         if (scheduled) jobIds.push(scheduled.jobId);
@@ -90,6 +94,7 @@ export async function persistImageProcessingSubmission(
         kind,
         sourceContentHash: source.sha256,
         processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+        runId: input.runId,
       });
       if (jobId) jobIds.push(jobId);
     }
@@ -109,7 +114,7 @@ export async function persistImageProcessingSubmission(
 
 export async function persistAppleImageDescriptionSubmission(
   db: Database,
-  input: { id: string },
+  input: { id: string; runId?: RunId | null },
 ): Promise<{ jobId: string | null }> {
   return withTransactionDatabase(db, async (transactionDb) => {
     const imageId = await resolveOrThrow(transactionDb, "image", input.id);
@@ -129,6 +134,7 @@ export async function persistAppleImageDescriptionSubmission(
       kind: "describe_image",
       sourceContentHash: source.sha256,
       processorRevision: IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+      runId: input.runId,
     });
     if (jobId)
       await attachSubmissionJobs(

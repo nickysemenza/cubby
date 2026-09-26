@@ -525,7 +525,7 @@ export async function imageAnalysisHistory(
 ) {
   const imageId = await resolveOrThrow(db, "image", input.id);
   const predicate = and(
-    eq(aiAnalysis.entityType, "image"),
+    eq(aiAnalysis.entityKind, "image"),
     eq(aiAnalysis.entityId, imageId),
     eq(aiAnalysis.feature, "image-description"),
     isNull(aiAnalysis.deletedAt),

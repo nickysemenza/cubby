@@ -122,7 +122,7 @@ async function findProductNameConflicts(
         .where(
           and(
             eq(runMutation.runId, runId),
-            eq(runMutation.targetType, "product"),
+            eq(runMutation.targetKind, "product"),
           ),
         )
     ).map((row) => row.targetId),
@@ -353,7 +353,7 @@ async function resolveProduct(
     .insert(runMutation)
     .values({
       runId: scope.public.runId,
-      targetType: "product",
+      targetKind: "product",
       targetId: productEntityId,
       mutationKind: "create",
       fields: ["name", "categoryId", "manufacturer", "model", "notes", "tags"],
@@ -428,7 +428,7 @@ async function receiveInventory(
     .insert(runMutation)
     .values({
       runId: scope.public.runId,
-      targetType: "inventory",
+      targetKind: "inventory",
       targetId: inventoryEntityId,
       mutationKind: "create",
       fields: ["amount", "ownershipMode", "ownerLedgerPartyId"],
@@ -506,7 +506,7 @@ async function markTargets(
       .insert(runMutation)
       .values({
         runId: scope.public.runId,
-        targetType: "image",
+        targetKind: "image",
         targetId: entry.imageId,
         mutationKind: "attach",
         fields: ["purpose"],
@@ -537,7 +537,7 @@ async function markTargets(
       .insert(runMutation)
       .values({
         runId: scope.public.runId,
-        targetType: "image",
+        targetKind: "image",
         targetId: entry.imageId,
         mutationKind: "skip",
         fields: ["warning"],

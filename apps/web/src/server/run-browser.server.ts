@@ -22,6 +22,7 @@ import {
 import {
   listRuns,
   listProductRuns,
+  reportRunTargetDeviceWork,
   resolveProductImportTarget,
   resolvePurchaseImportTarget,
 } from "~/server/purchase-import/run-target";
@@ -181,4 +182,13 @@ export const runHandlers = implementOperationDomain(runContract, {
     return listMerchantVendorRules(context.db, party.id);
   },
   aiUsage: (context, input) => listRunAiUsageWorkflow(context.db, input),
+  reportDeviceWork: async (context, input) => {
+    await memberParty(context);
+    return reportRunTargetDeviceWork(context.db, {
+      run: input.run,
+      image: input.image,
+      state: input.state,
+      error: input.error,
+    });
+  },
 });

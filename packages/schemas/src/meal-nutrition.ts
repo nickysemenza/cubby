@@ -1,10 +1,5 @@
 import { z } from "zod";
-import {
-  mealFoodAmount,
-  mealAmountInputFields,
-  hasOneMealAmountInput,
-  hasRequiredMealAmount,
-} from "./meal-amount";
+import { mealFoodAmount } from "./meal-amount";
 import { nutrientKey } from "./nutrition";
 import {
   ledgerPartyShortcode,
@@ -32,34 +27,25 @@ const foodEntryCommon = {
   ledgerPartyId: ledgerPartyShortcode,
 };
 export const saveMealFoodInput = z.discriminatedUnion("sourceKind", [
-  z
-    .object({
-      ...foodEntryCommon,
-      sourceKind: z.literal("product"),
-      productId: productShortcode,
-      ...mealAmountInputFields,
-    })
-    .refine(hasRequiredMealAmount, "Enter either amount or legacy grams"),
-  z
-    .object({
-      ...foodEntryCommon,
-      sourceKind: z.literal("ingredient"),
-      ingredientId: ingredientShortcode,
-      ...mealAmountInputFields,
-    })
-    .refine(hasRequiredMealAmount, "Enter either amount or legacy grams"),
-  z
-    .object({
-      ...foodEntryCommon,
-      sourceKind: z.literal("manual"),
-      name: z.string().trim().min(1).max(200),
-      nutrients: mealFoodNutrients,
-      ...mealAmountInputFields,
-    })
-    .refine(
-      hasOneMealAmountInput,
-      "Enter either amount or legacy grams, not both",
-    ),
+  z.object({
+    ...foodEntryCommon,
+    sourceKind: z.literal("product"),
+    productId: productShortcode,
+    amount: mealFoodAmount,
+  }),
+  z.object({
+    ...foodEntryCommon,
+    sourceKind: z.literal("ingredient"),
+    ingredientId: ingredientShortcode,
+    amount: mealFoodAmount,
+  }),
+  z.object({
+    ...foodEntryCommon,
+    sourceKind: z.literal("manual"),
+    name: z.string().trim().min(1).max(200),
+    nutrients: mealFoodNutrients,
+    amount: mealFoodAmount.nullable().optional(),
+  }),
 ]);
 export type SaveMealFoodInput = z.infer<typeof saveMealFoodInput>;
 export const removeMealFoodInput = z.object({

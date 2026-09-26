@@ -435,9 +435,7 @@ export const mealRecipePortion = pgTable(
       .notNull()
       .$type<LedgerPartyId>()
       .references(() => ledgerParty.id),
-    amount: jsonb("amount").$type<MealFoodAmount>(),
-    // Expand-migration compatibility only. New writes use `amount`.
-    grams: integer("grams"),
+    amount: jsonb("amount").notNull().$type<MealFoodAmount>(),
     confirmedAt: timestamp("confirmedAt", { mode: "date" }),
     ...baseTimestamps(),
     ...softDeletedAt(),
@@ -449,15 +447,7 @@ export const mealRecipePortion = pgTable(
     index("MealRecipePortion_mealRecipeId_idx").on(table.mealRecipeId),
     index("MealRecipePortion_mealId_idx").on(table.mealId),
     index("MealRecipePortion_ledgerPartyId_idx").on(table.ledgerPartyId),
-    check(
-      "MealRecipePortion_grams_check",
-      sql`${table.grams} IS NULL OR ${table.grams} > 0`,
-    ),
     check("MealRecipePortion_amount_check", validMealFoodAmount(table.amount)),
-    check(
-      "MealRecipePortion_amount_source_check",
-      sql`(${table.amount} IS NULL) <> (${table.grams} IS NULL)`,
-    ),
   ],
 );
 
@@ -483,8 +473,6 @@ export const mealFoodEntry = pgTable(
       .$type<ProductId>()
       .references((): AnyPgColumn => product.id),
     amount: jsonb("amount").$type<MealFoodAmount>(),
-    // Expand-migration compatibility only. New writes use `amount`.
-    grams: doublePrecision("grams"),
     name: text("name"),
     nutrients: jsonb("nutrients").$type<MealFoodNutrients>(),
     ...baseTimestamps(),
@@ -495,18 +483,10 @@ export const mealFoodEntry = pgTable(
     index("MealFoodEntry_ledgerPartyId_idx").on(table.ledgerPartyId),
     index("MealFoodEntry_ingredientId_idx").on(table.ingredientId),
     index("MealFoodEntry_productId_idx").on(table.productId),
-    check(
-      "MealFoodEntry_grams_check",
-      sql`${table.grams} IS NULL OR (${table.grams} > 0 AND ${table.grams} < 'Infinity'::float8)`,
-    ),
     check("MealFoodEntry_amount_check", validMealFoodAmount(table.amount)),
     check(
-      "MealFoodEntry_amount_compatibility_check",
-      sql`${table.amount} IS NULL OR ${table.grams} IS NULL`,
-    ),
-    check(
       "MealFoodEntry_source_check",
-      sql`(${table.sourceKind} = 'ingredient' AND ${table.ingredientId} IS NOT NULL AND ${table.productId} IS NULL AND (${table.amount} IS NOT NULL OR ${table.grams} IS NOT NULL) AND ${table.name} IS NULL AND ${table.nutrients} IS NULL) OR (${table.sourceKind} = 'product' AND ${table.ingredientId} IS NULL AND ${table.productId} IS NOT NULL AND (${table.amount} IS NOT NULL OR ${table.grams} IS NOT NULL) AND ${table.name} IS NULL AND ${table.nutrients} IS NULL) OR (${table.sourceKind} = 'manual' AND ${table.ingredientId} IS NULL AND ${table.productId} IS NULL AND length(trim(${table.name})) > 0 AND ${table.name} IS NOT NULL AND ${table.nutrients} IS NOT NULL AND jsonb_typeof(${table.nutrients}) = 'object' AND ${table.nutrients} <> '{}'::jsonb)`,
+      sql`(${table.sourceKind} = 'ingredient' AND ${table.ingredientId} IS NOT NULL AND ${table.productId} IS NULL AND ${table.amount} IS NOT NULL AND ${table.name} IS NULL AND ${table.nutrients} IS NULL) OR (${table.sourceKind} = 'product' AND ${table.ingredientId} IS NULL AND ${table.productId} IS NOT NULL AND ${table.amount} IS NOT NULL AND ${table.name} IS NULL AND ${table.nutrients} IS NULL) OR (${table.sourceKind} = 'manual' AND ${table.ingredientId} IS NULL AND ${table.productId} IS NULL AND length(trim(${table.name})) > 0 AND ${table.name} IS NOT NULL AND ${table.nutrients} IS NOT NULL AND jsonb_typeof(${table.nutrients}) = 'object' AND ${table.nutrients} <> '{}'::jsonb)`,
     ),
   ],
 );
@@ -1635,6 +1615,21 @@ export const runTarget = pgTable(
     diff: jsonb("diff"),
     preparedAt: timestamp("preparedAt", { mode: "date" }),
     completedAt: timestamp("completedAt", { mode: "date" }),
+    /**
+     * Device-side processing state for a photo-run image target, reported by
+     * `run.reportDeviceWork`. Null means no device has picked up this photo
+     * yet; distinct from `state` (the server-side prepare/complete pipeline).
+     */
+    deviceWorkState:
+      text("deviceWorkState").$type<
+        import("@cubby/schemas/photo-import-run").RunTargetDeviceWorkState
+      >(),
+    deviceWorkAttempts: integer("deviceWorkAttempts").notNull().default(0),
+    deviceWorkError: text("deviceWorkError"),
+    deviceWorkDeviceId: uuid("deviceWorkDeviceId")
+      .$type<DeviceId>()
+      .references(() => device.id),
+    deviceWorkUpdatedAt: timestamp("deviceWorkUpdatedAt", { mode: "date" }),
     ...baseTimestamps(),
   },
   (table) => [
@@ -1642,6 +1637,9 @@ export const runTarget = pgTable(
     index("RunTarget_purchase_idx").on(table.purchaseId),
     index("RunTarget_product_idx").on(table.productId),
     index("RunTarget_image_idx").on(table.imageId),
+    index("RunTarget_deviceWorkDeviceId_idx")
+      .on(table.deviceWorkDeviceId)
+      .where(sql`${table.deviceWorkDeviceId} IS NOT NULL`),
     uniqueIndex("RunTarget_run_purchase_key")
       .on(table.runId, table.purchaseId)
       .where(sql`${table.purchaseId} IS NOT NULL`),
@@ -1662,6 +1660,10 @@ export const runTarget = pgTable(
     check(
       "RunTarget_outcome_check",
       sql`${table.outcome} IS NULL OR ${table.outcome} IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped', 'attached')`,
+    ),
+    check(
+      "RunTarget_deviceWorkState_check",
+      sql`${table.deviceWorkState} IS NULL OR ${table.deviceWorkState} IN ('queued', 'running', 'paused', 'failed', 'completed')`,
     ),
   ],
 );
@@ -1777,7 +1779,7 @@ export const runMutation = pgTable(
     runId: uuid("runId")
       .notNull()
       .references(() => run.id),
-    targetType: text("targetType").notNull(),
+    targetKind: text("targetKind").notNull(),
     targetId: uuid("targetId").notNull(),
     mutationKind: text("mutationKind").notNull(),
     fields: jsonb("fields")
@@ -1790,7 +1792,14 @@ export const runMutation = pgTable(
   },
   (table) => [
     index("RunMutation_run_idx").on(table.runId),
-    index("RunMutation_target_idx").on(table.targetType, table.targetId),
+    index("RunMutation_target_idx").on(table.targetKind, table.targetId),
+    // A rebuildable pointer to a live identity (ADR 0006): history keeps the
+    // identity that received the mutation.
+    foreignKey({
+      name: "RunMutation_target_fk",
+      columns: [table.targetId, table.targetKind],
+      foreignColumns: [entityIdentity.id, entityIdentity.kind],
+    }),
   ],
 );
 
@@ -2094,7 +2103,7 @@ export const runFinding = pgTable(
       .notNull()
       .$type<LedgerPartyId>()
       .references(() => ledgerParty.id),
-    targetType: text("targetType").notNull(),
+    targetKind: text("targetKind").notNull(),
     targetId: uuid("targetId").notNull(),
     kind: text("kind").notNull(),
     summary: text("summary").notNull(),
@@ -2112,7 +2121,7 @@ export const runFinding = pgTable(
     uniqueIndex("RunFinding_open_evidence_key")
       .on(
         table.ledgerPartyId,
-        table.targetType,
+        table.targetKind,
         table.targetId,
         table.kind,
         table.evidenceFingerprint,
@@ -2125,8 +2134,15 @@ export const runFinding = pgTable(
     ),
     check(
       "RunFinding_target_check",
-      sql`${table.targetType} IN ('purchase', 'expense', 'product', 'run')`,
+      sql`${table.targetKind} IN ('purchase', 'expense', 'product', 'run')`,
     ),
+    // Findings stay live pointers (ADR 0006): a merge repoints them and a
+    // removal deletes them, so the FK always names a live identity.
+    foreignKey({
+      name: "RunFinding_target_fk",
+      columns: [table.targetId, table.targetKind],
+      foreignColumns: [entityIdentity.id, entityIdentity.kind],
+    }),
   ],
 );
 
@@ -3423,7 +3439,7 @@ export const aiAnalysis = pgTable(
   "AiAnalysis",
   {
     id: pkUuid(),
-    entityType: text("entityType").notNull().$type<AiAnalysisEntityType>(),
+    entityKind: text("entityKind").notNull().$type<AiAnalysisEntityType>(),
     entityId: uuid("entityId"),
     feature: text("feature").notNull(),
     provider: text("provider"),
@@ -3439,7 +3455,7 @@ export const aiAnalysis = pgTable(
   (table) => [
     uniqueIndex("AiAnalysis_active_key")
       .on(
-        table.entityType,
+        table.entityKind,
         table.entityId,
         table.feature,
         table.model,
@@ -3449,8 +3465,25 @@ export const aiAnalysis = pgTable(
         sql`coalesce(${table.resultSchemaRevision}, 0)`,
       )
       .where(sql`${table.deletedAt} IS NULL`),
-    index("AiAnalysis_entity_idx").on(table.entityType, table.entityId),
+    index("AiAnalysis_entity_idx").on(table.entityKind, table.entityId),
     index("AiAnalysis_feature_idx").on(table.feature),
+    check(
+      "AiAnalysis_entityKind_check",
+      sql`${table.entityKind} IN ('image', 'location', 'product', 'recipe', 'global')`,
+    ),
+    // 'global' analyses (no owning entity) always have a null entityId, and
+    // every other kind always names one; MATCH SIMPLE lets the null id skip
+    // the FK check below for the global case.
+    check(
+      "AiAnalysis_global_check",
+      sql`(${table.entityKind} = 'global') = (${table.entityId} IS NULL)`,
+    ),
+    // A rebuildable pointer to a live identity (ADR 0006); null on 'global'.
+    foreignKey({
+      name: "AiAnalysis_entity_fk",
+      columns: [table.entityId, table.entityKind],
+      foreignColumns: [entityIdentity.id, entityIdentity.kind],
+    }),
   ],
 );
 
@@ -3485,7 +3518,7 @@ export const aiUsage = pgTable(
     applicationCacheStatus: text("applicationCacheStatus").$type<
       "hit" | "miss" | "none"
     >(),
-    entityType: text("entityType"),
+    entityKind: text("entityKind"),
     entityId: uuid("entityId"),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     ...softDeletedAt(),
@@ -3499,9 +3532,16 @@ export const aiUsage = pgTable(
       table.model,
       table.createdAt.desc(),
     ),
-    index("AiUsage_entity_idx").on(table.entityType, table.entityId),
+    index("AiUsage_entity_idx").on(table.entityKind, table.entityId),
     index("AiUsage_job_idx").on(table.jobKind, table.jobId),
     index("AiUsage_run_idx").on(table.runId),
+    // Both columns are nullable (a call may have no subject entity); MATCH
+    // SIMPLE skips the FK check whenever either is null (ADR 0006).
+    foreignKey({
+      name: "AiUsage_entity_fk",
+      columns: [table.entityId, table.entityKind],
+      foreignColumns: [entityIdentity.id, entityIdentity.kind],
+    }),
   ],
 );
 

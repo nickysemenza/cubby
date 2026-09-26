@@ -192,7 +192,7 @@ export async function describeOriginalImage(
       operation: "imageDescription",
       job: { kind: "image_processing_attempt", id: input.attemptId },
       cacheStatus: "miss",
-      entity: { entityType: "image", entityId: source.id },
+      entity: { entityKind: "image", entityId: source.id },
     },
   );
   const result = imageDescriptionResult.parse({

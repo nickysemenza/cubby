@@ -43,7 +43,7 @@ describe("meal preparation contracts", () => {
             action: "set",
             mealId,
             ledgerPartyId: eaterId,
-            grams: 200,
+            amount: { value: 200, unit: "g" },
             confirmed: true,
           },
           {
@@ -82,8 +82,8 @@ describe("meal preparation contracts", () => {
     }
   });
 
-  it("rejects non-positive change grams but allows fractional grams (#1058 generic meal amounts)", () => {
-    for (const grams of [0, -1]) {
+  it("rejects non-positive change amounts but allows fractional amounts (#1058 generic meal amounts)", () => {
+    for (const value of [0, -1]) {
       expect(
         saveMealRecipePreparationInput.safeParse({
           mealRecipeId,
@@ -92,7 +92,7 @@ describe("meal preparation contracts", () => {
               action: "set",
               mealId,
               ledgerPartyId: eaterId,
-              grams,
+              amount: { value, unit: "g" },
               confirmed: false,
             },
           ],
@@ -100,9 +100,8 @@ describe("meal preparation contracts", () => {
       ).toBe(false);
     }
 
-    // Unlike the authored yields above, a change's `grams` comes from
-    // `mealAmountInputFields` (finite().positive(), no int()) so a fractional
-    // portion is valid.
+    // Unlike the authored yields above, a change's `amount.value` is
+    // `finite().positive()` (no int()), so a fractional portion is valid.
     expect(
       saveMealRecipePreparationInput.safeParse({
         mealRecipeId,
@@ -111,7 +110,7 @@ describe("meal preparation contracts", () => {
             action: "set",
             mealId,
             ledgerPartyId: eaterId,
-            grams: 1.5,
+            amount: { value: 1.5, unit: "g" },
             confirmed: false,
           },
         ],
@@ -119,23 +118,7 @@ describe("meal preparation contracts", () => {
     ).toBe(true);
   });
 
-  it("rejects a set change with both amount and grams, or neither (hasOneMealAmountInput/hasRequiredMealAmount)", () => {
-    expect(
-      saveMealRecipePreparationInput.safeParse({
-        mealRecipeId,
-        changes: [
-          {
-            action: "set",
-            mealId,
-            ledgerPartyId: eaterId,
-            amount: { value: 200, unit: "g" },
-            grams: 200,
-            confirmed: false,
-          },
-        ],
-      }).success,
-    ).toBe(false);
-
+  it("rejects a set change with no amount", () => {
     expect(
       saveMealRecipePreparationInput.safeParse({
         mealRecipeId,
@@ -175,7 +158,7 @@ describe("meal preparation contracts", () => {
             action: "set",
             mealId,
             ledgerPartyId: eaterId,
-            grams: 150,
+            amount: { value: 150, unit: "g" },
             confirmed: false,
           },
           {

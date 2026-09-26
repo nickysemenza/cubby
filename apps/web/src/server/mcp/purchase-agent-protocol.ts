@@ -307,7 +307,7 @@ export async function executePurchaseAgentMutation<T>(input: {
         ? [
             {
               runId: run.id,
-              targetType: ref.type,
+              targetKind: ref.type,
               targetId: ref.id,
               mutationKind: "update",
               fields: [input.toolName],

@@ -1007,6 +1007,7 @@ export async function finalizePhotoRun(
       id: shortcode,
       kinds: ["describe_image", "subject_lift"],
       submission: { id: submission.id, publicId: submission.publicId },
+      runId: scope.public.runId,
     });
     jobIds.push(...scheduled.jobIds);
   }
@@ -1589,7 +1590,7 @@ export async function claimNextImportWork(
     .where(
       and(
         eq(runMutation.runId, scope.public.runId),
-        eq(runMutation.targetType, "product"),
+        eq(runMutation.targetKind, "product"),
         isNull(entityAttachment.id),
       ),
     )
@@ -2376,7 +2377,7 @@ export async function auditImportBatch(
       .values({
         runId: runId,
         ledgerPartyId: scope.ledgerPartyId,
-        targetType: relinkExpenseId ? "expense" : "purchase",
+        targetKind: relinkExpenseId ? "expense" : "purchase",
         targetId: relinkExpenseId ?? finding.targetPurchaseId,
         kind: finding.kind,
         summary: finding.summary,
@@ -2476,7 +2477,7 @@ export async function stopRunForReview(
       .values({
         runId: runId,
         ledgerPartyId: scope.ledgerPartyId,
-        targetType: "run",
+        targetKind: "run",
         targetId: runId,
         kind,
         summary,
@@ -2492,7 +2493,7 @@ export async function stopRunForReview(
           .where(
             and(
               eq(runFinding.runId, runId),
-              eq(runFinding.targetType, "run"),
+              eq(runFinding.targetKind, "run"),
               eq(runFinding.targetId, runId),
               eq(runFinding.kind, kind),
               eq(runFinding.evidenceFingerprint, fingerprint),
@@ -2909,7 +2910,7 @@ export async function loadRunDetail(
       .where(
         and(
           eq(runMutation.runId, run.id),
-          eq(runMutation.targetType, "purchase"),
+          eq(runMutation.targetKind, "purchase"),
         ),
       ),
     database

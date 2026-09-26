@@ -287,7 +287,7 @@ async function runCase(
         db,
         runId,
         operation: `smoke.${scenario}`,
-        entity: { entityType: "location", entityId: id },
+        entity: { entityKind: "location", entityId: id },
       };
       return {
         result:
@@ -319,7 +319,7 @@ async function runCase(
             db,
             runId,
             operation: "smoke.imageDescription",
-            entity: { entityType: "image", entityId: id },
+            entity: { entityKind: "image", entityId: id },
           },
           structuredPorts,
         ),
@@ -338,7 +338,7 @@ async function runCase(
             db,
             runId,
             operation: "smoke.recipeFlow",
-            entity: { entityType: "recipe", entityId: id },
+            entity: { entityKind: "recipe", entityId: id },
             validate: (plan) => assessRecipeFlowCandidate(recipe, plan),
           },
         ),
@@ -530,7 +530,7 @@ async function runCase(
           runId,
           feature: ENTITY_EMBEDDING_FEATURE.feature,
           operation: "smoke.entityEmbedding",
-          entity: { entityType: "product", entityId: id },
+          entity: { entityKind: "product", entityId: id },
         },
       );
       return {

@@ -28,7 +28,7 @@ export async function listRecentAiUsage(db: Database, limit: number) {
       durationMs: aiUsage.durationMs,
       cacheStatus: aiUsage.cacheStatus,
       applicationCacheStatus: aiUsage.applicationCacheStatus,
-      entityType: aiUsage.entityType,
+      entityKind: aiUsage.entityKind,
       entityId: aiUsage.entityId,
       createdAt: aiUsage.createdAt,
     })

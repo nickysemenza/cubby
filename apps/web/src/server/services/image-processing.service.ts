@@ -1,4 +1,4 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor, type RunId } from "@cubby/schemas/identifiers";
 import {
   IMAGE_DESCRIPTION_PROMPT_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
@@ -49,6 +49,8 @@ export async function scheduleImageProcessingJobs(
     publish?: boolean;
     automatic?: boolean;
     submission?: { id: string; publicId: string };
+    /** The Run that requested this scheduling, when the caller has one. */
+    runId?: RunId | null;
   },
 ): Promise<{ jobIds: string[]; submissionId?: string }> {
   const settings = await readImageProcessingSettings(db);

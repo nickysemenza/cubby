@@ -574,7 +574,7 @@ const SOURCE_FACTORIES = {
   "RunFinding.ledgerPartyId": (db, targetId) =>
     insertAndReturn(db, runFinding, {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
-      targetType: "purchase",
+      targetKind: "purchase",
       targetId,
       kind: "liveness-fixture",
       summary: "Liveness fixture",
@@ -938,7 +938,7 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: party.id,
       sourceKind: "product",
       productId: product.id,
-      grams: 1,
+      amount: { value: 1, unit: "g" },
     });
   },
 
@@ -956,7 +956,7 @@ const SOURCE_FACTORIES = {
       mealRecipeId: preparation.id,
       mealId: parseEntityId("meal", targetId),
       ledgerPartyId: party.id,
-      grams: 1,
+      amount: { value: 1, unit: "g" },
     });
   },
 
@@ -970,7 +970,7 @@ const SOURCE_FACTORIES = {
       mealRecipeId: preparation.id,
       mealId: meal.id,
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
-      grams: 1,
+      amount: { value: 1, unit: "g" },
     });
   },
 
@@ -981,7 +981,7 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
       sourceKind: "product",
       productId: product.id,
-      grams: 1,
+      amount: { value: 1, unit: "g" },
     });
   },
 
@@ -1047,7 +1047,7 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: party.id,
       sourceKind: "product",
       productId: parseEntityId("product", targetId),
-      grams: 1,
+      amount: { value: 1, unit: "g" },
     });
   },
 
@@ -1405,7 +1405,7 @@ const SOURCE_FACTORIES = {
   "RunMutation.runId": (db, targetId) =>
     insertAndReturn(db, runMutation, {
       runId: parseEntityId("run", targetId),
-      targetType: "purchase",
+      targetKind: "purchase",
       targetId: crypto.randomUUID(),
       mutationKind: "liveness-fixture",
       postFingerprint: uniq("post-fingerprint"),
@@ -1473,7 +1473,7 @@ const SOURCE_FACTORIES = {
     return insertAndReturn(db, runFinding, {
       runId: parseEntityId("run", targetId),
       ledgerPartyId: party.id,
-      targetType: "purchase",
+      targetKind: "purchase",
       targetId: crypto.randomUUID(),
       kind: "liveness-fixture",
       summary: "Liveness fixture",

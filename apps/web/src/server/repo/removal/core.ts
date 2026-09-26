@@ -184,7 +184,7 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
       .delete(runFinding)
       .where(
         and(
-          eq(runFinding.targetType, entity),
+          eq(runFinding.targetKind, entity),
           inArray(runFinding.targetId, [...ids]),
         ),
       );

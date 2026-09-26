@@ -1371,7 +1371,7 @@ export async function commitProductEnrichment(
         }
         await tx.insert(runMutation).values({
           runId: scope.public.runId,
-          targetType: "product",
+          targetKind: "product",
           targetId: productId,
           mutationKind: "update",
           fields: changedFields,
@@ -1424,6 +1424,7 @@ export async function commitProductEnrichment(
         id: importedImageShortcode,
         kinds: ["describe_image", "subject_lift"],
         automatic: true,
+        runId: scope.public.runId,
       });
     } catch (error) {
       // Enrichment has committed. Optional processing cannot turn a successful

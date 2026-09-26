@@ -207,7 +207,7 @@ describe("photo coordinator model eval", () => {
           await getDb(ctx.db)
             .insert(aiAnalysis)
             .values({
-              entityType: "image",
+              entityKind: "image",
               entityId: fixture.id,
               feature: "image-description",
               model: "synthetic",
