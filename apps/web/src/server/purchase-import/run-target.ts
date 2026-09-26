@@ -4,16 +4,16 @@ import { and, desc, eq, exists, or, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   aiUsage,
-  importRun,
-  importRunMutation,
-  importRunTarget,
+  run as runTable,
+  runMutation,
+  runTarget,
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
-/** Resolve the public Purchase id used by the ImportRunMutation target edge. */
+/** Resolve the public Purchase id used by the RunMutation target edge. */
 export async function resolvePurchaseImportTarget(
   db: Database | DrizzleTransaction,
   purchaseShortcode: string,
@@ -30,34 +30,34 @@ export async function resolveProductImportTarget(
 }
 
 /** List write provenance and targeted no-op validation runs for a Purchase. */
-export function listImportRuns(
+export function listRuns(
   db: Database,
   ledgerPartyId: EntityId<"ledgerParty">,
   purchaseId?: EntityId<"purchase">,
 ) {
   const query = getDb(db)
     .select({
-      id: importRun.id,
-      publicId: importRun.shortcode,
+      id: runTable.id,
+      publicId: runTable.shortcode,
       vendorAccountLabel: vendorAccount.label,
       vendorName: vendor.name,
-      trigger: importRun.trigger,
-      purpose: importRun.purpose,
-      status: importRun.status,
-      startedAt: importRun.startedAt,
-      endedAt: importRun.endedAt,
-      ordersSeen: importRun.ordersSeen,
-      imported: importRun.imported,
-      updated: importRun.updated,
-      skipped: importRun.skipped,
-      failureCode: importRun.failureCode,
+      trigger: runTable.trigger,
+      purpose: runTable.purpose,
+      status: runTable.status,
+      startedAt: runTable.startedAt,
+      endedAt: runTable.endedAt,
+      ordersSeen: runTable.ordersSeen,
+      imported: runTable.imported,
+      updated: runTable.updated,
+      skipped: runTable.skipped,
+      failureCode: runTable.failureCode,
       estimatedCost: sql<number>`coalesce(sum(${aiUsage.estimatedCost}), 0)`,
     })
-    .from(importRun)
+    .from(runTable)
     .leftJoin(
       vendorAccount,
       and(
-        eq(vendorAccount.id, importRun.vendorAccountId),
+        eq(vendorAccount.id, runTable.vendorAccountId),
         notDeleted(vendorAccount),
       ),
     )
@@ -65,35 +65,32 @@ export function listImportRuns(
       vendor,
       and(eq(vendor.id, vendorAccount.vendorId), notDeleted(vendor)),
     )
-    .leftJoin(
-      aiUsage,
-      and(eq(aiUsage.runId, importRun.id), notDeleted(aiUsage)),
-    )
+    .leftJoin(aiUsage, and(eq(aiUsage.runId, runTable.id), notDeleted(aiUsage)))
     .where(
       and(
-        eq(importRun.ledgerPartyId, ledgerPartyId),
+        eq(runTable.ledgerPartyId, ledgerPartyId),
         purchaseId
           ? or(
               exists(
                 getDb(db)
-                  .select({ id: importRunMutation.id })
-                  .from(importRunMutation)
+                  .select({ id: runMutation.id })
+                  .from(runMutation)
                   .where(
                     and(
-                      eq(importRunMutation.runId, importRun.id),
-                      eq(importRunMutation.targetType, "purchase"),
-                      eq(importRunMutation.targetId, purchaseId),
+                      eq(runMutation.runId, runTable.id),
+                      eq(runMutation.targetType, "purchase"),
+                      eq(runMutation.targetId, purchaseId),
                     ),
                   ),
               ),
               exists(
                 getDb(db)
-                  .select({ id: importRunTarget.id })
-                  .from(importRunTarget)
+                  .select({ id: runTarget.id })
+                  .from(runTarget)
                   .where(
                     and(
-                      eq(importRunTarget.runId, importRun.id),
-                      eq(importRunTarget.purchaseId, purchaseId),
+                      eq(runTarget.runId, runTable.id),
+                      eq(runTarget.purchaseId, purchaseId),
                     ),
                   ),
               ),
@@ -101,41 +98,41 @@ export function listImportRuns(
           : undefined,
       ),
     )
-    .groupBy(importRun.id, vendorAccount.label, vendor.name)
-    .orderBy(desc(importRun.startedAt));
+    .groupBy(runTable.id, vendorAccount.label, vendor.name)
+    .orderBy(desc(runTable.startedAt));
 
   return purchaseId ? query : query.limit(20);
 }
 
 /** List write provenance and targeted enrichment runs for a Product. */
-export function listProductImportRuns(
+export function listProductRuns(
   db: Database,
   ledgerPartyId: EntityId<"ledgerParty">,
   productId?: EntityId<"product">,
 ) {
   const query = getDb(db)
     .select({
-      id: importRun.id,
-      publicId: importRun.shortcode,
+      id: runTable.id,
+      publicId: runTable.shortcode,
       vendorAccountLabel: vendorAccount.label,
       vendorName: vendor.name,
-      trigger: importRun.trigger,
-      purpose: importRun.purpose,
-      status: importRun.status,
-      startedAt: importRun.startedAt,
-      endedAt: importRun.endedAt,
-      ordersSeen: importRun.ordersSeen,
-      imported: importRun.imported,
-      updated: importRun.updated,
-      skipped: importRun.skipped,
-      failureCode: importRun.failureCode,
+      trigger: runTable.trigger,
+      purpose: runTable.purpose,
+      status: runTable.status,
+      startedAt: runTable.startedAt,
+      endedAt: runTable.endedAt,
+      ordersSeen: runTable.ordersSeen,
+      imported: runTable.imported,
+      updated: runTable.updated,
+      skipped: runTable.skipped,
+      failureCode: runTable.failureCode,
       estimatedCost: sql<number>`coalesce(sum(${aiUsage.estimatedCost}), 0)`,
     })
-    .from(importRun)
+    .from(runTable)
     .leftJoin(
       vendorAccount,
       and(
-        eq(vendorAccount.id, importRun.vendorAccountId),
+        eq(vendorAccount.id, runTable.vendorAccountId),
         notDeleted(vendorAccount),
       ),
     )
@@ -143,30 +140,27 @@ export function listProductImportRuns(
       vendor,
       and(eq(vendor.id, vendorAccount.vendorId), notDeleted(vendor)),
     )
-    .leftJoin(
-      aiUsage,
-      and(eq(aiUsage.runId, importRun.id), notDeleted(aiUsage)),
-    )
+    .leftJoin(aiUsage, and(eq(aiUsage.runId, runTable.id), notDeleted(aiUsage)))
     .where(
       and(
-        eq(importRun.ledgerPartyId, ledgerPartyId),
+        eq(runTable.ledgerPartyId, ledgerPartyId),
         productId
           ? exists(
               getDb(db)
-                .select({ id: importRunTarget.id })
-                .from(importRunTarget)
+                .select({ id: runTarget.id })
+                .from(runTarget)
                 .where(
                   and(
-                    eq(importRunTarget.runId, importRun.id),
-                    eq(importRunTarget.productId, productId),
+                    eq(runTarget.runId, runTable.id),
+                    eq(runTarget.productId, productId),
                   ),
                 ),
             )
           : undefined,
       ),
     )
-    .groupBy(importRun.id, vendorAccount.label, vendor.name)
-    .orderBy(desc(importRun.startedAt));
+    .groupBy(runTable.id, vendorAccount.label, vendor.name)
+    .orderBy(desc(runTable.startedAt));
 
   return productId ? query : query.limit(20);
 }

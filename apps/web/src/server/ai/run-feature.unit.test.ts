@@ -1,4 +1,4 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 
 import { AI_CACHE_TTL_SECONDS } from "~/server/clients/ai-adapters";
@@ -22,7 +22,7 @@ import {
 const db = new Database(() => {
   throw new Error("run-feature unit tests never resolve a database runtime");
 });
-const runId = importRunId.parse("00000000-0000-4000-8000-000000000001");
+const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
 const request: AiChatRequest = {
   systemPrompts: ["frame"],

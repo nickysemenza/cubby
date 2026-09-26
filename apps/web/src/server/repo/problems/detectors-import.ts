@@ -3,36 +3,34 @@ import { and, eq, inArray, lt, lte, or } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
-  importFinding,
+  runFinding,
   importHunt,
   purchase,
   vendorAccount,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
-export async function findOpenImportFindings(db: Database) {
+export async function findOpenRunFindings(db: Database) {
   const database = getDb(db);
   const now = new Date();
   await database
-    .update(importFinding)
+    .update(runFinding)
     .set({ status: "dismissed", resolvedAt: now, updatedAt: now })
-    .where(
-      and(eq(importFinding.status, "open"), lt(importFinding.expiresAt, now)),
-    );
+    .where(and(eq(runFinding.status, "open"), lt(runFinding.expiresAt, now)));
   const rows = await database
     .select({
-      id: importFinding.id,
+      id: runFinding.id,
       purchaseShortcode: purchase.shortcode,
-      kind: importFinding.kind,
-      summary: importFinding.summary,
-      probability: importFinding.probability,
-      proposedFix: importFinding.proposedFix,
-      createdAt: importFinding.createdAt,
+      kind: runFinding.kind,
+      summary: runFinding.summary,
+      probability: runFinding.probability,
+      proposedFix: runFinding.proposedFix,
+      createdAt: runFinding.createdAt,
     })
-    .from(importFinding)
-    .leftJoin(purchase, eq(importFinding.targetId, purchase.id))
-    .where(eq(importFinding.status, "open"))
-    .orderBy(importFinding.createdAt);
+    .from(runFinding)
+    .leftJoin(purchase, eq(runFinding.targetId, purchase.id))
+    .where(eq(runFinding.status, "open"))
+    .orderBy(runFinding.createdAt);
   const findings = rows.map((row) => ({
     id: row.id,
     purchaseId: row.purchaseShortcode

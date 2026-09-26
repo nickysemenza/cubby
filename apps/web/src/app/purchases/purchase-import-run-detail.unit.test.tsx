@@ -1,5 +1,5 @@
-import { importRunShortcode } from "@cubby/schemas/identifiers";
-import type { ImportRunOut } from "@cubby/schemas/import-run";
+import { runShortcode } from "@cubby/schemas/identifiers";
+import type { RunOut } from "@cubby/schemas/run";
 import {
   fireEvent,
   render,
@@ -10,19 +10,19 @@ import {
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ImportRunDetail } from "~/contracts/run.contract";
+import type { RunDetail } from "~/contracts/run.contract";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { RunImportWorkflow, RunPhotoBatch } from "./purchase-import-run-detail";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
-let detailRun: ImportRunDetail;
+let detailRun: RunDetail;
 let restoreDispatch: () => void;
 const operationCalls: Array<{ operation: string; input: unknown }> = [];
 
-const run: ImportRunDetail = {
-  publicId: importRunShortcode.parse("RUN-4K7M"),
+const run: RunDetail = {
+  publicId: runShortcode.parse("RUN-4K7M"),
   status: "completed",
   purpose: "purchase_validation",
   trigger: "manual",
@@ -160,7 +160,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const record = fromPartial<ImportRunOut>({
+const record = fromPartial<RunOut>({
   id: run.publicId,
   status: "completed",
   purpose: "purchase_validation",
@@ -171,7 +171,7 @@ describe("RunImportWorkflow", () => {
     detailRun = { ...run, status: "paused_auth", endedAt: null };
     render(
       <RunImportWorkflow
-        record={fromPartial<ImportRunOut>({ ...record, status: "paused_auth" })}
+        record={fromPartial<RunOut>({ ...record, status: "paused_auth" })}
       />,
       { wrapper: harness.wrapper },
     );
@@ -268,7 +268,7 @@ it("shows durable progress and diagnostics alongside photo group review", async 
       },
     ],
   };
-  const photoRecord = fromPartial<ImportRunOut>({
+  const photoRecord = fromPartial<RunOut>({
     id: run.publicId,
     status: "completed",
     purpose: "photo_inventory",
@@ -310,7 +310,7 @@ it("shows the remaining photo milestones while a run is active", async () => {
   };
   render(
     <RunPhotoBatch
-      record={fromPartial<ImportRunOut>({
+      record={fromPartial<RunOut>({
         id: run.publicId,
         status: "running",
         purpose: "photo_inventory",

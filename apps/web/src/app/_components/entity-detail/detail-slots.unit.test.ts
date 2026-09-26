@@ -1,4 +1,4 @@
-import type { ImportRunOut } from "@cubby/schemas/import-run";
+import type { RunOut } from "@cubby/schemas/run";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
@@ -8,18 +8,17 @@ import { detailSlotsFor } from "./detail-slots";
 // AI runs (no vendor, orders or transcript) once had no page at all, so the
 // import workflow must never claim them — nor any run lose usage or changes.
 describe("Run detail slots", () => {
-  const slots = detailSlotsFor("importRun") ?? {};
-  const applying = (purpose: ImportRunOut["purpose"]) =>
+  const slots = detailSlotsFor("run") ?? {};
+  const applying = (purpose: RunOut["purpose"]) =>
     Object.entries(slots)
       .filter(
         ([, slot]) =>
           // SAFETY: the erased map takes `never`; this is a Run record.
-          slot.applies?.(fromPartial<ImportRunOut>({ purpose }) as never) !==
-          false,
+          slot.applies?.(fromPartial<RunOut>({ purpose }) as never) !== false,
       )
       .map(([id]) => id);
 
-  it.each<[ImportRunOut["purpose"], string[]]>([
+  it.each<[RunOut["purpose"], string[]]>([
     ["ai_suggest", ["ai-usage", "changes"]],
     ["ai_action", ["ai-usage", "changes"]],
     ["background", ["ai-usage", "changes"]],

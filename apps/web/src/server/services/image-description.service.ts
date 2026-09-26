@@ -1,7 +1,7 @@
 import {
   parseShortcodeFor,
   type ImageId,
-  type ImportRunId,
+  type RunId,
 } from "@cubby/schemas/identifiers";
 import {
   IMAGE_DESCRIPTION_PROMPT_REVISION,
@@ -98,7 +98,7 @@ export function descriptionRequest(imageUrl: string) {
  */
 export async function describeOriginalImage(
   db: Database,
-  input: { imageId: ImageId; attemptId: string; runId: ImportRunId },
+  input: { imageId: ImageId; attemptId: string; runId: RunId },
 ): Promise<{
   result: ImageDescriptionResult;
   cached: boolean;

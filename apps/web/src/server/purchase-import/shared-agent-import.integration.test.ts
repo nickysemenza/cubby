@@ -9,9 +9,9 @@ import { describe, expect, it } from "vitest";
 import {
   expense,
   financialTransactionAllocation,
-  importFinding,
-  importRunOperation,
-  importRunTarget,
+  runFinding,
+  runOperation,
+  runTarget,
   product,
   productExternalId,
   purchase,
@@ -28,7 +28,7 @@ import {
   preparePurchaseImport,
   validatePurchaseImport,
 } from "./import-orders";
-import { startOrResumeImportRun, startTargetedImportRun } from "./run-service";
+import { startOrResumeRun, startTargetedRun } from "./run-service";
 
 const checksum = (digit: string) => digit.repeat(64);
 
@@ -70,7 +70,7 @@ describe("shared purchase-import prepare and commit", () => {
         isPrimary: true,
       });
     });
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -186,7 +186,7 @@ describe("shared purchase-import prepare and commit", () => {
     ).toHaveLength(0);
 
     // A fresh operationId for the corrected retry: the failed attempt above
-    // now leaves its own `failed` ImportRunOperation row (see the dedicated
+    // now leaves its own `failed` RunOperation row (see the dedicated
     // failure test below), so replaying "commit:amazon-order-1" with
     // different args is a fenced conflict, not a retry.
     const commitInput = commitPurchaseImportInput.parse({
@@ -257,7 +257,7 @@ describe("shared purchase-import prepare and commit", () => {
         isPrimary: true,
       });
     });
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -360,7 +360,7 @@ describe("shared purchase-import prepare and commit", () => {
       currency: "USD" | "EUR",
       sourceChecksum: string,
     ) => {
-      const started = await startTargetedImportRun(ctx.db, {
+      const started = await startTargetedRun(ctx.db, {
         ledgerPartyId: party.id,
         purpose: "purchase_validation",
         vendorId: vendor.id,
@@ -445,9 +445,9 @@ describe("shared purchase-import prepare and commit", () => {
         ctx.actor,
       );
       const [target] = await getDb(ctx.db)
-        .select({ warning: importRunTarget.warning })
-        .from(importRunTarget)
-        .where(eq(importRunTarget.runId, started.run.id));
+        .select({ warning: runTarget.warning })
+        .from(runTarget)
+        .where(eq(runTarget.runId, started.run.id));
       return { result, target };
     };
 
@@ -492,7 +492,7 @@ describe("shared purchase-import prepare and commit", () => {
       .where(eq(product.id, existingProduct.entityId));
     if (!productRow) throw new Error("Product fixture was not created");
 
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -596,7 +596,7 @@ describe("shared purchase-import prepare and commit", () => {
     }
   });
 
-  it("leaves a failed ImportRunOperation row when a resolution's product cannot be resolved", async () => {
+  it("leaves a failed RunOperation row when a resolution's product cannot be resolved", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Failed commit member",
       kind: "member",
@@ -612,7 +612,7 @@ describe("shared purchase-import prepare and commit", () => {
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -672,7 +672,7 @@ describe("shared purchase-import prepare and commit", () => {
           stableLineId: "failing-order-1:line-1",
           // Well-formed shortcode for a Product that does not exist:
           // resolveOrThrow rejects deep inside the transaction, after the
-          // ImportRunOperation "started" row has already been inserted, so
+          // RunOperation "started" row has already been inserted, so
           // that insert is rolled back along with everything else.
           resolution: { kind: "existing" as const, productId: "PRD-9999" },
         },
@@ -685,14 +685,14 @@ describe("shared purchase-import prepare and commit", () => {
 
     const [operation] = await getDb(ctx.db)
       .select({
-        state: importRunOperation.state,
-        error: importRunOperation.error,
+        state: runOperation.state,
+        error: runOperation.error,
       })
-      .from(importRunOperation)
+      .from(runOperation)
       .where(
         and(
-          eq(importRunOperation.runId, run.id),
-          eq(importRunOperation.operationId, operationId),
+          eq(runOperation.runId, run.id),
+          eq(runOperation.operationId, operationId),
         ),
       );
     expect(operation?.state).toBe("failed");
@@ -746,7 +746,7 @@ describe("shared purchase-import prepare and commit", () => {
       .where(eq(product.id, existingProduct.entityId));
     if (!productRow) throw new Error("Product fixture was not created");
 
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -891,7 +891,7 @@ describe("shared purchase-import prepare and commit", () => {
       productQuantity: 1,
     });
 
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -984,9 +984,9 @@ describe("shared purchase-import prepare and commit", () => {
     expect(liveExpenses).toEqual([{ id: manualExpense.id }]);
 
     const findings = await getDb(ctx.db)
-      .select({ kind: importFinding.kind })
-      .from(importFinding)
-      .where(eq(importFinding.targetId, manualPurchase.id));
+      .select({ kind: runFinding.kind })
+      .from(runFinding)
+      .where(eq(runFinding.targetId, manualPurchase.id));
     expect(findings.some((row) => row.kind === "duplicate_lines")).toBe(true);
   });
 });

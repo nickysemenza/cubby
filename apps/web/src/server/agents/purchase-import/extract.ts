@@ -1,4 +1,4 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import {
   browserCapture,
   type BrowserCapture,
@@ -74,7 +74,7 @@ export const extractPurchaseCapture = async (args: {
     await runStructuredFeature(PURCHASE_IMPORT_EXTRACTION_FEATURE, request, {
       db: args.db,
       operation: "purchaseImport.extract",
-      runId: importRunId.parse(args.runId),
+      runId: runEntityId.parse(args.runId),
     }),
   );
   const validation = validateExtraction(first);
@@ -102,7 +102,7 @@ export const extractPurchaseCapture = async (args: {
       {
         db: args.db,
         operation: "purchaseImport.repair",
-        runId: importRunId.parse(args.runId),
+        runId: runEntityId.parse(args.runId),
       },
     ),
   );
@@ -246,7 +246,7 @@ async function recoverPurchaseAudit(
     model: AUDIT_RECOVERY_MODEL,
     feature: PURCHASE_IMPORT_AUDIT_FEATURE.feature,
     operation: "purchaseImport.audit.recovery",
-    runId: importRunId.parse(args.runId),
+    runId: runEntityId.parse(args.runId),
     inputTokens: body.usage.input_tokens,
     outputTokens: body.usage.output_tokens,
     estimatedCost: estimateAiUsageCostUsd("anthropic", AUDIT_RECOVERY_MODEL, {
@@ -280,7 +280,7 @@ export const auditPurchaseImportBatch = async (
         {
           db: args.db,
           operation: "purchaseImport.audit",
-          runId: importRunId.parse(args.runId),
+          runId: runEntityId.parse(args.runId),
         },
       ),
     );
@@ -337,7 +337,7 @@ export const extractPurchaseEvidence = async (args: {
       {
         db: args.db,
         operation: "purchaseImport.extractReceipt",
-        runId: importRunId.parse(args.runId),
+        runId: runEntityId.parse(args.runId),
         validate: (output) =>
           validateExtraction(normalizeImportExtractionModelOutput(output)),
       },

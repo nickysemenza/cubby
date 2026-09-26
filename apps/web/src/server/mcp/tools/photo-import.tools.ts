@@ -1,13 +1,10 @@
 /**
  * Photo-inventory run MCP tools. The agent proposes item groups for a
- * `photo_inventory` `ImportRun` (`propose_photo_groups`); a household member
+ * `photo_inventory` `Run` (`propose_photo_groups`); a household member
  * reviews and approves them on the run page, and approval runs the bounded
  * `commit_photo_group` writer, which also stays callable directly.
  */
-import {
-  importRunShortcode,
-  ledgerPartyShortcode,
-} from "@cubby/schemas/identifiers";
+import { runShortcode, ledgerPartyShortcode } from "@cubby/schemas/identifiers";
 import {
   commitPhotoGroupInput,
   commitPhotoGroupOutput,
@@ -28,8 +25,8 @@ import {
   proposePhotoGroups,
 } from "~/server/photo-import-run/proposals";
 import { commitPhotoGroup } from "~/server/photo-import-run/writer";
-import { getImportRunByShortcode } from "~/server/repo/import-run";
 import { findPhotoProductCandidates } from "~/server/repo/photo-product-candidates";
+import { getRunByShortcode } from "~/server/repo/run";
 
 import { getEntityKernelContext } from "../kernel-context";
 import { READ_ONLY_CLOSED, registerMcpTool, WRITE_CLOSED } from "./_shared";
@@ -53,13 +50,13 @@ export function registerPhotoImportTools(server: McpServer) {
     description:
       "Read one photo-inventory run's owner, notes, and one page of its photos in shot order with their cloud descriptions and recognized text. Pass `nextCursor` back as `cursor` until it is null; an item photographed across a page boundary continues on the next page. Set `withImageUrls` only if you can open images. Use this before proposing groups.",
     inputSchema: z.object({
-      runId: importRunShortcode,
+      runId: runShortcode,
       cursor: z.number().int().nonnegative().optional(),
       limit: z.number().int().min(1).max(PHOTO_CONTEXT_PAGE_MAX).optional(),
       withImageUrls: z.boolean().optional(),
     }),
     outputSchema: z.object({
-      runId: importRunShortcode,
+      runId: runShortcode,
       ledgerPartyId: ledgerPartyShortcode,
       notes: z.string().nullable(),
       totalImages: z.number().int().nonnegative(),
@@ -69,7 +66,7 @@ export function registerPhotoImportTools(server: McpServer) {
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
       const db = getEntityKernelContext(extra).db;
-      const run = await getImportRunByShortcode(db, params.runId);
+      const run = await getRunByShortcode(db, params.runId);
       if (!run || run.purpose !== "photo_inventory" || !run.ledgerPartyId)
         throw new Error("Photo-inventory run and owner were not found");
       const all = await listPhotoRunImages(db, params.runId);

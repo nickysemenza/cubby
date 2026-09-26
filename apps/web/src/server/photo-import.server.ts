@@ -12,7 +12,7 @@ import {
   updatePhotoGroupProductDraft,
 } from "~/server/photo-import-run/proposals";
 import {
-  finalizePhotoImportRun,
+  finalizePhotoRun,
   startPhotoInventoryRun,
 } from "~/server/purchase-import/run-service";
 import { photoProductCandidates } from "~/server/repo/photo-product-candidates";
@@ -126,7 +126,7 @@ export const photoImportHandlers = implementOperationDomain(
       return { runId: run.publicId };
     },
     finalize: (context, input) =>
-      finalizePhotoImportRun(context.db, input, context.actorContext),
+      finalizePhotoRun(context.db, input, context.actorContext),
     reconcile: (context, input) => reconcilePhotoImport(context.db, input),
   },
 );

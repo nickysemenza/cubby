@@ -518,7 +518,7 @@ export const invalidFinancialJsonSchema = z.discriminatedUnion("entity", [
 export const sectionTotalsSchema = z.record(z.string(), z.number().int());
 export type SectionTotals = z.infer<typeof sectionTotalsSchema>;
 
-export const importFindingProblemSchema = z.object({
+export const runFindingProblemSchema = z.object({
   id: z.uuid(),
   purchaseId: purchaseShortcode.nullable(),
   kind: z.string(),
@@ -528,15 +528,13 @@ export const importFindingProblemSchema = z.object({
   createdAt: z.date(),
 });
 
-export const resolveImportFindingInput = z.object({
+export const resolveRunFindingInput = z.object({
   id: z.uuid(),
   action: z.enum(["apply", "dismiss"]),
 });
-export type ResolveImportFindingInput = z.infer<
-  typeof resolveImportFindingInput
->;
+export type ResolveRunFindingInput = z.infer<typeof resolveRunFindingInput>;
 
-export const resolveImportFindingOut = z.object({
+export const resolveRunFindingOut = z.object({
   id: z.uuid(),
   status: z.enum(["applied", "dismissed"]),
 });
@@ -584,7 +582,7 @@ const detector = <
  */
 export const problemDetectors = {
   // --- fast lane ---
-  importFindings: detector("fast", "defect", importFindingProblemSchema),
+  runFindings: detector("fast", "defect", runFindingProblemSchema),
   duplicateInventory: detector("fast", "defect", problemRowSchema),
   // Two rows for one SKU is unambiguously wrong — spend, stock, and identifiers
   // are split across both — and it converges to zero: `mergeProducts` folds the

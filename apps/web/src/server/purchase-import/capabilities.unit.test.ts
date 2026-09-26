@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  assertImportRunCapability,
+  assertRunCapability,
   capabilityForPurchaseAgentTool,
 } from "./capabilities";
 
@@ -16,17 +16,17 @@ describe("targeted import capabilities", () => {
       "enrichment_commit",
     ] as const) {
       expect(() =>
-        assertImportRunCapability("purchase_validation", capability),
+        assertRunCapability("purchase_validation", capability),
       ).toThrow("forbids");
     }
   });
 
   it("retains account-sync's existing mutation permissions", () => {
     expect(() =>
-      assertImportRunCapability("account_sync", "business_writer"),
+      assertRunCapability("account_sync", "business_writer"),
     ).not.toThrow();
     expect(() =>
-      assertImportRunCapability("account_sync", "audit_repair"),
+      assertRunCapability("account_sync", "audit_repair"),
     ).not.toThrow();
   });
 
@@ -43,7 +43,7 @@ describe("targeted import capabilities", () => {
       "photo_inventory",
     ] as const) {
       expect(() =>
-        assertImportRunCapability(purpose, "match_proposal"),
+        assertRunCapability(purpose, "match_proposal"),
       ).not.toThrow();
     }
   });

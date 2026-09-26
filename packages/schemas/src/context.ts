@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { DeviceId, ImportRunId, UserId } from "./identifiers";
+import type { DeviceId, RunId, UserId } from "./identifiers";
 
 /**
  * How a write entered the app. Who and what did it are separate columns:
@@ -21,7 +21,7 @@ export type AuditChannel = z.infer<typeof auditChannelSchema>;
 export interface ActorAttribution {
   oauthClientId: string | null;
   deviceId: DeviceId | null;
-  runId: ImportRunId | null;
+  runId: RunId | null;
 }
 
 export interface ActorContext extends ActorAttribution {
@@ -44,9 +44,6 @@ export function buildActorContext(
 }
 
 /** The actor with `runId` set, unless an enclosing run already owns the work. */
-export function actorInRun(
-  actor: ActorContext,
-  runId: ImportRunId,
-): ActorContext {
+export function actorInRun(actor: ActorContext, runId: RunId): ActorContext {
   return actor.runId ? actor : { ...actor, runId };
 }

@@ -1,4 +1,4 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
@@ -20,7 +20,7 @@ const db = new Database(() => {
   );
 });
 
-const runId = importRunId.parse("00000000-0000-4000-8000-000000000009");
+const runId = runEntityId.parse("00000000-0000-4000-8000-000000000009");
 const sourceId = testEntityId("ingredient", "source");
 const source = { id: sourceId, name: "scallion" };
 

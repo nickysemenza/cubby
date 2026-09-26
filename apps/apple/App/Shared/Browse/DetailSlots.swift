@@ -14,19 +14,19 @@ enum DetailSlotRegistry {
             return AnyView(MealNutritionSlot(mealID: row.id))
         case (.ledgerParty, .ledgerPartyWardrobe):
             return AnyView(WardrobeDetailSlot(ownerID: row.id, ownerName: row.title))
-        case (.importRun, .importRunImportWorkflow)
+        case (.run, .runImportWorkflow)
         where row.raw["purpose"]?.stringValue != "photo_inventory":
             return AnyView(
                 NavigationLink {
-                    ImportRunReviewView(runID: row.id)
+                    RunReviewView(runID: row.id)
                 } label: {
                     Label("Open live run", systemImage: "arrow.up.right.square")
                 })
-        case (.importRun, .importRunPhotoBatch)
+        case (.run, .runPhotoBatch)
         where row.raw["purpose"]?.stringValue == "photo_inventory":
             return AnyView(
                 NavigationLink {
-                    ImportRunReviewView(runID: row.id)
+                    RunReviewView(runID: row.id)
                 } label: {
                     Label("Review photos and items", systemImage: "photo.on.rectangle")
                 })

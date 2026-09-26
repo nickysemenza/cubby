@@ -1,4 +1,4 @@
-import type { ImportRunId, IngredientId } from "@cubby/schemas/identifiers";
+import type { RunId, IngredientId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 
 /**
@@ -38,7 +38,7 @@ export interface MergeShortlistPort {
     name: string,
     excludeId: IngredientId,
     limit: number,
-    runId: ImportRunId,
+    runId: RunId,
   ) => Promise<MergeShortlistEntry[]>;
 }
 
@@ -49,7 +49,7 @@ async function productionSemanticLeg(
   name: string,
   excludeId: IngredientId,
   limit: number,
-  runId: ImportRunId,
+  runId: RunId,
 ): Promise<MergeShortlistEntry[]> {
   if (!semanticEmbeddingsConfigured()) return [];
   const embedding = await embedQuery(name, { db, runId });
@@ -80,7 +80,7 @@ const productionMergeShortlistPort: MergeShortlistPort = {
 export async function buildMergeShortlist(
   db: Database,
   source: { id: IngredientId; name: string },
-  runId: ImportRunId,
+  runId: RunId,
   limit = 20,
   port: MergeShortlistPort = productionMergeShortlistPort,
 ): Promise<MergeShortlistEntry[]> {

@@ -2,15 +2,11 @@ import { z } from "zod";
 
 import {
   ledgerPartyShortcode,
-  importRunShortcode,
+  runShortcode,
   vendorAccountShortcode,
   vendorShortcode,
 } from "../identifier-fields.js";
-import {
-  importRunPurpose,
-  importRunStatus,
-  importRunTrigger,
-} from "../import-run-fields.js";
+import { runPurpose, runStatus, runTrigger } from "../run-fields.js";
 import { defineEntity } from "./definition.js";
 
 const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
@@ -28,7 +24,7 @@ const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
  * render it like any other record.
  */
 export default defineEntity({
-  key: "importRun",
+  key: "run",
   names: { singular: "Run", plural: "Runs" },
   route: {
     basePath: "runs",
@@ -41,8 +37,8 @@ export default defineEntity({
       },
     },
   },
-  table: "ImportRun",
-  identifiers: { brand: "ImportRunId", shortcode: "RUN-" },
+  table: "Run",
+  identifiers: { brand: "RunId", shortcode: "RUN-" },
   presentation: {
     titleField: "displayName",
     domain: "finance",
@@ -118,7 +114,7 @@ export default defineEntity({
           ],
         },
         display: { list: true, detail: true, width: "sm" },
-        validation: readOnly(importRunStatus),
+        validation: readOnly(runStatus),
       },
       {
         key: "purpose",
@@ -138,7 +134,7 @@ export default defineEntity({
           ],
         },
         display: { list: true, detail: true, width: "sm" },
-        validation: readOnly(importRunPurpose),
+        validation: readOnly(runPurpose),
       },
       {
         key: "trigger",
@@ -154,7 +150,7 @@ export default defineEntity({
           ],
         },
         display: { list: true, detail: true, width: "sm" },
-        validation: readOnly(importRunTrigger),
+        validation: readOnly(runTrigger),
       },
       {
         key: "vendorAccountId",
@@ -179,7 +175,7 @@ export default defineEntity({
         key: "ledgerPartyId",
         kind: "identifier",
         // Null only on runs that group AI work (see `ensureRun`); import
-        // purposes always carry the member scope (`ImportRun_import_party_check`).
+        // purposes always carry the member scope (`Run_import_party_check`).
         nullable: true,
         reference: { entity: "ledgerParty" },
         display: {
@@ -320,9 +316,9 @@ export default defineEntity({
         key: "predecessorRunId",
         kind: "identifier",
         nullable: true,
-        reference: { entity: "importRun" },
+        reference: { entity: "run" },
         display: { detail: true },
-        validation: readOnly(importRunShortcode.nullable()),
+        validation: readOnly(runShortcode.nullable()),
       },
       {
         key: "vendorAccountLabel",
@@ -346,7 +342,7 @@ export default defineEntity({
       {
         key: "id",
         kind: "identifier",
-        validation: readOnly(importRunShortcode),
+        validation: readOnly(runShortcode),
       },
       {
         key: "createdAt",
@@ -373,7 +369,7 @@ export default defineEntity({
     storage: [
       {
         key: "id",
-        specialized: "primary-key:ImportRunId",
+        specialized: "primary-key:RunId",
       },
       { key: "shortcode", specialized: "shortcode" },
       { key: "ledgerPartyId", reference: "ledgerParty" },
@@ -473,14 +469,14 @@ export default defineEntity({
     create: null,
     update: null,
     output: {
-      module: "@cubby/schemas/import-run",
-      export: "importRunOut",
+      module: "@cubby/schemas/run",
+      export: "runOut",
     },
   },
   filters: {
     schema: {
-      module: "@cubby/schemas/import-run",
-      export: "importRunFilterFields",
+      module: "@cubby/schemas/run",
+      export: "runFilterFields",
     },
     descriptors: [
       {
@@ -574,10 +570,10 @@ export default defineEntity({
       cardinality: "one",
       provenance: {
         kind: "local-path",
-        steps: [{ edge: "ImportRun.vendorAccountId", direction: "outgoing" }],
+        steps: [{ edge: "Run.vendorAccountId", direction: "outgoing" }],
       },
       inverse: {
-        steps: [{ edge: "ImportRun.vendorAccountId", direction: "incoming" }],
+        steps: [{ edge: "Run.vendorAccountId", direction: "incoming" }],
       },
     },
     {
@@ -587,10 +583,10 @@ export default defineEntity({
       cardinality: "one",
       provenance: {
         kind: "local-path",
-        steps: [{ edge: "ImportRun.vendorId", direction: "outgoing" }],
+        steps: [{ edge: "Run.vendorId", direction: "outgoing" }],
       },
       inverse: {
-        steps: [{ edge: "ImportRun.vendorId", direction: "incoming" }],
+        steps: [{ edge: "Run.vendorId", direction: "incoming" }],
       },
     },
     {
@@ -600,25 +596,25 @@ export default defineEntity({
       cardinality: "one",
       provenance: {
         kind: "local-path",
-        steps: [{ edge: "ImportRun.ledgerPartyId", direction: "outgoing" }],
+        steps: [{ edge: "Run.ledgerPartyId", direction: "outgoing" }],
       },
       inverse: {
-        steps: [{ edge: "ImportRun.ledgerPartyId", direction: "incoming" }],
+        steps: [{ edge: "Run.ledgerPartyId", direction: "incoming" }],
       },
     },
     {
       key: "predecessor",
       label: "Predecessor",
-      target: "importRun",
+      target: "run",
       cardinality: "one",
       inverseOmit:
         "A run links its predecessor; a retry chain is short and read from the newest run back.",
       provenance: {
         kind: "local-path",
-        steps: [{ edge: "ImportRun.predecessorRunId", direction: "outgoing" }],
+        steps: [{ edge: "Run.predecessorRunId", direction: "outgoing" }],
       },
       inverse: {
-        steps: [{ edge: "ImportRun.predecessorRunId", direction: "incoming" }],
+        steps: [{ edge: "Run.predecessorRunId", direction: "incoming" }],
       },
     },
     {
@@ -628,10 +624,10 @@ export default defineEntity({
       cardinality: "many",
       provenance: {
         kind: "local-path",
-        steps: [{ edge: "Purchase.importRunId", direction: "incoming" }],
+        steps: [{ edge: "Purchase.runId", direction: "incoming" }],
       },
       inverse: {
-        steps: [{ edge: "Purchase.importRunId", direction: "outgoing" }],
+        steps: [{ edge: "Purchase.runId", direction: "outgoing" }],
       },
     },
   ],
@@ -652,8 +648,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/import-run",
-        export: "importRunRepository",
+        module: "~/server/repo/run",
+        export: "runRepository",
       },
     },
   },

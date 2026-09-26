@@ -153,7 +153,7 @@ public actor CubbyClient {
             case .planting: .planting
             case .gardenEntry: .gardenEntry
             case .vendorAccount: .vendorAccount
-            case .importRun: .importRun
+            case .run: .run
             case .device: .device
             case .imageSighting: .imageSighting
             case .plant: .plant
@@ -440,20 +440,20 @@ public actor CubbyClient {
         }
     }
 
-    public func photoRunReview(_ runID: ImportRunShortcode) async throws -> PhotoRunReviewResponse {
+    public func photoRunReview(_ runID: RunShortcode) async throws -> PhotoRunReviewResponse {
         try await perform {
             try await api.photoImport_review(query: .init(runId: runID)).ok.body.json
         }
     }
 
-    public func startPhotoGrouping(_ runID: ImportRunShortcode) async throws {
+    public func startPhotoGrouping(_ runID: RunShortcode) async throws {
         _ = try await perform {
             try await api.photoImport_startGrouping(body: .json(.init(runId: runID))).ok.body.json
         }
     }
 
     public func photoProductCandidates(
-        runID: ImportRunShortcode, groupKey: String
+        runID: RunShortcode, groupKey: String
     ) async throws -> PhotoProductCandidatesResponse {
         try await perform {
             try await api.photoImport_candidates(query: .init(runId: runID, groupKey: groupKey))
@@ -462,7 +462,7 @@ public actor CubbyClient {
     }
 
     public func choosePhotoGroupProduct(
-        runID: ImportRunShortcode, groupKey: String, productID: ProductCode
+        runID: RunShortcode, groupKey: String, productID: ProductCode
     ) async throws -> ReviewPhotoGroupsOutput {
         try await perform {
             try await api.photoImport_chooseExisting(
@@ -473,7 +473,7 @@ public actor CubbyClient {
     }
 
     public func approvePhotoGroups(
-        runID: ImportRunShortcode, groupKeys: [String]
+        runID: RunShortcode, groupKeys: [String]
     ) async throws -> ReviewPhotoGroupsOutput {
         try await perform {
             try await api.photoImport_approveGroups(body: .json(.init(runId: runID, groupKeys: groupKeys)))
@@ -482,7 +482,7 @@ public actor CubbyClient {
     }
 
     public func discardPhotoGroup(
-        runID: ImportRunShortcode, groupKey: String
+        runID: RunShortcode, groupKey: String
     ) async throws -> ReviewPhotoGroupsOutput {
         try await perform {
             try await api.photoImport_discardGroup(body: .json(.init(runId: runID, groupKey: groupKey)))
@@ -490,13 +490,13 @@ public actor CubbyClient {
         }
     }
 
-    public func runWorkSnapshot(_ runID: ImportRunShortcode) async throws -> RunWorkSnapshotOutput {
+    public func runWorkSnapshot(_ runID: RunShortcode) async throws -> RunWorkSnapshotOutput {
         try await perform {
             try await api.run_workSnapshot(query: .init(runId: runID)).ok.body.json
         }
     }
 
-    public func runAiUsage(_ runID: ImportRunShortcode) async throws -> AiRunUsageOut {
+    public func runAiUsage(_ runID: RunShortcode) async throws -> AiRunUsageOut {
         try await perform {
             try await api.run_aiUsage(query: .init(runId: runID, limit: 1)).ok.body.json
         }

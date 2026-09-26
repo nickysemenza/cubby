@@ -538,7 +538,7 @@ export const connectedViews = {
       routes: [["products", "vendors"]],
     },
   ],
-  importRun: [
+  run: [
     {
       key: "products",
       title: "Imported products",

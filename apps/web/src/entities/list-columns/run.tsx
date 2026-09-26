@@ -1,8 +1,8 @@
 import {
-  importRunBrowserListInput,
-  type ImportRunFilters,
-  type ImportRunOut,
-} from "@cubby/schemas/import-run";
+  runBrowserListInput,
+  type RunFilters,
+  type RunOut,
+} from "@cubby/schemas/run";
 
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { run } from "~/entities/run.functions";
@@ -12,12 +12,10 @@ import { defineListOverride } from "./types";
 /**
  * The Runs list is not a kernel list (a Run has no create/update contract):
  * its rows come from the `run.list` read, which runs the kernel's own
- * importRun list, like image's source.
+ * run list, like image's source.
  */
-const runListSource: ListQueryOptionsFn<ImportRunFilters, ImportRunOut> = (
-  params,
-) => {
-  const input = importRunBrowserListInput.parse(params);
+const runListSource: ListQueryOptionsFn<RunFilters, RunOut> = (params) => {
+  const input = runBrowserListInput.parse(params);
   const policy = run.list.policy(input);
   return {
     queryKey: run.list.queryKey(input),
@@ -26,9 +24,6 @@ const runListSource: ListQueryOptionsFn<ImportRunFilters, ImportRunOut> = (
   };
 };
 
-export const importRunListOverride = defineListOverride<
-  ImportRunOut,
-  ImportRunFilters
->({
+export const runListOverride = defineListOverride<RunOut, RunFilters>({
   use: () => ({ source: runListSource }),
 });

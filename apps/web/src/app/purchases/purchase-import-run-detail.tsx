@@ -1,6 +1,6 @@
-import type { ImportRunOut } from "@cubby/schemas/import-run";
 import { flueImportRunPurpose } from "@cubby/schemas/import-run-agent";
-import { initiateImportRunEvidenceUploadInput } from "@cubby/schemas/purchase-import";
+import { initiateRunEvidenceUploadInput } from "@cubby/schemas/purchase-import";
+import type { RunOut } from "@cubby/schemas/run";
 import {
   createFlueClient,
   type AgentConversationObservationSnapshot,
@@ -23,16 +23,16 @@ import {
 import { z } from "zod";
 
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { usePhotoRunReview } from "~/app/import-runs/photo-group-review";
-import { PhotoImportRunView } from "~/app/import-runs/photo-run-detail";
-import { importRunHref } from "~/app/purchases/purchase-import-links";
+import { runHref } from "~/app/purchases/purchase-import-links";
+import { usePhotoRunReview } from "~/app/runs/photo-group-review";
+import { PhotoImportRunView } from "~/app/runs/photo-run-detail";
 import { Row, Section, Stack } from "~/components/layout";
 import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import { StatusText } from "~/components/ui/status-text";
-import type { ImportRunDetail } from "~/contracts/run.contract";
+import type { RunDetail } from "~/contracts/run.contract";
 import { purchaseImport, run as runOperations } from "~/entities/run.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
@@ -100,7 +100,7 @@ const EVIDENCE_GAP_STATES = new Set([
  * stop, dispatch recovery for a run the agent never picked up, evidence
  * recovery for a validation that found none, and the terminal retries.
  */
-function runActions(run: ImportRunDetail): RunAction[] {
+function runActions(run: RunDetail): RunAction[] {
   const actions: RunAction[] = [];
   if (run.status === "paused_auth" || run.status === "paused_offline")
     actions.push({
@@ -166,7 +166,7 @@ function RunActionButtons({
   target,
   children,
 }: {
-  runId: ImportRunDetail["publicId"];
+  runId: RunDetail["publicId"];
   actions: readonly RunAction[];
   target?: Pick<RunControlInput, "operationId" | "approvalId">;
   children?: ReactNode;
@@ -174,8 +174,7 @@ function RunActionButtons({
   const control = useMutation(
     runOperations.control.mutationOptions({
       onSuccess: ({ successor }) => {
-        if (successor)
-          window.location.assign(importRunHref(successor.publicId));
+        if (successor) window.location.assign(runHref(successor.publicId));
       },
     }),
   );
@@ -206,7 +205,7 @@ function RunActionButtons({
   );
 }
 
-function RunControls({ run }: { run: ImportRunDetail }) {
+function RunControls({ run }: { run: RunDetail }) {
   return (
     <Stack gap="sm">
       {run.status === "paused_auth" || run.status === "paused_offline" ? (
@@ -239,7 +238,7 @@ function RunControls({ run }: { run: ImportRunDetail }) {
 }
 
 /** Where this run came from, what replaced it, and the inputs a restart copies. */
-function RunLineageAndInputs({ run }: { run: ImportRunDetail }) {
+function RunLineageAndInputs({ run }: { run: RunDetail }) {
   const links = [
     ["Started from", run.predecessorRunPublicId],
     ["Restarted as", run.successorRunPublicId],
@@ -274,7 +273,7 @@ function RunLineageAndInputs({ run }: { run: ImportRunDetail }) {
   );
 }
 
-function ManualEvidenceUpload({ run }: { run: ImportRunDetail }) {
+function ManualEvidenceUpload({ run }: { run: RunDetail }) {
   const queryClient = useQueryClient();
   const target = run.targets.find((item) => item.state === "needs_evidence");
   const upload = useMutation({
@@ -286,7 +285,7 @@ function ManualEvidenceUpload({ run }: { run: ImportRunDetail }) {
         .map((byte) => byte.toString(16).padStart(2, "0"))
         .join("");
       const contentType =
-        initiateImportRunEvidenceUploadInput.shape.contentType.parse(file.type);
+        initiateRunEvidenceUploadInput.shape.contentType.parse(file.type);
       const staged = await purchaseImport.initiateRunEvidenceUpload.call({
         runId: run.publicId,
         targetId: target.id,
@@ -338,7 +337,7 @@ function ManualEvidenceUpload({ run }: { run: ImportRunDetail }) {
   );
 }
 
-function AgentSurface({ run }: { run: ImportRunDetail }) {
+function AgentSurface({ run }: { run: RunDetail }) {
   if (!ACTIVE_RUN_STATUSES.has(run.status)) {
     return <TerminalAgentSurface run={run} />;
   }
@@ -346,7 +345,7 @@ function AgentSurface({ run }: { run: ImportRunDetail }) {
 }
 
 function agentWorkHeadline(
-  run: ImportRunDetail,
+  run: RunDetail,
   isPhotoRun: boolean,
   proposedGroups?: number,
 ): string {
@@ -370,7 +369,7 @@ function AgentWorkOverview({
   settledGroups,
   additionalWork = [],
 }: {
-  run: ImportRunDetail;
+  run: RunDetail;
   messages: readonly FlueConversationMessage[];
   proposedGroups?: number;
   settledGroups?: number;
@@ -633,7 +632,7 @@ function PhotoAgentWorkOverview({
   run,
   messages,
 }: {
-  run: ImportRunDetail;
+  run: RunDetail;
   messages: readonly FlueConversationMessage[];
 }) {
   const review = usePhotoRunReview(run.publicId, run.status);
@@ -664,7 +663,7 @@ function AgentOverview({
   run,
   messages,
 }: {
-  run: ImportRunDetail;
+  run: RunDetail;
   messages: readonly FlueConversationMessage[];
 }) {
   return run.purpose === "photo_inventory" ? (
@@ -733,10 +732,10 @@ function TimedRows({
   );
 }
 
-const memberName = (member: ImportRunDetail["actor"]) =>
+const memberName = (member: RunDetail["actor"]) =>
   member.name ?? member.ledgerParty?.name ?? "Household member";
 
-function RunProgress({ run }: { run: ImportRunDetail }) {
+function RunProgress({ run }: { run: RunDetail }) {
   return (
     <Section
       title="Run progress"
@@ -788,7 +787,7 @@ function RunProgress({ run }: { run: ImportRunDetail }) {
   );
 }
 
-function TerminalAgentSurface({ run }: { run: ImportRunDetail }) {
+function TerminalAgentSurface({ run }: { run: RunDetail }) {
   const client = useMemo(
     () =>
       createFlueClient({
@@ -825,7 +824,7 @@ function TerminalAgentSurface({ run }: { run: ImportRunDetail }) {
   );
 }
 
-function ActiveAgentSurface({ run }: { run: ImportRunDetail }) {
+function ActiveAgentSurface({ run }: { run: RunDetail }) {
   const [prompt, setPrompt] = useState("");
   const queryClient = useQueryClient();
   const client = useMemo(
@@ -1087,7 +1086,7 @@ function ToolValue({ label, value }: { label: string; value: unknown }) {
   );
 }
 
-function RunTimeline({ run }: { run: ImportRunDetail }) {
+function RunTimeline({ run }: { run: RunDetail }) {
   return (
     <Section
       title="Durable transcript"
@@ -1167,7 +1166,7 @@ function RunDebugLog({
   runId,
   active,
 }: {
-  runId: ImportRunDetail["publicId"];
+  runId: RunDetail["publicId"];
   active: boolean;
 }) {
   const log = useQuery({
@@ -1223,7 +1222,7 @@ function RunDebugLog({
  * The import run's live read (agent transcript, operations, evidence), polled
  * while the run is active. Both import slots share it through the cache.
  */
-function useImportRun(runId: ImportRunOut["id"]) {
+function useRun(runId: RunOut["id"]) {
   return useQuery({
     ...runOperations.work.queryOptions({ runId }),
     refetchInterval: (query) =>
@@ -1233,14 +1232,14 @@ function useImportRun(runId: ImportRunOut["id"]) {
   });
 }
 
-function ImportRunGate({
+function RunGate({
   record,
   children,
 }: {
-  record: ImportRunOut;
-  children: (run: ImportRunDetail) => ReactNode;
+  record: RunOut;
+  children: (run: RunDetail) => ReactNode;
 }) {
-  const runQuery = useImportRun(record.id);
+  const runQuery = useRun(record.id);
   const queryClient = useQueryClient();
   const liveStatus = runQuery.data?.status;
   // The page's hero and fields read the Run record, not this poll: refresh
@@ -1256,20 +1255,16 @@ function ImportRunGate({
 }
 
 /** Run detail slot: the account-sync / validation / enrichment workflow. */
-export function RunImportWorkflow({ record }: { record: ImportRunOut }) {
-  return (
-    <ImportRunGate record={record}>
-      {(run) => <ImportRunContent run={run} />}
-    </ImportRunGate>
-  );
+export function RunImportWorkflow({ record }: { record: RunOut }) {
+  return <RunGate record={record}>{(run) => <RunContent run={run} />}</RunGate>;
 }
 
 /**
  * Run detail slot for an agent-proposed photo review.
  */
-export function RunPhotoBatch({ record }: { record: ImportRunOut }) {
+export function RunPhotoBatch({ record }: { record: RunOut }) {
   return (
-    <ImportRunGate record={record}>
+    <RunGate record={record}>
       {(run) => (
         <>
           <RunControls run={run} />
@@ -1290,7 +1285,7 @@ export function RunPhotoBatch({ record }: { record: ImportRunOut }) {
           </details>
         </>
       )}
-    </ImportRunGate>
+    </RunGate>
   );
 }
 
@@ -1298,7 +1293,7 @@ function RunOperationalSections({
   run,
   placement,
 }: {
-  run: ImportRunDetail;
+  run: RunDetail;
   placement: "active" | "terminal";
 }) {
   if (ACTIVE_RUN_STATUSES.has(run.status) !== (placement === "active"))
@@ -1315,7 +1310,7 @@ function RunOperationalSections({
 // together so terminal history cannot silently omit one during refactors. The
 // run record's own fields (trigger, vendor, dispatch, lineage, runtime) render
 // in the generic Run detail around this slot.
-function ImportRunContent({ run }: { run: ImportRunDetail }) {
+function RunContent({ run }: { run: RunDetail }) {
   return (
     <Stack gap="lg">
       <RunControls run={run} />
@@ -1534,7 +1529,7 @@ function RunLink({ label, publicId }: { label: string; publicId: string }) {
       <span className="text-muted-foreground">{label}</span>
       <a
         className="inline-flex items-center gap-1 font-mono text-xs text-primary hover:underline"
-        href={importRunHref(publicId)}
+        href={runHref(publicId)}
       >
         {publicId}
         <ArrowSquareOutIcon className="size-3" />

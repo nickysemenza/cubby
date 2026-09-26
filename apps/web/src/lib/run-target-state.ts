@@ -1,8 +1,8 @@
-import type { ImportRunTargetState } from "@cubby/schemas/purchase-import";
+import type { RunTargetState } from "@cubby/schemas/purchase-import";
 
 import type { BadgeVariant } from "~/components/ui/badge";
 
-export const IMPORT_RUN_TARGET_STATE_LABEL = {
+export const RUN_TARGET_STATE_LABEL = {
   pending: "Pending",
   prepared: "Prepared",
   completed: "Completed",
@@ -10,9 +10,9 @@ export const IMPORT_RUN_TARGET_STATE_LABEL = {
   unresolved: "Unresolved",
   needs_evidence: "Needs evidence",
   unavailable: "Unavailable",
-} satisfies Record<ImportRunTargetState, string>;
+} satisfies Record<RunTargetState, string>;
 
-export const IMPORT_RUN_TARGET_STATE_VARIANT = {
+export const RUN_TARGET_STATE_VARIANT = {
   pending: "slate",
   prepared: "default",
   completed: "positive",
@@ -20,4 +20,4 @@ export const IMPORT_RUN_TARGET_STATE_VARIANT = {
   unresolved: "warning",
   needs_evidence: "warning",
   unavailable: "destructive",
-} satisfies Record<ImportRunTargetState, BadgeVariant>;
+} satisfies Record<RunTargetState, BadgeVariant>;

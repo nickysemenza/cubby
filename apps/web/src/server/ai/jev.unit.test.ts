@@ -1,4 +1,4 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { FIELD_SUGGESTION_FEATURE } from "./features";
@@ -16,7 +16,7 @@ const base = {
   usage: {
     operation: "jev-test",
     cacheStatus: "none" as const,
-    runId: importRunId.parse("00000000-0000-4000-8000-000000000001"),
+    runId: runEntityId.parse("00000000-0000-4000-8000-000000000001"),
   },
 };
 

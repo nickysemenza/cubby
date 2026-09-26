@@ -14,7 +14,7 @@ import { mealListOverride } from "./meal";
 import { productListOverride } from "./product";
 import { purchaseListOverride } from "./purchase";
 import { recipeListOverride } from "./recipe";
-import { importRunListOverride } from "./run";
+import { runListOverride } from "./run";
 import { taskListOverride } from "./task";
 import type { ListOverrideRegistry } from "./types";
 import { wishListOverride } from "./wish";
@@ -30,7 +30,7 @@ export const listOverrides: ListOverrideRegistry = {
   financialAccount: financialAccountListOverride,
   financialTransaction: financialTransactionListOverride,
   image: imageListOverride,
-  importRun: importRunListOverride,
+  run: runListOverride,
   ingredient: ingredientListOverride,
   inventory: inventoryListOverride,
   ledgerParty: ledgerPartyListOverride,

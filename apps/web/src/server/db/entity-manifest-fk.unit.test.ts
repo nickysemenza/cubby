@@ -82,9 +82,9 @@ const NON_ENTITY_FK_TARGETS = {
   // statement line by public id.
   StatementImport: "provider export bookkeeping, not a domain entity",
   StatementRow: "verbatim statement evidence, not a domain entity",
-  ImportRunTarget:
+  RunTarget:
     "explicit operational target for a validation, enrichment or photo-inventory import run",
-  ImportRunOrderCandidate:
+  RunOrderCandidate:
     "an account-sync run's order-history worklist, not a domain entity",
   ImportPreparedOrder:
     "immutable purchase-import evidence preparation, not a domain entity",
@@ -121,7 +121,7 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records the Run a model call belonged to",
   },
-  "ImportRunTarget.purchaseId": {
+  "RunTarget.purchaseId": {
     classification: "metadata",
     reason: "records the Purchase a targeted validation examined",
   },
@@ -145,60 +145,60 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "the category a proposed photo group's new Product is filed under",
   },
-  "ImportRunTarget.productId": {
+  "RunTarget.productId": {
     classification: "metadata",
     reason: "records the Product a targeted enrichment examined",
   },
-  "ImportRunTarget.imageId": {
+  "RunTarget.imageId": {
     classification: "metadata",
     reason: "records the Image a photo-inventory run grouped into a Product",
   },
-  "ImportRunTarget.vendorAccountId": {
+  "RunTarget.vendorAccountId": {
     classification: "metadata",
     reason:
       "freezes the member-owned vendor account selected for targeted evidence",
   },
-  // importRun's own child rows. Each source table is operational
+  // run's own child rows. Each source table is operational
   // bookkeeping (see NON_ENTITY_FK_TARGETS above), not an entity, so these
   // stay ordinary non-graph exemptions rather than needing a declared
-  // relationship. `Purchase.importRunId` and `ImportRun.predecessorRunId`
+  // relationship. `Purchase.runId` and `Run.predecessorRunId`
   // are NOT exempted here on purpose: both source purchase and
-  // importRun, which are entities, so the guard below correctly
+  // run, which are entities, so the guard below correctly
   // demands a real graph path for them (as it already does for
-  // `ImportRun.ledgerPartyId`/`vendorAccountId`/`vendorId`) — declaring one
+  // `Run.ledgerPartyId`/`vendorAccountId`/`vendorId`) — declaring one
   // needs a `relations` entry on the entity definitions plus `pnpm generate`,
   // which is out of scope here; see the failing case this leaves in
   // "accounts for every entity-targeting FK with a graph path or classified
   // non-entity edge".
-  "ImportRunTarget.runId": {
+  "RunTarget.runId": {
     classification: "ownership",
     reason: "a validation/enrichment target exists only as part of its run",
   },
-  "ImportRunOrderCandidate.runId": {
+  "RunOrderCandidate.runId": {
     classification: "ownership",
     reason: "an account-sync order-history worklist row owned by its run",
   },
-  "ImportRunEvidence.runId": {
+  "RunEvidence.runId": {
     classification: "ownership",
     reason: "captured evidence filed under its run",
   },
-  "ImportRunMutation.runId": {
+  "RunMutation.runId": {
     classification: "ownership",
     reason: "an explicit row-mutation record attributed to its run",
   },
-  "ImportRunOperation.runId": {
+  "RunOperation.runId": {
     classification: "ownership",
     reason: "one idempotent operation owned by its run",
   },
-  "ImportRunProgress.runId": {
+  "RunProgress.runId": {
     classification: "ownership",
     reason: "a progress checkpoint owned by its run",
   },
-  "ImportRunControlEvent.runId": {
+  "RunControlEvent.runId": {
     classification: "ownership",
     reason: "a control-plane event (pause/resume/prompt/...) owned by its run",
   },
-  "ImportRunApproval.runId": {
+  "RunApproval.runId": {
     classification: "ownership",
     reason: "an approval decision owned by its run",
   },
@@ -211,7 +211,7 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     reason:
       "records the run that most recently confirmed this idempotent source claim",
   },
-  "ImportFinding.importRunId": {
+  "RunFinding.runId": {
     classification: "metadata",
     reason: "records the run that produced this integrity finding",
   },
@@ -243,7 +243,7 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "idempotency provenance for the purchase created from evidence",
   },
-  "ImportFinding.ledgerPartyId": {
+  "RunFinding.ledgerPartyId": {
     classification: "metadata",
     reason: "scopes an operational review finding to a household member",
   },

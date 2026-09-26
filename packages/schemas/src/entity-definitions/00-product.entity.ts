@@ -60,7 +60,7 @@ export default defineEntity({
         actionOverrides: ["edit", "addToInventory", "recordSale", "discard"],
       },
       additionalSectionOverrides: [
-        { kind: "slot", id: "import-runs", title: "Item journey" },
+        { kind: "slot", id: "runs", title: "Item journey" },
         {
           kind: "relation",
           id: "plantings",

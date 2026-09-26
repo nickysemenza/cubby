@@ -84,7 +84,7 @@ public actor PhotoImportRunUploader {
     /// reimplements the same two-condition check rather than sharing it across the module boundary.
     private let systemConditionsFavorable: @Sendable () -> Bool
 
-    public private(set) var runID: ImportRunShortcode?
+    public private(set) var runID: RunShortcode?
     private var photos: [PhotoImportRunPhoto] = []
     private var positions: [String: Int] = [:]
     private var staged: [String: StagedUpload] = [:]
@@ -130,11 +130,11 @@ public actor PhotoImportRunUploader {
     @discardableResult
     public func upload(
         _ photos: [PhotoImportRunPhoto],
-        runID: ImportRunShortcode? = nil,
+        runID: RunShortcode? = nil,
         createRun: PhotoImportCreateRunInput? = nil,
         performLocalAnalysis: Bool = true,
         progress reportProgress: (@Sendable (Progress) -> Void)? = nil
-    ) async throws -> ImportRunShortcode {
+    ) async throws -> RunShortcode {
         self.photos = photos
         positions = Dictionary(uniqueKeysWithValues: photos.enumerated().map { ($1.id, $0) })
         let resolvedRunID = try await resolveRun(runID: runID, createRun: createRun)
@@ -148,21 +148,21 @@ public actor PhotoImportRunUploader {
     }
 
     private func resolveRun(
-        runID: ImportRunShortcode?, createRun: PhotoImportCreateRunInput?
-    ) async throws -> ImportRunShortcode {
+        runID: RunShortcode?, createRun: PhotoImportCreateRunInput?
+    ) async throws -> RunShortcode {
         if let existing = self.runID { return existing }
         if let runID {
             self.runID = runID
             return runID
         }
         guard let createRun else { throw Failure.missingRunTarget }
-        let output = try await client.createPhotoImportRun(createRun)
+        let output = try await client.createPhotoRun(createRun)
         self.runID = output.runId
         return output.runId
     }
 
     private func uploadRemainingChunks(
-        runID: ImportRunShortcode, report: (@Sendable (Progress) -> Void)?
+        runID: RunShortcode, report: (@Sendable (Progress) -> Void)?
     ) async throws {
         let pending = photos.filter { !finalizedIDs.contains($0.id) }
         for chunk in pending.chunked(into: Self.chunkSize) {
@@ -172,7 +172,7 @@ public actor PhotoImportRunUploader {
         }
     }
 
-    private func processChunk(_ chunk: [PhotoImportRunPhoto], runID: ImportRunShortcode) async throws {
+    private func processChunk(_ chunk: [PhotoImportRunPhoto], runID: RunShortcode) async throws {
         let toStage = chunk.filter { staged[$0.id] == nil }
         if !toStage.isEmpty {
             try await stageAndUpload(toStage, runID: runID)
@@ -191,7 +191,7 @@ public actor PhotoImportRunUploader {
             // A submitted id always comes back in exactly one of `finalized`/`alreadyFinalized`
             // (the server's contract); a non-throwing response means every id in this chunk is
             // confirmed, so there is no need to reconcile the two arrays against `toFinalize`.
-            _ = try await client.finalizePhotoImportRun(
+            _ = try await client.finalizePhotoRun(
                 PhotoImportFinalizeInput(runId: runID, images: images))
             for photo in toFinalize {
                 finalizedIDs.insert(photo.id)
@@ -203,7 +203,7 @@ public actor PhotoImportRunUploader {
         }
     }
 
-    private func stageAndUpload(_ photos: [PhotoImportRunPhoto], runID: ImportRunShortcode) async throws {
+    private func stageAndUpload(_ photos: [PhotoImportRunPhoto], runID: RunShortcode) async throws {
         let hashes = try Dictionary(uniqueKeysWithValues: photos.map { ($0.id, try $0.file.sha256()) })
         let items = try photos.map { photo -> PhotoImportStageItem in
             guard
@@ -215,7 +215,7 @@ public actor PhotoImportRunUploader {
                 sha256: hashes[photo.id] ?? "")
         }
         let response = try await client.stagePhotoImport(
-            PhotoImportStageInput(items: items, importRunId: runID))
+            PhotoImportStageInput(items: items, runId: runID))
         let filesByID = Dictionary(uniqueKeysWithValues: photos.map { ($0.id, $0.file) })
         var uploads: [(id: String, imageID: ImageCode, url: URL, file: PhotoFile)] = []
         var failed: [String] = []
@@ -358,11 +358,11 @@ public final class PhotoImportRunSession {
 
     public private(set) var phase: Phase = .idle
     public private(set) var progress = PhotoImportRunUploader.Progress()
-    public private(set) var runID: ImportRunShortcode?
+    public private(set) var runID: RunShortcode?
 
     private let uploader: PhotoImportRunUploader
     private var task: Task<Void, Never>?
-    private var targetRunID: ImportRunShortcode?
+    private var targetRunID: RunShortcode?
     private var createRunInput: PhotoImportCreateRunInput?
 
     public init(uploader: PhotoImportRunUploader) {
@@ -382,7 +382,7 @@ public final class PhotoImportRunSession {
     /// upload. A no-op while already running.
     public func start(
         _ photos: [PhotoImportRunPhoto],
-        runID: ImportRunShortcode? = nil,
+        runID: RunShortcode? = nil,
         createRun: PhotoImportCreateRunInput? = nil
     ) {
         guard task == nil else { return }

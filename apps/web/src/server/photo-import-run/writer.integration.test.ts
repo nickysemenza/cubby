@@ -6,9 +6,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   entityAttachment,
-  importRun,
-  importRunOperation,
-  importRunTarget,
+  run as runTable,
+  runOperation,
+  runTarget,
   inventoryEntry,
   product,
 } from "~/server/db/schema";
@@ -36,14 +36,14 @@ describe("commitPhotoGroup", () => {
 
   const seedRun = async (
     party: Awaited<ReturnType<typeof seedMember>>,
-    overrides: Partial<typeof importRun.$inferInsert> = {},
+    overrides: Partial<typeof runTable.$inferInsert> = {},
   ) => {
-    const id = parseEntityId("importRun", crypto.randomUUID());
+    const id = parseEntityId("run", crypto.randomUUID());
     const [run] = await getDb(ctx.db)
-      .insert(importRun)
+      .insert(runTable)
       .values({
         id,
-        shortcode: generateShortcode("importRun"),
+        shortcode: generateShortcode("run"),
         ledgerPartyId: party.id,
         actorUserId: ctx.actor.userId,
         actorName: "Wardrobe Tester",
@@ -74,7 +74,7 @@ describe("commitPhotoGroup", () => {
     images: Awaited<ReturnType<typeof seedImages>>,
   ) => {
     await getDb(ctx.db)
-      .insert(importRunTarget)
+      .insert(runTarget)
       .values(
         images.map((image, index) => ({
           runId,
@@ -89,12 +89,12 @@ describe("commitPhotoGroup", () => {
   const readTargetStates = async (runId: string) =>
     getDb(ctx.db)
       .select({
-        imageId: importRunTarget.imageId,
-        state: importRunTarget.state,
-        outcome: importRunTarget.outcome,
+        imageId: runTarget.imageId,
+        state: runTarget.state,
+        outcome: runTarget.outcome,
       })
-      .from(importRunTarget)
-      .where(eq(importRunTarget.runId, runId));
+      .from(runTarget)
+      .where(eq(runTarget.runId, runId));
 
   it("creates a Product, attaches item+label images, and records a person-owned inventory entry", async () => {
     const party = await seedMember();
@@ -168,9 +168,9 @@ describe("commitPhotoGroup", () => {
     expect(targets.every((target) => target.outcome === "attached")).toBe(true);
 
     const [updatedRun] = await getDb(ctx.db)
-      .select({ status: importRun.status, imported: importRun.imported })
-      .from(importRun)
-      .where(eq(importRun.id, run.id));
+      .select({ status: runTable.status, imported: runTable.imported })
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
     expect(updatedRun?.status).toBe("completed");
     expect(updatedRun?.imported).toBe(1);
   });
@@ -223,11 +223,11 @@ describe("commitPhotoGroup", () => {
     // `doCommit`, which must recognize the already-attached image and refuse
     // to create a second Product or a duplicate attachment.
     await getDb(ctx.db)
-      .delete(importRunOperation)
+      .delete(runOperation)
       .where(
         and(
-          eq(importRunOperation.runId, run.id),
-          eq(importRunOperation.operationId, "photo-group:group-replay"),
+          eq(runOperation.runId, run.id),
+          eq(runOperation.operationId, "photo-group:group-replay"),
         ),
       );
 
@@ -280,12 +280,12 @@ describe("commitPhotoGroup", () => {
       );
       if (ledger === "failed")
         await getDb(ctx.db)
-          .update(importRunOperation)
+          .update(runOperation)
           .set({ state: "failed" })
           .where(
             and(
-              eq(importRunOperation.runId, run.id),
-              eq(importRunOperation.operationId, "photo-group:group-drift"),
+              eq(runOperation.runId, run.id),
+              eq(runOperation.operationId, "photo-group:group-drift"),
             ),
           );
 
@@ -337,9 +337,9 @@ describe("commitPhotoGroup", () => {
     expect(targets.every((target) => target.state === "pending")).toBe(true);
 
     const operations = await getDb(ctx.db)
-      .select({ id: importRunOperation.id })
-      .from(importRunOperation)
-      .where(eq(importRunOperation.runId, run.id));
+      .select({ id: runOperation.id })
+      .from(runOperation)
+      .where(eq(runOperation.runId, run.id));
     expect(operations).toHaveLength(0);
   });
 
@@ -375,9 +375,9 @@ describe("commitPhotoGroup", () => {
     expect(target?.state).toBe("skipped");
 
     const [updatedRun] = await getDb(ctx.db)
-      .select({ skipped: importRun.skipped, imported: importRun.imported })
-      .from(importRun)
-      .where(eq(importRun.id, run.id));
+      .select({ skipped: runTable.skipped, imported: runTable.imported })
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
     expect(updatedRun?.skipped).toBe(1);
     expect(updatedRun?.imported).toBe(0);
   });
@@ -418,9 +418,9 @@ describe("commitPhotoGroup", () => {
     expect(second.runStatus).toBe("completed");
 
     const [updatedRun] = await getDb(ctx.db)
-      .select({ status: importRun.status, endedAt: importRun.endedAt })
-      .from(importRun)
-      .where(eq(importRun.id, run.id));
+      .select({ status: runTable.status, endedAt: runTable.endedAt })
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
     expect(updatedRun?.status).toBe("completed");
     expect(updatedRun?.endedAt).not.toBeNull();
   });

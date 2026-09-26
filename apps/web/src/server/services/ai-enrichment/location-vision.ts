@@ -16,7 +16,7 @@ import type {
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
-  type ImportRunId,
+  type RunId,
   type LocationId,
   type ProductId,
   type ProductShortcode,
@@ -203,7 +203,7 @@ async function recordLocationAiUsage(
     cacheStatus: "hit" | "miss";
     durationMs: number;
     locationId: LocationId;
-    runId: ImportRunId;
+    runId: RunId;
   },
 ): Promise<void> {
   await recordAiUsage(db, {
@@ -239,7 +239,7 @@ export interface LocationDescriptionResult extends LocationDescription {
 export async function describeLocation(
   db: Database,
   locationId: LocationId,
-  runId: ImportRunId,
+  runId: RunId,
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
 ): Promise<LocationDescriptionResult> {
   const location = await getLocationById(db, locationId);
@@ -480,7 +480,7 @@ export interface DetectedInventoryResult extends DetectedInventory {
 export async function detectInventoryItems(
   db: Database,
   locationId: LocationId,
-  runId: ImportRunId,
+  runId: RunId,
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
 ): Promise<DetectedInventoryResult> {
   const location = await getLocationById(db, locationId);

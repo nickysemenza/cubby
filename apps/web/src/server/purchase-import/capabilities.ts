@@ -1,12 +1,9 @@
-import { importRunId } from "@cubby/schemas/identifiers";
-import {
-  importRunPurpose,
-  type ImportRunPurpose,
-} from "@cubby/schemas/purchase-import";
+import { runEntityId } from "@cubby/schemas/identifiers";
+import { runPurpose, type RunPurpose } from "@cubby/schemas/purchase-import";
 import { eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { importRun } from "~/server/db/schema";
+import { run as runTable } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 
 type Capability =
@@ -65,7 +62,7 @@ const capabilityMatrix = {
   background: new Set(),
   file_import: new Set(),
   legacy: new Set(),
-} satisfies Record<ImportRunPurpose, ReadonlySet<Capability>>;
+} satisfies Record<RunPurpose, ReadonlySet<Capability>>;
 
 export function capabilityForPurchaseAgentTool(
   toolName: string,
@@ -87,8 +84,8 @@ export function capabilityForPurchaseAgentTool(
   return "generic_mutation";
 }
 
-export function assertImportRunCapability(
-  purpose: ImportRunPurpose,
+export function assertRunCapability(
+  purpose: RunPurpose,
   capability: Capability,
 ): void {
   const allowed: ReadonlySet<Capability> = capabilityMatrix[purpose];
@@ -98,18 +95,18 @@ export function assertImportRunCapability(
   );
 }
 
-export async function assertImportRunCapabilityById(
+export async function assertRunCapabilityById(
   db: Database,
   runId: string,
   capability: Capability,
 ) {
   const [run] = await getDb(db)
-    .select({ purpose: importRun.purpose })
-    .from(importRun)
-    .where(eq(importRun.id, importRunId.parse(runId)))
+    .select({ purpose: runTable.purpose })
+    .from(runTable)
+    .where(eq(runTable.id, runEntityId.parse(runId)))
     .limit(1);
   if (!run) throw new Error("Import run was not found");
-  const purpose = importRunPurpose.parse(run.purpose);
-  assertImportRunCapability(purpose, capability);
+  const purpose = runPurpose.parse(run.purpose);
+  assertRunCapability(purpose, capability);
   return purpose;
 }

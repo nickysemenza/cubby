@@ -552,10 +552,10 @@
         }
       },
       "foreignKeys": {
-        "AiUsage_runId_ImportRun_id_fk": {
-          "name": "AiUsage_runId_ImportRun_id_fk",
+        "AiUsage_runId_Run_id_fk": {
+          "name": "AiUsage_runId_Run_id_fk",
           "tableFrom": "AiUsage",
-          "tableTo": "ImportRun",
+          "tableTo": "Run",
           "columnsFrom": [
             "runId"
           ],
@@ -944,10 +944,10 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "AuditLog_runId_ImportRun_id_fk": {
-          "name": "AuditLog_runId_ImportRun_id_fk",
+        "AuditLog_runId_Run_id_fk": {
+          "name": "AuditLog_runId_Run_id_fk",
           "tableFrom": "AuditLog",
-          "tableTo": "ImportRun",
+          "tableTo": "Run",
           "columnsFrom": [
             "runId"
           ],
@@ -4920,8 +4920,8 @@
       },
       "isRLSEnabled": false
     },
-    "public.ImportFinding": {
-      "name": "ImportFinding",
+    "public.RunFinding": {
+      "name": "RunFinding",
       "schema": "",
       "columns": {
         "id": {
@@ -4931,8 +4931,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "importRunId": {
-          "name": "importRunId",
+        "runId": {
+          "name": "runId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -5033,8 +5033,8 @@
         }
       },
       "indexes": {
-        "ImportFinding_open_evidence_key": {
-          "name": "ImportFinding_open_evidence_key",
+        "RunFinding_open_evidence_key": {
+          "name": "RunFinding_open_evidence_key",
           "columns": [
             {
               "expression": "ledgerPartyId",
@@ -5068,13 +5068,13 @@
             }
           ],
           "isUnique": true,
-          "where": "\"ImportFinding\".\"status\" = 'open'",
+          "where": "\"RunFinding\".\"status\" = 'open'",
           "concurrently": false,
           "method": "btree",
           "with": {}
         },
-        "ImportFinding_status_idx": {
-          "name": "ImportFinding_status_idx",
+        "RunFinding_status_idx": {
+          "name": "RunFinding_status_idx",
           "columns": [
             {
               "expression": "status",
@@ -5096,12 +5096,12 @@
         }
       },
       "foreignKeys": {
-        "ImportFinding_importRunId_ImportRun_id_fk": {
-          "name": "ImportFinding_importRunId_ImportRun_id_fk",
-          "tableFrom": "ImportFinding",
-          "tableTo": "ImportRun",
+        "RunFinding_runId_Run_id_fk": {
+          "name": "RunFinding_runId_Run_id_fk",
+          "tableFrom": "RunFinding",
+          "tableTo": "Run",
           "columnsFrom": [
-            "importRunId"
+            "runId"
           ],
           "columnsTo": [
             "id"
@@ -5109,9 +5109,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportFinding_ledgerPartyId_LedgerParty_id_fk": {
-          "name": "ImportFinding_ledgerPartyId_LedgerParty_id_fk",
-          "tableFrom": "ImportFinding",
+        "RunFinding_ledgerPartyId_LedgerParty_id_fk": {
+          "name": "RunFinding_ledgerPartyId_LedgerParty_id_fk",
+          "tableFrom": "RunFinding",
           "tableTo": "LedgerParty",
           "columnsFrom": [
             "ledgerPartyId"
@@ -5122,9 +5122,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportFinding_resolvedByUserId_user_id_fk": {
-          "name": "ImportFinding_resolvedByUserId_user_id_fk",
-          "tableFrom": "ImportFinding",
+        "RunFinding_resolvedByUserId_user_id_fk": {
+          "name": "RunFinding_resolvedByUserId_user_id_fk",
+          "tableFrom": "RunFinding",
           "tableTo": "user",
           "columnsFrom": [
             "resolvedByUserId"
@@ -5140,13 +5140,13 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "ImportFinding_status_check": {
-          "name": "ImportFinding_status_check",
-          "value": "\"ImportFinding\".\"status\" IN ('open', 'applied', 'dismissed')"
+        "RunFinding_status_check": {
+          "name": "RunFinding_status_check",
+          "value": "\"RunFinding\".\"status\" IN ('open', 'applied', 'dismissed')"
         },
-        "ImportFinding_target_check": {
-          "name": "ImportFinding_target_check",
-          "value": "\"ImportFinding\".\"targetType\" IN ('purchase', 'expense', 'product', 'import_run')"
+        "RunFinding_target_check": {
+          "name": "RunFinding_target_check",
+          "value": "\"RunFinding\".\"targetType\" IN ('purchase', 'expense', 'product', 'run')"
         }
       },
       "isRLSEnabled": false
@@ -5399,10 +5399,10 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportHunt_receiptRunId_ImportRun_id_fk": {
-          "name": "ImportHunt_receiptRunId_ImportRun_id_fk",
+        "ImportHunt_receiptRunId_Run_id_fk": {
+          "name": "ImportHunt_receiptRunId_Run_id_fk",
           "tableFrom": "ImportHunt",
-          "tableTo": "ImportRun",
+          "tableTo": "Run",
           "columnsFrom": [
             "receiptRunId"
           ],
@@ -5708,10 +5708,10 @@
         }
       },
       "foreignKeys": {
-        "ImportPreparedOrder_runId_ImportRun_id_fk": {
-          "name": "ImportPreparedOrder_runId_ImportRun_id_fk",
+        "ImportPreparedOrder_runId_Run_id_fk": {
+          "name": "ImportPreparedOrder_runId_Run_id_fk",
           "tableFrom": "ImportPreparedOrder",
-          "tableTo": "ImportRun",
+          "tableTo": "Run",
           "columnsFrom": [
             "runId"
           ],
@@ -5759,8 +5759,8 @@
       },
       "isRLSEnabled": false
     },
-    "public.ImportRun": {
-      "name": "ImportRun",
+    "public.Run": {
+      "name": "Run",
       "schema": "",
       "columns": {
         "id": {
@@ -6033,8 +6033,8 @@
         }
       },
       "indexes": {
-        "ImportRun_shortcode_unique": {
-          "name": "ImportRun_shortcode_unique",
+        "Run_shortcode_unique": {
+          "name": "Run_shortcode_unique",
           "columns": [
             {
               "expression": "shortcode",
@@ -6048,8 +6048,8 @@
           "method": "btree",
           "with": {}
         },
-        "ImportRun_party_started_idx": {
-          "name": "ImportRun_party_started_idx",
+        "Run_party_started_idx": {
+          "name": "Run_party_started_idx",
           "columns": [
             {
               "expression": "ledgerPartyId",
@@ -6069,8 +6069,8 @@
           "method": "btree",
           "with": {}
         },
-        "ImportRun_vendorAccount_started_idx": {
-          "name": "ImportRun_vendorAccount_started_idx",
+        "Run_vendorAccount_started_idx": {
+          "name": "Run_vendorAccount_started_idx",
           "columns": [
             {
               "expression": "vendorAccountId",
@@ -6090,8 +6090,8 @@
           "method": "btree",
           "with": {}
         },
-        "ImportRun_dispatch_event_unique": {
-          "name": "ImportRun_dispatch_event_unique",
+        "Run_dispatch_event_unique": {
+          "name": "Run_dispatch_event_unique",
           "columns": [
             {
               "expression": "dispatchEventId",
@@ -6101,13 +6101,13 @@
             }
           ],
           "isUnique": true,
-          "where": "\"ImportRun\".\"dispatchEventId\" IS NOT NULL",
+          "where": "\"Run\".\"dispatchEventId\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
         },
-        "ImportRun_one_active_vendor_account_key": {
-          "name": "ImportRun_one_active_vendor_account_key",
+        "Run_one_active_vendor_account_key": {
+          "name": "Run_one_active_vendor_account_key",
           "columns": [
             {
               "expression": "vendorAccountId",
@@ -6117,13 +6117,13 @@
             }
           ],
           "isUnique": true,
-          "where": "\"ImportRun\".\"vendorAccountId\" IS NOT NULL AND \"ImportRun\".\"status\" IN ('running', 'paused_auth', 'paused_offline', 'paused_approval')",
+          "where": "\"Run\".\"vendorAccountId\" IS NOT NULL AND \"Run\".\"status\" IN ('running', 'paused_auth', 'paused_offline', 'paused_approval')",
           "concurrently": false,
           "method": "btree",
           "with": {}
         },
-        "ImportRun_clientKey_unique": {
-          "name": "ImportRun_clientKey_unique",
+        "Run_clientKey_unique": {
+          "name": "Run_clientKey_unique",
           "columns": [
             {
               "expression": "clientKey",
@@ -6133,16 +6133,16 @@
             }
           ],
           "isUnique": true,
-          "where": "\"ImportRun\".\"clientKey\" IS NOT NULL",
+          "where": "\"Run\".\"clientKey\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
         }
       },
       "foreignKeys": {
-        "ImportRun_ledgerPartyId_LedgerParty_id_fk": {
-          "name": "ImportRun_ledgerPartyId_LedgerParty_id_fk",
-          "tableFrom": "ImportRun",
+        "Run_ledgerPartyId_LedgerParty_id_fk": {
+          "name": "Run_ledgerPartyId_LedgerParty_id_fk",
+          "tableFrom": "Run",
           "tableTo": "LedgerParty",
           "columnsFrom": [
             "ledgerPartyId"
@@ -6153,9 +6153,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportRun_vendorAccountId_VendorAccount_id_fk": {
-          "name": "ImportRun_vendorAccountId_VendorAccount_id_fk",
-          "tableFrom": "ImportRun",
+        "Run_vendorAccountId_VendorAccount_id_fk": {
+          "name": "Run_vendorAccountId_VendorAccount_id_fk",
+          "tableFrom": "Run",
           "tableTo": "VendorAccount",
           "columnsFrom": [
             "vendorAccountId"
@@ -6166,9 +6166,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportRun_vendorId_Vendor_id_fk": {
-          "name": "ImportRun_vendorId_Vendor_id_fk",
-          "tableFrom": "ImportRun",
+        "Run_vendorId_Vendor_id_fk": {
+          "name": "Run_vendorId_Vendor_id_fk",
+          "tableFrom": "Run",
           "tableTo": "Vendor",
           "columnsFrom": [
             "vendorId"
@@ -6179,9 +6179,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportRun_actorUserId_user_id_fk": {
-          "name": "ImportRun_actorUserId_user_id_fk",
-          "tableFrom": "ImportRun",
+        "Run_actorUserId_user_id_fk": {
+          "name": "Run_actorUserId_user_id_fk",
+          "tableFrom": "Run",
           "tableTo": "user",
           "columnsFrom": [
             "actorUserId"
@@ -6192,10 +6192,10 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportRun_predecessorRunId_ImportRun_id_fk": {
-          "name": "ImportRun_predecessorRunId_ImportRun_id_fk",
-          "tableFrom": "ImportRun",
-          "tableTo": "ImportRun",
+        "Run_predecessorRunId_Run_id_fk": {
+          "name": "Run_predecessorRunId_Run_id_fk",
+          "tableFrom": "Run",
+          "tableTo": "Run",
           "columnsFrom": [
             "predecessorRunId"
           ],
@@ -6205,9 +6205,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportRun_entity_identity_fk": {
-          "name": "ImportRun_entity_identity_fk",
-          "tableFrom": "ImportRun",
+        "Run_entity_identity_fk": {
+          "name": "Run_entity_identity_fk",
+          "tableFrom": "Run",
           "tableTo": "Entity",
           "columnsFrom": [
             "id",
@@ -6225,35 +6225,35 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "ImportRun_trigger_check": {
-          "name": "ImportRun_trigger_check",
-          "value": "\"ImportRun\".\"trigger\" IN ('foreground', 'discovery', 'manual', 'backfill', 'ephemeral')"
+        "Run_trigger_check": {
+          "name": "Run_trigger_check",
+          "value": "\"Run\".\"trigger\" IN ('foreground', 'discovery', 'manual', 'backfill', 'ephemeral')"
         },
-        "ImportRun_status_check": {
-          "name": "ImportRun_status_check",
-          "value": "\"ImportRun\".\"status\" IN ('running', 'paused_auth', 'paused_offline', 'paused_approval', 'needs_review', 'completed', 'failed', 'dispatch_failed')"
+        "Run_status_check": {
+          "name": "Run_status_check",
+          "value": "\"Run\".\"status\" IN ('running', 'paused_auth', 'paused_offline', 'paused_approval', 'needs_review', 'completed', 'failed', 'dispatch_failed')"
         },
-        "ImportRun_purpose_check": {
-          "name": "ImportRun_purpose_check",
-          "value": "\"ImportRun\".\"purpose\" IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'ai_action', 'background', 'file_import', 'legacy')"
+        "Run_purpose_check": {
+          "name": "Run_purpose_check",
+          "value": "\"Run\".\"purpose\" IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'ai_action', 'background', 'file_import', 'legacy')"
         },
-        "ImportRun_photo_inventory_no_vendor_check": {
-          "name": "ImportRun_photo_inventory_no_vendor_check",
-          "value": "\"ImportRun\".\"purpose\" <> 'photo_inventory' OR \"ImportRun\".\"vendorAccountId\" IS NULL"
+        "Run_photo_inventory_no_vendor_check": {
+          "name": "Run_photo_inventory_no_vendor_check",
+          "value": "\"Run\".\"purpose\" <> 'photo_inventory' OR \"Run\".\"vendorAccountId\" IS NULL"
         },
-        "ImportRun_channel_check": {
-          "name": "ImportRun_channel_check",
-          "value": "\"ImportRun\".\"channel\" IN ('web', 'api', 'mcp', 'caldav', 'system')"
+        "Run_channel_check": {
+          "name": "Run_channel_check",
+          "value": "\"Run\".\"channel\" IN ('web', 'api', 'mcp', 'caldav', 'system')"
         },
-        "ImportRun_import_party_check": {
-          "name": "ImportRun_import_party_check",
-          "value": "\"ImportRun\".\"purpose\" NOT IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory') OR (\"ImportRun\".\"ledgerPartyId\" IS NOT NULL AND \"ImportRun\".\"actorLedgerPartyShortcode\" IS NOT NULL)"
+        "Run_import_party_check": {
+          "name": "Run_import_party_check",
+          "value": "\"Run\".\"purpose\" NOT IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory') OR (\"Run\".\"ledgerPartyId\" IS NOT NULL AND \"Run\".\"actorLedgerPartyShortcode\" IS NOT NULL)"
         }
       },
       "isRLSEnabled": false
     },
-    "public.ImportRunApproval": {
-      "name": "ImportRunApproval",
+    "public.RunApproval": {
+      "name": "RunApproval",
       "schema": "",
       "columns": {
         "id": {
@@ -6351,8 +6351,8 @@
         }
       },
       "indexes": {
-        "ImportRunApproval_run_operation_key": {
-          "name": "ImportRunApproval_run_operation_key",
+        "RunApproval_run_operation_key": {
+          "name": "RunApproval_run_operation_key",
           "columns": [
             {
               "expression": "runId",
@@ -6372,8 +6372,8 @@
           "method": "btree",
           "with": {}
         },
-        "ImportRunApproval_run_state_idx": {
-          "name": "ImportRunApproval_run_state_idx",
+        "RunApproval_run_state_idx": {
+          "name": "RunApproval_run_state_idx",
           "columns": [
             {
               "expression": "runId",
@@ -6395,10 +6395,10 @@
         }
       },
       "foreignKeys": {
-        "ImportRunApproval_runId_ImportRun_id_fk": {
-          "name": "ImportRunApproval_runId_ImportRun_id_fk",
-          "tableFrom": "ImportRunApproval",
-          "tableTo": "ImportRun",
+        "RunApproval_runId_Run_id_fk": {
+          "name": "RunApproval_runId_Run_id_fk",
+          "tableFrom": "RunApproval",
+          "tableTo": "Run",
           "columnsFrom": [
             "runId"
           ],
@@ -6408,9 +6408,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportRunApproval_decidedByUserId_user_id_fk": {
-          "name": "ImportRunApproval_decidedByUserId_user_id_fk",
-          "tableFrom": "ImportRunApproval",
+        "RunApproval_decidedByUserId_user_id_fk": {
+          "name": "RunApproval_decidedByUserId_user_id_fk",
+          "tableFrom": "RunApproval",
           "tableTo": "user",
           "columnsFrom": [
             "decidedByUserId"
@@ -6426,15 +6426,15 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "ImportRunApproval_state_check": {
-          "name": "ImportRunApproval_state_check",
-          "value": "\"ImportRunApproval\".\"state\" IN ('pending', 'granted', 'rejected', 'consumed', 'invalidated')"
+        "RunApproval_state_check": {
+          "name": "RunApproval_state_check",
+          "value": "\"RunApproval\".\"state\" IN ('pending', 'granted', 'rejected', 'consumed', 'invalidated')"
         }
       },
       "isRLSEnabled": false
     },
-    "public.ImportRunControlEvent": {
-      "name": "ImportRunControlEvent",
+    "public.RunControlEvent": {
+      "name": "RunControlEvent",
       "schema": "",
       "columns": {
         "id": {
@@ -6507,8 +6507,8 @@
         }
       },
       "indexes": {
-        "ImportRunControlEvent_run_created_idx": {
-          "name": "ImportRunControlEvent_run_created_idx",
+        "RunControlEvent_run_created_idx": {
+          "name": "RunControlEvent_run_created_idx",
           "columns": [
             {
               "expression": "runId",
@@ -6530,10 +6530,10 @@
         }
       },
       "foreignKeys": {
-        "ImportRunControlEvent_runId_ImportRun_id_fk": {
-          "name": "ImportRunControlEvent_runId_ImportRun_id_fk",
-          "tableFrom": "ImportRunControlEvent",
-          "tableTo": "ImportRun",
+        "RunControlEvent_runId_Run_id_fk": {
+          "name": "RunControlEvent_runId_Run_id_fk",
+          "tableFrom": "RunControlEvent",
+          "tableTo": "Run",
           "columnsFrom": [
             "runId"
           ],
@@ -6548,15 +6548,15 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "ImportRunControlEvent_action_check": {
-          "name": "ImportRunControlEvent_action_check",
-          "value": "\"ImportRunControlEvent\".\"action\" IN ('prompt', 'abort', 'pause', 'resume', 'cancel', 'approve', 'reject', 'retry', 'retry_dispatch', 'upload_evidence', 'no_evidence_available', 'escalate_sol')"
+        "RunControlEvent_action_check": {
+          "name": "RunControlEvent_action_check",
+          "value": "\"RunControlEvent\".\"action\" IN ('prompt', 'abort', 'pause', 'resume', 'cancel', 'approve', 'reject', 'retry', 'retry_dispatch', 'upload_evidence', 'no_evidence_available', 'escalate_sol')"
         }
       },
       "isRLSEnabled": false
     },
-    "public.ImportRunEvidence": {
-      "name": "ImportRunEvidence",
+    "public.RunEvidence": {
+      "name": "RunEvidence",
       "schema": "",
       "columns": {
         "id": {
@@ -6624,8 +6624,8 @@
         }
       },
       "indexes": {
-        "ImportRunEvidence_object_key_unique": {
-          "name": "ImportRunEvidence_object_key_unique",
+        "RunEvidence_object_key_unique": {
+          "name": "RunEvidence_object_key_unique",
           "columns": [
             {
               "expression": "objectKey",
@@ -6639,8 +6639,8 @@
           "method": "btree",
           "with": {}
         },
-        "ImportRunEvidence_run_target_idx": {
-          "name": "ImportRunEvidence_run_target_idx",
+        "RunEvidence_run_target_idx": {
+          "name": "RunEvidence_run_target_idx",
           "columns": [
             {
               "expression": "runId",
@@ -6662,10 +6662,10 @@
         }
       },
       "foreignKeys": {
-        "ImportRunEvidence_runId_ImportRun_id_fk": {
-          "name": "ImportRunEvidence_runId_ImportRun_id_fk",
-          "tableFrom": "ImportRunEvidence",
-          "tableTo": "ImportRun",
+        "RunEvidence_runId_Run_id_fk": {
+          "name": "RunEvidence_runId_Run_id_fk",
+          "tableFrom": "RunEvidence",
+          "tableTo": "Run",
           "columnsFrom": [
             "runId"
           ],
@@ -6675,10 +6675,10 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportRunEvidence_targetId_ImportRunTarget_id_fk": {
-          "name": "ImportRunEvidence_targetId_ImportRunTarget_id_fk",
-          "tableFrom": "ImportRunEvidence",
-          "tableTo": "ImportRunTarget",
+        "RunEvidence_targetId_RunTarget_id_fk": {
+          "name": "RunEvidence_targetId_RunTarget_id_fk",
+          "tableFrom": "RunEvidence",
+          "tableTo": "RunTarget",
           "columnsFrom": [
             "targetId"
           ],
@@ -6693,15 +6693,15 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "ImportRunEvidence_kind_check": {
-          "name": "ImportRunEvidence_kind_check",
-          "value": "\"ImportRunEvidence\".\"kind\" IN ('browser_capture', 'gmail_attachment', 'manual_upload')"
+        "RunEvidence_kind_check": {
+          "name": "RunEvidence_kind_check",
+          "value": "\"RunEvidence\".\"kind\" IN ('browser_capture', 'gmail_attachment', 'manual_upload')"
         }
       },
       "isRLSEnabled": false
     },
-    "public.ImportRunMutation": {
-      "name": "ImportRunMutation",
+    "public.RunMutation": {
+      "name": "RunMutation",
       "schema": "",
       "columns": {
         "id": {
@@ -6763,8 +6763,8 @@
         }
       },
       "indexes": {
-        "ImportRunMutation_run_idx": {
-          "name": "ImportRunMutation_run_idx",
+        "RunMutation_run_idx": {
+          "name": "RunMutation_run_idx",
           "columns": [
             {
               "expression": "runId",
@@ -6778,8 +6778,8 @@
           "method": "btree",
           "with": {}
         },
-        "ImportRunMutation_target_idx": {
-          "name": "ImportRunMutation_target_idx",
+        "RunMutation_target_idx": {
+          "name": "RunMutation_target_idx",
           "columns": [
             {
               "expression": "targetType",
@@ -6801,10 +6801,10 @@
         }
       },
       "foreignKeys": {
-        "ImportRunMutation_runId_ImportRun_id_fk": {
-          "name": "ImportRunMutation_runId_ImportRun_id_fk",
-          "tableFrom": "ImportRunMutation",
-          "tableTo": "ImportRun",
+        "RunMutation_runId_Run_id_fk": {
+          "name": "RunMutation_runId_Run_id_fk",
+          "tableFrom": "RunMutation",
+          "tableTo": "Run",
           "columnsFrom": [
             "runId"
           ],
@@ -6821,8 +6821,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.ImportRunOperation": {
-      "name": "ImportRunOperation",
+    "public.RunOperation": {
+      "name": "RunOperation",
       "schema": "",
       "columns": {
         "id": {
@@ -6910,8 +6910,8 @@
         }
       },
       "indexes": {
-        "ImportRunOperation_run_operation_key": {
-          "name": "ImportRunOperation_run_operation_key",
+        "RunOperation_run_operation_key": {
+          "name": "RunOperation_run_operation_key",
           "columns": [
             {
               "expression": "runId",
@@ -6931,8 +6931,8 @@
           "method": "btree",
           "with": {}
         },
-        "ImportRunOperation_run_state_idx": {
-          "name": "ImportRunOperation_run_state_idx",
+        "RunOperation_run_state_idx": {
+          "name": "RunOperation_run_state_idx",
           "columns": [
             {
               "expression": "runId",
@@ -6954,10 +6954,10 @@
         }
       },
       "foreignKeys": {
-        "ImportRunOperation_runId_ImportRun_id_fk": {
-          "name": "ImportRunOperation_runId_ImportRun_id_fk",
-          "tableFrom": "ImportRunOperation",
-          "tableTo": "ImportRun",
+        "RunOperation_runId_Run_id_fk": {
+          "name": "RunOperation_runId_Run_id_fk",
+          "tableFrom": "RunOperation",
+          "tableTo": "Run",
           "columnsFrom": [
             "runId"
           ],
@@ -6972,15 +6972,15 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "ImportRunOperation_state_check": {
-          "name": "ImportRunOperation_state_check",
-          "value": "\"ImportRunOperation\".\"state\" IN ('started', 'paused_approval', 'completed', 'failed')"
+        "RunOperation_state_check": {
+          "name": "RunOperation_state_check",
+          "value": "\"RunOperation\".\"state\" IN ('started', 'paused_approval', 'completed', 'failed')"
         }
       },
       "isRLSEnabled": false
     },
-    "public.ImportRunOrderCandidate": {
-      "name": "ImportRunOrderCandidate",
+    "public.RunOrderCandidate": {
+      "name": "RunOrderCandidate",
       "schema": "",
       "columns": {
         "id": {
@@ -7044,8 +7044,8 @@
         }
       },
       "indexes": {
-        "ImportRunOrderCandidate_run_order_key": {
-          "name": "ImportRunOrderCandidate_run_order_key",
+        "RunOrderCandidate_run_order_key": {
+          "name": "RunOrderCandidate_run_order_key",
           "columns": [
             {
               "expression": "runId",
@@ -7065,8 +7065,8 @@
           "method": "btree",
           "with": {}
         },
-        "ImportRunOrderCandidate_run_state_idx": {
-          "name": "ImportRunOrderCandidate_run_state_idx",
+        "RunOrderCandidate_run_state_idx": {
+          "name": "RunOrderCandidate_run_state_idx",
           "columns": [
             {
               "expression": "runId",
@@ -7088,10 +7088,10 @@
         }
       },
       "foreignKeys": {
-        "ImportRunOrderCandidate_runId_ImportRun_id_fk": {
-          "name": "ImportRunOrderCandidate_runId_ImportRun_id_fk",
-          "tableFrom": "ImportRunOrderCandidate",
-          "tableTo": "ImportRun",
+        "RunOrderCandidate_runId_Run_id_fk": {
+          "name": "RunOrderCandidate_runId_Run_id_fk",
+          "tableFrom": "RunOrderCandidate",
+          "tableTo": "Run",
           "columnsFrom": [
             "runId"
           ],
@@ -7106,15 +7106,15 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "ImportRunOrderCandidate_state_check": {
-          "name": "ImportRunOrderCandidate_state_check",
-          "value": "\"ImportRunOrderCandidate\".\"state\" IN ('pending', 'covered', 'imported', 'skipped')"
+        "RunOrderCandidate_state_check": {
+          "name": "RunOrderCandidate_state_check",
+          "value": "\"RunOrderCandidate\".\"state\" IN ('pending', 'covered', 'imported', 'skipped')"
         }
       },
       "isRLSEnabled": false
     },
-    "public.ImportRunProgress": {
-      "name": "ImportRunProgress",
+    "public.RunProgress": {
+      "name": "RunProgress",
       "schema": "",
       "columns": {
         "id": {
@@ -7170,8 +7170,8 @@
         }
       },
       "indexes": {
-        "ImportRunProgress_eventId_unique": {
-          "name": "ImportRunProgress_eventId_unique",
+        "RunProgress_eventId_unique": {
+          "name": "RunProgress_eventId_unique",
           "columns": [
             {
               "expression": "eventId",
@@ -7185,8 +7185,8 @@
           "method": "btree",
           "with": {}
         },
-        "ImportRunProgress_run_created_idx": {
-          "name": "ImportRunProgress_run_created_idx",
+        "RunProgress_run_created_idx": {
+          "name": "RunProgress_run_created_idx",
           "columns": [
             {
               "expression": "runId",
@@ -7208,10 +7208,10 @@
         }
       },
       "foreignKeys": {
-        "ImportRunProgress_runId_ImportRun_id_fk": {
-          "name": "ImportRunProgress_runId_ImportRun_id_fk",
-          "tableFrom": "ImportRunProgress",
-          "tableTo": "ImportRun",
+        "RunProgress_runId_Run_id_fk": {
+          "name": "RunProgress_runId_Run_id_fk",
+          "tableFrom": "RunProgress",
+          "tableTo": "Run",
           "columnsFrom": [
             "runId"
           ],
@@ -7228,8 +7228,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.ImportRunTarget": {
-      "name": "ImportRunTarget",
+    "public.RunTarget": {
+      "name": "RunTarget",
       "schema": "",
       "columns": {
         "id": {
@@ -7352,8 +7352,8 @@
         }
       },
       "indexes": {
-        "ImportRunTarget_run_idx": {
-          "name": "ImportRunTarget_run_idx",
+        "RunTarget_run_idx": {
+          "name": "RunTarget_run_idx",
           "columns": [
             {
               "expression": "runId",
@@ -7367,8 +7367,8 @@
           "method": "btree",
           "with": {}
         },
-        "ImportRunTarget_purchase_idx": {
-          "name": "ImportRunTarget_purchase_idx",
+        "RunTarget_purchase_idx": {
+          "name": "RunTarget_purchase_idx",
           "columns": [
             {
               "expression": "purchaseId",
@@ -7382,8 +7382,8 @@
           "method": "btree",
           "with": {}
         },
-        "ImportRunTarget_product_idx": {
-          "name": "ImportRunTarget_product_idx",
+        "RunTarget_product_idx": {
+          "name": "RunTarget_product_idx",
           "columns": [
             {
               "expression": "productId",
@@ -7397,8 +7397,8 @@
           "method": "btree",
           "with": {}
         },
-        "ImportRunTarget_image_idx": {
-          "name": "ImportRunTarget_image_idx",
+        "RunTarget_image_idx": {
+          "name": "RunTarget_image_idx",
           "columns": [
             {
               "expression": "imageId",
@@ -7412,8 +7412,8 @@
           "method": "btree",
           "with": {}
         },
-        "ImportRunTarget_run_purchase_key": {
-          "name": "ImportRunTarget_run_purchase_key",
+        "RunTarget_run_purchase_key": {
+          "name": "RunTarget_run_purchase_key",
           "columns": [
             {
               "expression": "runId",
@@ -7429,13 +7429,13 @@
             }
           ],
           "isUnique": true,
-          "where": "\"ImportRunTarget\".\"purchaseId\" IS NOT NULL",
+          "where": "\"RunTarget\".\"purchaseId\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
         },
-        "ImportRunTarget_run_product_key": {
-          "name": "ImportRunTarget_run_product_key",
+        "RunTarget_run_product_key": {
+          "name": "RunTarget_run_product_key",
           "columns": [
             {
               "expression": "runId",
@@ -7451,13 +7451,13 @@
             }
           ],
           "isUnique": true,
-          "where": "\"ImportRunTarget\".\"productId\" IS NOT NULL",
+          "where": "\"RunTarget\".\"productId\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
         },
-        "ImportRunTarget_run_image_key": {
-          "name": "ImportRunTarget_run_image_key",
+        "RunTarget_run_image_key": {
+          "name": "RunTarget_run_image_key",
           "columns": [
             {
               "expression": "runId",
@@ -7473,17 +7473,17 @@
             }
           ],
           "isUnique": true,
-          "where": "\"ImportRunTarget\".\"imageId\" IS NOT NULL",
+          "where": "\"RunTarget\".\"imageId\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
         }
       },
       "foreignKeys": {
-        "ImportRunTarget_runId_ImportRun_id_fk": {
-          "name": "ImportRunTarget_runId_ImportRun_id_fk",
-          "tableFrom": "ImportRunTarget",
-          "tableTo": "ImportRun",
+        "RunTarget_runId_Run_id_fk": {
+          "name": "RunTarget_runId_Run_id_fk",
+          "tableFrom": "RunTarget",
+          "tableTo": "Run",
           "columnsFrom": [
             "runId"
           ],
@@ -7493,9 +7493,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportRunTarget_purchaseId_Purchase_id_fk": {
-          "name": "ImportRunTarget_purchaseId_Purchase_id_fk",
-          "tableFrom": "ImportRunTarget",
+        "RunTarget_purchaseId_Purchase_id_fk": {
+          "name": "RunTarget_purchaseId_Purchase_id_fk",
+          "tableFrom": "RunTarget",
           "tableTo": "Purchase",
           "columnsFrom": [
             "purchaseId"
@@ -7506,9 +7506,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportRunTarget_productId_Product_id_fk": {
-          "name": "ImportRunTarget_productId_Product_id_fk",
-          "tableFrom": "ImportRunTarget",
+        "RunTarget_productId_Product_id_fk": {
+          "name": "RunTarget_productId_Product_id_fk",
+          "tableFrom": "RunTarget",
           "tableTo": "Product",
           "columnsFrom": [
             "productId"
@@ -7519,9 +7519,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportRunTarget_imageId_Image_id_fk": {
-          "name": "ImportRunTarget_imageId_Image_id_fk",
-          "tableFrom": "ImportRunTarget",
+        "RunTarget_imageId_Image_id_fk": {
+          "name": "RunTarget_imageId_Image_id_fk",
+          "tableFrom": "RunTarget",
           "tableTo": "Image",
           "columnsFrom": [
             "imageId"
@@ -7532,9 +7532,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportRunTarget_vendorAccountId_VendorAccount_id_fk": {
-          "name": "ImportRunTarget_vendorAccountId_VendorAccount_id_fk",
-          "tableFrom": "ImportRunTarget",
+        "RunTarget_vendorAccountId_VendorAccount_id_fk": {
+          "name": "RunTarget_vendorAccountId_VendorAccount_id_fk",
+          "tableFrom": "RunTarget",
           "tableTo": "VendorAccount",
           "columnsFrom": [
             "vendorAccountId"
@@ -7550,17 +7550,17 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "ImportRunTarget_exactly_one_target_check": {
-          "name": "ImportRunTarget_exactly_one_target_check",
-          "value": "((\"ImportRunTarget\".\"purchaseId\" IS NOT NULL)::int + (\"ImportRunTarget\".\"productId\" IS NOT NULL)::int + (\"ImportRunTarget\".\"imageId\" IS NOT NULL)::int) = 1"
+        "RunTarget_exactly_one_target_check": {
+          "name": "RunTarget_exactly_one_target_check",
+          "value": "((\"RunTarget\".\"purchaseId\" IS NOT NULL)::int + (\"RunTarget\".\"productId\" IS NOT NULL)::int + (\"RunTarget\".\"imageId\" IS NOT NULL)::int) = 1"
         },
-        "ImportRunTarget_state_check": {
-          "name": "ImportRunTarget_state_check",
-          "value": "\"ImportRunTarget\".\"state\" IN ('pending', 'prepared', 'completed', 'skipped', 'unresolved', 'needs_evidence', 'unavailable')"
+        "RunTarget_state_check": {
+          "name": "RunTarget_state_check",
+          "value": "\"RunTarget\".\"state\" IN ('pending', 'prepared', 'completed', 'skipped', 'unresolved', 'needs_evidence', 'unavailable')"
         },
-        "ImportRunTarget_outcome_check": {
-          "name": "ImportRunTarget_outcome_check",
-          "value": "\"ImportRunTarget\".\"outcome\" IS NULL OR \"ImportRunTarget\".\"outcome\" IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped', 'attached')"
+        "RunTarget_outcome_check": {
+          "name": "RunTarget_outcome_check",
+          "value": "\"RunTarget\".\"outcome\" IS NULL OR \"RunTarget\".\"outcome\" IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped', 'attached')"
         }
       },
       "isRLSEnabled": false
@@ -7729,10 +7729,10 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportSourceClaim_firstRunId_ImportRun_id_fk": {
-          "name": "ImportSourceClaim_firstRunId_ImportRun_id_fk",
+        "ImportSourceClaim_firstRunId_Run_id_fk": {
+          "name": "ImportSourceClaim_firstRunId_Run_id_fk",
           "tableFrom": "ImportSourceClaim",
-          "tableTo": "ImportRun",
+          "tableTo": "Run",
           "columnsFrom": [
             "firstRunId"
           ],
@@ -7742,10 +7742,10 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportSourceClaim_lastRunId_ImportRun_id_fk": {
-          "name": "ImportSourceClaim_lastRunId_ImportRun_id_fk",
+        "ImportSourceClaim_lastRunId_Run_id_fk": {
+          "name": "ImportSourceClaim_lastRunId_Run_id_fk",
           "tableFrom": "ImportSourceClaim",
-          "tableTo": "ImportRun",
+          "tableTo": "Run",
           "columnsFrom": [
             "lastRunId"
           ],
@@ -14198,8 +14198,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "importRunId": {
-          "name": "importRunId",
+        "runId": {
+          "name": "runId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -14288,11 +14288,11 @@
           "method": "btree",
           "with": {}
         },
-        "Purchase_importRunId_idx": {
-          "name": "Purchase_importRunId_idx",
+        "Purchase_runId_idx": {
+          "name": "Purchase_runId_idx",
           "columns": [
             {
-              "expression": "importRunId",
+              "expression": "runId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -14389,12 +14389,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "Purchase_importRunId_ImportRun_id_fk": {
-          "name": "Purchase_importRunId_ImportRun_id_fk",
+        "Purchase_runId_Run_id_fk": {
+          "name": "Purchase_runId_Run_id_fk",
           "tableFrom": "Purchase",
-          "tableTo": "ImportRun",
+          "tableTo": "Run",
           "columnsFrom": [
-            "importRunId"
+            "runId"
           ],
           "columnsTo": [
             "id"
@@ -17635,10 +17635,10 @@
         }
       },
       "foreignKeys": {
-        "PhotoGroupProposal_runId_ImportRun_id_fk": {
-          "name": "PhotoGroupProposal_runId_ImportRun_id_fk",
+        "PhotoGroupProposal_runId_Run_id_fk": {
+          "name": "PhotoGroupProposal_runId_Run_id_fk",
           "tableFrom": "PhotoGroupProposal",
-          "tableTo": "ImportRun",
+          "tableTo": "Run",
           "columnsFrom": [
             "runId"
           ],
@@ -18015,11 +18015,11 @@
       "checkConstraints": {
         "Entity_kind_check": {
           "name": "Entity_kind_check",
-          "value": "\"Entity\".\"kind\" IN ('product', 'recipe', 'ingredient', 'cookbook', 'location', 'inventory', 'meal', 'ledgerParty', 'ledgerTransfer', 'project', 'task', 'vendor', 'purchase', 'financialAccount', 'financialTransaction', 'wish', 'expense', 'image', 'planting', 'gardenEntry', 'vendorAccount', 'productCategory', 'importRun', 'device', 'imageSighting', 'plant')"
+          "value": "\"Entity\".\"kind\" IN ('product', 'recipe', 'ingredient', 'cookbook', 'location', 'inventory', 'meal', 'ledgerParty', 'ledgerTransfer', 'project', 'task', 'vendor', 'purchase', 'financialAccount', 'financialTransaction', 'wish', 'expense', 'image', 'planting', 'gardenEntry', 'vendorAccount', 'productCategory', 'run', 'device', 'imageSighting', 'plant')"
         },
         "Entity_shortcode_prefix_check": {
           "name": "Entity_shortcode_prefix_check",
-          "value": "\"Entity\".\"shortcode\" IS NULL OR CASE \"Entity\".\"kind\" WHEN 'product' THEN \"Entity\".\"shortcode\" LIKE 'PRD-%' WHEN 'recipe' THEN \"Entity\".\"shortcode\" LIKE 'RCP-%' WHEN 'ingredient' THEN \"Entity\".\"shortcode\" LIKE 'ING-%' WHEN 'cookbook' THEN \"Entity\".\"shortcode\" LIKE 'CKB-%' WHEN 'location' THEN \"Entity\".\"shortcode\" LIKE 'LOC-%' WHEN 'inventory' THEN \"Entity\".\"shortcode\" LIKE 'INV-%' WHEN 'meal' THEN \"Entity\".\"shortcode\" LIKE 'MEL-%' WHEN 'ledgerParty' THEN \"Entity\".\"shortcode\" LIKE 'LPY-%' WHEN 'ledgerTransfer' THEN \"Entity\".\"shortcode\" LIKE 'LTR-%' WHEN 'project' THEN \"Entity\".\"shortcode\" LIKE 'PRJ-%' WHEN 'task' THEN \"Entity\".\"shortcode\" LIKE 'TSK-%' WHEN 'vendor' THEN \"Entity\".\"shortcode\" LIKE 'VEN-%' WHEN 'purchase' THEN \"Entity\".\"shortcode\" LIKE 'PUR-%' WHEN 'financialAccount' THEN \"Entity\".\"shortcode\" LIKE 'FAC-%' WHEN 'financialTransaction' THEN \"Entity\".\"shortcode\" LIKE 'FTX-%' WHEN 'wish' THEN \"Entity\".\"shortcode\" LIKE 'WSH-%' WHEN 'expense' THEN \"Entity\".\"shortcode\" LIKE 'EXP-%' WHEN 'image' THEN \"Entity\".\"shortcode\" LIKE 'IMG-%' WHEN 'planting' THEN \"Entity\".\"shortcode\" LIKE 'PLT-%' WHEN 'gardenEntry' THEN \"Entity\".\"shortcode\" LIKE 'GDE-%' WHEN 'vendorAccount' THEN \"Entity\".\"shortcode\" LIKE 'VACCT-%' WHEN 'productCategory' THEN \"Entity\".\"shortcode\" LIKE 'CAT-%' WHEN 'importRun' THEN \"Entity\".\"shortcode\" LIKE 'RUN-%' WHEN 'device' THEN \"Entity\".\"shortcode\" LIKE 'DEV-%' WHEN 'imageSighting' THEN \"Entity\".\"shortcode\" LIKE 'IMS-%' WHEN 'plant' THEN \"Entity\".\"shortcode\" LIKE 'PLANT-%' ELSE false END"
+          "value": "\"Entity\".\"shortcode\" IS NULL OR CASE \"Entity\".\"kind\" WHEN 'product' THEN \"Entity\".\"shortcode\" LIKE 'PRD-%' WHEN 'recipe' THEN \"Entity\".\"shortcode\" LIKE 'RCP-%' WHEN 'ingredient' THEN \"Entity\".\"shortcode\" LIKE 'ING-%' WHEN 'cookbook' THEN \"Entity\".\"shortcode\" LIKE 'CKB-%' WHEN 'location' THEN \"Entity\".\"shortcode\" LIKE 'LOC-%' WHEN 'inventory' THEN \"Entity\".\"shortcode\" LIKE 'INV-%' WHEN 'meal' THEN \"Entity\".\"shortcode\" LIKE 'MEL-%' WHEN 'ledgerParty' THEN \"Entity\".\"shortcode\" LIKE 'LPY-%' WHEN 'ledgerTransfer' THEN \"Entity\".\"shortcode\" LIKE 'LTR-%' WHEN 'project' THEN \"Entity\".\"shortcode\" LIKE 'PRJ-%' WHEN 'task' THEN \"Entity\".\"shortcode\" LIKE 'TSK-%' WHEN 'vendor' THEN \"Entity\".\"shortcode\" LIKE 'VEN-%' WHEN 'purchase' THEN \"Entity\".\"shortcode\" LIKE 'PUR-%' WHEN 'financialAccount' THEN \"Entity\".\"shortcode\" LIKE 'FAC-%' WHEN 'financialTransaction' THEN \"Entity\".\"shortcode\" LIKE 'FTX-%' WHEN 'wish' THEN \"Entity\".\"shortcode\" LIKE 'WSH-%' WHEN 'expense' THEN \"Entity\".\"shortcode\" LIKE 'EXP-%' WHEN 'image' THEN \"Entity\".\"shortcode\" LIKE 'IMG-%' WHEN 'planting' THEN \"Entity\".\"shortcode\" LIKE 'PLT-%' WHEN 'gardenEntry' THEN \"Entity\".\"shortcode\" LIKE 'GDE-%' WHEN 'vendorAccount' THEN \"Entity\".\"shortcode\" LIKE 'VACCT-%' WHEN 'productCategory' THEN \"Entity\".\"shortcode\" LIKE 'CAT-%' WHEN 'run' THEN \"Entity\".\"shortcode\" LIKE 'RUN-%' WHEN 'device' THEN \"Entity\".\"shortcode\" LIKE 'DEV-%' WHEN 'imageSighting' THEN \"Entity\".\"shortcode\" LIKE 'IMS-%' WHEN 'plant' THEN \"Entity\".\"shortcode\" LIKE 'PLANT-%' ELSE false END"
         },
         "Entity_merge_not_self_check": {
           "name": "Entity_merge_not_self_check",

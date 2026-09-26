@@ -1,11 +1,11 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { describe, expect, it, vi } from "vitest";
 
 import { Database } from "~/server/db";
 
 import { type AiUsagePort, recordAiUsage } from "./ai-usage";
 
-const runId = importRunId.parse("00000000-0000-4000-8000-000000000001");
+const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
 describe("recordAiUsage", () => {
   it("preserves AI usage fields in the queued event", async () => {

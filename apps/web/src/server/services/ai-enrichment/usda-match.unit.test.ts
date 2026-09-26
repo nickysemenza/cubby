@@ -1,4 +1,4 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { testEntityId } from "@cubby/schemas/testing";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { describe, expect, it, vi } from "vitest";
@@ -17,7 +17,7 @@ interface TestDatabase {
   readonly scope: "usda-match";
 }
 const database: TestDatabase = { scope: "usda-match" };
-const runId = importRunId.parse("00000000-0000-4000-8000-000000000009");
+const runId = runEntityId.parse("00000000-0000-4000-8000-000000000009");
 const lookup: UsdaLookupPort = {
   listFoods: async () => ({ data: [], count: 0 }),
 };

@@ -85,7 +85,7 @@ export {
   synthesizeEffectiveMappings,
 } from "./detectors-product";
 export { findDuplicateSpendCandidates } from "./detectors-purchase";
-export { findOpenImportFindings } from "./detectors-import";
+export { findOpenRunFindings } from "./detectors-import";
 // Recipe-centric detectors (derived-data-on-removal guardrail)
 export { findParentRecipesWithDeletedSubRecipes } from "./detectors-recipe";
 export { loadVendorLogoPresenterCounts } from "./detectors-vendor";

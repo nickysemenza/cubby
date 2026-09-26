@@ -1,4 +1,4 @@
-import type { ImportRunId } from "@cubby/schemas/identifiers";
+import type { RunId } from "@cubby/schemas/identifiers";
 import { embed } from "@tanstack/ai";
 import {
   createOpenaiEmbedding,
@@ -105,7 +105,7 @@ export async function embedTexts(
      * run per day, not one per search. A caller that already has the
      * request's `ai_action` (or an inherited) run should pass it.
      */
-    runId?: ImportRunId;
+    runId?: RunId;
     feature?: string;
     entity?: { entityType: string; entityId: string };
   },
@@ -187,7 +187,7 @@ export async function embedTexts(
 
 export async function embedQuery(
   query: string,
-  opts?: { db?: Database; runId?: ImportRunId },
+  opts?: { db?: Database; runId?: RunId },
 ): Promise<number[] | null> {
   if (!semanticEmbeddingsConfigured()) return null;
   const normalized = query.trim().replace(/\s+/g, " ").toLowerCase();

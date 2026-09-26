@@ -8,7 +8,7 @@ import {
   type LedgerPartyId,
   parseEntityId,
   type VendorId,
-  importRunId,
+  runEntityId,
 } from "@cubby/schemas/identifiers";
 import {
   commitPurchaseImportInput,
@@ -18,7 +18,7 @@ import {
   extractedPurchaseLine,
   importExtractionOutcome,
   importSourceKind,
-  importRunPurpose,
+  runPurpose,
   validatePurchaseImportInput,
   validatePurchaseImportOut,
   preparePurchaseImportInput,
@@ -45,11 +45,11 @@ import {
   importHunt,
   importPreparedLine,
   importPreparedOrder,
-  importRun,
-  importRunEvidence,
-  importRunMutation,
-  importRunOperation,
-  importRunTarget,
+  run as runTable,
+  runEvidence,
+  runMutation,
+  runOperation,
+  runTarget,
   importSourceClaim,
   product,
   productExternalId,
@@ -73,7 +73,7 @@ import {
   importImageFromUrl,
 } from "~/server/services/image-storage.service";
 
-import { assertImportRunCapability } from "./capabilities";
+import { assertRunCapability } from "./capabilities";
 import { learnPurchaseProductExternalId } from "./external-id-learning";
 import {
   attachPendingOrderMailEvidence,
@@ -344,14 +344,11 @@ export async function preparePurchaseImport(
   const input = preparePurchaseImportInput.parse(rawInput);
   const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
   const [purposeRow] = await getDb(db)
-    .select({ purpose: importRun.purpose })
-    .from(importRun)
-    .where(eq(importRun.id, scope.public.runId))
+    .select({ purpose: runTable.purpose })
+    .from(runTable)
+    .where(eq(runTable.id, scope.public.runId))
     .limit(1);
-  assertImportRunCapability(
-    importRunPurpose.parse(purposeRow?.purpose),
-    "prepare",
-  );
+  assertRunCapability(runPurpose.parse(purposeRow?.purpose), "prepare");
   if (
     purposeRow?.purpose === "purchase_validation" &&
     input.orders.some(
@@ -369,15 +366,15 @@ export async function preparePurchaseImport(
     const database = getDb(transactionDb);
     const [existing] = await database
       .select({
-        inputFingerprint: importRunOperation.inputFingerprint,
-        state: importRunOperation.state,
-        result: importRunOperation.result,
+        inputFingerprint: runOperation.inputFingerprint,
+        state: runOperation.state,
+        result: runOperation.result,
       })
-      .from(importRunOperation)
+      .from(runOperation)
       .where(
         and(
-          eq(importRunOperation.runId, scope.public.runId),
-          eq(importRunOperation.operationId, input._runExecution.operationId),
+          eq(runOperation.runId, scope.public.runId),
+          eq(runOperation.operationId, input._runExecution.operationId),
         ),
       )
       .limit(1);
@@ -394,7 +391,7 @@ export async function preparePurchaseImport(
       throw new Error(
         `Purchase import run is fenced in ${scope.public.status}`,
       );
-    await database.insert(importRunOperation).values({
+    await database.insert(runOperation).values({
       runId: scope.public.runId,
       operationId: input._runExecution.operationId,
       kind: "prepare_purchase_import",
@@ -507,7 +504,7 @@ export async function preparePurchaseImport(
       orders: outputOrders,
     });
     await database
-      .update(importRunOperation)
+      .update(runOperation)
       .set({
         state: "completed",
         result,
@@ -516,8 +513,8 @@ export async function preparePurchaseImport(
       })
       .where(
         and(
-          eq(importRunOperation.runId, scope.public.runId),
-          eq(importRunOperation.operationId, input._runExecution.operationId),
+          eq(runOperation.runId, scope.public.runId),
+          eq(runOperation.operationId, input._runExecution.operationId),
         ),
       );
     return result;
@@ -534,7 +531,7 @@ async function finalizeReviewRun(
     operationId: `${operationId}:required-audit`,
   });
   await getDb(db)
-    .update(importRun)
+    .update(runTable)
     .set({
       status: "needs_review",
       auditedAt: new Date(),
@@ -543,8 +540,8 @@ async function finalizeReviewRun(
     })
     .where(
       and(
-        eq(importRun.id, importRunId.parse(runId)),
-        inArray(importRun.status, ["running", "paused_approval"]),
+        eq(runTable.id, runEntityId.parse(runId)),
+        inArray(runTable.status, ["running", "paused_approval"]),
       ),
     );
 }
@@ -560,12 +557,12 @@ export async function commitPurchaseImport(
   const input = commitPurchaseImportInput.parse(rawInput);
   const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
   const [purposeRow] = await getDb(db)
-    .select({ purpose: importRun.purpose })
-    .from(importRun)
-    .where(eq(importRun.id, scope.public.runId))
+    .select({ purpose: runTable.purpose })
+    .from(runTable)
+    .where(eq(runTable.id, scope.public.runId))
     .limit(1);
-  assertImportRunCapability(
-    importRunPurpose.parse(purposeRow?.purpose),
+  assertRunCapability(
+    runPurpose.parse(purposeRow?.purpose),
     "commit_purchase_import",
   );
   if (!scope.vendorId) throw new Error("Purchase import run has no vendor");
@@ -584,18 +581,15 @@ export async function commitPurchaseImport(
         const database = getDb(transactionDb);
         const [operation] = await database
           .select({
-            state: importRunOperation.state,
-            inputFingerprint: importRunOperation.inputFingerprint,
-            result: importRunOperation.result,
+            state: runOperation.state,
+            inputFingerprint: runOperation.inputFingerprint,
+            result: runOperation.result,
           })
-          .from(importRunOperation)
+          .from(runOperation)
           .where(
             and(
-              eq(importRunOperation.runId, scope.public.runId),
-              eq(
-                importRunOperation.operationId,
-                input._runExecution.operationId,
-              ),
+              eq(runOperation.runId, scope.public.runId),
+              eq(runOperation.operationId, input._runExecution.operationId),
             ),
           )
           .limit(1)
@@ -648,7 +642,7 @@ export async function commitPurchaseImport(
             trade: input.defaultTrade ?? null,
           });
         }
-        await database.insert(importRunOperation).values({
+        await database.insert(runOperation).values({
           runId: scope.public.runId,
           operationId: input._runExecution.operationId,
           kind: "commit_purchase_import",
@@ -817,7 +811,7 @@ export async function commitPurchaseImport(
           items,
         });
         await database
-          .update(importRunOperation)
+          .update(runOperation)
           .set({
             state: "completed",
             result: { ...publicResult, requiresReview },
@@ -827,17 +821,14 @@ export async function commitPurchaseImport(
           })
           .where(
             and(
-              eq(importRunOperation.runId, scope.public.runId),
-              eq(
-                importRunOperation.operationId,
-                input._runExecution.operationId,
-              ),
+              eq(runOperation.runId, scope.public.runId),
+              eq(runOperation.operationId, input._runExecution.operationId),
             ),
           );
         await database
-          .update(importRun)
+          .update(runTable)
           .set({ status: "running", failureCode: null, updatedAt: new Date() })
-          .where(eq(importRun.id, scope.public.runId));
+          .where(eq(runTable.id, scope.public.runId));
         return { result: publicResult, requiresReview };
       },
     );
@@ -847,7 +838,7 @@ export async function commitPurchaseImport(
     // does). Never an upsert: an existing row belongs to another attempt whose
     // outcome must not be overwritten by this one.
     await getDb(db)
-      .insert(importRunOperation)
+      .insert(runOperation)
       .values({
         runId: scope.public.runId,
         operationId: input._runExecution.operationId,
@@ -891,9 +882,9 @@ export async function validatePurchaseImport(
     async (transactionDb) => {
       const database = getDb(transactionDb);
       const [lockedRun] = await database
-        .select({ status: importRun.status })
-        .from(importRun)
-        .where(eq(importRun.id, scope.public.runId))
+        .select({ status: runTable.status })
+        .from(runTable)
+        .where(eq(runTable.id, scope.public.runId))
         .limit(1)
         .for("update");
       if (lockedRun?.status !== "running")
@@ -902,14 +893,14 @@ export async function validatePurchaseImport(
         );
       const [existing] = await database
         .select({
-          inputFingerprint: importRunOperation.inputFingerprint,
-          result: importRunOperation.result,
+          inputFingerprint: runOperation.inputFingerprint,
+          result: runOperation.result,
         })
-        .from(importRunOperation)
+        .from(runOperation)
         .where(
           and(
-            eq(importRunOperation.runId, scope.public.runId),
-            eq(importRunOperation.operationId, input._runExecution.operationId),
+            eq(runOperation.runId, scope.public.runId),
+            eq(runOperation.operationId, input._runExecution.operationId),
           ),
         )
         .limit(1);
@@ -941,15 +932,15 @@ export async function validatePurchaseImport(
         const plan = buildPurchaseImportPlan(extraction);
         const [target] = await database
           .select({
-            id: importRunTarget.id,
-            purchaseId: importRunTarget.purchaseId,
-            evidenceFingerprint: importRunTarget.evidenceFingerprint,
+            id: runTarget.id,
+            purchaseId: runTarget.purchaseId,
+            evidenceFingerprint: runTarget.evidenceFingerprint,
           })
-          .from(importRunTarget)
+          .from(runTarget)
           .where(
             and(
-              eq(importRunTarget.runId, scope.public.runId),
-              eq(importRunTarget.sourceExternalKey, order.sourceExternalKey),
+              eq(runTarget.runId, scope.public.runId),
+              eq(runTarget.sourceExternalKey, order.sourceExternalKey),
             ),
           )
           .limit(1);
@@ -1053,7 +1044,7 @@ export async function validatePurchaseImport(
             : "replayed"
           : "semantic_drift";
         await database
-          .update(importRunTarget)
+          .update(runTarget)
           .set({
             state: semanticEqual ? "completed" : "unresolved",
             outcome,
@@ -1064,7 +1055,7 @@ export async function validatePurchaseImport(
             completedAt: new Date(),
             updatedAt: new Date(),
           })
-          .where(eq(importRunTarget.id, target.id));
+          .where(eq(runTarget.id, target.id));
         results.push({ stableOrderId: order.stableOrderId, outcome, diff });
       }
       const status = results.every(
@@ -1078,7 +1069,7 @@ export async function validatePurchaseImport(
         status,
         targets: results,
       });
-      await database.insert(importRunOperation).values({
+      await database.insert(runOperation).values({
         runId: scope.public.runId,
         operationId: input._runExecution.operationId,
         kind: "validate_purchase_import",
@@ -1113,14 +1104,14 @@ export async function commitProductEnrichment(
   const fingerprint = await sha256Hex(JSON.stringify(input));
   const [existing] = await database
     .select({
-      inputFingerprint: importRunOperation.inputFingerprint,
-      result: importRunOperation.result,
+      inputFingerprint: runOperation.inputFingerprint,
+      result: runOperation.result,
     })
-    .from(importRunOperation)
+    .from(runOperation)
     .where(
       and(
-        eq(importRunOperation.runId, scope.public.runId),
-        eq(importRunOperation.operationId, operationId),
+        eq(runOperation.runId, scope.public.runId),
+        eq(runOperation.operationId, operationId),
       ),
     )
     .limit(1);
@@ -1135,12 +1126,12 @@ export async function commitProductEnrichment(
     )
     .parse(Object.keys(changes));
   const [targetRef] = await database
-    .select({ id: importRunTarget.id })
-    .from(importRunTarget)
+    .select({ id: runTarget.id })
+    .from(runTarget)
     .where(
       and(
-        eq(importRunTarget.runId, scope.public.runId),
-        eq(importRunTarget.productId, productId),
+        eq(runTarget.runId, scope.public.runId),
+        eq(runTarget.productId, productId),
       ),
     )
     .limit(1);
@@ -1151,14 +1142,14 @@ export async function commitProductEnrichment(
   let importedImageSourcePageUrl: string | null = null;
   if (changes.image) {
     const [evidence] = await database
-      .select({ metadata: importRunEvidence.sourceMetadata })
-      .from(importRunEvidence)
+      .select({ metadata: runEvidence.sourceMetadata })
+      .from(runEvidence)
       .where(
         and(
-          eq(importRunEvidence.id, changes.image.evidenceId),
-          eq(importRunEvidence.runId, scope.public.runId),
-          eq(importRunEvidence.targetId, targetRef.id),
-          eq(importRunEvidence.kind, "browser_capture"),
+          eq(runEvidence.id, changes.image.evidenceId),
+          eq(runEvidence.runId, scope.public.runId),
+          eq(runEvidence.targetId, targetRef.id),
+          eq(runEvidence.kind, "browser_capture"),
         ),
       )
       .limit(1);
@@ -1213,9 +1204,9 @@ export async function commitProductEnrichment(
       // eslint-disable-next-line complexity -- The bounded commit revalidates every approved field and evidence class atomically.
       async (tx) => {
         const [lockedRun] = await tx
-          .select({ status: importRun.status })
-          .from(importRun)
-          .where(eq(importRun.id, scope.public.runId))
+          .select({ status: runTable.status })
+          .from(runTable)
+          .where(eq(runTable.id, scope.public.runId))
           .limit(1)
           .for("update");
         if (lockedRun?.status !== "running")
@@ -1224,14 +1215,14 @@ export async function commitProductEnrichment(
           );
         const [target] = await tx
           .select({
-            id: importRunTarget.id,
-            targetFingerprint: importRunTarget.targetFingerprint,
+            id: runTarget.id,
+            targetFingerprint: runTarget.targetFingerprint,
           })
-          .from(importRunTarget)
+          .from(runTarget)
           .where(
             and(
-              eq(importRunTarget.runId, scope.public.runId),
-              eq(importRunTarget.productId, productId),
+              eq(runTarget.runId, scope.public.runId),
+              eq(runTarget.productId, productId),
             ),
           )
           .limit(1)
@@ -1254,7 +1245,7 @@ export async function commitProductEnrichment(
           throw new Error(
             "Overwriting a populated Product field requires typed approval",
           );
-        await tx.insert(importRunOperation).values({
+        await tx.insert(runOperation).values({
           runId: scope.public.runId,
           operationId,
           kind: "commit_product_enrichment",
@@ -1284,14 +1275,14 @@ export async function commitProductEnrichment(
           await validateLiveEffectiveTrades(tx);
         for (const identifier of changes.identifiers ?? []) {
           const [identifierEvidence] = await tx
-            .select({ metadata: importRunEvidence.sourceMetadata })
-            .from(importRunEvidence)
+            .select({ metadata: runEvidence.sourceMetadata })
+            .from(runEvidence)
             .where(
               and(
-                eq(importRunEvidence.id, identifier.evidenceId),
-                eq(importRunEvidence.runId, scope.public.runId),
-                eq(importRunEvidence.targetId, target.id),
-                eq(importRunEvidence.kind, "browser_capture"),
+                eq(runEvidence.id, identifier.evidenceId),
+                eq(runEvidence.runId, scope.public.runId),
+                eq(runEvidence.targetId, target.id),
+                eq(runEvidence.kind, "browser_capture"),
               ),
             )
             .limit(1);
@@ -1378,7 +1369,7 @@ export async function commitProductEnrichment(
             });
           }
         }
-        await tx.insert(importRunMutation).values({
+        await tx.insert(runMutation).values({
           runId: scope.public.runId,
           targetType: "product",
           targetId: productId,
@@ -1389,14 +1380,14 @@ export async function commitProductEnrichment(
           ),
         });
         await tx
-          .update(importRunTarget)
+          .update(runTarget)
           .set({
             state: "completed",
             outcome: "enriched",
             completedAt: new Date(),
             updatedAt: new Date(),
           })
-          .where(eq(importRunTarget.id, target.id));
+          .where(eq(runTarget.id, target.id));
         const result = commitProductEnrichmentOut.parse({
           runId: scope.public.shortcode,
           operationId,
@@ -1405,7 +1396,7 @@ export async function commitProductEnrichment(
           changedFields,
         });
         await tx
-          .update(importRunOperation)
+          .update(runOperation)
           .set({
             state: "completed",
             result,
@@ -1414,8 +1405,8 @@ export async function commitProductEnrichment(
           })
           .where(
             and(
-              eq(importRunOperation.runId, scope.public.runId),
-              eq(importRunOperation.operationId, operationId),
+              eq(runOperation.runId, scope.public.runId),
+              eq(runOperation.operationId, operationId),
             ),
           );
       },
@@ -1468,12 +1459,12 @@ export async function overwriteProductEnrichment(
   );
   return withTransaction(db, async (database) => {
     const [target] = await database
-      .select({ targetFingerprint: importRunTarget.targetFingerprint })
-      .from(importRunTarget)
+      .select({ targetFingerprint: runTarget.targetFingerprint })
+      .from(runTarget)
       .where(
         and(
-          eq(importRunTarget.runId, scope.public.runId),
-          eq(importRunTarget.productId, resolvedProductId),
+          eq(runTarget.runId, scope.public.runId),
+          eq(runTarget.productId, resolvedProductId),
         ),
       )
       .limit(1);
@@ -1539,7 +1530,7 @@ export async function overwriteProductEnrichment(
     if (input.change.field === "categoryId")
       await validateLiveEffectiveTrades(database);
     await database
-      .update(importRunTarget)
+      .update(runTarget)
       .set({
         state: "completed",
         outcome: "enriched",
@@ -1548,8 +1539,8 @@ export async function overwriteProductEnrichment(
       })
       .where(
         and(
-          eq(importRunTarget.runId, scope.public.runId),
-          eq(importRunTarget.productId, resolvedProductId),
+          eq(runTarget.runId, scope.public.runId),
+          eq(runTarget.productId, resolvedProductId),
         ),
       );
     return overwriteProductEnrichmentOut.parse({
@@ -1569,18 +1560,18 @@ export async function purchaseImportOperationStatus(
   const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
   const [operation] = await getDb(db)
     .select({
-      kind: importRunOperation.kind,
-      state: importRunOperation.state,
-      result: importRunOperation.result,
-      error: importRunOperation.error,
-      startedAt: importRunOperation.startedAt,
-      completedAt: importRunOperation.completedAt,
+      kind: runOperation.kind,
+      state: runOperation.state,
+      result: runOperation.result,
+      error: runOperation.error,
+      startedAt: runOperation.startedAt,
+      completedAt: runOperation.completedAt,
     })
-    .from(importRunOperation)
+    .from(runOperation)
     .where(
       and(
-        eq(importRunOperation.runId, scope.public.runId),
-        eq(importRunOperation.operationId, input._runExecution.operationId),
+        eq(runOperation.runId, scope.public.runId),
+        eq(runOperation.operationId, input._runExecution.operationId),
       ),
     )
     .limit(1);

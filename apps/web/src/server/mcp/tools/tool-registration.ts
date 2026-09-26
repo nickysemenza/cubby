@@ -1,5 +1,5 @@
 import { mcpAppResourceUriForTool } from "@cubby/mcp-apps/metadata";
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import type {
   McpServer,
@@ -14,7 +14,7 @@ import { z } from "zod";
 
 import { scheduleCalendarFeedDirty } from "~/server/calendar/client";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
-import { importRun } from "~/server/db/schema";
+import { run as runTable } from "~/server/db/schema";
 import { toPublicErrorPayload } from "~/server/errors/app-error";
 import {
   errorReportingHeaders,
@@ -28,7 +28,7 @@ import {
   trustedPurchaseAgent,
 } from "~/server/mcp/purchase-agent-protocol";
 import {
-  assertImportRunCapabilityById,
+  assertRunCapabilityById,
   capabilityForPurchaseAgentTool,
 } from "~/server/purchase-import/capabilities";
 import type { ReadPolicy } from "~/server/read-policy";
@@ -331,7 +331,7 @@ export function registerMcpTool<
           );
           if (capability) {
             const parsedKernel = getEntityKernelContext(preparedExtra);
-            await assertImportRunCapabilityById(
+            await assertRunCapabilityById(
               parsedKernel.db,
               trusted.runId,
               capability,
@@ -348,9 +348,9 @@ export function registerMcpTool<
             .parse(params)._runExecution;
           const parsedKernel = getEntityKernelContext(preparedExtra);
           const [delegatedRun] = await getDb(parsedKernel.db)
-            .select({ id: importRun.id })
-            .from(importRun)
-            .where(eq(importRun.id, importRunId.parse(trusted.runId)))
+            .select({ id: runTable.id })
+            .from(runTable)
+            .where(eq(runTable.id, runEntityId.parse(trusted.runId)))
             .limit(1);
           if (delegatedRun?.id !== execution.runId)
             throw new Error(

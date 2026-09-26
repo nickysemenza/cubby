@@ -687,10 +687,10 @@ export default defineEntity({
         },
       },
       {
-        columnId: "importRunId",
+        columnId: "runId",
         kind: "idMulti",
         placeholder: "Filter by import run...",
-        brandRef: { entity: "importRun" },
+        brandRef: { entity: "run" },
         urlOnly: true,
       },
       {

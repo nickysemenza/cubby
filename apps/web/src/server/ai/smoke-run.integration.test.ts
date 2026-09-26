@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   aiAnalysis,
-  importFinding,
-  importRun,
+  runFinding,
+  run as runTable,
   orderMail,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -70,10 +70,10 @@ describe("AI smoke dispatch", () => {
       runShortcode: expect.any(String),
     });
     const runs = await getDb(ctx.db)
-      .select({ shortcode: importRun.shortcode })
-      .from(importRun);
+      .select({ shortcode: runTable.shortcode })
+      .from(runTable);
     expect(runs).toEqual([{ shortcode: attempt.runShortcode }]);
-    for (const table of [orderMail, importFinding, aiAnalysis]) {
+    for (const table of [orderMail, runFinding, aiAnalysis]) {
       expect(await getDb(ctx.db).select({ id: table.id }).from(table)).toEqual(
         [],
       );

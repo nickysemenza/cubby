@@ -28,7 +28,7 @@ import {
   aiAnalysis,
   cookbook,
   image,
-  importRunTarget,
+  runTarget,
   vendor,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -78,7 +78,7 @@ export interface ImportImageRow {
  * run resolves to that same target image first, so re-selecting the same
  * photo within one run always reuses the same row instead of racing the
  * "newest globally uploaded match" pick into a second Image with identical
- * bytes — which `ImportRunTarget`'s one-target-per-image constraint would
+ * bytes — which `RunTarget`'s one-target-per-image constraint would
  * then see as a distinct target, not the no-op re-selection it is.
  */
 export async function findReusableImagesBySha256(
@@ -93,16 +93,10 @@ export async function findReusableImagesBySha256(
   if (runId) {
     const targeted = await getDb(db)
       .select({ shortcode: image.shortcode, sha256: image.sha256 })
-      .from(importRunTarget)
-      .innerJoin(
-        image,
-        and(eq(image.id, importRunTarget.imageId), notDeleted(image)),
-      )
+      .from(runTarget)
+      .innerJoin(image, and(eq(image.id, runTarget.imageId), notDeleted(image)))
       .where(
-        and(
-          eq(importRunTarget.runId, runId),
-          inArray(image.sha256, uniqueHashes),
-        ),
+        and(eq(runTarget.runId, runId), inArray(image.sha256, uniqueHashes)),
       );
     for (const row of targeted) {
       if (row.sha256 && !reusable.has(row.sha256)) {

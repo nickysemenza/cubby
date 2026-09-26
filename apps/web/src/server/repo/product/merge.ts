@@ -39,8 +39,8 @@ import {
   device,
   entityAttachment,
   expense,
-  importRunEvidence,
-  importRunTarget,
+  runEvidence,
+  runTarget,
   ingredient,
   inventoryEntry,
   location,
@@ -89,7 +89,7 @@ import { markProductConversionCoverageInputStale } from "./conversion-coverage";
 import { ensureSlotPrimaries } from "./update-helpers";
 
 export const PRODUCT_MERGE_EDGE_POLICY = {
-  "ImportRunTarget.productId": {
+  "RunTarget.productId": {
     code: "repoint-targeted-import-history",
     effect: "repoint",
     description: "Targeted enrichment history follows the surviving Product.",
@@ -1682,33 +1682,31 @@ export const mergeProducts = async (
     // same run; re-pointing all rows at once would violate the partial unique
     // `(runId, productId)` index.
     const targetedRuns = await tx
-      .select({ id: importRunTarget.id, runId: importRunTarget.runId })
-      .from(importRunTarget)
-      .where(inArray(importRunTarget.productId, plan.loserIds));
+      .select({ id: runTarget.id, runId: runTarget.runId })
+      .from(runTarget)
+      .where(inArray(runTarget.productId, plan.loserIds));
     for (const target of targetedRuns) {
       const [existing] = await tx
-        .select({ id: importRunTarget.id })
-        .from(importRunTarget)
+        .select({ id: runTarget.id })
+        .from(runTarget)
         .where(
           and(
-            eq(importRunTarget.runId, target.runId),
-            eq(importRunTarget.productId, keepId),
+            eq(runTarget.runId, target.runId),
+            eq(runTarget.productId, keepId),
           ),
         )
         .limit(1);
       if (existing) {
         await tx
-          .update(importRunEvidence)
+          .update(runEvidence)
           .set({ targetId: existing.id })
-          .where(eq(importRunEvidence.targetId, target.id));
-        await tx
-          .delete(importRunTarget)
-          .where(eq(importRunTarget.id, target.id));
+          .where(eq(runEvidence.targetId, target.id));
+        await tx.delete(runTarget).where(eq(runTarget.id, target.id));
       } else {
         await tx
-          .update(importRunTarget)
+          .update(runTarget)
           .set({ productId: keepId, updatedAt: new Date() })
-          .where(eq(importRunTarget.id, target.id));
+          .where(eq(runTarget.id, target.id));
       }
     }
     await logAuditEntries(

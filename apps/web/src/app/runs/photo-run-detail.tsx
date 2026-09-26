@@ -8,7 +8,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Progress } from "~/components/ui/progress";
 import { StatusText } from "~/components/ui/status-text";
-import type { ImportRunDetail } from "~/contracts/run.contract";
+import type { RunDetail } from "~/contracts/run.contract";
 import { photoImport } from "~/entities/run.functions";
 
 import { PhotoGroupReview, usePhotoRunReview } from "./photo-group-review";
@@ -18,7 +18,7 @@ function PhotoRunProgress({
   review,
   children,
 }: {
-  run: ImportRunDetail;
+  run: RunDetail;
   review?: PhotoRunReview;
   children?: ReactNode;
 }) {
@@ -123,7 +123,7 @@ function groupingHint(pending: number, analyzing: boolean) {
 /** The photo-inventory counterpart of the purchase-agent run workflow: the
  * agent's proposed item groups to review and every run photo, rather than an
  * agent transcript. */
-export function PhotoImportRunView({ run }: { run: ImportRunDetail }) {
+export function PhotoImportRunView({ run }: { run: RunDetail }) {
   const review = usePhotoRunReview(run.publicId, run.status);
   const autoStartAttempted = useRef(false);
   const start = useMutation(photoImport.startGrouping.mutationOptions());

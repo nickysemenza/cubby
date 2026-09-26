@@ -1,7 +1,7 @@
 import {
   imageId as parseImageId,
-  importRunId as parseImportRunId,
-  importRunShortcode,
+  runEntityId as parseRunId,
+  runShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -11,22 +11,22 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { imageProcessingJob } from "~/server/db/image-processing-schema";
-import { aiUsage, image, importRun, importRunTarget } from "~/server/db/schema";
+import { aiUsage, image, run as runTable, runTarget } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
 import { registerPhotoImportTools } from "~/server/mcp/tools/photo-import.tools";
 import { getDb } from "~/server/repo/database-helpers";
 import { updateImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
-import { getImportRunByShortcode } from "~/server/repo/import-run";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
+import { getRunByShortcode } from "~/server/repo/run";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { productionPhotoImportCommitPorts } from "~/server/services/photo-import-commit.service";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
-  controlImportRun,
-  finalizePhotoImportRun,
-  loadImportRunDetail,
+  controlRun,
+  finalizePhotoRun,
+  loadRunDetail,
   startPhotoInventoryCoordinator,
   startPhotoInventoryRun,
 } from "./run-service";
@@ -56,7 +56,7 @@ describe("photo import finalize", () => {
     const run = await startPhotoInventoryRun(ctx.db, {
       actorUserId: ctx.actor.userId,
     });
-    return { ...run, publicId: importRunShortcode.parse(run.publicId) };
+    return { ...run, publicId: runShortcode.parse(run.publicId) };
   };
 
   it("gives the agent a bounded run and owner read through MCP", async () => {
@@ -94,7 +94,7 @@ describe("photo import finalize", () => {
         sha256: String(position).repeat(64),
       });
       await getDb(ctx.db)
-        .insert(importRunTarget)
+        .insert(runTarget)
         .values({
           runId: run.id,
           imageId: parseImageId.parse(photo.id),
@@ -178,7 +178,7 @@ describe("photo import finalize", () => {
       sha256: "e".repeat(64),
     });
     await getDb(ctx.db)
-      .insert(importRunTarget)
+      .insert(runTarget)
       .values({
         runId: original.id,
         imageId: parseImageId.parse(photo.id),
@@ -187,16 +187,16 @@ describe("photo import finalize", () => {
         targetFingerprint: "e".repeat(64),
       });
     await getDb(ctx.db)
-      .update(importRun)
+      .update(runTable)
       .set({
         status: "completed",
         startedAt: new Date("2026-09-20T08:00:00.000Z"),
         endedAt: new Date("2026-09-20T14:38:55.500Z"),
       })
-      .where(eq(importRun.id, original.id));
-    expect(
-      (await getImportRunByShortcode(ctx.db, original.publicId))?.wallTime,
-    ).toBe("6h 39m");
+      .where(eq(runTable.id, original.id));
+    expect((await getRunByShortcode(ctx.db, original.publicId))?.wallTime).toBe(
+      "6h 39m",
+    );
     await getDb(ctx.db).insert(aiUsage).values({
       runId: original.id,
       feature: "purchase_import_agent",
@@ -205,11 +205,11 @@ describe("photo import finalize", () => {
       operation: "flue.photo_inventory",
       durationMs: 3_200,
     });
-    expect(
-      (await loadImportRunDetail(ctx.db, original.publicId)).agentModelMs,
-    ).toBe(3_200);
+    expect((await loadRunDetail(ctx.db, original.publicId)).agentModelMs).toBe(
+      3_200,
+    );
 
-    const restarted = await controlImportRun(ctx.db, ctx.actor, {
+    const restarted = await controlRun(ctx.db, ctx.actor, {
       runPublicId: original.publicId,
       action: "restart",
     });
@@ -220,23 +220,21 @@ describe("photo import finalize", () => {
     if (!("successorRunId" in restarted)) throw new Error("Missing new run");
     const [newRun] = await getDb(ctx.db)
       .select({
-        predecessorRunId: importRun.predecessorRunId,
-        dispatchEventId: importRun.dispatchEventId,
+        predecessorRunId: runTable.predecessorRunId,
+        dispatchEventId: runTable.dispatchEventId,
       })
-      .from(importRun)
-      .where(
-        eq(importRun.id, parseImportRunId.parse(restarted.successorRunId)),
-      );
+      .from(runTable)
+      .where(eq(runTable.id, parseRunId.parse(restarted.successorRunId)));
     expect(newRun?.predecessorRunId).toBe(original.id);
     expect(newRun?.dispatchEventId).toBeTruthy();
     const targets = await getDb(ctx.db)
       .select({
-        runId: importRunTarget.runId,
-        imageId: importRunTarget.imageId,
-        state: importRunTarget.state,
+        runId: runTarget.runId,
+        imageId: runTarget.imageId,
+        state: runTarget.state,
       })
-      .from(importRunTarget)
-      .where(eq(importRunTarget.imageId, parseImageId.parse(photo.id)));
+      .from(runTarget)
+      .where(eq(runTarget.imageId, parseImageId.parse(photo.id)));
     expect(targets).toEqual(
       expect.arrayContaining([
         { runId: original.id, imageId: photo.id, state: "completed" },
@@ -263,7 +261,7 @@ describe("photo import finalize", () => {
       verifiedAt: new Date(),
     });
 
-    const result = await finalizePhotoImportRun(
+    const result = await finalizePhotoRun(
       ctx.db,
       {
         runId: run.publicId,
@@ -297,12 +295,12 @@ describe("photo import finalize", () => {
 
     const targets = await getDb(ctx.db)
       .select({
-        state: importRunTarget.state,
-        position: importRunTarget.position,
-        targetFingerprint: importRunTarget.targetFingerprint,
+        state: runTarget.state,
+        position: runTarget.position,
+        targetFingerprint: runTarget.targetFingerprint,
       })
-      .from(importRunTarget)
-      .where(eq(importRunTarget.imageId, parseImageId.parse(staged.id)));
+      .from(runTarget)
+      .where(eq(runTarget.imageId, parseImageId.parse(staged.id)));
     expect(targets).toEqual([
       { state: "pending", position: 0, targetFingerprint: sha256 },
     ]);
@@ -343,7 +341,7 @@ describe("photo import finalize", () => {
       ],
     };
 
-    const first = await finalizePhotoImportRun(
+    const first = await finalizePhotoRun(
       ctx.db,
       input,
       ctx.actor,
@@ -351,7 +349,7 @@ describe("photo import finalize", () => {
     );
     expect(first.finalized).toEqual([staged.shortcode]);
 
-    const replay = await finalizePhotoImportRun(
+    const replay = await finalizePhotoRun(
       ctx.db,
       input,
       ctx.actor,
@@ -361,21 +359,21 @@ describe("photo import finalize", () => {
     expect(replay.alreadyFinalized).toEqual([staged.shortcode]);
 
     const targets = await getDb(ctx.db)
-      .select({ id: importRunTarget.id })
-      .from(importRunTarget)
-      .where(eq(importRunTarget.imageId, parseImageId.parse(staged.id)));
+      .select({ id: runTarget.id })
+      .from(runTarget)
+      .where(eq(runTarget.imageId, parseImageId.parse(staged.id)));
     expect(targets).toHaveLength(1);
   });
 
   it("refuses a completed run", async () => {
     const run = await startRun();
     await getDb(ctx.db)
-      .update(importRun)
+      .update(runTable)
       .set({ status: "completed" })
-      .where(eq(importRun.shortcode, run.publicId));
+      .where(eq(runTable.shortcode, run.publicId));
 
     await expect(
-      finalizePhotoImportRun(
+      finalizePhotoRun(
         ctx.db,
         {
           runId: run.publicId,
@@ -396,7 +394,7 @@ describe("photo import finalize", () => {
 
   it("refuses a non-photo-inventory run", async () => {
     const party = await createMember();
-    const otherRun = await insertWithShortcode(ctx.db, "importRun", {
+    const otherRun = await insertWithShortcode(ctx.db, "run", {
       ledgerPartyId: party.id,
       actorUserId: ctx.actor.userId,
       actorName: "Finalize test actor",
@@ -409,10 +407,10 @@ describe("photo import finalize", () => {
     });
 
     await expect(
-      finalizePhotoImportRun(
+      finalizePhotoRun(
         ctx.db,
         {
-          runId: importRunShortcode.parse(otherRun.shortcode),
+          runId: runShortcode.parse(otherRun.shortcode),
           images: [
             {
               imageId: parseShortcodeFor("image", "IMG-4K7M"),

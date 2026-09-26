@@ -1,4 +1,4 @@
-import type { ImportRunId, RecipeId } from "@cubby/schemas/identifiers";
+import type { RunId, RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import {
   type RecipeFlowAiPlan,
@@ -271,7 +271,7 @@ async function recordFlowCacheHit(
   db: Database,
   recipeId: RecipeId,
   candidate: FlowCandidate,
-  runId: ImportRunId,
+  runId: RunId,
   ports: RecipeFlowPorts,
 ): Promise<void> {
   const feature = FLOW_FEATURES.find(
@@ -302,7 +302,7 @@ async function persistFlowArtifact(
 export async function generateRecipeFlow(
   db: Database,
   input: RecipeFlowGenerateRequest,
-  runId: ImportRunId,
+  runId: RunId,
   ports: RecipeFlowPorts = productionRecipeFlowPorts,
 ): Promise<RecipeFlowArtifact> {
   const [recipe, candidates] = await Promise.all([

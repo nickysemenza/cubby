@@ -31,8 +31,8 @@ import { financialAccount } from "~/server/db/schema";
 import { registerContractTools } from "~/server/mcp/tools/contract-tools";
 import { registerPurchaseTools } from "~/server/mcp/tools/purchase.tools";
 import {
-  startOrResumeImportRun,
-  startTargetedImportRun,
+  startOrResumeRun,
+  startTargetedRun,
 } from "~/server/purchase-import/run-service";
 import { classifyOrderCapture } from "~/server/purchase-import/order-list";
 import { parseEntityId } from "@cubby/schemas/identifiers";
@@ -474,7 +474,7 @@ async function reviewLateChargeInBrowser(input: {
       });
       const page = await context.newPage();
       try {
-        const importRuns = page.waitForResponse(
+        const runsResponsePromise = page.waitForResponse(
           (response) =>
             response.url().endsWith(BROWSER_OPERATION_PATH) &&
             (response.request().postData() ?? "").includes('"run.history"'),
@@ -482,7 +482,7 @@ async function reviewLateChargeInBrowser(input: {
         await page.goto(`${input.origin}/purchases/${input.purchaseId}`);
         // The purchase import run that created this Purchase must list; a
         // response-schema drift here once turned the slot into a bare 500.
-        const runsResponse = await importRuns;
+        const runsResponse = await runsResponsePromise;
         expect(runsResponse.status()).toBe(200);
         const result = unparsedStartOperationResultSchema.parse(
           superjson.deserialize(
@@ -695,7 +695,7 @@ async function importSyntheticPurchase(
     vendorId: vendor.id,
     ledgerPartyId: parseEntityId("ledgerParty", memberId),
   });
-  const run = await startOrResumeImportRun(db, {
+  const run = await startOrResumeRun(db, {
     ledgerPartyId: parseEntityId("ledgerParty", memberId),
     vendorAccountId: account.id,
     trigger: "manual",
@@ -872,7 +872,7 @@ async function reimportInNewRunAndAssertNoOp(
     photoProduct.shortcode,
     purchaseProduct.shortcode,
   );
-  const run = await startOrResumeImportRun(db, {
+  const run = await startOrResumeRun(db, {
     ledgerPartyId: parseEntityId("ledgerParty", memberId),
     vendorAccountId: parseEntityId("vendorAccount", vendorAccountId),
     trigger: "manual",
@@ -1105,7 +1105,7 @@ async function commitDuplicateOrderHistoryCapture(
   purchaseProduct: { shortcode: string },
 ) {
   const evidence = await readSyntheticRetailerEvidence();
-  const run = await startOrResumeImportRun(db, {
+  const run = await startOrResumeRun(db, {
     ledgerPartyId: parseEntityId("ledgerParty", memberId),
     vendorAccountId: parseEntityId("vendorAccount", vendorAccountId),
     trigger: "manual",
@@ -1253,7 +1253,7 @@ async function runForgeWearTraps(
     purchaseProduct.shortcode,
   );
   const duplicateFinding = await pool.query<{ count: string }>(
-    `SELECT count(*)::text AS count FROM "ImportFinding"
+    `SELECT count(*)::text AS count FROM "RunFinding"
      WHERE "targetType" = 'purchase' AND "targetId" = $1 AND kind = 'duplicate_lines'`,
     [facts.purchases[0]?.id ?? null],
   );
@@ -1331,7 +1331,7 @@ async function runProductEnrichmentCommitAndOverwrite(
     db,
     purchaseProduct.id,
   );
-  const commitRun = await startTargetedImportRun(db, {
+  const commitRun = await startTargetedRun(db, {
     ledgerPartyId: parseEntityId("ledgerParty", memberId),
     purpose: "product_enrichment",
     vendorId: parseEntityId("vendor", vendorId),
@@ -1394,7 +1394,7 @@ async function runProductEnrichmentCommitAndOverwrite(
     db,
     purchaseProduct.id,
   );
-  const overwriteRun = await startTargetedImportRun(db, {
+  const overwriteRun = await startTargetedRun(db, {
     ledgerPartyId: parseEntityId("ledgerParty", memberId),
     purpose: "product_enrichment",
     vendorId: parseEntityId("vendor", vendorId),

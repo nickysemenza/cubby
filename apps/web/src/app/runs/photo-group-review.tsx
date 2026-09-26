@@ -65,9 +65,9 @@ import { photoImport } from "~/entities/run.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import {
-  IMPORT_RUN_TARGET_STATE_LABEL,
-  IMPORT_RUN_TARGET_STATE_VARIANT,
-} from "~/lib/import-run-target-state";
+  RUN_TARGET_STATE_LABEL,
+  RUN_TARGET_STATE_VARIANT,
+} from "~/lib/run-target-state";
 
 import {
   mergeGroups,
@@ -1301,11 +1301,9 @@ function PhotoTable({
                   <TableCell>
                     <Stack gap="tight">
                       <Badge
-                        variant={
-                          IMPORT_RUN_TARGET_STATE_VARIANT[photo.targetState]
-                        }
+                        variant={RUN_TARGET_STATE_VARIANT[photo.targetState]}
                       >
-                        {IMPORT_RUN_TARGET_STATE_LABEL[photo.targetState]}
+                        {RUN_TARGET_STATE_LABEL[photo.targetState]}
                       </Badge>
                       {groupByImage.get(photo.id) ? (
                         <span className="max-w-40 truncate font-mono text-2xs text-muted-foreground">

@@ -2,7 +2,7 @@ import type {
   FieldSuggestionsInput,
   FieldSuggestionsOut,
 } from "@cubby/schemas/ai";
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
@@ -24,7 +24,7 @@ import { suggestFields } from "./suggest-fields";
 // vocabulary/rules, no DB) or a `ports.registry` fake, and label resolution
 // goes through `ports.resolveLabels` — nothing in this file ever touches `db`.
 const fakeDb = {} as Database;
-const fixtureRunId = importRunId.parse("00000000-0000-4000-8000-000000000001");
+const fixtureRunId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
 type JevInput = Parameters<JevPort>[0];
 

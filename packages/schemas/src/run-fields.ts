@@ -1,10 +1,10 @@
 import { z } from "zod";
 
 /**
- * Cycle-safe enums for the `importRun` declaration. `purchase-import.ts`
+ * Cycle-safe enums for the `run` declaration. `purchase-import.ts`
  * re-exports them so existing consumers keep their import paths.
  */
-export const importRunTrigger = z.enum([
+export const runTrigger = z.enum([
   "foreground",
   "discovery",
   "manual",
@@ -13,7 +13,7 @@ export const importRunTrigger = z.enum([
   // and never blocks ledger-party delete/merge.
   "ephemeral",
 ]);
-export const importRunStatus = z.enum([
+export const runStatus = z.enum([
   "running",
   "paused_auth",
   "paused_offline",
@@ -23,7 +23,7 @@ export const importRunStatus = z.enum([
   "failed",
   "dispatch_failed",
 ]);
-export const importRunPurpose = z.enum([
+export const runPurpose = z.enum([
   "account_sync",
   "purchase_validation",
   "product_enrichment",
@@ -36,4 +36,4 @@ export const importRunPurpose = z.enum([
   "file_import",
   "legacy",
 ]);
-export type ImportRunPurpose = z.infer<typeof importRunPurpose>;
+export type RunPurpose = z.infer<typeof runPurpose>;

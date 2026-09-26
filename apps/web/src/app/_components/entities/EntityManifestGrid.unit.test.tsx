@@ -94,10 +94,10 @@ describe("EntityManifestGrid mega table: kernel action condensation", () => {
   });
 
   it("renders a fixed-position letter mask for an entity missing some CRUD actions", () => {
-    // `importRun` declares only get and list — read-only, no create/update/delete.
-    renderGrid({ selected: "importRun", onSelect: noop });
+    // `run` declares only get and list — read-only, no create/update/delete.
+    renderGrid({ selected: "run", onSelect: noop });
 
-    const row = findEntityRow("importRun");
+    const row = findEntityRow("run");
     expect(within(row).getByText("·R··")).toBeInTheDocument();
   });
 
@@ -137,7 +137,7 @@ describe("EntityManifestGrid mega table: relations sub-row", () => {
 
   it.each([
     ["product", "images", "image"],
-    ["vendor", "runs", "importRun"],
+    ["vendor", "runs", "run"],
   ] as const)(
     "shows %s.%s as a custom list when %s has a separate list source",
     (entity, relation, target) => {

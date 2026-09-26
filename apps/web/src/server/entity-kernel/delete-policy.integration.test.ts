@@ -42,7 +42,7 @@ import {
   INCOMING_EDGES,
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
-import { importRun, importSourceClaim } from "~/server/db/schema";
+import { run as runTable, importSourceClaim } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import {
   ENTITY_KERNEL_ENTITIES,
@@ -81,7 +81,7 @@ const UNCOVERED_EDGES: readonly string[] = [
   "location Planting.locationId",
   "meal MealFoodEntry.mealId",
   "meal MealRecipePortion.mealId",
-  "ledgerParty ImportFinding.ledgerPartyId",
+  "ledgerParty RunFinding.ledgerPartyId",
   "ledgerParty ImportHunt.ledgerPartyId",
   "ledgerParty ExpenseAttribution.ledgerPartyId",
   "ledgerParty InventoryEntry.ownerLedgerPartyId",
@@ -101,7 +101,7 @@ const UNCOVERED_EDGES: readonly string[] = [
   "image ImportPreparedOrder.screenshotImageId",
   "image ImportHunt.receiptImageId",
   "image OrderMailAttachment.imageId",
-  "vendorAccount ImportRunTarget.vendorAccountId",
+  "vendorAccount RunTarget.vendorAccountId",
   "vendorAccount ImportHunt.vendorAccountId",
   "productCategory PhotoGroupProposal.productCreateCategoryId",
 ];
@@ -496,9 +496,9 @@ async function seedImportSourceClaim(
   if (!purchaseCode || !partyCode) return;
   const { actorContext } = buildKernelContext(db);
   const [run] = await getDb(db)
-    .insert(importRun)
+    .insert(runTable)
     .values({
-      shortcode: generateShortcode("importRun"),
+      shortcode: generateShortcode("run"),
       actorUserId: actorContext.userId,
       actorName: "Delete policy",
       actorEmail: "delete-policy@example.test",
@@ -506,7 +506,7 @@ async function seedImportSourceClaim(
       trigger: "manual",
       status: "completed",
     })
-    .returning({ id: importRun.id });
+    .returning({ id: runTable.id });
   await getDb(db)
     .insert(importSourceClaim)
     .values({

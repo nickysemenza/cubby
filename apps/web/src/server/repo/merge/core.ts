@@ -15,7 +15,7 @@ import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgeKey } from "~/server/db/entity-incoming-edges";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
-import { importFinding } from "~/server/db/schema";
+import { runFinding } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import type { AuditEntryInput } from "~/server/repo/audit-log";
 import { logAuditEntries } from "~/server/repo/audit-log";
@@ -156,47 +156,47 @@ export const finalizeMerge = async <E extends RemovableEntity>(
   if (entity === "purchase" || entity === "expense" || entity === "product") {
     const findings = await tx
       .select({
-        id: importFinding.id,
-        ledgerPartyId: importFinding.ledgerPartyId,
-        kind: importFinding.kind,
-        evidenceFingerprint: importFinding.evidenceFingerprint,
-        status: importFinding.status,
+        id: runFinding.id,
+        ledgerPartyId: runFinding.ledgerPartyId,
+        kind: runFinding.kind,
+        evidenceFingerprint: runFinding.evidenceFingerprint,
+        status: runFinding.status,
       })
-      .from(importFinding)
+      .from(runFinding)
       .where(
         and(
-          eq(importFinding.targetType, entity),
-          inArray(importFinding.targetId, ids),
+          eq(runFinding.targetType, entity),
+          inArray(runFinding.targetId, ids),
         ),
       );
     for (const finding of findings) {
       const [collision] =
         finding.status === "open"
           ? await tx
-              .select({ id: importFinding.id })
-              .from(importFinding)
+              .select({ id: runFinding.id })
+              .from(runFinding)
               .where(
                 and(
-                  eq(importFinding.ledgerPartyId, finding.ledgerPartyId),
-                  eq(importFinding.targetType, entity),
-                  eq(importFinding.targetId, keepId),
-                  eq(importFinding.kind, finding.kind),
+                  eq(runFinding.ledgerPartyId, finding.ledgerPartyId),
+                  eq(runFinding.targetType, entity),
+                  eq(runFinding.targetId, keepId),
+                  eq(runFinding.kind, finding.kind),
                   eq(
-                    importFinding.evidenceFingerprint,
+                    runFinding.evidenceFingerprint,
                     finding.evidenceFingerprint,
                   ),
-                  eq(importFinding.status, "open"),
+                  eq(runFinding.status, "open"),
                 ),
               )
               .limit(1)
           : [];
       if (collision) {
-        await tx.delete(importFinding).where(eq(importFinding.id, finding.id));
+        await tx.delete(runFinding).where(eq(runFinding.id, finding.id));
       } else {
         await tx
-          .update(importFinding)
+          .update(runFinding)
           .set({ targetId: keepId, updatedAt: new Date() })
-          .where(eq(importFinding.id, finding.id));
+          .where(eq(runFinding.id, finding.id));
       }
     }
   }

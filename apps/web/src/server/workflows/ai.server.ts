@@ -15,7 +15,7 @@ import type {
 import {
   parseEntityId,
   type IngredientId,
-  type ImportRunId,
+  type RunId,
   type LocationId,
 } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
@@ -66,7 +66,7 @@ import {
 type LocationIdInput = z.output<typeof aiLocationIdInput>;
 /** The request's `ai_action` run; `ai-browser.server.ts` mints it once via
  * `ensureRun` before calling in. */
-type AiActionRunContext = { db: Database; runId: ImportRunId };
+type AiActionRunContext = { db: Database; runId: RunId };
 export const describeLocationWorkflow = bindWorkflow(
   workflow<AiActionRunContext, LocationIdInput>("ai.describeLocation")
     .call("locationId", async ({ context }, { input }) =>
@@ -218,7 +218,7 @@ type EnrichmentPrecomputeInput = z.output<
 >;
 type EnrichmentPrecomputeItem = EnrichmentPrecomputeInput["items"][number] & {
   ingredientId: IngredientId;
-  runId: ImportRunId;
+  runId: RunId;
 };
 const skippedUsda: EnrichmentProposal["usda"] = {
   food: null,
@@ -362,7 +362,7 @@ export const summarizeAiUsageWorkflow = defineWorkflowOperation(
 export const listRunAiUsageWorkflow = defineWorkflowOperation(
   "ai.runUsage",
   async (db: Database, input: z.output<typeof aiRunUsageInput>) =>
-    listAiUsageForRun(db, await resolveOrThrow(db, "importRun", input.runId), {
+    listAiUsageForRun(db, await resolveOrThrow(db, "run", input.runId), {
       cursor: input.cursor,
       limit: input.limit,
     }),

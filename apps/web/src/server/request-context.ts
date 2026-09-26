@@ -1,7 +1,7 @@
 import { type AuditChannel, buildActorContext } from "@cubby/schemas/context";
 import {
   type DeviceId,
-  type ImportRunId,
+  type RunId,
   type UserId,
   userId,
 } from "@cubby/schemas/identifiers";
@@ -79,7 +79,7 @@ export type RequestActor = {
   /** The MCP OAuth client (JWT `azp`). */
   oauthClientId?: string | null;
   /** A run the credential is scoped to, e.g. Flue's delegation token. */
-  runId?: ImportRunId | null;
+  runId?: RunId | null;
 };
 
 // Positive hits only: a device registered after a miss must resolve next time.

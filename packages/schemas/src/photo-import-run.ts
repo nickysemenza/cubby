@@ -2,19 +2,19 @@ import { z } from "zod";
 
 import {
   imageShortcode,
-  importRunShortcode,
+  runShortcode,
   inventoryShortcode,
   ledgerPartyShortcode,
   locationShortcode,
   productCategoryShortcode,
   productShortcode,
 } from "./identifier-fields";
-import { importRunStatus } from "./import-run-fields";
+import { runStatus } from "./run-fields";
 import { purchaseImportRunExecution } from "./purchase-import";
 import { productImagePurpose } from "./image";
 import { imageProcessingJobState } from "./image-processing";
 import { inventoryOwnershipMode } from "./inventory-ownership";
-import { importRunTargetState } from "./purchase-import";
+import { runTargetState } from "./purchase-import";
 import { productVariantComparison } from "./product-variant-comparison";
 
 const commitPhotoGroupImage = z.object({
@@ -79,7 +79,7 @@ export type PhotoGroupStoredInventory = Omit<
 const PROPOSAL_IMAGE_LIMIT = 50;
 
 const commitPhotoGroupInputBase = z.object({
-  runId: importRunShortcode,
+  runId: runShortcode,
   groupKey: z.string().trim().min(1).max(200),
   // No `.min(1)`: a group may be skip-only (every image rejected, none
   // attached) — the cross-field check below requires only that `images` and
@@ -145,11 +145,11 @@ export type CommitPhotoGroupOutcome = z.infer<typeof commitPhotoGroupOutcome>;
 
 const commitPhotoGroupOutputImage = z.object({
   id: imageShortcode,
-  state: importRunTargetState,
+  state: runTargetState,
 });
 
 export const commitPhotoGroupOutput = z.object({
-  runId: importRunShortcode,
+  runId: runShortcode,
   groupKey: z.string().trim().min(1).max(200),
   outcome: commitPhotoGroupOutcome,
   productId: productShortcode.optional(),
@@ -158,7 +158,7 @@ export const commitPhotoGroupOutput = z.object({
   conflict: z
     .object({ existingProductIds: z.array(productShortcode) })
     .optional(),
-  runStatus: importRunStatus,
+  runStatus: runStatus,
 });
 export type CommitPhotoGroupOutput = z.infer<typeof commitPhotoGroupOutput>;
 
@@ -198,7 +198,7 @@ export type PhotoGroupProposalGroup = z.infer<typeof photoGroupProposalGroup>;
 
 export const proposePhotoGroupsInput = z
   .object({
-    runId: importRunShortcode,
+    runId: runShortcode,
     _runExecution: purchaseImportRunExecution.optional(),
     groups: z.array(photoGroupProposalGroup).max(200).default([]),
     /** Proposed groups to drop entirely (their images become unassigned). */
@@ -287,8 +287,8 @@ export const photoGroupProposal = z.object({
 export type PhotoGroupProposal = z.infer<typeof photoGroupProposal>;
 
 export const photoGroupProposalList = z.object({
-  runId: importRunShortcode,
-  runStatus: importRunStatus,
+  runId: runShortcode,
+  runStatus: runStatus,
   proposals: z.array(photoGroupProposal),
   /** Pending run images no `proposed` group mentions yet. */
   unassignedImageIds: z.array(imageShortcode),
@@ -302,7 +302,7 @@ export const proposePhotoGroupsOutput = photoGroupProposalList.extend({
 export type ProposePhotoGroupsOutput = z.infer<typeof proposePhotoGroupsOutput>;
 
 export const listPhotoGroupProposalsInput = z.object({
-  runId: importRunShortcode,
+  runId: runShortcode,
 });
 
 export const reviewPhotoGroupsAction = z.discriminatedUnion("action", [
@@ -344,7 +344,7 @@ export type ReviewPhotoGroupsOutput = z.infer<typeof reviewPhotoGroupsOutput>;
 export const photoRunImage = z.object({
   id: imageShortcode,
   position: z.number().int().nullable(),
-  targetState: importRunTargetState,
+  targetState: runTargetState,
   originalUrl: z.string(),
   cutoutUrl: z.string().nullable(),
   /** Current-source subject-lift and description job states; null = never queued. */
@@ -427,7 +427,7 @@ export const photoImportCreateRunInput = z.object({
   notes: z.string().max(2_000).optional(),
 });
 export const photoImportCreateRunOutput = z.object({
-  runId: importRunShortcode,
+  runId: runShortcode,
 });
 
 export const photoImportFinalizeImage = z.object({
@@ -438,7 +438,7 @@ export const photoImportFinalizeImage = z.object({
   height: z.int().positive(),
 });
 export const photoImportFinalizeInput = z.object({
-  runId: importRunShortcode,
+  runId: runShortcode,
   images: z.array(photoImportFinalizeImage).min(1).max(100),
 });
 export const photoImportFinalizeOutput = z.object({

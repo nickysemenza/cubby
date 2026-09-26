@@ -1,20 +1,17 @@
 import { type ActorContext, buildActorContext } from "@cubby/schemas/context";
 import {
-  type ImportRunId,
+  type RunId,
   type UserId,
-  importRunId,
+  runEntityId,
   userId,
 } from "@cubby/schemas/identifiers";
-import {
-  type ImportRunPurpose,
-  importRunStatus,
-} from "@cubby/schemas/import-run-fields";
-import type { ImportRunTrigger } from "@cubby/schemas/purchase-import";
+import type { RunTrigger } from "@cubby/schemas/purchase-import";
+import { type RunPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { importRun, ledgerParty, user } from "~/server/db/schema";
+import { run as runTable, ledgerParty, user } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 /**
@@ -30,14 +27,14 @@ export const systemActor = (): ActorContext =>
  * The run that owns AI usage recorded before every call had a run, and any
  * usage whose run is gone. The reserved run exists in the production database.
  */
-export const LEGACY_RUN_ID: ImportRunId = importRunId.parse(
+export const LEGACY_RUN_ID: RunId = runEntityId.parse(
   "00000000-0000-4000-8000-00000000c0de",
 );
 
 export type EnsureRunInput = {
-  purpose: ImportRunPurpose;
+  purpose: RunPurpose;
   /** `ephemeral` (the default) creates the run already `completed`. */
-  trigger?: ImportRunTrigger;
+  trigger?: RunTrigger;
   /** Groups repeat calls into one run, e.g. one Jev pass per page mount. */
   clientKey?: string;
   /**
@@ -60,7 +57,7 @@ export async function ensureRun(
   db: Database,
   actor: ActorContext,
   input: EnsureRunInput,
-): Promise<ImportRunId> {
+): Promise<RunId> {
   if (actor.runId) return actor.runId;
   const database = getDb(db);
   const trigger = input.trigger ?? "ephemeral";
@@ -68,8 +65,8 @@ export async function ensureRun(
   const snapshot = await actorSnapshot(database, actor.userId);
   const now = new Date();
   const values = {
-    id: importRunId.parse(crypto.randomUUID()),
-    shortcode: generateShortcode("importRun"),
+    id: runEntityId.parse(crypto.randomUUID()),
+    shortcode: generateShortcode("run"),
     // Only import runs carry a member scope. Ephemeral runs have none, so
     // thousands of Jev passes never block a member's delete or merge
     // (`LEDGER_PARTY_*_EDGE_POLICY`); the actor snapshot still names who
@@ -83,9 +80,7 @@ export async function ensureRun(
     actorLedgerPartyKind: snapshot.ledgerPartyKind,
     purpose: input.purpose,
     trigger,
-    status: completed
-      ? importRunStatus.enum.completed
-      : importRunStatus.enum.running,
+    status: completed ? runStatus.enum.completed : runStatus.enum.running,
     startedAt: now,
     endedAt: completed ? now : null,
     channel: actor.channel,
@@ -94,16 +89,16 @@ export async function ensureRun(
     clientKey: input.clientKey ?? null,
     notes: input.notes ?? null,
   };
-  const insert = database.insert(importRun).values(values);
+  const insert = database.insert(runTable).values(values);
   const [row] = input.clientKey
     ? await insert
         .onConflictDoUpdate({
-          target: importRun.clientKey,
-          targetWhere: sql`${importRun.clientKey} IS NOT NULL`,
+          target: runTable.clientKey,
+          targetWhere: sql`${runTable.clientKey} IS NOT NULL`,
           set: { endedAt: now },
         })
-        .returning({ id: importRun.id })
-    : await insert.returning({ id: importRun.id });
+        .returning({ id: runTable.id })
+    : await insert.returning({ id: runTable.id });
   if (!row) throw new Error(`Run for ${input.purpose} was not created`);
   return row.id;
 }
@@ -113,7 +108,7 @@ export async function actorWithRun(
   db: Database,
   actor: ActorContext,
   input: EnsureRunInput,
-): Promise<ActorContext & { runId: ImportRunId }> {
+): Promise<ActorContext & { runId: RunId }> {
   return { ...actor, runId: await ensureRun(db, actor, input) };
 }
 
@@ -121,9 +116,7 @@ export async function actorWithRun(
  * One `file_import` run per cookbook groups its EPUB upsert and recipe
  * imports. Keyed by name because `upsertCookbook` identifies books by name.
  */
-export const cookbookImportRunInput = (
-  cookbookName: string,
-): EnsureRunInput => ({
+export const cookbookRunInput = (cookbookName: string): EnsureRunInput => ({
   purpose: "file_import",
   trigger: "manual",
   status: "completed",

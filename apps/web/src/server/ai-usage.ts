@@ -1,4 +1,4 @@
-import type { ImportRunId } from "@cubby/schemas/identifiers";
+import type { RunId } from "@cubby/schemas/identifiers";
 
 import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
@@ -20,7 +20,7 @@ export type RecordAiUsageInput = {
   feature: string;
   operation: string;
   /** Every AI call belongs to a run; see `ensureRun`. */
-  runId: ImportRunId;
+  runId: RunId;
   jobKind?: string | null;
   jobId?: string | null;
   inputTokens?: number | null;

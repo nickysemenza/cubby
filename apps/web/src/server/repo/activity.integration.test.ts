@@ -14,8 +14,8 @@ import {
   aiAnalysis,
   aiUsage,
   image,
-  importRun,
-  importRunOperation,
+  run as runTable,
+  runOperation,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/runs/ensure-run";
 
@@ -311,9 +311,9 @@ describe("activity image processing projection", () => {
       .update(imageProcessingJob)
       .set({ createdAt: at })
       .where(eq(imageProcessingJob.id, imageJob));
-    const runPublicId = generateShortcode("importRun");
+    const runPublicId = generateShortcode("run");
     const [run] = await getDb(ctx.db)
-      .insert(importRun)
+      .insert(runTable)
       .values({
         shortcode: runPublicId,
         ledgerPartyId: party.id,
@@ -329,10 +329,10 @@ describe("activity image processing projection", () => {
         startedAt: at,
         endedAt: at,
       })
-      .returning({ id: importRun.id });
+      .returning({ id: runTable.id });
     // The real diagnosis, not a placeholder: the feed is the first place an
     // operator looks when a run stalls.
-    await getDb(ctx.db).insert(importRunOperation).values({
+    await getDb(ctx.db).insert(runOperation).values({
       runId: run!.id,
       operationId: "browser-import-orders-1",
       kind: "import_order_evidence",

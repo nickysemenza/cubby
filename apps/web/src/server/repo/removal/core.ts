@@ -61,7 +61,7 @@ import { searchableEntities } from "@cubby/schemas/search";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
-import { dataExceptionRecord, importFinding } from "~/server/db/schema";
+import { dataExceptionRecord, runFinding } from "~/server/db/schema";
 import type { AuditEntryInput } from "~/server/repo/audit-log";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/repo/entity-embedding-cleanup";
@@ -98,7 +98,7 @@ const SEARCHABLE = new Set<string>(searchableEntities);
 const isSearchable = (entity: Entity): entity is SearchableEntity =>
   SEARCHABLE.has(entity);
 
-const isImportFindingTarget = (
+const isRunFindingTarget = (
   entity: Entity,
 ): entity is "purchase" | "expense" | "product" =>
   entity === "purchase" || entity === "expense" || entity === "product";
@@ -179,13 +179,13 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
     .delete(dataExceptionRecord)
     .where(inArray(dataExceptionRecord.entityId, [...ids]));
 
-  if (isImportFindingTarget(entity)) {
+  if (isRunFindingTarget(entity)) {
     await tx
-      .delete(importFinding)
+      .delete(runFinding)
       .where(
         and(
-          eq(importFinding.targetType, entity),
-          inArray(importFinding.targetId, [...ids]),
+          eq(runFinding.targetType, entity),
+          inArray(runFinding.targetId, [...ids]),
         ),
       );
   }

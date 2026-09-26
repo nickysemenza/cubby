@@ -18,7 +18,7 @@ import type {
   FinancialTransactionId,
   GardenEntryId,
   ImageId,
-  ImportRunId,
+  RunId,
   IngredientId,
   LedgerPartyId,
   LedgerTransferId,
@@ -112,7 +112,7 @@ import {
   generatedRecipeColumns,
   generatedTaskColumns,
   generatedVendorColumns,
-  generatedImportRunColumns,
+  generatedRunColumns,
   generatedVendorAccountColumns,
   generatedWishColumns,
   imageRenderStatusEnum,
@@ -1460,9 +1460,7 @@ export const purchase = pgTable(
       vendor: (): AnyPgColumn => vendor.id,
       vendorAccount: (): AnyPgColumn => vendorAccount.id,
     }),
-    importRunId: uuid("importRunId").references(
-      (): AnyPgColumn => importRun.id,
-    ),
+    runId: uuid("runId").references((): AnyPgColumn => run.id),
   },
   (table) => [
     shortcodeUnique("Purchase", table.shortcode),
@@ -1478,7 +1476,7 @@ export const purchase = pgTable(
     index("Purchase_defaultProjectId_idx").on(table.defaultProjectId),
     index("Purchase_vendorId_idx").on(table.vendorId),
     index("Purchase_vendorAccountId_idx").on(table.vendorAccountId),
-    index("Purchase_importRunId_idx").on(table.importRunId),
+    index("Purchase_runId_idx").on(table.runId),
     index("Purchase_date_idx").on(table.date),
     check(
       "Purchase_statedTotal_whole_cent_check",
@@ -1520,10 +1518,10 @@ export const purchaseProduct = pgTable(
 );
 
 /** One durable attempt to discover, fetch, extract, write, and audit evidence. */
-export const importRun = pgTable(
-  "ImportRun",
+export const run = pgTable(
+  "Run",
   {
-    ...generatedImportRunColumns({
+    ...generatedRunColumns({
       ledgerParty: (): AnyPgColumn => ledgerParty.id,
       vendorAccount: (): AnyPgColumn => vendorAccount.id,
       vendor: (): AnyPgColumn => vendor.id,
@@ -1540,8 +1538,8 @@ export const importRun = pgTable(
     actorLedgerPartyName: text("actorLedgerPartyName"),
     actorLedgerPartyKind: text("actorLedgerPartyKind"),
     predecessorRunId: uuid("predecessorRunId")
-      .$type<ImportRunId>()
-      .references((): AnyPgColumn => importRun.id),
+      .$type<RunId>()
+      .references((): AnyPgColumn => run.id),
     /** Stable queue generation; duplicate and late deliveries are fenced to it. */
     dispatchEventId: text("dispatchEventId"),
     agentSessionId: text("agentSessionId"),
@@ -1559,47 +1557,47 @@ export const importRun = pgTable(
     clientKey: text("clientKey"),
   },
   (table) => [
-    shortcodeUnique("ImportRun", table.shortcode),
-    entityIdentityFk("ImportRun", table),
-    index("ImportRun_party_started_idx").on(
+    shortcodeUnique("Run", table.shortcode),
+    entityIdentityFk("Run", table),
+    index("Run_party_started_idx").on(
       table.ledgerPartyId,
       table.startedAt.desc(),
     ),
-    index("ImportRun_vendorAccount_started_idx").on(
+    index("Run_vendorAccount_started_idx").on(
       table.vendorAccountId,
       table.startedAt.desc(),
     ),
     check(
-      "ImportRun_trigger_check",
+      "Run_trigger_check",
       sql`${table.trigger} IN ('foreground', 'discovery', 'manual', 'backfill', 'ephemeral')`,
     ),
     check(
-      "ImportRun_import_party_check",
+      "Run_import_party_check",
       sql`${table.purpose} NOT IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory') OR (${table.ledgerPartyId} IS NOT NULL AND ${table.actorLedgerPartyShortcode} IS NOT NULL)`,
     ),
     check(
-      "ImportRun_channel_check",
+      "Run_channel_check",
       sql`${table.channel} IN ('web', 'api', 'mcp', 'caldav', 'system')`,
     ),
-    uniqueIndex("ImportRun_clientKey_unique")
+    uniqueIndex("Run_clientKey_unique")
       .on(table.clientKey)
       .where(sql`${table.clientKey} IS NOT NULL`),
     check(
-      "ImportRun_status_check",
+      "Run_status_check",
       sql`${table.status} IN ('running', 'paused_auth', 'paused_offline', 'paused_approval', 'needs_review', 'completed', 'failed', 'dispatch_failed')`,
     ),
     check(
-      "ImportRun_purpose_check",
+      "Run_purpose_check",
       sql`${table.purpose} IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'ai_action', 'background', 'file_import', 'legacy')`,
     ),
     check(
-      "ImportRun_photo_inventory_no_vendor_check",
+      "Run_photo_inventory_no_vendor_check",
       sql`${table.purpose} <> 'photo_inventory' OR ${table.vendorAccountId} IS NULL`,
     ),
-    uniqueIndex("ImportRun_dispatch_event_unique")
+    uniqueIndex("Run_dispatch_event_unique")
       .on(table.dispatchEventId)
       .where(sql`${table.dispatchEventId} IS NOT NULL`),
-    uniqueIndex("ImportRun_one_active_vendor_account_key")
+    uniqueIndex("Run_one_active_vendor_account_key")
       .on(table.vendorAccountId)
       .where(
         sql`${table.vendorAccountId} IS NOT NULL AND ${table.status} IN ('running', 'paused_auth', 'paused_offline', 'paused_approval')`,
@@ -1607,14 +1605,14 @@ export const importRun = pgTable(
   ],
 );
 
-/** Explicit no-op-validation/enrichment targets; ImportRunMutation remains writes-only. */
-export const importRunTarget = pgTable(
-  "ImportRunTarget",
+/** Explicit no-op-validation/enrichment targets; RunMutation remains writes-only. */
+export const runTarget = pgTable(
+  "RunTarget",
   {
     id: pkUuid(),
     runId: uuid("runId")
       .notNull()
-      .references(() => importRun.id),
+      .references(() => run.id),
     purchaseId: uuid("purchaseId")
       .$type<PurchaseId>()
       .references(() => purchase.id),
@@ -1640,29 +1638,29 @@ export const importRunTarget = pgTable(
     ...baseTimestamps(),
   },
   (table) => [
-    index("ImportRunTarget_run_idx").on(table.runId),
-    index("ImportRunTarget_purchase_idx").on(table.purchaseId),
-    index("ImportRunTarget_product_idx").on(table.productId),
-    index("ImportRunTarget_image_idx").on(table.imageId),
-    uniqueIndex("ImportRunTarget_run_purchase_key")
+    index("RunTarget_run_idx").on(table.runId),
+    index("RunTarget_purchase_idx").on(table.purchaseId),
+    index("RunTarget_product_idx").on(table.productId),
+    index("RunTarget_image_idx").on(table.imageId),
+    uniqueIndex("RunTarget_run_purchase_key")
       .on(table.runId, table.purchaseId)
       .where(sql`${table.purchaseId} IS NOT NULL`),
-    uniqueIndex("ImportRunTarget_run_product_key")
+    uniqueIndex("RunTarget_run_product_key")
       .on(table.runId, table.productId)
       .where(sql`${table.productId} IS NOT NULL`),
-    uniqueIndex("ImportRunTarget_run_image_key")
+    uniqueIndex("RunTarget_run_image_key")
       .on(table.runId, table.imageId)
       .where(sql`${table.imageId} IS NOT NULL`),
     check(
-      "ImportRunTarget_exactly_one_target_check",
+      "RunTarget_exactly_one_target_check",
       sql`((${table.purchaseId} IS NOT NULL)::int + (${table.productId} IS NOT NULL)::int + (${table.imageId} IS NOT NULL)::int) = 1`,
     ),
     check(
-      "ImportRunTarget_state_check",
+      "RunTarget_state_check",
       sql`${table.state} IN ('pending', 'prepared', 'completed', 'skipped', 'unresolved', 'needs_evidence', 'unavailable')`,
     ),
     check(
-      "ImportRunTarget_outcome_check",
+      "RunTarget_outcome_check",
       sql`${table.outcome} IS NULL OR ${table.outcome} IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped', 'attached')`,
     ),
   ],
@@ -1674,13 +1672,13 @@ export const importRunTarget = pgTable(
  * oldest `pending` one to the coordinator, and `ordersSeen` counts these rows
  * rather than commits. No vendorAccount FK: the run already carries it.
  */
-export const importRunOrderCandidate = pgTable(
-  "ImportRunOrderCandidate",
+export const runOrderCandidate = pgTable(
+  "RunOrderCandidate",
   {
     id: pkUuid(),
     runId: uuid("runId")
       .notNull()
-      .references(() => importRun.id),
+      .references(() => run.id),
     orderId: text("orderId").notNull(),
     orderUrl: text("orderUrl"),
     orderedAt: date("orderedAt", { mode: "string" }),
@@ -1689,29 +1687,29 @@ export const importRunOrderCandidate = pgTable(
     ...baseTimestamps(),
   },
   (table) => [
-    uniqueIndex("ImportRunOrderCandidate_run_order_key").on(
+    uniqueIndex("RunOrderCandidate_run_order_key").on(
       table.runId,
       table.orderId,
     ),
-    index("ImportRunOrderCandidate_run_state_idx").on(table.runId, table.state),
+    index("RunOrderCandidate_run_state_idx").on(table.runId, table.state),
     check(
-      "ImportRunOrderCandidate_state_check",
+      "RunOrderCandidate_state_check",
       sql`${table.state} IN ('pending', 'covered', 'imported', 'skipped')`,
     ),
   ],
 );
 
 /** Immutable R2-backed evidence scoped to a run target, never a shared Image. */
-export const importRunEvidence = pgTable(
-  "ImportRunEvidence",
+export const runEvidence = pgTable(
+  "RunEvidence",
   {
     id: pkUuid(),
     runId: uuid("runId")
       .notNull()
-      .references(() => importRun.id),
+      .references(() => run.id),
     targetId: uuid("targetId")
       .notNull()
-      .references(() => importRunTarget.id),
+      .references(() => runTarget.id),
     kind: text("kind").notNull(),
     objectKey: text("objectKey").notNull(),
     checksum: text("checksum").notNull(),
@@ -1723,10 +1721,10 @@ export const importRunEvidence = pgTable(
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("ImportRunEvidence_object_key_unique").on(table.objectKey),
-    index("ImportRunEvidence_run_target_idx").on(table.runId, table.targetId),
+    uniqueIndex("RunEvidence_object_key_unique").on(table.objectKey),
+    index("RunEvidence_run_target_idx").on(table.runId, table.targetId),
     check(
-      "ImportRunEvidence_kind_check",
+      "RunEvidence_kind_check",
       sql`${table.kind} IN ('browser_capture', 'gmail_attachment', 'manual_upload')`,
     ),
   ],
@@ -1750,10 +1748,10 @@ export const importSourceClaim = pgTable(
       .references(() => purchase.id),
     firstRunId: uuid("firstRunId")
       .notNull()
-      .references(() => importRun.id),
+      .references(() => run.id),
     lastRunId: uuid("lastRunId")
       .notNull()
-      .references(() => importRun.id),
+      .references(() => run.id),
     outputFingerprint: text("outputFingerprint").notNull(),
     ...baseTimestamps(),
   },
@@ -1772,13 +1770,13 @@ export const importSourceClaim = pgTable(
 );
 
 /** Explicit run provenance for every row mutation, independent of AuditLog's actor shape. */
-export const importRunMutation = pgTable(
-  "ImportRunMutation",
+export const runMutation = pgTable(
+  "RunMutation",
   {
     id: pkUuid(),
     runId: uuid("runId")
       .notNull()
-      .references(() => importRun.id),
+      .references(() => run.id),
     targetType: text("targetType").notNull(),
     targetId: uuid("targetId").notNull(),
     mutationKind: text("mutationKind").notNull(),
@@ -1791,14 +1789,14 @@ export const importRunMutation = pgTable(
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
-    index("ImportRunMutation_run_idx").on(table.runId),
-    index("ImportRunMutation_target_idx").on(table.targetType, table.targetId),
+    index("RunMutation_run_idx").on(table.runId),
+    index("RunMutation_target_idx").on(table.targetType, table.targetId),
   ],
 );
 
 /** Replay-safe boundary for Flue durable tools and external side effects. */
-export const importRunOperation = pgTable(
-  "ImportRunOperation",
+export const runOperation = pgTable(
+  "RunOperation",
   {
     id: pkUuid(),
     executor:
@@ -1807,7 +1805,7 @@ export const importRunOperation = pgTable(
       >(),
     runId: uuid("runId")
       .notNull()
-      .references(() => importRun.id),
+      .references(() => run.id),
     operationId: text("operationId").notNull(),
     kind: text("kind").notNull(),
     inputFingerprint: text("inputFingerprint").notNull(),
@@ -1819,13 +1817,13 @@ export const importRunOperation = pgTable(
     ...baseTimestamps(),
   },
   (table) => [
-    uniqueIndex("ImportRunOperation_run_operation_key").on(
+    uniqueIndex("RunOperation_run_operation_key").on(
       table.runId,
       table.operationId,
     ),
-    index("ImportRunOperation_run_state_idx").on(table.runId, table.state),
+    index("RunOperation_run_state_idx").on(table.runId, table.state),
     check(
-      "ImportRunOperation_state_check",
+      "RunOperation_state_check",
       sql`${table.state} IN ('started', 'paused_approval', 'completed', 'failed')`,
     ),
   ],
@@ -1837,7 +1835,7 @@ export const importRunOperation = pgTable(
  * this row's payload; `committed`/`discarded` rows are frozen history.
  * Product and Location are real FKs so a merge can repoint and a delete can
  * detach them; the image roster, category and owner party stay in the
- * payload because images are pinned by `ImportRunTarget` and the writer
+ * payload because images are pinned by `RunTarget` and the writer
  * re-resolves every code at approval time.
  */
 export const photoGroupProposal = pgTable(
@@ -1846,8 +1844,8 @@ export const photoGroupProposal = pgTable(
     id: pkUuid(),
     runId: uuid("runId")
       .notNull()
-      .$type<ImportRunId>()
-      .references(() => importRun.id),
+      .$type<RunId>()
+      .references(() => run.id),
     groupKey: text("groupKey").notNull(),
     state: text("state")
       .notNull()
@@ -1924,13 +1922,13 @@ export const photoGroupProposal = pgTable(
 );
 
 /** Idempotent progress events mirrored from the private Flue coordinator. */
-export const importRunProgress = pgTable(
-  "ImportRunProgress",
+export const runProgress = pgTable(
+  "RunProgress",
   {
     id: pkUuid(),
     runId: uuid("runId")
       .notNull()
-      .references(() => importRun.id),
+      .references(() => run.id),
     eventId: text("eventId").notNull(),
     phase: text("phase").notNull(),
     currentItem: text("currentItem"),
@@ -1939,8 +1937,8 @@ export const importRunProgress = pgTable(
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("ImportRunProgress_eventId_unique").on(table.eventId),
-    index("ImportRunProgress_run_created_idx").on(
+    uniqueIndex("RunProgress_eventId_unique").on(table.eventId),
+    index("RunProgress_run_created_idx").on(
       table.runId,
       table.createdAt.desc(),
     ),
@@ -1948,13 +1946,13 @@ export const importRunProgress = pgTable(
 );
 
 /** Immutable record of which household member prompted, approved, or stopped a run. */
-export const importRunControlEvent = pgTable(
-  "ImportRunControlEvent",
+export const runControlEvent = pgTable(
+  "RunControlEvent",
   {
     id: pkUuid(),
     runId: uuid("runId")
       .notNull()
-      .references(() => importRun.id),
+      .references(() => run.id),
     action: text("action").notNull(),
     controllerUserId: text("controllerUserId").notNull().$type<UserId>(),
     controllerName: text("controllerName").notNull(),
@@ -1970,12 +1968,9 @@ export const importRunControlEvent = pgTable(
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
-    index("ImportRunControlEvent_run_created_idx").on(
-      table.runId,
-      table.createdAt,
-    ),
+    index("RunControlEvent_run_created_idx").on(table.runId, table.createdAt),
     check(
-      "ImportRunControlEvent_action_check",
+      "RunControlEvent_action_check",
       sql`${table.action} IN ('prompt', 'abort', 'pause', 'resume', 'cancel', 'approve', 'reject', 'retry', 'retry_dispatch', 'upload_evidence', 'no_evidence_available', 'escalate_sol')`,
     ),
   ],
@@ -1988,7 +1983,7 @@ export const importPreparedOrder = pgTable(
     id: pkUuid(),
     runId: uuid("runId")
       .notNull()
-      .references(() => importRun.id),
+      .references(() => run.id),
     prepareOperationId: text("prepareOperationId").notNull(),
     itemOperationId: text("itemOperationId").notNull(),
     stableOrderId: text("stableOrderId").notNull(),
@@ -2054,13 +2049,13 @@ export const importPreparedLine = pgTable(
 );
 
 /** One exact human grant; commit rechecks fingerprints and consumes it transactionally. */
-export const importRunApproval = pgTable(
-  "ImportRunApproval",
+export const runApproval = pgTable(
+  "RunApproval",
   {
     id: pkUuid(),
     runId: uuid("runId")
       .notNull()
-      .references(() => importRun.id),
+      .references(() => run.id),
     operationId: text("operationId").notNull(),
     operationKind: text("operationKind").notNull(),
     args: jsonb("args").notNull(),
@@ -2078,23 +2073,23 @@ export const importRunApproval = pgTable(
     invalidatedAt: timestamp("invalidatedAt", { mode: "date" }),
   },
   (table) => [
-    uniqueIndex("ImportRunApproval_run_operation_key").on(
+    uniqueIndex("RunApproval_run_operation_key").on(
       table.runId,
       table.operationId,
     ),
-    index("ImportRunApproval_run_state_idx").on(table.runId, table.state),
+    index("RunApproval_run_state_idx").on(table.runId, table.state),
     check(
-      "ImportRunApproval_state_check",
+      "RunApproval_state_check",
       sql`${table.state} IN ('pending', 'granted', 'rejected', 'consumed', 'invalidated')`,
     ),
   ],
 );
 
-export const importFinding = pgTable(
-  "ImportFinding",
+export const runFinding = pgTable(
+  "RunFinding",
   {
     id: pkUuid(),
-    importRunId: uuid("importRunId").references(() => importRun.id),
+    runId: uuid("runId").references(() => run.id),
     ledgerPartyId: uuid("ledgerPartyId")
       .notNull()
       .$type<LedgerPartyId>()
@@ -2114,7 +2109,7 @@ export const importFinding = pgTable(
     ...baseTimestamps(),
   },
   (table) => [
-    uniqueIndex("ImportFinding_open_evidence_key")
+    uniqueIndex("RunFinding_open_evidence_key")
       .on(
         table.ledgerPartyId,
         table.targetType,
@@ -2123,14 +2118,14 @@ export const importFinding = pgTable(
         table.evidenceFingerprint,
       )
       .where(sql`${table.status} = 'open'`),
-    index("ImportFinding_status_idx").on(table.status, table.createdAt.desc()),
+    index("RunFinding_status_idx").on(table.status, table.createdAt.desc()),
     check(
-      "ImportFinding_status_check",
+      "RunFinding_status_check",
       sql`${table.status} IN ('open', 'applied', 'dismissed')`,
     ),
     check(
-      "ImportFinding_target_check",
-      sql`${table.targetType} IN ('purchase', 'expense', 'product', 'import_run')`,
+      "RunFinding_target_check",
+      sql`${table.targetType} IN ('purchase', 'expense', 'product', 'run')`,
     ),
   ],
 );
@@ -2161,7 +2156,7 @@ export const importHunt = pgTable(
       .default(sql`'[]'::jsonb`),
     error: text("error"),
     receiptImageId: uuid("receiptImageId").references(() => image.id),
-    receiptRunId: uuid("receiptRunId").references(() => importRun.id),
+    receiptRunId: uuid("receiptRunId").references(() => run.id),
     receiptQueuedAt: timestamp("receiptQueuedAt", { mode: "date" }),
     ...baseTimestamps(),
   },
@@ -3470,8 +3465,8 @@ export const aiUsage = pgTable(
     // Every AI call belongs to a Run, which carries the caller attribution.
     runId: uuid("runId")
       .notNull()
-      .$type<ImportRunId>()
-      .references(() => importRun.id),
+      .$type<RunId>()
+      .references(() => run.id),
     jobKind: text("jobKind"),
     jobId: text("jobId"),
     inputTokens: integer("inputTokens"),
@@ -3580,8 +3575,8 @@ export const auditLog = pgTable(
       .$type<DeviceId>()
       .references(() => device.id, { onDelete: "set null" }),
     runId: uuid("runId")
-      .$type<ImportRunId>()
-      .references(() => importRun.id, { onDelete: "set null" }),
+      .$type<RunId>()
+      .references(() => run.id, { onDelete: "set null" }),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
@@ -3624,9 +3619,9 @@ export const auditLogRelations = relations(auditLog, ({ one }) => ({
     fields: [auditLog.deviceId],
     references: [device.id],
   }),
-  run: one(importRun, {
+  run: one(run, {
     fields: [auditLog.runId],
-    references: [importRun.id],
+    references: [run.id],
   }),
 }));
 

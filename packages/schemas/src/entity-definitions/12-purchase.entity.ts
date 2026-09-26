@@ -44,7 +44,7 @@ export default defineEntity({
       hero: { stats: ["statedTotal", "expenseTotal"] },
       additionalSectionOverrides: [
         { kind: "slot", id: "project-allocation", title: "Project allocation" },
-        { kind: "slot", id: "import-runs", title: "Import runs" },
+        { kind: "slot", id: "runs", title: "Import runs" },
         {
           kind: "slot",
           id: "reconciliation",

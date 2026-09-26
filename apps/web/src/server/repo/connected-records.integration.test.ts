@@ -50,7 +50,7 @@ describe("complete connected record tables", () => {
 
   it("queries sources without a soft-delete column", async () => {
     const page = await getConnectedRecords(ctx.db, {
-      source: { entityType: "importRun", entityId: "RUN-EXAMPLE" },
+      source: { entityType: "run", entityId: "RUN-EXAMPLE" },
       viewKey: "products",
     });
     expect(page.totalCount).toBe(0);

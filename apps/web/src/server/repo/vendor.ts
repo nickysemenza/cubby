@@ -89,8 +89,8 @@ export const VENDOR_DELETE_EDGE_POLICY = {
     description:
       "A stored-value account retains the vendor that owes its balance.",
   },
-  "ImportRun.vendorId": {
-    code: "block-import-runs",
+  "Run.vendorId": {
+    code: "block-runs",
     effect: "block",
     description: "Import history retains the vendor it processed.",
   },
@@ -135,8 +135,8 @@ export const VENDOR_MERGE_EDGE_POLICY = {
     description:
       "Stored-value accounts must be reassigned explicitly before merging vendors; each provider and owner holds at most one live balance.",
   },
-  "ImportRun.vendorId": {
-    code: "block-import-runs",
+  "Run.vendorId": {
+    code: "block-runs",
     effect: "block",
     description: "Historical import runs prevent an ambiguous vendor merge.",
   },

@@ -2,8 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { getPurchaseAgentQueue } from "~/server/cf-env";
-import { dispatchImportRunEvent } from "~/server/purchase-import/dispatch";
-import { startOrResumeImportRun } from "~/server/purchase-import/run-service";
+import { dispatchRunEvent } from "~/server/purchase-import/dispatch";
+import { startOrResumeRun } from "~/server/purchase-import/run-service";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { createRequestContext, requireActor } from "~/server/request-context";
 
@@ -42,12 +42,12 @@ export const Route = createFileRoute("/api/import/agent/sync")({
             { status: 503 },
           );
         }
-        const run = await startOrResumeImportRun(context.db, {
+        const run = await startOrResumeRun(context.db, {
           ledgerPartyId: party.id,
           vendorAccountId: accountId,
           trigger: "manual",
         });
-        await dispatchImportRunEvent(context.db, queue, {
+        await dispatchRunEvent(context.db, queue, {
           version: 1,
           runId: run.id,
           eventId: run.created

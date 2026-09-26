@@ -25,8 +25,8 @@ const HAS_OWN_PHOTO = sql.raw(`EXISTS (
 const HAS_PHOTO_IMPORT = sql.raw(`EXISTS (
   SELECT 1 FROM "EntityAttachment" pc_ea
   JOIN "Image" pc_i ON pc_i."id" = pc_ea."imageId" AND pc_i."deletedAt" IS NULL
-  JOIN "ImportRunTarget" pc_t ON pc_t."imageId" = pc_i."id"
-  JOIN "ImportRun" pc_r ON pc_r."id" = pc_t."runId"
+  JOIN "RunTarget" pc_t ON pc_t."imageId" = pc_i."id"
+  JOIN "Run" pc_r ON pc_r."id" = pc_t."runId"
   WHERE pc_ea."subjectEntityId" = "Product"."id"
     AND pc_ea."deletedAt" IS NULL AND pc_r."deletedAt" IS NULL
     AND pc_r."purpose" = 'photo_inventory'

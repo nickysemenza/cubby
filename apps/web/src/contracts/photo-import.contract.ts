@@ -1,7 +1,7 @@
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
   imageShortcode,
-  importRunShortcode,
+  runShortcode,
   productCategoryShortcode,
   productShortcode,
 } from "@cubby/schemas/identifiers";
@@ -55,7 +55,7 @@ const photoImportStageInputSchema = z.object({
   // the same photo within the same run is a no-op rather than a duplicate
   // target, without suppressing reuse detection against images already
   // active from outside the run.
-  importRunId: importRunShortcode.optional(),
+  runId: runShortcode.optional(),
 });
 
 // Keep these as ordinary unions on the native HTTP surface. The OpenAPI pass
@@ -248,9 +248,9 @@ const [saveGroupsAction] = reviewPhotoGroupsAction.options;
 export const photoImportContract = defineContract("photoImport", {
   startGrouping: mutation({
     native: "Start photo grouping after a finalized upload",
-    input: z.object({ runId: importRunShortcode }),
+    input: z.object({ runId: runShortcode }),
     output: z.object({
-      runId: importRunShortcode,
+      runId: runShortcode,
       started: z.boolean(),
       /** Pending photos whose description is still queued or running; grouping waits for them. */
       waitingForAnalysis: z.number().int().nonnegative(),
@@ -258,13 +258,13 @@ export const photoImportContract = defineContract("photoImport", {
   }),
   review: query({
     native: "Review proposed photo groups and processing status in Apple apps",
-    input: z.object({ runId: importRunShortcode }),
+    input: z.object({ runId: runShortcode }),
     output: photoRunReviewResponse,
   }),
   candidates: query({
     native: "Explain possible Product matches for a proposed photo group",
     input: z.object({
-      runId: importRunShortcode,
+      runId: runShortcode,
       groupKey: z.string().min(1).max(200),
     }),
     output: photoProductCandidatesResponse,
@@ -272,7 +272,7 @@ export const photoImportContract = defineContract("photoImport", {
   chooseExisting: mutation({
     native: "Select an existing Product for a proposed photo group",
     input: z.object({
-      runId: importRunShortcode,
+      runId: runShortcode,
       groupKey: z.string().min(1).max(200),
       productId: productShortcode,
     }),
@@ -281,7 +281,7 @@ export const photoImportContract = defineContract("photoImport", {
   updateDraft: mutation({
     native: "Correct proposed product identity before approving photos",
     input: z.object({
-      runId: importRunShortcode,
+      runId: runShortcode,
       groupKey: z.string().min(1).max(200),
       name: z.string().trim().min(1).max(500),
       categoryId: productCategoryShortcode.nullable().optional(),
@@ -294,7 +294,7 @@ export const photoImportContract = defineContract("photoImport", {
   approveGroups: mutation({
     native: "Approve reviewed photo groups in Apple apps",
     input: z.object({
-      runId: importRunShortcode,
+      runId: runShortcode,
       /** Omit to approve every `proposed` group. */
       groupKeys: z.array(z.string().min(1).max(200)).min(1).max(200).optional(),
     }),
@@ -303,7 +303,7 @@ export const photoImportContract = defineContract("photoImport", {
   discardGroup: mutation({
     native: "Discard a proposed photo group in Apple apps",
     input: z.object({
-      runId: importRunShortcode,
+      runId: runShortcode,
       groupKey: z.string().min(1).max(200),
     }),
     output: reviewPhotoGroupsOutput,
@@ -311,7 +311,7 @@ export const photoImportContract = defineContract("photoImport", {
   saveGroups: mutation({
     input: saveGroupsAction
       .omit({ action: true })
-      .extend({ runId: importRunShortcode }),
+      .extend({ runId: runShortcode }),
     output: reviewPhotoGroupsOutput,
   }),
   stage: mutation({

@@ -20,10 +20,10 @@ import { SHORTCODE_TABLE } from "~/server/repo/shortcode-tables";
 
 describe("incoming-edge operation policies", () => {
   it("keeps audited removal entities aligned with the shortcode table roster", () => {
-    // Image is hard-deleted and ImportRun is immutable history.
+    // Image is hard-deleted and Run is immutable history.
     expect([...auditableEntities].sort()).toEqual(
       Object.keys(SHORTCODE_TABLE)
-        .filter((entity) => entity !== "image" && entity !== "importRun")
+        .filter((entity) => entity !== "image" && entity !== "run")
         .sort(),
     );
   });
@@ -78,7 +78,7 @@ describe("product retaining edges", () => {
     // along with every recipe it imported.
     "Cookbook.productId",
     "Expense.productId",
-    "ImportRunTarget.productId",
+    "RunTarget.productId",
     "InventoryEntry.productId",
     "Location.productId",
     "MealFoodEntry.productId",

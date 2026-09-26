@@ -1,6 +1,6 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import type { ActorContext } from "@cubby/schemas/context";
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import { parseShortcode } from "@cubby/shared";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -9,10 +9,10 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import {
   auditLog,
-  importRun,
-  importRunApproval,
-  importRunMutation,
-  importRunOperation,
+  run as runTable,
+  runApproval,
+  runMutation,
+  runOperation,
 } from "~/server/db/schema";
 import type { McpOperationContext } from "~/server/mcp/operation-context";
 import { getDb } from "~/server/repo/database-helpers";
@@ -136,12 +136,12 @@ export async function executePurchaseAgentMutation<T>(input: {
   const evidenceFingerprint = argsFingerprint;
   const [run] = await getDb(input.db)
     .select({
-      id: importRun.id,
-      actorUserId: importRun.actorUserId,
-      status: importRun.status,
+      id: runTable.id,
+      actorUserId: runTable.actorUserId,
+      status: runTable.status,
     })
-    .from(importRun)
-    .where(eq(importRun.id, importRunId.parse(input.trusted.runId)))
+    .from(runTable)
+    .where(eq(runTable.id, runEntityId.parse(input.trusted.runId)))
     .limit(1);
   // The envelope names the run by its private id, the same value the
   // delegation token was minted for; the public code is never trusted here.
@@ -159,15 +159,15 @@ export async function executePurchaseAgentMutation<T>(input: {
   );
   const [operation] = await getDb(input.db)
     .select({
-      state: importRunOperation.state,
-      inputFingerprint: importRunOperation.inputFingerprint,
-      result: importRunOperation.result,
+      state: runOperation.state,
+      inputFingerprint: runOperation.inputFingerprint,
+      result: runOperation.result,
     })
-    .from(importRunOperation)
+    .from(runOperation)
     .where(
       and(
-        eq(importRunOperation.runId, run.id),
-        eq(importRunOperation.operationId, input.execution.operationId),
+        eq(runOperation.runId, run.id),
+        eq(runOperation.operationId, input.execution.operationId),
       ),
     )
     .limit(1);
@@ -175,7 +175,7 @@ export async function executePurchaseAgentMutation<T>(input: {
     if (run.status !== "running" && run.status !== "paused_approval")
       throw new Error(`Purchase-agent run is fenced in ${run.status}`);
     await getDb(input.db).transaction(async (tx) => {
-      await tx.insert(importRunOperation).values({
+      await tx.insert(runOperation).values({
         runId: run.id,
         operationId: input.execution.operationId,
         kind: `mcp:${input.toolName}`,
@@ -190,7 +190,7 @@ export async function executePurchaseAgentMutation<T>(input: {
           },
         },
       });
-      await tx.insert(importRunApproval).values({
+      await tx.insert(runApproval).values({
         runId: run.id,
         operationId: input.execution.operationId,
         operationKind: `mcp:${input.toolName}`,
@@ -201,9 +201,9 @@ export async function executePurchaseAgentMutation<T>(input: {
         state: "pending",
       });
       await tx
-        .update(importRun)
+        .update(runTable)
         .set({ status: "paused_approval", updatedAt: new Date() })
-        .where(eq(importRun.id, run.id));
+        .where(eq(runTable.id, run.id));
     });
     throw new Error(
       "Purchase-agent mutation is awaiting exact human approval; inspect operation status",
@@ -223,12 +223,12 @@ export async function executePurchaseAgentMutation<T>(input: {
 
   const [approval] = await getDb(input.db)
     .select()
-    .from(importRunApproval)
+    .from(runApproval)
     .where(
       and(
-        eq(importRunApproval.runId, run.id),
-        eq(importRunApproval.operationId, input.execution.operationId),
-        eq(importRunApproval.state, "granted"),
+        eq(runApproval.runId, run.id),
+        eq(runApproval.operationId, input.execution.operationId),
+        eq(runApproval.state, "granted"),
       ),
     )
     .limit(1);
@@ -247,31 +247,31 @@ export async function executePurchaseAgentMutation<T>(input: {
     const [[lockedRun], [lockedOperation], [lockedApproval]] =
       await Promise.all([
         database
-          .select({ status: importRun.status })
-          .from(importRun)
-          .where(eq(importRun.id, run.id))
+          .select({ status: runTable.status })
+          .from(runTable)
+          .where(eq(runTable.id, run.id))
           .limit(1)
           .for("update"),
         database
-          .select({ state: importRunOperation.state })
-          .from(importRunOperation)
+          .select({ state: runOperation.state })
+          .from(runOperation)
           .where(
             and(
-              eq(importRunOperation.runId, run.id),
-              eq(importRunOperation.operationId, input.execution.operationId),
+              eq(runOperation.runId, run.id),
+              eq(runOperation.operationId, input.execution.operationId),
             ),
           )
           .limit(1)
           .for("update"),
         database
           .select({
-            state: importRunApproval.state,
-            argsFingerprint: importRunApproval.argsFingerprint,
-            targetFingerprint: importRunApproval.targetFingerprint,
-            evidenceFingerprint: importRunApproval.evidenceFingerprint,
+            state: runApproval.state,
+            argsFingerprint: runApproval.argsFingerprint,
+            targetFingerprint: runApproval.targetFingerprint,
+            evidenceFingerprint: runApproval.evidenceFingerprint,
           })
-          .from(importRunApproval)
-          .where(eq(importRunApproval.id, approval.id))
+          .from(runApproval)
+          .where(eq(runApproval.id, approval.id))
           .limit(1)
           .for("update"),
       ]);
@@ -317,13 +317,13 @@ export async function executePurchaseAgentMutation<T>(input: {
         : [],
     );
     if (provenance.length > 0)
-      await database.insert(importRunMutation).values(provenance);
+      await database.insert(runMutation).values(provenance);
     await database
-      .update(importRunApproval)
+      .update(runApproval)
       .set({ state: "consumed", consumedAt: new Date() })
-      .where(eq(importRunApproval.id, approval.id));
+      .where(eq(runApproval.id, approval.id));
     await database
-      .update(importRunOperation)
+      .update(runOperation)
       .set({
         state: "completed",
         result,
@@ -333,28 +333,28 @@ export async function executePurchaseAgentMutation<T>(input: {
       })
       .where(
         and(
-          eq(importRunOperation.runId, run.id),
-          eq(importRunOperation.operationId, input.execution.operationId),
+          eq(runOperation.runId, run.id),
+          eq(runOperation.operationId, input.execution.operationId),
         ),
       );
     const remainingApprovals = await database
-      .select({ id: importRunApproval.id })
-      .from(importRunApproval)
+      .select({ id: runApproval.id })
+      .from(runApproval)
       .where(
         and(
-          eq(importRunApproval.runId, run.id),
-          inArray(importRunApproval.state, ["pending", "granted"]),
+          eq(runApproval.runId, run.id),
+          inArray(runApproval.state, ["pending", "granted"]),
         ),
       )
       .limit(1);
     await database
-      .update(importRun)
+      .update(runTable)
       .set({
         status: remainingApprovals.length > 0 ? "paused_approval" : "running",
         failureCode: null,
         updatedAt: new Date(),
       })
-      .where(eq(importRun.id, run.id));
+      .where(eq(runTable.id, run.id));
     return result;
   });
 }

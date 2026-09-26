@@ -2,12 +2,12 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { importRunMutation } from "~/server/db/schema";
+import { runMutation } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { startOrResumeImportRun } from "./run-service";
-import { listImportRuns, resolvePurchaseImportTarget } from "./run-target";
+import { startOrResumeRun } from "./run-service";
+import { listRuns, resolvePurchaseImportTarget } from "./run-target";
 
 describe("purchase import run target resolution", () => {
   const ctx = withTestDb();
@@ -28,7 +28,7 @@ describe("purchase import run target resolution", () => {
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -39,7 +39,7 @@ describe("purchase import run target resolution", () => {
       displayLabel: "Imported target purchase",
     });
     await getDb(ctx.db)
-      .insert(importRunMutation)
+      .insert(runMutation)
       .values({
         runId: run.id,
         targetType: "purchase",
@@ -62,7 +62,7 @@ describe("purchase import run target resolution", () => {
         ledgerPartyId: party.id,
       },
     );
-    await startOrResumeImportRun(ctx.db, {
+    await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: untouchedAccount.id,
       trigger: "manual",
@@ -73,19 +73,19 @@ describe("purchase import run target resolution", () => {
       purchase.shortcode,
     );
     const [mutation] = await getDb(ctx.db)
-      .select({ runId: importRunMutation.runId })
-      .from(importRunMutation)
+      .select({ runId: runMutation.runId })
+      .from(runMutation)
       .where(
         and(
-          eq(importRunMutation.targetType, "purchase"),
-          eq(importRunMutation.targetId, targetId!),
+          eq(runMutation.targetType, "purchase"),
+          eq(runMutation.targetId, targetId!),
         ),
       );
 
     expect(targetId).toBe(purchase.id);
     expect(mutation?.runId).toBe(run.id);
 
-    const runs = await listImportRuns(ctx.db, party.id, targetId!);
+    const runs = await listRuns(ctx.db, party.id, targetId!);
     expect(runs.map((row) => row.id)).toEqual([run.id]);
   });
 });

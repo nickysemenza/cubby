@@ -1,4 +1,4 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
@@ -8,7 +8,7 @@ import {
 } from "~/server/request-context";
 
 const userId = testUserId("attribution-user");
-const runId = importRunId.parse("00000000-0000-4000-8000-000000000001");
+const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
 // Every audit row and run copies these fields from the request actor. A
 // verified-credential field silently dropped here (as the MCP client id once

@@ -76,9 +76,9 @@ struct CubbyApp: App {
         #if DEBUG && os(iOS)
             if ProcessInfo.processInfo.arguments.contains("--cubby-preview-photo-run") {
                 NavigationStack {
-                    ImportRunReviewView(
-                        runID: ImportRunReviewPreviewFixture.runID,
-                        previewModel: ImportRunReviewPreviewFixture.model())
+                    RunReviewView(
+                        runID: RunReviewPreviewFixture.runID,
+                        previewModel: RunReviewPreviewFixture.model())
                 }
                 .environment(model)
                 .tint(PorcelainTokens.cobalt)

@@ -1,4 +1,4 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 
 import type {
@@ -75,7 +75,7 @@ function fakePort(respond: () => Response) {
 // SAFETY: the unit under test never dereferences the database; it only hands
 // it to the injected `recordUsage` port, which ignores it.
 const db = {} as Database;
-const runId = importRunId.parse("00000000-0000-4000-8000-000000000001");
+const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
 describe("forwardGatewayRequest", () => {
   it("forwards the built request with the server's token and feature, and records priced usage", async () => {

@@ -1,16 +1,16 @@
 ---
 name: photo-inventory-import
-description: Import household belongings or wardrobe photos into Cubby from a photo_inventory ImportRun, preserving evidence, ownership, locations, and duplicate decisions.
+description: Import household belongings or wardrobe photos into Cubby from a photo_inventory Run, preserving evidence, ownership, locations, and duplicate decisions.
 ---
 
 # Photo inventory import
 
-For a durable `photo_inventory` ImportRun continuation, load
+For a durable `photo_inventory` Run continuation, load
 [run-workflow.md](references/run-workflow.md). It gives the ordered MCP steps,
 review stop, and run identity used by Flue, Codex, and Claude.
 
 A household member uploads photos through the Cubby iOS/macOS app (the
-`PhotoImportRunUploader` path) into a `photo_inventory` `ImportRun`
+`PhotoImportRunUploader` path) into a `photo_inventory` `Run`
 (`RUN-…`) — agents read the run and propose groups for human approval.
 `ledgerPartyId` names the one member whose belongings the run is; a run never
 mixes household members' items, so every group's owner defaults to that same

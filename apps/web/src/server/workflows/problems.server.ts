@@ -16,8 +16,8 @@ import {
   recipeUsageByProductOut,
   resolveArrivedFindingsInput,
   resolveArrivedFindingsOut,
-  resolveImportFindingInput,
-  resolveImportFindingOut,
+  resolveRunFindingInput,
+  resolveRunFindingOut,
   PROBLEM_CLASS,
   type ProblemKey,
 } from "@cubby/schemas/problems";
@@ -25,7 +25,7 @@ import { z } from "zod";
 
 import {
   resolveArrivedFindingsForPurchase,
-  resolveImportFinding,
+  resolveRunFinding,
 } from "~/server/purchase-import/findings";
 import { recipeUsageCountsByProduct } from "~/server/repo/problems";
 import {
@@ -99,9 +99,9 @@ const problemsWorkflowSchemas = {
     input: deleteUnusedIngredientsInput,
     output: deleteUnusedIngredientsOut,
   },
-  resolveImportFinding: {
-    input: resolveImportFindingInput,
-    output: resolveImportFindingOut,
+  resolveRunFinding: {
+    input: resolveRunFindingInput,
+    output: resolveRunFindingOut,
   },
   resolveArrivedFindings: {
     input: resolveArrivedFindingsInput,
@@ -207,12 +207,12 @@ export const deleteUnusedIngredientsWorkflow = bindWorkflow(
     .output(({ presented }) => presented),
 );
 
-export const resolveImportFindingWorkflow = defineWorkflowOperation(
-  "problems.resolveImportFinding",
+export const resolveRunFindingWorkflow = defineWorkflowOperation(
+  "problems.resolveRunFinding",
   (
     c: ProblemsWorkflowContext,
-    input: z.output<typeof resolveImportFindingInput>,
-  ) => resolveImportFinding(c.db, input, c.actorContext),
+    input: z.output<typeof resolveRunFindingInput>,
+  ) => resolveRunFinding(c.db, input, c.actorContext),
 );
 
 export const resolveArrivedFindingsWorkflow = defineWorkflowOperation(

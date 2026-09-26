@@ -62,7 +62,7 @@ import {
   entityAttachment,
   expense,
   image,
-  importRunTarget,
+  runTarget,
   inventoryEntry,
   location,
   mealFoodEntry,
@@ -2377,9 +2377,9 @@ type ProductDependentFetcher = (
 ) => Promise<Array<{ productId: ProductId | null }>>;
 
 const PRODUCT_RETAINING_DEPENDENTS = {
-  "ImportRunTarget.productId": (tx, ids) =>
-    tx.query.importRunTarget.findMany({
-      where: inArray(importRunTarget.productId, ids),
+  "RunTarget.productId": (tx, ids) =>
+    tx.query.runTarget.findMany({
+      where: inArray(runTarget.productId, ids),
       columns: { productId: true },
     }),
   "Planting.sourceProductId": async (tx, ids) => {

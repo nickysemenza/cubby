@@ -64,8 +64,8 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     effect: "block",
     description: "Member-owned vendor accounts retain their owner.",
   },
-  "ImportRun.ledgerPartyId": {
-    code: "block-import-runs",
+  "Run.ledgerPartyId": {
+    code: "block-runs",
     effect: "block",
     description: "Import provenance retains the member scope.",
   },
@@ -74,7 +74,7 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     effect: "block",
     description: "Import source claims retain the member scope.",
   },
-  "ImportFinding.ledgerPartyId": {
+  "RunFinding.ledgerPartyId": {
     code: "block-import-findings",
     effect: "block",
     description: "Import findings retain the member scope.",
@@ -167,8 +167,8 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     description:
       "Vendor-account ownership must be reconciled before merging members.",
   },
-  "ImportRun.ledgerPartyId": {
-    code: "block-import-runs",
+  "Run.ledgerPartyId": {
+    code: "block-runs",
     effect: "block",
     description: "Import provenance prevents member merges.",
   },
@@ -177,7 +177,7 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     effect: "block",
     description: "Import source identity prevents member merges.",
   },
-  "ImportFinding.ledgerPartyId": {
+  "RunFinding.ledgerPartyId": {
     code: "block-import-findings",
     effect: "block",
     description: "Import findings prevent member merges.",

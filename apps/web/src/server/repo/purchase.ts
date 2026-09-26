@@ -54,8 +54,8 @@ import {
   expenseAttribution,
   financialTransactionAllocation,
   image,
-  importRunEvidence,
-  importRunTarget,
+  runEvidence,
+  runTarget,
   importSourceClaim,
   ledgerSourceClaim,
   purchase,
@@ -146,7 +146,7 @@ import { hydrateExpenseProjectAllocations } from "./expense-project-allocation";
 import { validateLiveEffectiveTrades } from "./inheritance-validation";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
-  "ImportRunTarget.purchaseId": {
+  "RunTarget.purchaseId": {
     code: "preserve-targeted-import-history",
     effect: "preserve",
     description:
@@ -191,7 +191,7 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
 export const PURCHASE_MERGE_EDGE_POLICY = {
-  "ImportRunTarget.purchaseId": {
+  "RunTarget.purchaseId": {
     code: "repoint-targeted-import-history",
     effect: "repoint",
     description: "Targeted validation history follows the surviving purchase.",
@@ -1941,33 +1941,31 @@ export const mergePurchases = async (
     // drop the colliding loser row before re-pointing the remaining history;
     // the partial unique index makes a bulk update unsafe here.
     const targetedRuns = await tx
-      .select({ id: importRunTarget.id, runId: importRunTarget.runId })
-      .from(importRunTarget)
-      .where(inArray(importRunTarget.purchaseId, losers));
+      .select({ id: runTarget.id, runId: runTarget.runId })
+      .from(runTarget)
+      .where(inArray(runTarget.purchaseId, losers));
     for (const target of targetedRuns) {
       const [existing] = await tx
-        .select({ id: importRunTarget.id })
-        .from(importRunTarget)
+        .select({ id: runTarget.id })
+        .from(runTarget)
         .where(
           and(
-            eq(importRunTarget.runId, target.runId),
-            eq(importRunTarget.purchaseId, keepId),
+            eq(runTarget.runId, target.runId),
+            eq(runTarget.purchaseId, keepId),
           ),
         )
         .limit(1);
       if (existing) {
         await tx
-          .update(importRunEvidence)
+          .update(runEvidence)
           .set({ targetId: existing.id })
-          .where(eq(importRunEvidence.targetId, target.id));
-        await tx
-          .delete(importRunTarget)
-          .where(eq(importRunTarget.id, target.id));
+          .where(eq(runEvidence.targetId, target.id));
+        await tx.delete(runTarget).where(eq(runTarget.id, target.id));
       } else {
         await tx
-          .update(importRunTarget)
+          .update(runTarget)
           .set({ purchaseId: keepId, updatedAt: new Date() })
-          .where(eq(importRunTarget.id, target.id));
+          .where(eq(runTarget.id, target.id));
       }
     }
 

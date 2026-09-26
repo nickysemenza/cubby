@@ -71,7 +71,7 @@ export const INCOMING_EDGES = {
   task: projectIncomingEdges(ENTITY_EDGES.task),
   vendor: projectIncomingEdges(ENTITY_EDGES.vendor),
   vendorAccount: projectIncomingEdges(ENTITY_EDGES.vendorAccount),
-  importRun: projectIncomingEdges(ENTITY_EDGES.importRun),
+  run: projectIncomingEdges(ENTITY_EDGES.run),
   purchase: projectIncomingEdges(ENTITY_EDGES.purchase),
   financialAccount: projectIncomingEdges(ENTITY_EDGES.financialAccount),
   financialTransaction: projectIncomingEdges(ENTITY_EDGES.financialTransaction),

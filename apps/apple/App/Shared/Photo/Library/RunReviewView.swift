@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 @Observable
-final class ImportRunReviewModel {
+final class RunReviewModel {
     private(set) var snapshot: RunWorkSnapshotOutput?
     private(set) var review: PhotoRunReviewResponse?
     private(set) var usage: AiRunUsageOut?
@@ -88,7 +88,7 @@ enum PhotoReviewPolicy {
     /// (ready, skipped, or failed) — `.pending`/`.leased`/`.waitingForDevice` mean grouping would
     /// start from incomplete evidence.
     static func groupingReadiness(
-        images: [PhotoRunImage], runStatus: ImportRunStatus?
+        images: [PhotoRunImage], runStatus: RunStatus?
     ) -> PhotoGroupingReadiness {
         guard !images.isEmpty else { return .waitingForPhotos }
         if runStatus == .needsReview { return .needsReviewOnWeb }
@@ -100,7 +100,7 @@ enum PhotoReviewPolicy {
     }
 
     static func approvalBlocker(
-        group: PhotoGroupProposal, images: [PhotoRunImage], runStatus: ImportRunStatus?
+        group: PhotoGroupProposal, images: [PhotoRunImage], runStatus: RunStatus?
     ) -> String? {
         if group.missingImageCount > 0 { return "Some photos are missing; remove them before approval." }
         let byID = Dictionary(uniqueKeysWithValues: images.map { ($0.id, $0) })
@@ -126,23 +126,23 @@ enum PhotoReviewPolicy {
 
 /// The same run, photo, and proposal state used by the web reviewer. No product is created until
 /// the household confirms a proposed group.
-struct ImportRunReviewView: View {
+struct RunReviewView: View {
     let runID: String
     private let isPreview: Bool
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var model = ImportRunReviewModel()
+    @State private var model = RunReviewModel()
     @State private var confirmingGroup: String?
     @State private var confirmingAll = false
     @State private var discardingGroup: String?
     @State private var autoStartAttempted = false
     @State private var selectedGroupKey: String?
 
-    init(runID: String, previewModel: ImportRunReviewModel? = nil) {
+    init(runID: String, previewModel: RunReviewModel? = nil) {
         self.runID = runID
         isPreview = previewModel != nil
-        _model = State(initialValue: previewModel ?? ImportRunReviewModel())  // state-init-ok: fixture
+        _model = State(initialValue: previewModel ?? RunReviewModel())  // state-init-ok: fixture
     }
 
     private var proposed: [PhotoGroupProposal] {
@@ -291,7 +291,7 @@ struct ImportRunReviewView: View {
                     .font(.caption).foregroundStyle(.secondary)
                     Link(
                         "Open sign-in and resume controls",
-                        destination: appModel.webURL(for: .importRun, id: runID))
+                        destination: appModel.webURL(for: .run, id: runID))
                 }
                 if let latest = run.progress.last {
                     HStack(alignment: .firstTextBaseline) {
@@ -330,7 +330,7 @@ struct ImportRunReviewView: View {
                     Text(readiness.message).foregroundStyle(.secondary)
                     switch readiness {
                     case .needsReviewOnWeb:
-                        Link("Group photos on web", destination: appModel.webURL(for: .importRun, id: runID))
+                        Link("Group photos on web", destination: appModel.webURL(for: .run, id: runID))
                     case .readyToStart:
                         Button {
                             Task {
@@ -1085,10 +1085,10 @@ private struct PhotoGroupDraftEditView: View {
 
 // Reusable by Xcode Preview and the simulator's synthetic review launch mode.
 #if DEBUG
-    enum ImportRunReviewPreviewFixture {
+    enum RunReviewPreviewFixture {
         static let runID = "RUN-4K7M"
 
-        @MainActor static func model() -> ImportRunReviewModel {
+        @MainActor static func model() -> RunReviewModel {
             let itemID = ImageCode("IMG-2345")
             let labelID = ImageCode("IMG-2346")
             let group = PhotoGroupProposal(
@@ -1127,32 +1127,32 @@ private struct PhotoGroupDraftEditView: View {
                     .init(phase: "grouping", detail: "Identified one shirt and its label", createdAt: .now)
                 ],
                 operations: [])
-            return ImportRunReviewModel(snapshot: run, review: review)
+            return RunReviewModel(snapshot: run, review: review)
         }
     }
 
     #Preview("Photo review", traits: .modifier(SignedInPreview())) {
         NavigationStack {
-            ImportRunReviewView(
-                runID: ImportRunReviewPreviewFixture.runID,
-                previewModel: ImportRunReviewPreviewFixture.model())
+            RunReviewView(
+                runID: RunReviewPreviewFixture.runID,
+                previewModel: RunReviewPreviewFixture.model())
         }
     }
 
     #Preview("Photo review — intermediate", traits: .modifier(SignedInPreview())) {
         NavigationStack {
-            ImportRunReviewView(
-                runID: ImportRunReviewPreviewFixture.runID,
-                previewModel: ImportRunReviewPreviewFixture.model())
+            RunReviewView(
+                runID: RunReviewPreviewFixture.runID,
+                previewModel: RunReviewPreviewFixture.model())
         }
         .frame(width: 760, height: 900)
     }
 
     #Preview("Photo review — wide", traits: .modifier(SignedInPreview())) {
         NavigationStack {
-            ImportRunReviewView(
-                runID: ImportRunReviewPreviewFixture.runID,
-                previewModel: ImportRunReviewPreviewFixture.model())
+            RunReviewView(
+                runID: RunReviewPreviewFixture.runID,
+                previewModel: RunReviewPreviewFixture.model())
         }
         .frame(width: 1360, height: 900)
     }

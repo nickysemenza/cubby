@@ -1,4 +1,4 @@
-import type { ImportRunId } from "@cubby/schemas/identifiers";
+import type { RunId } from "@cubby/schemas/identifiers";
 import type { ChatMiddleware } from "@tanstack/ai";
 
 import { recordAiUsage } from "~/server/ai-usage";
@@ -8,7 +8,7 @@ import type { Database } from "~/server/db";
 export type AiGatewayUsageContext = SupportedAiModelRef & {
   db: Database;
   /** Every AI call belongs to a run; see `ensureRun`. */
-  runId: ImportRunId;
+  runId: RunId;
   feature: string;
   operation: string;
   jobKind?: string | null;

@@ -1,9 +1,9 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { createFileRoute } from "@tanstack/react-router";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { purchaseImportDebugEventsRequest } from "~/lib/purchase-import-debug";
-import { importRun, importRunOperation } from "~/server/db/schema";
+import { run as runTable, runOperation } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { createRequestContext, requireActor } from "~/server/request-context";
 
@@ -37,18 +37,18 @@ export const Route = createFileRoute("/api/import/agent/debug-events")({
           ...new Set(parsed.data.events.map((event) => event.runId)),
         ];
         const ownedRuns = await database
-          .select({ id: importRun.id })
-          .from(importRun)
+          .select({ id: runTable.id })
+          .from(runTable)
           .where(
             and(
               inArray(
-                importRun.id,
-                runIds.map((id) => importRunId.parse(id)),
+                runTable.id,
+                runIds.map((id) => runEntityId.parse(id)),
               ),
-              eq(importRun.ledgerPartyId, party.id),
+              eq(runTable.ledgerPartyId, party.id),
               // A party peer cannot attach arbitrary device metadata to the
               // run started by another actor.
-              eq(importRun.actorUserId, context.auth.userId),
+              eq(runTable.actorUserId, context.auth.userId),
             ),
           );
         const ownedRunIds = new Set<string>(ownedRuns.map((run) => run.id));
@@ -60,7 +60,7 @@ export const Route = createFileRoute("/api/import/agent/debug-events")({
         }
 
         const inserted = await database
-          .insert(importRunOperation)
+          .insert(runOperation)
           .values(
             parsed.data.events.map((event) => ({
               runId: event.runId,
@@ -74,7 +74,7 @@ export const Route = createFileRoute("/api/import/agent/debug-events")({
             })),
           )
           .onConflictDoNothing()
-          .returning({ id: importRunOperation.id });
+          .returning({ id: runOperation.id });
         return Response.json({ accepted: inserted.length });
       },
     },

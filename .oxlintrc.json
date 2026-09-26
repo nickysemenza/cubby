@@ -297,7 +297,7 @@
                 "message": "Entity declarations, and the helper modules they import, are the generator's input: they must not import generated artifacts, a canonical entity schema module (one built from generated field schemas), app code, or the WASM boundary. See docs/entities.md."
               },
               {
-                "regex": "^(\\.{1,2}/|@cubby/schemas/)(device|financial-account|financial-transaction|garden-entry|image-sighting|image|import-run|ingredient|inventory|ledger-party|ledger-transfer|location|meal-nutrition|meal|plant|planting|product-category|product|project|purchase|recipe|usda|vendor-account|vendor|wish)(\\.[jt]s)?$",
+                "regex": "^(\\.{1,2}/|@cubby/schemas/)(device|run|financial-account|financial-transaction|garden-entry|image-sighting|image|ingredient|inventory|ledger-party|ledger-transfer|location|meal-nutrition|meal|plant|planting|product-category|product|project|purchase|recipe|usda|vendor-account|vendor|wish)(\\.[jt]s)?$",
                 "message": "Entity declarations, and the helper modules they import, are the generator's input: they must not import generated artifacts, a canonical entity schema module (one built from generated field schemas), app code, or the WASM boundary. See docs/entities.md."
               },
               {

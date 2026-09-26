@@ -7,7 +7,7 @@ import {
   listPhotoRunImages,
 } from "~/server/photo-import-run/proposals";
 import { findActivePurchaseAgentGrant } from "~/server/purchase-import/agent-auth";
-import { dispatchImportRunEvent } from "~/server/purchase-import/dispatch";
+import { dispatchRunEvent } from "~/server/purchase-import/dispatch";
 import { startPhotoInventoryCoordinator } from "~/server/purchase-import/run-service";
 
 /**
@@ -43,7 +43,7 @@ export async function startPhotoGroupingForActor(
     actorUserId,
   });
   if (run.created)
-    await dispatchImportRunEvent(db, queue, {
+    await dispatchRunEvent(db, queue, {
       version: 1,
       runId: run.id,
       eventId: run.eventId,

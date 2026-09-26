@@ -1,12 +1,12 @@
 import type { FieldSuggestionsOut } from "@cubby/schemas/ai";
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EntityKernelContext } from "./adapter";
 import { previewEntity, type PreviewEntityPorts } from "./preview";
 
-const fixtureRunId = importRunId.parse("00000000-0000-4000-8000-000000000001");
+const fixtureRunId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
 const mocks = {
   suggestFields: vi.fn<PreviewEntityPorts["suggest"]>(),

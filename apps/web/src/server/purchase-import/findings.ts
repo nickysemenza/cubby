@@ -3,9 +3,9 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { costTypeSchema } from "@cubby/schemas/expense-fields";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
-  resolveImportFindingInput,
-  resolveImportFindingOut,
-  type ResolveImportFindingInput,
+  resolveRunFindingInput,
+  resolveRunFindingOut,
+  type ResolveRunFindingInput,
 } from "@cubby/schemas/problems";
 import {
   proposedImportFix,
@@ -18,9 +18,9 @@ import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   expense,
   auditLog,
-  importFinding,
+  runFinding,
   importHunt,
-  importRunMutation,
+  runMutation,
   importSourceClaim,
   inventoryEntry,
   ledgerParty,
@@ -159,23 +159,23 @@ const assertFixTargetsFinding = (
 const assertRunProvenance = async (
   tx: DrizzleTransaction,
   finding: {
-    importRunId: string | null;
+    runId: string | null;
     targetType: string;
     targetId: string;
   },
 ) => {
-  if (!finding.importRunId) return;
+  if (!finding.runId) return;
   const [mutation] = await tx
     .select({
-      id: importRunMutation.id,
-      createdAt: importRunMutation.createdAt,
+      id: runMutation.id,
+      createdAt: runMutation.createdAt,
     })
-    .from(importRunMutation)
+    .from(runMutation)
     .where(
       and(
-        eq(importRunMutation.runId, finding.importRunId),
-        eq(importRunMutation.targetType, finding.targetType),
-        eq(importRunMutation.targetId, finding.targetId),
+        eq(runMutation.runId, finding.runId),
+        eq(runMutation.targetType, finding.targetType),
+        eq(runMutation.targetId, finding.targetId),
       ),
     )
     .limit(1);
@@ -342,33 +342,33 @@ async function applyFix(
     .where(and(eq(purchase.id, purchaseId), isNull(purchase.deletedAt)));
 }
 
-export async function resolveImportFinding(
+export async function resolveRunFinding(
   db: Database,
-  rawInput: ResolveImportFindingInput,
+  rawInput: ResolveRunFindingInput,
   actor: ActorContext,
 ) {
-  const input = resolveImportFindingInput.parse(rawInput);
+  const input = resolveRunFindingInput.parse(rawInput);
   return withTransaction(db, async (tx) => {
     const [finding] = await tx
       .select({
-        id: importFinding.id,
-        status: importFinding.status,
-        proposedFix: importFinding.proposedFix,
-        importRunId: importFinding.importRunId,
-        ledgerPartyId: importFinding.ledgerPartyId,
-        targetType: importFinding.targetType,
-        targetId: importFinding.targetId,
+        id: runFinding.id,
+        status: runFinding.status,
+        proposedFix: runFinding.proposedFix,
+        runId: runFinding.runId,
+        ledgerPartyId: runFinding.ledgerPartyId,
+        targetType: runFinding.targetType,
+        targetId: runFinding.targetId,
       })
-      .from(importFinding)
+      .from(runFinding)
       .innerJoin(
         ledgerParty,
         and(
-          eq(ledgerParty.id, importFinding.ledgerPartyId),
+          eq(ledgerParty.id, runFinding.ledgerPartyId),
           eq(ledgerParty.userId, actor.userId),
           notDeleted(ledgerParty),
         ),
       )
-      .where(eq(importFinding.id, input.id))
+      .where(eq(runFinding.id, input.id))
       .limit(1)
       .for("update");
     if (!finding) {
@@ -396,7 +396,7 @@ export async function resolveImportFinding(
         .update(importHunt)
         .set({ state: "dismissed", updatedAt: new Date() })
         .where(eq(importHunt.id, hunt.id));
-      return resolveImportFindingOut.parse({
+      return resolveRunFindingOut.parse({
         id: hunt.id,
         status: "dismissed",
       });
@@ -412,15 +412,15 @@ export async function resolveImportFinding(
     }
     const status = input.action === "apply" ? "applied" : "dismissed";
     await tx
-      .update(importFinding)
+      .update(runFinding)
       .set({
         status,
         resolvedAt: new Date(),
         resolvedByUserId: actor.userId,
         updatedAt: new Date(),
       })
-      .where(eq(importFinding.id, finding.id));
-    return resolveImportFindingOut.parse({ id: finding.id, status });
+      .where(eq(runFinding.id, finding.id));
+    return resolveRunFindingOut.parse({ id: finding.id, status });
   });
 }
 
@@ -444,22 +444,22 @@ export async function resolveArrivedFindingsForPurchase(
 ): Promise<{ resolved: number }> {
   return withTransaction(db, async (tx) => {
     const openFindings = await tx
-      .select({ id: importFinding.id })
-      .from(importFinding)
+      .select({ id: runFinding.id })
+      .from(runFinding)
       .innerJoin(
         ledgerParty,
         and(
-          eq(ledgerParty.id, importFinding.ledgerPartyId),
+          eq(ledgerParty.id, runFinding.ledgerPartyId),
           eq(ledgerParty.userId, actor.userId),
           notDeleted(ledgerParty),
         ),
       )
       .where(
         and(
-          eq(importFinding.targetType, "purchase"),
-          eq(importFinding.targetId, input.purchaseId),
-          eq(importFinding.kind, "arrived"),
-          eq(importFinding.status, "open"),
+          eq(runFinding.targetType, "purchase"),
+          eq(runFinding.targetId, input.purchaseId),
+          eq(runFinding.kind, "arrived"),
+          eq(runFinding.status, "open"),
         ),
       )
       .for("update");
@@ -497,14 +497,14 @@ export async function resolveArrivedFindingsForPurchase(
 
     const ids = openFindings.map((finding) => finding.id);
     await tx
-      .update(importFinding)
+      .update(runFinding)
       .set({
         status: "applied",
         resolvedAt: new Date(),
         resolvedByUserId: actor.userId,
         updatedAt: new Date(),
       })
-      .where(inArray(importFinding.id, ids));
+      .where(inArray(runFinding.id, ids));
     return { resolved: ids.length };
   });
 }

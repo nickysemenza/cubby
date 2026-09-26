@@ -24,34 +24,33 @@ import productEnrichmentSkill from "../../../.claude/skills/product-enrichment/S
 import { serviceForCurrentRun } from "./cloudflare-service";
 import { takeContextBreakdown } from "./context-breakdown-scope";
 import { cubbyMcpConnection } from "./cubby-mcp";
-import { installImportRunTelemetry } from "./telemetry";
+import { installRunTelemetry } from "./telemetry";
 import { purchaseImportTools } from "./tools";
-import { workflowForImportRun } from "./import-run-workflows";
+import { workflowForRun } from "./import-run-workflows";
 
-installImportRunTelemetry();
+installRunTelemetry();
 
 // Flue applies this extension's `wrap` to the generated Durable Object class,
 // which is where the Sentry SDK initializes for the agent isolate.
 export { cloudflare } from "./sentry";
 
-type ImportRunInitialData = {
+type RunInitialData = {
   runId: string;
   coordinatorModel?: string;
   purpose?: FlueImportRunPurpose;
 };
 
-/** One durable Flue conversation per authoritative ImportRun. */
+/** One durable Flue conversation per authoritative Run. */
 export function PurchaseImportRun({ id }: AgentProps) {
-  const { runId, purpose = "account_sync" } =
-    useInitialData<ImportRunInitialData>();
+  const { runId, purpose = "account_sync" } = useInitialData<RunInitialData>();
   if (id !== importRunAgentIdentity(runId, purpose)) {
-    throw new Error("Flue agent identity does not match its ImportRun");
+    throw new Error("Flue agent identity does not match its Run");
   }
 
   const manifest = importRunAgentManifest[purpose];
   useModel(`openai/${manifest.model}`, { thinkingLevel: manifest.effort });
   useMcpConnection(cubbyMcpConnection(runId, serviceForCurrentRun, purpose));
-  const workflow = workflowForImportRun(purpose, runId);
+  const workflow = workflowForRun(purpose, runId);
   useSkill(workflow.skill);
   useSkill(productEnrichmentSkill);
 

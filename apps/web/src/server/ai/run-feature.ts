@@ -1,4 +1,4 @@
-import type { ImportRunId } from "@cubby/schemas/identifiers";
+import type { RunId } from "@cubby/schemas/identifiers";
 /**
  * The one runner for structured AI calls.
  *
@@ -61,7 +61,7 @@ export interface AiRunContext<T = unknown> {
    */
   db?: Database;
   /** Every AI call belongs to a run; see `ensureRun`. */
-  runId: ImportRunId;
+  runId: RunId;
   /** The code path placing the call — `suggestCategory`, `select`, … */
   operation: string;
   /** Correlates calls emitted while one durable job is executing. */

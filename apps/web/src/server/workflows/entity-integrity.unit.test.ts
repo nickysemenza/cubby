@@ -51,7 +51,7 @@ describe("integrity catalog", () => {
         .map((edge) => edge.edgeKey),
     ).toEqual([
       "Ingredient.recipeId",
-      "ImportRunTarget.purchaseId",
+      "RunTarget.purchaseId",
       "AuditLog.runId",
       "AiUsage.runId",
       "AuditLog.deviceId",

@@ -139,7 +139,7 @@ export type ProductDeleteDisposition =
   | (OperationDisposition & { effect: "detach" });
 
 export const PRODUCT_DELETE_EDGE_POLICY = {
-  "ImportRunTarget.productId": {
+  "RunTarget.productId": {
     code: "block-targeted-import-history",
     effect: "block",
     description:

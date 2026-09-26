@@ -347,9 +347,9 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     globs: [
       `${WEB}/src/routes/_authenticated/runs.$shortcode.tsx`,
       `${WEB}/src/routes/_authenticated/runs.index.tsx`,
-      `${WEB}/src/app/import-runs/**`,
+      `${WEB}/src/app/runs/**`,
       `${WEB}/src/app/images/**`,
-      `${WEB}/src/server/repo/import-run.ts`,
+      `${WEB}/src/server/repo/run.ts`,
       `${WEB}/src/server/repo/image-sighting.ts`,
       `${WEB}/src/server/repo/photo-import.ts`,
       `${WEB}/src/server/services/photo-import-stage.service.ts`,

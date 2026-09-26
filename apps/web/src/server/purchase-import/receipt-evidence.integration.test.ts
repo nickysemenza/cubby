@@ -1,9 +1,9 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { image, importHunt, importRun } from "~/server/db/schema";
+import { image, importHunt, run as runTable } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -112,18 +112,18 @@ describe("receipt hunt evidence submission is idempotent", () => {
       .where(eq(image.shortcode, imageId));
     expect(huntRow?.receiptImageId).toBe(imageRow?.id);
 
-    // One evidence attachment, one match: exactly one ImportRun claims this
+    // One evidence attachment, one match: exactly one Run claims this
     // hunt's receipt evidence, even though submission ran twice.
     const runsForHunt = await getDb(ctx.db)
-      .select({ id: importRun.id })
-      .from(importRun)
-      .where(eq(importRun.id, importRunId.parse(huntRow!.receiptRunId!)));
+      .select({ id: runTable.id })
+      .from(runTable)
+      .where(eq(runTable.id, runEntityId.parse(huntRow!.receiptRunId!)));
     expect(runsForHunt).toHaveLength(1);
 
     const allRunsForParty = await getDb(ctx.db)
-      .select({ id: importRun.id })
-      .from(importRun)
-      .where(eq(importRun.trigger, "discovery"));
+      .select({ id: runTable.id })
+      .from(runTable)
+      .where(eq(runTable.trigger, "discovery"));
     expect(allRunsForParty).toHaveLength(1);
 
     // The first submission starts the coordinator; the retry resumes the

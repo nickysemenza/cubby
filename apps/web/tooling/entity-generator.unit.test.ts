@@ -1678,7 +1678,7 @@ describe("typed entity compiler", () => {
     ]);
   });
 
-  // Regression: importRun declared `route.list: true` with no create/update
+  // Regression: run declared `route.list: true` with no create/update
   // contract (so no kernel list read) and no list override, and the
   // generated Runs index crashed on SSR. The generator must refuse that.
   it("requires a list override for a generated index with no kernel list read", async () => {
@@ -1688,8 +1688,8 @@ describe("typed entity compiler", () => {
       new URL("../src/entities/list-columns/index.ts", import.meta.url),
       "utf8",
     );
-    const withoutRuns = (await registry).replace(/^\s+importRun:.*$/mu, "");
-    expect(missingListSources(entities, withoutRuns)).toEqual(["importRun"]);
+    const withoutRuns = (await registry).replace(/^\s+run:.*$/mu, "");
+    expect(missingListSources(entities, withoutRuns)).toEqual(["run"]);
   });
 
   it("keeps generated artifacts on their side of the schema and server boundaries", async () => {

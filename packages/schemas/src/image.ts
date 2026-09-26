@@ -18,7 +18,7 @@ import { auditDateFilterFields } from "./base-entity";
 import { imageCaptureLocation } from "./image-capture-fields";
 import { imageSightingCamera } from "./image-sighting-fields";
 import { purchaseDocumentKind } from "./purchase";
-import { importRunTargetState } from "./purchase-import";
+import { runTargetState } from "./purchase-import";
 import {
   coverEntities,
   galleryEntities,
@@ -33,7 +33,7 @@ import { entityImage } from "./entity";
 import {
   id,
   imageShortcode,
-  importRunShortcode,
+  runShortcode,
   ledgerPartyShortcode,
   productShortcode,
   projectShortcode,
@@ -267,17 +267,17 @@ export const imageFilterFields = {
     .max(24 * 365 * 10)
     .optional()
     .describe("Only images uploaded more than this many hours ago."),
-  importRunId: entityFilterList(importRunShortcode)
+  runId: entityFilterList(runShortcode)
     .optional()
     .describe(
       "Only images that are a target of one of these import runs. Sets list order to the run's picker position (see importTarget.position) instead of the default sort.",
     ),
-  targetState: oneOrMany(importRunTargetState)
+  targetState: oneOrMany(runTargetState)
     .optional()
     .describe("Only images whose import-run target is in one of these states."),
   // `capturedByPartyId` is declared `idMulti`/`urlOnly` in the manifest (no
   // `stored` descriptor — it needs shortcode resolution, same as
-  // `importRunId` above), so it is hand-added here rather than generated.
+  // `runId` above), so it is hand-added here rather than generated.
   capturedByPartyId: entityFilterList(ledgerPartyShortcode)
     .optional()
     .describe(
@@ -601,8 +601,8 @@ export const initiateUploadWithoutEntityResponseSchema = z.object({
 
 /** An Image's current row in a photo-inventory (or other) import run's picker. */
 export const importTargetSummarySchema = z.object({
-  runId: importRunShortcode,
-  state: importRunTargetState,
+  runId: runShortcode,
+  state: runTargetState,
   position: z.number().int().nullable(),
 });
 export type ImportTargetSummary = z.infer<typeof importTargetSummarySchema>;

@@ -91,18 +91,18 @@ import {
   imageProcessingJob,
   imageSighting,
   gardenEntryPlanting,
-  importFinding,
+  runFinding,
   importHunt,
   importPreparedOrder,
-  importRun,
-  importRunApproval,
-  importRunControlEvent,
-  importRunEvidence,
-  importRunMutation,
-  importRunOperation,
-  importRunOrderCandidate,
-  importRunProgress,
-  importRunTarget,
+  run as runTable,
+  runApproval,
+  runControlEvent,
+  runEvidence,
+  runMutation,
+  runOperation,
+  runOrderCandidate,
+  runProgress,
+  runTarget,
   importSourceClaim,
   ingredient,
   inventoryEntry,
@@ -218,8 +218,8 @@ export const ENTITY_EDGES = {
         "A file attached to an entity: a gallery photo, a document, a cookbook cover, or a vendor logo. Says nothing about ownership.",
       liveness: { kind: "must-target-live" },
     },
-    "ImportRunTarget.imageId": {
-      column: importRunTarget.imageId,
+    "RunTarget.imageId": {
+      column: runTarget.imageId,
       role: "history",
       label: "photo import runs",
       description:
@@ -421,8 +421,8 @@ export const ENTITY_EDGES = {
       description: "A member-owned login used for vendor import automation.",
       liveness: { kind: "must-target-live" },
     },
-    "ImportRun.ledgerPartyId": {
-      column: importRun.ledgerPartyId,
+    "Run.ledgerPartyId": {
+      column: runTable.ledgerPartyId,
       role: "history",
       label: "import runs",
       description: "The member whose evidence was processed by an import run.",
@@ -435,8 +435,8 @@ export const ENTITY_EDGES = {
       description: "The member scope for an idempotent imported source.",
       liveness: { kind: "must-target-live" },
     },
-    "ImportFinding.ledgerPartyId": {
-      column: importFinding.ledgerPartyId,
+    "RunFinding.ledgerPartyId": {
+      column: runFinding.ledgerPartyId,
       role: "history",
       label: "import findings",
       description: "The member whose import requires review.",
@@ -549,8 +549,8 @@ export const ENTITY_EDGES = {
     },
   }),
   product: edges({
-    "ImportRunTarget.productId": {
-      column: importRunTarget.productId,
+    "RunTarget.productId": {
+      column: runTarget.productId,
       role: "history",
       label: "targeted import runs",
       description:
@@ -912,8 +912,8 @@ export const ENTITY_EDGES = {
         "A gift card or store-credit balance this vendor owes a member or the household.",
       liveness: { kind: "must-target-live" },
     },
-    "ImportRun.vendorId": {
-      column: importRun.vendorId,
+    "Run.vendorId": {
+      column: runTable.vendorId,
       role: "history",
       label: "import runs",
       description:
@@ -958,8 +958,8 @@ export const ENTITY_EDGES = {
     },
   }),
   purchase: edges({
-    "ImportRunTarget.purchaseId": {
-      column: importRunTarget.purchaseId,
+    "RunTarget.purchaseId": {
+      column: runTarget.purchaseId,
       role: "history",
       label: "targeted import runs",
       description:
@@ -1147,8 +1147,8 @@ export const ENTITY_EDGES = {
   // usda-link-resolved-at-query-time).
   inventory: edges({}),
   vendorAccount: edges({
-    "ImportRunTarget.vendorAccountId": {
-      column: importRunTarget.vendorAccountId,
+    "RunTarget.vendorAccountId": {
+      column: runTarget.vendorAccountId,
       role: "history",
       label: "targeted import runs",
       description:
@@ -1162,8 +1162,8 @@ export const ENTITY_EDGES = {
       description: "A purchase fetched through this member-owned vendor login.",
       liveness: { kind: "must-target-live" },
     },
-    "ImportRun.vendorAccountId": {
-      column: importRun.vendorAccountId,
+    "Run.vendorAccountId": {
+      column: runTable.vendorAccountId,
       role: "history",
       label: "import runs",
       description: "A durable run executed for this vendor account.",
@@ -1186,13 +1186,13 @@ export const ENTITY_EDGES = {
   }),
   // The read-only run record itself has no delete/merge operation
   // (`capabilities.delete: null`), so nothing here ever dispositions these
-  // edges under a importRun operation — see entity-incoming-edges.ts's
+  // edges under a runTable operation — see entity-incoming-edges.ts's
   // doc comment. Child rows (target/evidence/mutation/operation/progress/
   // control-event/approval/prepared-order/order-candidate) exist only as part
   // of one run, so they're `owned-child`; rows other entities keep about a
   // run (purchases it touched, claims it advanced, findings it produced) are
   // `history`, mirroring vendorAccount's own edges above.
-  importRun: edges({
+  run: edges({
     "AuditLog.runId": {
       column: auditLog.runId,
       role: "history",
@@ -1215,67 +1215,67 @@ export const ENTITY_EDGES = {
           "Append-only provenance: a usage row keeps naming the run it was billed to.",
       },
     },
-    "Purchase.importRunId": {
-      column: purchase.importRunId,
+    "Purchase.runId": {
+      column: purchase.runId,
       role: "history",
       label: "purchases",
       description: "A purchase this run imported or validated.",
       liveness: { kind: "must-target-live" },
     },
-    "ImportRun.predecessorRunId": {
-      column: importRun.predecessorRunId,
+    "Run.predecessorRunId": {
+      column: runTable.predecessorRunId,
       role: "history",
       label: "successor runs",
       description: "A later run that continued from this one.",
       liveness: { kind: "must-target-live" },
     },
-    "ImportRunTarget.runId": {
-      column: importRunTarget.runId,
+    "RunTarget.runId": {
+      column: runTarget.runId,
       role: "owned-child",
       label: "targets",
       description:
         "A validation or enrichment target recorded for this run; it has no independent meaning apart from the run.",
       liveness: { kind: "must-target-live" },
     },
-    "ImportRunOrderCandidate.runId": {
-      column: importRunOrderCandidate.runId,
+    "RunOrderCandidate.runId": {
+      column: runOrderCandidate.runId,
       role: "owned-child",
       label: "order candidates",
       description:
         "An account-sync order-history worklist row belonging to this run.",
       liveness: { kind: "must-target-live" },
     },
-    "ImportRunEvidence.runId": {
-      column: importRunEvidence.runId,
+    "RunEvidence.runId": {
+      column: runEvidence.runId,
       role: "owned-child",
       label: "evidence",
       description: "Captured evidence filed under this run.",
       liveness: { kind: "must-target-live" },
     },
-    "ImportRunMutation.runId": {
-      column: importRunMutation.runId,
+    "RunMutation.runId": {
+      column: runMutation.runId,
       role: "owned-child",
       label: "mutations",
       description:
         "An explicit row mutation attributed to this run, independent of AuditLog's actor shape.",
       liveness: { kind: "must-target-live" },
     },
-    "ImportRunOperation.runId": {
-      column: importRunOperation.runId,
+    "RunOperation.runId": {
+      column: runOperation.runId,
       role: "owned-child",
       label: "operations",
       description: "One idempotent operation this run executed.",
       liveness: { kind: "must-target-live" },
     },
-    "ImportRunProgress.runId": {
-      column: importRunProgress.runId,
+    "RunProgress.runId": {
+      column: runProgress.runId,
       role: "owned-child",
       label: "progress checkpoints",
       description: "A progress checkpoint recorded during this run.",
       liveness: { kind: "must-target-live" },
     },
-    "ImportRunControlEvent.runId": {
-      column: importRunControlEvent.runId,
+    "RunControlEvent.runId": {
+      column: runControlEvent.runId,
       role: "owned-child",
       label: "control events",
       description:
@@ -1297,8 +1297,8 @@ export const ENTITY_EDGES = {
         "A proposed item grouping of this photo-inventory run's images.",
       liveness: { kind: "must-target-live" },
     },
-    "ImportRunApproval.runId": {
-      column: importRunApproval.runId,
+    "RunApproval.runId": {
+      column: runApproval.runId,
       role: "owned-child",
       label: "approvals",
       description: "An approval decision recorded against this run.",
@@ -1319,8 +1319,8 @@ export const ENTITY_EDGES = {
         "An idempotent source claim most recently confirmed by this run.",
       liveness: { kind: "must-target-live" },
     },
-    "ImportFinding.importRunId": {
-      column: importFinding.importRunId,
+    "RunFinding.runId": {
+      column: runFinding.runId,
       role: "history",
       label: "findings",
       description: "An integrity finding this run produced.",

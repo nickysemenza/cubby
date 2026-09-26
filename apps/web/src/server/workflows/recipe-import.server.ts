@@ -55,7 +55,7 @@ import { findParentRecipeIdsBatch } from "~/server/repo/recipe/totals";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import {
   actorWithRun,
-  cookbookImportRunInput,
+  cookbookRunInput,
   ensureRun,
 } from "~/server/runs/ensure-run";
 import {
@@ -185,7 +185,7 @@ export const upsertCookbookWorkflow = bindWorkflow(
       actorWithRun(
         context.db,
         context.actorContext,
-        cookbookImportRunInput(input.name),
+        cookbookRunInput(input.name),
       ),
     )
     .commit("upserted", ({ context }, { input, actor }) =>
@@ -402,7 +402,7 @@ const cookbookImportDefinition = defineBulkWorkflow({
       actorWithRun(
         context.db,
         context.actorContext,
-        cookbookImportRunInput(input.cookbook.name),
+        cookbookRunInput(input.cookbook.name),
       ),
     )
     .commit("imported", ({ context }, { input, recipe, actor }) =>

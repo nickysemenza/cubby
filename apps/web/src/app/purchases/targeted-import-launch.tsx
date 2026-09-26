@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { importRunHref } from "~/app/purchases/purchase-import-links";
+import { runHref } from "~/app/purchases/purchase-import-links";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -129,7 +129,7 @@ export function TargetedProductBulkEnrichmentDialog({
         (entry) => entry.created && entry.run,
       )?.run;
       onFinished(true);
-      if (first) window.location.assign(importRunHref(first.id));
+      if (first) window.location.assign(runHref(first.id));
     },
   });
   return (
@@ -156,7 +156,7 @@ export function TargetedProductBulkEnrichmentDialog({
           .map((run) => (
             <a
               key={run.id}
-              href={importRunHref(run.id)}
+              href={runHref(run.id)}
               className="text-sm text-primary hover:underline"
             >
               Open blocking run {run.id}
@@ -231,7 +231,7 @@ export function TargetedImportLaunchDialog({
     },
     onSuccess: (result) => {
       const run = result.runs.find((entry) => entry.created && entry.run)?.run;
-      if (run) window.location.assign(importRunHref(run.id));
+      if (run) window.location.assign(runHref(run.id));
     },
   });
 
@@ -304,7 +304,7 @@ export function TargetedImportLaunchDialog({
                 <a
                   key={run.id}
                   className="w-fit text-primary hover:underline"
-                  href={importRunHref(run.id)}
+                  href={runHref(run.id)}
                 >
                   Open {run.id} ({run.status})
                 </a>

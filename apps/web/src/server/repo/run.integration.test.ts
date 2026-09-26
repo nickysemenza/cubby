@@ -2,13 +2,13 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { importRun } from "~/server/db/schema";
+import { run as runTable } from "~/server/db/schema";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 import { getDb } from "./database-helpers";
-import { getImportRunByShortcode, listImportRuns } from "./import-run";
+import { getRunByShortcode, listRuns } from "./run";
 
-describe("getImportRunByShortcode", () => {
+describe("getRunByShortcode", () => {
   const ctx = withTestDb();
 
   // Regression: an AI run has no member party, so its party name reads null.
@@ -17,11 +17,11 @@ describe("getImportRunByShortcode", () => {
   it("reads an AI run that has no member party", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_action" });
     const [row] = await getDb(ctx.db)
-      .select({ shortcode: importRun.shortcode })
-      .from(importRun)
-      .where(eq(importRun.id, runId));
+      .select({ shortcode: runTable.shortcode })
+      .from(runTable)
+      .where(eq(runTable.id, runId));
 
-    const run = await getImportRunByShortcode(ctx.db, row!.shortcode);
+    const run = await getRunByShortcode(ctx.db, row!.shortcode);
 
     expect(run).toMatchObject({
       purpose: "ai_action",
@@ -31,7 +31,7 @@ describe("getImportRunByShortcode", () => {
   });
 });
 
-describe("listImportRuns", () => {
+describe("listRuns", () => {
   const ctx = withTestDb();
 
   // Regression: the list once hid ephemeral runs unless a special flag was
@@ -40,19 +40,14 @@ describe("listImportRuns", () => {
     await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     const page = { pageIndex: 0, pageSize: 50 };
 
-    const all = await listImportRuns(ctx.db, {}, [], page);
-    const ephemeral = await listImportRuns(
+    const all = await listRuns(ctx.db, {}, [], page);
+    const ephemeral = await listRuns(
       ctx.db,
       { trigger: ["ephemeral"] },
       [],
       page,
     );
-    const manual = await listImportRuns(
-      ctx.db,
-      { trigger: ["manual"] },
-      [],
-      page,
-    );
+    const manual = await listRuns(ctx.db, { trigger: ["manual"] }, [], page);
 
     expect(all.data).toEqual([
       expect.objectContaining({ purpose: "ai_suggest", trigger: "ephemeral" }),

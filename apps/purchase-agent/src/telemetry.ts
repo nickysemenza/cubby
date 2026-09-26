@@ -42,7 +42,7 @@ export function usageEventForTurn(
   };
 }
 
-export function installImportRunTelemetry(): void {
+export function installRunTelemetry(): void {
   observe(async (event, context) => {
     const runId = importRunIdFromAgentIdentity(event.instanceId);
     if (!runId) return;
