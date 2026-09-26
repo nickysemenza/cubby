@@ -1442,6 +1442,52 @@ Deferred from the 2026-09 manifest-rendering and deletion/parity PRs; unordered.
   consolidate costly duplicate behavior coverage or fixture setup without
   weakening the merge gate. The one-run comparison is in that PR's report.
 
+- **Finish policy-driven deletes.** `deleteCookbook` (nested recipe cascade
+  returning recipe ids), the image delete path and `deleteStatementRows` still
+  hand-write their cascades instead of `deleteByPolicy`
+  (`apps/web/src/server/repo/removal/dispositions.ts`). Twelve `*_HAS_*` reasons
+  in `packages/shared/src/error-utils.ts` have no references since blocks throw
+  `ENTITY_DELETE_BLOCKED`; delete them.
+
+- **Cover the remaining delete-policy edges.**
+  `entity-kernel/delete-policy.integration.test.ts` pins 35 uncovered edges,
+  mostly import and mail tables the shared reference universe
+  (`entity-kernel/reference-universe.fixtures.ts`) never seeds. Seed them so
+  every declared block, detach and cascade is exercised.
+
+- **Make the declaration import-boundary lint transitive.** The
+  `no-restricted-imports` override in `.oxlintrc.json` lists the helper modules
+  declarations import; a declaration that starts importing a new helper
+  escapes the rule until someone adds it (the deleted unit test walked imports
+  transitively). Derive the file list, or fail `pnpm generate` on an unlisted
+  import.
+
+- **Put `run.startTargeted` on the HTTP API.** It is `http: false` because the
+  OpenAPI generator cannot express its discriminated-union input
+  (`apps/web/src/contracts/run.contract.ts`), so the native app cannot start a
+  targeted run. Teach the generator the union, or reshape the input.
+
+- **Fix `/api/v1` writes under the Vite dev server.** Locally (Node 24 and 26)
+  every `/api/v1` mutation returns 500: `@ts-rest/serverless`'s `TsRestRequest`
+  subclass fails undici's private-field check in `new Request`. Workers
+  deployments are unaffected; browser operations are the local workaround.
+
+- **One presigned-upload helper.** Seven call sites repeat the R2 upload
+  `fetch(init.uploadUrl, …)` with their own error handling (`PendingImageUpload`,
+  `PendingDocumentUpload`, `use-image-upload`, `use-entity-photo-capture`,
+  `SessionCaptureActions`, cookbook import, run evidence upload).
+
+- **Finish the picker and options consolidation.** 15 files still use the
+  `WithEntitySearch` render prop (SearchProvider slots and pickers inside field
+  arrays), and the tag, project and deferred filter-option hooks remain.
+  `ledgerParty.options` and `project.options` stay separate from
+  `getFilterOptions` because they return kind/icon and dates; add those
+  projections and fold them in.
+
+- **Seed a representative dev database.** `pnpm db:dev:reset` seeds no
+  projects, expenses, purchases or import runs, so screenshot and manual
+  checks of those pages need hand-made data (`apps/web/tooling/dev-db-seed.ts`).
+
 - **Expose recipebridge conversion, needs, costing and nutrition via cubby-ffi**
   only alongside the first native screen that scales a recipe or prices a meal.
   Until then the FFI surface stays `parse_ingredient`, `size_unit_aliases`,
