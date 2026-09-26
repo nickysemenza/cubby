@@ -172,7 +172,7 @@ describe("run.reportDeviceWork", () => {
       signal: new AbortController().signal,
     };
     await expect(
-      runHandlers.runs["run.reportDeviceWork"]!.run(context, {
+      runHandlers.runs.reportDeviceWork!.run(context, {
         run: "RUN-0000",
         image: "IMG-0000",
         state: "queued",

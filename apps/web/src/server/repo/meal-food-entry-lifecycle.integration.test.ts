@@ -466,7 +466,7 @@ describe("meal food entry lifecycle", () => {
           // database itself refuses a portion with no amount.
           amount: fromAny(sql`null`),
         }),
-    ).rejects.toThrow(/null value in column "amount"/);
+    ).rejects.toMatchObject({ cause: { code: "23502", column: "amount" } });
   });
 
   it("refuses to fold colliding recipe portions with different entered units", async () => {

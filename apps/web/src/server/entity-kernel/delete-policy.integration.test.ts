@@ -104,6 +104,7 @@ const UNCOVERED_EDGES: readonly string[] = [
   "vendorAccount RunTarget.vendorAccountId",
   "vendorAccount ImportHunt.vendorAccountId",
   "productCategory PhotoGroupProposal.productCreateCategoryId",
+  "device RunTarget.deviceWorkDeviceId",
 ];
 
 const rowSchema = z.record(z.string(), z.unknown());

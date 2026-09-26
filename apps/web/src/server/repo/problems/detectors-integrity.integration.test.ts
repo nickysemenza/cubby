@@ -571,15 +571,18 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
     }),
 
-  "RunFinding.ledgerPartyId": (db, targetId) =>
-    insertAndReturn(db, runFinding, {
+  "RunFinding.ledgerPartyId": async (db, targetId) => {
+    // A finding's target is anchored on Entity, so it must name a real run.
+    const run = await mkRun(db);
+    return insertAndReturn(db, runFinding, {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
-      targetKind: "purchase",
-      targetId,
+      targetKind: "run",
+      targetId: run.id,
       kind: "liveness-fixture",
       summary: "Liveness fixture",
       evidenceFingerprint: uniq("finding"),
-    }),
+    });
+  },
 
   "ImportHunt.ledgerPartyId": (db, targetId) =>
     mkImportHunt(db, {
@@ -1405,8 +1408,8 @@ const SOURCE_FACTORIES = {
   "RunMutation.runId": (db, targetId) =>
     insertAndReturn(db, runMutation, {
       runId: parseEntityId("run", targetId),
-      targetKind: "purchase",
-      targetId: crypto.randomUUID(),
+      targetKind: "run",
+      targetId,
       mutationKind: "liveness-fixture",
       postFingerprint: uniq("post-fingerprint"),
     }),
@@ -1473,8 +1476,8 @@ const SOURCE_FACTORIES = {
     return insertAndReturn(db, runFinding, {
       runId: parseEntityId("run", targetId),
       ledgerPartyId: party.id,
-      targetKind: "purchase",
-      targetId: crypto.randomUUID(),
+      targetKind: "run",
+      targetId,
       kind: "liveness-fixture",
       summary: "Liveness fixture",
       evidenceFingerprint: uniq("finding"),

@@ -95,7 +95,7 @@ async function loadDirectImageSearchText(
     ) correction ON TRUE
     LEFT JOIN LATERAL (
       SELECT a.result FROM "AiAnalysis" a
-      WHERE a."entityType" = 'image' AND a."entityId" = image.id
+      WHERE a."entityKind" = 'image' AND a."entityId" = image.id
         AND a.feature = 'image-description' AND a.provider = ${preferredImageDescriptionPolicy.provider}
         AND a.model = ${preferredImageDescriptionPolicy.model}
         AND a."promptVersion" = ${String(preferredImageDescriptionPolicy.promptRevision)}
