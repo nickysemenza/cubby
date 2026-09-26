@@ -1,7 +1,7 @@
 import { parseEntityId, importRunId } from "@cubby/schemas/identifiers";
 import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { generateShortcode } from "@cubby/shared";
-import { and, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lte, ne } from "drizzle-orm";
 
 import { classifyOrderMail } from "~/server/agents/purchase-import/extract";
 import type { Database } from "~/server/db";
@@ -23,6 +23,7 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
 
+import { refundStillUnbooked } from "../findings";
 import { uniqueOrderSubsetForCharge } from "../writer-policy";
 import type { GmailOrderMailAttachment } from "./types";
 
@@ -38,6 +39,19 @@ const sha256 = async (value: string) => {
 
 const cents = (value: number) => Math.round(value * 100);
 
+export type AttachOrderMailFile = typeof attachFileToEntity;
+
+/** External seams of the mail pipeline: the classifier model and object storage. */
+export interface OrderMailPorts {
+  classify: typeof classifyOrderMail;
+  attachFile: AttachOrderMailFile;
+}
+
+const productionOrderMailPorts: OrderMailPorts = {
+  classify: classifyOrderMail,
+  attachFile: attachFileToEntity,
+};
+
 export async function attachPendingOrderMailEvidence(
   db: Database,
   input: {
@@ -46,6 +60,7 @@ export async function attachPendingOrderMailEvidence(
     purchaseShortcode: string;
     ledgerPartyId?: string;
   },
+  attachFile: AttachOrderMailFile = attachFileToEntity,
 ) {
   const database = getDb(db);
   const rows = await database
@@ -78,7 +93,7 @@ export async function attachPendingOrderMailEvidence(
   let attachedCount = 0;
   for (const row of rows) {
     if (!row.data) continue;
-    const stored = await attachFileToEntity(db, {
+    const stored = await attachFile(db, {
       entityType: "purchase",
       entityId: input.purchaseShortcode,
       data: row.data,
@@ -117,6 +132,7 @@ export async function processOrderMails(
   db: Database,
   messageIds: readonly string[],
   _attachments: readonly GmailOrderMailAttachment[] = [],
+  ports: OrderMailPorts = productionOrderMailPorts,
 ): Promise<number> {
   if (messageIds.length === 0) return 0;
   const database = getDb(db);
@@ -213,7 +229,7 @@ export async function processOrderMails(
       .set({ vendorId: matchedVendor.id, updatedAt: new Date() })
       .where(eq(orderMail.id, mail.id));
 
-    const classification = await classifyOrderMail({
+    const classification = await ports.classify({
       db,
       messageId: mail.messageId,
       sender: mail.sender,
@@ -261,10 +277,19 @@ export async function processOrderMails(
             gte(importHunt.dateTo, date),
           ),
         );
+      // Statement charges are positive and credits negative, while mail
+      // amounts are unsigned: only the event kind says which way money moved.
+      // A refund may resolve only a credit hunt, and any other event only a
+      // charge hunt, or an equal-amount refund for another order claims a
+      // new charge.
+      const isRefund = classification.event === "refunded";
+      const sameDirection = candidates.filter(
+        (candidate) => candidate.amount < 0 === isRefund,
+      );
       const exact =
         classification.amount === null
           ? []
-          : candidates.filter(
+          : sameDirection.filter(
               (candidate) =>
                 cents(Math.abs(candidate.amount)) ===
                 cents(Math.abs(classification.amount ?? 0)),
@@ -275,7 +300,7 @@ export async function processOrderMails(
           : null;
       if (!matchedHunt) {
         const subsetMatches: { id: string; orderIds: string[] }[] = [];
-        for (const candidate of candidates) {
+        for (const candidate of sameDirection) {
           const events = await database
             .select({
               orderId: orderMailEvent.orderId,
@@ -289,6 +314,9 @@ export async function processOrderMails(
                 eq(orderMail.vendorId, matchedVendor.id),
                 isNotNull(orderMailEvent.orderId),
                 isNotNull(orderMailEvent.amount),
+                isRefund
+                  ? eq(orderMailEvent.event, "refunded")
+                  : ne(orderMailEvent.event, "refunded"),
                 gte(
                   orderMailEvent.occurredAt,
                   new Date(`${candidate.dateFrom}T00:00:00.000Z`),
@@ -343,12 +371,16 @@ export async function processOrderMails(
       : [];
 
     if (target && classification.orderId) {
-      await attachPendingOrderMailEvidence(db, {
-        vendorId: matchedVendor.id,
-        orderId: classification.orderId,
-        purchaseShortcode: target.shortcode,
-        ledgerPartyId: mail.ledgerPartyId,
-      });
+      await attachPendingOrderMailEvidence(
+        db,
+        {
+          vendorId: matchedVendor.id,
+          orderId: classification.orderId,
+          purchaseShortcode: target.shortcode,
+          ledgerPartyId: mail.ledgerPartyId,
+        },
+        ports.attachFile,
+      );
     }
 
     if (
@@ -360,18 +392,12 @@ export async function processOrderMails(
         classification.event === "refunded" &&
         classification.amount !== null
       ) {
-        const [existingRefund] = await database
-          .select({ id: expense.id })
-          .from(expense)
-          .where(
-            and(
-              eq(expense.purchaseId, target.id),
-              eq(expense.cost, -Math.abs(classification.amount)),
-              notDeleted(expense),
-            ),
-          )
-          .limit(1);
-        if (existingRefund) {
+        const unbooked = await refundStillUnbooked(database, {
+          purchaseId: target.id,
+          ledgerPartyId: mail.ledgerPartyId,
+          amount: classification.amount,
+        });
+        if (!unbooked) {
           processed += 1;
           continue;
         }

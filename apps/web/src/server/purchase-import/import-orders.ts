@@ -74,7 +74,10 @@ import {
 
 import { assertImportRunCapability } from "./capabilities";
 import { learnPurchaseProductExternalId } from "./external-id-learning";
-import { attachPendingOrderMailEvidence } from "./gmail/process";
+import {
+  attachPendingOrderMailEvidence,
+  type AttachOrderMailFile,
+} from "./gmail/process";
 import { auditAllImportBatches, loadRunScope } from "./run-service";
 import { buildPurchaseImportPlan, importVendorOrder } from "./writer";
 
@@ -560,6 +563,7 @@ export async function commitPurchaseImport(
   db: Database,
   rawInput: CommitPurchaseImportInput,
   actor: ActorContext,
+  attachMailFile?: AttachOrderMailFile,
 ) {
   const input = commitPurchaseImportInput.parse(rawInput);
   const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
@@ -794,12 +798,16 @@ export async function commitPurchaseImport(
                 .limit(1)
             : [];
           if (written && extraction.candidate?.orderId) {
-            await attachPendingOrderMailEvidence(transactionDb, {
-              vendorId,
-              orderId: extraction.candidate.orderId,
-              purchaseShortcode: written.shortcode,
-              ledgerPartyId: scope.ledgerPartyId,
-            });
+            await attachPendingOrderMailEvidence(
+              transactionDb,
+              {
+                vendorId,
+                orderId: extraction.candidate.orderId,
+                purchaseShortcode: written.shortcode,
+                ledgerPartyId: scope.ledgerPartyId,
+              },
+              attachMailFile,
+            );
           }
           items.push({
             stableOrderId: order.stableOrderId,
