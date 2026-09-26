@@ -298,7 +298,7 @@ struct TodayContent: View {
                         .buttonStyle(.plain)
                     }
                     if highlights?.runs.isEmpty == true {
-                        Text("No recent runs").foregroundStyle(.secondary)
+                        emptyStateText("No recent runs")
                     }
                 }
                 .accessibilityIdentifier("work.activityInbox")
@@ -337,7 +337,7 @@ struct TodayContent: View {
                     case .failed(let message):
                         failure(message, isLoading: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
                     case .loaded(let rows):
-                        if rows.isEmpty { Text("No meals planned").foregroundStyle(.secondary) }
+                        if rows.isEmpty { emptyStateText("No meals planned") }
                         ForEach(rows) { meal in
                             NavigationLink(value: Route.entityDetail(.meal, id: meal.id)) {
                                 MealRow(meal: meal)
@@ -476,7 +476,7 @@ struct TodayContent: View {
                     Button(run.subjectName) { model.navigator.openActivity(.serverRun(run.id)) }
                         .buttonStyle(.link)
                 }
-                if highlights.runs.isEmpty { Text("No recent runs").foregroundStyle(.secondary) }
+                if highlights.runs.isEmpty { emptyStateText("No recent runs") }
             }
         }
 
@@ -496,7 +496,7 @@ struct TodayContent: View {
                     case .failed(let message):
                         failure(message, isLoading: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
                     case .loaded(let rows):
-                        if rows.isEmpty { Text("No meals planned").foregroundStyle(.secondary) }
+                        if rows.isEmpty { emptyStateText("No meals planned") }
                         ForEach(rows) { meal in
                             NavigationLink(value: Route.entityDetail(.meal, id: meal.id)) {
                                 MealRow(meal: meal)
@@ -643,13 +643,18 @@ struct TodayContent: View {
     private func nextUpEmptyState(_ briefing: TaskTodayBriefingOut) -> some View {
         let summary = taskSummary(briefing)
         if let summary {
-            Text(summary).font(.porcelainLabel).foregroundStyle(.secondary)
+            emptyStateText(summary)
         }
         if briefing.next.isEmpty {
-            Text(summary == nil ? "Nothing urgent or ready right now" : "Nothing ready right now")
-                .font(.porcelainLabel)
-                .foregroundStyle(.secondary)
+            emptyStateText(summary == nil ? "Nothing urgent or ready right now" : "Nothing ready right now")
         }
+    }
+
+    /// House style for a section's empty/placeholder line (`.porcelainLabel` + secondary), shared
+    /// so every Today section's "nothing here" text reads at the same size instead of some
+    /// rendering at the default body size and others at caption size.
+    private func emptyStateText(_ text: String) -> some View {
+        Text(text).font(.porcelainLabel).foregroundStyle(.secondary)
     }
 }
 

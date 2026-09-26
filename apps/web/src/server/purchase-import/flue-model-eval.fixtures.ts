@@ -19,15 +19,83 @@ type EvalCatalogProduct = {
 export type ExpectedMatch =
   | { kind: "create" }
   | { kind: "existing"; product: string }
-  /** Any outcome except attaching to this Product (a wrong variant). */
-  | { kind: "notExisting"; product: string };
+  /** Any outcome except attaching to one of these Products (wrong variants). */
+  | { kind: "notExisting"; products: string[] };
 
 export type EvalCase = {
   name: string;
   photos: EvalPhoto[];
   catalog: EvalCatalogProduct[];
   expected: { photos: string[]; match: ExpectedMatch }[];
+  /** Stopping for human review is also a correct answer. */
+  allowReview?: boolean;
 };
+
+/** A 20-photo batch: eight items shot as item, label, and sometimes a second view. */
+function largeBatch(): EvalCase {
+  const items = [
+    [
+      "canvas-tote",
+      "Natural canvas tote bag with navy handles.",
+      "Harbor Pack · Tote · Natural",
+    ],
+    [
+      "wool-beanie",
+      "Charcoal ribbed wool beanie, folded cuff.",
+      "Ridgeline · Merino · One size",
+    ],
+    [
+      "rain-shell",
+      "Yellow hooded rain shell jacket, zipped.",
+      "Fieldcraft · Storm Shell · M",
+    ],
+    [
+      "chore-coat",
+      "Tan duck-canvas chore coat with corduroy collar.",
+      "Northwind Workwear · Chore Coat · L",
+    ],
+    [
+      "work-gloves",
+      "Pair of brown leather work gloves.",
+      "Fieldcraft · Grip Glove · L",
+    ],
+    [
+      "flannel-shirt",
+      "Red and black buffalo-check flannel shirt.",
+      "Northwind Workwear · Flannel · M",
+    ],
+    [
+      "hiking-socks",
+      "Two pairs of gray wool hiking socks.",
+      "Ridgeline · Trail Sock · M",
+    ],
+    [
+      "belt",
+      "Brown leather belt with a brass buckle.",
+      "Lumen & Co · Harness Belt · 34",
+    ],
+  ] as const;
+  const photos: EvalPhoto[] = [];
+  const expected: EvalCase["expected"] = [];
+  items.forEach(([key, description, label], index) => {
+    const group = [`${key}`, `${key}-label`];
+    photos.push({ key, description });
+    photos.push({
+      key: `${key}-label`,
+      description: "Close-up of a sewn or printed tag.",
+      labelText: label,
+    });
+    if (index % 2 === 0) {
+      group.push(`${key}-back`);
+      photos.push({
+        key: `${key}-back`,
+        description: `${description} Back view.`,
+      });
+    }
+    expected.push({ photos: group, match: { kind: "create" } });
+  });
+  return { name: "large-batch", photos, catalog: [], expected };
+}
 
 export const flueModelEvalCases: EvalCase[] = [
   {
@@ -151,9 +219,42 @@ export const flueModelEvalCases: EvalCase[] = [
     expected: [
       {
         photos: ["fleece", "fleece-label"],
-        match: { kind: "notExisting", product: "fleece-large" },
+        match: { kind: "notExisting", products: ["fleece-large"] },
       },
     ],
+  },
+  {
+    name: "ambiguous-variant",
+    photos: [
+      {
+        key: "vest",
+        description: "Olive quilted vest with snap front.",
+      },
+      {
+        key: "vest-label",
+        description: "Faded neck label on an olive vest; size mark worn away.",
+        labelText: "Northwind Workwear · Quilted Vest · Olive",
+      },
+    ],
+    catalog: [
+      {
+        key: "vest-small",
+        name: "Northwind Workwear Quilted Vest Olive S",
+        manufacturer: "Northwind Workwear",
+      },
+      {
+        key: "vest-large",
+        name: "Northwind Workwear Quilted Vest Olive L",
+        manufacturer: "Northwind Workwear",
+      },
+    ],
+    expected: [
+      {
+        photos: ["vest", "vest-label"],
+        match: { kind: "notExisting", products: ["vest-small", "vest-large"] },
+      },
+    ],
+    allowReview: true,
   },
   {
     name: "mixed-batch",
@@ -189,4 +290,5 @@ export const flueModelEvalCases: EvalCase[] = [
       { photos: ["book"], match: { kind: "create" } },
     ],
   },
+  largeBatch(),
 ];

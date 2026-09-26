@@ -69,24 +69,13 @@ const cases = flueModelEvalCases.filter(
 const repeats = Number(process.env.FLUE_EVAL_REPEATS ?? "1");
 const RUN_TIMEOUT_MS = 8 * 60_000;
 
-/**
- * USD per million tokens. Sol is the purchase agent's own catalog entry; Luna's
- * input and cached rates follow the app registry's cache pricing. Luna's output
- * rate is not recorded in the repo, so pass FLUE_EVAL_LUNA_OUTPUT_USD_PER_M or
- * read cost from the reported tokens.
- */
+/** USD per million tokens, from OpenAI's standard-tier pricing page. */
 const PRICES = {
   "gpt-6-sol": { input: 2, cachedInput: 0.2, output: 10 },
-  "gpt-6-luna": {
-    input: 0.1,
-    cachedInput: 0.01,
-    output: process.env.FLUE_EVAL_LUNA_OUTPUT_USD_PER_M
-      ? Number(process.env.FLUE_EVAL_LUNA_OUTPUT_USD_PER_M)
-      : null,
-  },
+  "gpt-6-luna": { input: 0.1, cachedInput: 0.01, output: 0.5 },
 } satisfies Record<
   Candidate["model"],
-  { input: number; cachedInput: number; output: number | null }
+  { input: number; cachedInput: number; output: number }
 >;
 
 const usageReport = z.object({
@@ -102,7 +91,6 @@ type Usage = z.infer<typeof usageReport>;
 
 function costUsd(model: Candidate["model"], usage: Usage) {
   const price = PRICES[model];
-  if (price.output === null) return null;
   const uncached = usage.inputTokens - usage.cachedInputTokens;
   return (
     (uncached * price.input +
@@ -319,17 +307,23 @@ describe("photo coordinator model eval", () => {
                 : null,
           })),
         );
+        // An ambiguous case may be handed to a human instead of proposed.
+        const reviewed =
+          evalCase.allowReview === true && final?.status === "needs_review";
         return {
           case: evalCase.name,
           model: choice.model,
           effort: choice.effort,
           settled,
           status: final?.status ?? "missing",
-          reachedApproval: settled && final?.status === "running",
+          reachedApproval: settled && (final?.status === "running" || reviewed),
           wallMs,
           usage,
           costUsd: costUsd(choice.model, usage),
           ...score,
+          exact: reviewed || score.exact,
+          pairF1: reviewed ? 1 : score.pairF1,
+          matchAccuracy: reviewed ? 1 : score.matchAccuracy,
         };
       };
 
@@ -360,7 +354,6 @@ describe("photo coordinator model eval", () => {
         const mean = (values: number[]) =>
           values.reduce((sum, value) => sum + value, 0) /
           Math.max(1, values.length);
-        const costs = mine.map((result) => result.costUsd);
         return {
           candidate: `${choice.model}:${choice.effort}`,
           runs: mine.length,
@@ -374,9 +367,7 @@ describe("photo coordinator model eval", () => {
             mine.map((result) => result.usage.outputTokens),
           ),
           meanInputTokens: mean(mine.map((result) => result.usage.inputTokens)),
-          meanCostUsd: costs.every((cost) => cost !== null)
-            ? mean(costs.filter((cost): cost is number => cost !== null))
-            : null,
+          meanCostUsd: mean(mine.map((result) => result.costUsd)),
         };
       });
       writeFileSync(
@@ -388,7 +379,7 @@ describe("photo coordinator model eval", () => {
         "|---|---|---|---|---|---|---|---|---|",
         ...summary.map(
           (row) =>
-            `| ${row.candidate} | ${row.exact}/${row.runs} | ${row.meanPairF1.toFixed(2)} | ${row.meanMatchAccuracy.toFixed(2)} | ${row.reachedApproval}/${row.runs} | ${row.meanWallSeconds.toFixed(0)} | ${Math.round(row.meanInputTokens)} | ${Math.round(row.meanOutputTokens)} | ${row.meanCostUsd === null ? "n/a" : `$${row.meanCostUsd.toFixed(3)}`} |`,
+            `| ${row.candidate} | ${row.exact}/${row.runs} | ${row.meanPairF1.toFixed(2)} | ${row.meanMatchAccuracy.toFixed(2)} | ${row.reachedApproval}/${row.runs} | ${row.meanWallSeconds.toFixed(0)} | ${Math.round(row.meanInputTokens)} | ${Math.round(row.meanOutputTokens)} | $${row.meanCostUsd.toFixed(3)} |`,
         ),
       ].join("\n");
       writeFileSync(path.join(outDir, "report.md"), `${table}\n`);

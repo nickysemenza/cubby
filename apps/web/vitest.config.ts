@@ -98,6 +98,7 @@ function explicitlySelectsProject(name: string): boolean {
 }
 
 const mcpContractTests = [
+  "src/server/mcp/agent-manifest-tools.unit.test.ts",
   "src/server/mcp/caller-contract.unit.test.ts",
   "src/server/mcp/catalog-schema.unit.test.ts",
   "src/server/mcp/mcp-apps.unit.test.ts",

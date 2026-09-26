@@ -9,8 +9,10 @@ import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
 import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 import { z } from "zod";
 
+import { type ContextRecorder, withContextCapture } from "./context-breakdown";
+
 const CUBBY_GATEWAY_ID = "cubby";
-const OPENAI_MODELS = ["gpt-6-sol"] as const;
+const OPENAI_MODELS = ["gpt-6-sol", "gpt-6-luna"] as const;
 const ANTHROPIC_MODELS = ["claude-haiku-4-5", "claude-sonnet-5"] as const;
 const STRIPPED_SDK_HEADERS = [
   "authorization",
@@ -103,27 +105,62 @@ function bindingAuth(provider: string) {
   };
 }
 
+// Pi's catalog has not caught up to GPT-6. Responses uses these ids
+// verbatim; each inherits its template's context and output limits. Costs are
+// USD per 1M tokens from OpenAI's pricing page (no long-context tiers).
+const SYNTHESIZED_MODELS = {
+  "gpt-6-sol": {
+    template: "gpt-5.5-pro",
+    name: "GPT-6 Sol",
+    cost: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+  },
+  "gpt-6-luna": {
+    template: "gpt-5.6-luna",
+    name: "GPT-6 Luna",
+    cost: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
+  },
+} satisfies Record<
+  (typeof OPENAI_MODELS)[number],
+  {
+    template: string;
+    name: string;
+    cost: {
+      input: number;
+      output: number;
+      cacheRead: number;
+      cacheWrite: number;
+    };
+  }
+>;
+
+const synthesizedModel = (id: string) =>
+  Object.entries(SYNTHESIZED_MODELS).find(([known]) => known === id)?.[1];
+
 function selectedModels<const TIds extends readonly string[]>(
   provider: Provider,
   ids: TIds,
   baseUrl: string,
 ) {
   return ids.map((id) => {
+    const declared = provider
+      .getModels()
+      .find((candidate) => candidate.id === id);
+    const synthesized = synthesizedModel(id);
     const model =
-      provider.getModels().find((candidate) => candidate.id === id) ??
-      (id === "gpt-6-sol"
+      declared ??
+      (synthesized
         ? (() => {
             const template = provider
               .getModels()
-              .find((candidate) => candidate.id === "gpt-5.5-pro");
-            if (!template) throw new Error("Pi does not declare gpt-5.5-pro");
-            // Pi's catalog has not caught up to GPT-6. Responses uses this
-            // id verbatim; inherit the 1.05m context and 128k output limits.
+              .find((candidate) => candidate.id === synthesized.template);
+            if (!template) {
+              throw new Error(`Pi does not declare ${synthesized.template}`);
+            }
             return {
               ...template,
               id,
-              name: "GPT-6 Sol",
-              cost: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+              name: synthesized.name,
+              cost: synthesized.cost,
             };
           })()
         : undefined);
@@ -136,6 +173,7 @@ function selectedModels<const TIds extends readonly string[]>(
 export function cubbyAiGatewayProviders(
   aiForRequest: () => GatewayHost,
   testModel?: PurchaseAgentTestModelBinding,
+  contextCapture?: { recorder: ContextRecorder; scope: () => string },
 ): Provider[] {
   const gateway = () => aiForRequest().gateway(CUBBY_GATEWAY_ID);
   // This binding is intentionally absent from the deployed worker. Workerd
@@ -159,9 +197,16 @@ export function cubbyAiGatewayProviders(
         );
       }
     : undefined;
-  const openaiFetch = testFetch ?? createCubbyGatewayFetch("openai", gateway);
-  const anthropicFetch =
-    testFetch ?? createCubbyGatewayFetch("anthropic", gateway);
+  // Every model call, test peer included, is measured for the run page's
+  // per-call context breakdown (sizes only; see context-breakdown.ts).
+  const captured = (fetchFn: typeof fetch) =>
+    contextCapture ? withContextCapture(fetchFn, contextCapture) : fetchFn;
+  const openaiFetch = captured(
+    testFetch ?? createCubbyGatewayFetch("openai", gateway),
+  );
+  const anthropicFetch = captured(
+    testFetch ?? createCubbyGatewayFetch("anthropic", gateway),
+  );
   return [
     createProvider({
       id: "openai",

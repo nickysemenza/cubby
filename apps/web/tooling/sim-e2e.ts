@@ -1275,7 +1275,9 @@ async function main(): Promise<void> {
       await pool.end();
     }
 
-    await run("pnpm", ["run", "build:cf"], webRoot);
+    // tooling/local-e2e.ts builds once for every lane it runs.
+    if (process.env.CUBBY_E2E_PREBUILT_WEB !== "1")
+      await run("pnpm", ["run", "build:cf"], webRoot);
     const { writeLocalWorkerdConfig } = await import("./e2e-worker-config");
     writeLocalWorkerdConfig(webRoot);
     const runtime = await import("./local-workerd-harness");

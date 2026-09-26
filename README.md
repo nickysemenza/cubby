@@ -334,6 +334,10 @@ Auth on loopback. For example, open `http://localhost:3000/__dev/login?next=/`.
 It exists only with the guarded local database; the deployed Worker has no
 such route. Browser E2E still uses its API-authenticated storage state.
 
+`pnpm test:e2e:local` runs every local-only lane below (headless, photo,
+wardrobe, simulator, simulator layout) one after another with a single web
+build; pass lane names (e.g. `headless:photo sim`) to run a subset.
+
 `pnpm test:e2e:sim` builds a Debug iOS app and runs the committed agent-device
 flow on an iPhone 17 simulator against a uniquely named disposable PostgreSQL
 database and workerd server. It creates that simulator if needed and always

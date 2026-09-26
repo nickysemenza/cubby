@@ -3,6 +3,7 @@
 import {
   flueImportRunPurpose,
   importRunAgentIdentity,
+  importRunAgentManifest,
   type FlueImportRunPurpose,
 } from "@cubby/schemas/import-run-agent";
 import {
@@ -21,6 +22,7 @@ import * as v from "valibot";
 
 import productEnrichmentSkill from "../../../.claude/skills/product-enrichment/SKILL.md";
 import { serviceForCurrentRun } from "./cloudflare-service";
+import { takeContextBreakdown } from "./context-breakdown-scope";
 import { cubbyMcpConnection } from "./cubby-mcp";
 import { installImportRunTelemetry } from "./telemetry";
 import { purchaseImportTools } from "./tools";
@@ -46,9 +48,8 @@ export function PurchaseImportRun({ id }: AgentProps) {
     throw new Error("Flue agent identity does not match its ImportRun");
   }
 
-  // The coordinator is intentionally fixed. Other registered provider models
-  // exist for Flue internals and future bounded operations, not dynamic routing.
-  useModel("openai/gpt-6-sol", { thinkingLevel: "high" });
+  const manifest = importRunAgentManifest[purpose];
+  useModel(`openai/${manifest.model}`, { thinkingLevel: manifest.effort });
   useMcpConnection(cubbyMcpConnection(runId, serviceForCurrentRun, purpose));
   const workflow = workflowForImportRun(purpose, runId);
   useSkill(workflow.skill);
@@ -57,8 +58,11 @@ export function PurchaseImportRun({ id }: AgentProps) {
   // The run is named by its private id everywhere the agent speaks: the
   // public code can change without touching durable Flue state.
   useResponseStart(() => ({ runId }));
+  // Section sizes of this response's model calls, never their text; the run
+  // page draws "Context per call" from it.
   useResponseFinish(({ response }) => ({
     usage: response.usage,
+    contextBreakdown: takeContextBreakdown(),
   }));
 
   // The model may stop talking without a terminal tool call. Tools that
@@ -84,24 +88,11 @@ export function PurchaseImportRun({ id }: AgentProps) {
     });
   });
 
-  const tools = purchaseImportTools(runId, serviceForCurrentRun);
-  useTool(tools[0]);
-  useTool(tools[6]);
-  useTool(tools[10]);
-  // Flue explicitly supports conditional useTool mounts per render; this is
-  // not a React component, and purpose is fixed for this durable run.
-  // oxlint-disable react-hooks/rules-of-hooks
-  if (purpose !== "photo_inventory") {
-    useTool(tools[1]);
-    useTool(tools[2]);
-    useTool(tools[3]);
-    useTool(tools[4]);
-    useTool(tools[5]);
-    useTool(tools[7]);
-    useTool(tools[8]);
-    useTool(tools[9]);
-  }
-  // oxlint-enable react-hooks/rules-of-hooks
+  // Mounted by name from the manifest; purpose is fixed for a durable run, so
+  // the set is stable across renders.
+  for (const tool of purchaseImportTools(runId, serviceForCurrentRun))
+    // oxlint-disable-next-line react-hooks/rules-of-hooks
+    if (manifest.agentTools.some((name) => name === tool.name)) useTool(tool);
 
   return workflow.instructions;
 }
