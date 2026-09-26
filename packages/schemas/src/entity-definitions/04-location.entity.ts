@@ -1,5 +1,5 @@
 import { defineEntity } from "./definition.js";
-import { LOCATION_UNSPECIFIED_GROUP_KEY } from "@cubby/schemas/pagination";
+import { LOCATION_UNSPECIFIED_GROUP_KEY } from "../group-keys";
 import { selectControlOptions } from "./select-control-options.js";
 import {
   imageShortcode,

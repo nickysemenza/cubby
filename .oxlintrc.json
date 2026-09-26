@@ -267,7 +267,7 @@
         "packages/schemas/src/*-fields.ts",
         "packages/schemas/src/base-entity.ts",
         "packages/schemas/src/codec.ts",
-        "packages/schemas/src/pagination.ts",
+        "packages/schemas/src/group-keys.ts",
         "packages/schemas/src/data-quality-facets.ts",
         "packages/schemas/src/data-quality-shape.ts",
         "packages/schemas/src/expense-line-kind.ts",

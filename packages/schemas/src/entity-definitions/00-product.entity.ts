@@ -1,5 +1,5 @@
 import { defineEntity } from "./definition.js";
-import { PRODUCT_UNCLASSIFIED_GROUP_KEY } from "@cubby/schemas/pagination";
+import { PRODUCT_UNCLASSIFIED_GROUP_KEY } from "../group-keys";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared/constants";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
