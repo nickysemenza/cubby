@@ -176,6 +176,41 @@ describe("HTTP boundary", () => {
     );
     expect(ports.getSession).not.toHaveBeenCalled();
   });
+  // Regression: the Vite dev server hands over srvx's NodeRequest, which
+  // passes `instanceof Request` but carries no undici internal state, so
+  // ts-rest's `new TsRestRequest(request)` threw on every write.
+  it("accepts a foreign Request implementation carrying a body", async () => {
+    const native = new Request(
+      "https://cubby.example/api/v1/recipes/RCP-ABCD",
+      {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer token.signature",
+          "content-type": "application/json",
+        },
+        body: '{"notes":"Changed"}',
+      },
+    );
+    const foreign: Request = Object.create(Request.prototype, {
+      url: { get: () => native.url },
+      method: { get: () => native.method },
+      headers: { get: () => native.headers },
+      body: { get: () => native.body },
+      bodyUsed: { get: () => native.bodyUsed },
+      signal: { get: () => native.signal },
+      text: { value: () => native.text() },
+      json: { value: () => native.json() },
+      arrayBuffer: { value: () => native.arrayBuffer() },
+      clone: { value: () => native.clone() },
+    });
+    const response = await handleHttpOperation(foreign);
+    expect(response.status).toBe(200);
+    expect(ports.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({ data: { notes: "Changed" } }),
+      }),
+    );
+  });
   it("lets bearer-authenticated writes through without an Origin", async () => {
     const response = await request("recipes/RCP-ABCD", {
       method: "PATCH",

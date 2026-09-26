@@ -244,6 +244,23 @@ const sessionDataCookiesFrom = (headers: Headers): string[] =>
     );
   });
 
+/**
+ * ts-rest's `TsRestRequest` subclasses the global `Request`, whose constructor
+ * reads undici's private state from its input. The Vite dev server passes
+ * srvx's `NodeRequest`, which is `instanceof Request` without that state, so
+ * every write failed locally with "Cannot read private member #state". Copying
+ * into a native `Request` costs one body buffer; uploads go straight to R2.
+ */
+async function nativeRequest(request: Request): Promise<Request> {
+  const hasBody = request.method !== "GET" && request.method !== "HEAD";
+  return new Request(request.url, {
+    method: request.method,
+    headers: request.headers,
+    body: hasBody ? await request.arrayBuffer() : undefined,
+    signal: request.signal,
+  });
+}
+
 export function createHttpApiHandler(ports: HttpApiPorts) {
   const methods = methodTable(httpContract);
   const diagnosticContexts = new WeakMap<
@@ -475,8 +492,9 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
   };
 
   return async function handleHttpOperation(
-    request: Request,
+    incoming: Request,
   ): Promise<Response> {
+    const request = await nativeRequest(incoming);
     const pathname = new URL(request.url).pathname;
     const matching = methods.filter((entry) => entry.pattern.test(pathname));
     if (
