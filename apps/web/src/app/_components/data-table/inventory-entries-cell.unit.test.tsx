@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
-import type { WithEntitySearchProps } from "../combobox/with-search-hook";
+import type { SearchProviderProps } from "../combobox/with-search-hook";
 import { InventoryEntriesCell } from "./inventory-entries-cell";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
@@ -50,7 +50,7 @@ const STATIC_ITEMS: ComboboxItem<LocationShortcode>[] = [PANTRY, FRIDGE];
  * static item list synchronously, matching editable-entity-cell.unit.test.tsx. */
 function StubSearchProvider({
   children,
-}: WithEntitySearchProps<LocationShortcode>) {
+}: SearchProviderProps<LocationShortcode>) {
   return children({
     items: STATIC_ITEMS,
     onSearchChange: vi.fn(),

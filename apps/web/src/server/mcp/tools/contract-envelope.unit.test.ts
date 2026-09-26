@@ -1,3 +1,4 @@
+import { recipeTagsOut } from "@cubby/schemas/recipe";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -5,7 +6,6 @@ import { cookbookContract } from "~/contracts/cookbook.contract";
 import { query } from "~/contracts/define";
 import { ingredientContract } from "~/contracts/ingredient.contract";
 import { purchaseContract } from "~/contracts/purchase.contract";
-import { recipeContract } from "~/contracts/recipe.contract";
 
 import { createMcpServer } from "../server";
 import {
@@ -77,9 +77,9 @@ describe("migrated MCP envelope wrappers stay identical to their contract output
     );
   });
 
-  it("get_recipe_tags.items is recipe.getAllTags' own output", () => {
+  it("get_recipe_tags.items is recipe's own `recipeTagsOut` schema", () => {
     expect(requireObjectOutput("get_recipe_tags").shape.items).toBe(
-      recipeContract.ops.getAllTags.output,
+      recipeTagsOut,
     );
   });
 

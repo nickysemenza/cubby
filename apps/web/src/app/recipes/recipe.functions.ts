@@ -8,7 +8,6 @@ import { defineOperationDomain } from "~/integrations/tanstack-query/operation-c
 
 export const recipe = defineOperationDomain(recipeContract, {
   getManyByIDs: { tags: [["recipe"]] },
-  getAllTags: { tags: [["recipe", "tags"]] },
   duplicate: { invalidates: ripple.recipeList },
   getIngredientCooccurrence: { tags: [["recipe", "cooccurrence"]] },
   getDependencyGraph: { tags: [["recipe", "dependencyGraph"]] },

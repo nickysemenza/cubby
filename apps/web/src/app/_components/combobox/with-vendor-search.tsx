@@ -19,7 +19,7 @@ import {
   type EntitySearchScope,
   useEntitySearchRows,
 } from "./entity-search-hooks";
-import type { WithEntitySearchProps } from "./with-search-hook";
+import type { SearchProviderProps } from "./with-search-hook";
 
 /**
  * The vendor picker's items key on the vendor's NAME, not its id.
@@ -75,7 +75,7 @@ function VendorSearch<TId extends string>({
   buildSearchHit: (hit: SearchHit) => ComboboxItem<TId>;
   onCreateNew: (name: string) => Promise<ComboboxItem<TId>>;
   scope?: EntitySearchScope | null;
-} & Pick<WithEntitySearchProps<TId>, "children">) {
+} & Pick<SearchProviderProps<TId>, "children">) {
   const search = useEntitySearchRows(
     "vendor",
     {
@@ -118,7 +118,7 @@ function VendorSearch<TId extends string>({
 export function WithVendorSearch({
   children,
   scope,
-}: WithEntitySearchProps<VendorName>) {
+}: SearchProviderProps<VendorName>) {
   return (
     <VendorSearch<VendorName>
       build={(row) => buildVendorComboboxItem(row, { itemId: "name" })}
@@ -150,7 +150,7 @@ export function WithVendorSearch({
 export function WithVendorShortcodeSearch({
   children,
   scope,
-}: WithEntitySearchProps<VendorShortcode>) {
+}: SearchProviderProps<VendorShortcode>) {
   const commands = useEntityCommands("vendor");
   const onCreateNew = useCallback(
     async (name: string): Promise<ComboboxItem<VendorShortcode>> => {

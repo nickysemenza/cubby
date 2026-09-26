@@ -59,9 +59,12 @@ const projectScaffold = listScaffold("project", project);
 
 /**
  * Lightweight `{id, name, icon}` options for pickers/filter selects — no
- * rollup/dependency joins. Feeds `project.options` (see `useProjectOptions`),
- * which used to page through the full `list` (rollups + deps) at pageSize 500
- * just to get names.
+ * rollup/dependency joins. Feeds the `dates` projection of
+ * `getFilterOptions`'s `entity: "project"` roster (see `useEntityOptions`),
+ * and the direct callers below that need the excludable window without going
+ * through the wire (expense→project suggestions, AI field-suggest). It used
+ * to back a dedicated `project.options` procedure that paged through the
+ * full `list` (rollups + deps) at pageSize 500 just to get names.
  *
  * Two queries, not one: the dates it carries are the EFFECTIVE window, so it
  * pays for `projectContentDates` on top of the project scan. That cost buys

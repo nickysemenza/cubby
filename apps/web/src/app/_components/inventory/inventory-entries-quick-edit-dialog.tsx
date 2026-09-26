@@ -6,7 +6,10 @@ import type {
 import type { LocationType } from "@cubby/schemas/location";
 
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
-import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
+import {
+  useEntityListSource,
+  type SearchProviderProps,
+} from "~/app/_components/combobox/with-search-hook";
 import { EditableAmountCell } from "~/app/_components/data-table/editable-cell";
 import { EditableEntityCell } from "~/app/_components/data-table/editable-entity-cell";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
@@ -14,6 +17,24 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+
+/**
+ * The location search provider for every entry row's `EditableEntityCell` —
+ * a stable top-level component (not one defined inline per row) so
+ * `useEntityListSource` is called through a proper component reference
+ * rather than a fresh callback on each `entries.map()` iteration.
+ */
+function LocationSearchProvider(props: SearchProviderProps<LocationShortcode>) {
+  const { dialog, ...search } = useEntityListSource("location", {
+    scope: props.scope,
+  });
+  return (
+    <>
+      {dialog}
+      {props.children(search)}
+    </>
+  );
+}
 
 interface QuickEditInventoryEntry {
   id: InventoryShortcode;
@@ -88,9 +109,7 @@ export function InventoryEntriesQuickEditDialog({
               <EditableEntityCell
                 value={buildLocationComboboxItem(entry.location)}
                 label="location"
-                SearchProvider={(props) => (
-                  <WithEntitySearch entity="location" {...props} />
-                )}
+                SearchProvider={LocationSearchProvider}
                 onSave={async (newLocationId) => {
                   if (!newLocationId) return;
                   await updateInventoryMutation.mutateAsync({

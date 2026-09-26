@@ -22,12 +22,12 @@ import { toast } from "sonner";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
-import { ledgerParty } from "~/app/finance/finance.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
 import {
@@ -82,8 +82,27 @@ function FoodEntryForm({
     nutrients,
   } = draft;
   const [error, setError] = useState<string | null>(null);
-  const eaters = useQuery(ledgerParty.options.queryOptions(null));
-  const options = eaters.data?.filter((p) => p.kind !== "household");
+  const eaters = useQuery(
+    entityFilterOptions.filterOptions.queryOptions({
+      source: "entity",
+      entity: "ledgerParty",
+      search: "",
+      selectedIds: [],
+      include: ["kind"],
+      limit: 1000,
+    }),
+  );
+  const eaterOptions: LedgerPartyOptionsOut | undefined =
+    eaters.data?.items.map((item) => ({
+      // SAFETY: `entity: "ledgerParty"` filter options always publish the
+      // entity's own branded shortcode as `id`.
+      id: item.id as LedgerPartyShortcode,
+      name: item.label,
+      // SAFETY: `include: ["kind"]` on the `ledgerParty` entity always
+      // populates `kind` (see `getFilterOptions`'s `optionKindFor`).
+      kind: item.kind!,
+    }));
+  const options = eaterOptions?.filter((p) => p.kind !== "household");
   const selectedEater =
     eaterId == null ? options?.[0] : options?.find((p) => p.id === eaterId);
   const calculation = useFoodAmount(draft);
@@ -297,7 +316,7 @@ function FoodSourceFields({
   draft: ReturnType<typeof useFoodDraft>;
   calculation: ReturnType<typeof useFoodAmount>;
   options: LedgerPartyOptionsOut | undefined;
-  eaters: UseQueryResult<LedgerPartyOptionsOut>;
+  eaters: Pick<UseQueryResult, "isLoading" | "error">;
   selectedEater: LedgerPartyOptionsOut[number] | undefined;
   setEaterId: (id: LedgerPartyShortcode | null) => void;
   onRecipe?: (recipeId: RecipeShortcode) => void;

@@ -14,9 +14,9 @@ import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { expect, it } from "vitest";
 
+import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
 import { mock } from "~/lib/test/mock-schema";
 
-import { ledgerParty } from "../../finance/finance.functions";
 import { meal } from "../meal.functions";
 import { useMealPreparationController } from "./use-meal-preparation-controller";
 
@@ -43,7 +43,17 @@ it("loads allocation choices only after an editor opens", async () => {
     },
   });
   client.setQueryData(meal.getPreparations.queryKey({ mealId }), preparation);
-  client.setQueryData(ledgerParty.options.queryKey(null), []);
+  client.setQueryData(
+    entityFilterOptions.filterOptions.queryKey({
+      source: "entity",
+      entity: "ledgerParty",
+      search: "",
+      selectedIds: [],
+      include: ["kind"],
+      limit: 1000,
+    }),
+    { items: [], nextCursor: null },
+  );
   const target = mock(mealOut, {
     overrides: { id: mealId, date: "2026-03-15", recipes: [], totals },
   });

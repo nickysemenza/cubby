@@ -19,7 +19,7 @@ import { Input } from "~/components/ui/input";
 import { QuantityInput } from "~/components/ui/quantity-input";
 import { cn } from "~/lib/utils";
 
-import { WithEntitySearch } from "../../combobox/with-search-hook";
+import { useEntityListSource } from "../../combobox/with-search-hook";
 import { ComboboxField } from "../../form-utils";
 import { IngredientReparse } from "./ingredient-reparse";
 import type { IngItem, RecipeFormValues } from "./types";
@@ -127,6 +127,77 @@ const AmountInputs: FC<{
 };
 
 /**
+ * The ingredient-target picker for one row, extracted so `useEntityListSource`
+ * (a hook) is called once per row's own component instance rather than
+ * inside the rows' `.map()`.
+ */
+const IngredientEntityPicker: FC<{
+  form: UseFormReturn<RecipeFormValues>;
+  sectionIndex: number;
+  ingredientIndex: number;
+}> = ({ form, sectionIndex, ingredientIndex }) => {
+  const path =
+    `sections.${sectionIndex}.ingredients.${ingredientIndex}` as const;
+  const {
+    dialog,
+    items,
+    onSearchChange,
+    isLoading,
+    onCreateNew,
+    onOpenChange,
+  } = useEntityListSource("ingredient");
+  return (
+    <>
+      {dialog}
+      <ComboboxField
+        entity="ingredient"
+        form={form}
+        name={`${path}.ingredient`}
+        items={items}
+        onSearchChange={onSearchChange}
+        isLoading={isLoading}
+        onCreateNew={onCreateNew}
+        onOpenChange={onOpenChange}
+        // Keep the row's aliases in sync with the picked ingredient so the
+        // Re-parse drift check doesn't false-positive on an alias match.
+        onSelect={(item) =>
+          form.setValue(`${path}.aliases`, item?.aliases ?? [])
+        }
+      />
+    </>
+  );
+};
+
+/**
+ * The sub-recipe target picker for one row — same extraction reason as
+ * {@link IngredientEntityPicker}.
+ */
+const RecipeEntityPicker: FC<{
+  form: UseFormReturn<RecipeFormValues>;
+  sectionIndex: number;
+  ingredientIndex: number;
+}> = ({ form, sectionIndex, ingredientIndex }) => {
+  const path =
+    `sections.${sectionIndex}.ingredients.${ingredientIndex}` as const;
+  const { dialog, items, onSearchChange, isLoading, onOpenChange } =
+    useEntityListSource("recipe");
+  return (
+    <>
+      {dialog}
+      <ComboboxField
+        entity="recipe"
+        form={form}
+        name={`${path}.recipe`}
+        items={items}
+        onSearchChange={onSearchChange}
+        isLoading={isLoading}
+        onOpenChange={onOpenChange}
+      />
+    </>
+  );
+};
+
+/**
  * Ledger-style ingredient editor: one line per ingredient
  * ([qty][unit][name][⋮]), dashed rules between rows. Type switching, extra
  * amounts, the entity link, and row moves live in the ⋮ menu; Enter in the
@@ -184,54 +255,17 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
 
                   <div className="min-w-0">
                     {row.type === "ingredient" ? (
-                      <WithEntitySearch entity="ingredient">
-                        {({
-                          items,
-                          onSearchChange,
-                          isLoading,
-                          onCreateNew,
-                          onOpenChange,
-                        }) => (
-                          <ComboboxField
-                            entity="ingredient"
-                            form={form}
-                            name={`${path}.ingredient`}
-                            items={items}
-                            onSearchChange={onSearchChange}
-                            isLoading={isLoading}
-                            onCreateNew={onCreateNew}
-                            onOpenChange={onOpenChange}
-                            // Keep the row's aliases in sync with the picked
-                            // ingredient so the Re-parse drift check doesn't
-                            // false-positive on an alias match.
-                            onSelect={(item) =>
-                              form.setValue(
-                                `${path}.aliases`,
-                                item?.aliases ?? [],
-                              )
-                            }
-                          />
-                        )}
-                      </WithEntitySearch>
+                      <IngredientEntityPicker
+                        form={form}
+                        sectionIndex={sectionIndex}
+                        ingredientIndex={ingredientIndex}
+                      />
                     ) : (
-                      <WithEntitySearch entity="recipe">
-                        {({
-                          items,
-                          onSearchChange,
-                          isLoading,
-                          onOpenChange,
-                        }) => (
-                          <ComboboxField
-                            entity="recipe"
-                            form={form}
-                            name={`${path}.recipe`}
-                            items={items}
-                            onSearchChange={onSearchChange}
-                            isLoading={isLoading}
-                            onOpenChange={onOpenChange}
-                          />
-                        )}
-                      </WithEntitySearch>
+                      <RecipeEntityPicker
+                        form={form}
+                        sectionIndex={sectionIndex}
+                        ingredientIndex={ingredientIndex}
+                      />
                     )}
                   </div>
 

@@ -20,7 +20,6 @@ export const product = defineOperationDomain(productContract, {
   applyUpcData: { invalidates: ripple.productRecipe },
   findOrCreateByUPC: { invalidates: ripple.productLookup },
   findOrCreateByCode: { invalidates: ripple.productLookup },
-  tagOptions: { tags: [["product", "tagOptions"]] },
   categoryDistribution: { tags: [["product", "categoryDistribution"]] },
   manufacturerOptions: { tags: [["product", "manufacturerOptions"]] },
   externalIdSourceOptions: {

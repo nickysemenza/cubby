@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { WithEntitySearchProps } from "~/app/_components/combobox/with-search-hook";
+import type { SearchProviderProps } from "~/app/_components/combobox/with-search-hook";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
@@ -28,7 +28,7 @@ import {
 function stubSearchProviderFor() {
   return function StubSearchProvider({
     children,
-  }: WithEntitySearchProps<string>) {
+  }: SearchProviderProps<string>) {
     return children({
       items: [{ id: "LOC-GRGE", name: "Garage" }],
       onSearchChange: vi.fn(),

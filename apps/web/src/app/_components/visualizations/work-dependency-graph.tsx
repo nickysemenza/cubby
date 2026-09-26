@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useMemo } from "react";
 
+import { useEntityOptions } from "~/app/_components/hooks/useEntityOptions";
 import { project } from "~/app/projects/project.functions";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
@@ -36,7 +37,7 @@ export function WorkDependencyGraph({
   const { data, isLoading, isError, error, refetch } = useQuery(
     project.getDependencyGraph.queryOptions({ projectId }),
   );
-  const { data: projects } = useQuery(project.options.queryOptions(undefined));
+  const { items: projects } = useEntityOptions("project");
   const today = householdLocalDate();
   const graph = useMemo<GraphData>(
     () => ({
@@ -85,9 +86,9 @@ export function WorkDependencyGraph({
           }
         >
           <option value="">All projects and tasks</option>
-          {projects?.map((item) => (
+          {projects.map((item) => (
             <option key={item.id} value={item.id}>
-              {item.name}
+              {item.label}
             </option>
           ))}
         </NativeSelect>

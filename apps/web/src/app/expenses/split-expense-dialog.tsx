@@ -19,7 +19,7 @@ import { useRef, useState } from "react";
 import { FieldSuggestionApply } from "~/app/_components/ai/field-suggestion-apply";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
-import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
+import { useEntityListSource } from "~/app/_components/combobox/with-search-hook";
 import { tradeOptions } from "~/app/projects/trade-options";
 import { purchase } from "~/app/purchases/purchase.functions";
 import { Row, Stack } from "~/components/layout";
@@ -61,6 +61,47 @@ interface PartDraft {
   projectId: string | null;
   keepProduct: boolean;
   productQuantity: string;
+}
+
+/**
+ * A part's project picker, extracted so `useEntityListSource` (a hook) is
+ * called once per part's own component instance rather than inside the
+ * parts' `.map()`.
+ */
+function PartProjectPicker({
+  projectId,
+  onChange,
+}: {
+  projectId: string | null;
+  onChange: (projectId: string | null) => void;
+}) {
+  const { dialog, items, onSearchChange, isLoading, onOpenChange } =
+    useEntityListSource("project");
+  const selectedId = projectId ? parseShortcodeFor("project", projectId) : null;
+  const selected = selectedId
+    ? (items.find((item) => item.id === selectedId) ?? {
+        id: selectedId,
+        shortcode: selectedId,
+        name: selectedId,
+      })
+    : null;
+  return (
+    <>
+      {dialog}
+      <EntityPicker
+        entity="project"
+        label="project"
+        items={items}
+        value={selected}
+        setValue={(item) => onChange(item?.id ?? null)}
+        onSearchChange={onSearchChange}
+        isLoading={isLoading}
+        onOpenChange={onOpenChange}
+        placeholder="No project"
+        clearable
+      />
+    </>
+  );
 }
 
 /** Dollars of slack before the parts read as disagreeing with the original. */
@@ -290,38 +331,12 @@ export function SplitExpenseDialog({
                   compact
                 />
                 <div className="w-48">
-                  <WithEntitySearch entity="project">
-                    {({ items, onSearchChange, isLoading, onOpenChange }) => {
-                      const selectedId = part.projectId
-                        ? parseShortcodeFor("project", part.projectId)
-                        : null;
-                      const selected = selectedId
-                        ? (items.find((item) => item.id === selectedId) ?? {
-                            id: selectedId,
-                            shortcode: selectedId,
-                            name: selectedId,
-                          })
-                        : null;
-                      return (
-                        <EntityPicker
-                          entity="project"
-                          label="project"
-                          items={items}
-                          value={selected}
-                          setValue={(item) =>
-                            updatePart(part.key, {
-                              projectId: item?.id ?? null,
-                            })
-                          }
-                          onSearchChange={onSearchChange}
-                          isLoading={isLoading}
-                          onOpenChange={onOpenChange}
-                          placeholder="No project"
-                          clearable
-                        />
-                      );
-                    }}
-                  </WithEntitySearch>
+                  <PartProjectPicker
+                    projectId={part.projectId}
+                    onChange={(projectId) =>
+                      updatePart(part.key, { projectId })
+                    }
+                  />
                 </div>
                 {expense.productId && (
                   <Row align="center" gap="xs">

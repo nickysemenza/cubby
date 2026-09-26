@@ -1,5 +1,4 @@
 import * as schemas from "@cubby/schemas/project";
-import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
@@ -21,10 +20,6 @@ export const projectContract = defineContract("project", {
     native: "Project analytics",
     input: schemas.projectDashboardFiltersSchema,
     output: schemas.projectPortfolioAnalyticsOut,
-  }),
-  options: query({
-    input: z.undefined(),
-    output: z.array(schemas.projectOptionsOut),
   }),
   createFromTasks: mutation({
     input: schemas.createProjectFromTasksInput,

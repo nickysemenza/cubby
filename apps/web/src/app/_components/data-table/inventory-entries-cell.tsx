@@ -13,7 +13,7 @@ import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 
 import { buildLocationComboboxItem } from "../combobox/combobox-builders";
-import type { WithEntitySearchProps } from "../combobox/with-search-hook";
+import type { SearchProviderProps } from "../combobox/with-search-hook";
 import {
   entityDisplayImageKey,
   useEntityDisplayImageMap,
@@ -48,9 +48,7 @@ function locationSummary(
 
 interface InventoryEntriesInlineEditConfig<T, TEntry> {
   /** WithLocationSearch — injected so unit tests can stub it. */
-  SearchProvider: (
-    props: WithEntitySearchProps<LocationShortcode>,
-  ) => ReactNode;
+  SearchProvider: (props: SearchProviderProps<LocationShortcode>) => ReactNode;
   onMoveEntry: (entry: TEntry, locationId: LocationShortcode) => Promise<void>;
   onCreateEntry: (row: T, locationId: LocationShortcode) => Promise<void>;
 }
