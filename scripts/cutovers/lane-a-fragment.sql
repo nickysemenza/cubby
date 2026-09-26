@@ -185,7 +185,7 @@ ALTER TABLE "RunTarget"
   ADD COLUMN "deviceWorkState" text,
   ADD COLUMN "deviceWorkAttempts" integer NOT NULL DEFAULT 0,
   ADD COLUMN "deviceWorkError" text,
-  ADD COLUMN "deviceWorkDeviceId" uuid REFERENCES "Device" ("id"),
+  ADD COLUMN "deviceWorkDeviceId" uuid REFERENCES "Device" ("id") ON DELETE SET NULL,
   ADD COLUMN "deviceWorkUpdatedAt" timestamp;
 
 ALTER TABLE "RunTarget"

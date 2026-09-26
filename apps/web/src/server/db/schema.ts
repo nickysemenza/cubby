@@ -1628,7 +1628,7 @@ export const runTarget = pgTable(
     deviceWorkError: text("deviceWorkError"),
     deviceWorkDeviceId: uuid("deviceWorkDeviceId")
       .$type<DeviceId>()
-      .references(() => device.id),
+      .references(() => device.id, { onDelete: "set null" }),
     deviceWorkUpdatedAt: timestamp("deviceWorkUpdatedAt", { mode: "date" }),
     ...baseTimestamps(),
   },

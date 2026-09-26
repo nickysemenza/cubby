@@ -121,6 +121,14 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records the Run a model call belonged to",
   },
+  "ImageProcessingJob.runId": {
+    classification: "metadata",
+    reason: "records the Run that scheduled a queued image-processing job",
+  },
+  "RunTarget.deviceWorkDeviceId": {
+    classification: "metadata",
+    reason: "records the device that last reported on-device processing",
+  },
   "RunTarget.purchaseId": {
     classification: "metadata",
     reason: "records the Purchase a targeted validation examined",

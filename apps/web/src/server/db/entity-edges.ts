@@ -1215,6 +1215,18 @@ export const ENTITY_EDGES = {
           "Append-only provenance: a usage row keeps naming the run it was billed to.",
       },
     },
+    "ImageProcessingJob.runId": {
+      column: imageProcessingJob.runId,
+      role: "history",
+      label: "image processing jobs",
+      description:
+        "A queued image-processing job requested by this run; the column is cleared when the run goes.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Append-only provenance: a job keeps naming the run that scheduled it.",
+      },
+    },
     "Purchase.runId": {
       column: purchase.runId,
       role: "history",
@@ -1355,6 +1367,18 @@ export const ENTITY_EDGES = {
       description:
         "A sighting reported by this device; meaningless without the reporting install.",
       liveness: { kind: "must-target-live" },
+    },
+    "RunTarget.deviceWorkDeviceId": {
+      column: runTarget.deviceWorkDeviceId,
+      role: "history",
+      label: "photo-run device work",
+      description:
+        "A run target this device reported processing; the column is cleared when the device goes.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Append-only provenance: a target keeps naming the device that last reported on it.",
+      },
     },
   }),
   imageSighting: edges({}),
