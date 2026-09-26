@@ -22,7 +22,6 @@ export {
   batchUpdateWithCaseWhen,
   FindOrCreateConflictError,
   findOrCreate,
-  imageCascadeChild,
   imageJoinBindings,
   insertAndReturn,
   nextImageSortOrder,

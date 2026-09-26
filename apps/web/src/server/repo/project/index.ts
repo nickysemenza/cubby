@@ -49,7 +49,7 @@ export {
 } from "./crud";
 export { projectDashboardSummary } from "./dashboard-summary";
 export { getProjectDependencyGraph } from "./dependency-graph";
-export { projectList, projectNameOptions } from "./lookup";
+export { projectList } from "./lookup";
 export { projectPortfolioAnalytics } from "./portfolio-analytics";
 export { projectToolGallery } from "./tool-gallery";
 export { projectToolMatrix } from "./tool-matrix";

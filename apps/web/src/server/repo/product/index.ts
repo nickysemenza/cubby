@@ -26,7 +26,6 @@ export {
   getProductExternalIdSourceOptions,
   getProductManufacturerOptions,
   getProductsSharingTags,
-  getProductTagOptions,
 } from "./analytics";
 export {
   getProductConversionCoverageFreshness,

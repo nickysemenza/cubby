@@ -141,7 +141,7 @@ test.describe("Recipe Flow", () => {
 
       await pool.query(
         `INSERT INTO "AiAnalysis"
-          ("entityType", "entityId", "feature", "model", "promptVersion", "inputFingerprint", "result")
+          ("entityKind", "entityId", "feature", "model", "promptVersion", "inputFingerprint", "result")
          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
         [
           "recipe",

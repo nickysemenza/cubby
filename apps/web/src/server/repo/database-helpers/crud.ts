@@ -463,25 +463,6 @@ export async function nextImageSortOrder<
 }
 
 /**
- * The declared child-cascade edge for an entity's own attachments — pass this
- * in `removeEntity`'s `children` so a delete soft-deletes the associations and
- * reaps any Image row/R2 object the cascade orphaned. `removeEntity` discovers
- * the image column itself (via `imageJoinColumnFor` reading
- * `INCOMING_EDGES.image`).
- */
-export const imageCascadeChild = (
-  // Purchase's cascade counts distinguish `cascadedPurchaseImages` from its
-  // sibling `cascadedPurchaseProducts` child — every other caller uses the
-  // shared default.
-  auditKey = "cascadedImages",
-) =>
-  ({
-    table: entityAttachment,
-    parentColumns: [entityAttachment.subjectEntityId],
-    auditKey,
-  }) as const;
-
-/**
  * The shared image-sync body behind every gallery entity's update path:
  * reorder existing images (first = cover) → detach removed ones (reaping any
  * Image row/R2 object nothing else still references, via

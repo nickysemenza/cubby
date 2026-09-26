@@ -294,12 +294,7 @@ export type TargetedImportLaunch = z.infer<typeof targetedImportLaunch>;
 // union's members when the union is a named export of a scanned schema
 // module, and this operation is now HTTP-visible (not browser-only), so its
 // members must resolve to real components.
-export {
-  targetedImportStartInput,
-  targetedImportStartOutput,
-  type TargetedImportStartInput,
-  type TargetedImportStartOutput,
-};
+export { type TargetedImportStartInput, type TargetedImportStartOutput };
 
 /**
  * Run reads for the generic list and detail pages. A Run has no create/update

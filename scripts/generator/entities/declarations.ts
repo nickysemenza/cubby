@@ -243,7 +243,7 @@ export type EntityStorageField = Readonly<{
   reference: string | null;
   specialized: string | null;
 }>;
-export type EntityFieldModelGrouping = Readonly<{
+type EntityFieldModelGrouping = Readonly<{
   field: string;
   nullGroupKey: string;
   labelField: string | null;
