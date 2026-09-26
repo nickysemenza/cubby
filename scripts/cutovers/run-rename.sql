@@ -5,14 +5,23 @@
 -- One transaction: any failed assertion rolls everything back.
 BEGIN;
 
--- 0. Preconditions. No run may be mid-flight: its Flue instance and browser
---    commands still speak the old API shape.
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM "ImportRun" WHERE status = 'running') THEN
-    RAISE EXCEPTION 'cutover: a run is still running; wait for it or cancel it';
-  END IF;
-END $$;
+-- 0. A competing lock fails fast instead of stretching the window.
+SET LOCAL lock_timeout = '10s';
+SET LOCAL statement_timeout = '5min';
+
+-- Active runs (running or paused) straddle the API shape change: their Flue
+-- instance and browser commands speak the old names. Fail them so they can be
+-- restarted from the run page afterwards; `needs_review` runs are plain data.
+UPDATE "ImportRun"
+SET status = 'failed',
+    "failureCode" = 'run_cutover',
+    "endedAt" = now(),
+    "updatedAt" = now()
+WHERE status IN ('running', 'paused_auth', 'paused_offline', 'paused_approval');
+
+UPDATE "VendorAccount"
+SET status = 'active', "updatedAt" = now()
+WHERE status IN ('paused_auth', 'paused_offline');
 
 -- 1. Tables.
 ALTER TABLE "ImportRun" RENAME TO "Run";

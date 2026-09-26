@@ -13,16 +13,19 @@ report zero).
 
 1. **Prepare.** The PR is green, open without auto-merge, and up to date with
    `main`. Nobody else is pushing schema.
-2. **Drain.** Wait until no run has `status = 'running'`
-   (`SELECT count(*) FROM "ImportRun" WHERE status = 'running'`). Runs in
-   `needs_review` are data and survive the rename. The SQL aborts if a run is
-   still running.
-3. **Back up.** Create a Neon branch of production named for the date.
-4. **Rehearse.** Run `run-rename.sql` then `run-rename-verify.sql` against a
-   second throwaway Neon branch; every verify row must be zero. Point a local
-   `pnpm --dir apps/web exec drizzle-kit push --verbose` (answer no to every
-   prompt) at that branch and confirm the only proposed changes are the known
-   `gin_trgm_ops`/array-default drift. Delete the rehearsal branch.
+2. **Drain.** Finish or cancel the runs you care about. Any run still
+   `running` or paused is failed by the SQL (`failureCode = 'run_cutover'`)
+   and can be restarted from its run page afterwards; `needs_review` runs are
+   data and survive the rename. The SQL sets `lock_timeout = 10s`, so a
+   competing transaction aborts the cutover instead of stretching it; re-run.
+3. **Back up.** Note the UTC time just before running the SQL; Neon's
+   point-in-time restore to that instant is the rollback point.
+4. **Rehearse.** Push the pre-rename schema to a scratch Postgres, seed
+   synthetic rows (a running run, a finding targeting its run, grams-only
+   meal rows, an orphan `AiUsage` entity, a deleted recipe with cached
+   totals), run `run-rename.sql` then `run-rename-verify.sql`, and confirm a
+   dry-run `drizzle-kit push` of the new schema proposes only the known
+   `gin_trgm_ops`/array-default/composite-FK drift.
 5. **Cut over.** Run `run-rename.sql` against production, then merge the PR
    immediately. The previous deploy errors against the renamed tables until
    `deploy.yaml` finishes (a few minutes); queues retry.
@@ -32,5 +35,5 @@ report zero).
 7. **Native.** Ship a TestFlight build from the merged commit the same day;
    older native builds cannot read the renamed operations.
 
-Rollback: restore from the step-3 branch and redeploy the previous `main`
+Rollback: restore to the step-3 point in time and redeploy the previous `main`
 commit. There is no forward-compatible rollback of the rename itself.
