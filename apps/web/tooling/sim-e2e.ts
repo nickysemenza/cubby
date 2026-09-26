@@ -908,8 +908,11 @@ async function runHeadlessPhotoScenario(
         await page
           .getByRole("button", { name: "Start new run with same inputs" })
           .click();
-        await expect(page).not.toHaveURL(new RegExp(`/${runID}$`));
-        const successorID = page.url().split("/").at(-1) ?? "";
+        // The new run re-processes its photos, then its page starts grouping.
+        await expect(page).toHaveURL(/\/runs\/[^/?]+\?startGrouping=1$/);
+        const successorID =
+          new URL(page.url()).pathname.split("/").at(-1) ?? "";
+        expect(successorID).not.toBe(runID);
         await expect(
           page.getByRole("link", { name: runID, exact: true }),
         ).toBeVisible();
