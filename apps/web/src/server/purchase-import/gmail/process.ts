@@ -23,7 +23,7 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
 
-import { refundStillUnbooked } from "../findings";
+import { refundTally } from "../findings";
 import { uniqueOrderSubsetForCharge } from "../writer-policy";
 import type { GmailOrderMailAttachment } from "./types";
 
@@ -388,19 +388,21 @@ export async function processOrderMails(
       (classification.event === "delivered" ||
         classification.event === "refunded")
     ) {
+      let possibleDuplicateRefund = false;
       if (
         classification.event === "refunded" &&
         classification.amount !== null
       ) {
-        const unbooked = await refundStillUnbooked(database, {
+        const tally = await refundTally(database, {
           purchaseId: target.id,
           ledgerPartyId: mail.ledgerPartyId,
           amount: classification.amount,
         });
-        if (!unbooked) {
+        if (tally.booked >= Math.max(tally.evidenced, 1)) {
           processed += 1;
           continue;
         }
+        possibleDuplicateRefund = tally.booked > 0 || tally.evidenced > 1;
       }
       const kind =
         classification.event === "delivered" ? "arrived" : "refund_unbooked";
@@ -425,7 +427,9 @@ export async function processOrderMails(
           summary:
             classification.event === "delivered"
               ? "Vendor mail says all items were delivered. Review and receive this purchase."
-              : "Vendor mail reports a refund that is not yet booked in the expense ledger.",
+              : possibleDuplicateRefund
+                ? "Vendor mail reports a refund of the same amount as another refund on this order. Apply only if it is a separate refund, not a second notice for the same one."
+                : "Vendor mail reports a refund that is not yet booked in the expense ledger.",
           proposedFix,
           evidenceFingerprint: await sha256(
             JSON.stringify({ sourceKey, classification, target: target.id }),

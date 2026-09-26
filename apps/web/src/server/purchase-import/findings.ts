@@ -71,19 +71,22 @@ const loadExpenses = async (
 };
 
 /**
- * Whether another refund Expense of this amount belongs on the Purchase.
+ * Refund Expenses of this amount already on the Purchase, and refund mails
+ * for the order and amount.
  *
  * Equal partial refunds on one order are distinct money, so "an Expense of
  * this amount already exists" cannot mean "already booked". Each distinct
- * refund mail for the order and amount is one refund; a booked Expense of the
- * amount (from an applied finding, order history, or a human) covers one of
- * them. Evidence is counted per mail, not per event, so a reclassified mail
- * stays one refund.
+ * refund mail is one refund; a booked Expense of the amount (from an applied
+ * finding, order history, or a human) covers one of them. Mails are counted
+ * by content, so a resent copy stays one refund. A vendor's "refund
+ * initiated" and "refund issued" mails still count as two: the mail alone
+ * cannot tell them from two equal refunds, so the finding says so and the
+ * reviewer decides.
  */
-export async function refundStillUnbooked(
+export async function refundTally(
   executor: DrizzleClient | DrizzleTransaction,
   input: { purchaseId: string; ledgerPartyId: string; amount: number },
-): Promise<boolean> {
+): Promise<{ booked: number; evidenced: number }> {
   const refundCents = Math.round(Math.abs(input.amount) * 100);
   const purchaseId = parseEntityId("purchase", input.purchaseId);
   // Sequential: a transaction handle runs one statement at a time.
@@ -98,7 +101,9 @@ export async function refundStillUnbooked(
       ),
     );
   const [evidenced] = await executor
-    .select({ count: sql<number>`count(distinct ${orderMail.id})::int` })
+    .select({
+      count: sql<number>`count(distinct ${orderMail.rawChecksum})::int`,
+    })
     .from(orderMailEvent)
     .innerJoin(orderMail, eq(orderMail.id, orderMailEvent.orderMailId))
     .innerJoin(
@@ -119,8 +124,17 @@ export async function refundStillUnbooked(
         sql`round(abs(${orderMailEvent.amount}) * 100) = ${refundCents}`,
       ),
     );
+  return { booked: booked?.count ?? 0, evidenced: evidenced?.count ?? 0 };
+}
+
+/** Whether another refund Expense of this amount belongs on the Purchase. */
+async function refundStillUnbooked(
+  executor: DrizzleClient | DrizzleTransaction,
+  input: { purchaseId: string; ledgerPartyId: string; amount: number },
+): Promise<boolean> {
+  const { booked, evidenced } = await refundTally(executor, input);
   // A refund finding without mail evidence still stands for one refund.
-  return (booked?.count ?? 0) < Math.max(evidenced?.count ?? 0, 1);
+  return booked < Math.max(evidenced, 1);
 }
 
 const assertFixTargetsFinding = (

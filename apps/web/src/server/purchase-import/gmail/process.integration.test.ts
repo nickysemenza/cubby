@@ -132,7 +132,7 @@ describe("Gmail order mail processing", () => {
     messageId: string,
     receivedAt: string,
     classification: OrderMailClassification,
-    options: { pdf?: boolean } = {},
+    options: { pdf?: boolean; rawChecksum?: string } = {},
   ) {
     const [mail] = await getDb(ctx.db)
       .insert(orderMail)
@@ -142,7 +142,7 @@ describe("Gmail order mail processing", () => {
         sender: SENDER,
         subject: `ForgeWear ${classification.event} ${classification.orderId ?? ""}`,
         receivedAt: new Date(receivedAt),
-        rawChecksum: `raw-${messageId}`,
+        rawChecksum: options.rawChecksum ?? `raw-${messageId}`,
       })
       .returning({ id: orderMail.id });
     if (!mail) throw new Error("test setup: order mail not inserted");
@@ -411,6 +411,75 @@ describe("Gmail order mail processing", () => {
     // Replaying the first refund mail is still a no-op.
     await processOrderMails(ctx.db, ["msg-refund-1"], [], ports);
     expect(await refundFindings()).toHaveLength(2);
+  });
+
+  // Regression: counting refund mails by row let a resent copy of one refund
+  // notice book the refund twice. Two different notices of the same amount
+  // are still filed, since mail alone cannot tell them from two refunds, but
+  // the finding tells the reviewer.
+  it("counts a resent refund notice once and flags a second same-amount notice", async () => {
+    const seed = await seedForgeWear();
+    await importOrderHistory(ctx.db, ctx.actor, {
+      ledgerPartyId: seed.party.id,
+      vendorAccountId: seed.account.id,
+      orderId: "FW-SYN-2002",
+      orderedAt: "2026-09-01T12:00:00.000Z",
+      lines: [{ title: "Canvas work apron", amount: 30 }],
+      revision: "a",
+    });
+    const [target] = await purchasesForOrder(ctx.db, "FW-SYN-2002");
+    if (!target)
+      throw new Error("test setup: history import wrote no Purchase");
+    const refundFindings = () =>
+      getDb(ctx.db)
+        .select({
+          id: importFinding.id,
+          status: importFinding.status,
+          summary: importFinding.summary,
+        })
+        .from(importFinding)
+        .where(
+          and(
+            eq(importFinding.targetId, target.id),
+            eq(importFinding.kind, "refund_unbooked"),
+          ),
+        );
+
+    await receiveMail(
+      seed,
+      "msg-notice-1",
+      "2026-09-05T12:00:00.000Z",
+      refunded("FW-SYN-2002", 10, "2026-09-05T12:00:00.000Z"),
+    );
+    const [first] = await refundFindings();
+    if (!first) throw new Error("test assertion: refund not filed");
+    expect(first.summary).not.toMatch(/same amount/);
+    await resolveImportFinding(
+      ctx.db,
+      { id: first.id, action: "apply" },
+      ctx.actor,
+    );
+
+    await receiveMail(
+      seed,
+      "msg-notice-1-resent",
+      "2026-09-05T13:00:00.000Z",
+      refunded("FW-SYN-2002", 10, "2026-09-05T12:00:00.000Z"),
+      { rawChecksum: "raw-msg-notice-1" },
+    );
+    expect(await refundFindings()).toHaveLength(1);
+
+    await receiveMail(
+      seed,
+      "msg-notice-2",
+      "2026-09-07T12:00:00.000Z",
+      refunded("FW-SYN-2002", 10, "2026-09-07T12:00:00.000Z"),
+    );
+    const second = (await refundFindings()).find(
+      (row) => row.status === "open",
+    );
+    expect(second?.summary).toMatch(/same amount as another refund/);
+    expect(await liveExpenseCents(ctx.db, target.id)).toEqual([-1000, 3000]);
   });
 
   it("converges mail-first and history-first arrivals on one Purchase with the mail PDF attached once", async () => {

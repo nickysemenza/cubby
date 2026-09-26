@@ -27,6 +27,7 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import { recordImportRunDispatchAttempt } from "~/server/purchase-import/dispatch";
+import { productEnrichmentTarget } from "~/server/purchase-import/product-enrichment-target";
 import { startTargetedImportRun } from "~/server/purchase-import/run-service";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
@@ -53,17 +54,8 @@ type TargetFingerprintInput =
       updatedAt: Date;
       source: string | null;
     }
-  | {
-      product:
-        | {
-            name: string;
-            manufacturer: string;
-            categoryId: string | null;
-            model: string | null;
-            updatedAt: Date;
-          }
-        | undefined;
-    };
+  /** A Product that was not found; a live one uses `productEnrichmentTarget`. */
+  | { product: undefined };
 
 const fingerprint = async (value: TargetFingerprintInput) => {
   const digest = await crypto.subtle.digest(
@@ -451,17 +443,10 @@ export const Route = createFileRoute("/api/import/targeted")({
               const claim = target.sourceId
                 ? await claimForActor(context.db, party.id, target.sourceId)
                 : null;
-              const [productState] = await getDb(context.db)
-                .select({
-                  name: product.name,
-                  manufacturer: product.manufacturer,
-                  categoryId: product.categoryId,
-                  model: product.model,
-                  updatedAt: product.updatedAt,
-                })
-                .from(product)
-                .where(and(eq(product.id, productId), notDeleted(product)))
-                .limit(1);
+              const productState = await productEnrichmentTarget(
+                getDb(context.db),
+                productId,
+              );
               const [sourceLine] = claim?.purchaseId
                 ? await getDb(context.db)
                     .select({ id: expense.id })
@@ -480,9 +465,9 @@ export const Route = createFileRoute("/api/import/targeted")({
                 productId,
                 claim,
                 sourceMatches: Boolean(sourceLine),
-                targetFingerprint: await fingerprint({
-                  product: productState,
-                }),
+                targetFingerprint:
+                  productState?.fingerprint ??
+                  (await fingerprint({ product: undefined })),
               };
             }),
           );

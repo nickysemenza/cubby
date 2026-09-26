@@ -31,6 +31,7 @@ import {
 } from "~/server/purchase-import/run-service";
 import { classifyOrderCapture } from "~/server/purchase-import/order-list";
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { productEnrichmentTarget } from "~/server/purchase-import/product-enrichment-target";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { recordStatementRows } from "~/server/repo/statement-row";
 import { statementRowExternalId } from "~/server/repo/statement-row-identity";
@@ -1264,24 +1265,15 @@ async function runForgeWearTraps(
 }
 
 async function productEnrichmentFingerprint(
-  pool: Pool,
+  db: Database,
   productId: string,
 ): Promise<string> {
-  const { rows } = await pool.query<{
-    name: string;
-    manufacturer: string;
-    categoryId: string | null;
-    model: string | null;
-    updatedAt: Date;
-  }>(
-    `SELECT name, manufacturer, "categoryId", model, "updatedAt" FROM "Product" WHERE id = $1`,
-    [productId],
+  const target = await productEnrichmentTarget(
+    getDb(db),
+    parseEntityId("product", productId),
   );
-  const live = rows[0];
-  if (!live) throw new Error("Product enrichment fingerprint target missing");
-  return createHash("sha256")
-    .update(JSON.stringify({ product: live }))
-    .digest("hex");
+  if (!target) throw new Error("Product enrichment fingerprint target missing");
+  return target.fingerprint;
 }
 
 /**
@@ -1323,7 +1315,7 @@ async function runProductEnrichmentCommitAndOverwrite(
   };
 
   const commitFingerprint = await productEnrichmentFingerprint(
-    pool,
+    db,
     purchaseProduct.id,
   );
   const commitRun = await startTargetedImportRun(db, {
@@ -1342,6 +1334,19 @@ async function runProductEnrichmentCommitAndOverwrite(
   });
   if (!commitRun.created)
     throw new Error("Product enrichment commit run was blocked");
+  // Fill-only commits may only fill an empty field; the scenario's Product
+  // already has a manufacturer from its import, so this fills `model`.
+  const before = await pool.query<{
+    manufacturer: string;
+    model: string | null;
+    categoryId: string | null;
+  }>(`SELECT manufacturer, model, "categoryId" FROM "Product" WHERE id = $1`, [
+    purchaseProduct.id,
+  ]);
+  if (before.rows[0]?.model !== null)
+    throw new Error(
+      `Enrichment setup expects an empty model: ${JSON.stringify(before.rows)}`,
+    );
   const committed = commitProductEnrichmentOut.parse(
     await callPurchase("commit_product_enrichment", {
       _runExecution: {
@@ -1350,12 +1355,12 @@ async function runProductEnrichmentCommitAndOverwrite(
       },
       productId: purchaseProduct.shortcode,
       targetFingerprint: commitFingerprint,
-      changes: { manufacturer: "Synthetic Textile Co." },
+      changes: { model: "SYN-APRON-1" },
     }),
   );
-  if (!committed.changedFields.includes("manufacturer"))
+  if (!committed.changedFields.includes("model"))
     throw new Error(
-      `Enrichment commit did not fill manufacturer: ${JSON.stringify(committed)}`,
+      `Enrichment commit did not fill model: ${JSON.stringify(committed)}`,
     );
   const afterCommit = await pool.query<{
     manufacturer: string;
@@ -1364,13 +1369,16 @@ async function runProductEnrichmentCommitAndOverwrite(
   }>(`SELECT manufacturer, model, "categoryId" FROM "Product" WHERE id = $1`, [
     purchaseProduct.id,
   ]);
-  if (afterCommit.rows[0]?.manufacturer !== "Synthetic Textile Co.")
+  if (
+    afterCommit.rows[0]?.model !== "SYN-APRON-1" ||
+    afterCommit.rows[0]?.manufacturer !== before.rows[0]?.manufacturer
+  )
     throw new Error(
-      `Enrichment commit did not persist manufacturer: ${JSON.stringify(afterCommit.rows)}`,
+      `Enrichment commit left unexpected state: ${JSON.stringify({ before: before.rows[0], after: afterCommit.rows[0] })}`,
     );
 
   const overwriteFingerprint = await productEnrichmentFingerprint(
-    pool,
+    db,
     purchaseProduct.id,
   );
   const overwriteRun = await startTargetedImportRun(db, {
@@ -1397,13 +1405,10 @@ async function runProductEnrichmentCommitAndOverwrite(
       },
       productId: purchaseProduct.shortcode,
       targetFingerprint: overwriteFingerprint,
-      change: {
-        field: "manufacturer",
-        value: "Synthetic Textile Co. (Reissue)",
-      },
+      change: { field: "model", value: "SYN-APRON-2" },
     }),
   );
-  if (overwritten.changedField !== "manufacturer")
+  if (overwritten.changedField !== "model")
     throw new Error(
       `Enrichment overwrite changed the wrong field: ${JSON.stringify(overwritten)}`,
     );
@@ -1417,15 +1422,15 @@ async function runProductEnrichmentCommitAndOverwrite(
   const row = afterOverwrite.rows[0];
   if (
     !row ||
-    row.manufacturer !== "Synthetic Textile Co. (Reissue)" ||
-    row.model !== afterCommit.rows[0]?.model ||
+    row.model !== "SYN-APRON-2" ||
+    row.manufacturer !== afterCommit.rows[0]?.manufacturer ||
     row.categoryId !== afterCommit.rows[0]?.categoryId
   )
     throw new Error(
       `Enrichment overwrite left unexpected state: ${JSON.stringify({ before: afterCommit.rows[0], after: row })}`,
     );
   console.log(
-    "[headless-wardrobe-e2e] Product enrichment commit filled manufacturer, and overwrite replaced it with typed approval leaving other fields untouched",
+    "[headless-wardrobe-e2e] Product enrichment commit filled model, and overwrite replaced it with typed approval leaving other fields untouched",
   );
 }
 
