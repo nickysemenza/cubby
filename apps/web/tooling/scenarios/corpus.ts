@@ -3,12 +3,20 @@ import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import { ledgerPartyCreateInput } from "@cubby/schemas/ledger-party";
 import { locationCreateInput } from "@cubby/schemas/location";
 import { productCreateInput } from "@cubby/schemas/product";
-import { taskCreateInput } from "@cubby/schemas/project";
+import {
+  expenseCreateInput,
+  projectCreateInput,
+  taskCreateInput,
+} from "@cubby/schemas/project";
+import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { testUserId } from "@cubby/schemas/testing";
+import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { faker } from "@faker-js/faker";
 import type { Pool } from "pg";
 
 import * as schema from "~/server/db/schema";
+import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
   taxonomyRootFixtures,
@@ -73,6 +81,7 @@ export async function seedCorpus(pool: Pool, userId: string): Promise<void> {
 
   console.log("[dev-db] Seeding products and inventory...");
   const productCount = 8;
+  const products = [];
   for (let index = 0; index < productCount; index += 1) {
     const product = await createFixtureWithContext(
       context,
@@ -90,6 +99,7 @@ export async function seedCorpus(pool: Pool, userId: string): Promise<void> {
         categoryId: taxonomyShortcode("food"),
       }),
     );
+    products.push(product);
     const location = locations[index % locations.length];
     if (!location) continue;
     await createFixtureWithContext(
@@ -144,4 +154,79 @@ export async function seedCorpus(pool: Pool, userId: string): Promise<void> {
       taskCreateInput.parse({ name, trade: "other" }),
     );
   }
+
+  console.log("[dev-db] Seeding projects...");
+  const projectNames = ["Kitchen refresh", "Garage organization"];
+  for (const name of projectNames) {
+    await createFixtureWithContext(
+      context,
+      "project",
+      projectCreateInput.parse({
+        name,
+        aliases: [],
+        tags: [],
+        notes: null,
+        startDate: "2026-05-01",
+        endDate: "2026-05-31",
+      }),
+    );
+  }
+
+  console.log("[dev-db] Seeding a vendor with purchases and expenses...");
+  const vendor = await createFixtureWithContext(
+    context,
+    "vendor",
+    vendorCreateInput.parse({
+      name: "Synthetic Supply Co",
+      aliases: [],
+      tags: [],
+      website: "https://example.com",
+      orderUrlTemplate: null,
+      notes: null,
+    }),
+  );
+  for (const [index, name] of [
+    "Kitchen restock",
+    "Garage supplies",
+  ].entries()) {
+    const purchase = await createFixtureWithContext(
+      context,
+      "purchase",
+      purchaseCreateInput.parse({
+        vendorId: vendor.id,
+        orderId: `${name} order`,
+        date: "2026-05-15",
+        statedTotal: 42.5,
+        notes: null,
+        pendingImageIds: [],
+      }),
+    );
+    const product = products[index % products.length];
+    await createFixtureWithContext(
+      context,
+      "expense",
+      expenseCreateInput.parse({
+        name: `${name} expense`,
+        cost: 42.5,
+        date: "2026-05-15",
+        costType: "materials",
+        trade: "other",
+        productId: product?.id ?? null,
+        productQuantity: product ? 1 : null,
+        purchaseId: purchase.id,
+      }),
+    );
+  }
+
+  console.log("[dev-db] Seeding a member ledger party...");
+  await insertWithShortcode(db, "ledgerParty", {
+    name: "Household Member",
+    kind: "member",
+    userId: testUserId(userId),
+  });
+
+  console.log("[dev-db] Seeding a photo-inventory run...");
+  await startPhotoInventoryRun(db, {
+    actorUserId: testUserId(userId),
+  });
 }

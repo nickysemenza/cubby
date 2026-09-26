@@ -70,6 +70,10 @@ import {
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { imageUpload } from "~/lib/image.functions";
+import {
+  PresignedUploadError,
+  putPresignedObject,
+} from "~/lib/presigned-upload";
 
 type GalleryEntityId<E extends GalleryEntity> = EntityMutationVariables<
   E,
@@ -164,12 +168,14 @@ export function useEntityPhotoCapture<E extends GalleryEntity>(
         entityType,
       });
 
-      const put = await fetch(init.uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-      if (!put.ok) throw new Error(`Image upload failed (${put.status})`);
+      try {
+        await putPresignedObject(init.uploadUrl, file, contentType);
+      } catch (error) {
+        throw new Error(
+          `Image upload failed (${error instanceof PresignedUploadError ? error.status : "unknown"})`,
+          { cause: error },
+        );
+      }
 
       // SAFETY: every gallery entity's generated update schema accepts
       // `{ id, data: { pendingImageIds } }` — the per-entity shapes only differ

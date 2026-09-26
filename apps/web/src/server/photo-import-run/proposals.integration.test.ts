@@ -1,5 +1,7 @@
+import { buildActorContext } from "@cubby/schemas/context";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PhotoGroupProposalGroup } from "@cubby/schemas/photo-import-run";
+import { testUserId } from "@cubby/schemas/testing";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq, ilike, sql } from "drizzle-orm";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
@@ -36,6 +38,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
   approvePhotoGroupProposals,
+  assertPhotoRunReviewer,
   chooseExistingProductForPhotoGroup,
   updatePhotoGroupProductDraft,
   discardPhotoGroupProposal,
@@ -119,6 +122,21 @@ describe("photo group proposals", () => {
       );
     return row;
   };
+
+  // Regression: `assertPhotoRunReviewer` is every review handler's gate
+  // (`photoImportHandlers` in `photo-import.server.ts` calls it before doing
+  // anything else). It must reject an actor with no live `member`
+  // LedgerParty the exact same way as a run that doesn't exist — a 404, not a
+  // 403 — so a non-member can never learn a run exists by the shape of the
+  // error they get back.
+  it("treats an actor with no member LedgerParty as if the run doesn't exist", async () => {
+    const { run } = await seedRun(1);
+    const outsider = buildActorContext(testUserId("outsider-user-id"), "web");
+
+    await expect(
+      assertPhotoRunReviewer(ctx.db, outsider, run.shortcode),
+    ).rejects.toThrow(`Import run ${run.shortcode} was not found`);
+  });
 
   it("hands a saved photo proposal to human review when the agent ends without a final progress call", async () => {
     const { run, codes } = await seedRun(2);
