@@ -1,13 +1,18 @@
+import { buildActorContext } from "@cubby/schemas/context";
 import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import { locationCreateInput } from "@cubby/schemas/location";
 import {
+  commitProductEnrichmentOut,
   commitPurchaseImportOut,
+  overwriteProductEnrichmentOut,
   preparePurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
 import { proposeProductMatchOut } from "@cubby/schemas/recommendations";
+import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { testUserId } from "@cubby/schemas/testing";
 import { chromium, expect, request } from "@playwright/test";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { and, eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
@@ -17,11 +22,18 @@ import type { Database } from "~/server/db";
 
 import { importRunsResponse } from "~/lib/purchase-import-run-detail";
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
+import { financialAccount } from "~/server/db/schema";
 import { registerProductTools } from "~/server/mcp/tools/product.tools";
 import { registerPurchaseTools } from "~/server/mcp/tools/purchase.tools";
-import { startOrResumeImportRun } from "~/server/purchase-import/run-service";
+import {
+  startOrResumeImportRun,
+  startTargetedImportRun,
+} from "~/server/purchase-import/run-service";
 import { classifyOrderCapture } from "~/server/purchase-import/order-list";
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { recordStatementRows } from "~/server/repo/statement-row";
+import { statementRowExternalId } from "~/server/repo/statement-row-identity";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { proposeProductMatch } from "~/server/services/product-match.service";
 
@@ -799,6 +811,624 @@ async function importSyntheticPurchase(
   return purchaseProduct;
 }
 
+async function syntheticWardrobeMemberAndVendor(pool: Pool, userId: string) {
+  const member = await pool.query<{ id: string }>(
+    `SELECT id FROM "LedgerParty" WHERE "userId" = $1 AND kind = 'member' AND "deletedAt" IS NULL`,
+    [userId],
+  );
+  const memberId = member.rows[0]?.id;
+  if (member.rows.length !== 1 || !memberId)
+    throw new Error("Synthetic member is unavailable");
+  const vendorRow = await pool.query<{ id: string }>(
+    `SELECT id FROM "Vendor" WHERE name = 'Synthetic Outfitters' AND "deletedAt" IS NULL`,
+  );
+  const vendorId = vendorRow.rows[0]?.id;
+  if (vendorRow.rows.length !== 1 || !vendorId)
+    throw new Error("Synthetic vendor is unavailable");
+  const account = await pool.query<{ id: string }>(
+    `SELECT id FROM "VendorAccount" WHERE label = 'Synthetic wardrobe account' AND "deletedAt" IS NULL`,
+  );
+  const vendorAccountId = account.rows[0]?.id;
+  if (account.rows.length !== 1 || !vendorAccountId)
+    throw new Error("Synthetic vendor account is unavailable");
+  return { memberId, vendorId, vendorAccountId };
+}
+
+/**
+ * Re-import the identical order in a fresh run. A second run replaying the
+ * exact same source evidence must be a true no-op — inventory never
+ * auto-decrements/increments on re-import (README tenet), and re-running an
+ * import must not mint a second Purchase or Expense for one order.
+ */
+async function reimportInNewRunAndAssertNoOp(
+  pool: Pool,
+  db: Database,
+  kernel: KernelContext,
+  userId: string,
+  photoProduct: { id: string; shortcode: string },
+  purchaseProduct: { id: string; shortcode: string },
+): Promise<void> {
+  const { memberId, vendorAccountId } = await syntheticWardrobeMemberAndVendor(
+    pool,
+    userId,
+  );
+  const evidence = await readSyntheticRetailerEvidence();
+  const before = await readConvergenceFacts(
+    pool,
+    photoProduct.shortcode,
+    purchaseProduct.shortcode,
+  );
+  const run = await startOrResumeImportRun(db, {
+    ledgerPartyId: parseEntityId("ledgerParty", memberId),
+    vendorAccountId: parseEntityId("vendorAccount", vendorAccountId),
+    trigger: "manual",
+  });
+  const callPurchase = async (
+    name: string,
+    args: Parameters<typeof callMcpTool>[2],
+  ) => {
+    const server = new McpServer({
+      name: "wardrobe-reimport-sim",
+      version: "1.0",
+    });
+    registerPurchaseTools(server);
+    const result = await callMcpTool(
+      server,
+      name,
+      args,
+      {},
+      { entityKernel: kernel },
+    );
+    if (result.isError)
+      throw new Error(`${name} failed: ${JSON.stringify(result.content)}`);
+    return result.structuredContent;
+  };
+  const prepareOperationId = "prepare:synthetic-wardrobe-order-reimport";
+  const prepared = preparePurchaseImportOut.parse(
+    await callPurchase("prepare_purchase_import", {
+      _runExecution: {
+        runId: run.id,
+        operationId: prepareOperationId,
+        itemOperationIds: ["prepare-item:synthetic-wardrobe-order-reimport"],
+      },
+      orders: [
+        {
+          stableOrderId: "synthetic-wardrobe-order-reimport",
+          itemOperationId: "prepare-item:synthetic-wardrobe-order-reimport",
+          source: {
+            kind: "browser_order",
+            externalKey: evidence.orderUrl,
+            checksum: evidence.sourceChecksum,
+          },
+          evidenceChecksum: evidence.evidenceChecksum,
+          extractionRevision: "synthetic-html@1",
+          extraction: {
+            status: "ready",
+            candidate: {
+              orderId: evidence.order.orderNumber,
+              orderedAt: evidence.order.orderDate,
+              merchant: evidence.order.seller.name,
+              currency: evidence.order.priceCurrency,
+              printedGrandTotal: evidence.order.price,
+              lines: [
+                {
+                  title: evidence.product.name,
+                  amount: evidence.product.offers.price,
+                  lineKind: "principal",
+                  productUrl: evidence.product.url,
+                },
+              ],
+              payments: [
+                {
+                  amount: evidence.order.price,
+                  chargedAt: evidence.order.orderDate,
+                  cardLastFour: evidence.order.paymentMethodId,
+                },
+              ],
+              allShipmentsDelivered:
+                evidence.order.orderStatus.endsWith("OrderDelivered"),
+            },
+          },
+          lineIds: ["synthetic-wardrobe-order-reimport:line-1"],
+          primaryDocumentImageId: null,
+          screenshotImageId: null,
+        },
+      ],
+    }),
+  );
+  if (prepared.orders.length !== 1)
+    throw new Error("Re-import preparation did not return the synthetic order");
+  const committed = commitPurchaseImportOut.parse(
+    await callPurchase("commit_purchase_import", {
+      _runExecution: {
+        runId: run.id,
+        operationId: "commit:synthetic-wardrobe-order-reimport",
+      },
+      prepareOperationId,
+      defaultTrade: "other",
+      resolutions: [
+        {
+          stableOrderId: "synthetic-wardrobe-order-reimport",
+          stableLineId: "synthetic-wardrobe-order-reimport:line-1",
+          resolution: {
+            kind: "existing",
+            productId: purchaseProduct.shortcode,
+          },
+        },
+      ],
+    }),
+  );
+  if (committed.items[0]?.outcome !== "replayed")
+    throw new Error(
+      `Re-importing identical evidence was not a pure replay: ${JSON.stringify(committed.items)}`,
+    );
+  const after = await readConvergenceFacts(
+    pool,
+    photoProduct.shortcode,
+    purchaseProduct.shortcode,
+  );
+  if (
+    after.purchases.length !== 1 ||
+    after.expenses.length !== 1 ||
+    JSON.stringify(before.purchases) !== JSON.stringify(after.purchases) ||
+    JSON.stringify(before.expenses) !== JSON.stringify(after.expenses) ||
+    JSON.stringify(before.inventory) !== JSON.stringify(after.inventory) ||
+    JSON.stringify(before.settlements) !== JSON.stringify(after.settlements)
+  )
+    throw new Error(
+      `Re-import in a new run changed converged state: ${JSON.stringify({ before, after })}`,
+    );
+  console.log(
+    "[headless-wardrobe-e2e] Re-import in a new run replayed as a no-op: one Purchase, one Expense, inventory and allocations unchanged",
+  );
+}
+
+/**
+ * Trap 1 + 2: an overlapping statement CSV whose rows were already imported,
+ * alongside a decoy charge sharing the purchase's exact amount on a different
+ * day/merchant. Only the decoy row may be recorded; the overlap must not
+ * mint a second StatementRow under a new batch. Returns the decoy
+ * FinancialTransaction so the duplicate-order-history trap can confirm it
+ * stays unmatched.
+ */
+async function recordOverlappingStatementCsvAndDecoy(
+  db: Database,
+  userId: string,
+): Promise<{ id: string }> {
+  const actor = buildActorContext(testUserId(userId), "mcp");
+  const overlapAndDecoyRows = [
+    {
+      accountDescriptor: "Fixture Visa (...4242)",
+      statementDate: "2026-09-21",
+      providerAmount: -29.99,
+      merchant: "Synthetic Outfitters",
+      rawDescription: "SYNTHETIC OUTFITTERS ORDER 1",
+    },
+    {
+      accountDescriptor: "Fixture Visa (...4242)",
+      statementDate: "2026-09-22",
+      providerAmount: 50,
+      merchant: "Fixture Bank",
+      rawDescription: "SYNTHETIC CARD PAYMENT",
+    },
+    {
+      accountDescriptor: "Fixture Visa (...4242)",
+      statementDate: "2026-08-05",
+      providerAmount: -29.99,
+      merchant: "Synthetic Deceptive Retail",
+      rawDescription: "SYNTHETIC DECEPTIVE RETAIL CHARGE 1",
+    },
+  ] as const;
+  const recorded = await recordStatementRows(
+    db,
+    recordStatementRowsInput.parse({
+      import: {
+        source: "monarch",
+        label: "Synthetic wardrobe followup",
+        fingerprint: "synthetic-wardrobe-followup-1",
+        dateKind: "unknown",
+        rowCountDeclared: overlapAndDecoyRows.length,
+        notes: null,
+      },
+      rows: overlapAndDecoyRows,
+      dryRun: false,
+    }),
+    actor,
+  );
+  if (
+    recorded.inserted !== 1 ||
+    recorded.alreadyInAnotherBatch !== 2 ||
+    recorded.alreadyInThisBatch !== 0
+  )
+    throw new Error(
+      `Overlapping statement CSV did not dedupe against already-imported rows: ${JSON.stringify(recorded)}`,
+    );
+
+  const fixtureVisa = await getDb(db)
+    .select({ id: financialAccount.id })
+    .from(financialAccount)
+    .where(
+      and(
+        eq(financialAccount.name, "Fixture Visa"),
+        notDeleted(financialAccount),
+      ),
+    );
+  const fixtureVisaId = fixtureVisa[0]?.id;
+  if (fixtureVisa.length !== 1 || !fixtureVisaId)
+    throw new Error("Fixture Visa account is unavailable for the decoy charge");
+  const decoyExternalId = await statementRowExternalId({
+    source: "monarch",
+    account: "Fixture Visa (...4242)",
+    date: "2026-08-05",
+    amount: -29.99,
+    originalStatement: "SYNTHETIC DECEPTIVE RETAIL CHARGE 1",
+  });
+  return insertWithShortcode(db, "financialTransaction", {
+    accountId: parseEntityId("financialAccount", fixtureVisaId),
+    kind: "purchase",
+    status: "posted",
+    amount: 29.99,
+    transactionDate: null,
+    postedDate: "2026-08-05",
+    merchant: "Synthetic Deceptive Retail",
+    rawDescription: "SYNTHETIC DECEPTIVE RETAIL CHARGE 1",
+    sourceCategory: "Clothing",
+    sourceRefs: [{ source: "monarch", externalId: decoyExternalId }],
+  });
+}
+
+/**
+ * Trap 3: a duplicate order-history capture of the same order, under a
+ * different source key (as a second discovery surface would produce). It
+ * must attach to the existing Purchase rather than duplicate it, and its
+ * conflicting line must be filed as a finding instead of a second Expense.
+ */
+async function commitDuplicateOrderHistoryCapture(
+  db: Database,
+  kernel: KernelContext,
+  memberId: string,
+  vendorAccountId: string,
+  purchaseProduct: { shortcode: string },
+) {
+  const evidence = await readSyntheticRetailerEvidence();
+  const run = await startOrResumeImportRun(db, {
+    ledgerPartyId: parseEntityId("ledgerParty", memberId),
+    vendorAccountId: parseEntityId("vendorAccount", vendorAccountId),
+    trigger: "manual",
+  });
+  const callPurchase = async (
+    name: string,
+    args: Parameters<typeof callMcpTool>[2],
+  ) => {
+    const server = new McpServer({ name: "wardrobe-trap-sim", version: "1.0" });
+    registerPurchaseTools(server);
+    const result = await callMcpTool(
+      server,
+      name,
+      args,
+      {},
+      { entityKernel: kernel },
+    );
+    if (result.isError)
+      throw new Error(`${name} failed: ${JSON.stringify(result.content)}`);
+    return result.structuredContent;
+  };
+  const duplicateExternalKey = `${evidence.orderUrl}#duplicate-order-history-capture`;
+  const duplicateChecksum = createHash("sha256")
+    .update(duplicateExternalKey)
+    .digest("hex");
+  const prepareOperationId = "prepare:synthetic-wardrobe-order-duplicate";
+  const prepared = preparePurchaseImportOut.parse(
+    await callPurchase("prepare_purchase_import", {
+      _runExecution: {
+        runId: run.id,
+        operationId: prepareOperationId,
+        itemOperationIds: ["prepare-item:synthetic-wardrobe-order-duplicate"],
+      },
+      orders: [
+        {
+          stableOrderId: "synthetic-wardrobe-order-duplicate",
+          itemOperationId: "prepare-item:synthetic-wardrobe-order-duplicate",
+          source: {
+            kind: "browser_order",
+            externalKey: duplicateExternalKey,
+            checksum: duplicateChecksum,
+          },
+          evidenceChecksum: duplicateChecksum,
+          extractionRevision: "synthetic-html@1",
+          extraction: {
+            status: "ready",
+            candidate: {
+              orderId: evidence.order.orderNumber,
+              orderedAt: evidence.order.orderDate,
+              merchant: evidence.order.seller.name,
+              currency: evidence.order.priceCurrency,
+              printedGrandTotal: evidence.order.price,
+              lines: [
+                {
+                  title: evidence.product.name,
+                  amount: evidence.product.offers.price,
+                  lineKind: "principal",
+                  productUrl: evidence.product.url,
+                },
+              ],
+              payments: [
+                {
+                  amount: evidence.order.price,
+                  chargedAt: evidence.order.orderDate,
+                  cardLastFour: evidence.order.paymentMethodId,
+                },
+              ],
+              allShipmentsDelivered:
+                evidence.order.orderStatus.endsWith("OrderDelivered"),
+            },
+          },
+          lineIds: ["synthetic-wardrobe-order-duplicate:line-1"],
+          primaryDocumentImageId: null,
+          screenshotImageId: null,
+        },
+      ],
+    }),
+  );
+  if (prepared.orders.length !== 1)
+    throw new Error(
+      "Duplicate order-history preparation did not return the synthetic order",
+    );
+  const committed = commitPurchaseImportOut.parse(
+    await callPurchase("commit_purchase_import", {
+      _runExecution: {
+        runId: run.id,
+        operationId: "commit:synthetic-wardrobe-order-duplicate",
+      },
+      prepareOperationId,
+      defaultTrade: "other",
+      resolutions: [
+        {
+          stableOrderId: "synthetic-wardrobe-order-duplicate",
+          stableLineId: "synthetic-wardrobe-order-duplicate:line-1",
+          resolution: {
+            kind: "existing",
+            productId: purchaseProduct.shortcode,
+          },
+        },
+      ],
+    }),
+  );
+  if (
+    committed.items[0]?.outcome !== "updated" ||
+    (committed.items[0]?.findingCount ?? 0) < 1
+  )
+    throw new Error(
+      `Duplicate order-history capture did not file a conflict finding: ${JSON.stringify(committed.items)}`,
+    );
+}
+
+/**
+ * ForgeWear traps: an overlapping statement CSV whose rows were already
+ * imported, a decoy charge sharing the purchase's exact amount on a different
+ * day/merchant, and a duplicate order-history capture of the same order under
+ * a different source key. None may mint a duplicate Expense/Purchase or match
+ * the decoy.
+ */
+async function runForgeWearTraps(
+  pool: Pool,
+  db: Database,
+  kernel: KernelContext,
+  userId: string,
+  photoProduct: { id: string; shortcode: string },
+  purchaseProduct: { id: string; shortcode: string },
+): Promise<void> {
+  const { memberId, vendorAccountId } = await syntheticWardrobeMemberAndVendor(
+    pool,
+    userId,
+  );
+  const decoyTransaction = await recordOverlappingStatementCsvAndDecoy(
+    db,
+    userId,
+  );
+  await commitDuplicateOrderHistoryCapture(
+    db,
+    kernel,
+    memberId,
+    vendorAccountId,
+    purchaseProduct,
+  );
+  const facts = await readConvergenceFacts(
+    pool,
+    photoProduct.shortcode,
+    purchaseProduct.shortcode,
+  );
+  const duplicateFinding = await pool.query<{ count: string }>(
+    `SELECT count(*)::text AS count FROM "ImportFinding"
+     WHERE "targetType" = 'purchase' AND "targetId" = $1 AND kind = 'duplicate_lines'`,
+    [facts.purchases[0]?.id ?? null],
+  );
+  const decoyAllocations = await pool.query<{ count: string }>(
+    `SELECT count(*)::text AS count FROM "FinancialTransactionAllocation"
+     WHERE "transactionId" = $1 AND "deletedAt" IS NULL`,
+    [decoyTransaction.id],
+  );
+  if (
+    facts.purchases.length !== 1 ||
+    facts.expenses.length !== 1 ||
+    Number(facts.expenses[0]?.cost) !== 29.99 ||
+    duplicateFinding.rows[0]?.count !== "1" ||
+    decoyAllocations.rows[0]?.count !== "0"
+  )
+    throw new Error(
+      `ForgeWear traps left inconsistent state: ${JSON.stringify({ facts, duplicateFinding: duplicateFinding.rows, decoyAllocations: decoyAllocations.rows })}`,
+    );
+  console.log(
+    "[headless-wardrobe-e2e] ForgeWear traps held: overlapping statement rows deduped, the decoy charge stayed unmatched, and the duplicate order-history capture filed a conflict instead of a duplicate",
+  );
+}
+
+async function productEnrichmentFingerprint(
+  pool: Pool,
+  productId: string,
+): Promise<string> {
+  const { rows } = await pool.query<{
+    name: string;
+    manufacturer: string;
+    categoryId: string | null;
+    model: string | null;
+    updatedAt: Date;
+  }>(
+    `SELECT name, manufacturer, "categoryId", model, "updatedAt" FROM "Product" WHERE id = $1`,
+    [productId],
+  );
+  const live = rows[0];
+  if (!live) throw new Error("Product enrichment fingerprint target missing");
+  return createHash("sha256")
+    .update(JSON.stringify({ product: live }))
+    .digest("hex");
+}
+
+/**
+ * Product enrichment commit/overwrite: fill-only commit on a Product created
+ * by this scenario, then a typed-approval overwrite of that same field.
+ * Asserts the overwrite's stored value and that nothing else on the Product
+ * changed.
+ */
+async function runProductEnrichmentCommitAndOverwrite(
+  pool: Pool,
+  db: Database,
+  kernel: KernelContext,
+  userId: string,
+  purchaseProduct: { id: string; shortcode: string },
+): Promise<void> {
+  const { memberId, vendorId } = await syntheticWardrobeMemberAndVendor(
+    pool,
+    userId,
+  );
+  const callPurchase = async (
+    name: string,
+    args: Parameters<typeof callMcpTool>[2],
+  ) => {
+    const server = new McpServer({
+      name: "wardrobe-enrichment-sim",
+      version: "1.0",
+    });
+    registerPurchaseTools(server);
+    const result = await callMcpTool(
+      server,
+      name,
+      args,
+      {},
+      { entityKernel: kernel },
+    );
+    if (result.isError)
+      throw new Error(`${name} failed: ${JSON.stringify(result.content)}`);
+    return result.structuredContent;
+  };
+
+  const commitFingerprint = await productEnrichmentFingerprint(
+    pool,
+    purchaseProduct.id,
+  );
+  const commitRun = await startTargetedImportRun(db, {
+    ledgerPartyId: parseEntityId("ledgerParty", memberId),
+    purpose: "product_enrichment",
+    vendorId: parseEntityId("vendor", vendorId),
+    vendorAccountId: null,
+    trigger: "manual",
+    targets: [
+      {
+        kind: "product",
+        productId: purchaseProduct.id,
+        targetFingerprint: commitFingerprint,
+      },
+    ],
+  });
+  if (!commitRun.created)
+    throw new Error("Product enrichment commit run was blocked");
+  const committed = commitProductEnrichmentOut.parse(
+    await callPurchase("commit_product_enrichment", {
+      _runExecution: {
+        runId: commitRun.run.id,
+        operationId: "commit:synthetic-wardrobe-enrichment",
+      },
+      productId: purchaseProduct.shortcode,
+      targetFingerprint: commitFingerprint,
+      changes: { manufacturer: "Synthetic Textile Co." },
+    }),
+  );
+  if (!committed.changedFields.includes("manufacturer"))
+    throw new Error(
+      `Enrichment commit did not fill manufacturer: ${JSON.stringify(committed)}`,
+    );
+  const afterCommit = await pool.query<{
+    manufacturer: string;
+    model: string | null;
+    categoryId: string | null;
+  }>(`SELECT manufacturer, model, "categoryId" FROM "Product" WHERE id = $1`, [
+    purchaseProduct.id,
+  ]);
+  if (afterCommit.rows[0]?.manufacturer !== "Synthetic Textile Co.")
+    throw new Error(
+      `Enrichment commit did not persist manufacturer: ${JSON.stringify(afterCommit.rows)}`,
+    );
+
+  const overwriteFingerprint = await productEnrichmentFingerprint(
+    pool,
+    purchaseProduct.id,
+  );
+  const overwriteRun = await startTargetedImportRun(db, {
+    ledgerPartyId: parseEntityId("ledgerParty", memberId),
+    purpose: "product_enrichment",
+    vendorId: parseEntityId("vendor", vendorId),
+    vendorAccountId: null,
+    trigger: "manual",
+    targets: [
+      {
+        kind: "product",
+        productId: purchaseProduct.id,
+        targetFingerprint: overwriteFingerprint,
+      },
+    ],
+  });
+  if (!overwriteRun.created)
+    throw new Error("Product enrichment overwrite run was blocked");
+  const overwritten = overwriteProductEnrichmentOut.parse(
+    await callPurchase("overwrite_product_enrichment", {
+      _runExecution: {
+        runId: overwriteRun.run.id,
+        operationId: "overwrite:synthetic-wardrobe-enrichment",
+      },
+      productId: purchaseProduct.shortcode,
+      targetFingerprint: overwriteFingerprint,
+      change: {
+        field: "manufacturer",
+        value: "Synthetic Textile Co. (Reissue)",
+      },
+    }),
+  );
+  if (overwritten.changedField !== "manufacturer")
+    throw new Error(
+      `Enrichment overwrite changed the wrong field: ${JSON.stringify(overwritten)}`,
+    );
+  const afterOverwrite = await pool.query<{
+    manufacturer: string;
+    model: string | null;
+    categoryId: string | null;
+  }>(`SELECT manufacturer, model, "categoryId" FROM "Product" WHERE id = $1`, [
+    purchaseProduct.id,
+  ]);
+  const row = afterOverwrite.rows[0];
+  if (
+    !row ||
+    row.manufacturer !== "Synthetic Textile Co. (Reissue)" ||
+    row.model !== afterCommit.rows[0]?.model ||
+    row.categoryId !== afterCommit.rows[0]?.categoryId
+  )
+    throw new Error(
+      `Enrichment overwrite left unexpected state: ${JSON.stringify({ before: afterCommit.rows[0], after: row })}`,
+    );
+  console.log(
+    "[headless-wardrobe-e2e] Product enrichment commit filled manufacturer, and overwrite replaced it with typed approval leaving other fields untouched",
+  );
+}
+
 export async function runWardrobeConvergenceScenario({
   databaseURL,
   origin,
@@ -937,6 +1567,30 @@ export async function runWardrobeConvergenceScenario({
     });
     console.log(
       "[headless-wardrobe-e2e] Product, inventory, purchase, expense, Monarch transaction, and photos linked",
+    );
+
+    await reimportInNewRunAndAssertNoOp(
+      pool,
+      db,
+      kernel,
+      userId,
+      photoProduct,
+      purchaseProduct,
+    );
+    await runForgeWearTraps(
+      pool,
+      db,
+      kernel,
+      userId,
+      photoProduct,
+      purchaseProduct,
+    );
+    await runProductEnrichmentCommitAndOverwrite(
+      pool,
+      db,
+      kernel,
+      userId,
+      purchaseProduct,
     );
   } finally {
     await pool.end();
