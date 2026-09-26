@@ -8,6 +8,8 @@ import {
   locationShortcode,
   productCategoryShortcode,
   productShortcode,
+  expenseShortcode,
+  purchaseShortcode,
 } from "./identifier-fields";
 import { importRunStatus } from "./import-run-fields";
 import { purchaseImportRunExecution } from "./purchase-import";
@@ -16,6 +18,10 @@ import { imageProcessingJobState } from "./image-processing";
 import { inventoryOwnershipMode } from "./inventory-ownership";
 import { importRunTargetState } from "./purchase-import";
 import { productVariantComparison } from "./product-variant-comparison";
+import {
+  productListInventoryEntryOut,
+  productQuantitySummaryOut,
+} from "./product";
 
 const commitPhotoGroupImage = z.object({
   id: imageShortcode,
@@ -62,6 +68,8 @@ const commitPhotoGroupInventory = z.object({
   ownershipMode: inventoryOwnershipMode.optional(),
   ownerPartyId: ledgerPartyShortcode.optional(),
   quantity: z.number().int().positive(),
+  mode: z.enum(["create", "add"]).optional(),
+  existingEntryId: inventoryShortcode.optional(),
 });
 export type CommitPhotoGroupInventory = z.infer<
   typeof commitPhotoGroupInventory
@@ -262,6 +270,7 @@ export const photoGroupProposal = z.object({
   ]),
   /** The Product the approved group attached to (existing or newly created). */
   committedProduct: proposalProductSummary.nullable(),
+  committedInventoryId: inventoryShortcode.nullable().optional(),
   inventory: z
     .object({
       /** Null only when the chosen Location was deleted after proposing. */
@@ -270,6 +279,8 @@ export const photoGroupProposal = z.object({
       ownershipMode: inventoryOwnershipMode.optional(),
       ownerPartyId: ledgerPartyShortcode.optional(),
       quantity: z.number().int().positive(),
+      mode: z.enum(["create", "add"]).optional(),
+      existingEntryId: inventoryShortcode.optional(),
     })
     .nullable(),
   evidence: z.string().nullable(),
@@ -397,11 +408,54 @@ export const photoProductCandidate = z.object({
     sharedNameTerms: z.array(z.string()),
     brandMatches: z.boolean(),
     variant: productVariantComparison,
+    score: z.number().optional(),
+    factors: z
+      .array(z.object({ label: z.string(), points: z.number() }))
+      .optional(),
+    matchedIdentifiers: z.array(z.string()).optional(),
   }),
   hasOwnPhoto: z.boolean(),
   hasPhotoImport: z.boolean(),
   hasPurchase: z.boolean(),
   hasInventory: z.boolean(),
+  quantity: productQuantitySummaryOut.optional(),
+  inventoryEntries: z.array(productListInventoryEntryOut).optional(),
+  ownPhotos: z
+    .array(z.object({ id: imageShortcode, url: z.string() }))
+    .optional(),
+  variantEvidence: z
+    .array(
+      z.object({
+        dimension: z.enum(["color", "size"]),
+        value: z.string(),
+        raw: z.string(),
+        source: z.enum([
+          "proposal_name",
+          "photo_description",
+          "label_ocr",
+          "product_name",
+          "product_model",
+          "product_alias",
+          "purchase_line",
+        ]),
+      }),
+    )
+    .optional(),
+  purchaseLines: z
+    .array(
+      z.object({
+        expenseId: expenseShortcode,
+        purchaseId: purchaseShortcode.nullable(),
+        purchaseLabel: z.string().nullable(),
+        name: z.string(),
+        date: z.string().nullable(),
+        cost: z.number().nullable(),
+        productQuantity: z.number().nullable(),
+        movement: z.enum(["acquired", "exited", "adjusted", "unknown"]),
+      }),
+    )
+    .optional(),
+  purchaseLineCount: z.number().int().nonnegative().optional(),
 });
 export type PhotoProductCandidate = z.infer<typeof photoProductCandidate>;
 

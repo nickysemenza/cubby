@@ -31,6 +31,7 @@ import {
   imageId,
   importRunId,
   importRunShortcode,
+  inventoryShortcode,
 } from "@cubby/schemas/identifiers";
 import { inventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import {
@@ -88,12 +89,19 @@ const RUN_IMAGE_LIMIT = 1_000;
 const DISCARD_REASON = "Discarded in review";
 
 type ProposalRow = typeof photoGroupProposal.$inferSelect;
-type RunImage = { imageId: ImageId; shortcode: string; state: string };
+type RunImage = {
+  imageId: ImageId;
+  shortcode: string;
+  state: string;
+  diff: unknown;
+};
 
 const storedCreate = commitPhotoGroupProduct.options[1].shape.create;
 const storedInventory = z.object({
   ownershipMode: inventoryOwnershipMode.optional(),
   quantity: z.number().int().positive(),
+  mode: z.enum(["create", "add"]).optional(),
+  existingEntryId: inventoryShortcode.optional(),
 });
 
 /** A run that does not exist, or that this actor may not review; routes map it to 404. */
@@ -148,6 +156,7 @@ async function loadRunImages(db: Database, runId: ImportRunId) {
       imageId: image.id,
       shortcode: image.shortcode,
       state: importRunTarget.state,
+      diff: importRunTarget.diff,
     })
     .from(importRunTarget)
     .innerJoin(image, eq(image.id, importRunTarget.imageId))
@@ -372,6 +381,22 @@ async function toViews(
               create: linked.create(row),
             },
       committedProduct: row.state === "committed" ? productSummary : null,
+      committedInventoryId:
+        row.state === "committed"
+          ? (() => {
+              const stored = row.images.flatMap((entry) => {
+                const parsed = z
+                  .object({ groupKey: z.string(), inventoryId: z.string() })
+                  .safeParse(imagesById.get(entry.imageId)?.diff);
+                if (!parsed.success || parsed.data.groupKey !== row.groupKey)
+                  return [];
+                return [
+                  parseShortcodeFor("inventory", parsed.data.inventoryId),
+                ];
+              });
+              return stored[0] ?? null;
+            })()
+          : null,
       inventory: inventory
         ? {
             locationId: place
@@ -381,6 +406,8 @@ async function toViews(
             ownershipMode: inventory.ownershipMode,
             ownerPartyId: linked.ownerPartyId(row),
             quantity: inventory.quantity,
+            mode: inventory.mode,
+            existingEntryId: inventory.existingEntryId,
           }
         : null,
       evidence: row.evidence,
@@ -558,6 +585,8 @@ async function upsertProposal(
       ? {
           quantity: group.inventory.quantity,
           ownershipMode: group.inventory.ownershipMode,
+          mode: group.inventory.mode,
+          existingEntryId: group.inventory.existingEntryId,
         }
       : null,
     inventoryOwnerPartyId: entry.ownerPartyId,
@@ -675,6 +704,8 @@ export async function chooseExistingProductForPhotoGroup(
         ownershipMode: group.inventory.ownershipMode,
         ownerPartyId: group.inventory.ownerPartyId,
         quantity: group.inventory.quantity,
+        mode: group.inventory.mode,
+        existingEntryId: group.inventory.existingEntryId,
       }
     : undefined;
   return proposePhotoGroups(db, {
@@ -717,6 +748,8 @@ export async function updatePhotoGroupProductDraft(
         ownershipMode: group.inventory.ownershipMode,
         ownerPartyId: group.inventory.ownerPartyId,
         quantity: group.inventory.quantity,
+        mode: group.inventory.mode,
+        existingEntryId: group.inventory.existingEntryId,
       }
     : undefined;
   return proposePhotoGroups(db, {
@@ -796,6 +829,8 @@ async function commitInputFor(
       locationId: parseShortcodeFor("location", place.shortcode),
       quantity: stored.quantity,
       ownershipMode: stored.ownershipMode,
+      mode: stored.mode,
+      existingEntryId: stored.existingEntryId,
       ownerPartyId: (await linkedCodes(db, [row])).ownerPartyId(row),
     };
   }

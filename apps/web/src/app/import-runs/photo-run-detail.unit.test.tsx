@@ -7,13 +7,7 @@ import type {
   PhotoRunImage,
   PhotoRunReview,
 } from "@cubby/schemas/photo-import-run";
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ImportRunDetail } from "~/contracts/run.contract";
@@ -225,9 +219,8 @@ describe("PhotoImportRunView", () => {
     });
 
     expect(
-      await screen.findByRole("button", { name: /Approve all/ }),
+      await screen.findByRole("button", { name: "Approve item" }),
     ).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
     expect(
       screen.queryByText(/photos that can no longer be reviewed/),
     ).not.toBeInTheDocument();
@@ -422,12 +415,11 @@ describe("PhotoImportRunView", () => {
         "Cutout: Skipped. This photo is label evidence, so it does not need a cutout.",
       ),
     ).toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Review possible matches" }),
-    );
-    expect(await screen.findByText("Database search")).toBeInTheDocument();
     expect(
-      screen.getByText(/Shared name: pocket, tee, black, small/),
+      await screen.findByRole("region", { name: "Product comparison" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Shared terms: pocket, tee, black, small/),
     ).toBeInTheDocument();
   });
 
@@ -468,10 +460,10 @@ describe("PhotoImportRunView", () => {
       { wrapper: harness.wrapper },
     );
 
-    const approveAll = await screen.findByRole("button", {
-      name: /Approve all/,
+    const approveItem = await screen.findByRole("button", {
+      name: "Approve item",
     });
-    expect(approveAll).toBeDisabled();
+    expect(approveItem).toBeDisabled();
     expect(
       screen.getByText(/Approval waits for the AI description/),
     ).toBeInTheDocument();
@@ -482,6 +474,6 @@ describe("PhotoImportRunView", () => {
         image.id === "IMG-4K7P" ? { ...image, describe: "ready" } : image,
       ),
     } satisfies PhotoRunReview);
-    await waitFor(() => expect(approveAll).toBeEnabled());
+    await waitFor(() => expect(approveItem).toBeEnabled());
   });
 });
