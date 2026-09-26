@@ -410,9 +410,10 @@ function declaredSections<E extends GenericDetailEntity>(
                 title={section.title}
                 operations={operations.list}
                 emptyLabel={
-                  detail.variant === "journal"
+                  section.empty ??
+                  (detail.variant === "journal"
                     ? "Nothing logged yet — the first entry starts the journal."
-                    : undefined
+                    : undefined)
                 }
               />
             ),

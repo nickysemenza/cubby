@@ -315,6 +315,9 @@ public struct RelationSectionSpec: Codable, Sendable, Hashable {
     public let columns: [String]?
     public let sort: SectionSort?
     public let limit: Int?
+    /// Section-specific empty-state copy, replacing the generic "No <plural> yet."
+    /// sentence both platforms otherwise render.
+    public let empty: String?
     /// Skip the whole section, on both platforms, when its first page is empty.
     public let hideWhenEmpty: Bool
     /// Keep the header and create action but fold the rows away when the first page is empty.

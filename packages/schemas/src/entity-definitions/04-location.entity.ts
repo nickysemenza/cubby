@@ -1,4 +1,5 @@
 import { defineEntity } from "./definition.js";
+import { LOCATION_UNSPECIFIED_GROUP_KEY } from "@cubby/schemas/pagination";
 import { selectControlOptions } from "./select-control-options.js";
 import {
   imageShortcode,
@@ -33,6 +34,11 @@ export default defineEntity({
       omitRelations: {
         ingredients:
           "Derived through inventory, then product, then ingredient; the Contents table already lists what is stocked here.",
+      },
+      // The generic "No locations yet." reads oddly under "Sub-locations" —
+      // a self-relation whose target label doesn't match the section title.
+      emptyOverrides: {
+        children: "No sub-locations yet.",
       },
       hero: { breadcrumb: "parentId" },
       additionalSectionOverrides: [
@@ -482,6 +488,12 @@ export default defineEntity({
       ],
       computed: ["parent", "inventoryEntries"],
       groupable: ["type"],
+      // The web list groups locations by their own `type` value, so no
+      // `labelField` is needed — the field's own value is the label.
+      grouping: {
+        field: "type",
+        nullGroupKey: LOCATION_UNSPECIFIED_GROUP_KEY,
+      },
     },
     intents: {
       fields: {

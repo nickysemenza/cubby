@@ -737,12 +737,52 @@ describe("typed entity compiler", () => {
       direction: "asc",
       computed: ["related:example.count"],
       groupable: ["name"],
+      grouping: null,
     });
   });
 
   it("defaults an absent sort declaration to null", () => {
     const entity = compileEntityDeclarations([{ ...base, model }])[0]!;
     expect(entity.fieldModel.sort).toBeNull();
+  });
+
+  it("compiles a declared list-grouping contract", () => {
+    const entity = compileEntityDeclarations([
+      {
+        ...base,
+        model: {
+          ...model,
+          sort: {
+            fields: ["name"],
+            groupable: ["name"],
+            grouping: { field: "name", nullGroupKey: "__unspecified__" },
+          },
+        },
+      },
+    ])[0]!;
+    expect(entity.fieldModel.sort?.grouping).toEqual({
+      field: "name",
+      nullGroupKey: "__unspecified__",
+      labelField: null,
+    });
+  });
+
+  it("rejects a list-grouping contract whose field isn't groupable", () => {
+    expect(() =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          model: {
+            ...model,
+            sort: {
+              fields: ["name"],
+              groupable: [],
+              grouping: { field: "name", nullGroupKey: "__unspecified__" },
+            },
+          },
+        },
+      ]),
+    ).toThrow("grouping.field name must be one of sort.groupable");
   });
 
   it("derives a detail overview from readable fields unless sections are opted out", () => {
