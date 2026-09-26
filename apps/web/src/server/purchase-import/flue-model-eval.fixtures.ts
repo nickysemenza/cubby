@@ -31,70 +31,69 @@ export type EvalCase = {
   allowReview?: boolean;
 };
 
-/** A 20-photo batch: eight items shot as item, label, and sometimes a second view. */
-function largeBatch(): EvalCase {
-  const items = [
-    [
-      "canvas-tote",
-      "Natural canvas tote bag with navy handles.",
-      "Harbor Pack · Tote · Natural",
-    ],
-    [
-      "wool-beanie",
-      "Charcoal ribbed wool beanie, folded cuff.",
-      "Ridgeline · Merino · One size",
-    ],
-    [
-      "rain-shell",
-      "Yellow hooded rain shell jacket, zipped.",
-      "Fieldcraft · Storm Shell · M",
-    ],
-    [
-      "chore-coat",
-      "Tan duck-canvas chore coat with corduroy collar.",
-      "Northwind Workwear · Chore Coat · L",
-    ],
-    [
-      "work-gloves",
-      "Pair of brown leather work gloves.",
-      "Fieldcraft · Grip Glove · L",
-    ],
-    [
-      "flannel-shirt",
-      "Red and black buffalo-check flannel shirt.",
-      "Northwind Workwear · Flannel · M",
-    ],
-    [
-      "hiking-socks",
-      "Two pairs of gray wool hiking socks.",
-      "Ridgeline · Trail Sock · M",
-    ],
-    [
-      "belt",
-      "Brown leather belt with a brass buckle.",
-      "Lumen & Co · Harness Belt · 34",
-    ],
-  ] as const;
+const LARGE_BATCH_ITEMS = [
+  ["canvas-tote", "canvas tote bag with navy handles", "Harbor Pack · Tote"],
+  ["wool-beanie", "ribbed wool beanie, folded cuff", "Ridgeline · Merino"],
+  [
+    "rain-shell",
+    "hooded rain shell jacket, zipped",
+    "Fieldcraft · Storm Shell",
+  ],
+  [
+    "chore-coat",
+    "duck-canvas chore coat with corduroy collar",
+    "Northwind Workwear · Chore Coat",
+  ],
+  ["work-gloves", "pair of leather work gloves", "Fieldcraft · Grip Glove"],
+  [
+    "flannel-shirt",
+    "check flannel shirt with two chest pockets",
+    "Northwind Workwear · Flannel",
+  ],
+  ["hiking-socks", "two pairs of wool hiking socks", "Ridgeline · Trail Sock"],
+  ["belt", "leather belt with a brass buckle", "Lumen & Co · Harness Belt"],
+] as const;
+const LARGE_BATCH_COLORWAYS = [
+  ["natural", "Natural", "M"],
+  ["charcoal", "Charcoal", "L"],
+  ["olive", "Olive", "S"],
+  ["rust", "Rust", "XL"],
+  ["navy", "Navy", "M"],
+] as const;
+
+/**
+ * Items shot in order as item, label, and every other item a back view.
+ * Neighbours differ in type; the same type recurs in other colourways, so
+ * grouping must follow the label text, not the product type.
+ */
+function largeBatch(name: string, colorways: number): EvalCase {
   const photos: EvalPhoto[] = [];
   const expected: EvalCase["expected"] = [];
-  items.forEach(([key, description, label], index) => {
-    const group = [`${key}`, `${key}-label`];
-    photos.push({ key, description });
-    photos.push({
-      key: `${key}-label`,
-      description: "Close-up of a sewn or printed tag.",
-      labelText: label,
-    });
-    if (index % 2 === 0) {
-      group.push(`${key}-back`);
+  let index = 0;
+  for (const [colorKey, color, size] of LARGE_BATCH_COLORWAYS.slice(
+    0,
+    colorways,
+  ))
+    for (const [itemKey, description, label] of LARGE_BATCH_ITEMS) {
+      const key = `${itemKey}-${colorKey}`;
+      const group = [key, `${key}-label`];
+      photos.push({ key, description: `${color} ${description}.` });
       photos.push({
-        key: `${key}-back`,
-        description: `${description} Back view.`,
+        key: `${key}-label`,
+        description: "Close-up of a sewn or printed tag.",
+        labelText: `${label} · ${color} · ${size}`,
       });
+      if (index % 2 === 0) {
+        group.push(`${key}-back`);
+        photos.push({
+          key: `${key}-back`,
+          description: `${color} ${description}. Back view.`,
+        });
+      }
+      expected.push({ photos: group, match: { kind: "create" } });
+      index += 1;
     }
-    expected.push({ photos: group, match: { kind: "create" } });
-  });
-  return { name: "large-batch", photos, catalog: [], expected };
+  return { name, photos, catalog: [], expected };
 }
 
 export const flueModelEvalCases: EvalCase[] = [
@@ -290,5 +289,7 @@ export const flueModelEvalCases: EvalCase[] = [
       { photos: ["book"], match: { kind: "create" } },
     ],
   },
-  largeBatch(),
+  largeBatch("large-batch", 1),
+  // The native picker's maximum run size.
+  largeBatch("hundred-photos", 5),
 ];

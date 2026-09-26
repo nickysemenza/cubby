@@ -15,7 +15,7 @@ import {
   photoGroupProposalList,
   photoProductCandidateSearchInput,
   photoProductCandidatesResponse,
-  photoRunImage,
+  photoRunContextImage,
   proposePhotoGroupsInput,
   proposePhotoGroupsOutput,
 } from "@cubby/schemas/photo-import-run";
@@ -34,17 +34,37 @@ import { findPhotoProductCandidates } from "~/server/repo/photo-product-candidat
 import { getEntityKernelContext } from "../kernel-context";
 import { READ_ONLY_CLOSED, registerMcpTool, WRITE_CLOSED } from "./_shared";
 
+/**
+ * Every page stays in the coordinator's context for the rest of the run, so
+ * a page and each photo's text are bounded: 100 photos (the native picker's
+ * maximum) at these caps stay well inside the photo model's context window.
+ */
+const PHOTO_CONTEXT_PAGE_DEFAULT = 50;
+const PHOTO_CONTEXT_PAGE_MAX = 100;
+const DESCRIPTION_CHARS = 800;
+const RECOGNIZED_TEXT_CHARS = 400;
+
+const clip = (text: string | null, max: number) =>
+  text && text.length > max ? `${text.slice(0, max)}…` : text;
+
 export function registerPhotoImportTools(server: McpServer) {
   registerMcpTool(server, {
     name: "get_photo_run_context",
     description:
-      "Read one photo-inventory run's owner, notes, ordered photos, local analysis and cloud descriptions in a single bounded result. Use this before proposing groups; only inspect individual images when these summaries leave a concrete question unanswered.",
-    inputSchema: z.object({ runId: importRunShortcode }),
+      "Read one photo-inventory run's owner, notes, and one page of its photos in shot order with their cloud descriptions and recognized text. Pass `nextCursor` back as `cursor` until it is null; an item photographed across a page boundary continues on the next page. Set `withImageUrls` only if you can open images. Use this before proposing groups.",
+    inputSchema: z.object({
+      runId: importRunShortcode,
+      cursor: z.number().int().nonnegative().optional(),
+      limit: z.number().int().min(1).max(PHOTO_CONTEXT_PAGE_MAX).optional(),
+      withImageUrls: z.boolean().optional(),
+    }),
     outputSchema: z.object({
       runId: importRunShortcode,
       ledgerPartyId: ledgerPartyShortcode,
       notes: z.string().nullable(),
-      images: z.array(photoRunImage),
+      totalImages: z.number().int().nonnegative(),
+      nextCursor: z.number().int().nonnegative().nullable(),
+      images: z.array(photoRunContextImage),
     }),
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
@@ -52,11 +72,30 @@ export function registerPhotoImportTools(server: McpServer) {
       const run = await getImportRunByShortcode(db, params.runId);
       if (!run || run.purpose !== "photo_inventory" || !run.ledgerPartyId)
         throw new Error("Photo-inventory run and owner were not found");
+      const all = await listPhotoRunImages(db, params.runId);
+      const cursor = params.cursor ?? 0;
+      const end = cursor + (params.limit ?? PHOTO_CONTEXT_PAGE_DEFAULT);
       return {
         runId: params.runId,
         ledgerPartyId: run.ledgerPartyId,
         notes: run.notes,
-        images: await listPhotoRunImages(db, params.runId),
+        totalImages: all.length,
+        nextCursor: end < all.length ? end : null,
+        images: all.slice(cursor, end).map((image) => {
+          const summary: z.infer<typeof photoRunContextImage> = {
+            id: image.id,
+            position: image.position,
+            targetState: image.targetState,
+            describe: image.describe,
+            description: clip(image.description, DESCRIPTION_CHARS),
+            recognizedText: clip(image.recognizedText, RECOGNIZED_TEXT_CHARS),
+          };
+          if (params.withImageUrls) {
+            summary.originalUrl = image.originalUrl;
+            summary.cutoutUrl = image.cutoutUrl;
+          }
+          return summary;
+        }),
       };
     },
   });
