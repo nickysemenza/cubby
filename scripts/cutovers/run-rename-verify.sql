@@ -16,5 +16,16 @@ UNION ALL
 SELECT 'old finding target', count(*) FROM "RunFinding" WHERE "targetKind" = 'import_run'
 UNION ALL
 SELECT 'deleted recipes with cached totals', count(*) FROM "Recipe"
-WHERE "deletedAt" IS NOT NULL AND ("totals" IS NOT NULL OR "totalsComputedAt" IS NOT NULL);
--- @@LANE_A_VERIFY@@
+WHERE "deletedAt" IS NOT NULL AND ("totals" IS NOT NULL OR "totalsComputedAt" IS NOT NULL)
+UNION ALL
+SELECT 'legacy grams columns', count(*) FROM information_schema.columns
+WHERE table_schema = 'public' AND column_name = 'grams'
+  AND table_name IN ('MealFoodEntry', 'MealRecipePortion')
+UNION ALL
+SELECT 'missing entity FKs', 4 - count(*) FROM pg_constraint
+WHERE conname IN ('RunFinding_target_fk', 'RunMutation_target_fk',
+  'AiUsage_entity_fk', 'AiAnalysis_entity_fk') AND convalidated
+UNION ALL
+SELECT 'unvalidated constraints', count(*) FROM pg_constraint c
+JOIN pg_namespace n ON n.oid = c.connamespace
+WHERE n.nspname = 'public' AND NOT c.convalidated;
