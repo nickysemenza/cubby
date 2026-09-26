@@ -307,23 +307,17 @@ describe("photo coordinator model eval", () => {
                 : null,
           })),
         );
-        // An ambiguous case may be handed to a human instead of proposed.
-        const reviewed =
-          evalCase.allowReview === true && final?.status === "needs_review";
         return {
           case: evalCase.name,
           model: choice.model,
           effort: choice.effort,
           settled,
           status: final?.status ?? "missing",
-          reachedApproval: settled && (final?.status === "running" || reviewed),
+          reachedApproval: settled && final?.status === "running",
           wallMs,
           usage,
           costUsd: costUsd(choice.model, usage),
           ...score,
-          exact: reviewed || score.exact,
-          pairF1: reviewed ? 1 : score.pairF1,
-          matchAccuracy: reviewed ? 1 : score.matchAccuracy,
         };
       };
 

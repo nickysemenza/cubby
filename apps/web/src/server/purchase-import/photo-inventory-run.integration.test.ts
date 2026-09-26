@@ -16,6 +16,7 @@ import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
 import { registerPhotoImportTools } from "~/server/mcp/tools/photo-import.tools";
 import { getDb } from "~/server/repo/database-helpers";
+import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/repo/image-processing";
 import { updateImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
 import { getImportRunByShortcode } from "~/server/repo/import-run";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
@@ -209,14 +210,33 @@ describe("photo import finalize", () => {
       (await loadImportRunDetail(ctx.db, original.publicId)).agentModelMs,
     ).toBe(3_200);
 
+    // Regression: a restart reused failed cutouts and descriptions and
+    // dispatched the agent at once, so it grouped the same bare photos again.
+    await getDb(ctx.db)
+      .insert(imageProcessingJob)
+      .values({
+        imageId: parseImageId.parse(photo.id),
+        kind: "describe_image",
+        state: "failed",
+        sourceContentHash: "e".repeat(64),
+        processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+        lastError: "synthetic failure",
+      });
+
     const restarted = await controlImportRun(ctx.db, ctx.actor, {
       runPublicId: original.publicId,
       action: "restart",
     });
     expect(restarted).toMatchObject({
       created: true,
-      dispatchPurpose: "photo_inventory",
+      dispatchRunId: null,
+      dispatchEventId: null,
     });
+    const [describe] = await getDb(ctx.db)
+      .select({ state: imageProcessingJob.state })
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.imageId, parseImageId.parse(photo.id)));
+    expect(describe?.state).toBe("pending");
     if (!("successorRunId" in restarted)) throw new Error("Missing new run");
     const [newRun] = await getDb(ctx.db)
       .select({
@@ -228,7 +248,7 @@ describe("photo import finalize", () => {
         eq(importRun.id, parseImportRunId.parse(restarted.successorRunId)),
       );
     expect(newRun?.predecessorRunId).toBe(original.id);
-    expect(newRun?.dispatchEventId).toBeTruthy();
+    expect(newRun?.dispatchEventId).toBeNull();
     const targets = await getDb(ctx.db)
       .select({
         runId: importRunTarget.runId,

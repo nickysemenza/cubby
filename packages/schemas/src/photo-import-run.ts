@@ -62,6 +62,12 @@ const commitPhotoGroupInventory = z.object({
   ownershipMode: inventoryOwnershipMode.optional(),
   ownerPartyId: ledgerPartyShortcode.optional(),
   quantity: z.number().int().positive(),
+  /**
+   * The Product may already be stocked at this location for the same owner.
+   * Approval then refuses to create a second entry unless the reviewer chose
+   * to add `quantity` to the existing one.
+   */
+  addToExisting: z.boolean().optional(),
 });
 export type CommitPhotoGroupInventory = z.infer<
   typeof commitPhotoGroupInventory
@@ -270,6 +276,18 @@ export const photoGroupProposal = z.object({
       ownershipMode: inventoryOwnershipMode.optional(),
       ownerPartyId: ledgerPartyShortcode.optional(),
       quantity: z.number().int().positive(),
+      addToExisting: z.boolean().optional(),
+    })
+    .nullable(),
+  /**
+   * Stock of the chosen existing Product already at the chosen location, so
+   * the reviewer decides before approval refuses a second entry.
+   */
+  stockedHere: z
+    .object({
+      inventoryId: inventoryShortcode,
+      quantity: z.number(),
+      unit: z.string(),
     })
     .nullable(),
   evidence: z.string().nullable(),

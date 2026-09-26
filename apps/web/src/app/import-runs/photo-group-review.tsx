@@ -36,6 +36,7 @@ import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Checkbox } from "~/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -72,6 +73,8 @@ import {
 import {
   mergeGroups,
   moveImage,
+  needsStockDecision,
+  receiveAllInto,
   toGroupInput,
   type ProposalEdit,
 } from "./photo-review-model";
@@ -792,6 +795,49 @@ function PhotoProductSuggestions({
   );
 }
 
+/** Every proposed group is approvable once its stock decision is made. */
+const canApproveAll = (proposed: readonly PhotoGroupProposal[]) =>
+  proposed.length > 0 && !proposed.some(needsStockDecision);
+
+/** One location for every proposed group, shown when they already agree. */
+function ReceiveAllInto({
+  proposed,
+  disabled,
+  onPick,
+}: {
+  proposed: readonly PhotoGroupProposal[];
+  disabled: boolean;
+  onPick: (
+    locationId: NonNullable<PhotoGroupProposalGroup["inventory"]>["locationId"],
+  ) => void;
+}) {
+  if (!proposed.length) return null;
+  const first = proposed[0]?.inventory;
+  const shared =
+    first?.locationId &&
+    first.locationName &&
+    proposed.every(
+      (proposal) => proposal.inventory?.locationId === first.locationId,
+    )
+      ? { id: first.locationId, name: first.locationName }
+      : null;
+  return (
+    <div className="flex min-w-56 flex-1 flex-col gap-1 text-xs sm:flex-none">
+      <span className="text-muted-foreground">Receive all into</span>
+      <EntityReferencePicker
+        entity="location"
+        label="location for every item"
+        value={shared}
+        setValue={(item) => {
+          if (item) onPick(item.id);
+        }}
+        disabled={disabled}
+        placeholder="Choose where these items go"
+      />
+    </div>
+  );
+}
+
 function InventoryFields({
   proposal,
   save,
@@ -807,56 +853,90 @@ function InventoryFields({
     inventory?.locationId && inventory.locationName
       ? { id: inventory.locationId, name: inventory.locationName }
       : null;
+  const stocked = proposal.stockedHere;
   return (
-    <Row gap="sm" align="end" className="min-w-0">
-      <div className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
-        <span className="text-muted-foreground">Receive into</span>
-        <EntityReferencePicker
-          entity="location"
-          label="location"
-          value={selected}
-          setValue={(item) =>
-            save(() =>
-              toGroupInput(proposal, {
-                inventory: item
-                  ? {
-                      ownershipMode: inventory?.ownershipMode,
-                      ownerPartyId: inventory?.ownerPartyId,
-                      locationId: item.id,
-                      quantity,
-                    }
-                  : undefined,
-              }),
-            )
-          }
-          disabled={busy}
-          placeholder="No inventory entry"
-          clearable
-        />
-      </div>
-      {inventory?.locationId ? (
-        <CommitInput
-          label="Qty"
-          type="number"
-          className="w-20"
-          value={String(quantity)}
-          disabled={busy}
-          onCommit={(next) => {
-            const parsed = Number.parseInt(next, 10);
-            if (Number.isInteger(parsed) && parsed > 0)
+    <Stack gap="xs" className="min-w-0">
+      <Row gap="sm" align="end" className="min-w-0">
+        <div className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
+          <span className="text-muted-foreground">Receive into</span>
+          <EntityReferencePicker
+            entity="location"
+            label="location"
+            value={selected}
+            setValue={(item) =>
+              save(() =>
+                toGroupInput(proposal, {
+                  inventory: item
+                    ? {
+                        ownershipMode: inventory?.ownershipMode,
+                        ownerPartyId: inventory?.ownerPartyId,
+                        locationId: item.id,
+                        quantity,
+                      }
+                    : undefined,
+                }),
+              )
+            }
+            disabled={busy}
+            placeholder="No inventory entry"
+            clearable
+          />
+        </div>
+        {inventory?.locationId ? (
+          <CommitInput
+            label="Qty"
+            type="number"
+            className="w-20"
+            value={String(quantity)}
+            disabled={busy}
+            onCommit={(next) => {
+              const parsed = Number.parseInt(next, 10);
+              if (Number.isInteger(parsed) && parsed > 0)
+                save(() => {
+                  const input = toGroupInput(proposal);
+                  return input.inventory
+                    ? {
+                        ...input,
+                        inventory: { ...input.inventory, quantity: parsed },
+                      }
+                    : input;
+                });
+            }}
+          />
+        ) : null}
+      </Row>
+      {stocked && inventory ? (
+        <label className="flex items-start gap-2 text-xs">
+          <Checkbox
+            checked={inventory.addToExisting === true}
+            onCheckedChange={(checked) =>
               save(() => {
                 const input = toGroupInput(proposal);
                 return input.inventory
                   ? {
                       ...input,
-                      inventory: { ...input.inventory, quantity: parsed },
+                      inventory: {
+                        ...input.inventory,
+                        addToExisting: checked === true,
+                      },
                     }
                   : input;
-              });
-          }}
-        />
+              })
+            }
+            disabled={busy}
+          />
+          <span
+            className={
+              inventory.addToExisting ? "text-muted-foreground" : "text-warning"
+            }
+          >
+            Already {stocked.quantity} {stocked.unit} here (
+            {stocked.inventoryId}). Add {quantity} to it ({stocked.quantity} →{" "}
+            {stocked.quantity + quantity}) instead of approving a second entry.
+          </span>
+        </label>
       ) : null}
-    </Row>
+    </Stack>
   );
 }
 
@@ -985,6 +1065,7 @@ function ProposalCard({
                 working ||
                 stale ||
                 descriptionsPending.length > 0 ||
+                needsStockDecision(proposal) ||
                 (proposal.product.kind === "existing" &&
                   !proposal.product.existing)
               }
@@ -1459,14 +1540,21 @@ export function PhotoGroupReview({
         title="Proposed items"
         description={`${proposed.length} to review · ${settled.length} settled · ${review.unassignedImageIds.length} photos not in a group`}
       >
-        <Row align="center" justify="end" wrap gap="sm">
+        <Row align="end" justify="end" wrap gap="sm">
+          <ReceiveAllInto
+            proposed={proposed}
+            disabled={busy}
+            onPick={(locationId) =>
+              save(() => receiveAllInto(proposed, locationId))
+            }
+          />
           <Button
             className="min-h-11 w-full sm:w-auto"
             disabled={
               busy ||
-              proposed.length === 0 ||
               hasStaleGroups ||
-              hasPendingDescriptions
+              hasPendingDescriptions ||
+              !canApproveAll(proposed)
             }
             onClick={() => action.mutate({ action: "approve" })}
           >

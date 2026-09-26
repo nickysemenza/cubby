@@ -13,6 +13,7 @@ import {
   product,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { createInventoryEntry } from "~/server/repo/inventory/crud";
 import {
   createImageFixture,
   createLocationFixture,
@@ -173,6 +174,71 @@ describe("commitPhotoGroup", () => {
       .where(eq(importRun.id, run.id));
     expect(updatedRun?.status).toBe("completed");
     expect(updatedRun?.imported).toBe(1);
+  });
+
+  // A Product already stocked at the chosen location must not silently gain a
+  // second entry: approval is refused unless the reviewer chose to add the
+  // photographed quantity to the existing entry.
+  it("refuses a second entry where the Product is already stocked, and adds to it when asked", async () => {
+    const party = await seedMember();
+    const run = await seedRun(party);
+    const images = await seedImages(2);
+    await seedTargets(run.id, images);
+    const closet = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Hall Closet", parentId: TEST_HOME_SHORTCODE }),
+      ctx.actor,
+    );
+    const boots = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Stocked Work Boots" }),
+      ctx.actor,
+    );
+    const stocked = await createInventoryEntry(
+      ctx.db,
+      {
+        productId: boots.entityId,
+        locationId: closet.entityId,
+        amount: { value: 1, unit: "each" },
+        ownershipMode: "person",
+        ownerLedgerPartyId: party.id,
+      },
+      ctx.actor,
+    );
+    const group = (groupKey: string, addToExisting = false) => ({
+      runId: run.shortcode,
+      groupKey,
+      images: [{ id: images[0]!.shortcode, purpose: "item" as const }],
+      skip: [],
+      product: { kind: "existing" as const, existingId: boots.id },
+      inventory: {
+        locationId: closet.id,
+        quantity: 2,
+        addToExisting,
+      },
+    });
+
+    await expect(
+      commitPhotoGroup(ctx.db, group("boots"), ctx.actor),
+    ).rejects.toThrow(/already has 1 each at Hall Closet/);
+
+    const added = await commitPhotoGroup(
+      ctx.db,
+      group("boots-added", true),
+      ctx.actor,
+    );
+    expect(added.outcome).toBe("committed");
+    expect(added.inventoryId).toBe(stocked.id);
+    const entries = await getDb(ctx.db)
+      .select({ amount: inventoryEntry.amount })
+      .from(inventoryEntry)
+      .where(
+        and(
+          eq(inventoryEntry.productId, boots.entityId),
+          eq(inventoryEntry.locationId, closet.entityId),
+        ),
+      );
+    expect(entries).toEqual([{ amount: { value: 3, unit: "each" } }]);
   });
 
   it("attaches to an existing Product by id", async () => {

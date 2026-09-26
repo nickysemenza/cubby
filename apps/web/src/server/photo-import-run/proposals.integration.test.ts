@@ -1,5 +1,8 @@
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { PhotoGroupProposalGroup } from "@cubby/schemas/photo-import-run";
+import type {
+  PhotoGroupProposal,
+  PhotoGroupProposalGroup,
+} from "@cubby/schemas/photo-import-run";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq, ilike, sql } from "drizzle-orm";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
@@ -22,6 +25,7 @@ import {
 } from "~/server/purchase-import/run-service";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { deleteImages } from "~/server/repo/image";
+import { createInventoryEntry } from "~/server/repo/inventory/crud";
 import { mergeLedgerParties } from "~/server/repo/ledger-party";
 import { productCategoryRepository } from "~/server/repo/product-category";
 import { mergeProducts } from "~/server/repo/product/merge";
@@ -42,6 +46,7 @@ import {
   listPhotoGroupProposals,
   listPhotoRunImages,
   proposePhotoGroups,
+  setPhotoGroupInventory,
 } from "./proposals";
 import { commitPhotoGroup } from "./writer";
 
@@ -192,6 +197,101 @@ describe("photo group proposals", () => {
     );
     expect(final.results).toEqual([{ groupKey: "hat", outcome: "committed" }]);
     expect(final.runStatus).toBe("completed");
+  });
+
+  it("warns about stock already at the chosen location and adds to it only when asked", async () => {
+    const { run, codes } = await seedRun(1);
+    const closet = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Boot Closet", parentId: TEST_HOME_SHORTCODE }),
+      ctx.actor,
+    );
+    const pantry = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Mud Room", parentId: TEST_HOME_SHORTCODE }),
+      ctx.actor,
+    );
+    const boots = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic Stocked Boots" }),
+      ctx.actor,
+    );
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: boots.entityId,
+        locationId: closet.entityId,
+        amount: { value: 1, unit: "each" },
+        ownershipMode: "person",
+        ownerLedgerPartyId: run.ledgerPartyId!,
+      },
+      ctx.actor,
+    );
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [
+        {
+          ...createGroup("boots", [codes[0]!]),
+          product: { kind: "existing", existingId: boots.id },
+        },
+      ],
+    });
+    const groupIn = (review: { proposals: PhotoGroupProposal[] }) =>
+      review.proposals.find((item) => item.groupKey === "boots");
+
+    const placed = await setPhotoGroupInventory(ctx.db, {
+      runId: run.shortcode,
+      locationId: closet.id,
+    });
+    expect(groupIn(placed)?.stockedHere).toMatchObject({
+      quantity: 1,
+      unit: "each",
+    });
+    const refused = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode, groupKeys: ["boots"] },
+      ctx.actor,
+    );
+    expect(refused.results[0]).toMatchObject({ outcome: "failed" });
+
+    await setPhotoGroupInventory(ctx.db, {
+      runId: run.shortcode,
+      addToExisting: true,
+    });
+    const moved = await setPhotoGroupInventory(ctx.db, {
+      runId: run.shortcode,
+      locationId: pantry.id,
+    });
+    expect(groupIn(moved)?.inventory?.addToExisting).toBeUndefined();
+    expect(groupIn(moved)?.stockedHere).toBeNull();
+
+    await setPhotoGroupInventory(ctx.db, {
+      runId: run.shortcode,
+      locationId: closet.id,
+    });
+    await setPhotoGroupInventory(ctx.db, {
+      runId: run.shortcode,
+      groupKeys: ["boots"],
+      addToExisting: true,
+    });
+    const approved = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode, groupKeys: ["boots"] },
+      ctx.actor,
+    );
+    expect(approved.results).toEqual([
+      { groupKey: "boots", outcome: "committed" },
+    ]);
+    const entries = await getDb(ctx.db)
+      .select({ amount: inventoryEntry.amount })
+      .from(inventoryEntry)
+      .where(
+        and(
+          eq(inventoryEntry.productId, boots.entityId),
+          notDeleted(inventoryEntry),
+        ),
+      );
+    expect(entries).toEqual([{ amount: { value: 2, unit: "each" } }]);
   });
 
   it("keeps photo roles and evidence when a reviewer selects an existing product", async () => {

@@ -95,9 +95,11 @@ exactly one of `images` or `skip`, across all proposed groups of the run. Add
 `inventory` once ownership and location are settled: `ownershipMode:
 "person"` with the owner (default the run's own `ledgerPartyId` unless the
 photo says otherwise) and a real location — resolve one from the run's
-`notes` (location-by-time-window) or ask; never invent a holding location.
+`notes` (location-by-time-window); never invent a holding location.
 Omit `inventory` when ownership or location is genuinely unresolved and say
-so in `evidence` — a group is not forced into a guess to stay unblocked.
+so in `evidence` — the reviewer chooses where items go on the run page. Never
+set `addToExisting`: when the Product is already stocked there, the reviewer
+decides whether to add to that entry.
 
 Use a stable `groupKey` per physical item. Re-proposing a groupKey replaces
 it while it is still `proposed`; `committed`/`discarded` groups are frozen and

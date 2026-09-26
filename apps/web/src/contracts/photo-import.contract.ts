@@ -2,6 +2,7 @@ import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
   imageShortcode,
   importRunShortcode,
+  locationShortcode,
   productCategoryShortcode,
   productShortcode,
 } from "@cubby/schemas/identifiers";
@@ -289,6 +290,28 @@ export const photoImportContract = defineContract("photoImport", {
       model: z.string().trim().max(500).nullable().optional(),
       notes: z.string().trim().max(5000).nullable().optional(),
     }),
+    output: reviewPhotoGroupsOutput,
+  }),
+  setGroupInventory: mutation({
+    native: "Choose where approved photo groups are received",
+    input: z
+      .object({
+        runId: importRunShortcode,
+        /** Omit to set every `proposed` group. */
+        groupKeys: z
+          .array(z.string().min(1).max(200))
+          .min(1)
+          .max(200)
+          .optional(),
+        locationId: locationShortcode.optional(),
+        /** Add to stock already at the group's location instead of a second entry. */
+        addToExisting: z.boolean().optional(),
+      })
+      .refine(
+        (value) =>
+          value.locationId !== undefined || value.addToExisting !== undefined,
+        "Choose a location or whether to add to existing stock",
+      ),
     output: reviewPhotoGroupsOutput,
   }),
   approveGroups: mutation({

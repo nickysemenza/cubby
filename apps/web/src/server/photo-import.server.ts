@@ -9,6 +9,7 @@ import {
   listPhotoGroupProposals,
   listPhotoRunImages,
   proposePhotoGroups,
+  setPhotoGroupInventory,
   updatePhotoGroupProductDraft,
 } from "~/server/photo-import-run/proposals";
 import {
@@ -74,6 +75,15 @@ export const photoImportHandlers = implementOperationDomain(
         input.runId,
       );
       const saved = await updatePhotoGroupProductDraft(context.db, input);
+      return { ...saved, results: [] };
+    },
+    setGroupInventory: async (context, input) => {
+      await assertPhotoRunReviewer(
+        context.db,
+        context.actorContext,
+        input.runId,
+      );
+      const saved = await setPhotoGroupInventory(context.db, input);
       return { ...saved, results: [] };
     },
     approveGroups: async (context, input) => {

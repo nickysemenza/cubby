@@ -27,8 +27,6 @@ export type EvalCase = {
   photos: EvalPhoto[];
   catalog: EvalCatalogProduct[];
   expected: { photos: string[]; match: ExpectedMatch }[];
-  /** Stopping for human review is also a correct answer. */
-  allowReview?: boolean;
 };
 
 const LARGE_BATCH_ITEMS = [
@@ -253,7 +251,57 @@ export const flueModelEvalCases: EvalCase[] = [
         match: { kind: "notExisting", products: ["vest-small", "vest-large"] },
       },
     ],
-    allowReview: true,
+  },
+  {
+    // Regression: one item's unreadable size stopped the whole run, so the
+    // two clear items were never proposed either.
+    name: "ambiguous-item-among-clear-ones",
+    photos: [
+      {
+        key: "boots",
+        description: "A pair of worn tan leather work boots, laces tied.",
+        labelText: "Bal / 7",
+      },
+      {
+        key: "pants-waistband",
+        description: "Close-up of a brown elastic waistband with a woven tag.",
+        labelText: "Harbor Pack · REC.",
+      },
+      {
+        key: "pants",
+        description:
+          "Brown wide-leg trousers with a black side stripe, laid flat.",
+      },
+      {
+        key: "joggers-label",
+        description: "Inside waistband of dark olive pants with a care tag.",
+        labelText: "Ridgeline · Trail Jogger · Olive · 32",
+      },
+      {
+        key: "joggers",
+        description: "Dark olive tapered joggers laid flat.",
+      },
+    ],
+    catalog: [
+      {
+        key: "boots-9-5",
+        name: "Fieldcraft Pit Boot 6-inch Wheat 9.5 US",
+        manufacturer: "Fieldcraft",
+      },
+      {
+        key: "boots-10",
+        name: "Fieldcraft Pit Boot 6-inch Wheat 10 US",
+        manufacturer: "Fieldcraft",
+      },
+    ],
+    expected: [
+      {
+        photos: ["boots"],
+        match: { kind: "notExisting", products: ["boots-9-5", "boots-10"] },
+      },
+      { photos: ["pants-waistband", "pants"], match: { kind: "create" } },
+      { photos: ["joggers-label", "joggers"], match: { kind: "create" } },
+    ],
   },
   {
     name: "mixed-batch",

@@ -120,6 +120,10 @@ enum PhotoReviewPolicy {
         if case .existing(let product) = group.product, product.existing == nil {
             return "Select an existing product before approval."
         }
+        if let stocked = group.stockedHere, group.inventory?.addToExisting != true {
+            return
+                "This product already has \(stocked.quantity.formatted()) \(stocked.unit) here. Add to it or pick another location."
+        }
         return nil
     }
 }
@@ -138,6 +142,7 @@ struct ImportRunReviewView: View {
     @State private var discardingGroup: String?
     @State private var autoStartAttempted = false
     @State private var selectedGroupKey: String?
+    @State private var pickingLocation: LocationPickTarget?
 
     init(runID: String, previewModel: ImportRunReviewModel? = nil) {
         self.runID = runID
@@ -209,6 +214,18 @@ struct ImportRunReviewView: View {
             }
         } message: {
             Text("This attaches the photos and commits the proposed product choice.")
+        }
+        .sheet(item: $pickingLocation) { target in
+            EntityPickerSheet(target: .location) { picks in
+                guard let pick = picks.first else { return }
+                Task {
+                    await model.act(runID: runID, client: appModel.client) {
+                        _ = try await appModel.client.setPhotoGroupInventory(
+                            runID: runID, groupKeys: target.groupKeys,
+                            locationID: LocationCode(pick.id))
+                    }
+                }
+            }
         }
         .confirmationDialog("Approve all proposed items?", isPresented: $confirmingAll) {
             Button("Approve \(proposed.count) items") { approve(proposed.map(\.groupKey)) }
@@ -357,6 +374,10 @@ struct ImportRunReviewView: View {
                     HStack {
                         Text("Proposed items · \(proposed.count)")
                         Spacer()
+                        Button("Receive all into…") {
+                            pickingLocation = LocationPickTarget(groupKeys: nil)
+                        }
+                        .disabled(model.busy)
                         Button("Approve all") { confirmingAll = true }
                             .disabled(
                                 model.busy
@@ -557,6 +578,31 @@ struct ImportRunReviewView: View {
                     "\(group.missingImageCount) photos are missing", systemImage: "exclamationmark.triangle"
                 )
                 .foregroundStyle(PorcelainTokens.warning)
+            }
+            Button {
+                pickingLocation = LocationPickTarget(groupKeys: [group.groupKey])
+            } label: {
+                Label(
+                    "Receive into: \(group.inventory?.locationName ?? "Not set")",
+                    systemImage: "shippingbox")
+            }
+            .disabled(model.busy)
+            if let stocked = group.stockedHere, let inventory = group.inventory {
+                Toggle(
+                    "Add \(inventory.quantity) to the \(stocked.quantity.formatted()) already here",
+                    isOn: Binding(
+                        get: { inventory.addToExisting == true },
+                        set: { add in
+                            Task {
+                                await model.act(runID: runID, client: appModel.client) {
+                                    _ = try await appModel.client.setPhotoGroupInventory(
+                                        runID: runID, groupKeys: [group.groupKey], addToExisting: add)
+                                }
+                            }
+                        })
+                )
+                .font(.subheadline)
+                .disabled(model.busy)
             }
             if let blocker = approvalBlocker(group, images: images) {
                 Text(blocker).font(.caption).foregroundStyle(PorcelainTokens.warning)
@@ -1157,3 +1203,9 @@ private struct PhotoGroupDraftEditView: View {
         .frame(width: 1360, height: 900)
     }
 #endif
+
+/// Which proposed groups a location pick applies to; nil means every proposed group.
+private struct LocationPickTarget: Identifiable {
+    let id = UUID()
+    let groupKeys: [String]?
+}

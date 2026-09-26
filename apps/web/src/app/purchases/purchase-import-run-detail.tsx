@@ -164,18 +164,25 @@ function RunActionButtons({
   runId,
   actions,
   target,
+  startsPhotoGrouping = false,
   children,
 }: {
   runId: ImportRunDetail["publicId"];
   actions: readonly RunAction[];
   target?: Pick<RunControlInput, "operationId" | "approvalId">;
+  /** A restarted photo run waits for re-processing, then its page starts grouping. */
+  startsPhotoGrouping?: boolean;
   children?: ReactNode;
 }) {
   const control = useMutation(
     runOperations.control.mutationOptions({
       onSuccess: ({ successor }) => {
         if (successor)
-          window.location.assign(importRunHref(successor.publicId));
+          window.location.assign(
+            startsPhotoGrouping
+              ? `${importRunHref(successor.publicId)}?startGrouping=1`
+              : importRunHref(successor.publicId),
+          );
       },
     }),
   );
@@ -223,12 +230,17 @@ function RunControls({ run }: { run: ImportRunDetail }) {
           }
         />
       ) : null}
-      <RunActionButtons runId={run.publicId} actions={runActions(run)}>
+      <RunActionButtons
+        runId={run.publicId}
+        actions={runActions(run)}
+        startsPhotoGrouping={run.purpose === "photo_inventory"}
+      >
         {run.purpose === "photo_inventory" &&
         TERMINAL_RUN_STATUSES.has(run.status) ? (
           <p className="max-w-md text-right text-xs text-muted-foreground">
-            Reuses these uploaded photos and their existing image analysis. The
-            agent groups them again in a separate run.
+            Reuses these uploaded photos in a separate run. Failed or missing
+            cutouts and descriptions are processed again, and the agent groups
+            the photos once processing finishes.
           </p>
         ) : null}
       </RunActionButtons>

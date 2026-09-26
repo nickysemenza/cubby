@@ -17,7 +17,10 @@ grouping, ownership, and location rules.
    import, whether or not it has a vendor import or purchase. Read labels in
    context: fit text and a separate size marker can mean different things.
    Propose a strong existing match for human approval and state any uncertainty
-   in its evidence. Leave genuinely ambiguous variants for the reviewer.
+   in its evidence. When the variant is ambiguous (an unreadable size, two
+   near matches), still propose the group as a new Product named from what the
+   photos show, and put the candidate Products and the open question in its
+   `evidence`; the reviewer can switch it to an existing Product.
 3. Cover every pending image exactly once with `propose_photo_groups`. Include
    `_runExecution: { runId: "{{runId}}", operationId: <stable proposal id> }` on
    the mutation. Read `list_photo_group_proposals` to check for conflicts and
@@ -26,8 +29,10 @@ grouping, ownership, and location rules.
 4. Once every photo is covered by a valid proposal, call
    `report_agent_progress` with `phase: "awaiting_approval"` and
    `awaitingApproval: true`, then end this submission. The run completes after
-   the human approves or discards the last group. If safe grouping is blocked,
-   call `stop_import_run_for_review` with the exact open question.
+   the human approves or discards the last group. One item's open question
+   never blocks the others: it belongs in that group's evidence. Call
+   `stop_import_run_for_review` only when no group can be proposed at all, with
+   the exact open question.
 
 Use photos only to identify physical items. Retailer browsing and purchase
 inference belong to the purchase workflow. Use Cubby MCP tools here; shell,

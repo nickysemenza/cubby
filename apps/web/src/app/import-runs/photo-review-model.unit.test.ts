@@ -2,7 +2,13 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PhotoGroupProposal } from "@cubby/schemas/photo-import-run";
 import { describe, expect, it } from "vitest";
 
-import { mergeGroups, moveImage, toGroupInput } from "./photo-review-model";
+import {
+  mergeGroups,
+  moveImage,
+  needsStockDecision,
+  receiveAllInto,
+  toGroupInput,
+} from "./photo-review-model";
 
 const img = (code: string) => parseShortcodeFor("image", code);
 
@@ -21,6 +27,7 @@ const proposal = (
   product: { kind: "create", create: { name: `Item ${groupKey}` } },
   committedProduct: null,
   inventory: null,
+  stockedHere: null,
   evidence: null,
   conflict: null,
   lastError: null,
@@ -118,5 +125,55 @@ describe("photo review edits", () => {
         toGroupInput(deletedLocation, { inventory: undefined }).inventory,
       ).toBeUndefined();
     });
+  });
+});
+
+describe("where approved items are received", () => {
+  const closet = parseShortcodeFor("location", "LOC-4K7M");
+  const withInventory = (
+    base: PhotoGroupProposal,
+    inventory: PhotoGroupProposal["inventory"],
+    stockedHere: PhotoGroupProposal["stockedHere"] = null,
+  ): PhotoGroupProposal => ({ ...base, inventory, stockedHere });
+
+  it("points every proposed group at one location, keeping each quantity", () => {
+    const edit = receiveAllInto(
+      [
+        withInventory(proposal("a", ["IMG-AAA2"]), {
+          locationId: null,
+          locationName: null,
+          quantity: 3,
+        }),
+        proposal("b", ["IMG-BBB2"]),
+        proposal("c", ["IMG-CCC2"], "committed"),
+      ],
+      closet,
+    );
+    expect(
+      edit.groups.map((group) => [group.groupKey, group.inventory]),
+    ).toEqual([
+      ["a", { locationId: closet, quantity: 3 }],
+      ["b", { locationId: closet, quantity: 1 }],
+    ]);
+  });
+
+  it("holds approval until the reviewer decides about existing stock", () => {
+    const stocked = withInventory(
+      proposal("a", ["IMG-AAA2"]),
+      { locationId: closet, locationName: "Closet", quantity: 1 },
+      {
+        inventoryId: parseShortcodeFor("inventory", "INV-4K7M"),
+        quantity: 2,
+        unit: "each",
+      },
+    );
+    expect(needsStockDecision(stocked)).toBe(true);
+    expect(
+      needsStockDecision({
+        ...stocked,
+        inventory: { ...stocked.inventory!, addToExisting: true },
+      }),
+    ).toBe(false);
+    expect(toGroupInput(stocked).inventory?.addToExisting).toBeUndefined();
   });
 });

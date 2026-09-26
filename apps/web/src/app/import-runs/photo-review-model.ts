@@ -48,6 +48,7 @@ export function toGroupInput(
       quantity: proposal.inventory.quantity,
       ownershipMode: proposal.inventory.ownershipMode,
       ownerPartyId: proposal.inventory.ownerPartyId,
+      addToExisting: proposal.inventory.addToExisting,
     };
   return {
     groupKey: proposal.groupKey,
@@ -166,5 +167,37 @@ export function mergeGroups(
       },
     ],
     removeGroupKeys: [fromGroupKey],
+  };
+}
+
+/**
+ * The chosen existing Product is already stocked at the chosen location and
+ * the reviewer has not chosen to add to that entry; approval would be refused.
+ */
+export const needsStockDecision = (proposal: PhotoGroupProposal) =>
+  proposal.stockedHere !== null && proposal.inventory?.addToExisting !== true;
+
+/**
+ * Point every proposed group's inventory at one location, keeping each
+ * group's quantity and owner. A per-group choice made afterwards still wins.
+ */
+export function receiveAllInto(
+  proposals: readonly PhotoGroupProposal[],
+  locationId: NonNullable<PhotoGroupProposalGroup["inventory"]>["locationId"],
+): ProposalEdit {
+  return {
+    groups: proposals
+      .filter((proposal) => proposal.state === "proposed")
+      .map((proposal) =>
+        toGroupInput(proposal, {
+          inventory: {
+            locationId,
+            quantity: proposal.inventory?.quantity ?? 1,
+            ownershipMode: proposal.inventory?.ownershipMode,
+            ownerPartyId: proposal.inventory?.ownerPartyId,
+          },
+        }),
+      ),
+    removeGroupKeys: [],
   };
 }

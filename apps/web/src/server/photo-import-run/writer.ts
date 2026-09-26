@@ -36,6 +36,8 @@ import {
   importRun,
   importRunMutation,
   importRunTarget,
+  inventoryEntry,
+  location,
   product,
 } from "~/server/db/schema";
 import { assertImportRunCapability } from "~/server/purchase-import/capabilities";
@@ -49,7 +51,12 @@ import {
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
 import { attachExistingImageToEntity } from "~/server/repo/image";
-import { createInventoryEntry } from "~/server/repo/inventory/crud";
+import {
+  createInventoryEntry,
+  updateInventoryEntry,
+} from "~/server/repo/inventory/crud";
+import { stockOnly } from "~/server/repo/inventory/placement";
+import { inventoryOwnershipSlotCondition } from "~/server/repo/inventory/slot";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/request-context";
 import { sha256Hex } from "~/server/semantic/hash";
@@ -407,18 +414,62 @@ async function receiveInventory(
     ownershipMode = requestedMode;
     ownerLedgerPartyId = null;
   }
-  const entry = await createInventoryEntry(
-    txDb,
-    {
-      productId,
-      locationId,
-      amount: { value: input.inventory.quantity, unit: "each" },
-      ownershipMode,
-      ownerLedgerPartyId,
-    },
-    actor,
-  );
-  const inventoryShortcodeStr = entry.id;
+  const [stocked] = await getDb(txDb)
+    .select({
+      id: inventoryEntry.id,
+      shortcode: inventoryEntry.shortcode,
+      amount: inventoryEntry.amount,
+      locationName: location.name,
+    })
+    .from(inventoryEntry)
+    .innerJoin(location, eq(location.id, inventoryEntry.locationId))
+    .where(
+      and(
+        eq(inventoryEntry.productId, productId),
+        eq(inventoryEntry.locationId, locationId),
+        stockOnly(),
+        inventoryOwnershipSlotCondition({ ownershipMode, ownerLedgerPartyId }),
+        notDeleted(inventoryEntry),
+      ),
+    )
+    .limit(1);
+  if (stocked) {
+    const held = `${stocked.amount.value} ${stocked.amount.unit}`;
+    if (!input.inventory.addToExisting)
+      throw new Error(
+        `This Product already has ${held} at ${stocked.locationName} (${stocked.shortcode}). Choose to add to that entry, or pick another location.`,
+      );
+    if (stocked.amount.unit !== "each")
+      throw new Error(
+        `Cannot add ${input.inventory.quantity} each to ${stocked.shortcode}, which holds ${held}`,
+      );
+    await updateInventoryEntry(
+      txDb,
+      stocked.id,
+      {
+        amount: {
+          value: stocked.amount.value + input.inventory.quantity,
+          unit: "each",
+        },
+      },
+      actor,
+    );
+  }
+  const inventoryShortcodeStr = stocked
+    ? stocked.shortcode
+    : (
+        await createInventoryEntry(
+          txDb,
+          {
+            productId,
+            locationId,
+            amount: { value: input.inventory.quantity, unit: "each" },
+            ownershipMode,
+            ownerLedgerPartyId,
+          },
+          actor,
+        )
+      ).id;
   const inventoryEntityId: InventoryId = await resolveOrThrow(
     txDb,
     "inventory",
@@ -430,8 +481,10 @@ async function receiveInventory(
       runId: scope.public.runId,
       targetType: "inventory",
       targetId: inventoryEntityId,
-      mutationKind: "create",
-      fields: ["amount", "ownershipMode", "ownerLedgerPartyId"],
+      mutationKind: stocked ? "update" : "create",
+      fields: stocked
+        ? ["amount"]
+        : ["amount", "ownershipMode", "ownerLedgerPartyId"],
       postFingerprint: await sha256Hex(
         JSON.stringify({
           groupKey: input.groupKey,

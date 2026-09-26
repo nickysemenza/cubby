@@ -63,6 +63,7 @@ import {
   imageProcessingAttempt,
   importRun,
   importRunTarget,
+  inventoryEntry,
   ledgerParty,
   location,
   photoGroupProposal,
@@ -77,6 +78,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { loadImageRepresentations } from "~/server/repo/image-processing";
+import { stockOnly } from "~/server/repo/inventory/placement";
 import { currentMemberLedgerParty } from "~/server/repo/member-login";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
@@ -94,6 +96,7 @@ const storedCreate = commitPhotoGroupProduct.options[1].shape.create;
 const storedInventory = z.object({
   ownershipMode: inventoryOwnershipMode.optional(),
   quantity: z.number().int().positive(),
+  addToExisting: z.boolean().optional(),
 });
 
 /** A run that does not exist, or that this actor may not review; routes map it to 404. */
@@ -299,6 +302,25 @@ async function linkedCodes(db: Database, rows: readonly ProposalRow[]) {
   };
 }
 
+function stockedHereFor(
+  row: ProposalRow,
+  stockByPair: ReadonlyMap<
+    string,
+    { shortcode: string; amount: { value: number; unit: string } }
+  >,
+): PhotoGroupProposal["stockedHere"] {
+  if (row.state !== "proposed" || !row.productId || !row.inventoryLocationId)
+    return null;
+  const entry = stockByPair.get(`${row.productId}:${row.inventoryLocationId}`);
+  return entry
+    ? {
+        inventoryId: parseShortcodeFor("inventory", entry.shortcode),
+        quantity: entry.amount.value,
+        unit: entry.amount.unit,
+      }
+    : null;
+}
+
 async function toViews(
   db: Database,
   rows: ProposalRow[],
@@ -317,7 +339,15 @@ async function toViews(
       ),
     ),
   ];
-  const [chosen, conflicts, locations, linked] = await Promise.all([
+  const stockPairs = rows.flatMap((row) =>
+    row.state === "proposed" &&
+    row.productKind === "existing" &&
+    row.productId &&
+    row.inventoryLocationId
+      ? [{ productId: row.productId, locationId: row.inventoryLocationId }]
+      : [],
+  );
+  const [chosen, conflicts, locations, linked, stock] = await Promise.all([
     productSummaries(db, { ids: productIds }),
     productSummaries(db, { shortcodes: conflictCodes }),
     locationIds.length
@@ -331,7 +361,34 @@ async function toViews(
           .where(and(inArray(location.id, locationIds), notDeleted(location)))
       : Promise.resolve([]),
     linkedCodes(db, rows),
+    stockPairs.length
+      ? getDb(db)
+          .select({
+            productId: inventoryEntry.productId,
+            locationId: inventoryEntry.locationId,
+            shortcode: inventoryEntry.shortcode,
+            amount: inventoryEntry.amount,
+          })
+          .from(inventoryEntry)
+          .where(
+            and(
+              inArray(
+                inventoryEntry.productId,
+                stockPairs.map((pair) => pair.productId),
+              ),
+              inArray(
+                inventoryEntry.locationId,
+                stockPairs.map((pair) => pair.locationId),
+              ),
+              stockOnly(),
+              notDeleted(inventoryEntry),
+            ),
+          )
+      : Promise.resolve([]),
   ]);
+  const stockByPair = new Map(
+    stock.map((entry) => [`${entry.productId}:${entry.locationId}`, entry]),
+  );
   const summaryById = new Map(chosen.map((entry) => [entry.uuid, entry]));
   const summaryByCode = new Map(conflicts.map((entry) => [entry.id, entry]));
   const locationById = new Map(locations.map((entry) => [entry.id, entry]));
@@ -381,8 +438,10 @@ async function toViews(
             ownershipMode: inventory.ownershipMode,
             ownerPartyId: linked.ownerPartyId(row),
             quantity: inventory.quantity,
+            addToExisting: inventory.addToExisting,
           }
         : null,
+      stockedHere: stockedHereFor(row, stockByPair),
       evidence: row.evidence,
       conflict: row.conflictProductIds?.length
         ? row.conflictProductIds.flatMap((conflictCode) => {
@@ -558,6 +617,7 @@ async function upsertProposal(
       ? {
           quantity: group.inventory.quantity,
           ownershipMode: group.inventory.ownershipMode,
+          addToExisting: group.inventory.addToExisting,
         }
       : null,
     inventoryOwnerPartyId: entry.ownerPartyId,
@@ -693,6 +753,66 @@ export async function chooseExistingProductForPhotoGroup(
 }
 
 /** Keep the reviewed photo grouping intact while correcting a new Product's identity. */
+/**
+ * Set where proposed groups are received: a new location for the chosen
+ * groups (every proposed group when `groupKeys` is omitted), or the reviewer's
+ * choice to add to stock already at a group's location. A location change
+ * clears that choice, since the existing stock it answered may differ.
+ */
+export async function setPhotoGroupInventory(
+  db: Database,
+  input: {
+    runId: string;
+    groupKeys?: string[];
+    locationId?: string;
+    addToExisting?: boolean;
+  },
+) {
+  const review = await listPhotoGroupProposals(db, input.runId);
+  const targets = review.proposals.filter(
+    (group) =>
+      group.state === "proposed" &&
+      (!input.groupKeys || input.groupKeys.includes(group.groupKey)),
+  );
+  if (!targets.length) throw new Error("No proposed photo group was found");
+  return proposePhotoGroups(db, {
+    runId: input.runId,
+    groups: targets.map((group) => {
+      const locationId = input.locationId ?? group.inventory?.locationId;
+      if (!locationId)
+        throw new Error(
+          `Group ${group.groupKey} has no location; choose one first`,
+        );
+      if (group.product.kind === "existing" && !group.product.existing)
+        throw new Error(
+          `Group ${group.groupKey}'s Product was deleted; pick another first`,
+        );
+      return {
+        groupKey: group.groupKey,
+        images: group.images,
+        skip: group.skip,
+        product:
+          group.product.kind === "existing"
+            ? {
+                kind: "existing" as const,
+                existingId: group.product.existing!.id,
+              }
+            : { kind: "create" as const, create: group.product.create },
+        inventory: {
+          locationId: parseShortcodeFor("location", locationId),
+          quantity: group.inventory?.quantity ?? 1,
+          ownershipMode: group.inventory?.ownershipMode,
+          ownerPartyId: group.inventory?.ownerPartyId,
+          addToExisting: input.locationId
+            ? undefined
+            : (input.addToExisting ?? group.inventory?.addToExisting),
+        },
+        evidence: group.evidence,
+      };
+    }),
+  });
+}
+
 export async function updatePhotoGroupProductDraft(
   db: Database,
   input: {
@@ -797,6 +917,7 @@ async function commitInputFor(
       quantity: stored.quantity,
       ownershipMode: stored.ownershipMode,
       ownerPartyId: (await linkedCodes(db, [row])).ownerPartyId(row),
+      addToExisting: stored.addToExisting,
     };
   }
   return {

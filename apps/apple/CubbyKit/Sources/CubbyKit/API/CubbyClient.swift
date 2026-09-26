@@ -481,6 +481,23 @@ public actor CubbyClient {
         }
     }
 
+    /// Where approved photo groups are received: a location for the given groups (every proposed
+    /// group when `groupKeys` is nil), or whether to add to stock already at a group's location.
+    public func setPhotoGroupInventory(
+        runID: ImportRunShortcode, groupKeys: [String]? = nil, locationID: LocationCode? = nil,
+        addToExisting: Bool? = nil
+    ) async throws -> ReviewPhotoGroupsOutput {
+        try await perform {
+            try await api.photoImport_setGroupInventory(
+                body: .json(
+                    .init(
+                        runId: runID, groupKeys: groupKeys, locationId: locationID,
+                        addToExisting: addToExisting))
+            )
+            .ok.body.json
+        }
+    }
+
     public func discardPhotoGroup(
         runID: ImportRunShortcode, groupKey: String
     ) async throws -> ReviewPhotoGroupsOutput {

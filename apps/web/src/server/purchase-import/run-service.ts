@@ -101,7 +101,11 @@ import { persistImageProcessingSubmission } from "~/server/repo/image-processing
 import { getImportRunByShortcode } from "~/server/repo/import-run";
 import { withPhotoImportTransaction } from "~/server/repo/photo-import";
 import { sha256Hex } from "~/server/semantic/hash";
-import { publishImageProcessingWakeups } from "~/server/services/image-processing.service";
+import {
+  publishImageProcessingWakeups,
+  retryImageProcessingFailures,
+  scheduleImageProcessingJobs,
+} from "~/server/services/image-processing.service";
 import {
   productionPhotoImportCommitPorts,
   verifyStagedImages,
@@ -3447,7 +3451,7 @@ export async function controlImportRun(
         "Manual evidence checksum does not match its upload record",
       );
   }
-  return withTransaction(
+  const result = await withTransaction(
     db,
     // eslint-disable-next-line complexity
     async (tx) => {
@@ -3515,7 +3519,10 @@ export async function controlImportRun(
             "This account run has no vendor account to start again",
           );
         const successorId = importRunId.parse(crypto.randomUUID());
-        const dispatchEventId = crypto.randomUUID();
+        // A photo restart re-queues image processing; grouping starts once
+        // that settles (see `startPhotoGroupingForActor`), not now.
+        const reprocessPhotos = locked.purpose === "photo_inventory";
+        const dispatchEventId = reprocessPhotos ? null : crypto.randomUUID();
         const [successor] = await tx
           .insert(importRun)
           .values({
@@ -3564,7 +3571,12 @@ export async function controlImportRun(
           successorStatus: successor.status,
           successorCoordinatorModel: coordinatorModelFor(locked.purpose),
           created: true,
-          dispatchRunId: successorId,
+          reprocessImageIds: reprocessPhotos
+            ? sourceTargets.flatMap((target) =>
+                target.imageId ? [target.imageId] : [],
+              )
+            : [],
+          dispatchRunId: reprocessPhotos ? null : successorId,
           dispatchPublicId: successor.publicId,
           dispatchPurpose: locked.purpose,
           dispatchCoordinatorModel: coordinatorModelFor(locked.purpose),
@@ -4161,4 +4173,32 @@ export async function controlImportRun(
       };
     },
   );
+  const reprocessImageIds =
+    "reprocessImageIds" in result ? (result.reprocessImageIds ?? []) : [];
+  if (reprocessImageIds.length) {
+    const photos = await getDb(db)
+      .select({ shortcode: image.shortcode })
+      .from(image)
+      .where(inArray(image.id, reprocessImageIds));
+    // Sequential: each call opens its own transaction and publishes wakeups.
+    // The new run already committed, so one photo that cannot be processed
+    // (e.g. not integrity-verified) must not fail the restart; its state
+    // stays visible in the run's processing badges.
+    for (const photo of photos) {
+      try {
+        await scheduleImageProcessingJobs(db, {
+          id: photo.shortcode,
+          kinds: ["describe_image", "subject_lift"],
+        });
+      } catch (error) {
+        // SILENT: surfaced by the photo's processing badge on the new run.
+        console.error("photo-restart.schedule-failed", {
+          image: photo.shortcode,
+          error,
+        });
+      }
+      await retryImageProcessingFailures(db, { id: photo.shortcode });
+    }
+  }
+  return result;
 }
