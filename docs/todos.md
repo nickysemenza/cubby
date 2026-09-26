@@ -27,14 +27,6 @@ history is the archive. Permanent product constraints live in the
 
 ## Easy fixes
 
-- **CalDAV feed dirty-mark can fail silently.** The dirty-mark in
-  `server/calendar/client.ts` (annotated `SILENT:`, guarded by the
-  `cubby/no-swallowed-catch` rule) runs after the response is committed, so a
-  failure leaves the feed stale until the next successful write. Move it onto
-  the write's own transaction or a retried queue message. (Product mutations
-  now carry `sideEffects.warnings` for best-effort failures if a caller-visible
-  channel is wanted instead.)
-
 - **Canvas conformance follow-ups.** The generic pages now render the
   canvas (<https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL>): one 44px
   workbench band with declared-filter chips and `Actions ▾`, plate verbs,
@@ -87,29 +79,17 @@ history is the archive. Permanent product constraints live in the
   grouping (`treePickerItems`) is not worth the wiring yet — revisit if
   either roster grows deep nesting.
 
-- **Test the merge dialog's impact preview.** `entity-merge-dialog.tsx`
-  renders a `MergeImpactPreview` per loser in both the ranked and fixed
-  dialogs, but only the delete dialog's preview has a unit test. Add one for
-  a blocking disposition on one loser that leaves confirm enabled.
-
-- **Cover the photo-group review's untested guards.** Add regression tests for
-  the photo review operations' household-member check (404 for a non-member), the
-  `state='proposed'` guard on the approval `lastError` write, and the
-  frozen-group toast after a save into a just-committed group
-  (`apps/web/src/server/photo-import.server.ts`,
-  `apps/web/src/app/import-runs/photo-group-review.tsx`).
-
-- **Sweep exact-count test pins.** Assertions that pin a registry total
-  (operation counts, method counts, path counts) fail on every legitimate
-  addition without guarding behavior; the HTTP contract tests dropped theirs.
-  Find the rest and replace each with the invariant it stood in for
-  (uniqueness, coverage against the source registry) or delete it. Keep
-  one-directional ratchets that caught real regressions (the positional
-  OpenAPI component bound).
-
 ---
 
 ## Ready projects
+
+- **Maintenance mode.** A single switch for cutovers and incident holds: a
+  status held in a Durable Object that the web Worker checks per request
+  (503 with a short page except health and the switch itself), every queue
+  consumer checks before consuming (leave messages unacked so they redeliver
+  afterwards), and Flue run workflows check before each step (pause cleanly,
+  resumable). Toggle it from Settings → Maintenance and over MCP. The
+  2026-09 run-rename cutover accepted a few minutes of errors instead.
 
 - **Finish the input-first retailer and statement journey.** Make a saved
   synthetic order-history and product HTML page drive the actual browser capture
@@ -161,15 +141,18 @@ onHandUnits`; `product-hero-presence.ts` computes the presentation and is
   currently unused) instead of `QuickInventoryAdd`'s constant `1`. Detail
   pages have no prev/next navigation, so use the guided-flow shape
   (`problem-actions.ts` `start-recount`), optionally scoped to one import run
-  (`product-import-runs.tsx` already knows it). Receiving stays explicit
+  (`product-runs.tsx` already knows it). Receiving stays explicit
   (purchase-import plan decision 15).
+  The same pass should also accept a value- or category-bounded worklist
+  (not only the `unlocated` view) and reuse the existing location picker and
+  immediate-write inventory flows.
 
 - **`resolve_ingredients` suggests product links.** A newly resolved ingredient
   can remain unlinked to an existing matching product. Products with
   `ingredientId: null` do not contribute costing until hand-linked. Return
   `candidateProducts` by name similarity and accept
   `linkProductId` in the same call. Pairs with the coverage-visibility entry
-  above.
+  below.
 
 - **`resolve_products` should share `global_search`'s lexical engine.** Name
   variants such as
@@ -211,11 +194,6 @@ externalIds[]}` per line and returning exact-id hits, alias hits, and lexical
   source-ref and account-alias Problems findings a safe targeted action, without
   widening the general entity-merge system to money entities.
 
-- **Guided placement pass for unlocated products.** Walk a value- or
-  category-bounded worklist one product at a time with three answers: not tracked,
-  place here, or skip. Reuse the existing location picker and immediate-write
-  inventory flows.
-
 - **Import extracted cookbook bundles.** Accept ingredient-parser's `.cookbook`
   archives with extracted recipes and images through the existing cookbook
   review/import flow (`recipe/cookbook-import/cookbook-dropzone.tsx`). Read ZIP entries
@@ -231,13 +209,10 @@ externalIds[]}` per line and returning exact-id hits, alias hits, and lexical
   that surfaces heavily used ingredients lacking a usable Product mapping
   specifically, not just ones with no Product at all.
 
-- **Ingredient detail editing and recipe-usage repair.** The ingredient detail
-  page already hosts product/USDA (`IngredientProductShelf`) and unit-mapping
-  (`UnitCoveragePanel`) sections. Remaining scope: let `naKinds` be edited
-  after creation (currently create-only), and add a reparse action to the
-  recipe-usage drift indicator, which is presently read-only. Use this
-  representative workflow to deepen the shared editing module only after its
-  concrete needs are proven; do not add speculative editor ports first.
+- **Reparse from the recipe-usage drift indicator.** The ingredient detail
+  page's recipe-usage drift indicator is read-only; add a reparse action. Use
+  this workflow to deepen the shared editing module only after its concrete
+  needs are proven.
 
 - **Itemization and settlement verdict on the transactions list.** The
   linkage exists (`FinancialTransaction ──< Allocation >── Purchase ──<
@@ -297,86 +272,26 @@ text: none` plus candidate names and passes through as "Deterministic local
   shelf-versus-ledger disagreement worklist so the pass visits the products that
   actually disagree wherever they live.
 
-- **Flue `photo_inventory` coordinator.** A hosted coordinator that works a
-  photo run through `propose_photo_groups` and `propose_product_match` from
-  on-device analysis text (never raw bytes): a coordinator prompt,
-  `claim_next_import_work` support for image targets, and the Flue SSE channel
-  on the run page in place of 3s polling. Photo runs are excluded from dispatch
-  today (`run-service.ts` throws "Photo inventory runs have no dispatchable
-  work").
-
-- **Lift photo-run image bytes straight from the device.** The Apple uploader
-  round-trips every photo through R2 before on-device analysis; hand the
-  analysis the local bytes and upload once
-  (`apps/apple/CubbyKit/Sources/CubbyKit/Photo/PhotoImportRunUploader.swift`).
+- **Stream photo-run progress over Flue SSE.** Photo runs dispatch to the Flue
+  coordinator; the run page still polls every 3 s
+  (`apps/web/src/app/runs/photo-group-review.tsx` `refetchInterval`). Use the
+  Flue SSE channel instead.
 
 - **Move the purchase run detail onto generic entity-detail slots.**
-  `ImportRunContent` in `apps/web/src/app/purchases/purchase-import-run-detail.tsx`
-  is hand-written even though `importRun` is a manifest entity.
+  `RunContent` in `apps/web/src/app/purchases/purchase-import-run-detail.tsx`
+  is hand-written even though `run` is a manifest entity.
 
 ---
 
 ## Requires database changes
 
-- **Persist per-photo device analysis work.** `AiAnalysis` records a successful
-  Vision submission but cannot distinguish queued, running, paused, or failed
-  work before submission. Give each finalized photo a durable device-work
-  record and an authenticated, idempotent status update from
-  `PhotoImportRunUploader`; reconcile success with the existing analysis row.
-  The photo-run page should read that record so closing the phone does not
-  leave an ambiguous "waiting" state, and retry can target failed photos.
-
-- **Carry the member through queued AI work.** Search-query embeddings,
-  image-processing dispatch, location AI refresh and inbound purchase-mail
-  classification run under `systemActor()` because no actor reaches them
-  (`server/semantic/embeddings.ts`, `image-processing/dispatch.ts`,
-  `background-tasks/handle.ts`, `agents/purchase-import/extract.ts`). The
-  system actor is meant only for work with no member present: thread the
-  request actor (or its `runId`) into the queue messages and the search read
-  path so these runs name the member who caused them. The Flue provider
+- **Attribute Flue provider calls to their run.** Queued image processing,
+  background tasks and search-query embeddings now carry the causing run;
+  inbound purchase-mail classification keeps `systemActor()` because no member
+  is present. The Flue provider
   (`apps/purchase-agent/src/cubby-ai-provider.ts`) still tags gateway metadata
   with `jobKind: "purchase_import_run"`; send the run id once Flue exposes the
   current run to module-scope providers.
-
-- **Finish the `ImportRun` → `Run` rename.** Runs now group all AI work
-  (`ai_suggest`, `ai_action`, `background`, `file_import`, `legacy` purposes),
-  but only the UI label and `/runs` route were renamed. Still named
-  `ImportRun*`: the parent table, entity key, `ImportRunId` type, the child
-  tables (`ImportRunTarget`, `…OrderCandidate`, `…Evidence`, `…Mutation`,
-  `…Operation`, `…Progress`, `…ControlEvent`), `ImportSourceClaim.firstRunId`/
-  `lastRunId`, `Purchase.importRunId`, `ImportFinding.importRunId`, raw-SQL
-  name strings (`repo/activity.ts`, `problems/detectors-integrity.ts`,
-  edge-policy keys), and the generated Apple types. Leave Flue runtime
-  identifiers (Durable Object `purchase-import-run`, `finish_import_run` /
-  `stop_import_run_for_review` tools) unchanged, because a separately deployed
-  worker and in-flight runs depend on them. Ship it as a
-  `scripts/cutovers/*.sql` cutover, not `db:push`.
-
-- **Schema-bearing PRs must not auto-merge ahead of their runbook.**
-  `deploy.yaml` deploys every `main` push and never applies schema; the
-  image-provenance PRs (#1193, #1198, #1201) auto-merged green and deployed
-  against a database that lacked `Device`, `ImageSighting` and the new
-  `Image` columns until the production expansion ran. Rule: a PR whose runbook
-  adds a table or column is opened as a draft or without auto-merge until the
-  expansion is applied and read back; consider
-  a CI job that diffs `application-schema.json` against the live schema and
-  blocks merge on a missing column.
-
-- **Anchor the remaining polymorphic references on `Entity`.** ADR 0006 gave
-  `AuditLog`, `SearchDocument`, `EntityEmbedding`, and `DataException` a
-  composite `Entity(id, kind)` FK. `AiAnalysis`, `AiUsage`, `ImportRunMutation`,
-  and `ImportFinding` still carry unenforced `(entityType|targetType, id)`
-  pairs with bespoke merge and removal cleanup. Classify each one (history that
-  keeps its original identity vs a live pointer that follows a merge), then
-  convert one table per cutover; a pair whose target can be a non-entity row
-  (`import_run`, `expense` without a shortcode) stays as it is.
-
-- **Finish the meal amount migration.** `MealFoodEntry` and
-  `MealRecipePortion` still retain legacy `grams` columns and read/input
-  compatibility paths. Verify legacy rows and writers have drained, remove
-  those paths, deploy and drain the previous build, then drop the columns and
-  tighten constraints. Follow the [meal amount cleanup runbook](runbooks/meal-food-entry-schema.md#3-later-cleanup)
-  and verify the resulting schema; do not infer production readiness from code.
 
 - **Cookbook identity merge.** Stop same-title collisions and renamed-EPUB forks
   by giving cookbooks durable identity plus a merge/repoint path.
@@ -430,11 +345,6 @@ example vegetable` must not resolve to the weight of an entire linked bag
   manifest-defined `presentation.list.views` without creating a second query
   language.
 
-- **Structured location segments for photo runs.** `ImportRun.notes` carries
-  location-by-time-window prose that the agent parses; give photo runs
-  structured time-window → Location segments so proposals default their
-  inventory location without interpretation.
-
 ---
 
 ## Requires thought or evidence
@@ -444,7 +354,7 @@ example vegetable` must not resolve to the weight of an entire linked bag
   surface; past sweeps were ad-hoc agent batches. Build a sweep that records
   each product's suggestion (target, branch-rolled confidence, runner-up), applies only
   high-confidence changes, and queues the rest for review. Decide where the
-  run lives: an `ImportRun` purpose, the activity `runProjection`, or a
+  run lives: a `Run` purpose, the activity `runProjection`, or a
   shared sweep primitive also used by the image-description backfill. Run it
   after that backfill, since the basis is mostly text until then. Measured:
   about $0.10 per 1,000 Jev calls at a 2.3k-token roster; bursts near
@@ -490,7 +400,7 @@ example vegetable` must not resolve to the weight of an entire linked bag
   What remains: durable "not available" exceptions still only exist for
   Product and Purchase (the `dataExceptions` jsonb column and
   `set_data_exception`/`clear_data_exception` are hardcoded to those two —
-  see "Generic durable data exceptions" below); the per-check weights shipped
+  generic durable exceptions are not yet designed); the per-check weights shipped
   are a first cut and may need tuning once worklists are used in anger;
   `projectsMissingBudget` remains a Problems tracker rule, not a `dataQuality`
   check, because its subtree spend rollup is not a per-row predicate.
@@ -637,8 +547,8 @@ example vegetable` must not resolve to the weight of an entire linked bag
   Promote when agents keep reproducing edge states against real data; decide
   how it stays out of the production bundle (`mock-schema.ts` imports faker).
   The data half is now covered: `pnpm dev:local` sets up a persistent
-  local database with named, non-empty entities in every state the corpus
-  covers, so `dev:local` no longer needs the shared prod `DATABASE_URL` for
+  local database seeded with the scenario corpus (products, inventory,
+  projects, purchases, expenses and a photo run), so `dev:local` no longer needs the shared prod `DATABASE_URL` for
   this. What remains is the route/component-preview half — driving one
   component into an arbitrary state (loading/error/edge) without navigating
   the full app to reach it.
@@ -877,16 +787,12 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   recurrence.
 
 - (lead) **React #418 hydration error on `/garden-entries`.**
-  Logged in production on both route loads; reproduce in dev before deciding
-  on a fix. Two related, reproducible-in-dev leads seen 2026-09-16 on `main`:
-  every sortable list header hydrates with a different dnd-kit
-  `aria-describedby="DndDescribedBy-N"` than the server rendered (dnd-kit's
-  id counter advances per SSR request in the long-lived worker), and
+  Logged in production on both route loads. The dnd-kit per-request id lead is
+  fixed (headers build their id from `useId()`). The remaining lead:
   `@tanstack/react-router-ssr-query` 1.167 calls `hydrate(client, undefined)`
-  on the query stream's final `done` read, which query-core 5.102 logs as
-  "Error reading query stream … reading 'mutations'". Both are console noise
-  today; fix by seeding dnd-kit's `id` per request and upgrading the router
-  ssr-query package once it guards `done`.
+  on the query stream's final `done` read, which query-core logs as "Error
+  reading query stream … reading 'mutations'"; upgrade once it guards `done`,
+  then re-check production.
 
 - **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
   `get_shopping_list` is a plain structured/text tool. The remaining USDA
@@ -936,8 +842,8 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
 
 ### Waiting for a trigger
 
-- **Retire native-owned web fieldwork and PWA installation.** After the native
-  parity project above ships and its flows pass real-device validation, remove
+- **Retire native-owned web fieldwork and PWA installation.** After native
+  workflow parity (below) ships and its flows pass real-device validation, remove
   web barcode/QR camera controls, `/scan`, the sweep UI, the superseded recount
   and location photo-pass routes, and PWA manifest/share-target/icons/splash
   assets. Account for unfinished browser-local passes and old entry links
@@ -1061,13 +967,6 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   descriptors (`product/crud.ts` and `purchase.ts` carry most). Convert per
   repository and verify with the real-query matrix; leave joins alone.
 
-- **Harden `createDeleteProcedure`'s id contract** — Promote if a second hand-rolled
-  delete procedure appears. It infers its id type from the callback and then casts
-  (`id as TId`), so a branded parameter alone does not catch a caller passing the
-  wrong id form — that is how shortcode-vs-uuid image deletion shipped to review.
-  Every entity going through `createEntityCrudRouter` is safe today because that
-  config requires an `idSchema`; a hand-rolled call site can still omit one.
-
 - **Let the negative-expected-quantity worklist converge** — Promote when the
   `negativeExpectedQuantity` view is next worked. It reads the kit-projected quantity
   (`kit-projection.ts`), and after triage most survivors are settled decisions —
@@ -1179,8 +1078,8 @@ productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
 
 - **Native system-surface expansion.** Promote one surface only after a recurring
   household workflow names it: Quick Look for typed attachments, typed drag/drop,
-  additional App Intents, widgets, extensions, voice entry, timers, or Live
-  Activities. Each slice must retain explicit user-confirmed writes and use the
+  additional App Intents, widgets, extensions, voice entry, or timers (Live
+  Activities for server runs are their own item). Each slice must retain explicit user-confirmed writes and use the
   existing entity/link contracts rather than creating a parallel state model.
 
 - **Offline native writes and multiwindow.** Promote only when disconnected use
@@ -1325,10 +1224,11 @@ productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
   beneficiaries: default the expense editor's beneficiaries/funders to the last
   set used with the same vendor.
 
-- **ImportFinding as a manifest entity** — Promote once a second parent needs
+- **RunFinding as a manifest entity** — Promote once a second parent needs
   its list: today findings render as a slot on the run page and through the
-  Problems `importFindings` key. `ImportRun` itself became `importRun`
-  (`RUN-`, read-only) in 2026-09; its other children (targets, evidence,
+  Problems `runFindings` key. `Run` became the `run` entity (`RUN-`,
+  read-only) in 2026-09, and a finding's `(targetId, targetKind)` is already
+  anchored on `Entity`; the run's other children (targets, evidence,
   operations, approvals, progress) stay internal rows with no life outside a
   run. A finding is the one child with its own lifecycle (open → applied /
   dismissed) and a Purchase relation, so it is the natural next promotion —
@@ -1425,16 +1325,6 @@ productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
 
 Deferred from the 2026-09 manifest-rendering and deletion/parity PRs; unordered.
 
-- **Declare generic list grouping once.** Product and Location enable grouping
-  in their web list-column overrides, while their repositories separately
-  implement full-filter counts and group-first order. Put the grouping contract
-  on the entity declaration and generate or validate both bindings, including
-  Product's computed category path and the shared null-group keys. Reject a new
-  generic grouped view without full-set metadata so page-local counts cannot
-  silently return (`apps/web/src/app/_components/entity-list/generic-entity-list.tsx`,
-  `apps/web/src/server/repo/product/crud.ts`,
-  `apps/web/src/server/repo/location/crud.ts`).
-
 - **Profile test cost before another pruning pass.** [PR #1273](https://github.com/nickysemenza/cubby/pull/1273) reduced literal
   test declarations but did not show an overall CI speed gain: web node and
   Apple checks ran longer while PostgreSQL ran faster than successful main
@@ -1442,51 +1332,10 @@ Deferred from the 2026-09 manifest-rendering and deletion/parity PRs; unordered.
   consolidate costly duplicate behavior coverage or fixture setup without
   weakening the merge gate. The one-run comparison is in that PR's report.
 
-- **Finish policy-driven deletes.** `deleteCookbook` (nested recipe cascade
-  returning recipe ids), the image delete path and `deleteStatementRows` still
-  hand-write their cascades instead of `deleteByPolicy`
-  (`apps/web/src/server/repo/removal/dispositions.ts`). Twelve `*_HAS_*` reasons
-  in `packages/shared/src/error-utils.ts` have no references since blocks throw
-  `ENTITY_DELETE_BLOCKED`; delete them.
-
-- **Cover the remaining delete-policy edges.**
-  `entity-kernel/delete-policy.integration.test.ts` pins 35 uncovered edges,
-  mostly import and mail tables the shared reference universe
-  (`entity-kernel/reference-universe.fixtures.ts`) never seeds. Seed them so
-  every declared block, detach and cascade is exercised.
-
-- **Make the declaration import-boundary lint transitive.** The
-  `no-restricted-imports` override in `.oxlintrc.json` lists the helper modules
-  declarations import; a declaration that starts importing a new helper
-  escapes the rule until someone adds it (the deleted unit test walked imports
-  transitively). Derive the file list, or fail `pnpm generate` on an unlisted
-  import.
-
-- **Put `run.startTargeted` on the HTTP API.** It is `http: false` because the
-  OpenAPI generator cannot express its discriminated-union input
-  (`apps/web/src/contracts/run.contract.ts`), so the native app cannot start a
-  targeted run. Teach the generator the union, or reshape the input.
-
-- **Fix `/api/v1` writes under the Vite dev server.** Locally (Node 24 and 26)
-  every `/api/v1` mutation returns 500: `@ts-rest/serverless`'s `TsRestRequest`
-  subclass fails undici's private-field check in `new Request`. Workers
-  deployments are unaffected; browser operations are the local workaround.
-
-- **One presigned-upload helper.** Seven call sites repeat the R2 upload
-  `fetch(init.uploadUrl, …)` with their own error handling (`PendingImageUpload`,
-  `PendingDocumentUpload`, `use-image-upload`, `use-entity-photo-capture`,
-  `SessionCaptureActions`, cookbook import, run evidence upload).
-
-- **Finish the picker and options consolidation.** 15 files still use the
-  `WithEntitySearch` render prop (SearchProvider slots and pickers inside field
-  arrays), and the tag, project and deferred filter-option hooks remain.
-  `ledgerParty.options` and `project.options` stay separate from
-  `getFilterOptions` because they return kind/icon and dates; add those
-  projections and fold them in.
-
-- **Seed a representative dev database.** `pnpm db:dev:reset` seeds no
-  projects, expenses, purchases or import runs, so screenshot and manual
-  checks of those pages need hand-made data (`apps/web/tooling/dev-db-seed.ts`).
+- **Put `deleteStatementRows` on policy-driven removal.** It is the last
+  hand-written cascade (`apps/web/src/server/repo/statement-row.ts`); it takes a
+  filter rather than ids and StatementRow has no `AuditEntityType`, so it waits
+  on "StatementRow and StatementImport as manifest entities".
 
 - **Expose recipebridge conversion, needs, costing and nutrition via cubby-ffi**
   only alongside the first native screen that scales a recipe or prices a meal.
@@ -1512,11 +1361,6 @@ Deferred from the 2026-09 manifest-rendering and deletion/parity PRs; unordered.
   layer. Touches `wrangler` config and the USDA data source binding.
 
 ## Operational passes
-
-- **Finish the nutrition totals cutover.** Flattened `Recipe.totals` values
-  still exist on soft-deleted rows in production. Coordinate the reset and
-  recomputation in [the cutover runbook](nutrition-cutover.md), then verify
-  every cached row uses the current JSON shape, including deleted recipes.
 
 - **Finish image provenance rollout on existing photos.** Run
   `classifyImageProvenance` in dry-run mode, review its proposed changes, then
