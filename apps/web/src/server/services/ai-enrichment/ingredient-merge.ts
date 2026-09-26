@@ -9,7 +9,7 @@
 
 import type { Confidence } from "@cubby/schemas/ai";
 import {
-  type ImportRunId,
+  type RunId,
   type IngredientId,
   type IngredientShortcode,
   parseShortcodeFor,
@@ -53,7 +53,7 @@ export interface IngredientMergeSuggestion {
 export async function suggestIngredientMerge(
   db: Database,
   source: { id: IngredientId; name: string },
-  runId: ImportRunId,
+  runId: RunId,
   ai: IngredientMergeAiPort = productionIngredientMergeAiPort,
   shortlistPort?: MergeShortlistPort,
 ): Promise<IngredientMergeSuggestion> {
@@ -82,7 +82,7 @@ export async function suggestIngredientMerge(
         runId,
         operation: "suggestIngredientMerge",
         cacheStatus: "none",
-        entity: { entityType: "ingredient", entityId: source.id },
+        entity: { entityKind: "ingredient", entityId: source.id },
       },
     },
   );
@@ -113,7 +113,7 @@ interface IngredientMergeBatchSuggestion extends IngredientMergeSuggestion {
 export async function suggestIngredientMergeBatch(
   db: Database,
   sources: { id: IngredientId; shortcode: IngredientShortcode; name: string }[],
-  runId: ImportRunId,
+  runId: RunId,
 ): Promise<IngredientMergeBatchSuggestion[]> {
   const capped = sources.slice(0, 20);
   const out: IngredientMergeBatchSuggestion[] = [];

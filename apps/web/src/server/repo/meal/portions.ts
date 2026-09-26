@@ -7,7 +7,6 @@ import {
 import {
   type GetMealPreparationsInput,
   type MealFoodAmount,
-  mealFoodAmountFromStored,
   type GetMealPreparationsOut,
   getMealPreparationsOut,
   type MealPreparationYieldBasis,
@@ -324,7 +323,6 @@ export const saveMealRecipePreparation = async (
         id: mealRecipePortion.id,
         mealId: mealRecipePortion.mealId,
         ledgerPartyId: mealRecipePortion.ledgerPartyId,
-        grams: mealRecipePortion.grams,
         amount: mealRecipePortion.amount,
         confirmedAt: mealRecipePortion.confirmedAt,
       })
@@ -346,7 +344,7 @@ export const saveMealRecipePreparation = async (
     const finalAmounts = new Map(
       existing.map((portion) => [
         `${portion.mealId}:${portion.ledgerPartyId}`,
-        mealFoodAmountFromStored(portion),
+        portion.amount,
       ]),
     );
     for (const [index, change] of input.changes.entries()) {
@@ -354,7 +352,7 @@ export const saveMealRecipePreparation = async (
       const party = parties[index]!;
       const key = `${targetId}:${party.id}`;
       if (change.action === "remove") finalAmounts.delete(key);
-      else finalAmounts.set(key, mealFoodAmountFromStored(change));
+      else finalAmounts.set(key, change.amount);
     }
     const { nextActualYield } = await resolveYieldBasisAndValidateShares(
       tx,
@@ -384,8 +382,7 @@ export const saveMealRecipePreparation = async (
         await tx
           .update(mealRecipePortion)
           .set({
-            amount: mealFoodAmountFromStored(change),
-            grams: null,
+            amount: change.amount,
             confirmedAt,
             deletedAt: null,
           })
@@ -395,8 +392,7 @@ export const saveMealRecipePreparation = async (
           mealRecipeId: occurrence.id,
           mealId: targetId,
           ledgerPartyId: party.id,
-          amount: mealFoodAmountFromStored(change),
-          grams: null,
+          amount: change.amount,
           confirmedAt,
         });
     }
@@ -474,7 +470,6 @@ const getMealPreparationsRaw = async (
       ledgerPartyShortcode: ledgerParty.shortcode,
       ledgerPartyName: ledgerParty.name,
       ledgerPartyKind: ledgerParty.kind,
-      grams: mealRecipePortion.grams,
       amount: mealRecipePortion.amount,
       confirmedAt: mealRecipePortion.confirmedAt,
     })
@@ -575,7 +570,7 @@ const getMealPreparationsRaw = async (
       row.ledgerPartyShortcode != null &&
       row.ledgerPartyName != null &&
       row.ledgerPartyKind != null &&
-      (row.amount != null || row.grams != null)
+      row.amount != null
     ) {
       preparation.portions.push({
         id: row.portionId,
@@ -588,7 +583,7 @@ const getMealPreparationsRaw = async (
         ledgerPartyShortcode: row.ledgerPartyShortcode,
         ledgerPartyName: row.ledgerPartyName,
         ledgerPartyKind: row.ledgerPartyKind,
-        amount: mealFoodAmountFromStored(row)!,
+        amount: row.amount,
         confirmedAt: row.confirmedAt,
       });
     }

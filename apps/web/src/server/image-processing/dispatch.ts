@@ -73,11 +73,16 @@ export async function dispatchImageProcessingWakeup(
         },
       });
       if (!assigned) return "skipped";
-      // No user rides along with a dispatched image-processing job; books
-      // under the system actor, same as every other background AI call.
-      const runId = await ensureRun(db, systemActor(), {
-        purpose: "background",
-      });
+      // Use the run that requested this job when one was recorded at
+      // scheduling time, so its AI usage is attributed to that run's actor
+      // rather than a fresh background run. No user rides along with a job
+      // that has none, so it books under the system actor like every other
+      // background AI call.
+      const runId =
+        claimed.runId ??
+        (await ensureRun(db, systemActor(), {
+          purpose: "background",
+        }));
       const { result, fingerprint } = await describeOriginalImage(db, {
         imageId: claimed.imageId,
         attemptId: claimed.attemptId,

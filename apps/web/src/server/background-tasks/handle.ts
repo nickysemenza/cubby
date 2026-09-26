@@ -1,6 +1,6 @@
 import type { BackgroundTask } from "@cubby/schemas/background-tasks";
 import { entityRefKey } from "@cubby/schemas/entity";
-import type { ImageId } from "@cubby/schemas/identifiers";
+import { runEntityId, type ImageId } from "@cubby/schemas/identifiers";
 
 import type { Database } from "~/server/db";
 
@@ -90,13 +90,14 @@ export async function handleBackgroundTask(
       const { ensureRun, systemActor } =
         await import("~/server/runs/ensure-run");
       try {
-        // No actor rides along on a queued background task; this call could
-        // originate from a member's mutation side effect or a backfill, but
-        // neither carries an actor through the queue message, so it books
-        // under the system actor rather than guessing at attribution.
-        const runId = await ensureRun(db, systemActor(), {
-          purpose: "background",
-        });
+        // Attribute to the mutation's actor run when the publisher recorded
+        // one; older queue messages (and backfills) carry no `runId`, so
+        // those book under the system actor instead of guessing.
+        const runId =
+          (task.runId ? runEntityId.parse(task.runId) : null) ??
+          (await ensureRun(db, systemActor(), {
+            purpose: "background",
+          }));
         await describeLocation(db, task.locationId, runId);
       } catch (error) {
         if (isLocationHasNoImagesToAnalyzeError(error)) return "skipped";
@@ -110,9 +111,11 @@ export async function handleBackgroundTask(
       const { ensureRun, systemActor } =
         await import("~/server/runs/ensure-run");
       try {
-        const runId = await ensureRun(db, systemActor(), {
-          purpose: "background",
-        });
+        const runId =
+          (task.runId ? runEntityId.parse(task.runId) : null) ??
+          (await ensureRun(db, systemActor(), {
+            purpose: "background",
+          }));
         await detectInventoryItems(db, task.locationId, runId);
       } catch (error) {
         if (isLocationHasNoImagesToAnalyzeError(error)) return "skipped";

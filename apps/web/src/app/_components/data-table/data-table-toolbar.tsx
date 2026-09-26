@@ -92,12 +92,10 @@ function SavedViewsSubmenu<TData extends RowData>({
 
 /**
  * The page-mode workbench's `Actions ▾`: table-layout customization and
- * saved views, plus whatever the table owner (`RTable`) needs to fold in
- * (inspector/grouped toggles). Bulk verbs are NOT listed here yet — that
- * needs `useListBulkActions`'s raw `BulkActionsConfig` threaded down from
- * outside this lane's files; the live `bulkActionBar` still replaces this
- * entire tier via `data-query-bulk`/`data-query-rest` (styles.css) once rows
- * are selected, so the real verbs stay reachable in the meantime.
+ * saved views, plus whatever the table owner (`RTable`) folds in through
+ * `extra` (inspector/grouped toggles and the list's bulk verbs, disabled at
+ * rest). The live `bulkActionBar` replaces this tier via
+ * `data-query-bulk`/`data-query-rest` (styles.css) once rows are selected.
  */
 function ActionsMenu<TData extends RowData>({
   table,

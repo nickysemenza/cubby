@@ -532,8 +532,7 @@ const ENTITIES_WITHOUT_RELATED_VIEWS = {
   gardenEntry: "garden timelines render entries directly",
   vendorAccount:
     "vendor account ownership and vendor links are rendered as detail fields",
-  importRun:
-    "read-only runs have no detail route to hang a related view on; vendor account/vendor/member links are rendered as list columns",
+  run: "read-only runs have no detail route to hang a related view on; vendor account/vendor/member links are rendered as list columns",
   productCategory:
     "the category tree is rendered through the product-category records page",
   // Not a local entity — remote USDA search results, no local edges.

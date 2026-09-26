@@ -15,7 +15,7 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import {
   type DeviceId,
-  type ImportRunId,
+  type RunId,
   parseEntityRef,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
@@ -372,7 +372,7 @@ export async function getAuditLog(
     oauthClientId?: string;
     /** Device and Run uuids; the workflow resolves the public shortcodes. */
     deviceId?: DeviceId;
-    runId?: ImportRunId;
+    runId?: RunId;
     // Both ISO date strings, same encoding as `cursor` below — inclusive
     // bounds on `createdAt`.
     createdAtFrom?: string;
@@ -537,7 +537,7 @@ export async function getAuditLog(
               name: device.name,
             }
           : null,
-        runId: run ? parseShortcodeFor("importRun", run.shortcode) : null,
+        runId: run ? parseShortcodeFor("run", run.shortcode) : null,
         entryKey: encodeAuditCursor({ id, createdAt: entry.createdAt }),
         // `Entity` still knows a hard-deleted payload's code.
         entityId: identity?.shortcode ?? null,

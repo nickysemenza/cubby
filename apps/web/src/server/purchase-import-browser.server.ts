@@ -5,13 +5,13 @@ import {
   listReceiptHunts,
   submitReceiptEvidence,
 } from "~/server/purchase-import/receipt-evidence";
-import { initiateImportRunEvidenceUpload } from "~/server/purchase-import/run-evidence";
+import { initiateRunEvidenceUpload } from "~/server/purchase-import/run-evidence";
 
 export const purchaseImportHandlers = implementOperationDomain(
   purchaseImportContract,
   {
     initiateRunEvidenceUpload: (context, input) =>
-      initiateImportRunEvidenceUpload(context.db, input, context.auth.userId),
+      initiateRunEvidenceUpload(context.db, input, context.auth.userId),
     listReceiptHunts: (context) =>
       listReceiptHunts(context.db, context.actorContext),
     submitReceiptEvidence: (context, input) => {

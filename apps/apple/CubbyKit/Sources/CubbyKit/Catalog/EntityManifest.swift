@@ -129,10 +129,6 @@ public enum EntityDetailSlotID: String, CaseIterable, Codable, Sendable {
     case cookbookToc = "cookbook.toc"
     case expenseSettlement = "expense.settlement"
     case imageAssociations = "image.associations"
-    case importRunAiUsage = "importRun.ai-usage"
-    case importRunChanges = "importRun.changes"
-    case importRunImportWorkflow = "importRun.import-workflow"
-    case importRunPhotoBatch = "importRun.photo-batch"
     case ingredientNutritionProduct = "ingredient.nutrition-product"
     case ledgerPartyWardrobe = "ledgerParty.wardrobe"
     case locationAiDescription = "location.ai-description"
@@ -141,20 +137,24 @@ public enum EntityDetailSlotID: String, CaseIterable, Codable, Sendable {
     case mealNutrition = "meal.nutrition"
     case productCookbooks = "product.cookbooks"
     case productFitsWith = "product.fits-with"
-    case productImportRuns = "product.import-runs"
     case productLabels = "product.labels"
     case productNutrition = "product.nutrition"
     case productRecipeAppearances = "product.recipe-appearances"
+    case productRuns = "product.runs"
     case productUnitMappings = "product.unit-mappings"
     case projectAnalytics = "project.analytics"
     case projectBudget = "project.budget"
     case projectContribution = "project.contribution"
     case projectSchedule = "project.schedule"
     case purchaseFinancialSettlement = "purchase.financial-settlement"
-    case purchaseImportRuns = "purchase.import-runs"
     case purchaseProjectAllocation = "purchase.project-allocation"
     case purchaseReconciliation = "purchase.reconciliation"
+    case purchaseRuns = "purchase.runs"
     case recipeWorkflow = "recipe.workflow"
+    case runAiUsage = "run.ai-usage"
+    case runChanges = "run.changes"
+    case runImportWorkflow = "run.import-workflow"
+    case runPhotoBatch = "run.photo-batch"
 }
 
 public enum EntityListSlotID: String, CaseIterable, Codable, Sendable {
@@ -315,6 +315,9 @@ public struct RelationSectionSpec: Codable, Sendable, Hashable {
     public let columns: [String]?
     public let sort: SectionSort?
     public let limit: Int?
+    /// Section-specific empty-state copy, replacing the generic "No <plural> yet."
+    /// sentence both platforms otherwise render.
+    public let empty: String?
     /// Skip the whole section, on both platforms, when its first page is empty.
     public let hideWhenEmpty: Bool
     /// Keep the header and create action but fold the rows away when the first page is empty.

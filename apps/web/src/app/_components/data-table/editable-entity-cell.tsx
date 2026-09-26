@@ -12,7 +12,7 @@ import { cn } from "~/lib/utils";
 
 import type { ComboboxItem, PickerEntity } from "../combobox/combobox-types";
 import { EntityPicker } from "../combobox/entity-picker";
-import type { WithEntitySearchProps } from "../combobox/with-search-hook";
+import type { SearchProviderProps } from "../combobox/with-search-hook";
 import type { CellClipboardSpec } from "./cell-clipboard";
 import { CellEditTrigger } from "./cell-edit-trigger";
 import { CellEditorOverlay } from "./cell-editor-overlay";
@@ -34,7 +34,7 @@ export interface EditableEntityCellProps<TId extends string> {
   /** Save the new id (null only when `clearable`). */
   onSave: (id: TId | null) => Promise<void>;
   /** WithLocationSearch / WithIngredientSearch / ... — injected so unit tests can stub it. */
-  SearchProvider: (props: WithEntitySearchProps<TId>) => React.ReactNode;
+  SearchProvider: (props: SearchProviderProps<TId>) => React.ReactNode;
   /** Combobox placeholder noun, e.g. "location", "ingredient". */
   label: PickerEntity;
   /** Allow saving null (clear the relation). Without it, an empty selection is a no-op cancel. */
@@ -161,7 +161,7 @@ function EditableEntityEditor<TId extends string>({
 }: {
   value: ComboboxItem<TId> | null;
   onSave: (id: TId | null) => Promise<void>;
-  SearchProvider: (props: WithEntitySearchProps<TId>) => React.ReactNode;
+  SearchProvider: (props: SearchProviderProps<TId>) => React.ReactNode;
   label: PickerEntity;
   clearable?: boolean;
   filterItems?: (item: ComboboxItem<TId>) => boolean;

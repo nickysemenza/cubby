@@ -34,6 +34,7 @@ import {
   optionalNullableProperties,
   residualNullPointers,
 } from "./document-passes.ts";
+import { registerDiscriminatedUnionMembersForIo } from "./discriminator-registration.ts";
 import type { EntityOutputs } from "./api-types.ts";
 import { NATIVE_COMPONENT_ROOTS, renderNativeArtifacts } from "./native.ts";
 import { pascal, registerSchemaNames } from "./schema-names.ts";
@@ -333,6 +334,13 @@ const buildOpenApiDocument = async (): Promise<{
         ),
       ]),
     );
+
+  // `schemaTransformer` above only registers the ROUTE-LEVEL schema it was
+  // asked to convert, so a discriminated union nested inside a route's
+  // input/output never gets its members added to `registries[io]` — see
+  // `discriminator-registration.ts` for why, and why this closes the gap.
+  for (const io of ["input", "output"] as const)
+    registerDiscriminatedUnionMembersForIo(registries[io], io, named.values());
 
   const emitted: Record<string, JsonSchema> = {};
   for (const io of ["input", "output"] as const) {

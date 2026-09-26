@@ -162,9 +162,9 @@ describe("buildImageWhere", () => {
     },
   );
 
-  it("narrows by targetState via an ImportRunTarget EXISTS clause", async () => {
+  it("narrows by targetState via an RunTarget EXISTS clause", async () => {
     const sqlText = await where({ targetState: "pending" });
-    expect(sqlText).toContain("ImportRunTarget");
+    expect(sqlText).toContain("RunTarget");
     expect(sqlText).toContain('"state"');
   });
 });

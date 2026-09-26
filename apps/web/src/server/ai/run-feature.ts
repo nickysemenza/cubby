@@ -1,4 +1,4 @@
-import type { ImportRunId } from "@cubby/schemas/identifiers";
+import type { RunId } from "@cubby/schemas/identifiers";
 /**
  * The one runner for structured AI calls.
  *
@@ -61,12 +61,12 @@ export interface AiRunContext<T = unknown> {
    */
   db?: Database;
   /** Every AI call belongs to a run; see `ensureRun`. */
-  runId: ImportRunId;
+  runId: RunId;
   /** The code path placing the call — `suggestCategory`, `select`, … */
   operation: string;
   /** Correlates calls emitted while one durable job is executing. */
   job?: { kind: string; id: string } | null;
-  entity?: { entityType: string; entityId: string } | null;
+  entity?: { entityKind: string; entityId: string } | null;
   /** Whether the *caller's* own cache (AiAnalysis) hit, for the usage row. */
   cacheStatus?: "hit" | "miss" | "none";
   applicationCacheStatus?: ApplicationCacheStatus;
@@ -117,7 +117,7 @@ export function planStructuredRun<T = unknown>(
     operation: ctx.operation,
   };
   if (ctx.entity) {
-    metadata.entityType = ctx.entity.entityType;
+    metadata.entityKind = ctx.entity.entityKind;
     metadata.entityId = ctx.entity.entityId;
   }
 

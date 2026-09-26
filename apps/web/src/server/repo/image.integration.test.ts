@@ -16,8 +16,8 @@ import {
   cookbook,
   entityAttachment,
   image,
-  importRun,
-  importRunTarget,
+  run as runTable,
+  runTarget,
   ledgerParty,
   user,
 } from "~/server/db/schema";
@@ -48,27 +48,27 @@ import { createProject } from "./project";
 import { insertWithShortcode } from "./shortcode-utils";
 import { findOrCreateVendor } from "./vendor";
 
-let importRunFixtureSeq = 0;
-const uniqImportRunLabel = (label: string) =>
-  `${label}-${(importRunFixtureSeq++).toString(36)}`;
+let runFixtureSeq = 0;
+const uniqRunLabel = (label: string) =>
+  `${label}-${(runFixtureSeq++).toString(36)}`;
 
 /** Minimal live `LedgerParty`, for fixtures that only need a valid owner id. */
 const mkLedgerParty = (db: Database) =>
   insertWithShortcode(db, "ledgerParty", {
-    name: uniqImportRunLabel("Ledger party"),
+    name: uniqRunLabel("Ledger party"),
     kind: "member",
   });
 
 const mkActorUser = (db: Database) =>
   insertAndReturn(db, user, {
-    id: uniqImportRunLabel("user"),
+    id: uniqRunLabel("user"),
     name: "Import run fixture actor",
-    email: `${uniqImportRunLabel("actor")}@example.test`,
+    email: `${uniqRunLabel("actor")}@example.test`,
   });
 
 /**
- * A live `photo_inventory` `ImportRun`, with the actor snapshot columns the
- * table requires (mirrors `mkImportRun` in
+ * A live `photo_inventory` `Run`, with the actor snapshot columns the
+ * table requires (mirrors `mkRun` in
  * `problems/detectors-integrity.integration.test.ts`, trimmed to what the
  * image-filter tests need).
  */
@@ -86,8 +86,8 @@ const mkPhotoInventoryRun = async (db: Database) => {
       .then((rows) => rows[0]!),
     mkActorUser(db),
   ]);
-  return insertAndReturn(db, importRun, {
-    shortcode: generateShortcode("importRun"),
+  return insertAndReturn(db, runTable, {
+    shortcode: generateShortcode("run"),
     purpose: "photo_inventory",
     trigger: "manual",
     ledgerPartyId: party.id,
@@ -100,16 +100,16 @@ const mkPhotoInventoryRun = async (db: Database) => {
   });
 };
 
-const mkImportRunTargetRow = (
+const mkRunTargetRow = (
   db: Database,
   values: { runId: string; imageId: string; position?: number; state?: string },
 ) =>
-  insertAndReturn(db, importRunTarget, {
+  insertAndReturn(db, runTarget, {
     runId: values.runId,
     imageId: parseEntityId("image", values.imageId),
     position: values.position,
     state: values.state ?? "pending",
-    targetFingerprint: uniqImportRunLabel("target-fingerprint"),
+    targetFingerprint: uniqRunLabel("target-fingerprint"),
   });
 
 describe("image repository", () => {
@@ -565,7 +565,7 @@ describe("image repository — import-run targets", () => {
       size: 512,
     });
 
-  it("filters images by importRunId and targetState", async () => {
+  it("filters images by runId and targetState", async () => {
     const run = await mkPhotoInventoryRun(ctx.db);
     const otherRun = await mkPhotoInventoryRun(ctx.db);
     const pendingImage = await makeImage("run-pending.jpg");
@@ -573,27 +573,27 @@ describe("image repository — import-run targets", () => {
     const otherRunImage = await makeImage("other-run.jpg");
     const untargetedImage = await makeImage("untargeted.jpg");
 
-    await mkImportRunTargetRow(ctx.db, {
+    await mkRunTargetRow(ctx.db, {
       runId: run.id,
       imageId: pendingImage.id,
       position: 1,
       state: "pending",
     });
-    await mkImportRunTargetRow(ctx.db, {
+    await mkRunTargetRow(ctx.db, {
       runId: run.id,
       imageId: preparedImage.id,
       position: 2,
       state: "prepared",
     });
-    await mkImportRunTargetRow(ctx.db, {
+    await mkRunTargetRow(ctx.db, {
       runId: otherRun.id,
       imageId: otherRunImage.id,
       position: 1,
       state: "pending",
     });
 
-    const runCode = parseShortcodeFor("importRun", run.shortcode);
-    const byRun = await imageList(ctx.db, { importRunId: runCode }, [], {
+    const runCode = parseShortcodeFor("run", run.shortcode);
+    const byRun = await imageList(ctx.db, { runId: runCode }, [], {
       pageIndex: 0,
       pageSize: 100,
     });
@@ -605,7 +605,7 @@ describe("image repository — import-run targets", () => {
 
     const byRunAndState = await imageList(
       ctx.db,
-      { importRunId: runCode, targetState: "pending" },
+      { runId: runCode, targetState: "pending" },
       [],
       { pageIndex: 0, pageSize: 100 },
     );
@@ -636,7 +636,7 @@ describe("image repository — import-run targets", () => {
     });
   });
 
-  it("orders a run's images by ImportRunTarget.position, then createdAt", async () => {
+  it("orders a run's images by RunTarget.position, then createdAt", async () => {
     const run = await mkPhotoInventoryRun(ctx.db);
     const first = await makeImage("position-first.jpg");
     const second = await makeImage("position-second.jpg");
@@ -644,17 +644,17 @@ describe("image repository — import-run targets", () => {
 
     // Inserted out of position order, so a pass without the position ORDER BY
     // would come back in this insertion/createdAt order instead.
-    await mkImportRunTargetRow(ctx.db, {
+    await mkRunTargetRow(ctx.db, {
       runId: run.id,
       imageId: third.id,
       position: 3,
     });
-    await mkImportRunTargetRow(ctx.db, {
+    await mkRunTargetRow(ctx.db, {
       runId: run.id,
       imageId: first.id,
       position: 1,
     });
-    await mkImportRunTargetRow(ctx.db, {
+    await mkRunTargetRow(ctx.db, {
       runId: run.id,
       imageId: second.id,
       position: 2,
@@ -662,7 +662,7 @@ describe("image repository — import-run targets", () => {
 
     const listed = await imageList(
       ctx.db,
-      { importRunId: parseShortcodeFor("importRun", run.shortcode) },
+      { runId: parseShortcodeFor("run", run.shortcode) },
       [],
       { pageIndex: 0, pageSize: 100 },
     );

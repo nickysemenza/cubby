@@ -16,7 +16,7 @@ actor CubbyBrowserEvidenceUploader: BrowserEvidenceUploading {
         if let scope {
             return try await uploadRunScoped(evidence, scope: scope)
         }
-        // Account-sync commands predate explicit ImportRun targets. They retain their existing
+        // Account-sync commands predate explicit Run targets. They retain their existing
         // operational storage path; targeted validation/enrichment always carries `scope` and
         // therefore cannot create a shared Image or Document through this fallback.
         switch evidence.kind {
@@ -35,13 +35,13 @@ actor CubbyBrowserEvidenceUploader: BrowserEvidenceUploading {
             throw CocoaError(.fileReadTooLarge)
         }
         guard
-            let contentType = InitiateImportRunEvidenceUploadInput.ContentTypePayload(
+            let contentType = InitiateRunEvidenceUploadInput.ContentTypePayload(
                 rawValue: evidence.contentType)
         else {
             throw CocoaError(.fileReadUnsupportedScheme)
         }
         let staged = try await client.initiateRunEvidenceUpload(
-            InitiateImportRunEvidenceUploadInput(
+            InitiateRunEvidenceUploadInput(
                 runId: scope.runID, targetId: scope.targetID, kind: .browserCapture,
                 contentType: contentType, byteSize: byteSize, checksum: evidence.checksum,
                 filename: evidence.url.lastPathComponent))

@@ -42,7 +42,7 @@ export async function requestCatchUp(
 export async function recoverMissedWork(db: Database) {
   const [
     { repairImageProcessingWork },
-    { expireOfflineImportRuns, expireStaleImportRuns },
+    { expireOfflineRuns, expireStaleRuns },
   ] = await Promise.all([
     import("~/server/repo/image-processing-maintenance"),
     import("~/server/purchase-import/run-service"),
@@ -50,9 +50,9 @@ export async function recoverMissedWork(db: Database) {
   const namespace = getPurchaseImportNamespace();
   const [image, offlineResult, staleResult] = await Promise.allSettled([
     repairImageProcessingWork(db),
-    expireOfflineImportRuns(db),
+    expireOfflineRuns(db),
     namespace
-      ? expireStaleImportRuns(db, namespace)
+      ? expireStaleRuns(db, namespace)
       : isCloudflareRuntime()
         ? Promise.reject(new Error("PURCHASE_IMPORT binding is unavailable"))
         : Promise.resolve(null),

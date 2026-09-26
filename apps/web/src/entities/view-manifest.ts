@@ -856,7 +856,7 @@ export const viewManifest = defineViewManifest({
       },
     },
   ],
-  importRun: [
+  run: [
     {
       id: "imports",
       label: "Imports",

@@ -3,10 +3,7 @@ import {
   entityInspectorMetadata,
   type BrowserRoutedEntity,
 } from "@cubby/schemas/entity-manifest";
-import {
-  LOCATION_UNSPECIFIED_GROUP_KEY,
-  PRODUCT_UNCLASSIFIED_GROUP_KEY,
-} from "@cubby/schemas/pagination";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useSearch } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -24,7 +21,10 @@ import {
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 
 import type { EntityActionSubject } from "../actions/entity-actions";
-import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
+import {
+  bulkActionPreview,
+  type BulkActionsConfig,
+} from "../data-table/bulk-actions.types";
 import type { RowLinkResolver } from "../data-table/columnHelpers";
 import type { ServerListWorkbenchModel } from "../data-table/ListWorkbench";
 import { problemWorklistState } from "../data-table/problem-worklist";
@@ -417,29 +417,23 @@ export function useEntityList<
     timing,
     refreshControls,
   } = infiniteResult;
+  // Once the server has returned full-set `groups`, the row key it matches
+  // sections by must be the raw grouped field's value (the id or enum the
+  // server grouped on), read through the override's `rawKeyFn` — not
+  // whatever label `keyFn` renders for the local, groups-less fallback below
+  // — falling back to the entity's declared null-group key
+  // (`packages/schemas/src/entity-definitions/*.entity.ts`'s `sort.grouping`,
+  // emitted as `generatedEntitySort[entity].grouping`).
   const effectiveGroupConfig = useMemo(() => {
     if (!groupConfig || !grouped || !groups) return groupConfig;
-    if (entity === "product") {
-      const categoryRow = z.object({
-        category: z.object({ id: z.string() }).nullable().optional(),
-      });
-      return {
-        ...groupConfig,
-        groups,
-        keyFn: (item: TData) =>
-          categoryRow.safeParse(item).data?.category?.id ??
-          PRODUCT_UNCLASSIFIED_GROUP_KEY,
-      };
-    }
-    if (entity === "location") {
-      return {
-        ...groupConfig,
-        groups,
-        keyFn: (item: TData) =>
-          groupConfig.keyFn(item) ?? LOCATION_UNSPECIFIED_GROUP_KEY,
-      };
-    }
-    return groupConfig;
+    const grouping = generatedEntitySort[entity]?.grouping;
+    const rawKeyFn = groupConfig.rawKeyFn;
+    if (!grouping || !rawKeyFn) return { ...groupConfig, groups };
+    return {
+      ...groupConfig,
+      groups,
+      keyFn: (item: TData) => rawKeyFn(item) ?? grouping.nullGroupKey,
+    };
   }, [entity, groupConfig, grouped, groups]);
 
   const serverTotals = useMemo(
@@ -612,6 +606,9 @@ export function useEntityList<
       error,
       timing,
       bulkActionBar,
+      bulkActionPreview: bulkActionPreview(
+        presentationState.listBulkActions.config,
+      ),
       rowActions: presentationState.listBulkActions.rowActions,
       actionDialogs: presentationState.listBulkActions.actionDialogs,
       subjectEntity: subject?.entity,

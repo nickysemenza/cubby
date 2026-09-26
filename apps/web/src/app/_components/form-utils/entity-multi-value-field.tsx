@@ -17,7 +17,7 @@ import { preserveSelectedPickerItems } from "~/entities/editing/reference-scope"
 import type { ComboboxItem, PickerEntity } from "../combobox/combobox-types";
 import { EntityPicker } from "../combobox/entity-picker";
 import type { EntitySearchScope } from "../combobox/entity-search-hooks";
-import type { WithEntitySearchProps } from "../combobox/with-search-hook";
+import type { SearchProviderProps } from "../combobox/with-search-hook";
 import { FormFieldGroup } from "../forms/form-field-group";
 
 const idList = z.array(z.string()).catch([]);
@@ -44,7 +44,7 @@ export function EntityMultiValueField<
   name: Path<TFieldValues>;
   entity: E;
   label: string;
-  SearchProvider: (props: WithEntitySearchProps<string>) => ReactNode;
+  SearchProvider: (props: SearchProviderProps<string>) => ReactNode;
   /** Dependent-field filters for the candidate picker; null keeps it scoped but idle. */
   scope?: EntitySearchScope | null;
 }) {

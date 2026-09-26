@@ -18,8 +18,8 @@ import {
   readCookie,
   verifyPurchaseAgentOAuthState,
 } from "~/server/purchase-import/agent-auth";
-import { recordImportRunDispatchAttempt } from "~/server/purchase-import/dispatch";
-import { resumeAuthorizedImportRuns } from "~/server/purchase-import/run-service";
+import { recordRunDispatchAttempt } from "~/server/purchase-import/dispatch";
+import { resumeAuthorizedRuns } from "~/server/purchase-import/run-service";
 import { createRequestContext, requireActor } from "~/server/request-context";
 
 const tokenResponse = z.object({
@@ -39,7 +39,7 @@ type DispatchAttempt = {
 };
 
 export type ResumedRun = Awaited<
-  ReturnType<typeof resumeAuthorizedImportRuns>
+  ReturnType<typeof resumeAuthorizedRuns>
 >[number];
 
 export type CallbackDependencies = {
@@ -86,9 +86,9 @@ const callbackDependencies: CallbackDependencies = {
     );
   },
   findGrant: findActivePurchaseAgentGrant,
-  resumeRuns: resumeAuthorizedImportRuns,
+  resumeRuns: resumeAuthorizedRuns,
   getQueue: getPurchaseAgentQueue,
-  recordDispatch: recordImportRunDispatchAttempt,
+  recordDispatch: recordRunDispatchAttempt,
   verifyState(token) {
     return verifyPurchaseAgentOAuthState(token, env.BETTER_AUTH_SECRET);
   },

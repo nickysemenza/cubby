@@ -13,7 +13,7 @@ import {
 } from "~/server/repo/database-helpers";
 
 interface AiAnalysisKey<T> {
-  entityType: AiAnalysisEntityType;
+  entityKind: AiAnalysisEntityType;
   entityId: string | null;
   feature: AiAnalysisFeature<T>;
   inputFingerprint: string;
@@ -30,7 +30,7 @@ export interface StoredAiAnalysis<T> {
 export async function listAiAnalysesForEntityFeature<T>(
   db: Database,
   input: {
-    entityType: AiAnalysisEntityType;
+    entityKind: AiAnalysisEntityType;
     entityId: string | null;
     feature: string;
     promptVersion: string;
@@ -40,7 +40,7 @@ export async function listAiAnalysesForEntityFeature<T>(
 ): Promise<StoredAiAnalysis<T>[]> {
   const rows = await getDb(db).query.aiAnalysis.findMany({
     where: and(
-      eq(aiAnalysis.entityType, input.entityType),
+      eq(aiAnalysis.entityKind, input.entityKind),
       input.entityId == null
         ? isNull(aiAnalysis.entityId)
         : eq(aiAnalysis.entityId, input.entityId),
@@ -63,7 +63,7 @@ export async function listAiAnalysesForEntityFeature<T>(
     const parsed = input.schema.safeParse(row.result);
     if (!parsed.success) {
       console.warn("ai.analysis.invalid-stored-result", {
-        entityType: input.entityType,
+        entityKind: input.entityKind,
         entityId: input.entityId,
         feature: input.feature,
         model: row.model,
@@ -75,13 +75,13 @@ export async function listAiAnalysesForEntityFeature<T>(
 }
 
 const analysisWhere = <T>({
-  entityType,
+  entityKind,
   entityId,
   feature,
   inputFingerprint,
 }: AiAnalysisKey<T>) =>
   and(
-    eq(aiAnalysis.entityType, entityType),
+    eq(aiAnalysis.entityKind, entityKind),
     entityId == null
       ? isNull(aiAnalysis.entityId)
       : eq(aiAnalysis.entityId, entityId),
@@ -138,7 +138,7 @@ export async function upsertAiAnalysis<T>(
   }
 
   await insertAndReturn(db, aiAnalysis, {
-    entityType: key.entityType,
+    entityKind: key.entityKind,
     entityId: key.entityId,
     feature: key.feature.feature,
     model: key.feature.model,

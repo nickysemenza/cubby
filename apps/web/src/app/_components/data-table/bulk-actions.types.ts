@@ -56,6 +56,18 @@ export function resolveBulkActionAvailability<TData extends RowData>(
   return action.availability?.(selectedRows) ?? { status: "available" };
 }
 
+/** A bulk verb as the at-rest `Actions ▾` menu lists it. */
+export type BulkActionPreview = Pick<
+  BulkAction<RowData>,
+  "id" | "label" | "icon"
+>;
+
+/** The at-rest menu entries for a list's bulk actions. */
+export const bulkActionPreview = <TData extends RowData>(
+  config: BulkActionsConfig<TData> | undefined,
+): BulkActionPreview[] | undefined =>
+  config?.actions.map(({ id, label, icon }) => ({ id, label, icon }));
+
 /** Configuration for bulk actions on an entity list */
 export interface BulkActionsConfig<TData extends RowData> {
   /** Available actions */

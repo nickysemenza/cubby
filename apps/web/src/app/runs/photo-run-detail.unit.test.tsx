@@ -1,6 +1,6 @@
 import {
   imageShortcode,
-  importRunShortcode,
+  runShortcode,
   productShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
@@ -10,7 +10,7 @@ import type {
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ImportRunDetail } from "~/contracts/run.contract";
+import type { RunDetail } from "~/contracts/run.contract";
 import { photoImport } from "~/entities/run.functions";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -28,10 +28,10 @@ const answerOperations = (data: UnparsedStartOperationData) => {
 
 // "RUN-4K7M" is the one synthetic shortcode body AGENTS.md sanctions for
 // outward-facing examples, and it also satisfies the real shortcode format
-// the `importRunId` filter validates against.
-const RUN_ID = importRunShortcode.parse("RUN-4K7M");
+// the `runId` filter validates against.
+const RUN_ID = runShortcode.parse("RUN-4K7M");
 
-const run: ImportRunDetail = {
+const run: RunDetail = {
   publicId: RUN_ID,
   purpose: "photo_inventory",
   status: "completed",
@@ -127,7 +127,12 @@ const photo = (
   id: string,
   position: number,
   targetState: PhotoRunImage["targetState"],
-  text: { description?: string; recognizedText?: string; cutout?: boolean },
+  text: {
+    description?: string;
+    recognizedText?: string;
+    cutout?: boolean;
+    deviceWorkState?: PhotoRunImage["deviceWorkState"];
+  },
 ): PhotoRunImage => ({
   id: imageShortcode.parse(id),
   position,
@@ -145,6 +150,9 @@ const photo = (
   describeReason: null,
   description: text.description ?? null,
   recognizedText: text.recognizedText ?? null,
+  deviceWorkState: text.deviceWorkState ?? null,
+  deviceWorkError: null,
+  deviceWorkAttempts: 0,
 });
 
 const review: PhotoRunReview = {

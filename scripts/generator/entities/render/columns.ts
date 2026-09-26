@@ -26,7 +26,7 @@ const identifierTypeNames = {
   productCategory: "ProductCategoryId",
   project: "ProjectId",
   purchase: "PurchaseId",
-  importRun: "ImportRunId",
+  run: "RunId",
   recipe: "RecipeId",
   task: "TaskId",
   vendor: "VendorId",

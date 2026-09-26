@@ -1,4 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { fromAny } from "@total-typescript/shoehorn";
 import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -57,11 +58,11 @@ describe("meal food entry lifecycle", () => {
     mealId: Awaited<ReturnType<typeof seedMeal>>["id"];
     ledgerPartyId: Awaited<ReturnType<typeof seedParty>>["id"];
     productId: Awaited<ReturnType<typeof seedProduct>>["id"];
-    grams?: number;
+    amount?: { value: number; unit: string };
   }) =>
     insertAndReturn(ctx.db, mealFoodEntry, {
       ...args,
-      grams: args.grams ?? 1,
+      amount: args.amount ?? { value: 1, unit: "g" },
       sourceKind: "product",
     });
   const seedIngredientEntry = async (args: {
@@ -73,7 +74,6 @@ describe("meal food entry lifecycle", () => {
     insertAndReturn(ctx.db, mealFoodEntry, {
       ...args,
       amount: args.amount ?? { value: 1, unit: "g" },
-      grams: null,
       sourceKind: "ingredient",
     });
 
@@ -120,19 +120,7 @@ describe("meal food entry lifecycle", () => {
         .insert(mealFoodEntry)
         .values({
           ...base,
-          amount: { value: 1, unit: "cup" },
-          grams: 1,
-        }),
-    ).rejects.toMatchObject({
-      cause: { constraint: "MealFoodEntry_amount_compatibility_check" },
-    });
-    await expect(
-      getDb(ctx.db)
-        .insert(mealFoodEntry)
-        .values({
-          ...base,
           amount: { value: 0, unit: "g" },
-          grams: null,
         }),
     ).rejects.toMatchObject({
       cause: { constraint: "MealFoodEntry_amount_check" },
@@ -143,7 +131,6 @@ describe("meal food entry lifecycle", () => {
         .values({
           ...base,
           amount: sql`'{"value": 1}'::jsonb`,
-          grams: null,
         }),
     ).rejects.toMatchObject({
       cause: { constraint: "MealFoodEntry_amount_check" },
@@ -154,7 +141,6 @@ describe("meal food entry lifecycle", () => {
         .values({
           ...base,
           amount: sql`'{"unit": "g"}'::jsonb`,
-          grams: null,
         }),
     ).rejects.toMatchObject({
       cause: { constraint: "MealFoodEntry_amount_check" },
@@ -166,7 +152,16 @@ describe("meal food entry lifecycle", () => {
           ...base,
           ingredientId: ingredientSource.id,
           amount: { value: 1, unit: "g" },
-          grams: null,
+        }),
+    ).rejects.toMatchObject({
+      cause: { constraint: "MealFoodEntry_source_check" },
+    });
+    await expect(
+      getDb(ctx.db)
+        .insert(mealFoodEntry)
+        .values({
+          ...base,
+          amount: null,
         }),
     ).rejects.toMatchObject({
       cause: { constraint: "MealFoodEntry_source_check" },
@@ -179,7 +174,6 @@ describe("meal food entry lifecycle", () => {
         name: "Manual nutrition estimate",
         nutrients: { kcal: 50 },
         amount: null,
-        grams: null,
       }),
     ).resolves.toMatchObject({ sourceKind: "manual", amount: null });
   });
@@ -305,7 +299,7 @@ describe("meal food entry lifecycle", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("re-points product entries during merge without changing grams", async () => {
+  it("re-points product entries during merge without changing the amount", async () => {
     const [meal, party, keep, lose] = await Promise.all([
       seedMeal(),
       seedParty("Product merge eater"),
@@ -316,7 +310,7 @@ describe("meal food entry lifecycle", () => {
       mealId: meal.id,
       ledgerPartyId: party.id,
       productId: lose.id,
-      grams: 42.5,
+      amount: { value: 42.5, unit: "g" },
     });
 
     const preview = await previewMergeProducts(ctx.db, {
@@ -342,9 +336,12 @@ describe("meal food entry lifecycle", () => {
 
     const moved = await getDb(ctx.db).query.mealFoodEntry.findFirst({
       where: and(eq(mealFoodEntry.id, entry.id), notDeleted(mealFoodEntry)),
-      columns: { productId: true, grams: true },
+      columns: { productId: true, amount: true },
     });
-    expect(moved).toEqual({ productId: keep.id, grams: 42.5 });
+    expect(moved).toEqual({
+      productId: keep.id,
+      amount: { value: 42.5, unit: "g" },
+    });
   });
 
   it("blocks party deletion and re-points entries during party merge", async () => {
@@ -358,7 +355,7 @@ describe("meal food entry lifecycle", () => {
       mealId: meal.id,
       ledgerPartyId: lose.id,
       productId: product.id,
-      grams: 17.25,
+      amount: { value: 17.25, unit: "g" },
     });
     const loseCode = parseShortcodeFor("ledgerParty", lose.shortcode);
 
@@ -380,21 +377,24 @@ describe("meal food entry lifecycle", () => {
         eq(mealFoodEntry.id, entry.id),
         isNull(mealFoodEntry.deletedAt),
       ),
-      columns: { ledgerPartyId: true, grams: true },
+      columns: { ledgerPartyId: true, amount: true },
     });
-    expect(moved).toEqual({ ledgerPartyId: keep.id, grams: 17.25 });
+    expect(moved).toEqual({
+      ledgerPartyId: keep.id,
+      amount: { value: 17.25, unit: "g" },
+    });
   });
 
-  it("folds matching canonical portion units and legacy gram portions into canonical amounts", async () => {
+  it("folds matching canonical portion units into a summed canonical amount", async () => {
     const [meal, keep, lose] = await Promise.all([
       seedMeal(),
       seedParty("Portion keeper"),
       seedParty("Portion loser"),
     ]);
-    const [volumePreparation, legacyPreparation] = await Promise.all([
-      seedPreparation(meal.id, "Volume portion recipe"),
-      seedPreparation(meal.id, "Legacy portion recipe"),
-    ]);
+    const volumePreparation = await seedPreparation(
+      meal.id,
+      "Volume portion recipe",
+    );
     await getDb(ctx.db)
       .insert(mealRecipePortion)
       .values([
@@ -403,28 +403,12 @@ describe("meal food entry lifecycle", () => {
           mealId: meal.id,
           ledgerPartyId: keep.id,
           amount: { value: 0.75, unit: "cup" },
-          grams: null,
         },
         {
           mealRecipeId: volumePreparation.id,
           mealId: meal.id,
           ledgerPartyId: lose.id,
           amount: { value: 1.25, unit: "cup" },
-          grams: null,
-        },
-        {
-          mealRecipeId: legacyPreparation.id,
-          mealId: meal.id,
-          ledgerPartyId: keep.id,
-          amount: null,
-          grams: 4,
-        },
-        {
-          mealRecipeId: legacyPreparation.id,
-          mealId: meal.id,
-          ledgerPartyId: lose.id,
-          amount: null,
-          grams: 6,
         },
       ]);
 
@@ -437,12 +421,11 @@ describe("meal food entry lifecycle", () => {
       ctx.actor,
     );
 
-    expect(result.mergeSummary.portionEdgesRepointed).toBe(2);
+    expect(result.mergeSummary.portionEdgesRepointed).toBe(1);
     const folded = await getDb(ctx.db)
       .select({
         mealRecipeId: mealRecipePortion.mealRecipeId,
         amount: mealRecipePortion.amount,
-        grams: mealRecipePortion.grams,
       })
       .from(mealRecipePortion)
       .where(
@@ -451,23 +434,15 @@ describe("meal food entry lifecycle", () => {
           isNull(mealRecipePortion.deletedAt),
         ),
       );
-    expect(folded).toEqual(
-      expect.arrayContaining([
-        {
-          mealRecipeId: volumePreparation.id,
-          amount: { value: 2, unit: "cup" },
-          grams: null,
-        },
-        {
-          mealRecipeId: legacyPreparation.id,
-          amount: { value: 10, unit: "g" },
-          grams: null,
-        },
-      ]),
-    );
+    expect(folded).toEqual([
+      {
+        mealRecipeId: volumePreparation.id,
+        amount: { value: 2, unit: "cup" },
+      },
+    ]);
   });
 
-  it("requires exactly one canonical or legacy amount for every recipe portion", async () => {
+  it("requires an amount for every recipe portion", async () => {
     const [meal, party] = await Promise.all([
       seedMeal(),
       seedParty("Portion constraint eater"),
@@ -487,23 +462,11 @@ describe("meal food entry lifecycle", () => {
         .insert(mealRecipePortion)
         .values({
           ...base,
-          amount: { value: 1, unit: "slice" },
-          grams: 50,
+          // SAFETY: deliberately bypassing the NOT NULL type to prove the
+          // database itself refuses a portion with no amount.
+          amount: fromAny(sql`null`),
         }),
-    ).rejects.toMatchObject({
-      cause: { constraint: "MealRecipePortion_amount_source_check" },
-    });
-    await expect(
-      getDb(ctx.db)
-        .insert(mealRecipePortion)
-        .values({
-          ...base,
-          amount: null,
-          grams: null,
-        }),
-    ).rejects.toMatchObject({
-      cause: { constraint: "MealRecipePortion_amount_source_check" },
-    });
+    ).rejects.toMatchObject({ cause: { code: "23502", column: "amount" } });
   });
 
   it("refuses to fold colliding recipe portions with different entered units", async () => {
@@ -524,14 +487,12 @@ describe("meal food entry lifecycle", () => {
           mealId: meal.id,
           ledgerPartyId: keep.id,
           amount: { value: 1, unit: "cup" },
-          grams: null,
         },
         {
           mealRecipeId: preparation.id,
           mealId: meal.id,
           ledgerPartyId: lose.id,
           amount: { value: 8, unit: "oz" },
-          grams: null,
         },
       ]);
 

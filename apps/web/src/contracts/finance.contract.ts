@@ -6,7 +6,6 @@ import {
   merchantVendorInferenceInput,
 } from "@cubby/schemas/financial-transaction";
 import { ledgerPartyShortcode, userId } from "@cubby/schemas/identifiers";
-import { ledgerPartyOptionsOut } from "@cubby/schemas/ledger-party";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
@@ -32,10 +31,6 @@ const memberLogins = z.object({
 });
 
 export const ledgerPartyContract = defineContract("ledgerParty", {
-  options: query({
-    input: z.null(),
-    output: ledgerPartyOptionsOut,
-  }),
   /** Every signed-in login and the member ledger party it represents. */
   memberLogins: query({ input: z.null(), output: memberLogins }),
   /** Links (or unlinks) one login to a member ledger party. */

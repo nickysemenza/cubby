@@ -21,7 +21,7 @@ import { updateExpense } from "~/server/repo/expense/crud";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 async function committedGroup(db: Database, runId: string, groupKey: string) {
-  const id = await resolveOrThrow(db, "importRun", runId);
+  const id = await resolveOrThrow(db, "run", runId);
   const [group] = await getDb(db)
     .select({
       productId: photoGroupProposal.productId,

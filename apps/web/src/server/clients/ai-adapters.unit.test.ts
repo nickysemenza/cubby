@@ -1,4 +1,4 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -132,7 +132,7 @@ describe("usageFor", () => {
   // SAFETY: the usage context only carries the database to the middleware,
   // which this test never runs.
   const db = {} as Database;
-  const runId = importRunId.parse("00000000-0000-4000-8000-000000000001");
+  const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
   it("derives the provider from the registry rather than assuming Anthropic", () => {
     expect(

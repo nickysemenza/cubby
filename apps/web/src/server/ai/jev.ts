@@ -151,7 +151,7 @@ async function requestJev(
     feature: feature.feature,
     operation: ctx.operation,
   };
-  if (ctx.entity) metadata.entityType = ctx.entity.entityType;
+  if (ctx.entity) metadata.entityKind = ctx.entity.entityKind;
   const fetch = gatewayFetch(
     "workers-ai",
     feature.cache ? cachedCall({ metadata, force: ctx.force }) : { metadata },

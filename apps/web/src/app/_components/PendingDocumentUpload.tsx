@@ -13,6 +13,7 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { imageUpload } from "~/lib/image.functions";
+import { putPresignedObject } from "~/lib/presigned-upload";
 
 import type { PendingImage } from "./PendingImageUpload";
 
@@ -140,19 +141,7 @@ export function PendingDocumentUpload({
           folder,
         });
 
-        const uploadResult = await fetch(initResult.uploadUrl, {
-          method: "PUT",
-          body: file,
-          headers: { "Content-Type": PDF_CONTENT_TYPE },
-        });
-        if (!uploadResult.ok) {
-          const errorText = await uploadResult
-            .text()
-            .catch(() => "Unknown error");
-          throw new Error(
-            `Storage error (${uploadResult.status}): ${errorText}`,
-          );
-        }
+        await putPresignedObject(initResult.uploadUrl, file, PDF_CONTENT_TYPE);
 
         const newDocument: PendingDocument = {
           id: initResult.imageId,

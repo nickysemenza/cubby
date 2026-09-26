@@ -7,10 +7,7 @@ import purchaseWorkflow from "../../../.claude/skills/purchase-import/references
 import purchaseFinishNudge from "../../../.claude/skills/purchase-import/references/finish-nudge.md?raw";
 
 /** Flue provides run identity and tools; the workflow is shared Markdown. */
-export function workflowForImportRun(
-  purpose: FlueImportRunPurpose,
-  runId: string,
-) {
+export function workflowForRun(purpose: FlueImportRunPurpose, runId: string) {
   if (purpose === "photo_inventory") {
     return {
       skill: photoInventorySkill,

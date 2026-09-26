@@ -656,7 +656,7 @@ const handler = {
 
 /**
  * Private RPC boundary for the Flue Worker. Every method resolves authority
- * from the ImportRun; the caller cannot supply a party, account, vendor, SQL,
+ * from the Run; the caller cannot supply a party, account, vendor, SQL,
  * script, or generic mutation target.
  */
 export class PurchaseImportService extends WorkerEntrypoint<Env> {
@@ -686,13 +686,13 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
 
   canDispatchCoordinator(input: { runId: string; eventId: string }) {
     return this.withDatabase((db, service) =>
-      service.canDispatchImportRunCoordinator(db, input),
+      service.canDispatchRunCoordinator(db, input),
     );
   }
 
   acknowledgeCoordinator(input: { runId: string; eventId: string }) {
     return this.withDatabase((db, service) =>
-      service.acknowledgeImportRunCoordinator(db, input),
+      service.acknowledgeRunCoordinator(db, input),
     );
   }
 
@@ -703,7 +703,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
         await import("./server/purchase-import/agent-auth");
       const grant = await findActivePurchaseAgentGrant(db, scope.actorUserId);
       if (!grant) {
-        await service.pauseImportRunForAuthorization(db, input.runId);
+        await service.pauseRunForAuthorization(db, input.runId);
         throw new Error("Purchase Agent authorization is required");
       }
       const token = await issuePurchaseAgentDelegation({
@@ -892,11 +892,11 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
       ).join("");
       const eventId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
       const { runId, ...rest } = input;
-      const { importRunId } = await import("@cubby/schemas/identifiers");
+      const { runEntityId } = await import("@cubby/schemas/identifiers");
       await recordAiUsage(db, {
         ...rest,
         eventId,
-        runId: importRunId.parse(runId),
+        runId: runEntityId.parse(runId),
         cacheStatus:
           input.cacheReadTokens > 0 || input.cacheWriteTokens > 0
             ? "hit"
@@ -990,7 +990,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
       service.runImportOperation(
         db,
         { ...input, kind: "finish_run", payload: input },
-        () => service.finishImportRun(db, this.env.PURCHASE_IMPORT, input),
+        () => service.finishRun(db, this.env.PURCHASE_IMPORT, input),
       ),
     );
   }
@@ -1014,7 +1014,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
         db,
         { ...input, kind: "stop_for_review", payload: input },
         () =>
-          service.stopImportRunForReview(db, {
+          service.stopRunForReview(db, {
             runId: input.runId,
             operationId: input.operationId,
             kind,
@@ -1035,7 +1035,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
       service.runImportOperation(
         db,
         { ...input, kind: "mark_run_failed", payload: input },
-        () => service.markImportRunFailed(db, input),
+        () => service.markRunFailed(db, input),
       ),
     );
   }
@@ -1046,7 +1046,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     detail?: string;
   }) {
     return this.withDatabase((db, service) =>
-      service.reconcileSettledImportRun(db, this.env.PURCHASE_IMPORT, input),
+      service.reconcileSettledRun(db, this.env.PURCHASE_IMPORT, input),
     );
   }
 }

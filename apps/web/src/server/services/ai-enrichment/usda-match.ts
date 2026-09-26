@@ -7,7 +7,7 @@
 // in a single call via `runAiSelection` (no agentic search loop).
 
 import type { Confidence } from "@cubby/schemas/ai";
-import type { ImportRunId, IngredientId } from "@cubby/schemas/identifiers";
+import type { RunId, IngredientId } from "@cubby/schemas/identifiers";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 
 import { runAiSelection } from "~/server/ai/selection";
@@ -44,7 +44,7 @@ export async function suggestUsdaFood(
   usdaService: UsdaLookupPort,
   db: Database,
   ingredientName: string,
-  opts: { runId: ImportRunId; ingredientId?: IngredientId },
+  opts: { runId: RunId; ingredientId?: IngredientId },
   ai: UsdaMatchAiPort = productionUsdaMatchAiPort,
 ): Promise<UsdaFoodSuggestion> {
   const shortlist = await buildUsdaShortlist(usdaService, ingredientName);
@@ -65,7 +65,7 @@ export async function suggestUsdaFood(
       operation: "suggestUsdaFood",
       cacheStatus: "none",
       entity: opts.ingredientId
-        ? { entityType: "ingredient", entityId: opts.ingredientId }
+        ? { entityKind: "ingredient", entityId: opts.ingredientId }
         : null,
     },
   });
@@ -90,7 +90,7 @@ export interface UsdaMatchPorts<TDatabase> {
     service: UsdaLookupPort,
     database: TDatabase,
     name: string,
-    options: { runId: ImportRunId; ingredientId?: IngredientId },
+    options: { runId: RunId; ingredientId?: IngredientId },
   ) => Promise<UsdaFoodSuggestion>;
 }
 
@@ -115,7 +115,7 @@ async function suggestUsdaFoodBatchWithPorts<TDatabase>(
   usdaService: UsdaLookupPort,
   db: TDatabase,
   ingredients: { id: IngredientId; name: string }[],
-  runId: ImportRunId,
+  runId: RunId,
   ports: UsdaMatchPorts<TDatabase>,
 ): Promise<UsdaFoodBatchSuggestion[]> {
   const capped = ingredients.slice(0, 20);
@@ -160,7 +160,7 @@ export function createUsdaMatchService<TDatabase>(
       service: UsdaLookupPort,
       database: TDatabase,
       ingredients: { id: IngredientId; name: string }[],
-      runId: ImportRunId,
+      runId: RunId,
     ) =>
       suggestUsdaFoodBatchWithPorts(
         service,

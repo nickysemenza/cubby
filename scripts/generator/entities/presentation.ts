@@ -443,6 +443,7 @@ export const compilePresentation = (
       omitRelations: detail.omitRelations,
       additionalSections: detail.additionalSections,
       relationFilterOverrides: detail.relationFilterOverrides,
+      emptyOverrides: detail.emptyOverrides,
     },
     list: {
       // Cards are a universal alternate renderer. Stored images improve the

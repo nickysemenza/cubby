@@ -8,8 +8,8 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
-  importRun,
-  importRunOrderCandidate,
+  run as runTable,
+  runOrderCandidate,
   vendorAccount,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -17,10 +17,10 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
   claimNextImportWork,
-  finishImportRun,
+  finishRun,
   importBrowserOrderEvidence,
   issueBrowserCommand,
-  startOrResumeImportRun,
+  startOrResumeRun,
 } from "./run-service";
 
 const HOST = "shop.example.test";
@@ -118,7 +118,7 @@ describe("account-sync order worklist", () => {
         ...cursor,
       }),
     });
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -180,9 +180,9 @@ describe("account-sync order worklist", () => {
       nextPageUrl: `https://${HOST}/order-history?startIndex=10`,
     });
     const [seen] = await getDb(ctx.db)
-      .select({ ordersSeen: importRun.ordersSeen })
-      .from(importRun)
-      .where(eq(importRun.id, run.id));
+      .select({ ordersSeen: runTable.ordersSeen })
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
     expect(seen?.ordersSeen).toBe(3);
 
     // Newest pending order first.
@@ -196,7 +196,7 @@ describe("account-sync order worklist", () => {
       orderedAt: "2026-09-18",
     });
     await expect(
-      finishImportRun(ctx.db, bridge.namespace, {
+      finishRun(ctx.db, bridge.namespace, {
         runId: run.id,
         operationId: "finish:early",
       }),
@@ -205,16 +205,16 @@ describe("account-sync order worklist", () => {
     // Once every listed order is handled the walk resumes from the next page,
     // and finishing advances the account cursor to the newest handled order.
     await getDb(ctx.db)
-      .update(importRunOrderCandidate)
+      .update(runOrderCandidate)
       .set({ state: "imported" })
-      .where(eq(importRunOrderCandidate.runId, run.id));
+      .where(eq(runOrderCandidate.runId, run.id));
     await expect(
       claimNextImportWork(ctx.db, bridge.namespace, run.id),
     ).resolves.toEqual({
       kind: "cursor_walk",
       startUrl: `https://${HOST}/order-history?startIndex=10`,
     });
-    await finishImportRun(ctx.db, bridge.namespace, {
+    await finishRun(ctx.db, bridge.namespace, {
       runId: run.id,
       operationId: "finish:done",
     });
@@ -248,9 +248,9 @@ describe("account-sync order worklist", () => {
 
     expect(listed).toMatchObject({ kind: "order_list", nextPageUrl: null });
     await getDb(ctx.db)
-      .update(importRunOrderCandidate)
+      .update(runOrderCandidate)
       .set({ state: "imported" })
-      .where(eq(importRunOrderCandidate.runId, run.id));
+      .where(eq(runOrderCandidate.runId, run.id));
     await expect(
       claimNextImportWork(ctx.db, fakeBroker().namespace, run.id),
     ).resolves.toEqual({ kind: "none" });

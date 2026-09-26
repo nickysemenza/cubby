@@ -58,8 +58,8 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
   },
   deleteUnused: async (context, input) =>
     (await problemWorkflows()).deleteUnusedIngredientsWorkflow(context, input),
-  resolveImportFinding: async (context, input) =>
-    (await problemWorkflows()).resolveImportFindingWorkflow(context, input),
+  resolveRunFinding: async (context, input) =>
+    (await problemWorkflows()).resolveRunFindingWorkflow(context, input),
   resolveArrivedFindings: async (context, input) =>
     (await problemWorkflows()).resolveArrivedFindingsWorkflow(context, input),
 });

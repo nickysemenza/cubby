@@ -1,5 +1,5 @@
 import type { AuditLogListOut, auditLogListInput } from "@cubby/schemas/audit";
-import { deviceId, importRunId } from "@cubby/schemas/identifiers";
+import { deviceId, runEntityId } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -38,7 +38,7 @@ const auditLogWorkflow = workflow<Database, AuditInput>("auditLog.list")
             deviceId: subject.device
               ? deviceId.parse(subject.device.id)
               : undefined,
-            runId: subject.run ? importRunId.parse(subject.run.id) : undefined,
+            runId: subject.run ? runEntityId.parse(subject.run.id) : undefined,
             createdAtFrom: subject.data.createdAtFrom,
             createdAtTo: subject.data.createdAtTo,
             limit: subject.data.limit,

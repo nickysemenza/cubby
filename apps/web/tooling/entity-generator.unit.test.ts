@@ -737,12 +737,52 @@ describe("typed entity compiler", () => {
       direction: "asc",
       computed: ["related:example.count"],
       groupable: ["name"],
+      grouping: null,
     });
   });
 
   it("defaults an absent sort declaration to null", () => {
     const entity = compileEntityDeclarations([{ ...base, model }])[0]!;
     expect(entity.fieldModel.sort).toBeNull();
+  });
+
+  it("compiles a declared list-grouping contract", () => {
+    const entity = compileEntityDeclarations([
+      {
+        ...base,
+        model: {
+          ...model,
+          sort: {
+            fields: ["name"],
+            groupable: ["name"],
+            grouping: { field: "name", nullGroupKey: "__unspecified__" },
+          },
+        },
+      },
+    ])[0]!;
+    expect(entity.fieldModel.sort?.grouping).toEqual({
+      field: "name",
+      nullGroupKey: "__unspecified__",
+      labelField: null,
+    });
+  });
+
+  it("rejects a list-grouping contract whose field isn't groupable", () => {
+    expect(() =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          model: {
+            ...model,
+            sort: {
+              fields: ["name"],
+              groupable: [],
+              grouping: { field: "name", nullGroupKey: "__unspecified__" },
+            },
+          },
+        },
+      ]),
+    ).toThrow("grouping.field name must be one of sort.groupable");
   });
 
   it("derives a detail overview from readable fields unless sections are opted out", () => {
@@ -1678,7 +1718,7 @@ describe("typed entity compiler", () => {
     ]);
   });
 
-  // Regression: importRun declared `route.list: true` with no create/update
+  // Regression: run declared `route.list: true` with no create/update
   // contract (so no kernel list read) and no list override, and the
   // generated Runs index crashed on SSR. The generator must refuse that.
   it("requires a list override for a generated index with no kernel list read", async () => {
@@ -1688,8 +1728,8 @@ describe("typed entity compiler", () => {
       new URL("../src/entities/list-columns/index.ts", import.meta.url),
       "utf8",
     );
-    const withoutRuns = (await registry).replace(/^\s+importRun:.*$/mu, "");
-    expect(missingListSources(entities, withoutRuns)).toEqual(["importRun"]);
+    const withoutRuns = (await registry).replace(/^\s+run:.*$/mu, "");
+    expect(missingListSources(entities, withoutRuns)).toEqual(["run"]);
   });
 
   it("keeps generated artifacts on their side of the schema and server boundaries", async () => {

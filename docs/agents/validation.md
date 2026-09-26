@@ -42,6 +42,11 @@ successful push proves correctness.
 GitHub Actions must pass on the exact final PR head before merge. `main` runs CI
 after deployment starts, so post-merge CI does not replace this gate.
 
+`deploy.yaml` deploys every `main` push and never applies schema. A PR whose
+schema snapshot (`apps/web/src/server/db/__snapshots__/application-schema.json`)
+changes is opened without auto-merge and merges only after its runbook's
+production SQL has run and been read back.
+
 ## Explicit local diagnostics
 
 `pnpm check` remains available for repository-wide static validation.

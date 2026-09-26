@@ -48,7 +48,7 @@ final class PhotoImportRunFlow {
         filters.set(.many(["running"]), for: "status")
         filters.set(.many(["photo_inventory"]), for: "purpose")
         openRuns =
-            (try? await client.list(EntityCatalog[.importRun], pageSize: 50, filters: filters))?
+            (try? await client.list(EntityCatalog[.run], pageSize: 50, filters: filters))?
             .items ?? []
     }
 
@@ -61,7 +61,7 @@ final class PhotoImportRunFlow {
         }
     }
 
-    func useExistingRun(_ id: ImportRunShortcode, items: [PhotoSelectionItem]) {
+    func useExistingRun(_ id: RunShortcode, items: [PhotoSelectionItem]) {
         begin(items: items) { [self] in session.start(preparedPhotos, runID: id) }
     }
 
@@ -154,7 +154,7 @@ extension PhotoImportRunFlow: BackgroundActivitySource {
 struct PhotoImportRunSheet: View {
     let items: [PhotoSelectionItem]
     @Bindable var flow: PhotoImportRunFlow
-    let onDone: (ImportRunShortcode) -> Void
+    let onDone: (RunShortcode) -> Void
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
@@ -190,7 +190,9 @@ struct PhotoImportRunSheet: View {
         case .preparing(let completed, let total):
             preparingView(completed, total)
         case .running:
-            RunningView(session: flow.session, onResume: flow.resume, onDone: finish)
+            RunningView(
+                session: flow.session, onResume: flow.resume,
+                onRetryAnalysis: flow.session.retryFailedAnalysis, onDone: finish)
         }
     }
 
@@ -208,7 +210,7 @@ struct PhotoImportRunSheet: View {
                 } label: {
                     LabeledContent("Owner", value: flow.selectedOwnerName ?? "You (signed-in member)")
                 }
-                .accessibilityIdentifier("photos.importRun.owner")
+                .accessibilityIdentifier("photos.run.owner")
                 DisclosureGroup("Add a note") {
                     TextField("Notes for this batch", text: $flow.notes, axis: .vertical)
                 }
@@ -223,7 +225,7 @@ struct PhotoImportRunSheet: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .accessibilityIdentifier("photos.importRun.startNew")
+                .accessibilityIdentifier("photos.run.startNew")
             } header: {
                 Text("New run")
             } footer: {
@@ -239,7 +241,7 @@ struct PhotoImportRunSheet: View {
                         Button(row.title) {
                             flow.useExistingRun(row.id, items: items)
                         }
-                        .accessibilityIdentifier("photos.importRun.existing.\(row.id)")
+                        .accessibilityIdentifier("photos.run.existing.\(row.id)")
                     }
                 }
             }
@@ -265,11 +267,11 @@ struct PhotoImportRunSheet: View {
                     dismiss()
                 }
             }
-            .accessibilityIdentifier("photos.importRun.stop")
+            .accessibilityIdentifier("photos.run.stop")
         }
     }
 
-    private func finish(_ runID: ImportRunShortcode) {
+    private func finish(_ runID: RunShortcode) {
         onDone(runID)
         dismiss()
     }
@@ -281,7 +283,8 @@ struct PhotoImportRunSheet: View {
 private struct RunningView: View {
     @Bindable var session: PhotoImportRunSession
     let onResume: () -> Void
-    let onDone: (ImportRunShortcode) -> Void
+    let onRetryAnalysis: () -> Void
+    let onDone: (RunShortcode) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
@@ -304,6 +307,16 @@ private struct RunningView: View {
                     systemImage: "exclamationmark.triangle"
                 )
                 .foregroundStyle(PorcelainTokens.destructive)
+            }
+            if !session.failedAnalysisPhotos.isEmpty {
+                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+                    ForEach(session.failedAnalysisPhotos, id: \.id) { photo in
+                        Label(photo.file.filename, systemImage: "photo")
+                            .font(.porcelainLabel)
+                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    }
+                }
+                .accessibilityIdentifier("photos.run.failedAnalysis")
             }
             statusAction
         }
@@ -339,7 +352,7 @@ private struct RunningView: View {
                 Text("The agent will propose item groups for your review before products are created.")
                     .font(.porcelainBody)
                 NavigationLink {
-                    ImportRunReviewView(runID: runID)
+                    RunReviewView(runID: runID)
                 } label: {
                     Label("Review item groups", systemImage: "square.stack.3d.up")
                         .frame(maxWidth: .infinity)
@@ -348,23 +361,23 @@ private struct RunningView: View {
                 .controlSize(.large)
                 Button("Done") { onDone(runID) }
                     .buttonStyle(.bordered)
-                    .accessibilityIdentifier("photos.importRun.done")
+                    .accessibilityIdentifier("photos.run.done")
                 if session.canRetryAnalysis {
-                    Button("Retry photo details") { onResume() }
+                    Button("Retry photo details") { onRetryAnalysis() }
                         .buttonStyle(.bordered)
-                        .accessibilityIdentifier("photos.importRun.retryAnalysis")
+                        .accessibilityIdentifier("photos.run.retryAnalysis")
                 }
             }
         case .cancelled:
             Button("Resume") { onResume() }
                 .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("photos.importRun.resume")
+                .accessibilityIdentifier("photos.run.resume")
         case .failed(let message):
             Label(message, systemImage: "exclamationmark.triangle")
                 .foregroundStyle(PorcelainTokens.destructive)
             Button("Resume") { onResume() }
                 .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("photos.importRun.resume")
+                .accessibilityIdentifier("photos.run.resume")
         }
     }
 }

@@ -1,4 +1,4 @@
-import type { ImportRunId } from "@cubby/schemas/identifiers";
+import type { RunId } from "@cubby/schemas/identifiers";
 import {
   gatewayForwardInput,
   gatewayForwardOut,
@@ -188,7 +188,7 @@ function usageRecord(
   usage: GatewayCallUsage,
   durationMs: number,
   gatewayHit: boolean,
-  runId: ImportRunId,
+  runId: RunId,
 ): AiUsageRecord {
   const cacheStatus = gatewayHit
     ? "hit"
@@ -222,7 +222,7 @@ function usageRecord(
  */
 export async function forwardGatewayRequest(
   request: GatewayForwardRequest,
-  opts: { db?: Database; runId?: ImportRunId; feature: string },
+  opts: { db?: Database; runId?: RunId; feature: string },
   port: GatewayForwardPort = productionGatewayForwardPort,
 ): Promise<GatewayForwardResponse> {
   const metadata = metadataWithFeature(request.headers, opts.feature);

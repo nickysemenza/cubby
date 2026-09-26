@@ -33,7 +33,7 @@ import type { EntityEditValue, EntityEditValueBag } from "./value-schema";
  */
 export type EditableEntity = Exclude<
   Entity,
-  "image" | "usda-food" | "cookbook" | "importRun"
+  "image" | "usda-food" | "cookbook" | "run"
 >;
 
 type _EditableEntityMatchesTypedCatalog =

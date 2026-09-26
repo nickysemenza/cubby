@@ -1,6 +1,7 @@
 import type {
   PhotoGroupProposal,
   PhotoGroupProposalGroup,
+  ReviewPhotoGroupsOutput,
 } from "@cubby/schemas/photo-import-run";
 
 /**
@@ -169,4 +170,47 @@ export function mergeGroups(
     ],
     removeGroupKeys: [fromGroupKey],
   };
+}
+
+export type ReviewOutcomeToast = {
+  tone: "success" | "warning";
+  title: string;
+  description?: string;
+};
+
+/** The toasts a review action's result earns: approvals, per-group problems, and groups a save left frozen. */
+export function reviewOutcomeToasts(
+  data: Pick<ReviewPhotoGroupsOutput, "results" | "frozenGroupKeys">,
+): ReviewOutcomeToast[] {
+  const toasts: ReviewOutcomeToast[] = [];
+  const problems = data.results.filter(
+    (result) => result.outcome === "conflict" || result.outcome === "failed",
+  );
+  const committed = data.results.length - problems.length;
+  if (problems.length) {
+    toasts.push({
+      tone: "warning",
+      title: `${committed} approved · ${problems.length} need attention`,
+      description: problems
+        .map(
+          (result) =>
+            `${result.groupKey}: ${result.outcome === "conflict" ? "name matches an existing product" : result.error}`,
+        )
+        .join("\n"),
+    });
+  } else if (committed) {
+    toasts.push({
+      tone: "success",
+      title:
+        committed === 1 ? "Group approved" : `${committed} groups approved`,
+    });
+  }
+  if (data.frozenGroupKeys.length) {
+    toasts.push({
+      tone: "warning",
+      title: "Some groups were already settled",
+      description: `Left unchanged: ${data.frozenGroupKeys.join(", ")}`,
+    });
+  }
+  return toasts;
 }

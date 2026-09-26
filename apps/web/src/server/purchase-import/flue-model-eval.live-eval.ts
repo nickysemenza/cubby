@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { importRunId, parseEntityId } from "@cubby/schemas/identifiers";
+import { runEntityId, parseEntityId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray } from "drizzle-orm";
 import { createWorkerdHarness } from "tooling/purchase-agent-workerd-harness";
 import { withTestDb } from "tooling/test-setup";
@@ -12,9 +12,9 @@ import { z } from "zod";
 import { CF_ACCOUNT_ID, CF_AIG_GATEWAY_ID } from "~/server/cf-env";
 import {
   aiAnalysis,
-  importRun,
-  importRunProgress,
-  importRunTarget,
+  run as runTable,
+  runProgress,
+  runTarget,
   oauthRefreshToken,
   photoGroupProposal,
   session,
@@ -207,7 +207,7 @@ describe("photo coordinator model eval", () => {
           await getDb(ctx.db)
             .insert(aiAnalysis)
             .values({
-              entityType: "image",
+              entityKind: "image",
               entityId: fixture.id,
               feature: "image-description",
               model: "synthetic",
@@ -224,9 +224,9 @@ describe("photo coordinator model eval", () => {
               },
             });
           await getDb(ctx.db)
-            .insert(importRunTarget)
+            .insert(runTarget)
             .values({
-              runId: importRunId.parse(run.id),
+              runId: runEntityId.parse(run.id),
               imageId: parseEntityId("image", fixture.id),
               position,
               state: "pending",
@@ -254,20 +254,20 @@ describe("photo coordinator model eval", () => {
             eventId: started.eventId,
           }),
         });
-        const runId = importRunId.parse(run.id);
+        const runId = runEntityId.parse(run.id);
         const settled = await poll(async () => {
           const [row] = await getDb(ctx.db)
-            .select({ status: importRun.status })
-            .from(importRun)
-            .where(eq(importRun.id, runId));
+            .select({ status: runTable.status })
+            .from(runTable)
+            .where(eq(runTable.id, runId));
           if (row && row.status !== "running") return true;
           const waiting = await getDb(ctx.db)
-            .select({ id: importRunProgress.id })
-            .from(importRunProgress)
+            .select({ id: runProgress.id })
+            .from(runProgress)
             .where(
               and(
-                eq(importRunProgress.runId, runId),
-                eq(importRunProgress.phase, "awaiting_approval"),
+                eq(runProgress.runId, runId),
+                eq(runProgress.phase, "awaiting_approval"),
               ),
             )
             .limit(1);
@@ -278,9 +278,9 @@ describe("photo coordinator model eval", () => {
           await (await model.fetch("https://model.test/usage")).json(),
         );
         const [final] = await getDb(ctx.db)
-          .select({ status: importRun.status })
-          .from(importRun)
-          .where(eq(importRun.id, runId));
+          .select({ status: runTable.status })
+          .from(runTable)
+          .where(eq(runTable.id, runId));
         const proposals = await getDb(ctx.db)
           .select({
             images: photoGroupProposal.images,

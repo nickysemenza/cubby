@@ -27,7 +27,7 @@ import {
   isReferencePickerEntity,
   referenceEntitySearch as sharedReferenceEntitySearch,
 } from "~/app/_components/combobox/reference-entity-search";
-import type { WithEntitySearchProps } from "~/app/_components/combobox/with-search-hook";
+import type { SearchProviderProps } from "~/app/_components/combobox/with-search-hook";
 import {
   NullableNumericField,
   PlainDateField,
@@ -636,7 +636,7 @@ function specializedRendererFor(
 /** Use the same reference providers as inline edits and product forms. */
 function referenceEntitySearch(
   referenceEntity: string,
-): (props: WithEntitySearchProps<string>) => ReactNode {
+): (props: SearchProviderProps<string>) => ReactNode {
   if (!isReferencePickerEntity(referenceEntity)) {
     throw new Error(`No reference picker for ${referenceEntity}`);
   }

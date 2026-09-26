@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   displayGtin,
   type ExternalIdKind,
@@ -19,7 +20,6 @@ import type { ImageOut } from "@cubby/schemas/image";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import {
   buildTakeSkip,
-  PRODUCT_UNCLASSIFIED_GROUP_KEY,
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
@@ -62,7 +62,7 @@ import {
   entityAttachment,
   expense,
   image,
-  importRunTarget,
+  runTarget,
   inventoryEntry,
   location,
   mealFoodEntry,
@@ -318,6 +318,13 @@ const productListOrderBy = (
     filters,
   );
 
+// Read from the manifest instead of re-hardcoding: `sort.grouping` on
+// `00-product.entity.ts` is this entity's one declared list-grouping
+// contract, compiler-checked to name a `sort.groupable` field.
+const PRODUCT_GROUPING = generatedEntitySort.product.grouping;
+if (!PRODUCT_GROUPING)
+  throw new Error("product entity declares no list-grouping contract.");
+
 const loadProductCategoryGroups = async (
   db: Database,
   whereClause: SQL | undefined,
@@ -356,7 +363,7 @@ const loadProductCategoryGroups = async (
   }
   if (unclassifiedCount > 0)
     groups.push({
-      key: PRODUCT_UNCLASSIFIED_GROUP_KEY,
+      key: PRODUCT_GROUPING.nullGroupKey,
       label: "Unclassified",
       count: unclassifiedCount,
       categoryId: null,
@@ -1066,7 +1073,7 @@ export const productList = async (
   }
 
   const groups =
-    groupBy === "categoryId" && readIntent === "page"
+    groupBy === PRODUCT_GROUPING.field && readIntent === "page"
       ? await loadProductCategoryGroups(db, whereClause, sorts)
       : null;
   const groupOrder = groups ? productCategoryGroupOrder(groups) : null;
@@ -1074,7 +1081,7 @@ export const productList = async (
     ...(groupOrder ? [groupOrder] : []),
     ...productListOrderBy(
       sorts,
-      groupBy === "categoryId" ? undefined : groupBy,
+      groupBy === PRODUCT_GROUPING.field ? undefined : groupBy,
       filters,
     ),
   ];
@@ -2377,9 +2384,9 @@ type ProductDependentFetcher = (
 ) => Promise<Array<{ productId: ProductId | null }>>;
 
 const PRODUCT_RETAINING_DEPENDENTS = {
-  "ImportRunTarget.productId": (tx, ids) =>
-    tx.query.importRunTarget.findMany({
-      where: inArray(importRunTarget.productId, ids),
+  "RunTarget.productId": (tx, ids) =>
+    tx.query.runTarget.findMany({
+      where: inArray(runTarget.productId, ids),
       columns: { productId: true },
     }),
   "Planting.sourceProductId": async (tx, ids) => {

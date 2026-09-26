@@ -410,9 +410,10 @@ function declaredSections<E extends GenericDetailEntity>(
                 title={section.title}
                 operations={operations.list}
                 emptyLabel={
-                  detail.variant === "journal"
+                  section.empty ??
+                  (detail.variant === "journal"
                     ? "Nothing logged yet — the first entry starts the journal."
-                    : undefined
+                    : undefined)
                 }
               />
             ),
@@ -513,7 +514,7 @@ function detailWayfinding<E extends GenericDetailEntity>(
   entity: E,
   record: DetailRecordOf<E>,
 ) {
-  if (entity !== "importRun") return undefined;
+  if (entity !== "run") return undefined;
   return readRecordField(record, "purpose", z.string().optional()) ===
     "photo_inventory"
     ? { label: "Photos", domain: null }

@@ -11,8 +11,8 @@ import { defineProblem, type ProblemQuery } from "~/entities/problem-query";
  */
 export const derivedProblemQueries = [
   defineProblem({
-    key: "importFindings",
-    problemClass: PROBLEM_CLASS.importFindings,
+    key: "runFindings",
+    problemClass: PROBLEM_CLASS.runFindings,
     executionLane: "fast",
     continuation: {
       kind: "none",

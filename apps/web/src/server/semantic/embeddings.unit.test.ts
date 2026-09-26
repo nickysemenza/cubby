@@ -1,4 +1,4 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AI_CACHE_TTL_SECONDS } from "~/server/clients/ai-adapters";
@@ -9,7 +9,7 @@ import type { EmbeddingPorts } from "./embeddings";
 const db = new Database(() => {
   throw new Error("Embedding unit ports do not resolve a database runtime");
 });
-const runId = importRunId.parse("00000000-0000-4000-8000-000000000001");
+const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -154,7 +154,7 @@ describe("embedTexts usage recording", () => {
         feature: "entity-embedding",
         operation: "entityEmbeddingBackfill",
         entity: {
-          entityType: "product",
+          entityKind: "product",
           entityId: "00000000-0000-4000-8000-000000000002",
         },
       },

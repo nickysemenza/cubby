@@ -880,6 +880,7 @@ export const renderEntityArtifacts = (
               default: fieldModel.sort.default,
               computed: fieldModel.sort.computed,
               groupable: fieldModel.sort.groupable,
+              grouping: fieldModel.sort.grouping,
               direction: fieldModel.sort.direction,
             },
           ] as const,
@@ -1178,13 +1179,18 @@ export const renderEntityArtifacts = (
         " * `computed` names roster entries with no `model.fields` read projection\n" +
         " * (correlated subqueries and rollups); `groupable` is the `groupBy` allowlist,\n" +
         " * defaulting to every sortable field when empty. `direction` is the list's\n" +
-        ' * opening sort direction, defaulting to "desc".\n' +
+        ' * opening sort direction, defaulting to "desc". `grouping` is the entity\'s\n' +
+        " * single opt-in list-grouping contract (null when the list has no grouped\n" +
+        " * view): `field` matches a `groupable` entry, `nullGroupKey` is the\n" +
+        " * sentinel key for a row whose field is null, and `labelField` names the\n" +
+        " * row key the group's display label reads from when it differs from\n" +
+        " * `field` (null means the field's own value).\n" +
         " */\n" +
         renderRecord({
           name: "generatedEntitySort",
           entries: entitySort,
           satisfies:
-            'Partial<Record<Entity, { fields: readonly [string, ...string[]]; default: string; computed: readonly string[]; groupable: readonly string[]; direction: "asc" | "desc" }>>',
+            'Partial<Record<Entity, { fields: readonly [string, ...string[]]; default: string; computed: readonly string[]; groupable: readonly string[]; grouping: { field: string; nullGroupKey: string; labelField: string | null } | null; direction: "asc" | "desc" }>>',
           comment: "// Generated sort rosters stay one entity per line.",
         }) +
         "\n" +

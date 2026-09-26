@@ -59,6 +59,6 @@ describe("home task project identity", () => {
     await waitFor(() =>
       expect(requests).toContain("entityMedia.displayImages"),
     );
-    expect(requests).not.toContain("project.options");
+    expect(requests).not.toContain("entity.filterOptions");
   });
 });

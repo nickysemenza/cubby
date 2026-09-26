@@ -364,7 +364,7 @@ describe("durable image representations", () => {
       .insert(aiAnalysis)
       .values(
         Array.from({ length: 22 }, (_, index) => ({
-          entityType: "image" as const,
+          entityKind: "image" as const,
           entityId: imageId,
           feature: IMAGE_DESCRIPTION_FEATURE.feature,
           provider: "evaluation",

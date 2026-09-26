@@ -425,13 +425,13 @@ function UpcApplyAction({
   );
 }
 
-function ImportFindingActions({
+function RunFindingActions({
   finding,
 }: {
-  finding: ProblemItem<"importFindings">;
+  finding: ProblemItem<"runFindings">;
 }) {
   const resolve = useActionMutation({
-    mutationFn: problemOperations.resolveImportFinding.mutationOptions,
+    mutationFn: problemOperations.resolveRunFinding.mutationOptions,
     success: (result) =>
       result.status === "applied"
         ? "Applied import correction"
@@ -866,8 +866,8 @@ const DECLARED_SECTIONS = [
   section({
     id: "import-findings",
     label: "Purchase imports",
-    select: (p) => p.importFindings,
-    problemKeys: ["importFindings"],
+    select: (p) => p.runFindings,
+    problemKeys: ["runFindings"],
     icon: WarningIcon,
     renderItem: (finding) => ({
       key: finding.id,
@@ -876,7 +876,7 @@ const DECLARED_SECTIONS = [
       route: finding.purchaseId
         ? entityDetailLink("purchase", finding.purchaseId)
         : undefined,
-      customActions: <ImportFindingActions finding={finding} />,
+      customActions: <RunFindingActions finding={finding} />,
     }),
   }),
   rowSection("duplicateInventory", {

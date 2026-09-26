@@ -176,6 +176,41 @@ describe("HTTP boundary", () => {
     );
     expect(ports.getSession).not.toHaveBeenCalled();
   });
+  // Regression: the Vite dev server hands over srvx's NodeRequest, which
+  // passes `instanceof Request` but carries no undici internal state, so
+  // ts-rest's `new TsRestRequest(request)` threw on every write.
+  it("accepts a foreign Request implementation carrying a body", async () => {
+    const native = new Request(
+      "https://cubby.example/api/v1/recipes/RCP-ABCD",
+      {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer token.signature",
+          "content-type": "application/json",
+        },
+        body: '{"notes":"Changed"}',
+      },
+    );
+    const foreign: Request = Object.create(Request.prototype, {
+      url: { get: () => native.url },
+      method: { get: () => native.method },
+      headers: { get: () => native.headers },
+      body: { get: () => native.body },
+      bodyUsed: { get: () => native.bodyUsed },
+      signal: { get: () => native.signal },
+      text: { value: () => native.text() },
+      json: { value: () => native.json() },
+      arrayBuffer: { value: () => native.arrayBuffer() },
+      clone: { value: () => native.clone() },
+    });
+    const response = await handleHttpOperation(foreign);
+    expect(response.status).toBe(200);
+    expect(ports.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({ data: { notes: "Changed" } }),
+      }),
+    );
+  });
   it("lets bearer-authenticated writes through without an Origin", async () => {
     const response = await request("recipes/RCP-ABCD", {
       method: "PATCH",
@@ -258,9 +293,9 @@ describe("HTTP boundary", () => {
       expect.objectContaining({ input }),
     );
   });
-  // A domain blocker (e.g. FINANCIAL_ACCOUNT_HAS_TRANSACTIONS, covered against
-  // PostgreSQL in financial.integration.test.ts) must reach an HTTP client as
-  // its own status with the blockers intact, not as a generic 500.
+  // A domain blocker (e.g. PROJECT_HAS_TASKS, covered against PostgreSQL in
+  // project.integration.test.ts) must reach an HTTP client as its own status
+  // with the blockers intact, not as a generic 500.
   it.each([
     ["PRECONDITION_FAILED", 412],
     ["CONFLICT", 409],
@@ -271,8 +306,8 @@ describe("HTTP boundary", () => {
       const error = {
         code,
         message: "Blocked",
-        reason: "FINANCIAL_ACCOUNT_HAS_TRANSACTIONS",
-        blockers: [{ id: "FTX-4K7M" }],
+        reason: "PROJECT_HAS_TASKS",
+        blockers: [{ id: "TSK-4K7M" }],
       };
       ports.dispatch.mockResolvedValueOnce({ ok: false, error });
       const response = await request("financial-accounts/FAC-4K7M", {

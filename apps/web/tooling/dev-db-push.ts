@@ -10,7 +10,7 @@ import { toPushSchemaDatabase } from "./drizzle-kit-interop";
 
 /**
  * drizzle-kit push matches CHECK constraints by name, so an edited expression
- * (a new enum value in `ImportRun_purpose_check`, say) never reaches a
+ * (a new enum value in `Run_purpose_check`, say) never reaches a
  * long-lived dev database and valid writes fail there. Re-create every
  * declared check; fresh test databases and production migrations don't need
  * this.

@@ -4,7 +4,11 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { expense, importRun, photoGroupProposal } from "~/server/db/schema";
+import {
+  expense,
+  run as runTable,
+  photoGroupProposal,
+} from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import {
   createProductFixture,
@@ -28,12 +32,12 @@ describe("photo review Expense link", () => {
       makeProductInput({ name: "Canvas work boots" }),
       ctx.actor,
     );
-    const runId = parseEntityId("importRun", crypto.randomUUID());
+    const runId = parseEntityId("run", crypto.randomUUID());
     const [run] = await getDb(ctx.db)
-      .insert(importRun)
+      .insert(runTable)
       .values({
         id: runId,
-        shortcode: generateShortcode("importRun"),
+        shortcode: generateShortcode("run"),
         ledgerPartyId: party.id,
         actorUserId: ctx.actor.userId,
         actorName: "Synthetic reviewer",

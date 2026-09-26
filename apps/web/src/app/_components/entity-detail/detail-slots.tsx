@@ -1,5 +1,5 @@
 import type { DetailSlotId } from "@cubby/schemas/entity-manifest";
-import type { ImportRunPurpose } from "@cubby/schemas/import-run-fields";
+import type { RunPurpose } from "@cubby/schemas/run-fields";
 import { type FunctionComponent, lazy, type LazyExoticComponent } from "react";
 
 import {
@@ -28,7 +28,7 @@ export interface DetailSlot<E extends GenericDetailEntity> {
  * agent transcript and evidence. AI-only runs (`ai_suggest`, `ai_action`,
  * `background`) and photo batches do not.
  */
-const IMPORT_WORKFLOW_PURPOSES: ReadonlySet<ImportRunPurpose> = new Set([
+const IMPORT_WORKFLOW_PURPOSES: ReadonlySet<RunPurpose> = new Set([
   "account_sync",
   "purchase_validation",
   "product_enrichment",
@@ -96,9 +96,9 @@ export const detailSlots = {
         default: m.ProductLabels,
       })),
     ),
-    "import-runs": slot(() =>
-      import("~/app/products/product-import-runs").then((m) => ({
-        default: m.ProductImportRuns,
+    runs: slot(() =>
+      import("~/app/products/product-runs").then((m) => ({
+        default: m.ProductRuns,
       })),
     ),
   },
@@ -173,9 +173,9 @@ export const detailSlots = {
     ),
   },
   purchase: {
-    "import-runs": slot(() =>
+    runs: slot(() =>
       import("~/app/purchases/slots").then((m) => ({
-        default: m.ImportRuns,
+        default: m.Runs,
       })),
     ),
     "project-allocation": slot(() =>
@@ -201,7 +201,7 @@ export const detailSlots = {
       })),
     ),
   },
-  importRun: {
+  run: {
     "import-workflow": slot(
       () =>
         import("~/app/purchases/purchase-import-run-detail").then((m) => ({
@@ -217,12 +217,12 @@ export const detailSlots = {
       (run) => run.purpose === "photo_inventory",
     ),
     "ai-usage": slot(() =>
-      import("~/app/import-runs/slots").then((m) => ({
+      import("~/app/runs/slots").then((m) => ({
         default: m.RunAiUsage,
       })),
     ),
     changes: slot(() =>
-      import("~/app/import-runs/slots").then((m) => ({
+      import("~/app/runs/slots").then((m) => ({
         default: m.RunChanges,
       })),
     ),

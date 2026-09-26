@@ -28,12 +28,8 @@ export async function stagePhotoImport(
   input: PhotoImportStageInput,
   ports: PhotoImportStagePorts = productionPorts,
 ): Promise<PhotoImportStageOutput> {
-  const runId = input.importRunId
-    ? await (ports.resolveRunId ?? resolveOrThrow)(
-        db,
-        "importRun",
-        input.importRunId,
-      )
+  const runId = input.runId
+    ? await (ports.resolveRunId ?? resolveOrThrow)(db, "run", input.runId)
     : undefined;
   const exact = await ports.findReusable(
     db,

@@ -1,4 +1,4 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 
 import { withErrorReporting } from "~/server/errors/report-error";
 import { normalizeStartOperationError } from "~/server/start-operation.server";
@@ -35,7 +35,7 @@ export async function handleMcpHttpRequest(request: Request) {
             // Flue's token is scoped to its run, so everything it writes
             // inherits that run (validated against the grant below).
             runId: actor.purchaseAgentRunId
-              ? importRunId.parse(actor.purchaseAgentRunId)
+              ? runEntityId.parse(actor.purchaseAgentRunId)
               : null,
           },
         }),

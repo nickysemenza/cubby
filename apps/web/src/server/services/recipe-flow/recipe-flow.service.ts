@@ -1,4 +1,4 @@
-import type { ImportRunId, RecipeId } from "@cubby/schemas/identifiers";
+import type { RunId, RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import {
   type RecipeFlowAiPlan,
@@ -65,7 +65,7 @@ const productionRecipeFlowPorts: RecipeFlowPorts = {
   listCandidates: async (db, recipeId) =>
     (
       await listAiAnalysesForEntityFeature(db, {
-        entityType: "recipe",
+        entityKind: "recipe",
         entityId: recipeId,
         feature: RECIPE_FLOW_PRIMARY_FEATURE.feature,
         promptVersion: RECIPE_FLOW_PRIMARY_FEATURE.promptVersion,
@@ -85,7 +85,7 @@ const productionRecipeFlowPorts: RecipeFlowPorts = {
     return await upsertAiAnalysis(
       db,
       {
-        entityType: "recipe",
+        entityKind: "recipe",
         entityId: recipeId,
         feature: input.feature,
         inputFingerprint: input.fingerprint,
@@ -271,7 +271,7 @@ async function recordFlowCacheHit(
   db: Database,
   recipeId: RecipeId,
   candidate: FlowCandidate,
-  runId: ImportRunId,
+  runId: RunId,
   ports: RecipeFlowPorts,
 ): Promise<void> {
   const feature = FLOW_FEATURES.find(
@@ -286,7 +286,7 @@ async function recordFlowCacheHit(
     runId,
     durationMs: 0,
     cacheStatus: "hit",
-    entity: { entityType: "recipe", entityId: recipeId },
+    entity: { entityKind: "recipe", entityId: recipeId },
   });
 }
 
@@ -302,7 +302,7 @@ async function persistFlowArtifact(
 export async function generateRecipeFlow(
   db: Database,
   input: RecipeFlowGenerateRequest,
-  runId: ImportRunId,
+  runId: RunId,
   ports: RecipeFlowPorts = productionRecipeFlowPorts,
 ): Promise<RecipeFlowArtifact> {
   const [recipe, candidates] = await Promise.all([
@@ -334,7 +334,7 @@ export async function generateRecipeFlow(
       runId,
       operation: "generateRecipeFlow",
       cacheStatus: "miss",
-      entity: { entityType: "recipe", entityId: input.id },
+      entity: { entityKind: "recipe", entityId: input.id },
       // A forced regenerate must also skip the AI Gateway's response cache:
       // the request body is unchanged, so an unforced call would be served
       // the very flow the user asked to replace.

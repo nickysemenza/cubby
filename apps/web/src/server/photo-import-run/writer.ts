@@ -3,14 +3,14 @@
  *
  * Turns one caller-defined group of images into one Product (new or
  * existing), attaches the images with a `purpose`, optionally records one
- * inventory entry, and marks the run's `ImportRunTarget` rows. See
+ * inventory entry, and marks the run's `RunTarget` rows. See
  * `packages/schemas/src/photo-import-run.ts` for the wire contract and
  * `.claude/skills/photo-inventory-import/SKILL.md` for the workflow this serves.
  */
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import { type ActorContext, actorInRun } from "@cubby/schemas/context";
 import {
-  importRunId,
+  runEntityId,
   parseShortcodeFor,
   type ImageId,
   type ImageShortcode,
@@ -33,13 +33,13 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import {
   auditLog,
-  importRun,
-  importRunMutation,
-  importRunTarget,
+  run as runTable,
+  runMutation,
+  runTarget,
   inventoryEntry,
   product,
 } from "~/server/db/schema";
-import { assertImportRunCapability } from "~/server/purchase-import/capabilities";
+import { assertRunCapability } from "~/server/purchase-import/capabilities";
 import {
   loadRunScopeByShortcode,
   runImportOperation,
@@ -61,7 +61,7 @@ import { createProductWithSideEffects } from "~/server/services/product-orchestr
 import { createProductWriteActions } from "~/server/services/product.service";
 
 /**
- * Bookkeeping recorded on `ImportRunTarget.diff` for an attached (or skipped)
+ * Bookkeeping recorded on `RunTarget.diff` for an attached (or skipped)
  * target. `groupKey` is the replay key: a target is only a legitimate replay
  * of THIS call when its diff was written by the same group, not merely
  * "already completed" (which could be a different, unrelated commit against
@@ -121,12 +121,12 @@ async function findProductNameConflicts(
   const ownProductIds = new Set(
     (
       await getDb(db)
-        .select({ targetId: importRunMutation.targetId })
-        .from(importRunMutation)
+        .select({ targetId: runMutation.targetId })
+        .from(runMutation)
         .where(
           and(
-            eq(importRunMutation.runId, runId),
-            eq(importRunMutation.targetType, "product"),
+            eq(runMutation.runId, runId),
+            eq(runMutation.targetKind, "product"),
           ),
         )
     ).map((row) => row.targetId),
@@ -148,7 +148,7 @@ async function findProductNameConflicts(
     .map((row) => parseShortcodeFor("product", row.shortcode));
 }
 
-/** Best-effort link from an `ImportRunMutation` row to the audit trail that carries the actor. */
+/** Best-effort link from an `RunMutation` row to the audit trail that carries the actor. */
 async function latestAuditLogId(
   db: Database,
   entityType: string,
@@ -222,7 +222,7 @@ type LockedTargets = {
 };
 
 /**
- * Lock this group's `ImportRunTarget` rows and classify the group as either a
+ * Lock this group's `RunTarget` rows and classify the group as either a
  * full replay of a prior commit under the same `groupKey`, or fresh review work
  * (targets `pending`, or `unresolved` on a run stopped for review). Any other
  * mix — partial completion, or a target already completed under a DIFFERENT
@@ -240,17 +240,17 @@ async function lockTargets(
   const imageIds = [...attaches, ...skips].map((entry) => entry.imageId);
   const lockedTargets: LockedTarget[] = await getDb(txDb)
     .select({
-      id: importRunTarget.id,
-      imageId: importRunTarget.imageId,
-      state: importRunTarget.state,
-      outcome: importRunTarget.outcome,
-      diff: importRunTarget.diff,
+      id: runTarget.id,
+      imageId: runTarget.imageId,
+      state: runTarget.state,
+      outcome: runTarget.outcome,
+      diff: runTarget.diff,
     })
-    .from(importRunTarget)
+    .from(runTarget)
     .where(
       and(
-        eq(importRunTarget.runId, scope.public.runId),
-        inArray(importRunTarget.imageId, imageIds),
+        eq(runTarget.runId, scope.public.runId),
+        inArray(runTarget.imageId, imageIds),
       ),
     )
     .for("update");
@@ -354,10 +354,10 @@ async function resolveProduct(
     productShortcodeStr,
   );
   await getDb(txDb)
-    .insert(importRunMutation)
+    .insert(runMutation)
     .values({
       runId: scope.public.runId,
-      targetType: "product",
+      targetKind: "product",
       targetId: productEntityId,
       mutationKind: "create",
       fields: ["name", "categoryId", "manufacturer", "model", "notes", "tags"],
@@ -482,10 +482,10 @@ async function receiveInventory(
     inventoryShortcodeStr,
   );
   await getDb(txDb)
-    .insert(importRunMutation)
+    .insert(runMutation)
     .values({
       runId: scope.public.runId,
-      targetType: "inventory",
+      targetKind: "inventory",
       targetId: inventoryEntityId,
       mutationKind: targetId ? "update" : "create",
       fields: ["amount", "ownershipMode", "ownerLedgerPartyId"],
@@ -520,7 +520,7 @@ async function attachImages(
   }
 }
 
-/** Mark each target row completed (attach) or skipped, with a matching `ImportRunMutation` row. */
+/** Mark each target row completed (attach) or skipped, with a matching `RunMutation` row. */
 async function markTargets(
   txDb: Database,
   scope: RunScope,
@@ -549,7 +549,7 @@ async function markTargets(
       diff.inventoryId = inventoryShortcodeStr;
     }
     await getDb(txDb)
-      .update(importRunTarget)
+      .update(runTarget)
       .set({
         state: "completed",
         outcome: "attached",
@@ -558,12 +558,12 @@ async function markTargets(
         completedAt: now,
         updatedAt: now,
       })
-      .where(eq(importRunTarget.id, target.id));
+      .where(eq(runTarget.id, target.id));
     await getDb(txDb)
-      .insert(importRunMutation)
+      .insert(runMutation)
       .values({
         runId: scope.public.runId,
-        targetType: "image",
+        targetKind: "image",
         targetId: entry.imageId,
         mutationKind: "attach",
         fields: ["purpose"],
@@ -580,7 +580,7 @@ async function markTargets(
   for (const entry of skips) {
     const target = targetByImageId.get(entry.imageId)!;
     await getDb(txDb)
-      .update(importRunTarget)
+      .update(runTarget)
       .set({
         state: "skipped",
         outcome: "skipped",
@@ -589,12 +589,12 @@ async function markTargets(
         completedAt: now,
         updatedAt: now,
       })
-      .where(eq(importRunTarget.id, target.id));
+      .where(eq(runTarget.id, target.id));
     await getDb(txDb)
-      .insert(importRunMutation)
+      .insert(runMutation)
       .values({
         runId: scope.public.runId,
-        targetType: "image",
+        targetKind: "image",
         targetId: entry.imageId,
         mutationKind: "skip",
         fields: ["warning"],
@@ -621,11 +621,11 @@ async function completeRunIfDone(
 ): Promise<boolean> {
   const [pendingRow] = await getDb(txDb)
     .select({ pending: count() })
-    .from(importRunTarget)
+    .from(runTarget)
     .where(
       and(
-        eq(importRunTarget.runId, scope.public.runId),
-        inArray(importRunTarget.state, ["pending", "unresolved"]),
+        eq(runTarget.runId, scope.public.runId),
+        inArray(runTarget.state, ["pending", "unresolved"]),
       ),
     );
   const runCompletes = (pendingRow?.pending ?? 0) === 0;
@@ -636,24 +636,24 @@ async function completeRunIfDone(
   // intermediate record.
   if (runCompletes) {
     await getDb(txDb)
-      .update(importRun)
+      .update(runTable)
       .set({
-        imported: sql`${importRun.imported} + ${importedDelta}`,
-        skipped: sql`${importRun.skipped} + ${skippedDelta}`,
+        imported: sql`${runTable.imported} + ${importedDelta}`,
+        skipped: sql`${runTable.skipped} + ${skippedDelta}`,
         updatedAt: now,
         status: "completed",
         endedAt: now,
       })
-      .where(eq(importRun.id, scope.public.runId));
+      .where(eq(runTable.id, scope.public.runId));
   } else {
     await getDb(txDb)
-      .update(importRun)
+      .update(runTable)
       .set({
-        imported: sql`${importRun.imported} + ${importedDelta}`,
-        skipped: sql`${importRun.skipped} + ${skippedDelta}`,
+        imported: sql`${runTable.imported} + ${importedDelta}`,
+        skipped: sql`${runTable.skipped} + ${skippedDelta}`,
         updatedAt: now,
       })
-      .where(eq(importRun.id, scope.public.runId));
+      .where(eq(runTable.id, scope.public.runId));
   }
 
   return runCompletes;
@@ -674,9 +674,9 @@ async function doCommit(
   // (and `completeRunIfDone` only re-touches the row already held), so no
   // run/target lock cycle exists.
   const [lockedRun] = await getDb(txDb)
-    .select({ status: importRun.status })
-    .from(importRun)
-    .where(eq(importRun.id, scope.public.runId))
+    .select({ status: runTable.status })
+    .from(runTable)
+    .where(eq(runTable.id, scope.public.runId))
     .for("update");
   const runStatus = lockedRun?.status ?? scope.public.status;
 
@@ -704,12 +704,12 @@ async function doCommit(
   // write failed. Targets carrying this groupKey prove the earlier commit
   // landed; running fresh work under the same key would duplicate it.
   const [alreadyCommitted] = await getDb(txDb)
-    .select({ id: importRunTarget.id })
-    .from(importRunTarget)
+    .select({ id: runTarget.id })
+    .from(runTarget)
     .where(
       and(
-        eq(importRunTarget.runId, scope.public.runId),
-        sql`${importRunTarget.diff}->>'groupKey' = ${input.groupKey}`,
+        eq(runTarget.runId, scope.public.runId),
+        sql`${runTarget.diff}->>'groupKey' = ${input.groupKey}`,
       ),
     )
     .limit(1);
@@ -780,7 +780,7 @@ export async function commitPhotoGroup(
 ): Promise<CommitPhotoGroupOutput> {
   const input = commitPhotoGroupInput.parse(rawInput);
   const scope = await loadRunScopeByShortcode(db, input.runId);
-  assertImportRunCapability(scope.public.purpose, "photo_commit");
+  assertRunCapability(scope.public.purpose, "photo_commit");
   // NOT gated on `status === "running"` here: a crash-window retry (see
   // `runImportOperation`) can legitimately arrive after the SAME commit
   // already flipped the run to `completed`, and must still resolve as a
@@ -827,7 +827,7 @@ export async function commitPhotoGroup(
           transactionDb,
           scope,
           input,
-          actorInRun(actor, importRunId.parse(scope.public.runId)),
+          actorInRun(actor, runEntityId.parse(scope.public.runId)),
         ),
       ),
   );

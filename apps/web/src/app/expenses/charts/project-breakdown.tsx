@@ -3,10 +3,10 @@ import { BuildingsIcon } from "@phosphor-icons/react/dist/csr/Buildings";
 import { useMemo } from "react";
 
 import { RankedBarBreakdown } from "~/app/_components/charts/kit";
-import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import {
   ProjectChartLabel,
   ProjectChartTick,
+  useProjectIconById,
 } from "~/app/projects/project-mark";
 
 /**
@@ -21,7 +21,7 @@ export function ProjectBreakdown({
 }: {
   byProject: ExpenseProjectAggregate[];
 }) {
-  const { iconById } = useProjectOptions();
+  const { iconById } = useProjectIconById();
   const identityById = useMemo(
     () =>
       new Map<string, { name: string; icon: string | null }>(

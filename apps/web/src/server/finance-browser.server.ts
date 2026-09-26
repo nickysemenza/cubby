@@ -10,14 +10,12 @@ import {
 } from "~/server/repo/member-login";
 import {
   financialTransactionSourceOptionsWorkflow,
-  ledgerPartyOptionsWorkflow,
   merchantVendorInferenceWorkflow,
 } from "~/server/workflows/finance.server";
 
 export const ledgerPartyHandlers = implementOperationDomain(
   ledgerPartyContract,
   {
-    options: (context) => ledgerPartyOptionsWorkflow(context.readDb),
     memberLogins: (context) => listMemberLogins(context.db),
     setMemberLogin: async (context, input) => {
       await setMemberLoginParty(

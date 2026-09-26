@@ -1,4 +1,4 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import type {
   BrowserBridgeRequest,
   BrowserBridgeResult,
@@ -6,21 +6,18 @@ import type {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
 import {
-  dispatchImportRunEvent,
-  recordImportRunDispatchAttempt,
-} from "./dispatch";
-import {
-  controlImportRun,
-  expireStaleImportRuns,
-  finishImportRun,
+  controlRun,
+  expireStaleRuns,
+  finishRun,
   issueBrowserCommand,
   readBrowserCommandResult,
-  reconcileSettledImportRun,
-  resumeAuthorizedImportRuns,
+  reconcileSettledRun,
+  resumeAuthorizedRuns,
   runImportOperation,
-  startOrResumeImportRun,
-  startTargetedImportRun,
+  startOrResumeRun,
+  startTargetedRun,
 } from "./run-service";
 
 describe("purchase import run admission", () => {
@@ -58,12 +55,12 @@ describe("purchase import run admission", () => {
     const account = await createVendorAccount(party.id);
 
     const [first, second] = await Promise.all([
-      startOrResumeImportRun(ctx.db, {
+      startOrResumeRun(ctx.db, {
         ledgerPartyId: party.id,
         vendorAccountId: account.id,
         trigger: "manual",
       }),
-      startOrResumeImportRun(ctx.db, {
+      startOrResumeRun(ctx.db, {
         ledgerPartyId: party.id,
         vendorAccountId: account.id,
         trigger: "foreground",
@@ -72,92 +69,89 @@ describe("purchase import run admission", () => {
 
     expect(first.id).toBe(second.id);
     expect([first.created, second.created].sort()).toEqual([false, true]);
-    const { importRun } = await import("~/server/db/schema");
+    const { run: runTable } = await import("~/server/db/schema");
     const { eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
     const [stored] = await getDb(ctx.db)
-      .select({ coordinatorModel: importRun.coordinatorModel })
-      .from(importRun)
-      .where(eq(importRun.id, first.id));
+      .select({ coordinatorModel: runTable.coordinatorModel })
+      .from(runTable)
+      .where(eq(runTable.id, first.id));
     expect(stored?.coordinatorModel).toBe("gpt-6-sol");
   });
 
   it("retries a historical run on the current coordinator model", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
     });
-    const { importRun } = await import("~/server/db/schema");
+    const { run: runTable } = await import("~/server/db/schema");
     const { eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
     await getDb(ctx.db)
-      .update(importRun)
+      .update(runTable)
       .set({
         status: "completed",
         endedAt: new Date(),
         coordinatorModel: "retired-model",
       })
-      .where(eq(importRun.id, run.id));
+      .where(eq(runTable.id, run.id));
 
-    const successor = await controlImportRun(ctx.db, ctx.actor, {
+    const successor = await controlRun(ctx.db, ctx.actor, {
       runPublicId: run.publicId,
       action: "retry",
     });
     expect(successor.successorCoordinatorModel).toBe("gpt-6-sol");
     expect(successor.dispatchCoordinatorModel).toBe("gpt-6-sol");
     const [storedSuccessor] = await getDb(ctx.db)
-      .select({ coordinatorModel: importRun.coordinatorModel })
-      .from(importRun)
-      .where(eq(importRun.id, importRunId.parse(successor.successorRunId)));
+      .select({ coordinatorModel: runTable.coordinatorModel })
+      .from(runTable)
+      .where(eq(runTable.id, runEntityId.parse(successor.successorRunId)));
     expect(storedSuccessor?.coordinatorModel).toBe("gpt-6-sol");
   });
 
   it("resumes authorization with a persisted dispatch generation", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
     });
-    const { importRun } = await import("~/server/db/schema");
+    const { run: runTable } = await import("~/server/db/schema");
     const { eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
     await getDb(ctx.db)
-      .update(importRun)
+      .update(runTable)
       .set({ status: "paused_auth", coordinatorStartedAt: new Date() })
-      .where(eq(importRun.id, run.id));
+      .where(eq(runTable.id, run.id));
 
-    const [resumed] = await resumeAuthorizedImportRuns(
-      ctx.db,
-      ctx.actor.userId,
-    );
+    const [resumed] = await resumeAuthorizedRuns(ctx.db, ctx.actor.userId);
     expect(resumed?.eventId).toEqual(expect.any(String));
     expect(resumed?.eventId).not.toBe(run.dispatchEventId);
     const [stored] = await getDb(ctx.db)
       .select({
-        eventId: importRun.dispatchEventId,
-        coordinatorStartedAt: importRun.coordinatorStartedAt,
+        eventId: runTable.dispatchEventId,
+        coordinatorStartedAt: runTable.coordinatorStartedAt,
       })
-      .from(importRun)
-      .where(eq(importRun.id, run.id));
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
     expect(stored).toEqual({
       eventId: resumed?.eventId,
       coordinatorStartedAt: null,
     });
 
-    await recordImportRunDispatchAttempt(ctx.db, {
+    await recordRunDispatchAttempt(ctx.db, {
       runId: run.id,
       eventId: resumed!.eventId!,
       error: "queue unavailable",
     });
     const [failed] = await getDb(ctx.db)
-      .select({ status: importRun.status, error: importRun.dispatchError })
-      .from(importRun)
-      .where(eq(importRun.id, run.id));
+      .select({ status: runTable.status, error: runTable.dispatchError })
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
     expect(failed).toEqual({
       status: "dispatch_failed",
       error: "queue unavailable",
@@ -167,20 +161,20 @@ describe("purchase import run admission", () => {
   it("dispatches a manually resumed retailer sign-in run instead of leaving it idle", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
     });
-    const { importRun } = await import("~/server/db/schema");
+    const { run: runTable } = await import("~/server/db/schema");
     const { eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
     await getDb(ctx.db)
-      .update(importRun)
+      .update(runTable)
       .set({ status: "paused_auth", coordinatorStartedAt: new Date() })
-      .where(eq(importRun.id, run.id));
+      .where(eq(runTable.id, run.id));
 
-    const resumed = await controlImportRun(ctx.db, ctx.actor, {
+    const resumed = await controlRun(ctx.db, ctx.actor, {
       runPublicId: run.publicId,
       action: "resume",
     });
@@ -192,11 +186,11 @@ describe("purchase import run admission", () => {
     });
     const [stored] = await getDb(ctx.db)
       .select({
-        eventId: importRun.dispatchEventId,
-        coordinatorStartedAt: importRun.coordinatorStartedAt,
+        eventId: runTable.dispatchEventId,
+        coordinatorStartedAt: runTable.coordinatorStartedAt,
       })
-      .from(importRun)
-      .where(eq(importRun.id, run.id));
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
     expect(stored?.eventId).not.toBe(run.dispatchEventId);
     expect(stored?.coordinatorStartedAt).toBeNull();
   });
@@ -204,25 +198,21 @@ describe("purchase import run admission", () => {
   it("republishes an interrupted authorization dispatch with its stable event id", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
     });
-    const { importRun } = await import("~/server/db/schema");
+    const { run: runTable } = await import("~/server/db/schema");
     const { eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
     const now = new Date("2026-09-20T20:00:00.000Z");
     await getDb(ctx.db)
-      .update(importRun)
+      .update(runTable)
       .set({ updatedAt: new Date(now.getTime() - 61_000) })
-      .where(eq(importRun.id, run.id));
+      .where(eq(runTable.id, run.id));
 
-    const repaired = await resumeAuthorizedImportRuns(
-      ctx.db,
-      ctx.actor.userId,
-      now,
-    );
+    const repaired = await resumeAuthorizedRuns(ctx.db, ctx.actor.userId, now);
 
     expect(repaired).toContainEqual(
       expect.objectContaining({ id: run.id, eventId: run.dispatchEventId }),
@@ -232,12 +222,12 @@ describe("purchase import run admission", () => {
   it("accepts a producer receipt after the consumer advances the run", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
     });
-    const { importRun } = await import("~/server/db/schema");
+    const { run: runTable } = await import("~/server/db/schema");
     const { eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
     if (!run.dispatchEventId)
@@ -245,11 +235,11 @@ describe("purchase import run admission", () => {
 
     for (const status of ["paused_auth", "completed"] as const) {
       await getDb(ctx.db)
-        .update(importRun)
+        .update(runTable)
         .set({ status })
-        .where(eq(importRun.id, run.id));
+        .where(eq(runTable.id, run.id));
       await expect(
-        recordImportRunDispatchAttempt(ctx.db, {
+        recordRunDispatchAttempt(ctx.db, {
           runId: run.id,
           eventId: run.dispatchEventId,
         }),
@@ -268,7 +258,7 @@ describe("purchase import run admission", () => {
       date: "2026-09-20",
       displayLabel: "Validation target",
     });
-    const started = await startTargetedImportRun(ctx.db, {
+    const started = await startTargetedRun(ctx.db, {
       ledgerPartyId: party.id,
       purpose: "purchase_validation",
       vendorId: account.vendorId,
@@ -284,15 +274,15 @@ describe("purchase import run admission", () => {
       ],
     });
     if (!started.created) throw new Error("Expected validation admission");
-    const { importRun, importRunTarget } = await import("~/server/db/schema");
+    const { run: runTable, runTarget } = await import("~/server/db/schema");
     const { eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
     await getDb(ctx.db)
-      .update(importRun)
+      .update(runTable)
       .set({ status: "needs_review", endedAt: new Date() })
-      .where(eq(importRun.id, started.run.id));
+      .where(eq(runTable.id, started.run.id));
 
-    const result = await controlImportRun(ctx.db, ctx.actor, {
+    const result = await controlRun(ctx.db, ctx.actor, {
       runPublicId: started.run.publicId,
       action: "upload_evidence",
     });
@@ -305,11 +295,11 @@ describe("purchase import run admission", () => {
     });
     const [successorTarget] = await getDb(ctx.db)
       .select({
-        purchaseId: importRunTarget.purchaseId,
-        state: importRunTarget.state,
+        purchaseId: runTarget.purchaseId,
+        state: runTarget.state,
       })
-      .from(importRunTarget)
-      .where(eq(importRunTarget.runId, result.successorRunId!));
+      .from(runTarget)
+      .where(eq(runTarget.runId, result.successorRunId!));
     expect(successorTarget).toEqual({
       purchaseId: target.id,
       state: "needs_evidence",
@@ -319,7 +309,7 @@ describe("purchase import run admission", () => {
   it("returns the recorded tool result without replaying its effect", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -355,7 +345,7 @@ describe("purchase import run admission", () => {
   it("reclaims a stale started operation after a worker crash", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -371,15 +361,15 @@ describe("purchase import run admission", () => {
         throw new Error("injected crash");
       }),
     ).rejects.toThrow("injected crash");
-    const [{ eq }, { getDb }, { importRunOperation }] = await Promise.all([
+    const [{ eq }, { getDb }, { runOperation }] = await Promise.all([
       import("drizzle-orm"),
       import("~/server/repo/database-helpers"),
       import("~/server/db/schema"),
     ]);
     await getDb(ctx.db)
-      .update(importRunOperation)
+      .update(runOperation)
       .set({ state: "started", updatedAt: new Date(Date.now() - 6 * 60_000) })
-      .where(eq(importRunOperation.operationId, input.operationId));
+      .where(eq(runOperation.operationId, input.operationId));
 
     await expect(
       runImportOperation(ctx.db, input, async () => ({ recovered: true })),
@@ -389,7 +379,7 @@ describe("purchase import run admission", () => {
   it("replays the exact persisted browser command for one operation id", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -428,7 +418,7 @@ describe("purchase import run admission", () => {
   it("rejects a capture recovery URL outside the vendor allowlist", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -464,7 +454,7 @@ describe("purchase import run admission", () => {
   it("replays terminal completion after the run status already committed", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -484,8 +474,8 @@ describe("purchase import run admission", () => {
     const namespace = { getByName: () => broker };
     const input = { runId: run.id, operationId: "finish:replay" };
 
-    const first = await finishImportRun(ctx.db, namespace, input);
-    const replay = await finishImportRun(ctx.db, namespace, input);
+    const first = await finishRun(ctx.db, namespace, input);
+    const replay = await finishRun(ctx.db, namespace, input);
 
     expect(replay).toEqual(first);
     expect(notifications).toEqual([run.id, run.id]);
@@ -493,17 +483,17 @@ describe("purchase import run admission", () => {
   it("counts the initial dispatch as an attempt, not only retries", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
     });
-    const { importRun } = await import("~/server/db/schema");
+    const { run: runTable } = await import("~/server/db/schema");
     const { eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
     const sent: string[] = [];
 
-    await dispatchImportRunEvent(
+    await dispatchRunEvent(
       ctx.db,
       {
         send: async (event) => {
@@ -519,9 +509,9 @@ describe("purchase import run admission", () => {
     );
 
     const [stored] = await getDb(ctx.db)
-      .select({ attempts: importRun.dispatchAttempts })
-      .from(importRun)
-      .where(eq(importRun.id, run.id));
+      .select({ attempts: runTable.dispatchAttempts })
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
     expect(sent).toEqual(["start_or_resume"]);
     expect(stored?.attempts).toBe(1);
   });
@@ -529,7 +519,7 @@ describe("purchase import run admission", () => {
   it("moves a run whose coordinator settled without finishing to review, unless a browser command is in flight", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -550,7 +540,7 @@ describe("purchase import run admission", () => {
     const namespace = { getByName: () => broker };
 
     await expect(
-      reconcileSettledImportRun(ctx.db, namespace, {
+      reconcileSettledRun(ctx.db, namespace, {
         runId: run.id,
         operationId: "settled:1",
       }),
@@ -558,23 +548,23 @@ describe("purchase import run admission", () => {
 
     pending = false;
     await expect(
-      reconcileSettledImportRun(ctx.db, namespace, {
+      reconcileSettledRun(ctx.db, namespace, {
         runId: run.id,
         operationId: "settled:2",
       }),
     ).resolves.toEqual({ reconciled: true, status: "needs_review" });
-    const { importFinding, importRun } = await import("~/server/db/schema");
+    const { runFinding, run: runTable } = await import("~/server/db/schema");
     const { eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
     const [stored] = await getDb(ctx.db)
-      .select({ status: importRun.status })
-      .from(importRun)
-      .where(eq(importRun.id, run.id));
+      .select({ status: runTable.status })
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
     expect(stored?.status).toBe("needs_review");
     const findings = await getDb(ctx.db)
-      .select({ kind: importFinding.kind, summary: importFinding.summary })
-      .from(importFinding)
-      .where(eq(importFinding.importRunId, run.id));
+      .select({ kind: runFinding.kind, summary: runFinding.summary })
+      .from(runFinding)
+      .where(eq(runFinding.runId, run.id));
     expect(findings).toEqual([
       expect.objectContaining({
         kind: "other",
@@ -587,25 +577,25 @@ describe("purchase import run admission", () => {
     const party = await createMember();
     const staleAccount = await createVendorAccount(party.id);
     const liveAccount = await createVendorAccount(party.id);
-    const stale = await startOrResumeImportRun(ctx.db, {
+    const stale = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: staleAccount.id,
       trigger: "manual",
     });
-    const live = await startOrResumeImportRun(ctx.db, {
+    const live = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: liveAccount.id,
       trigger: "manual",
     });
-    const { importRun } = await import("~/server/db/schema");
+    const { run: runTable } = await import("~/server/db/schema");
     const { inArray } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
     const now = new Date("2026-09-21T12:00:00.000Z");
     const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60_000);
     await getDb(ctx.db)
-      .update(importRun)
+      .update(runTable)
       .set({ updatedAt: threeHoursAgo })
-      .where(inArray(importRun.id, [stale.id, live.id]));
+      .where(inArray(runTable.id, [stale.id, live.id]));
     // A progress report inside the window is activity even when the run row
     // itself was not touched.
     await runImportOperation(
@@ -628,7 +618,7 @@ describe("purchase import run admission", () => {
       requestAuthentication: async () => undefined,
     };
 
-    const outcome = await expireStaleImportRuns(
+    const outcome = await expireStaleRuns(
       ctx.db,
       { getByName: () => broker },
       now,
@@ -636,9 +626,9 @@ describe("purchase import run admission", () => {
 
     expect(outcome).toEqual({ expired: 1, failures: [] });
     const rows = await getDb(ctx.db)
-      .select({ id: importRun.id, status: importRun.status })
-      .from(importRun)
-      .where(inArray(importRun.id, [stale.id, live.id]));
+      .select({ id: runTable.id, status: runTable.status })
+      .from(runTable)
+      .where(inArray(runTable.id, [stale.id, live.id]));
     expect(Object.fromEntries(rows.map((row) => [row.id, row.status]))).toEqual(
       {
         [stale.id]: "needs_review",
@@ -649,7 +639,7 @@ describe("purchase import run admission", () => {
   it("records a terminal browser failure on the operation row instead of only returning it", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -695,19 +685,19 @@ describe("purchase import run admission", () => {
     });
 
     expect(read.state).toBe("completed");
-    const { importRunOperation } = await import("~/server/db/schema");
+    const { runOperation } = await import("~/server/db/schema");
     const { and, eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
     const [operation] = await getDb(ctx.db)
       .select({
-        state: importRunOperation.state,
-        error: importRunOperation.error,
+        state: runOperation.state,
+        error: runOperation.error,
       })
-      .from(importRunOperation)
+      .from(runOperation)
       .where(
         and(
-          eq(importRunOperation.runId, run.id),
-          eq(importRunOperation.operationId, "browser:bad-link"),
+          eq(runOperation.runId, run.id),
+          eq(runOperation.operationId, "browser:bad-link"),
         ),
       );
     expect(operation).toEqual({
@@ -718,19 +708,19 @@ describe("purchase import run admission", () => {
   it("abandons a browser command nobody answered within the stale window", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
-    const run = await startOrResumeImportRun(ctx.db, {
+    const run = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
     });
-    const { importRun } = await import("~/server/db/schema");
+    const { run: runTable } = await import("~/server/db/schema");
     const { eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
     const now = new Date("2026-09-21T12:00:00.000Z");
     await getDb(ctx.db)
-      .update(importRun)
+      .update(runTable)
       .set({ updatedAt: new Date(now.getTime() - 3 * 60 * 60_000) })
-      .where(eq(importRun.id, run.id));
+      .where(eq(runTable.id, run.id));
     const cancelled: string[] = [];
     const stale = {
       requestId: crypto.randomUUID(),
@@ -748,7 +738,7 @@ describe("purchase import run admission", () => {
       requestAuthentication: async () => undefined,
     };
 
-    const outcome = await expireStaleImportRuns(
+    const outcome = await expireStaleRuns(
       ctx.db,
       { getByName: () => broker },
       now,
@@ -757,9 +747,9 @@ describe("purchase import run admission", () => {
     expect(outcome).toEqual({ expired: 1, failures: [] });
     expect(cancelled).toEqual([stale.requestId]);
     const [stored] = await getDb(ctx.db)
-      .select({ status: importRun.status })
-      .from(importRun)
-      .where(eq(importRun.id, run.id));
+      .select({ status: runTable.status })
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
     expect(stored?.status).toBe("needs_review");
   });
 });

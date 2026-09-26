@@ -22,8 +22,9 @@ import {
 import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
 import { FormFieldResolution } from "~/app/_components/ai/form-field-resolution";
 import {
-  WithEntitySearch,
-  type WithEntitySearchProps,
+  useEntityListSource,
+  type EntitySearchEntity,
+  type SearchProviderProps,
 } from "~/app/_components/combobox/with-search-hook";
 import { WithVendorShortcodeSearch } from "~/app/_components/combobox/with-vendor-search";
 import { PlainDateField, SelectField } from "~/app/_components/form-utils";
@@ -88,7 +89,7 @@ type BulkEditResult = { updated: number; sideEffects: MutationSideEffects };
  * fake instead of mocking the `with-search-hook` module. */
 type SearchProviderFor = (
   referenceEntity: string,
-) => (props: WithEntitySearchProps<string>) => ReactNode;
+) => (props: SearchProviderProps<string>) => ReactNode;
 
 /**
  * A row's passthrough value — list columns (`status`, `trade`, `projectId`)
@@ -142,13 +143,32 @@ function bulkFieldDescription(
 }
 
 /**
+ * A non-vendor reference field's search provider: a direct
+ * `useEntityListSource` call in the render-prop shape `EntityValueField`'s
+ * `SearchProvider` prop expects.
+ */
+function GenericEntitySearch({
+  entity,
+  scope,
+  children,
+}: { entity: EntitySearchEntity } & SearchProviderProps<string>): ReactNode {
+  const { dialog, ...search } = useEntityListSource(entity, { scope });
+  return (
+    <>
+      {dialog}
+      {children(search)}
+    </>
+  );
+}
+
+/**
  * One reference field's search provider — the vendor picker needs its own
  * shortcode-typed wrapper, matching `referenceEntitySearch` in
  * `entity-primitive-fields.tsx`.
  */
 function referenceEntitySearch(
   referenceEntity: string,
-): (props: WithEntitySearchProps<string>) => ReactNode {
+): (props: SearchProviderProps<string>) => ReactNode {
   if (referenceEntity === "vendor") {
     // SAFETY: `WithVendorShortcodeSearch` is keyed to `VendorShortcode`, a
     // string-branded type; the caller's id path is a plain string RHF field.
@@ -156,8 +176,8 @@ function referenceEntitySearch(
   }
   return (props) => (
     // SAFETY: `referenceEntity` is a manifest-declared reference target,
-    // always one of `WithEntitySearch`'s supported (non-vendor) entities.
-    <WithEntitySearch entity={referenceEntity as never} {...props} />
+    // always one of `useEntityListSource`'s supported (non-vendor) entities.
+    <GenericEntitySearch entity={referenceEntity as never} {...props} />
   );
 }
 

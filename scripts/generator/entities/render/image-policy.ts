@@ -3,6 +3,7 @@ import {
   photoCategories,
   photoCategoryKeys,
 } from "../../../../packages/schemas/src/photo-categories.ts";
+import { IMAGE_FIELD_KEYS } from "../../../../packages/schemas/src/image-field-keys.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 
 /**
@@ -342,7 +343,9 @@ export const renderImagePolicyArtifacts = (
     "public struct PhotoLifecycleFilter: Sendable, Hashable {\n  public let field: String\n  public let equals: String?\n  public let oneOf: [String]\n}\n\n" +
     "public struct PhotoRoutingPolicy: Sendable, Hashable {\n  public let candidateFields: [String]\n  public let temporalFields: [String]\n  public let lifecycleFilters: [PhotoLifecycleFilter]\n  public let ocrFields: [String]\n  public let classifierLabels: [String]\n  public let minimumScore: Double\n  public let minimumMargin: Double\n  public let category: String\n}\n\n" +
     "public struct PhotoCategory: Sendable, Hashable {\n  public let key: String\n  public let label: String\n  public let emoji: String\n  /** Base labels UNION every member entity's own classifier labels — computed by the\n   * generator (scripts/generator/entities/render/image-policy.ts); never recompute here. */\n  public let classifierLabels: [String]\n  public let entities: [EntityKey]\n}\n\n" +
-    "public enum PhotoImportCatalog {\n  public static let categories: [PhotoCategory] = [\n" +
+    "public enum PhotoImportCatalog {\n" +
+    `  /** Entity-create-body keys that stage an image action rather than a real field —\n   * derived from \`updateInputImages\` (packages/schemas/src/image.ts) so it cannot drift\n   * from the wire schema's own list. */\n  public static let imageFieldKeys: Set<String> = [${IMAGE_FIELD_KEYS.map((key) => JSON.stringify(key)).join(", ")}]\n` +
+    "  public static let categories: [PhotoCategory] = [\n" +
     swiftCategories +
     "\n  ]\n  public static let ingressRoutes: [PhotoIngressRoute] = [\n" +
     swiftRoutes +

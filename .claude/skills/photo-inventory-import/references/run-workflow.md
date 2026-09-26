@@ -1,6 +1,6 @@
 # Photo inventory run workflow
 
-Coordinate one `photo_inventory` ImportRun (`{{runId}}`) through Cubby MCP.
+Coordinate one `photo_inventory` Run (`{{runId}}`) through Cubby MCP.
 Activate the `photo-inventory-import` skill and apply its product identity,
 grouping, ownership, and location rules.
 

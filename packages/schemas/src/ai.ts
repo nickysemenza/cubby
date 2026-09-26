@@ -4,7 +4,7 @@ import { mutationSideEffectsSchema } from "./background-jobs";
 import { shortcodeEntities } from "./entity-manifest";
 import { moneyNullable } from "./money";
 import {
-  importRunShortcode,
+  runShortcode,
   ingredientShortcode,
   inventoryShortcode,
   locationShortcode,
@@ -292,7 +292,7 @@ export const aiUsageEntrySchema = z.object({
   gatewayLogId: z.string().nullable(),
   estimatedCost: moneyNullable,
   durationMs: z.number().int(),
-  entityType: z.string().nullable(),
+  entityKind: z.string().nullable(),
   entityId: z.string().nullable(),
   createdAt: z.coerce.date(),
 });
@@ -302,7 +302,7 @@ export type AiUsageEntry = z.infer<typeof aiUsageEntrySchema>;
 
 /** `run.aiUsage` — one Run's AI calls, newest first, cursor-paginated. */
 export const aiRunUsageInput = z.object({
-  runId: importRunShortcode,
+  runId: runShortcode,
   cursor: z.string().min(1).optional(),
   limit: z.number().int().min(1).max(100).default(25),
 });

@@ -1,5 +1,5 @@
 /* eslint-disable anti-slop/no-unsafe-dictionary-type -- The harness adapts generated Wrangler JSON whose binding dictionaries have no source-level owner type. */
-import { importRunId, parseEntityId } from "@cubby/schemas/identifiers";
+import { runEntityId, parseEntityId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import { createWorkerdHarness } from "tooling/purchase-agent-workerd-harness";
 import { type TestDbContext, withTestDb } from "tooling/test-setup";
@@ -15,12 +15,12 @@ import {
   financialTransaction,
   financialTransactionAllocation,
   image,
-  importFinding,
-  importRun,
-  importRunMutation,
-  importRunOperation,
-  importRunProgress,
-  importRunTarget,
+  runFinding,
+  run as runTable,
+  runMutation,
+  runOperation,
+  runProgress,
+  runTarget,
   importSourceClaim,
   oauthRefreshToken,
   product,
@@ -45,7 +45,7 @@ import {
 import {
   startPhotoInventoryCoordinator,
   startPhotoInventoryRun,
-  startTargetedImportRun,
+  startTargetedRun,
 } from "./run-service";
 
 let harness: TestHarness | undefined;
@@ -64,45 +64,45 @@ async function workerdDiagnostic(db: TestDbContext["db"], runId: string) {
     await Promise.all([
       getDb(db)
         .select({
-          status: importRun.status,
-          failureCode: importRun.failureCode,
-          dispatchError: importRun.dispatchError,
-          dispatchAttempts: importRun.dispatchAttempts,
-          coordinatorStartedAt: importRun.coordinatorStartedAt,
+          status: runTable.status,
+          failureCode: runTable.failureCode,
+          dispatchError: runTable.dispatchError,
+          dispatchAttempts: runTable.dispatchAttempts,
+          coordinatorStartedAt: runTable.coordinatorStartedAt,
         })
-        .from(importRun)
-        .where(eq(importRun.id, importRunId.parse(runId))),
+        .from(runTable)
+        .where(eq(runTable.id, runEntityId.parse(runId))),
       getDb(db)
         .select({
-          operationId: importRunOperation.operationId,
-          kind: importRunOperation.kind,
-          state: importRunOperation.state,
-          result: importRunOperation.result,
-          error: importRunOperation.error,
+          operationId: runOperation.operationId,
+          kind: runOperation.kind,
+          state: runOperation.state,
+          result: runOperation.result,
+          error: runOperation.error,
         })
-        .from(importRunOperation)
-        .where(eq(importRunOperation.runId, runId)),
+        .from(runOperation)
+        .where(eq(runOperation.runId, runId)),
       // The review reason lives on the finding and the last progress report,
       // not on the run row.
       getDb(db)
-        .select({ kind: importFinding.kind, summary: importFinding.summary })
-        .from(importFinding)
-        .where(eq(importFinding.importRunId, runId)),
+        .select({ kind: runFinding.kind, summary: runFinding.summary })
+        .from(runFinding)
+        .where(eq(runFinding.runId, runId)),
       getDb(db)
         .select({
-          phase: importRunProgress.phase,
-          detail: importRunProgress.detail,
+          phase: runProgress.phase,
+          detail: runProgress.detail,
         })
-        .from(importRunProgress)
-        .where(eq(importRunProgress.runId, runId)),
+        .from(runProgress)
+        .where(eq(runProgress.runId, runId)),
       getDb(db)
         .select({ state: photoGroupProposal.state })
         .from(photoGroupProposal)
-        .where(eq(photoGroupProposal.runId, importRunId.parse(runId))),
+        .where(eq(photoGroupProposal.runId, runEntityId.parse(runId))),
       getDb(db)
         .select({ id: aiUsage.id })
         .from(aiUsage)
-        .where(eq(aiUsage.runId, importRunId.parse(runId))),
+        .where(eq(aiUsage.runId, runEntityId.parse(runId))),
     ]);
   return JSON.stringify({
     run,
@@ -147,8 +147,8 @@ async function protectedBusinessSnapshot(
     database.select().from(auditLog),
     database
       .select()
-      .from(importRunMutation)
-      .where(eq(importRunMutation.runId, input.runId)),
+      .from(runMutation)
+      .where(eq(runMutation.runId, input.runId)),
   ]);
   return JSON.stringify(values);
 }
@@ -175,9 +175,9 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
       `synthetic-wardrobe-${crypto.randomUUID()}`,
     );
     await getDb(ctx.db)
-      .insert(importRunTarget)
+      .insert(runTarget)
       .values({
-        runId: importRunId.parse(run.id),
+        runId: runEntityId.parse(run.id),
         imageId: parseEntityId("image", imageFixture.id),
         position: 0,
         state: "pending",
@@ -277,22 +277,22 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
                 .where(eq(photoGroupProposal.runId, run.id))
                 .limit(1),
               getDb(ctx.db)
-                .select({ phase: importRunProgress.phase })
-                .from(importRunProgress)
+                .select({ phase: runProgress.phase })
+                .from(runProgress)
                 .where(
                   and(
-                    eq(importRunProgress.runId, run.id),
-                    eq(importRunProgress.phase, "awaiting_approval"),
+                    eq(runProgress.runId, run.id),
+                    eq(runProgress.phase, "awaiting_approval"),
                   ),
                 )
                 .limit(1),
               getDb(ctx.db)
-                .select({ id: importRunProgress.id })
-                .from(importRunProgress)
+                .select({ id: runProgress.id })
+                .from(runProgress)
                 .where(
                   and(
-                    eq(importRunProgress.runId, run.id),
-                    eq(importRunProgress.detail, "Coordinator started"),
+                    eq(runProgress.runId, run.id),
+                    eq(runProgress.detail, "Coordinator started"),
                   ),
                 )
                 .limit(1),
@@ -322,9 +322,9 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
           .where(eq(product.name, productName)),
       ).toHaveLength(0);
       const [waitingRun] = await getDb(ctx.db)
-        .select({ status: importRun.status })
-        .from(importRun)
-        .where(eq(importRun.id, run.id));
+        .select({ status: runTable.status })
+        .from(runTable)
+        .where(eq(runTable.id, run.id));
       expect(waitingRun?.status).toBe("running");
       const approval = await approvePhotoGroupProposals(
         ctx.db,
@@ -339,9 +339,9 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
           .where(eq(product.name, productName)),
       ).toHaveLength(1);
       const [settled] = await getDb(ctx.db)
-        .select({ status: importRun.status })
-        .from(importRun)
-        .where(eq(importRun.id, run.id));
+        .select({ status: runTable.status })
+        .from(runTable)
+        .where(eq(runTable.id, run.id));
       expect(settled?.status).toBe("completed");
     } finally {
       for (const [key, value] of previousHyperdrive) {
@@ -425,7 +425,7 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
       });
     const sourceExternalKey = "workerd:ORDER-WORKERD-1";
     const evidenceChecksum = "a".repeat(64);
-    const started = await startTargetedImportRun(ctx.db, {
+    const started = await startTargetedRun(ctx.db, {
       ledgerPartyId: party.id,
       purpose: "purchase_validation",
       vendorId: vendor.id,
@@ -498,14 +498,14 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
         await waitFor(async () => {
           const [operation] = await getDb(ctx.db)
             .select({
-              operationId: importRunOperation.operationId,
-              result: importRunOperation.result,
+              operationId: runOperation.operationId,
+              result: runOperation.result,
             })
-            .from(importRunOperation)
+            .from(runOperation)
             .where(
               and(
-                eq(importRunOperation.runId, started.run.id),
-                eq(importRunOperation.kind, "browser_command"),
+                eq(runOperation.runId, started.run.id),
+                eq(runOperation.kind, "browser_command"),
               ),
             )
             .limit(1);
@@ -547,11 +547,11 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
         await waitFor(async () => {
           const [run] = await getDb(ctx.db)
             .select({
-              status: importRun.status,
-              coordinatorStartedAt: importRun.coordinatorStartedAt,
+              status: runTable.status,
+              coordinatorStartedAt: runTable.coordinatorStartedAt,
             })
-            .from(importRun)
-            .where(eq(importRun.id, started.run.id));
+            .from(runTable)
+            .where(eq(runTable.id, started.run.id));
           return (
             run?.status === "completed" && run.coordinatorStartedAt !== null
           );

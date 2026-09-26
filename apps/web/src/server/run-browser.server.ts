@@ -1,7 +1,4 @@
-import {
-  importRunPurpose,
-  importRunStatus,
-} from "@cubby/schemas/import-run-fields";
+import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { runContract } from "~/contracts/run.contract";
@@ -17,14 +14,15 @@ import {
   listMerchantVendorRules,
 } from "~/server/purchase-import/hunts";
 import {
-  controlImportRun,
-  loadImportRunDetail,
-  loadImportRunLog,
-  pauseAuthorizedImportRuns,
+  controlRun,
+  loadRunDetail,
+  loadRunLog,
+  pauseAuthorizedRuns,
 } from "~/server/purchase-import/run-service";
 import {
-  listImportRuns,
-  listProductImportRuns,
+  listRuns,
+  listProductRuns,
+  reportRunTargetDeviceWork,
   resolveProductImportTarget,
   resolvePurchaseImportTarget,
 } from "~/server/purchase-import/run-target";
@@ -34,7 +32,7 @@ import {
   startTargetedImport,
 } from "~/server/purchase-import/targeted-run";
 import { getDb } from "~/server/repo/database-helpers";
-import { getImportRunByShortcode } from "~/server/repo/import-run";
+import { getRunByShortcode } from "~/server/repo/run";
 import type { AuthenticatedRequestContext } from "~/server/request-context";
 import { listRunAiUsageWorkflow } from "~/server/workflows/ai.server";
 
@@ -50,7 +48,7 @@ export const runHandlers = implementOperationDomain(runContract, {
   list: async (context, input) => {
     const result = await executeEntity(context, {
       action: "list",
-      entity: "importRun",
+      entity: "run",
       filters: input.filters,
       sort: input.sort,
       pagination: input.pagination,
@@ -60,14 +58,13 @@ export const runHandlers = implementOperationDomain(runContract, {
       throw new Error("Run list returned the wrong entity action");
     return { items: result.items, meta: result.meta };
   },
-  detail: (context, input) =>
-    getImportRunByShortcode(context.db, input.shortcode),
+  detail: (context, input) => getRunByShortcode(context.db, input.shortcode),
   workSnapshot: async (context, input) => {
-    const run = await loadImportRunDetail(context.db, input.runId);
+    const run = await loadRunDetail(context.db, input.runId);
     return {
       runId: input.runId,
-      purpose: importRunPurpose.parse(run.purpose),
-      status: importRunStatus.parse(run.status),
+      purpose: runPurpose.parse(run.purpose),
+      status: runStatus.parse(run.status),
       startedAt: run.startedAt,
       endedAt: run.endedAt,
       coordinatorModel: run.coordinatorModel,
@@ -95,12 +92,12 @@ export const runHandlers = implementOperationDomain(runContract, {
       : undefined;
     if (productId === null) throw new Error("Product was not found");
     const runs = productId
-      ? await listProductImportRuns(context.db, party.id, productId)
-      : await listImportRuns(context.db, party.id, purchaseId);
+      ? await listProductRuns(context.db, party.id, productId)
+      : await listRuns(context.db, party.id, purchaseId);
     return {
       runs: runs.map((run) => ({
         ...run,
-        purpose: importRunPurpose.parse(run.purpose),
+        purpose: runPurpose.parse(run.purpose),
         startedAt: run.startedAt.toISOString(),
         endedAt: run.endedAt?.toISOString() ?? null,
       })),
@@ -108,11 +105,11 @@ export const runHandlers = implementOperationDomain(runContract, {
   },
   work: async (context, input) => {
     await memberParty(context);
-    return loadImportRunDetail(context.db, input.runId);
+    return loadRunDetail(context.db, input.runId);
   },
   control: async (context, { runId, ...input }) => {
     await memberParty(context);
-    const control = await controlImportRun(context.db, context.actorContext, {
+    const control = await controlRun(context.db, context.actorContext, {
       runPublicId: runId,
       ...input,
     });
@@ -129,7 +126,7 @@ export const runHandlers = implementOperationDomain(runContract, {
       });
     }
     return {
-      run: await loadImportRunDetail(context.db, runId),
+      run: await loadRunDetail(context.db, runId),
       successor:
         "successorRunPublicId" in control && control.successorRunPublicId
           ? {
@@ -142,7 +139,7 @@ export const runHandlers = implementOperationDomain(runContract, {
   },
   logs: async (context, input) => {
     await memberParty(context);
-    return loadImportRunLog(context.db, input.runId);
+    return loadRunLog(context.db, input.runId);
   },
   targetedLaunch: async (context, input) =>
     loadTargetedImportLaunch(
@@ -174,7 +171,7 @@ export const runHandlers = implementOperationDomain(runContract, {
           isNull(oauthRefreshToken.revoked),
         ),
       );
-    await pauseAuthorizedImportRuns(context.db, context.auth.userId);
+    await pauseAuthorizedRuns(context.db, context.auth.userId);
     return { authorized: false, expiresAt: null };
   },
   merchantRules: async (context) =>
@@ -185,4 +182,13 @@ export const runHandlers = implementOperationDomain(runContract, {
     return listMerchantVendorRules(context.db, party.id);
   },
   aiUsage: (context, input) => listRunAiUsageWorkflow(context.db, input),
+  reportDeviceWork: async (context, input) => {
+    await memberParty(context);
+    return reportRunTargetDeviceWork(context.db, {
+      run: input.run,
+      image: input.image,
+      state: input.state,
+      error: input.error,
+    });
+  },
 });

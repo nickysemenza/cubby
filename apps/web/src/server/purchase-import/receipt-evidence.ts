@@ -1,5 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { importRunId, vendorAccountId } from "@cubby/schemas/identifiers";
+import { runEntityId, vendorAccountId } from "@cubby/schemas/identifiers";
 import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import {
   listReceiptHuntsOut,
@@ -15,7 +15,7 @@ import {
   financialTransaction,
   image,
   importHunt,
-  importRun,
+  run as runTable,
   ledgerParty,
   user,
 } from "~/server/db/schema";
@@ -28,7 +28,7 @@ import {
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
-import { dispatchImportRunEvent } from "./dispatch";
+import { dispatchRunEvent } from "./dispatch";
 
 /**
  * A hunt—not a particular upload—is the durable receipt source. A retry may
@@ -198,9 +198,9 @@ export async function submitReceiptEvidence(
             "Receipt evidence is processing without an import run.",
           );
         const [existingRun] = await tx
-          .select({ id: importRun.id, publicId: importRun.shortcode })
-          .from(importRun)
-          .where(eq(importRun.id, importRunId.parse(row.receiptRunId)))
+          .select({ id: runTable.id, publicId: runTable.shortcode })
+          .from(runTable)
+          .where(eq(runTable.id, runEntityId.parse(row.receiptRunId)))
           .limit(1);
         if (!existingRun)
           throw new Error("Receipt import run could not be resumed.");
@@ -214,13 +214,13 @@ export async function submitReceiptEvidence(
         };
       }
     }
-    const runId = importRunId.parse(crypto.randomUUID());
+    const runId = runEntityId.parse(crypto.randomUUID());
     const dispatchEventId = `receipt:${input.huntId}:${row.imageChecksum}`;
     const [run] = await tx
-      .insert(importRun)
+      .insert(runTable)
       .values({
         id: runId,
-        shortcode: generateShortcode("importRun"),
+        shortcode: generateShortcode("run"),
         ledgerPartyId: row.ledgerPartyId,
         actorUserId: row.actorUserId,
         actorName: row.actorName,
@@ -233,14 +233,14 @@ export async function submitReceiptEvidence(
           : null,
         vendorId: row.vendorId,
         predecessorRunId: row.receiptRunId
-          ? importRunId.parse(row.receiptRunId)
+          ? runEntityId.parse(row.receiptRunId)
           : null,
         trigger: "discovery",
         coordinatorModel: "gpt-6-sol",
         agentSessionId: importRunAgentIdentity(runId, "account_sync"),
         dispatchEventId,
       })
-      .returning({ id: importRun.id });
+      .returning({ id: runTable.id });
     if (!run) throw new Error("Receipt import run was not created.");
     await tx
       .update(importHunt)
@@ -254,9 +254,9 @@ export async function submitReceiptEvidence(
       })
       .where(eq(importHunt.id, row.id));
     const [createdRun] = await tx
-      .select({ publicId: importRun.shortcode })
-      .from(importRun)
-      .where(eq(importRun.id, run.id))
+      .select({ publicId: runTable.shortcode })
+      .from(runTable)
+      .where(eq(runTable.id, run.id))
       .limit(1);
     if (!createdRun) throw new Error("Receipt import run was not found.");
     return {
@@ -280,7 +280,7 @@ export async function submitReceiptEvidence(
     throw new Error("Finalized receipt image is missing its checksum.");
   if (!claimed.vendorId)
     throw new Error("Classify the receipt vendor before importing it.");
-  await dispatchImportRunEvent(db, queue, {
+  await dispatchRunEvent(db, queue, {
     version: 1,
     runId: claimed.runId,
     eventId: claimed.created

@@ -26,7 +26,7 @@ import {
   type FieldResolution,
   type FieldResolutions,
 } from "@cubby/schemas/field-resolution";
-import type { ImportRunId } from "@cubby/schemas/identifiers";
+import type { RunId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
 import { classifyWithJev } from "~/server/ai/classify";
@@ -731,7 +731,7 @@ function basisValueLimitFor(entity: string, key: string): number {
 
 export async function suggestFields(
   db: Database,
-  runId: ImportRunId,
+  runId: RunId,
   rawInput: FieldSuggestionsInput,
   ports?: SuggestFieldsPorts,
 ): Promise<FieldSuggestionsOut> {

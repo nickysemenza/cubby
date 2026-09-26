@@ -1,5 +1,5 @@
 import type { ExternalIdKindSuggestionInput } from "@cubby/schemas/ai";
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { describe, expect, it, vi } from "vitest";
 
 import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
@@ -38,7 +38,7 @@ function jevPortPicking(needle: string) {
 const usage: AiRunContext = {
   operation: "test",
   cacheStatus: "none",
-  runId: importRunId.parse("00000000-0000-4000-8000-000000000001"),
+  runId: runEntityId.parse("00000000-0000-4000-8000-000000000001"),
 };
 
 function inputFor(

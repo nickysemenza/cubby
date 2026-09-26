@@ -19,7 +19,7 @@ in the real member, closets, and taxonomy gaps for an actual run.
    re-file any root-level `Apparel` Products into their new types — a Product
    classified only at the root predates this taxonomy and should move down.
 4. Upload a batch from the native app into a run: one member's clothes per
-   capture session. The app creates a `photo_inventory` `ImportRun` with
+   capture session. The app creates a `photo_inventory` `Run` with
    `ledgerPartyId` set to that member and `notes` describing
    location-by-time-window (e.g. "9:15–9:40am: primary closet; 9:40–10:05am:
    hallway dresser").

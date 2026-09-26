@@ -573,6 +573,28 @@ const buildMetadataSchemas = () => {
       ),
   ]);
 
+  /**
+   * The generic list-grouping contract for an entity whose web list groups
+   * rows into sections (currently product and location). `field` is the
+   * `groupable` entry the row is grouped by; the server's `parseGroupBy`
+   * rejects any other value, and the compiler below rejects a declaration
+   * whose `field` is not in `groupable`. `nullGroupKey` is the sentinel used
+   * when a row's field is null (kept as a literal here, not re-derived,
+   * so the web and repository read the exact same value the manifest
+   * declares — see `PRODUCT_UNCLASSIFIED_GROUP_KEY` /
+   * `LOCATION_UNSPECIFIED_GROUP_KEY` in `../pagination`). `labelField` names
+   * the row key the group's display label is read from when it differs from
+   * `field` itself (product groups by `categoryId` but labels from the
+   * `category` relation); omitted, the label is the field's own value.
+   */
+  const entityFieldModelGroupingMetadataSchema = z
+    .object({
+      field: nonEmptyString(),
+      nullGroupKey: nonEmptyString(),
+      labelField: nonEmptyString().optional(),
+    })
+    .strict();
+
   const entityFieldModelSortMetadataSchema = z
     .object({
       fields: z.array(nonEmptyString()).min(1),
@@ -580,6 +602,7 @@ const buildMetadataSchemas = () => {
       defaultOverride: nonEmptyString().optional(),
       computed: z.array(nonEmptyString()).optional().default([]),
       groupable: z.array(nonEmptyString()).optional().default([]),
+      grouping: entityFieldModelGroupingMetadataSchema.optional(),
       /** Text and enum defaults open ascending; other fields open descending. */
       directionOverride: z.enum(["asc", "desc"]).optional(),
     })
@@ -742,6 +765,12 @@ const buildMetadataSchemas = () => {
           .optional()
           .default(null),
         limit: z.number().int().positive().nullable().optional().default(null),
+        /** Section-specific empty-state copy, replacing the generic
+         * "No <plural> yet." sentence both platforms otherwise render — for
+         * a section whose target's plural name reads awkwardly or
+         * uninformatively on its own (e.g. "No products yet." under "Kit
+         * components"). */
+        empty: nonEmptyString().nullable().optional().default(null),
         /** Skip the whole section, on both platforms, when its first page is empty. */
         hideWhenEmpty: z
           .boolean({ error: "must be a boolean" })
@@ -905,6 +934,17 @@ const buildMetadataSchemas = () => {
             .record(nonEmptyString(), nonEmptyString("must give a reason"))
             .optional()
             .default({}),
+          /**
+           * Section-specific empty-state copy for a *derived* relation
+           * section, keyed by relation name — the narrow way to replace the
+           * generic "No <plural> yet." sentence without hand-declaring the
+           * whole section (filter, columns, sort). A section declared
+           * explicitly in `sectionOverrides` instead sets its own `empty`.
+           */
+          emptyOverrides: z
+            .record(nonEmptyString(), nonEmptyString())
+            .optional()
+            .default({}),
         })
         .strict()
         .prefault({})
@@ -916,6 +956,7 @@ const buildMetadataSchemas = () => {
             variantOverride,
             hero,
             omitRelations,
+            emptyOverrides,
           }) => ({
             variant: variantOverride,
             hero,
@@ -923,6 +964,7 @@ const buildMetadataSchemas = () => {
             additionalSections: additionalSectionOverrides,
             relationFilterOverrides,
             omitRelations,
+            emptyOverrides,
           }),
         ),
       list: z

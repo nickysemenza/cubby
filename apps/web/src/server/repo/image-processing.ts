@@ -1,5 +1,9 @@
 import type { AiAnalysisRuntime } from "@cubby/schemas/ai";
-import { parseEntityId, type ImageId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  type ImageId,
+  type RunId,
+} from "@cubby/schemas/identifiers";
 import {
   imageProcessingCompletedOutcome,
   imageDescriptionResult,
@@ -103,6 +107,8 @@ type JobIdentity = {
   kind: ImageProcessingJobKind;
   sourceContentHash: string;
   processorRevision: number;
+  /** The Run that requested this job, when the caller has one. */
+  runId?: RunId | null;
 };
 
 const isAttachedOnlyAsLabel = async (
@@ -133,6 +139,8 @@ export type ClaimedImageProcessingJob = {
   originalKey: string;
   originalContentType: string;
   derivativeKey: string | null;
+  /** The Run that requested this job, when one was recorded at scheduling. */
+  runId: RunId | null;
   /** Database-authoritative end of this attempt's presigned capabilities. */
   leaseExpiresAt: Date;
 };
@@ -183,7 +191,7 @@ export async function findCachedImageDescriptionAnalysis(
 ): Promise<ImageDescriptionResult | null> {
   const cached = await getDb(db).query.aiAnalysis.findFirst({
     where: and(
-      eq(aiAnalysis.entityType, "image"),
+      eq(aiAnalysis.entityKind, "image"),
       eq(aiAnalysis.entityId, input.imageId),
       eq(aiAnalysis.feature, "image-description"),
       eq(aiAnalysis.provider, input.provider),
@@ -228,6 +236,7 @@ export async function createImageProcessingJob(
     .values({
       ...input,
       derivativeId: input.derivativeId ?? null,
+      runId: input.runId ?? null,
       state: "pending",
     })
     .onConflictDoNothing();
@@ -252,6 +261,8 @@ export async function createTransparentDerivativeAndJob(
     key: string;
     /** A manual reschedule may undo only the reversible label-only decision. */
     reviveLabelOnlySkip?: boolean;
+    /** The Run that requested this job, when the caller has one. */
+    runId?: RunId | null;
   },
 ): Promise<{ derivativeId: string; jobId: string } | null> {
   return await withTransaction(db, async (tx) => {
@@ -302,6 +313,7 @@ export async function createTransparentDerivativeAndJob(
         state: "pending",
         sourceContentHash: input.sourceContentHash,
         processorRevision: IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+        runId: input.runId ?? null,
       })
       .onConflictDoNothing();
     const job = await tx.query.imageProcessingJob.findFirst({
@@ -427,6 +439,7 @@ export async function claimImageProcessingJob(
         previousAttemptId: imageProcessingJob.attemptId,
         submissionId: imageProcessingJob.submissionId,
         derivativeId: imageProcessingJob.derivativeId,
+        runId: imageProcessingJob.runId,
         originalKey: image.key,
         originalContentType: image.contentType,
         derivativeKey: imageDerivative.key,
@@ -1061,7 +1074,7 @@ async function adoptSuccessfulCompletion(
     await tx
       .insert(aiAnalysis)
       .values({
-        entityType: "image",
+        entityKind: "image",
         entityId: job.imageId,
         feature: "image-description",
         provider: analysis.provider,
@@ -1222,7 +1235,7 @@ export async function saveImageDescriptionAnalysis(
   await getDb(db)
     .insert(aiAnalysis)
     .values({
-      entityType: "image",
+      entityKind: "image",
       entityId: input.imageId,
       feature: "image-description",
       provider: input.provider,
@@ -1370,7 +1383,7 @@ export async function getImageProcessingReadProjection(
     .from(aiAnalysis)
     .where(
       and(
-        eq(aiAnalysis.entityType, "image"),
+        eq(aiAnalysis.entityKind, "image"),
         eq(aiAnalysis.entityId, imageId),
         eq(aiAnalysis.feature, "image-description"),
         isNull(aiAnalysis.deletedAt),
@@ -1434,7 +1447,7 @@ export async function getImageProcessingReadProjection(
     .from(aiAnalysis)
     .where(
       and(
-        eq(aiAnalysis.entityType, "image"),
+        eq(aiAnalysis.entityKind, "image"),
         eq(aiAnalysis.entityId, imageId),
         eq(aiAnalysis.feature, "image-description"),
         eq(aiAnalysis.provider, preferredImageDescriptionPolicy.provider),

@@ -1,26 +1,31 @@
 import { aiRunUsageInput, aiRunUsageOut } from "@cubby/schemas/ai";
 import {
-  importRunShortcode,
+  runShortcode,
+  imageShortcode,
   productShortcode,
   purchaseShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  importRunBrowserListInput,
-  importRunListResponse,
-  importRunOut,
-} from "@cubby/schemas/import-run";
-import {
-  importRunPurpose,
-  importRunStatus,
-} from "@cubby/schemas/import-run-fields";
+import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import { confirmMerchantVendorRuleInput } from "@cubby/schemas/purchase-import";
+import {
+  runBrowserListInput,
+  runListResponse,
+  runOut,
+  targetedImportPurpose,
+  targetedImportStartInput,
+  targetedImportStartOutput,
+  type TargetedImportPurpose,
+  type TargetedImportStartInput,
+  type TargetedImportStartOutput,
+} from "@cubby/schemas/run";
+import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
-const importRunSummary = z.object({
-  publicId: importRunShortcode,
-  purpose: importRunPurpose,
+const runSummary = z.object({
+  publicId: runShortcode,
+  purpose: runPurpose,
   vendorAccountLabel: z.string().nullable(),
   vendorName: z.string().nullable(),
   trigger: z.string(),
@@ -34,9 +39,9 @@ const importRunSummary = z.object({
   failureCode: z.string().nullable(),
   estimatedCost: z.number(),
 });
-export type ImportRunSummary = z.infer<typeof importRunSummary>;
+export type RunSummary = z.infer<typeof runSummary>;
 
-const importRunProgress = z.object({
+const runProgress = z.object({
   eventId: z.string().min(1),
   phase: z.string().min(1),
   currentItem: z.string().nullable(),
@@ -45,7 +50,7 @@ const importRunProgress = z.object({
   createdAt: z.iso.datetime(),
 });
 
-const importRunController = z.object({
+const runController = z.object({
   name: z.string().nullable(),
   ledgerParty: z
     .object({ id: z.string().nullable(), name: z.string().nullable() })
@@ -76,9 +81,9 @@ const restartInputs = z.object({
 });
 
 /** The run work view. Private UUIDs and operation payloads never cross it. */
-const importRunDetail = z.object({
-  publicId: importRunShortcode,
-  purpose: importRunPurpose,
+const runDetail = z.object({
+  publicId: runShortcode,
+  purpose: runPurpose,
   status: z.string().min(1),
   trigger: z.string().min(1),
   startedAt: z.iso.datetime(),
@@ -89,8 +94,8 @@ const importRunDetail = z.object({
   skipped: z.number().int().nonnegative(),
   failureCode: z.string().nullable(),
   notes: z.string().nullable(),
-  predecessorRunPublicId: importRunShortcode.nullable(),
-  successorRunPublicId: importRunShortcode.nullable(),
+  predecessorRunPublicId: runShortcode.nullable(),
+  successorRunPublicId: runShortcode.nullable(),
   /** Null for runs that cannot be started again. */
   restartInputs: restartInputs.nullable(),
   coordinatorModel: z.string().nullable(),
@@ -98,10 +103,10 @@ const importRunDetail = z.object({
   runtimeRevision: z.string().nullable(),
   agentModelMs: z.number().nonnegative(),
   source: z.object({ kind: z.string(), vendorName: z.string().nullable() }),
-  actor: importRunController,
-  controllingMembers: z.array(importRunController),
+  actor: runController,
+  controllingMembers: z.array(runController),
   controlHistory: z.array(
-    importRunController.extend({
+    runController.extend({
       action: z.string().min(1),
       createdAt: z.iso.datetime(),
     }),
@@ -181,8 +186,8 @@ const importRunDetail = z.object({
     error: z.string().nullable(),
     coordinatorStartedAt: z.iso.datetime().nullable(),
   }),
-  progress: z.array(importRunProgress),
-  latestProgress: importRunProgress.nullable(),
+  progress: z.array(runProgress),
+  latestProgress: runProgress.nullable(),
   approvals: z.array(
     z.object({
       id: z.string().min(1),
@@ -197,9 +202,9 @@ const importRunDetail = z.object({
     }),
   ),
 });
-export type ImportRunDetail = z.infer<typeof importRunDetail>;
+export type RunDetail = z.infer<typeof runDetail>;
 
-const importRunLogEntry = z.object({
+const runLogEntry = z.object({
   id: z.string(),
   occurredAt: z.iso.datetime(),
   source: z.enum(["run", "server", "mac"]),
@@ -219,7 +224,7 @@ const importRunLogEntry = z.object({
   errorCode: z.number().int().nullable(),
   error: z.string().nullable(),
 });
-export type ImportRunLogEntry = z.infer<typeof importRunLogEntry>;
+export type RunLogEntry = z.infer<typeof runLogEntry>;
 
 const agentConnection = z.object({
   authorized: z.boolean(),
@@ -237,11 +242,7 @@ const merchantRules = z.object({
   vendors: z.array(z.object({ shortcode: z.string(), name: z.string() })),
 });
 
-export const targetedImportPurpose = z.enum([
-  "purchase_validation",
-  "product_enrichment",
-]);
-export type TargetedImportPurpose = z.infer<typeof targetedImportPurpose>;
+export { targetedImportPurpose, type TargetedImportPurpose };
 
 const targetedImportSource = z.object({
   id: z.string().min(1),
@@ -288,52 +289,12 @@ const targetedImportLaunch = z.object({
 });
 export type TargetedImportLaunch = z.infer<typeof targetedImportLaunch>;
 
-/**
- * Targeted import launch. Entity targets use public shortcodes; an opaque
- * source-claim id is resolved again against the actor's own claims.
- */
-const targetedImportStartInput = z.discriminatedUnion("purpose", [
-  z.object({
-    purpose: z.literal("purchase_validation"),
-    purchaseId: purchaseShortcode,
-    sourceId: z.string().min(1).nullable(),
-  }),
-  z.object({
-    purpose: z.literal("product_enrichment"),
-    targets: z
-      .array(
-        z.object({
-          productId: productShortcode,
-          sourceId: z.string().min(1).nullable(),
-          vendorAccountId: z.string().min(1).nullable(),
-        }),
-      )
-      .min(1),
-  }),
-]);
-export type TargetedImportStartInput = z.input<typeof targetedImportStartInput>;
-
-const targetedImportStartOutput = z.object({
-  runs: z.array(
-    z.object({
-      created: z.boolean(),
-      run: z
-        .object({
-          id: importRunShortcode,
-          status: z.string().min(1),
-          purpose: targetedImportPurpose,
-          dispatchEventId: z.string().nullable(),
-        })
-        .nullable(),
-      blockingRun: z
-        .object({ id: importRunShortcode, status: z.string().min(1) })
-        .nullable(),
-    }),
-  ),
-});
-export type TargetedImportStartOutput = z.infer<
-  typeof targetedImportStartOutput
->;
+// The input/output schemas themselves live in `@cubby/schemas/run` (see the
+// doc comment there): the OpenAPI generator only names a discriminated
+// union's members when the union is a named export of a scanned schema
+// module, and this operation is now HTTP-visible (not browser-only), so its
+// members must resolve to real components.
+export { type TargetedImportStartInput, type TargetedImportStartOutput };
 
 /**
  * Run reads for the generic list and detail pages. A Run has no create/update
@@ -343,20 +304,20 @@ export type TargetedImportStartOutput = z.infer<
  */
 export const runContract = defineContract("run", {
   list: query({
-    input: importRunBrowserListInput,
-    output: importRunListResponse,
+    input: runBrowserListInput,
+    output: runListResponse,
   }),
   detail: query({
     input: z.object({ shortcode: z.string() }),
-    output: importRunOut.nullable(),
+    output: runOut.nullable(),
   }),
   workSnapshot: query({
     native: "Show durable live import progress in Apple apps",
-    input: z.object({ runId: importRunShortcode }),
+    input: z.object({ runId: runShortcode }),
     output: z.object({
-      runId: importRunShortcode,
-      purpose: importRunPurpose,
-      status: importRunStatus,
+      runId: runShortcode,
+      purpose: runPurpose,
+      status: runStatus,
       startedAt: z.iso.datetime(),
       endedAt: z.iso.datetime().nullable(),
       coordinatorModel: z.string().nullable(),
@@ -394,15 +355,15 @@ export const runContract = defineContract("run", {
       .refine((input) => !(input.purchaseId && input.productId), {
         message: "Choose either a Purchase or a Product",
       }),
-    output: z.object({ runs: z.array(importRunSummary) }),
+    output: z.object({ runs: z.array(runSummary) }),
   }),
   work: query({
-    input: z.object({ runId: importRunShortcode }),
-    output: importRunDetail,
+    input: z.object({ runId: runShortcode }),
+    output: runDetail,
   }),
   control: mutation({
     input: z.object({
-      runId: importRunShortcode,
+      runId: runShortcode,
       action: z.enum([
         "pause",
         "resume",
@@ -421,10 +382,10 @@ export const runContract = defineContract("run", {
       approvalId: z.string().min(1).optional(),
     }),
     output: z.object({
-      run: importRunDetail,
+      run: runDetail,
       successor: z
         .object({
-          publicId: importRunShortcode,
+          publicId: runShortcode,
           status: z.string().min(1),
           created: z.boolean(),
         })
@@ -432,9 +393,9 @@ export const runContract = defineContract("run", {
     }),
   }),
   logs: query({
-    input: z.object({ runId: importRunShortcode }),
+    input: z.object({ runId: runShortcode }),
     output: z.object({
-      entries: z.array(importRunLogEntry),
+      entries: z.array(runLogEntry),
       truncated: z.boolean(),
     }),
   }),
@@ -446,8 +407,7 @@ export const runContract = defineContract("run", {
     output: targetedImportLaunch,
   }),
   startTargeted: mutation({
-    // The HTTP document cannot name this union's members; browser-only.
-    http: false,
+    native: "Launch a targeted purchase-validation or product-enrichment run",
     input: targetedImportStartInput,
     output: targetedImportStartOutput,
   }),
@@ -467,5 +427,20 @@ export const runContract = defineContract("run", {
     native: "Show live AI spend alongside native run timing",
     input: aiRunUsageInput,
     output: aiRunUsageOut,
+  }),
+  /**
+   * Idempotent device-side status for one photo-run image target. The
+   * uploader reports queued/running/failed/completed as it works through a
+   * run's photos; repeating the same {run, image, state} is a no-op.
+   */
+  reportDeviceWork: mutation({
+    native: "Report on-device photo processing progress for a run target",
+    input: z.object({
+      run: runShortcode,
+      image: imageShortcode,
+      state: runTargetDeviceWorkState,
+      error: z.string().min(1).max(2000).optional(),
+    }),
+    output: z.object({ recorded: z.boolean() }),
   }),
 });

@@ -1,4 +1,4 @@
-import { importRunId, userId } from "@cubby/schemas/identifiers";
+import { runEntityId, userId } from "@cubby/schemas/identifiers";
 import type {
   AiUsageTelemetry,
   McpToolCallTelemetry,
@@ -9,7 +9,7 @@ import { match } from "ts-pattern";
 
 import { estimateAiUsageCostUsd } from "~/server/ai/models";
 import type { Database } from "~/server/db";
-import { aiUsage, importRun, mcpToolCall } from "~/server/db/schema";
+import { aiUsage, run as runTable, mcpToolCall } from "~/server/db/schema";
 import { withTransaction } from "~/server/repo/database-helpers";
 import { LEGACY_RUN_ID } from "~/server/runs/ensure-run";
 
@@ -34,15 +34,15 @@ export async function persistTelemetryMessages(
     // MCP rows beside it into the DLQ), so unknown runs file under legacy.
     const requestedRuns = [
       ...new Set(ai.flatMap((event) => event.runId ?? [])),
-    ].map((id) => importRunId.parse(id));
+    ].map((id) => runEntityId.parse(id));
     const knownRuns = new Set(
       requestedRuns.length === 0
         ? []
         : (
             await tx
-              .select({ id: importRun.id })
-              .from(importRun)
-              .where(inArray(importRun.id, requestedRuns))
+              .select({ id: runTable.id })
+              .from(runTable)
+              .where(inArray(runTable.id, requestedRuns))
           ).map((row): string => row.id),
     );
     if (mcp.length > 0) {
@@ -81,7 +81,7 @@ export async function persistTelemetryMessages(
             operation: event.operation,
             runId:
               event.runId && knownRuns.has(event.runId)
-                ? importRunId.parse(event.runId)
+                ? runEntityId.parse(event.runId)
                 : LEGACY_RUN_ID,
             jobKind: event.jobKind ?? null,
             jobId: event.jobId ?? null,
@@ -106,7 +106,7 @@ export async function persistTelemetryMessages(
             durationMs: event.durationMs,
             cacheStatus: event.cacheStatus,
             applicationCacheStatus: event.applicationCacheStatus ?? null,
-            entityType: event.entityType,
+            entityKind: event.entityKind,
             entityId: event.entityId,
             createdAt: new Date(event.occurredAt),
           })),

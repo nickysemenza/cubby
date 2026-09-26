@@ -53,12 +53,12 @@ describe("entity manifest", () => {
   });
 
   it("only claims a delete lifecycle for entities with a table", () => {
-    // `importRun` is the one stored entity that is immutable history:
+    // `run` is the one stored entity that is immutable history:
     // it has a table and deliberately no delete lifecycle.
     for (const entity of allEntities) {
       const { dbTable, lifecycle } = entityManifest[entity];
       expect(lifecycle.delete === null).toBe(
-        dbTable === null || entity === "importRun",
+        dbTable === null || entity === "run",
       );
     }
   });

@@ -42,6 +42,7 @@ function WorkbenchHarness({
         entity: "product",
         table,
         bulkActionBar: <span>Bulk actions</span>,
+        bulkActionPreview: [{ id: "archive", label: "Archive selected" }],
         deleteDialog: <div>Delete Product</div>,
       }}
       mode={mode}
@@ -86,6 +87,10 @@ describe("ListWorkbench", () => {
       await screen.findByRole("menuitem", { name: /Columns/ }),
     ).toBeVisible();
     expect(screen.getByRole("menuitem", { name: /Saved views/ })).toBeVisible();
+    // Bulk verbs are discoverable before any row is selected, but inert.
+    expect(
+      screen.getByRole("menuitem", { name: "Archive selected" }),
+    ).toHaveAttribute("aria-disabled", "true");
   });
 
   it("keeps an embedded relationship ledger's empty copy in the real table", async () => {

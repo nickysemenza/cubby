@@ -1,7 +1,7 @@
 import type { PhotoRunImage } from "@cubby/schemas/photo-import-run";
 import type { FlueConversationMessage } from "@flue/sdk";
 
-import type { ImportRunDetail } from "~/contracts/run.contract";
+import type { RunDetail } from "~/contracts/run.contract";
 export { formatDuration as formatWorkDuration } from "~/lib/format-duration";
 
 type WorkKind =
@@ -123,7 +123,7 @@ function operationWorkKind(kind: string): WorkKind | null {
 /** Bounded task-level facts from recorded work. No model-generated recap or inferred timing. */
 export function summarizeAgentWork(
   messages: readonly FlueConversationMessage[],
-  operations: ImportRunDetail["operations"],
+  operations: RunDetail["operations"],
 ): AgentWorkItem[] {
   const items = new Map<WorkKind, AgentWorkItem>();
   const toolKinds = new Set<WorkKind>();

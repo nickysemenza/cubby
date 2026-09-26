@@ -9,7 +9,7 @@ import type { MouseEvent } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
-import type { WithEntitySearchProps } from "../combobox/with-search-hook";
+import type { SearchProviderProps } from "../combobox/with-search-hook";
 import {
   EditorNotificationContext,
   type EditorNotificationPort,
@@ -33,7 +33,7 @@ function createEditorNotifications(): EditorNotificationPort & {
 
 /** Stub SearchProvider — bypasses the real query hooks and hands back a
  * static item list synchronously, as real=false loading state. */
-function StubSearchProvider({ children }: WithEntitySearchProps<string>) {
+function StubSearchProvider({ children }: SearchProviderProps<string>) {
   return children({
     items: STATIC_ITEMS,
     onSearchChange: vi.fn(),

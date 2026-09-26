@@ -1,4 +1,4 @@
-import { parseEntityId, importRunId } from "@cubby/schemas/identifiers";
+import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
 import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
@@ -8,9 +8,9 @@ import type { Database } from "~/server/db";
 import {
   financialTransaction,
   expense,
-  importFinding,
+  runFinding,
   importHunt,
-  importRun,
+  run as runTable,
   ledgerParty,
   orderMail,
   orderMailAttachment,
@@ -152,14 +152,14 @@ export async function processOrderMails(
         `unknown-sender:${mail.sender.toLowerCase()}`,
       );
       const [existing] = await database
-        .select({ id: importFinding.id })
-        .from(importFinding)
+        .select({ id: runFinding.id })
+        .from(runFinding)
         .where(
           and(
-            eq(importFinding.ledgerPartyId, mail.ledgerPartyId),
-            eq(importFinding.kind, "unclassified_vendor"),
-            eq(importFinding.evidenceFingerprint, fingerprint),
-            eq(importFinding.status, "open"),
+            eq(runFinding.ledgerPartyId, mail.ledgerPartyId),
+            eq(runFinding.kind, "unclassified_vendor"),
+            eq(runFinding.evidenceFingerprint, fingerprint),
+            eq(runFinding.status, "open"),
           ),
         )
         .limit(1);
@@ -184,10 +184,10 @@ export async function processOrderMails(
           .limit(1);
         if (!actorSnapshot?.actorUserId)
           throw new Error("Order mail party has no controlling member");
-        const runId = importRunId.parse(crypto.randomUUID());
-        await database.insert(importRun).values({
+        const runId = runEntityId.parse(crypto.randomUUID());
+        await database.insert(runTable).values({
           id: runId,
-          shortcode: generateShortcode("importRun"),
+          shortcode: generateShortcode("run"),
           ledgerPartyId: mail.ledgerPartyId,
           actorUserId: actorSnapshot.actorUserId,
           actorName: actorSnapshot.actorName,
@@ -200,10 +200,10 @@ export async function processOrderMails(
           agentSessionId: importRunAgentIdentity(runId, "account_sync"),
           endedAt: new Date(),
         });
-        await database.insert(importFinding).values({
-          importRunId: runId,
+        await database.insert(runFinding).values({
+          runId: runId,
           ledgerPartyId: mail.ledgerPartyId,
-          targetType: "import_run",
+          targetKind: "run",
           targetId: runId,
           kind: "unclassified_vendor",
           summary: `Purchase mail from ${mail.sender} does not match a known vendor. Create or update the vendor's order-email sender list.`,
@@ -376,10 +376,10 @@ export async function processOrderMails(
               }
             : null;
       await database
-        .insert(importFinding)
+        .insert(runFinding)
         .values({
           ledgerPartyId: mail.ledgerPartyId,
-          targetType: "purchase",
+          targetKind: "purchase",
           targetId: target.id,
           kind,
           summary:
@@ -417,10 +417,10 @@ export async function processOrderMails(
               matchedVendor.returnWindowDays * 24 * 60 * 60 * 1_000,
           );
           await database
-            .insert(importFinding)
+            .insert(runFinding)
             .values({
               ledgerPartyId: mail.ledgerPartyId,
-              targetType: "purchase",
+              targetKind: "purchase",
               targetId: target.id,
               kind: "return_window",
               summary: `${costlyLines.length} line${costlyLines.length === 1 ? "" : "s"} worth at least $50 can be returned until ${expiresAt.toLocaleDateString("en-US", { timeZone: "UTC" })}.`,

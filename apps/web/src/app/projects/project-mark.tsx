@@ -1,10 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
+import { useEntityOptions } from "~/app/_components/hooks/useEntityOptions";
 import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
-
-import { project } from "./project.functions";
 
 const markClasses = {
   12: "size-3 text-xs",
@@ -51,9 +49,26 @@ export function ProjectMark({
 }
 
 /**
- * Resolves relation-only links through the lightweight options query. React
- * Query deduplicates the request across every project link on the page;
- * explicit icon values skip the lookup.
+ * Every live project's icon, name-order-independent, keyed by shortcode.
+ * React Query deduplicates the request across every consumer on the page —
+ * `ProjectMarkById` and the project-identity charts (project-breakdown,
+ * cost-vs-estimate, open-tasks-by-project) all share this one roster read.
+ */
+export function useProjectIconById(options: { enabled?: boolean } = {}) {
+  const { items, isLoading } = useEntityOptions("project", {
+    include: ["icon"],
+    enabled: options.enabled,
+  });
+  const iconById = useMemo(
+    () => new Map(items.map((item) => [item.id, item.icon ?? null])),
+    [items],
+  );
+  return { iconById, isLoading };
+}
+
+/**
+ * Resolves relation-only links through the lightweight options query.
+ * Explicit icon values skip the lookup.
  */
 export function ProjectMarkById({
   projectId,
@@ -67,16 +82,10 @@ export function ProjectMarkById({
   size?: ProjectMarkSize;
   className?: string;
 }) {
-  const { data } = useQuery({
-    ...project.options.queryOptions(),
-    enabled: icon === undefined,
-  });
+  const { iconById } = useProjectIconById({ enabled: icon === undefined });
   const resolvedIcon = useMemo(
-    () =>
-      icon === undefined
-        ? (data?.find((project) => project.id === projectId)?.icon ?? null)
-        : icon,
-    [data, icon, projectId],
+    () => (icon === undefined ? (iconById.get(projectId) ?? null) : icon),
+    [iconById, icon, projectId],
   );
 
   return <ProjectMark icon={resolvedIcon} size={size} className={className} />;

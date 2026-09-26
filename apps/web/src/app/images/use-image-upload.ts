@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { showErrorToast } from "~/components/feedback/error-details";
 import { imageUpload } from "~/lib/image.functions";
+import { putPresignedObject } from "~/lib/presigned-upload";
 
 export interface UploadedImage {
   id: string;
@@ -89,19 +90,11 @@ export function useImageUpload(
             size: file.size,
           });
 
-          const uploadResult = await fetch(initResult.uploadUrl, {
-            method: "PUT",
-            body: file,
-            headers: { "Content-Type": file.type },
-          });
-          if (!uploadResult.ok) {
-            const errorText = await uploadResult
-              .text()
-              .catch(() => "Unknown error");
-            throw new Error(
-              `Storage error (${uploadResult.status}): ${errorText}`,
-            );
-          }
+          await putPresignedObject(
+            initResult.uploadUrl,
+            file,
+            contentType.data!,
+          );
 
           uploadedImage = {
             id: initResult.imageId,

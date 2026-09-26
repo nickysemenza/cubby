@@ -5,7 +5,7 @@ import { auditableEntities, type ShortcodeEntity } from "./entity-manifest";
 import {
   anyShortcodeSchema,
   deviceShortcode,
-  importRunShortcode,
+  runShortcode,
   nonEmptyTuple,
 } from "./identifiers";
 import { imageUrlSummary } from "./image-summary";
@@ -32,7 +32,7 @@ export const auditLogListInput = z.object({
   oauthClient: z.string().min(1).optional(),
   deviceId: deviceShortcode.optional(),
   /** Everything one Run wrote, e.g. an import or an agent session. */
-  runId: importRunShortcode.optional(),
+  runId: runShortcode.optional(),
   // Date bounds stay ISO strings over the wire. `cursor` below is opaque (and
   // the repo continues accepting the former ISO cursor for compatibility).
   createdAtFrom: z
@@ -128,7 +128,7 @@ export const auditLogEntryOut = z.object({
   device: z
     .object({ id: deviceShortcode, name: z.string().nullable() })
     .nullable(),
-  runId: importRunShortcode.nullable(),
+  runId: runShortcode.nullable(),
   createdAt: z.date(),
   user: auditLogUserOut,
 });

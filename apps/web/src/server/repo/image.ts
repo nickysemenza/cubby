@@ -29,7 +29,7 @@ import {
   IMAGE_METADATA_REVISION,
 } from "@cubby/schemas/image";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
-import { importRunTargetState } from "@cubby/schemas/purchase-import";
+import { runTargetState } from "@cubby/schemas/purchase-import";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
 import {
   aliasedTable,
@@ -76,8 +76,8 @@ import {
   imageSighting,
   importHunt,
   importPreparedOrder,
-  importRun,
-  importRunTarget,
+  run as runTable,
+  runTarget,
   ledgerParty,
   location,
   meal,
@@ -788,7 +788,7 @@ export async function loadAnalysisCapturedAtForImages(
     .from(aiAnalysis)
     .where(
       and(
-        eq(aiAnalysis.entityType, "image"),
+        eq(aiAnalysis.entityKind, "image"),
         inArray(aiAnalysis.entityId, imageIds),
         eq(aiAnalysis.feature, "photo-local-analysis"),
         isNull(aiAnalysis.deletedAt),
@@ -1022,7 +1022,7 @@ const imageReferenceCondition = (
     "ImageDerivative.imageId": sql`FALSE`,
     "ImageDescriptionCorrection.imageId": sql`FALSE`,
     // A run worklist row records history, never ownership of the image.
-    "ImportRunTarget.imageId": sql`FALSE`,
+    "RunTarget.imageId": sql`FALSE`,
     // A sighting is reported evidence, not user ownership — same reasoning
     // as the processing children above.
     "ImageSighting.imageId": sql`FALSE`,
@@ -1124,7 +1124,7 @@ const imageScaffold = listScaffold("image", listImage);
  * soft-deletes) — `Image` is still declared `softDeletedAt()`, so this closes
  * a latent gap rather than changing any observable result.
  *
- * Async (unlike most `buildXWhere` in this repo) because `importRunId` and
+ * Async (unlike most `buildXWhere` in this repo) because `runId` and
  * `capturedByPartyId` are shortcode filters that must resolve through
  * `shortcode-resolver` rather than match a raw code in SQL (see
  * `docs/agents/domain-rules.md`). `getEntityCounts` already tolerates either
@@ -1144,21 +1144,21 @@ export const buildImageWhere = async (
   // `undefined` here means "not requested"; `[]` means "requested but every
   // code failed to resolve" — `eqAnyRequested` treats those differently
   // (unrestricted vs. matches nothing), see its own doc comment.
-  const [importRunIds, capturedByPartyIds] = await Promise.all([
-    resolveFilterIds(db, "importRun", filters.importRunId),
+  const [runIds, capturedByPartyIds] = await Promise.all([
+    resolveFilterIds(db, "run", filters.runId),
     resolveFilterIds(db, "ledgerParty", filters.capturedByPartyId),
   ]);
   const importTargetCondition =
-    importRunIds !== undefined || filters.targetState !== undefined
+    runIds !== undefined || filters.targetState !== undefined
       ? exists(
           getDb(db)
             .select({ one: sql`1` })
-            .from(importRunTarget)
+            .from(runTarget)
             .where(
               and(
-                eq(importRunTarget.imageId, listImage.id),
-                eqAnyRequested(importRunTarget.runId, importRunIds),
-                eqAny(importRunTarget.state, filters.targetState),
+                eq(runTarget.imageId, listImage.id),
+                eqAnyRequested(runTarget.runId, runIds),
+                eqAny(runTarget.state, filters.targetState),
               ),
             ),
         )
@@ -1182,7 +1182,7 @@ export const buildImageWhere = async (
 /**
  * Each image's current import-run target row, batched by the public `IMG-`
  * shortcode (matching every other batched loader `imageList`/`getImageById`
- * call). `ImportRunTarget_run_image_key` keeps a live target unique per (run,
+ * call). `RunTarget_run_image_key` keeps a live target unique per (run,
  * image), but a row's own history is never deleted, so this takes the newest
  * by `createdAt` when more than one run has ever targeted the same image.
  */
@@ -1195,22 +1195,22 @@ const loadImportTargets = async (
   const rows = await getDb(db)
     .select({
       imageShortcode: image.shortcode,
-      state: importRunTarget.state,
-      position: importRunTarget.position,
-      runShortcode: importRun.shortcode,
-      createdAt: importRunTarget.createdAt,
+      state: runTarget.state,
+      position: runTarget.position,
+      runShortcode: runTable.shortcode,
+      createdAt: runTarget.createdAt,
     })
-    .from(importRunTarget)
-    .innerJoin(importRun, eq(importRun.id, importRunTarget.runId))
-    .innerJoin(image, eq(image.id, importRunTarget.imageId))
+    .from(runTarget)
+    .innerJoin(runTable, eq(runTable.id, runTarget.runId))
+    .innerJoin(image, eq(image.id, runTarget.imageId))
     .where(inArray(image.shortcode, shortcodes))
-    .orderBy(desc(importRunTarget.createdAt));
+    .orderBy(desc(runTarget.createdAt));
   const byImage = new Map<string, ImportTargetSummary>();
   for (const row of rows) {
     if (byImage.has(row.imageShortcode)) continue;
     byImage.set(row.imageShortcode, {
-      runId: parseShortcodeFor("importRun", row.runShortcode),
-      state: importRunTargetState.parse(row.state),
+      runId: parseShortcodeFor("run", row.runShortcode),
+      state: runTargetState.parse(row.state),
       position: row.position,
     });
   }
@@ -1225,21 +1225,21 @@ export const imageList = async (
   readIntent: ListReadIntent = "page",
 ) => {
   const dbClient = getDb(db);
-  const [whereClause, importRunIdsForOrder] = await Promise.all([
+  const [whereClause, runIdsForOrder] = await Promise.all([
     buildImageWhere(db, filters),
-    resolveFilterIds(db, "importRun", filters.importRunId),
+    resolveFilterIds(db, "run", filters.runId),
   ]);
 
   // A photo-inventory run's picker order overrides the caller's own sort:
-  // an agent working `filters.importRunId` wants the run's physical capture
+  // an agent working `filters.runId` wants the run's physical capture
   // order, not whatever default/requested sort the generic image list uses.
   const orderByClause =
-    importRunIdsForOrder !== undefined
+    runIdsForOrder !== undefined
       ? [
           sql`(
-            SELECT "position" FROM "ImportRunTarget"
-            WHERE "ImportRunTarget"."imageId" = ${listImage.id}
-              AND "ImportRunTarget"."runId" = ANY(${uuidArrayParam(importRunIdsForOrder)})
+            SELECT "position" FROM "RunTarget"
+            WHERE "RunTarget"."imageId" = ${listImage.id}
+              AND "RunTarget"."runId" = ANY(${uuidArrayParam(runIdsForOrder)})
           ) asc nulls last`,
           asc(listImage.createdAt),
         ]
@@ -1572,7 +1572,7 @@ export const cullPendingImages = async (
  *   null it so the parent row survives, just without a cover.
  */
 export const IMAGE_HARD_DELETE = {
-  "ImportRunTarget.imageId": {
+  "RunTarget.imageId": {
     code: "deleteRow",
     effect: "hard-delete",
     description:
@@ -1646,7 +1646,7 @@ type ImageEdgeOperation = {
 
 /** Edges that record processing of an image, never who owns it. */
 const PROCESSING_EDGES: ReadonlySet<string> = new Set([
-  "ImportRunTarget.imageId",
+  "RunTarget.imageId",
   "ImageProcessingJob.imageId",
   "ImageDerivative.imageId",
   "ImageDescriptionCorrection.imageId",
@@ -1716,7 +1716,7 @@ const imageEdgeOperations: ImageEdgeOperation[] = Object.entries(
           .update(table)
           .set({ [property]: null })
           .where(inArray(column, imageIds));
-      if (table === importRunTarget) await dropFromProposedGroups(tx, imageIds);
+      if (table === runTarget) await dropFromProposedGroups(tx, imageIds);
     },
     findReferenced: async (dbc, imageIds) => {
       const rows = await dbc

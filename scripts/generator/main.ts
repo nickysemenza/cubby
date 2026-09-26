@@ -29,6 +29,7 @@ import { writeRouteTree } from "./route-tree.ts";
 import { renderShortcodeRegistryArtifact } from "./entities/shortcode-registry.ts";
 import { renderSearchArtifacts } from "./entities/render/search.ts";
 import { renderTimelineArtifacts } from "./entities/render/entity-timelines.ts";
+import { validateEntityDeclarationImportBoundary } from "./entities/import-boundary.ts";
 
 // `relationshipProvenanceSchema`'s local-path member; the schema module itself
 // imports generated files, which do not exist yet when this validation runs.
@@ -102,6 +103,7 @@ const main = async () => {
     written.push(...artifacts);
   };
 
+  validateEntityDeclarationImportBoundary();
   await settle([await renderShortcodeRegistryArtifact()]);
   const { entities, declarations } = await loadEntityDeclarationBundle();
   validateConnectedViews(entities);

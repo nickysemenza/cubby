@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { importRunHref } from "./purchase-import-links";
+import { runHref } from "./purchase-import-links";
 
 describe("purchase import run links", () => {
   it("uses the public PIR address for the canonical run detail", () => {
-    expect(importRunHref("RUN-4K7M")).toBe("/runs/RUN-4K7M");
+    expect(runHref("RUN-4K7M")).toBe("/runs/RUN-4K7M");
   });
 });

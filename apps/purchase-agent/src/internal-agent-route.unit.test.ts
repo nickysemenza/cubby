@@ -13,7 +13,7 @@ describe("private purchase-agent route contract", () => {
     (method) => {
       const routed = internalAgentRoute(
         new Request(
-          `https://purchase-agent.internal${INTERNAL_AGENT_PATH}/import-run%3Aabc/abort?cursor=9`,
+          `https://purchase-agent.internal${INTERNAL_AGENT_PATH}/run%3Aabc/abort?cursor=9`,
           {
             method,
             headers: {
@@ -26,7 +26,7 @@ describe("private purchase-agent route contract", () => {
 
       expect(routed.request.method).toBe(method);
       expect(new URL(routed.request.url)).toMatchObject({
-        pathname: "/import-run%3Aabc/abort",
+        pathname: "/run%3Aabc/abort",
         search: "?cursor=9",
       });
     },

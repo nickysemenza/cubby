@@ -1,5 +1,5 @@
 import type { aiRunUsageInput } from "@cubby/schemas/ai";
-import type { ImportRunOut } from "@cubby/schemas/import-run";
+import type { RunOut } from "@cubby/schemas/run";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import type { z } from "zod";
@@ -13,7 +13,7 @@ import { formatDuration } from "~/lib/format-duration";
 import { formatCurrency } from "~/lib/utils";
 
 /** Run detail slot: every AI call the run grouped, for any run purpose. */
-export function RunAiUsage({ record }: { record: ImportRunOut }) {
+export function RunAiUsage({ record }: { record: RunOut }) {
   // Each entry is the cursor that loaded that page; `null` is the first.
   const [cursors, setCursors] = useState<Array<string | null>>([null]);
   const cursor = cursors.at(-1) ?? null;
@@ -157,6 +157,6 @@ export function RunAiUsage({ record }: { record: ImportRunOut }) {
 }
 
 /** Run detail slot: every audit entry the run wrote. */
-export function RunChanges({ record }: { record: ImportRunOut }) {
+export function RunChanges({ record }: { record: RunOut }) {
   return <AuditLogList runId={record.id} />;
 }

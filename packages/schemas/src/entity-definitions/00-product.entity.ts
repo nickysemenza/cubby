@@ -1,4 +1,5 @@
 import { defineEntity } from "./definition.js";
+import { PRODUCT_UNCLASSIFIED_GROUP_KEY } from "../group-keys";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared/constants";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
@@ -56,11 +57,18 @@ export default defineEntity({
         eaters:
           "Who ate it is per-portion meal data; the Meals table on this page shows each meal and its eaters.",
       },
+      // The generic "No products yet." reads oddly under a self-relation
+      // whose target happens to also be Product — say what's missing
+      // instead of what type it is.
+      emptyOverrides: {
+        components: "This isn't a kit yet — no components added.",
+        "containing-kits": "Not used as a component in any kit yet.",
+      },
       hero: {
         actionOverrides: ["edit", "addToInventory", "recordSale", "discard"],
       },
       additionalSectionOverrides: [
-        { kind: "slot", id: "import-runs", title: "Item journey" },
+        { kind: "slot", id: "runs", title: "Item journey" },
         {
           kind: "relation",
           id: "plantings",
@@ -1198,6 +1206,14 @@ export default defineEntity({
         "related:product.purchases",
       ],
       groupable: ["categoryId"],
+      // The web list groups products by category; `labelField` names the
+      // relation whose formatted path is the group's label (the field
+      // itself only carries the category id).
+      grouping: {
+        field: "categoryId",
+        nullGroupKey: PRODUCT_UNCLASSIFIED_GROUP_KEY,
+        labelField: "category",
+      },
     },
     intents: {
       fields: {

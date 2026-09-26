@@ -438,6 +438,7 @@ const detailSectionJSON = (
                       ),
                     },
               limit: section.limit ?? null,
+              empty: section.empty ?? null,
               hideWhenEmpty: section.hideWhenEmpty,
               collapseWhenEmpty: section.collapseWhenEmpty,
             },

@@ -303,7 +303,7 @@ export async function seedPhotoReviewLabelText(
   await getDb(db)
     .insert(schema.aiAnalysis)
     .values({
-      entityType: "image",
+      entityKind: "image",
       entityId: row.id,
       feature: "photo-local-analysis",
       model: "synthetic",
@@ -682,7 +682,6 @@ export async function seedMealNutritionPrerequisite(
       ledgerPartyId: guest.id,
       sourceKind: "manual",
       name: `${name} manual snack`,
-      grams: null,
       nutrients: { kcal: 250, protein: 20, carbs: 0 },
     }),
     context.actorContext,
@@ -695,7 +694,7 @@ export async function seedMealNutritionPrerequisite(
         ledgerPartyId: member.id,
         sourceKind: "product",
         productId: product.id,
-        grams: 45,
+        amount: { value: 45, unit: "g" },
       }),
       context.actorContext,
     );
@@ -1015,13 +1014,13 @@ export async function seedInheritancePrerequisite(page: Page, name: string) {
 }
 
 /**
- * A running photo-inventory ImportRun with three synthetic photos, seeded
+ * A running photo-inventory Run with three synthetic photos, seeded
  * two suggested groups (a two-photo item/label pair and a single-photo item),
  * and the Location the item group's inventory targets. There is no browser
  * flow to create a photo-inventory run with real uploaded photos, so this
- * mirrors `proposals.integration.test.ts`'s `seedRun`: an ImportRunTarget row
+ * mirrors `proposals.integration.test.ts`'s `seedRun`: an RunTarget row
  * is inserted directly per image rather than through the byte-verifying
- * `finalizePhotoImportRun` upload path. The browser test submits proposals
+ * `finalizePhotoRun` upload path. The browser test submits proposals
  * through the same authenticated review route an agent can use.
  */
 export async function seedPhotoGroupReviewRun(
@@ -1088,7 +1087,7 @@ export async function seedPhotoGroupReviewRun(
   const run = await startPhotoInventoryRun(db, { actorUserId: userId });
 
   await getDb(db)
-    .insert(schema.importRunTarget)
+    .insert(schema.runTarget)
     .values(
       [itemImage, labelImage, soloImage].map((image, index) => ({
         runId: run.id,

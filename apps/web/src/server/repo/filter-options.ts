@@ -5,6 +5,7 @@ import type {
   FilterOptionsOut,
 } from "@cubby/schemas/filter-options";
 import { type LocationId, parseEntityId } from "@cubby/schemas/identifiers";
+import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import {
   type AnyColumn,
   and,
@@ -25,6 +26,7 @@ import {
   image,
   ingredient,
   inventoryEntry,
+  ledgerParty,
   location,
   product,
   project,
@@ -40,7 +42,13 @@ import { financialAccountTransactionCount } from "~/server/repo/financial-accoun
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { stockOnly } from "~/server/repo/inventory/placement";
 import { loadLocationAncestors } from "~/server/repo/location/tree";
-import { DISPLAY_NAME_COLUMN } from "~/server/repo/shortcode-resolver";
+import { getProductTagOptions } from "~/server/repo/product/analytics";
+import { projectNameOptions } from "~/server/repo/project/lookup";
+import { getAllTags as getAllRecipeTags } from "~/server/repo/recipe/queries";
+import {
+  DISPLAY_NAME_COLUMN,
+  resolveLiveShortcode,
+} from "~/server/repo/shortcode-resolver";
 import {
   SHORTCODE_TABLE,
   type ShortcodeTable,
@@ -272,6 +280,15 @@ async function loadEntityRows(
     throw new Error(`Entity filter options require a label for ${entity}`);
   const count = input.include.includes("count") ? optionCountFor(entity) : null;
   const withLogo = input.include.includes("logo");
+  const kindColumn = input.include.includes("kind")
+    ? optionKindFor(entity)
+    : null;
+  const iconColumn = input.include.includes("icon")
+    ? optionIconFor(entity)
+    : null;
+  const withDates = input.include.includes("dates");
+  if (withDates && entity !== "project")
+    throw new Error(`Filter option dates are not defined for ${entity}`);
   const selected = selectedOnly ? input.selectedIds : [];
   let query = getDb(db)
     .select({
@@ -279,6 +296,8 @@ async function loadEntityRows(
       label,
       count: count ?? sql<null>`NULL::int`,
       logoKey: withLogo ? image.key : sql<null>`NULL::text`,
+      kind: kindColumn ?? sql<null>`NULL::text`,
+      icon: iconColumn ?? sql<null>`NULL::text`,
     })
     .from(table)
     .$dynamic();
@@ -321,12 +340,17 @@ async function loadEntityRows(
     if (count) option.count = Number(row.count);
     if (withLogo)
       option.logo = row.logoKey ? { url: getR2PublicUrl(row.logoKey) } : null;
+    if (kindColumn) option.kind = ledgerPartyKind.parse(row.kind);
+    if (iconColumn) option.icon = z.string().nullable().parse(row.icon);
     return option;
   });
 }
 
 type EntityOptionRow = OptionRow &
-  Pick<FilterOptionsOut["items"][number], "count" | "logo">;
+  Pick<
+    FilterOptionsOut["items"][number],
+    "count" | "logo" | "kind" | "icon" | "dates"
+  >;
 
 /**
  * The usage a `count` projection ranks by. An entity absent here refuses the
@@ -344,15 +368,128 @@ const optionCountFor = (entity: ShortcodeEntity): SQL<number> => {
   return count;
 };
 
+/** Entities whose `ledgerParty`-shaped `kind` column a picker can project. */
+const OPTION_KINDS = new Map<ShortcodeEntity, PgColumn>([
+  ["ledgerParty", ledgerParty.kind],
+]);
+
+const optionKindFor = (entity: ShortcodeEntity): PgColumn => {
+  const kind = OPTION_KINDS.get(entity);
+  if (!kind) throw new Error(`Filter option kind is not defined for ${entity}`);
+  return kind;
+};
+
+/** Entities with their own icon column a picker can project. */
+const OPTION_ICONS = new Map<ShortcodeEntity, PgColumn>([
+  ["project", project.icon],
+]);
+
+const optionIconFor = (entity: ShortcodeEntity): PgColumn => {
+  const icon = OPTION_ICONS.get(entity);
+  if (!icon) throw new Error(`Filter option icon is not defined for ${entity}`);
+  return icon;
+};
+
+/**
+ * Merges `project`'s effective content-date window onto rows already read by
+ * `loadEntityRows`. Reuses `projectNameOptions` (and, through it,
+ * `projectContentDates`/`aggregateSubtreeDates`) rather than re-deriving the
+ * fold here, so the picker's window can never drift from the expense→project
+ * suggestion ranking that depends on the same computation.
+ */
+async function withProjectDates(
+  db: Database,
+  input: Extract<FilterOptionsInput, { source: "entity" }>,
+  rows: EntityOptionRow[],
+): Promise<EntityOptionRow[]> {
+  const excludeExpenseId = input.excludeExpenseId
+    ? await resolveLiveShortcode(db, input.excludeExpenseId, "expense")
+    : null;
+  const windows = await projectNameOptions(db, excludeExpenseId ?? undefined);
+  const byShortcode = new Map(
+    windows.map((row) => [
+      String(row.id),
+      { effectiveStart: row.effectiveStart, effectiveEnd: row.effectiveEnd },
+    ]),
+  );
+  return rows.map((row) => ({
+    ...row,
+    dates: byShortcode.get(row.id) ?? {
+      effectiveStart: null,
+      effectiveEnd: null,
+    },
+  }));
+}
+
+/**
+ * Recipe/product tag rosters share no table or shortcode with the `entity`
+ * source: they're a distinct list folded from a free-text array column, not
+ * a scanned reference table. Loaded whole (both are small, personal-household
+ * vocabularies — see `getAllTags`/`getProductTagOptions`) and paginated/
+ * filtered in memory, same cursor contract as every other source.
+ */
+type TagOptionRow = OptionRow & { count?: number };
+
+async function loadTagRows(
+  db: Database,
+  input: Extract<FilterOptionsInput, { source: "tags" }>,
+): Promise<TagOptionRow[]> {
+  if (input.entity === "recipe") {
+    const tags = await getAllRecipeTags(db);
+    return tags.map((tag) => ({ id: tag, label: tag }));
+  }
+  const tags = await getProductTagOptions(db);
+  return tags.map(({ tag, count }) => ({ id: tag, label: tag, count }));
+}
+
+async function getTagFilterOptions(
+  db: Database,
+  input: Extract<FilterOptionsInput, { source: "tags" }>,
+): Promise<FilterOptionsOut> {
+  const allRows = await loadTagRows(db, input);
+  const search = input.search.trim().toLowerCase();
+  const matching = search
+    ? allRows.filter((row) => row.label.toLowerCase().includes(search))
+    : allRows;
+  const offset = Number(input.cursor ?? "0");
+  const page = matching.slice(offset, offset + input.limit);
+  const hasNextPage = matching.length > offset + input.limit;
+  const byId = new Map(page.map((row) => [row.id, row]));
+  for (const id of input.selectedIds) {
+    if (byId.has(id)) continue;
+    const selected = allRows.find((row) => row.id === id);
+    if (selected) byId.set(id, selected);
+  }
+  return {
+    items: [...byId.values()].map((row) => {
+      const item: FilterOptionsOut["items"][number] = {
+        id: row.id,
+        label: row.label,
+      };
+      if (row.count !== undefined) item.count = row.count;
+      return item;
+    }),
+    nextCursor: hasNextPage ? String(offset + input.limit) : null,
+  };
+}
+
 export async function getFilterOptions(
   db: Database,
   input: FilterOptionsInput,
 ): Promise<FilterOptionsOut> {
+  if (input.source === "tags") return getTagFilterOptions(db, input);
   if (input.source === "entity") {
-    const [pageRows, selectedRows] = await Promise.all([
+    const withDates = input.include.includes("dates");
+    const [pageRowsRaw, selectedRowsRaw] = await Promise.all([
       loadEntityRows(db, input, false),
       input.selectedIds.length > 0 ? loadEntityRows(db, input, true) : [],
     ]);
+    const [pageRows, selectedRows] = withDates
+      ? await Promise.all([
+          withProjectDates(db, input, pageRowsRaw),
+          withProjectDates(db, input, selectedRowsRaw),
+        ])
+      : [pageRowsRaw, selectedRowsRaw];
     const hasNextPage = pageRows.length > input.limit;
     const byId = new Map(
       pageRows.slice(0, input.limit).map((row) => [row.id, row]),

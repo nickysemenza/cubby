@@ -27,7 +27,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   entityAttachment,
-  importFinding,
+  runFinding,
   importHunt,
   merchantVendorRule,
   orderMail,
@@ -40,7 +40,7 @@ import {
   productionImageStoragePorts,
 } from "~/server/services/image-storage.service";
 
-import { resolveImportFinding } from "../findings";
+import { resolveRunFinding } from "../findings";
 import {
   discoverImportHunts,
   dispatchImportHunts,
@@ -479,12 +479,12 @@ describe("Gmail order mail processing", () => {
 
     const refundFindings = () =>
       getDb(ctx.db)
-        .select({ id: importFinding.id, status: importFinding.status })
-        .from(importFinding)
+        .select({ id: runFinding.id, status: runFinding.status })
+        .from(runFinding)
         .where(
           and(
-            eq(importFinding.targetId, target.id),
-            eq(importFinding.kind, "refund_unbooked"),
+            eq(runFinding.targetId, target.id),
+            eq(runFinding.kind, "refund_unbooked"),
           ),
         );
 
@@ -496,7 +496,7 @@ describe("Gmail order mail processing", () => {
     );
     const [first] = await refundFindings();
     if (!first) throw new Error("test assertion: first refund not filed");
-    await resolveImportFinding(
+    await resolveRunFinding(
       ctx.db,
       { id: first.id, action: "apply" },
       ctx.actor,
@@ -516,7 +516,7 @@ describe("Gmail order mail processing", () => {
       (row) => row.status === "open",
     );
     if (!second) throw new Error("test assertion: second refund not filed");
-    await resolveImportFinding(
+    await resolveRunFinding(
       ctx.db,
       { id: second.id, action: "apply" },
       ctx.actor,
@@ -550,15 +550,15 @@ describe("Gmail order mail processing", () => {
     const refundFindings = () =>
       getDb(ctx.db)
         .select({
-          id: importFinding.id,
-          status: importFinding.status,
-          summary: importFinding.summary,
+          id: runFinding.id,
+          status: runFinding.status,
+          summary: runFinding.summary,
         })
-        .from(importFinding)
+        .from(runFinding)
         .where(
           and(
-            eq(importFinding.targetId, target.id),
-            eq(importFinding.kind, "refund_unbooked"),
+            eq(runFinding.targetId, target.id),
+            eq(runFinding.kind, "refund_unbooked"),
           ),
         );
 
@@ -571,7 +571,7 @@ describe("Gmail order mail processing", () => {
     const [first] = await refundFindings();
     if (!first) throw new Error("test assertion: refund not filed");
     expect(first.summary).not.toMatch(/same amount/);
-    await resolveImportFinding(
+    await resolveRunFinding(
       ctx.db,
       { id: first.id, action: "apply" },
       ctx.actor,

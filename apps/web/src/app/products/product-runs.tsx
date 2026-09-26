@@ -7,12 +7,12 @@ import { Link } from "@tanstack/react-router";
 import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
 import { Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
-import type { ImportRunSummary } from "~/contracts/run.contract";
+import type { RunSummary } from "~/contracts/run.contract";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { run as runOperations } from "~/entities/run.functions";
 import { purchaseLabel } from "~/lib/purchase-label";
 
-import { importRunHref } from "../purchases/purchase-import-links";
+import { runHref } from "../purchases/purchase-import-links";
 import { TargetedImportLaunchButton } from "../purchases/targeted-import-launch";
 
 function JourneyStep({
@@ -41,7 +41,7 @@ function JourneyStep({
 }
 
 /** Targeted enrichment history stays visible even when a run made no writes. */
-export const ProductImportRuns: DetailSlotComponent<"product"> = ({
+export const ProductRuns: DetailSlotComponent<"product"> = ({
   record: product,
 }) => {
   const runs = useQuery({
@@ -153,7 +153,7 @@ export const ProductImportRuns: DetailSlotComponent<"product"> = ({
         runs.data.length ? (
           <div className="grid gap-3">
             {runs.data.map((run) => (
-              <ProductImportRunSummary key={run.publicId} run={run} />
+              <ProductRunSummary key={run.publicId} run={run} />
             ))}
           </div>
         ) : (
@@ -166,7 +166,7 @@ export const ProductImportRuns: DetailSlotComponent<"product"> = ({
   );
 };
 
-function ProductImportRunSummary({ run }: { run: ImportRunSummary }) {
+function ProductRunSummary({ run }: { run: RunSummary }) {
   return (
     <div className="grid gap-1 border-b border-border pb-3 text-sm last:border-0 last:pb-0">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -186,7 +186,7 @@ function ProductImportRunSummary({ run }: { run: ImportRunSummary }) {
       ) : null}
       <a
         className="w-fit text-xs font-medium text-primary hover:underline"
-        href={importRunHref(run.publicId)}
+        href={runHref(run.publicId)}
       >
         Open import run
       </a>

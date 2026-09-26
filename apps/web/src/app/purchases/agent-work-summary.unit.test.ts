@@ -3,7 +3,7 @@ import type { FlueConversationMessage } from "@flue/sdk";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
-import type { ImportRunDetail } from "~/contracts/run.contract";
+import type { RunDetail } from "~/contracts/run.contract";
 
 import {
   formatWorkDuration,
@@ -113,7 +113,7 @@ describe("agent work summary", () => {
         ],
       }),
     ];
-    const operations = fromPartial<ImportRunDetail["operations"]>([
+    const operations = fromPartial<RunDetail["operations"]>([
       {
         operationId: "commit-1",
         kind: "commit_photo_group",
@@ -155,7 +155,7 @@ describe("agent work summary", () => {
   });
 
   it("does not mistake browser command dispatch for completed scraping", () => {
-    const operations = fromPartial<ImportRunDetail["operations"]>([
+    const operations = fromPartial<RunDetail["operations"]>([
       {
         operationId: "browser-1",
         kind: "browser_command",

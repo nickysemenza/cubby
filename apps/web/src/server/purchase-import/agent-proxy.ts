@@ -1,10 +1,10 @@
-import { importRunShortcode } from "@cubby/schemas/purchase-import";
+import { runShortcode } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
 import { getBindingFetcher } from "~/server/cf-env";
 import {
   loadRunScopeByShortcode,
-  recordImportRunControlEvent,
+  recordRunControlEvent,
 } from "~/server/purchase-import/run-service";
 import type {
   AuthenticatedRequestContext,
@@ -40,7 +40,7 @@ export async function proxyPurchaseAgentRequest(input: {
   context: AuthenticatedRequestContext;
   party: CurrentParty;
 }) {
-  const publicId = importRunShortcode.parse(input.publicId);
+  const publicId = runShortcode.parse(input.publicId);
   const scope = await loadRunScopeByShortcode(input.context.db, publicId);
   const suffix = input.suffix?.replace(/^\/+|\/+$/gu, "") ?? "";
   if (!allowedSuffix.test(suffix)) {
@@ -96,14 +96,10 @@ export async function proxyPurchaseAgentRequest(input: {
     }),
   );
   if (response.ok && input.request.method === "POST") {
-    await recordImportRunControlEvent(
-      input.context.db,
-      input.context.actorContext,
-      {
-        runPublicId: publicId,
-        action: suffix === "abort" ? "abort" : "prompt",
-      },
-    );
+    await recordRunControlEvent(input.context.db, input.context.actorContext, {
+      runPublicId: publicId,
+      action: suffix === "abort" ? "abort" : "prompt",
+    });
   }
   return await redactJsonAgentResponse(response);
 }

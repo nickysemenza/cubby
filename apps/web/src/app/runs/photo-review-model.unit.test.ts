@@ -2,7 +2,12 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PhotoGroupProposal } from "@cubby/schemas/photo-import-run";
 import { describe, expect, it } from "vitest";
 
-import { mergeGroups, moveImage, toGroupInput } from "./photo-review-model";
+import {
+  mergeGroups,
+  moveImage,
+  reviewOutcomeToasts,
+  toGroupInput,
+} from "./photo-review-model";
 
 const img = (code: string) => parseShortcodeFor("image", code);
 
@@ -118,5 +123,40 @@ describe("photo review edits", () => {
         toGroupInput(deletedLocation, { inventory: undefined }).inventory,
       ).toBeUndefined();
     });
+  });
+});
+
+describe("reviewOutcomeToasts", () => {
+  // Regression: a save into a group another tab just committed must say the
+  // group was left unchanged instead of reporting silent success.
+  it("warns about frozen groups on a save that approved nothing", () => {
+    expect(
+      reviewOutcomeToasts({ results: [], frozenGroupKeys: ["kitchen-mugs"] }),
+    ).toEqual([
+      {
+        tone: "warning",
+        title: "Some groups were already settled",
+        description: "Left unchanged: kitchen-mugs",
+      },
+    ]);
+  });
+
+  it("separates approved groups from ones needing attention", () => {
+    expect(
+      reviewOutcomeToasts({
+        results: [
+          { groupKey: "a", outcome: "committed" },
+          { groupKey: "b", outcome: "conflict" },
+          { groupKey: "c", outcome: "failed", error: "boom" },
+        ],
+        frozenGroupKeys: [],
+      }),
+    ).toEqual([
+      {
+        tone: "warning",
+        title: "1 approved · 2 need attention",
+        description: "b: name matches an existing product\nc: boom",
+      },
+    ]);
   });
 });

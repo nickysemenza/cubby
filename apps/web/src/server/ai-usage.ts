@@ -1,4 +1,4 @@
-import type { ImportRunId } from "@cubby/schemas/identifiers";
+import type { RunId } from "@cubby/schemas/identifiers";
 
 import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
@@ -20,7 +20,7 @@ export type RecordAiUsageInput = {
   feature: string;
   operation: string;
   /** Every AI call belongs to a run; see `ensureRun`. */
-  runId: ImportRunId;
+  runId: RunId;
   jobKind?: string | null;
   jobId?: string | null;
   inputTokens?: number | null;
@@ -35,7 +35,7 @@ export type RecordAiUsageInput = {
   durationMs: number;
   cacheStatus?: "hit" | "miss" | "none" | null;
   applicationCacheStatus?: "hit" | "miss" | "none" | null;
-  entity?: { entityType: string; entityId: string } | null;
+  entity?: { entityKind: string; entityId: string } | null;
 };
 
 /** Best-effort AI usage telemetry; never changes the owning AI operation. */
@@ -69,7 +69,7 @@ export async function recordAiUsage(
       durationMs: input.durationMs,
       cacheStatus: input.cacheStatus ?? null,
       applicationCacheStatus: input.applicationCacheStatus ?? null,
-      entityType: input.entity?.entityType ?? null,
+      entityKind: input.entity?.entityKind ?? null,
       entityId: input.entity?.entityId ?? null,
       estimatedCost: input.estimatedCost ?? null,
     });

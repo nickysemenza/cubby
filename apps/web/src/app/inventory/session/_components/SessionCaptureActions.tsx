@@ -52,6 +52,7 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { focusOnMount } from "~/hooks/focus-on-mount";
 import { ai } from "~/lib/ai.functions";
 import { imageUpload } from "~/lib/image.functions";
+import { putPresignedObject } from "~/lib/presigned-upload";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 import type { SessionLocation } from "../session-utils";
@@ -272,12 +273,11 @@ export function SessionCaptureActions({
         size: file.size,
         entityType: "PRODUCT",
       });
-      const put = await fetch(init.uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-      if (!put.ok) throw new Error("Image upload failed");
+      try {
+        await putPresignedObject(init.uploadUrl, file, contentType.data);
+      } catch {
+        throw new Error("Image upload failed");
+      }
       const product = await quickCreateProduct.mutateAsync({
         name: `misc: ${name}`,
       });

@@ -42,12 +42,12 @@ export const VENDOR_ACCOUNT_DELETE_EDGE_POLICY = {
     description:
       "Fetched purchases retain the vendor account that supplied their evidence.",
   },
-  "ImportRun.vendorAccountId": {
+  "Run.vendorAccountId": {
     code: "block-runs",
     effect: "block",
     description: "Import runs retain their vendor-account scope.",
   },
-  "ImportRunTarget.vendorAccountId": {
+  "RunTarget.vendorAccountId": {
     code: "block-targeted-runs",
     effect: "block",
     description:

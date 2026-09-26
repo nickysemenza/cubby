@@ -34,7 +34,6 @@ import {
   recipeIdInput,
   recipeIdsInput,
   recipeRecomputeAllOut,
-  recipeTagsOut,
   recipeWithSideEffectsOut,
 } from "@cubby/schemas/recipe";
 import { recipeDependencyGraphSchema } from "@cubby/schemas/recipe-dependency-graph";
@@ -63,10 +62,6 @@ export const recipeContract = defineContract("recipe", {
   getManyByIDs: query({
     input: recipeIdsInput,
     output: recipeGraphListOut,
-  }),
-  getAllTags: query({
-    input: z.undefined(),
-    output: recipeTagsOut,
   }),
   duplicate: mutation({
     input: recipeIdInput,

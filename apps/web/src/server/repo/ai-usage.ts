@@ -1,4 +1,4 @@
-import type { ImportRunId } from "@cubby/schemas/identifiers";
+import type { RunId } from "@cubby/schemas/identifiers";
 import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -28,7 +28,7 @@ export async function listRecentAiUsage(db: Database, limit: number) {
       durationMs: aiUsage.durationMs,
       cacheStatus: aiUsage.cacheStatus,
       applicationCacheStatus: aiUsage.applicationCacheStatus,
-      entityType: aiUsage.entityType,
+      entityKind: aiUsage.entityKind,
       entityId: aiUsage.entityId,
       createdAt: aiUsage.createdAt,
     })
@@ -159,7 +159,7 @@ const decodeRunUsageCursor = (value: string) => {
  */
 export async function listAiUsageForRun(
   db: Database,
-  runId: ImportRunId,
+  runId: RunId,
   options: { cursor?: string | null; limit?: number } = {},
 ) {
   const limit = z

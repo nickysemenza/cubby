@@ -5,7 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
-  importFinding,
+  runFinding,
   orderMail,
   orderMailEvent,
   user,
@@ -23,7 +23,7 @@ import { findOrCreateVendor } from "~/server/repo/vendor";
 
 import {
   resolveArrivedFindingsForPurchase,
-  resolveImportFinding,
+  resolveRunFinding,
 } from "./findings";
 import {
   importOrderHistory,
@@ -41,10 +41,10 @@ describe("resolveArrivedFindingsForPurchase", () => {
     fingerprint: string,
   ) => {
     const [row] = await getDb(ctx.db)
-      .insert(importFinding)
+      .insert(runFinding)
       .values({
         ledgerPartyId: parseEntityId("ledgerParty", ledgerPartyId),
-        targetType: "purchase",
+        targetKind: "purchase",
         targetId: purchaseId,
         kind: "arrived",
         summary:
@@ -52,7 +52,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
         proposedFix: { kind: "receive_purchase", purchaseId },
         evidenceFingerprint: fingerprint,
       })
-      .returning({ id: importFinding.id });
+      .returning({ id: runFinding.id });
     if (!row) throw new Error("test setup: finding not inserted");
     return row.id;
   };
@@ -60,12 +60,12 @@ describe("resolveArrivedFindingsForPurchase", () => {
   const readFinding = async (id: string) => {
     const [row] = await getDb(ctx.db)
       .select({
-        status: importFinding.status,
-        resolvedByUserId: importFinding.resolvedByUserId,
-        resolvedAt: importFinding.resolvedAt,
+        status: runFinding.status,
+        resolvedByUserId: runFinding.resolvedByUserId,
+        resolvedAt: runFinding.resolvedAt,
       })
-      .from(importFinding)
-      .where(eq(importFinding.id, id));
+      .from(runFinding)
+      .where(eq(runFinding.id, id));
     if (!row) throw new Error(`test assertion: finding ${id} not found`);
     return row;
   };
@@ -121,7 +121,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
 
     // Another member's own finding on the same purchase must never be
     // touched by resolving this actor's finding — scoped by ledgerParty
-    // ownership, mirroring `resolveImportFinding`.
+    // ownership, mirroring `resolveRunFinding`.
     const otherUserId = testUserId("findings-other-member");
     await getDb(ctx.db).insert(user).values({
       id: otherUserId,
@@ -266,10 +266,10 @@ describe("create_refund findings", () => {
       sourceKey,
     });
     const [finding] = await database
-      .insert(importFinding)
+      .insert(runFinding)
       .values({
         ledgerPartyId: fixture.party.id,
-        targetType: "purchase",
+        targetKind: "purchase",
         targetId: input.purchaseId,
         kind: "refund_unbooked",
         summary:
@@ -282,13 +282,13 @@ describe("create_refund findings", () => {
         },
         evidenceFingerprint: sourceKey,
       })
-      .returning({ id: importFinding.id });
+      .returning({ id: runFinding.id });
     if (!finding) throw new Error("test setup: refund finding not inserted");
     return finding.id;
   }
 
   const apply = (id: string) =>
-    resolveImportFinding(ctx.db, { id, action: "apply" }, ctx.actor);
+    resolveRunFinding(ctx.db, { id, action: "apply" }, ctx.actor);
 
   it("books two equal partial refunds and a later history refresh does not re-add them", async () => {
     const fixture = await seed();
@@ -388,12 +388,12 @@ describe("create_refund findings", () => {
       -1000, -1000, 2000, 3000,
     ]);
     const statuses = await getDb(ctx.db)
-      .select({ status: importFinding.status })
-      .from(importFinding)
+      .select({ status: runFinding.status })
+      .from(runFinding)
       .where(
         and(
-          eq(importFinding.targetId, target.id),
-          eq(importFinding.kind, "refund_unbooked"),
+          eq(runFinding.targetId, target.id),
+          eq(runFinding.kind, "refund_unbooked"),
         ),
       );
     expect(statuses.map(({ status }) => status)).toEqual([

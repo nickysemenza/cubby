@@ -1,9 +1,9 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { importRun } from "~/server/db/schema";
+import { run as runTable } from "~/server/db/schema";
 import type { PurchaseAgentQueueProducer } from "~/server/purchase-agent-queue-types";
 import { getDb } from "~/server/repo/database-helpers";
 
@@ -14,15 +14,15 @@ import { getDb } from "~/server/repo/database-helpers";
  */
 
 /** Mark the producer hand-off. A delivery can be retried only with this id. */
-export async function recordImportRunDispatchAttempt(
+export async function recordRunDispatchAttempt(
   db: Database,
   input: { runId: string; eventId: string; error?: string },
 ) {
-  const runId = importRunId.parse(input.runId);
+  const runId = runEntityId.parse(input.runId);
   const [run] = await getDb(db)
-    .update(importRun)
+    .update(runTable)
     .set({
-      dispatchAttempts: sql`${importRun.dispatchAttempts} + 1`,
+      dispatchAttempts: sql`${runTable.dispatchAttempts} + 1`,
       dispatchError: input.error?.slice(0, 2_000) ?? null,
       status: input.error ? "dispatch_failed" : "running",
       failureCode: input.error ? "dispatch_failed" : null,
@@ -31,21 +31,18 @@ export async function recordImportRunDispatchAttempt(
     })
     .where(
       and(
-        eq(importRun.id, runId),
-        eq(importRun.dispatchEventId, input.eventId),
-        inArray(importRun.status, ["running", "dispatch_failed"]),
+        eq(runTable.id, runId),
+        eq(runTable.dispatchEventId, input.eventId),
+        inArray(runTable.status, ["running", "dispatch_failed"]),
       ),
     )
-    .returning({ id: importRun.id, status: importRun.status });
+    .returning({ id: runTable.id, status: runTable.status });
   if (run) return run;
   const [settled] = await getDb(db)
-    .select({ id: importRun.id, status: importRun.status })
-    .from(importRun)
+    .select({ id: runTable.id, status: runTable.status })
+    .from(runTable)
     .where(
-      and(
-        eq(importRun.id, runId),
-        eq(importRun.dispatchEventId, input.eventId),
-      ),
+      and(eq(runTable.id, runId), eq(runTable.dispatchEventId, input.eventId)),
     )
     .limit(1);
   if (settled) return settled;
@@ -56,9 +53,9 @@ export async function recordImportRunDispatchAttempt(
  * The one producer hand-off. Every path that starts a coordinator sends
  * through here so `dispatchAttempts` counts the initial delivery, not only
  * the retry route. A `retry` event resumes the active generation and is not a
- * new attempt: `recordImportRunDispatchAttempt` would reject its event id.
+ * new attempt: `recordRunDispatchAttempt` would reject its event id.
  */
-export async function dispatchImportRunEvent(
+export async function dispatchRunEvent(
   db: Database,
   queue: PurchaseAgentQueueProducer,
   event: PurchaseAgentEvent,
@@ -70,14 +67,14 @@ export async function dispatchImportRunEvent(
   try {
     await queue.send(event);
   } catch (error) {
-    await recordImportRunDispatchAttempt(db, {
+    await recordRunDispatchAttempt(db, {
       runId: event.runId,
       eventId: event.eventId,
       error: error instanceof Error ? error.message : "Queue send failed",
     });
     throw error;
   }
-  await recordImportRunDispatchAttempt(db, {
+  await recordRunDispatchAttempt(db, {
     runId: event.runId,
     eventId: event.eventId,
   });

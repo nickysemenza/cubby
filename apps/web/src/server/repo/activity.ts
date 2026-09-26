@@ -141,7 +141,7 @@ function runProjection(partyId: string | null): SQL {
       r."dispatchAttempts" AS attempts,
       (SELECT jsonb_agg(DISTINCT executor) FROM (
         SELECT o.executor
-        FROM "ImportRunOperation" o
+        FROM "RunOperation" o
         WHERE o."runId" = r.id AND o.executor IS NOT NULL
         UNION ALL SELECT ${cloudExecutor}
       ) execution) AS executors,
@@ -153,9 +153,9 @@ function runProjection(partyId: string | null): SQL {
         WHERE u."deletedAt" IS NULL AND u."runId" = r.id
       ) END AS "estimatedCost",
       coalesce(r."dispatchError", r."failureCode") AS error,
-      EXISTS(SELECT 1 FROM "ImportRunOperation" o WHERE o."runId" = r.id) AS "hasDiagnostics",
+      EXISTS(SELECT 1 FROM "RunOperation" o WHERE o."runId" = r.id) AS "hasDiagnostics",
       false AS "canRetry"
-    FROM "ImportRun" r
+    FROM "Run" r
     LEFT JOIN "Vendor" v ON v.id = r."vendorId" AND v."deletedAt" IS NULL
     WHERE ${partyId}::uuid IS NOT NULL AND r."ledgerPartyId" = ${partyId}::uuid
   `;
@@ -188,7 +188,7 @@ function listPredicate(input: ActivityListInput): SQL {
       "subjectId" = ${input.subjectId}
       OR internal_id IN (
         SELECT t."runId"
-        FROM "ImportRunTarget" t
+        FROM "RunTarget" t
         LEFT JOIN "Product" product ON product.id = t."productId" AND product."deletedAt" IS NULL
         LEFT JOIN "Purchase" purchase ON purchase.id = t."purchaseId" AND purchase."deletedAt" IS NULL
         WHERE product.shortcode = ${input.subjectId} OR purchase.shortcode = ${input.subjectId}
@@ -208,7 +208,7 @@ function listPredicate(input: ActivityListInput): SQL {
       jsonb_array_length(executors) = 0
       OR (kind IN ('purchase_import', 'purchase_validation', 'product_enrichment')
         AND EXISTS(
-          SELECT 1 FROM "ImportRunOperation" operation
+          SELECT 1 FROM "RunOperation" operation
           WHERE operation."runId" = internal_id AND operation.executor IS NULL
         ))
     )`);
@@ -429,7 +429,7 @@ export async function activityEvents(
               'operationId', "operationId", 'executor', executor
             )::text
           END AS "detailsJson"
-        FROM "ImportRunOperation" WHERE "runId" = ${internalId}::uuid
+        FROM "RunOperation" WHERE "runId" = ${internalId}::uuid
       `;
   const after = cursor
     ? sql`("occurredAt", id) < ((${cursor.at}::timestamptz AT TIME ZONE 'UTC'), ${cursor.id})`
@@ -470,7 +470,7 @@ export async function activityDevices(db: Database, partyId: string | null) {
       FROM "ImageProcessingAttempt" a JOIN runs r ON r.internal_id = a."jobId" AND r.id LIKE 'IPR-%'
       UNION ALL
       SELECT o.executor, o."startedAt" AS observed_at, o.id::text AS id
-      FROM "ImportRunOperation" o JOIN runs r ON r.internal_id = o."runId" AND r.id LIKE 'RUN-%'
+      FROM "RunOperation" o JOIN runs r ON r.internal_id = o."runId" AND r.id LIKE 'RUN-%'
     )
     SELECT DISTINCT ON (executor->>'deviceId') executor FROM observations
     WHERE executor->>'kind' = 'device' AND executor->>'deviceId' IS NOT NULL
@@ -525,7 +525,7 @@ export async function imageAnalysisHistory(
 ) {
   const imageId = await resolveOrThrow(db, "image", input.id);
   const predicate = and(
-    eq(aiAnalysis.entityType, "image"),
+    eq(aiAnalysis.entityKind, "image"),
     eq(aiAnalysis.entityId, imageId),
     eq(aiAnalysis.feature, "image-description"),
     isNull(aiAnalysis.deletedAt),

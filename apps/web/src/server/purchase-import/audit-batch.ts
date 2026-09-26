@@ -1,11 +1,11 @@
-import type { ImportRunId } from "@cubby/schemas/identifiers";
+import type { RunId } from "@cubby/schemas/identifiers";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { PurchaseAuditRenderedBatch } from "~/server/agents/purchase-import/prompts";
 import type { Database } from "~/server/db";
 import {
   expense,
-  importRunMutation,
+  runMutation,
   product,
   purchase,
   purchasePaymentEvidence,
@@ -15,7 +15,7 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 /** The read-only source batch shared by production audit and manual AI probes. */
 export async function loadPurchaseAuditBatch(
   db: Database,
-  runId: ImportRunId,
+  runId: RunId,
   offset = 0,
 ): Promise<PurchaseAuditRenderedBatch> {
   const importedPurchases = await getDb(db)
@@ -25,16 +25,13 @@ export async function loadPurchaseAuditBatch(
       statedTotal: purchase.statedTotal,
       displayLabel: purchase.displayLabel,
     })
-    .from(importRunMutation)
+    .from(runMutation)
     .innerJoin(
       purchase,
-      and(eq(purchase.id, importRunMutation.targetId), notDeleted(purchase)),
+      and(eq(purchase.id, runMutation.targetId), notDeleted(purchase)),
     )
     .where(
-      and(
-        eq(importRunMutation.runId, runId),
-        eq(importRunMutation.targetType, "purchase"),
-      ),
+      and(eq(runMutation.runId, runId), eq(runMutation.targetKind, "purchase")),
     )
     .orderBy(asc(purchase.id))
     .limit(25)

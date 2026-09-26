@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { getPurchaseImportNamespace } from "~/server/cf-env";
 import { proxyPurchaseAgentRequest } from "~/server/purchase-import/agent-proxy";
 import {
-  controlImportRun,
+  controlRun,
   loadRunScopeByShortcode,
 } from "~/server/purchase-import/run-service";
 import { createRequestContext, requireActor } from "~/server/request-context";
@@ -23,14 +23,10 @@ async function handler(input: {
     );
   const suffix = input.params._splat ?? "";
   if (input.request.method === "POST" && suffix === "abort") {
-    const cancellation = await controlImportRun(
-      context.db,
-      context.actorContext,
-      {
-        runPublicId: input.params.publicId,
-        action: "cancel",
-      },
-    );
+    const cancellation = await controlRun(context.db, context.actorContext, {
+      runPublicId: input.params.publicId,
+      action: "cancel",
+    });
     if (cancellation.cancelledBrowserCommandIds) {
       const scope = await loadRunScopeByShortcode(
         context.db,

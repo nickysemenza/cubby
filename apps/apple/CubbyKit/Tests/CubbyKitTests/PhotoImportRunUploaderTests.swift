@@ -29,10 +29,18 @@ private final class RunUploaderScript: @unchecked Sendable {
         let fields: [String: JSONValue]
     }
 
+    struct DeviceWorkReport: Sendable, Equatable {
+        let image: String
+        let state: String
+        let error: String?
+    }
+
     private let seenBox = Mutex<[Seen]>([])
     private let failNextFinalize = Mutex<Bool>(false)
     private let failNextCreateRun = Mutex<Bool>(false)
     private let analysisCalls = Mutex<[String: Int]>([:])
+    private let deviceWorkReportsBox = Mutex<[DeviceWorkReport]>([])
+    private let failDeviceWorkReports = Mutex<Bool>(false)
 
     var seen: [Seen] { seenBox.withLock { $0 } }
     func requests(matching suffix: String) -> [Seen] { seen.filter { $0.path.hasSuffix(suffix) } }
@@ -42,11 +50,20 @@ private final class RunUploaderScript: @unchecked Sendable {
         analysisCalls.withLock { $0[imageID] ?? 0 }
     }
 
+    /// Every `run.reportDeviceWork` call seen for one image id, in request order — the state
+    /// sequence `PhotoImportRunUploader` posted while processing it.
+    func deviceWorkReports(forImageID imageID: String) -> [DeviceWorkReport] {
+        deviceWorkReportsBox.withLock { $0.filter { $0.image == imageID } }
+    }
+
     /// The next `finalize` call answers 500 instead of confirming; the call after that (a retry)
     /// reports every requested id in `alreadyFinalized` rather than `finalized`, exercising the
     /// idempotent-replay path a retry after a transport error relies on.
     func failNextFinalizeCall() { failNextFinalize.withLock { $0 = true } }
     func failNextCreateRunCall() { failNextCreateRun.withLock { $0 = true } }
+    /// Every `run.reportDeviceWork` call answers 500 for the rest of this script's lifetime —
+    /// used to prove a reporting failure never blocks or fails analysis.
+    func failDeviceWorkReportsAlways() { failDeviceWorkReports.withLock { $0 = true } }
 
     var handler: StubNetworking.Handler {
         { [self] request in
@@ -98,6 +115,18 @@ private final class RunUploaderScript: @unchecked Sendable {
                     analysisCalls.withLock { $0[imageID, default: 0] += 1 }
                 }
                 return (200, Data(#"{"saved": true}"#.utf8))
+            }
+            if path.hasSuffix("/run/reportDeviceWork") {
+                if let image = fields["image"]?.stringValue, let state = fields["state"]?.stringValue {
+                    deviceWorkReportsBox.withLock {
+                        $0.append(
+                            DeviceWorkReport(image: image, state: state, error: fields["error"]?.stringValue))
+                    }
+                }
+                if failDeviceWorkReports.withLock({ $0 }) {
+                    return (500, Data(#"{"code": "INTERNAL", "message": "boom"}"#.utf8))
+                }
+                return (200, Data(#"{"recorded": true}"#.utf8))
             }
             return (404, Data("{}".utf8))
         }
@@ -322,5 +351,87 @@ struct PhotoImportRunUploaderTests {
         for id in ["x", "y", "z"] {
             #expect(script.analysisCallCount(forImageID: "IMG-\(id)") == 1)
         }
+    }
+
+    /// The reports are fire-and-forget (never awaited by the uploader), so a test must poll for
+    /// them to land instead of asserting immediately after `upload(_:)` returns.
+    private func waitForDeviceWorkReports(
+        _ script: RunUploaderScript, imageID: String, count: Int
+    ) async throws {
+        for _ in 0..<200 {
+            if script.deviceWorkReports(forImageID: imageID).count >= count { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
+    /// A successfully analyzed photo reports `queued` (entering the analysis queue) then `running`
+    /// (`analyzeOne` starting) and never `completed` — the server already marks that target
+    /// completed when `recordImageAnalysis` succeeds, so the device-side report would be redundant.
+    @Test func reportsQueuedThenRunningForSuccessfulAnalysis() async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+
+        let uploader = PhotoImportRunUploader(
+            client: try makeClient(), put: { _, _, _ in },
+            analyze: { input in fakeAnalysis(for: input.id) })
+
+        _ = try await uploader.upload([try photo("ok")], runID: "RUN-TEST")
+        try await waitForDeviceWorkReports(script, imageID: "IMG-ok", count: 2)
+
+        let reports = script.deviceWorkReports(forImageID: "IMG-ok")
+        #expect(reports.map(\.state) == ["queued", "running"])
+        #expect(reports.allSatisfy { $0.error == nil })
+    }
+
+    /// A photo whose local analysis throws reports `queued`, `running`, then `failed` with a
+    /// short, non-empty error description — and the failure is recorded locally (`progress`)
+    /// without the uploader itself throwing, matching `analyzeOne`'s best-effort catch.
+    @Test func reportsFailedWithErrorDescriptionWhenAnalysisThrows() async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        enum TestFailure: Error { case boom }
+
+        let uploader = PhotoImportRunUploader(
+            client: try makeClient(), put: { _, _, _ in },
+            analyze: { _ in throw TestFailure.boom })
+
+        let runID = try await uploader.upload([try photo("bad")], runID: "RUN-TEST")
+        #expect(runID == "RUN-TEST")
+        try await waitForDeviceWorkReports(script, imageID: "IMG-bad", count: 3)
+
+        let reports = script.deviceWorkReports(forImageID: "IMG-bad")
+        #expect(reports.map(\.state) == ["queued", "running", "failed"])
+        let failureError = reports.last?.error
+        #expect(failureError != nil && !(failureError ?? "").isEmpty)
+        #expect((failureError ?? "").count < 200)
+
+        let progress = await uploader.progress
+        #expect(progress.failedIDs == ["bad"])
+        #expect(progress.analyzed == 0)
+    }
+
+    /// A `reportDeviceWork` call that itself fails (transport error or non-2xx) must never abort
+    /// or fail the analysis it is reporting on: this is the "best-effort, never blocks the
+    /// pipeline" contract, exercised by making every device-work report 500 and confirming
+    /// analysis still completes and posts the real result.
+    @Test func deviceWorkReportFailureDoesNotBreakAnalysis() async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        script.failDeviceWorkReportsAlways()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+
+        let uploader = PhotoImportRunUploader(
+            client: try makeClient(), put: { _, _, _ in },
+            analyze: { input in fakeAnalysis(for: input.id) })
+
+        let runID = try await uploader.upload([try photo("resilient")], runID: "RUN-TEST")
+        #expect(runID == "RUN-TEST")
+
+        let progress = await uploader.progress
+        #expect(progress.analyzed == 1)
+        #expect(progress.failedIDs.isEmpty)
+        #expect(script.analysisCallCount(forImageID: "IMG-resilient") == 1)
     }
 }

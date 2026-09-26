@@ -61,12 +61,12 @@ describe("cascadeRemoval — the type-level lock", () => {
     // NON-auditable (it is the one hard delete, with no tombstone to annotate).
     // So it is in `SHORTCODE_TABLE` and out of `RemovableEntity` — which is the
     // correct outcome, because `removeEntity` must not be called for it;
-    // `IMAGE_HARD_DELETE` owns that path. `importRun` is the other
+    // `IMAGE_HARD_DELETE` owns that path. `run` is the other
     // exception: immutable history, neither auditable nor removable.
     expectTypeOf<RemovableEntity>().toExtend<keyof typeof SHORTCODE_TABLE>();
     expect([...auditableEntities].sort()).toEqual(
       Object.keys(SHORTCODE_TABLE)
-        .filter((entity) => entity !== "image" && entity !== "importRun")
+        .filter((entity) => entity !== "image" && entity !== "run")
         .sort(),
     );
     expectTypeOf<RemovableEntity>().toExtend<AuditableEntity>();

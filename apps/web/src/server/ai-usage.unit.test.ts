@@ -1,11 +1,11 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { describe, expect, it, vi } from "vitest";
 
 import { Database } from "~/server/db";
 
 import { type AiUsagePort, recordAiUsage } from "./ai-usage";
 
-const runId = importRunId.parse("00000000-0000-4000-8000-000000000001");
+const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
 describe("recordAiUsage", () => {
   it("preserves AI usage fields in the queued event", async () => {
@@ -33,7 +33,7 @@ describe("recordAiUsage", () => {
         attempt: 0,
         estimatedCost: 0,
         entity: {
-          entityType: "product",
+          entityKind: "product",
           entityId: "9d4f70aa-5c8f-4f24-b7f8-d67d28111d86",
         },
       },
@@ -53,7 +53,7 @@ describe("recordAiUsage", () => {
         attempt: 0,
         estimatedCost: 0,
         outputTokens: 0,
-        entityType: "product",
+        entityKind: "product",
         entityId: "9d4f70aa-5c8f-4f24-b7f8-d67d28111d86",
       }),
     );

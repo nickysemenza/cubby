@@ -65,13 +65,14 @@ import { photoImport } from "~/entities/run.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import {
-  IMPORT_RUN_TARGET_STATE_LABEL,
-  IMPORT_RUN_TARGET_STATE_VARIANT,
-} from "~/lib/import-run-target-state";
+  RUN_TARGET_STATE_LABEL,
+  RUN_TARGET_STATE_VARIANT,
+} from "~/lib/run-target-state";
 
 import {
   mergeGroups,
   moveImage,
+  reviewOutcomeToasts,
   toGroupInput,
   type ProposalEdit,
 } from "./photo-review-model";
@@ -130,33 +131,8 @@ function useReviewAction(runId: string) {
       );
       // Approval changes photo states and may complete the run.
       void invalidateOperationTags(queryClient, ripple.runOnly);
-      const problems = data.results.filter(
-        (result) =>
-          result.outcome === "conflict" || result.outcome === "failed",
-      );
-      const committed = data.results.length - problems.length;
-      if (problems.length) {
-        toast.warning(
-          `${committed} approved · ${problems.length} need attention`,
-          {
-            description: problems
-              .map(
-                (result) =>
-                  `${result.groupKey}: ${result.outcome === "conflict" ? "name matches an existing product" : result.error}`,
-              )
-              .join("\n"),
-          },
-        );
-      } else if (committed) {
-        toast.success(
-          committed === 1 ? "Group approved" : `${committed} groups approved`,
-        );
-      }
-      if (data.frozenGroupKeys.length) {
-        toast.warning("Some groups were already settled", {
-          description: `Left unchanged: ${data.frozenGroupKeys.join(", ")}`,
-        });
-      }
+      for (const { tone, title, description } of reviewOutcomeToasts(data))
+        toast[tone](title, description ? { description } : undefined);
     },
     onError: (error) => showErrorToast(error),
   });
@@ -1532,11 +1508,9 @@ function PhotoTable({
                   <TableCell>
                     <Stack gap="tight">
                       <Badge
-                        variant={
-                          IMPORT_RUN_TARGET_STATE_VARIANT[photo.targetState]
-                        }
+                        variant={RUN_TARGET_STATE_VARIANT[photo.targetState]}
                       >
-                        {IMPORT_RUN_TARGET_STATE_LABEL[photo.targetState]}
+                        {RUN_TARGET_STATE_LABEL[photo.targetState]}
                       </Badge>
                       {groupByImage.get(photo.id) ? (
                         <span className="max-w-40 truncate font-mono text-2xs text-muted-foreground">

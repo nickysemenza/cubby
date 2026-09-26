@@ -88,6 +88,11 @@ export async function handleCalDavRequest(request: Request): Promise<Response> {
   return namespace.getByName(new URL(request.url).hostname).fetch(request);
 }
 
+/** Delays between dirty-mark attempts; the RPC is idempotent (`markDirty` only sets a flag). */
+const DIRTY_MARK_RETRY_DELAYS_MS = [250, 750];
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export function scheduleCalendarFeedDirty(
   reason: string,
   options: { origin?: string } = {},
@@ -97,13 +102,35 @@ export function scheduleCalendarFeedDirty(
   if (!origin || !getCalendarFeedNamespace()) return;
   // SILENT: best-effort background dirty-mark from a `waitUntil` task, run
   // after the response is already committed — there is no result channel
-  // left to report into. A failure here leaves the calendar feed stale
-  // until the next write successfully re-marks it dirty (known gap, see
-  // docs/todos.md).
-  const task = calendarFeedStateFor(origin)
-    .then(async (state) => await state.markDirty(reason))
-    .catch((error) => {
-      console.error("[calendar-feed] failed to mark snapshot dirty", error);
-    });
+  // left to report into. `markDirty` only sets a flag on the target Durable
+  // Object, so retrying it a few times (short backoff, still inside the same
+  // `waitUntil`) is safe and absorbs a transient RPC failure without needing
+  // a durable queue message; a failure that survives every retry still
+  // leaves the feed stale until the next write successfully re-marks it
+  // dirty (known gap, see docs/todos.md).
+  const task = (async () => {
+    const state = await calendarFeedStateFor(origin);
+    for (const [attempt, retryDelay] of [
+      ...DIRTY_MARK_RETRY_DELAYS_MS,
+      undefined,
+    ].entries()) {
+      try {
+        await state.markDirty(reason);
+        return;
+      } catch (error) {
+        if (retryDelay === undefined) {
+          console.error(
+            "[calendar-feed] failed to mark snapshot dirty",
+            { reason, attempt },
+            error,
+          );
+          return;
+        }
+        // SILENT: not the last attempt — logged above only if every retry
+        // below also fails.
+        await delay(retryDelay);
+      }
+    }
+  })();
   execution?.waitUntil(task);
 }

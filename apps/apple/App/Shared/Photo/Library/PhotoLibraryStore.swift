@@ -519,8 +519,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             // Let visible cells enqueue their user-initiated requests before the utility scan.
             try? await Task.sleep(for: .milliseconds(150))
             // One batch read for the whole remaining set instead of one actor round trip per
-            // asset — `query(_:preloaded:)` only falls back to a per-id store read when an asset
-            // is missing from this snapshot (e.g. newly added mid-scan).
+            // asset — `query(_:preloaded:)` treats a miss here as "looked up, absent" (see its
+            // doc comment) and never falls back to a per-id store read for anything in `remaining`.
             let preloadedHashes =
                 (try? await analysisStore.hashes(for: remaining.map(\.localIdentifier))) ?? [:]
             // Warm path: photos with a still-valid cached fingerprint need no image work, so they
@@ -560,7 +560,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                 matches.markChecking(for: asset.localIdentifier)
                 do {
                     pending[asset.localIdentifier] =
-                        try await query(asset, preloaded: preloadedHashes[asset.localIdentifier])
+                        try await query(asset, preloaded: .some(preloadedHashes[asset.localIdentifier]))
                 } catch is CancellationError {
                     matches.markCheckCancelled(for: asset.localIdentifier)
                     return
@@ -768,18 +768,22 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         startScan(remaining: remaining, matches: matches, token: token)
     }
 
-    /// `preloaded` — from a batch `PhotoAnalysisStore.hashes(for:)` read — skips the per-id store
-    /// round trip entirely when it is present and still valid; the scan loop always supplies it,
-    /// the single-cell `thumbnail(_:matches:degraded:)` path never does.
+    /// `preloaded` is tri-state, from a batch `PhotoAnalysisStore.hashes(for:)` read: the outer
+    /// optional is whether the batch looked this id up at all, the inner one whether it found a
+    /// hash. The scan loop always supplies the outer layer (`.some(preloadedHashes[id])`), so a
+    /// miss there — `.some(nil)`, "looked up, absent" — skips straight to computing a fresh hash
+    /// instead of repeating a per-id store round trip the batch already answered. The single-cell
+    /// `thumbnail(_:matches:degraded:)` path never supplies it (bare `nil`, "not looked up"), so
+    /// that per-id round trip still runs there.
     private func query(
-        _ asset: PHAsset, preloaded: PhotoHashRecord? = nil
+        _ asset: PHAsset, preloaded: PhotoHashRecord?? = nil
     ) async throws -> HashQuery {
         let token = generation
         let id = asset.localIdentifier
         guard let analysisStore else { throw CancellationError() }
         let hash: PerceptualHash64
-        if let preloaded, Self.isCurrent(preloaded, for: asset) {
-            hash = preloaded.perceptualHash
+        if let looked = preloaded, let record = looked, Self.isCurrent(record, for: asset) {
+            hash = record.perceptualHash
         } else if preloaded == nil,
             let cached = try? await analysisStore.hash(for: id, modificationDate: asset.modificationDate)
         {

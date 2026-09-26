@@ -1,8 +1,8 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { imageWithEntitySchema } from "@cubby/schemas/image";
-import { importRunOut } from "@cubby/schemas/import-run";
 import { cookbookSummary } from "@cubby/schemas/recipe";
+import { runOut } from "@cubby/schemas/run";
 import { testShortcode } from "@cubby/schemas/testing";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda-schemas";
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -26,7 +26,7 @@ const genericDetailEntities: readonly GenericDetailEntity[] = [
   ...detailEntities,
   "image",
   "cookbook",
-  "importRun",
+  "run",
 ];
 
 const pending = { status: "pending", reason: "totals_missing" } as const;
@@ -74,8 +74,8 @@ function recordFor<E extends GenericDetailEntity>(
       ? imageWithEntitySchema
       : entity === "cookbook"
         ? cookbookSummary
-        : entity === "importRun"
-          ? importRunOut
+        : entity === "run"
+          ? runOut
           : // SAFETY: every other generic detail entity is a kernel detail entity.
             getEntityDetailOutputSchema(entity as never);
   // SAFETY: `schema` is the detail output schema of exactly `entity`, and the
@@ -159,8 +159,8 @@ describe("GenericEntityDetail", () => {
   it("gives an AI run its usage and changes but no import workflow", () => {
     render(
       <GenericEntityDetail
-        entity="importRun"
-        record={{ ...recordFor("importRun"), purpose: "ai_suggest" }}
+        entity="run"
+        record={{ ...recordFor("run"), purpose: "ai_suggest" }}
         operations={operations}
       />,
       { wrapper: harness.wrapper },

@@ -9,7 +9,7 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatusText } from "~/components/ui/status-text";
-import type { ImportRunSummary } from "~/contracts/run.contract";
+import type { RunSummary } from "~/contracts/run.contract";
 import { run as runOperations } from "~/entities/run.functions";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
@@ -17,7 +17,7 @@ import { formatCurrency } from "~/lib/utils";
 import { FinancialSettlement } from "./financial-settlement";
 import { LinkExpensesDialog } from "./link-expenses-dialog";
 import { LinkProductsDialog } from "./link-products-dialog";
-import { importRunHref } from "./purchase-import-links";
+import { runHref } from "./purchase-import-links";
 import {
   purchaseReconciliationStatus,
   ReconciliationStatus,
@@ -28,11 +28,9 @@ import { TargetedImportLaunchButton } from "./targeted-import-launch";
 
 const EMPTY_PURCHASE_PRODUCTS: PurchaseProductOut[] = [];
 
-/** Runs are linked through ImportRunMutation, so replay-only source claims do not appear here. */
-export const ImportRuns: DetailSlotComponent<"purchase"> = ({
-  record: purchase,
-}) => {
-  const runs = useQuery(
+/** Runs are linked through RunMutation, so replay-only source claims do not appear here. */
+export const Runs: DetailSlotComponent<"purchase"> = ({ record: purchase }) => {
+  const runsQuery = useQuery(
     runOperations.history.queryOptions({ purchaseId: purchase.id }),
   );
 
@@ -43,22 +41,22 @@ export const ImportRuns: DetailSlotComponent<"purchase"> = ({
       purpose="purchase_validation"
     />
   );
-  if (runs.isLoading)
+  if (runsQuery.isLoading)
     return (
       <Stack gap="sm">
         {startValidation}
         <StatusText>Loading import runs…</StatusText>
       </Stack>
     );
-  if (runs.isError)
+  if (runsQuery.isError)
     return (
       <Stack gap="sm">
         {startValidation}
-        <StatusText tone="destructive">{runs.error.message}</StatusText>
+        <StatusText tone="destructive">{runsQuery.error.message}</StatusText>
       </Stack>
     );
-  const importRuns = runs.data?.runs ?? [];
-  if (importRuns.length === 0) {
+  const runs = runsQuery.data?.runs ?? [];
+  if (runs.length === 0) {
     return (
       <Stack gap="sm">
         {startValidation}
@@ -72,15 +70,15 @@ export const ImportRuns: DetailSlotComponent<"purchase"> = ({
     <Stack gap="sm">
       {startValidation}
       <div className="grid gap-3">
-        {importRuns.map((run) => (
-          <ImportRunSummary key={run.publicId} run={run} />
+        {runs.map((run) => (
+          <RunSummary key={run.publicId} run={run} />
         ))}
       </div>
     </Stack>
   );
 };
 
-function ImportRunSummary({ run }: { run: ImportRunSummary }) {
+function RunSummary({ run }: { run: RunSummary }) {
   return (
     <div className="grid gap-1 border-b border-border pb-3 text-sm last:border-0 last:pb-0">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -102,7 +100,7 @@ function ImportRunSummary({ run }: { run: ImportRunSummary }) {
       ) : null}
       <a
         className="w-fit text-xs font-medium text-primary hover:underline"
-        href={importRunHref(run.publicId)}
+        href={runHref(run.publicId)}
       >
         Open import run
       </a>

@@ -23,9 +23,9 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { currentMemberLedgerParty } from "~/server/repo/member-login";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
-import { dispatchImportRunEvent } from "./dispatch";
+import { dispatchRunEvent } from "./dispatch";
 import { matchProcessedOrderMail } from "./gmail/match";
-import { startOrResumeImportRun } from "./run-service";
+import { startOrResumeRun } from "./run-service";
 
 const normalizeMerchant = (value: string) =>
   value.trim().toLowerCase().replaceAll(/\s+/g, " ");
@@ -243,19 +243,19 @@ export async function dispatchImportHunts(
   let dispatched = 0;
   const runsByAccount = new Map<
     string,
-    Awaited<ReturnType<typeof startOrResumeImportRun>>
+    Awaited<ReturnType<typeof startOrResumeRun>>
   >();
   for (const hunt of hunts) {
     if (!hunt.vendorAccountId) continue;
     let run = runsByAccount.get(hunt.vendorAccountId);
     if (!run) {
-      run = await startOrResumeImportRun(db, {
+      run = await startOrResumeRun(db, {
         ledgerPartyId: hunt.ledgerPartyId,
         vendorAccountId: vendorAccountId.parse(hunt.vendorAccountId),
         trigger: "discovery",
       });
       runsByAccount.set(hunt.vendorAccountId, run);
-      await dispatchImportRunEvent(db, queue, {
+      await dispatchRunEvent(db, queue, {
         version: 1,
         runId: run.id,
         eventId: run.created

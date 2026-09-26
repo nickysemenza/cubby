@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-import { importRunId } from "./identifier-fields";
-import { importRunPurpose } from "./import-run-fields";
+import { runEntityId } from "./identifier-fields";
+import { runPurpose } from "./run-fields";
 
-/** Purposes currently coordinated by the durable Flue ImportRun agent. */
-export const flueImportRunPurpose = importRunPurpose.extract([
+/** Purposes currently coordinated by the durable Flue Run agent. */
+export const flueImportRunPurpose = runPurpose.extract([
   "account_sync",
   "purchase_validation",
   "product_enrichment",
@@ -12,7 +12,7 @@ export const flueImportRunPurpose = importRunPurpose.extract([
 ]);
 export type FlueImportRunPurpose = z.infer<typeof flueImportRunPurpose>;
 
-// These prefixes are persisted in ImportRun.agentSessionId and Flue Durable
+// These prefixes are persisted in Run.agentSessionId and Flue Durable
 // Object storage. Existing conversations must retain their original identity.
 const instancePrefix = {
   account_sync: "import-run",
@@ -26,7 +26,7 @@ export function importRunAgentIdentity(
   runId: string,
   purpose: FlueImportRunPurpose,
 ): string {
-  return `${instancePrefix[purpose]}:${importRunId.parse(runId)}`;
+  return `${instancePrefix[purpose]}:${runEntityId.parse(runId)}`;
 }
 
 /** Resolve only agent-owned Flue instances; other observations are ignored. */
@@ -38,7 +38,7 @@ export function importRunIdFromAgentIdentity(
   if (colon < 0) return undefined;
   const prefix = instanceId.slice(0, colon);
   if (!validPrefixes.has(prefix)) return undefined;
-  return importRunId.safeParse(instanceId.slice(colon + 1)).data;
+  return runEntityId.safeParse(instanceId.slice(colon + 1)).data;
 }
 
 /** The purchase agent's own tools (apps/purchase-agent/src/tools.ts). */

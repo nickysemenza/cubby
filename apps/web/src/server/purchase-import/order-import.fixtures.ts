@@ -14,7 +14,7 @@ import {
 
 import type { AttachOrderMailFile } from "./gmail/process";
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
-import { startOrResumeImportRun } from "./run-service";
+import { startOrResumeRun } from "./run-service";
 
 type HistoryLine = {
   title: string;
@@ -41,7 +41,7 @@ export async function importOrderHistory(
   },
   attachMailFile?: AttachOrderMailFile,
 ) {
-  const run = await startOrResumeImportRun(db, {
+  const run = await startOrResumeRun(db, {
     ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
     vendorAccountId: vendorAccountId.parse(input.vendorAccountId),
     trigger: "manual",

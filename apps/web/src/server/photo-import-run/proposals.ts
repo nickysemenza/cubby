@@ -21,7 +21,7 @@ import {
   parseShortcodeFor,
   type ImageId,
   type ImageShortcode,
-  type ImportRunId,
+  type RunId,
   type LedgerPartyId,
   type LocationId,
   type ProductCategoryId,
@@ -29,8 +29,8 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   imageId,
-  importRunId,
-  importRunShortcode,
+  runEntityId,
+  runShortcode as runShortcodeSchema,
   inventoryShortcode,
 } from "@cubby/schemas/identifiers";
 import { inventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
@@ -48,9 +48,9 @@ import {
   type ProposePhotoGroupsOutput,
 } from "@cubby/schemas/photo-import-run";
 import {
-  importRunPurpose,
-  importRunStatus,
-  importRunTargetState,
+  runPurpose,
+  runStatus,
+  runTargetState,
 } from "@cubby/schemas/purchase-import";
 import { getErrorMessage } from "@cubby/shared";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -62,15 +62,15 @@ import {
   image,
   imageProcessingJob,
   imageProcessingAttempt,
-  importRun,
-  importRunTarget,
+  run as runTable,
+  runTarget,
   ledgerParty,
   location,
   photoGroupProposal,
   product,
   productCategory,
 } from "~/server/db/schema";
-import { assertImportRunCapability } from "~/server/purchase-import/capabilities";
+import { assertRunCapability } from "~/server/purchase-import/capabilities";
 import {
   getDb,
   notDeleted,
@@ -129,39 +129,36 @@ export async function assertPhotoRunReviewer(
 async function loadRun(db: Database, runShortcode: string) {
   const [row] = await getDb(db)
     .select({
-      id: importRun.id,
-      shortcode: importRun.shortcode,
-      purpose: importRun.purpose,
-      status: importRun.status,
+      id: runTable.id,
+      shortcode: runTable.shortcode,
+      purpose: runTable.purpose,
+      status: runTable.status,
     })
-    .from(importRun)
-    .where(eq(importRun.shortcode, importRunShortcode.parse(runShortcode)))
+    .from(runTable)
+    .where(eq(runTable.shortcode, runShortcodeSchema.parse(runShortcode)))
     .limit(1);
   if (!row) throw new PhotoRunNotFoundError(runShortcode);
-  assertImportRunCapability(
-    importRunPurpose.parse(row.purpose),
-    "photo_commit",
-  );
+  assertRunCapability(runPurpose.parse(row.purpose), "photo_commit");
   return {
-    id: importRunId.parse(row.id),
-    shortcode: importRunShortcode.parse(row.shortcode),
-    status: importRunStatus.parse(row.status),
+    id: runEntityId.parse(row.id),
+    shortcode: runShortcodeSchema.parse(row.shortcode),
+    status: runStatus.parse(row.status),
   };
 }
 type LoadedRun = Awaited<ReturnType<typeof loadRun>>;
 
-async function loadRunImages(db: Database, runId: ImportRunId) {
+async function loadRunImages(db: Database, runId: RunId) {
   const rows = await getDb(db)
     .select({
       imageId: image.id,
       shortcode: image.shortcode,
-      state: importRunTarget.state,
-      diff: importRunTarget.diff,
+      state: runTarget.state,
+      diff: runTarget.diff,
     })
-    .from(importRunTarget)
-    .innerJoin(image, eq(image.id, importRunTarget.imageId))
-    .where(eq(importRunTarget.runId, runId))
-    .orderBy(importRunTarget.position)
+    .from(runTarget)
+    .innerJoin(image, eq(image.id, runTarget.imageId))
+    .where(eq(runTarget.runId, runId))
+    .orderBy(runTarget.position)
     .limit(RUN_IMAGE_LIMIT);
   const ordered: RunImage[] = rows.map((row) => ({
     ...row,
@@ -172,7 +169,7 @@ async function loadRunImages(db: Database, runId: ImportRunId) {
   return { byCode, byId, ordered };
 }
 
-const loadProposalRows = (db: Database, runId: ImportRunId) =>
+const loadProposalRows = (db: Database, runId: RunId) =>
   getDb(db)
     .select()
     .from(photoGroupProposal)
@@ -191,7 +188,7 @@ type LiveRoster = {
 
 /**
  * A row's roster minus images that left the run: deleting an image
- * hard-deletes its `ImportRunTarget` but not the id stored in this row's
+ * hard-deletes its `RunTarget` but not the id stored in this row's
  * JSON, and a missing id must not break listing, approval, or discard.
  */
 function liveRoster(
@@ -564,7 +561,7 @@ function assertOneGroupPerImage(
 
 async function upsertProposal(
   txDb: Database,
-  runId: ImportRunId,
+  runId: RunId,
   entry: ResolvedGroup,
 ) {
   const { group } = entry;
@@ -630,9 +627,9 @@ export async function proposePhotoGroups(
   }
   const frozenGroupKeys = await withTransactionDatabase(db, async (txDb) => {
     await getDb(txDb)
-      .select({ id: importRun.id })
-      .from(importRun)
-      .where(eq(importRun.id, run.id))
+      .select({ id: runTable.id })
+      .from(runTable)
+      .where(eq(runTable.id, run.id))
       .for("update");
     const [runImages, existing] = await Promise.all([
       loadRunImages(txDb, run.id),
@@ -1118,13 +1115,16 @@ export async function listPhotoRunImages(
       imageId: image.id,
       shortcode: image.shortcode,
       sha256: image.sha256,
-      position: importRunTarget.position,
-      state: importRunTarget.state,
+      position: runTarget.position,
+      state: runTarget.state,
+      deviceWorkState: runTarget.deviceWorkState,
+      deviceWorkError: runTarget.deviceWorkError,
+      deviceWorkAttempts: runTarget.deviceWorkAttempts,
     })
-    .from(importRunTarget)
-    .innerJoin(image, eq(image.id, importRunTarget.imageId))
-    .where(eq(importRunTarget.runId, run.id))
-    .orderBy(importRunTarget.position, image.shortcode)
+    .from(runTarget)
+    .innerJoin(image, eq(image.id, runTarget.imageId))
+    .where(eq(runTarget.runId, run.id))
+    .orderBy(runTarget.position, image.shortcode)
     .limit(RUN_IMAGE_LIMIT);
   if (!rows.length) return [];
   const shortcodes = rows.map((row) => row.shortcode);
@@ -1155,7 +1155,7 @@ export async function listPhotoRunImages(
       .from(aiAnalysis)
       .where(
         and(
-          eq(aiAnalysis.entityType, "image"),
+          eq(aiAnalysis.entityKind, "image"),
           eq(aiAnalysis.feature, "photo-local-analysis"),
           inArray(
             aiAnalysis.entityId,
@@ -1197,13 +1197,20 @@ export async function listPhotoRunImages(
     return {
       id: parseShortcodeFor("image", row.shortcode),
       position: row.position,
-      targetState: importRunTargetState.parse(row.state),
+      targetState: runTargetState.parse(row.state),
       originalUrl: rendition.original,
       cutoutUrl: rendition.transparent,
       cutout: cutout?.state ?? null,
       describe: describe?.state ?? null,
       ...descriptionJobTiming(describe, descriptionAttempts),
-      localAnalysisReady: locallyAnalyzed.has(row.imageId),
+      // Device-reported completion is the source of truth going forward;
+      // an AiAnalysis row from before this column existed still counts, so
+      // an in-flight run's older photos do not regress to "not ready".
+      localAnalysisReady:
+        row.deviceWorkState === "completed" || locallyAnalyzed.has(row.imageId),
+      deviceWorkState: row.deviceWorkState,
+      deviceWorkError: row.deviceWorkError,
+      deviceWorkAttempts: row.deviceWorkAttempts,
       cutoutReason:
         cutout && (cutout.state === "skipped" || cutout.state === "failed")
           ? cutout.lastError

@@ -1,7 +1,10 @@
 import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import { useCallback, useEffect, useMemo } from "react";
 
-import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
+import {
+  bulkActionPreview,
+  type BulkActionsConfig,
+} from "../data-table/bulk-actions.types";
 import type { ListWorkbenchModel } from "../data-table/ListWorkbench";
 import { reconcileRowSelection } from "../data-table/row-selection";
 import type { CubbyRow as Row } from "../data-table/table-features";
@@ -306,6 +309,9 @@ export function useClientEntityList<TData extends BaseListRow>({
           }
         : undefined,
       bulkActionBar,
+      bulkActionPreview: bulkActionPreview(
+        presentationState.listBulkActions.config,
+      ),
       rowActions: presentationState.listBulkActions.rowActions,
       actionDialogs: presentationState.listBulkActions.actionDialogs,
       subjectEntity: subject?.entity,

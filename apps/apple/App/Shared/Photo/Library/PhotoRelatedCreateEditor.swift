@@ -228,8 +228,7 @@ struct PhotoRelatedCreateEditor: View {
         _ field: FieldDescriptor, bindings: [PhotoCreateBinding], source: EntityRow?,
         captureDate: Date?
     ) -> Bool {
-        // TODO: derive from image-policy.gen.ts
-        if ["pendingImageIds", "removeImageIds", "imageOrder"].contains(field.key) { return false }
+        if PhotoImportCatalog.imageFieldKeys.contains(field.key) { return false }
         for binding in bindings where binding.field == field.key {
             switch binding.source {
             case .sourceField:

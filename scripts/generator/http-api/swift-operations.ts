@@ -621,11 +621,11 @@ const CLIENT_PASSTHROUGH_METHODS = {
   },
   "photoImport.commit": { method: "commitPhotoImport", doc: null },
   "photoImport.createRun": {
-    method: "createPhotoImportRun",
+    method: "createPhotoRun",
     doc: "Starts a native-tagged photo-inventory run (`PhotoImportRunUploader`'s bulk-upload entry point). Distinct from the manifest-based `stage`/`commit` pair: a run has no per-photo destination, only ordered positions finalized in chunks.",
   },
   "photoImport.finalize": {
-    method: "finalizePhotoImportRun",
+    method: "finalizePhotoRun",
     doc: "Finalizes one chunk (≤100 images) of a bulk upload into `input.runId`. Idempotent: a retry after a transport error replays safely, since a previously finalized image comes back in `alreadyFinalized` rather than erroring.",
   },
   "photoImport.stage": { method: "stagePhotoImport", doc: null },

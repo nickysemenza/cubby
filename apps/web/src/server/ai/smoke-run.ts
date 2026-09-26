@@ -3,10 +3,7 @@ import {
   aiSmokeRunInput,
   type AiSmokeScenario,
 } from "@cubby/schemas/ai-smoke";
-import {
-  type ImportRunId,
-  parseShortcodeFor,
-} from "@cubby/schemas/identifiers";
+import { type RunId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   extractedPurchaseLine,
   browserCapture,
@@ -38,7 +35,7 @@ import {
 } from "~/server/ai/run-feature";
 import { runAiSelection } from "~/server/ai/selection";
 import { getAiClient } from "~/server/clients/ai";
-import { aiUsage, image, importRun } from "~/server/db/schema";
+import { aiUsage, image, run as runTable } from "~/server/db/schema";
 import { loadPurchaseAuditBatch } from "~/server/purchase-import/audit-batch";
 import {
   chooseLineStage,
@@ -156,7 +153,7 @@ async function runCase(
   context: AuthenticatedStartOperationContext,
   scenario: AiSmokeScenario,
   raw: SmokeJson,
-  runId: ImportRunId,
+  runId: RunId,
   structuredPorts?: StructuredRunPorts,
 ): Promise<CaseResult> {
   const db = context.db;
@@ -290,7 +287,7 @@ async function runCase(
         db,
         runId,
         operation: `smoke.${scenario}`,
-        entity: { entityType: "location", entityId: id },
+        entity: { entityKind: "location", entityId: id },
       };
       return {
         result:
@@ -322,7 +319,7 @@ async function runCase(
             db,
             runId,
             operation: "smoke.imageDescription",
-            entity: { entityType: "image", entityId: id },
+            entity: { entityKind: "image", entityId: id },
           },
           structuredPorts,
         ),
@@ -341,7 +338,7 @@ async function runCase(
             db,
             runId,
             operation: "smoke.recipeFlow",
-            entity: { entityType: "recipe", entityId: id },
+            entity: { entityKind: "recipe", entityId: id },
             validate: (plan) => assessRecipeFlowCandidate(recipe, plan),
           },
         ),
@@ -459,7 +456,7 @@ async function runCase(
         source === "run"
           ? await loadPurchaseAuditBatch(
               db,
-              await resolveOrThrow(db, "importRun", sourceRunCode ?? ""),
+              await resolveOrThrow(db, "run", sourceRunCode ?? ""),
             )
           : [
               {
@@ -533,7 +530,7 @@ async function runCase(
           runId,
           feature: ENTITY_EMBEDDING_FEATURE.feature,
           operation: "smoke.entityEmbedding",
-          entity: { entityType: "product", entityId: id },
+          entity: { entityKind: "product", entityId: id },
         },
       );
       return {
@@ -563,9 +560,9 @@ export async function runAiSmoke(
     },
   );
   const [run] = await getDb(context.db)
-    .select({ shortcode: importRun.shortcode })
-    .from(importRun)
-    .where(eq(importRun.id, runId))
+    .select({ shortcode: runTable.shortcode })
+    .from(runTable)
+    .where(eq(runTable.id, runId))
     .limit(1);
   if (!run) throw new Error("Smoke Run was not found after creation.");
   const attempt = await finishSmokeAttempt(spec.feature, run.shortcode, () =>

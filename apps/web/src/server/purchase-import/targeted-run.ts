@@ -3,10 +3,7 @@ import type {
   PurchaseId,
   VendorId,
 } from "@cubby/schemas/identifiers";
-import {
-  importRunShortcode,
-  vendorAccountId,
-} from "@cubby/schemas/identifiers";
+import { runShortcode, vendorAccountId } from "@cubby/schemas/identifiers";
 import { flueImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { and, desc, eq } from "drizzle-orm";
@@ -30,11 +27,11 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import {
-  dispatchImportRunEvent,
-  recordImportRunDispatchAttempt,
+  dispatchRunEvent,
+  recordRunDispatchAttempt,
 } from "~/server/purchase-import/dispatch";
 import { productEnrichmentTarget } from "~/server/purchase-import/product-enrichment-target";
-import { startTargetedImportRun } from "~/server/purchase-import/run-service";
+import { startTargetedRun } from "~/server/purchase-import/run-service";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
@@ -85,7 +82,7 @@ export async function dispatchStartedRun(
 ): Promise<"running" | "dispatch_failed"> {
   const queue = getPurchaseAgentQueue();
   if (!queue) {
-    await recordImportRunDispatchAttempt(db, {
+    await recordRunDispatchAttempt(db, {
       runId: run.id,
       eventId: run.eventId,
       error: "Purchase import agent queue is unavailable",
@@ -101,7 +98,7 @@ export async function dispatchStartedRun(
       type: "start_or_resume",
     };
     if (run.coordinatorModel) event.coordinatorModel = run.coordinatorModel;
-    await dispatchImportRunEvent(db, queue, event);
+    await dispatchRunEvent(db, queue, event);
     return "running";
   } catch {
     return "dispatch_failed";
@@ -126,7 +123,7 @@ async function queueStartedRun(
     purpose: run.purpose,
   });
   return {
-    id: importRunShortcode.parse(run.publicId),
+    id: runShortcode.parse(run.publicId),
     status,
     purpose: targetedImportPurpose.parse(run.purpose),
     dispatchEventId: run.dispatchEventId,
@@ -135,14 +132,14 @@ async function queueStartedRun(
 
 async function startedOutcome(
   db: Database,
-  started: Awaited<ReturnType<typeof startTargetedImportRun>>,
+  started: Awaited<ReturnType<typeof startTargetedRun>>,
 ): Promise<TargetedImportStartOutput["runs"][number]> {
   if (!started.created)
     return {
       created: false,
       run: null,
       blockingRun: {
-        id: importRunShortcode.parse(started.blockingRun.publicId),
+        id: runShortcode.parse(started.blockingRun.publicId),
         status: started.blockingRun.status,
       },
     };
@@ -367,7 +364,7 @@ async function startPurchaseValidation(
     : purchaseScope.vendorAccountId
       ? vendorAccountId.parse(purchaseScope.vendorAccountId)
       : null;
-  const started = await startTargetedImportRun(db, {
+  const started = await startTargetedRun(db, {
     ledgerPartyId,
     purpose: "purchase_validation",
     vendorId: claim?.vendorId ?? purchaseScope.vendorId,
@@ -438,7 +435,7 @@ async function startProductEnrichment(
   const runs = await Promise.all(
     [...groups.values()].map(async (group) => {
       const { claim } = group[0]!;
-      const started = await startTargetedImportRun(db, {
+      const started = await startTargetedRun(db, {
         ledgerPartyId,
         purpose: "product_enrichment",
         vendorId: claim.vendorId,

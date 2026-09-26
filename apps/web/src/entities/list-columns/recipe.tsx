@@ -17,8 +17,8 @@ import {
 import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
+import { useTagOptions } from "~/app/_components/hooks/useEntityOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
-import { useRecipeTagOptions } from "~/app/_components/hooks/useRecipeTagOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { EditableTagsCell } from "~/app/_components/recipe/editable-tags-cell";
 import { RecipeTag } from "~/app/_components/recipe/recipe-tag";
@@ -99,7 +99,7 @@ export const recipeListOverride = defineListOverride<
   RecipeFilters
 >({
   use() {
-    const { options: tagOptions } = useRecipeTagOptions();
+    const { options: tagOptions } = useTagOptions("recipe");
     const ingredientOptionsQuery = useQuery(
       relatedData.options.queryOptions({
         relationKey: "recipe.ingredients",

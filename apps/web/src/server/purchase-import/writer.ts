@@ -8,7 +8,7 @@ import { cardLastFoursOn } from "@cubby/schemas/financial-account";
 import {
   parseEntityId,
   userId as userIdSchema,
-  importRunId,
+  runEntityId,
 } from "@cubby/schemas/identifiers";
 import {
   importWriterInput,
@@ -45,9 +45,9 @@ import {
   financialAccount,
   financialTransaction,
   financialTransactionAllocation,
-  importFinding,
-  importRun,
-  importRunMutation,
+  runFinding,
+  run as runTable,
+  runMutation,
   importSourceClaim,
   ledgerParty,
   ledgerSourceClaim,
@@ -60,7 +60,7 @@ import {
   purchasePaymentEvidence,
   vendorAccount,
 } from "~/server/db/schema";
-import { assertImportRunCapabilityById } from "~/server/purchase-import/capabilities";
+import { assertRunCapabilityById } from "~/server/purchase-import/capabilities";
 import {
   getDb,
   notDeleted,
@@ -131,11 +131,11 @@ async function assertImportOwnership(
     .select({ id: ledgerParty.id })
     .from(ledgerParty)
     .innerJoin(
-      importRun,
+      runTable,
       and(
-        eq(importRun.id, importRunId.parse(input.runId)),
-        eq(importRun.ledgerPartyId, ledgerParty.id),
-        eq(importRun.actorUserId, userIdSchema.parse(actorUserId)),
+        eq(runTable.id, runEntityId.parse(input.runId)),
+        eq(runTable.ledgerPartyId, ledgerParty.id),
+        eq(runTable.actorUserId, userIdSchema.parse(actorUserId)),
       ),
     )
     .leftJoin(
@@ -401,7 +401,7 @@ export async function chooseLineStage(
     usage: {
       db,
       operation: `purchaseImport.${stage}.${index}`,
-      runId: importRunId.parse(runId),
+      runId: runEntityId.parse(runId),
     },
   });
 }
@@ -563,7 +563,7 @@ async function decideLineIdentities(
       usage: {
         db,
         operation: `purchaseImport.productIdentity.${index}`,
-        runId: importRunId.parse(input.runId),
+        runId: runEntityId.parse(input.runId),
       },
     });
     const selected =
@@ -722,11 +722,11 @@ async function fileFinding(
     JSON.stringify({ source: input.source, kind, purchaseId, proposedFix }),
   );
   const [row] = await tx
-    .insert(importFinding)
+    .insert(runFinding)
     .values({
-      importRunId: input.runId,
+      runId: input.runId,
       ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
-      targetType: "purchase",
+      targetKind: "purchase",
       targetId: purchaseId,
       kind,
       summary,
@@ -734,18 +734,18 @@ async function fileFinding(
       evidenceFingerprint,
     })
     .onConflictDoNothing()
-    .returning({ id: importFinding.id });
+    .returning({ id: runFinding.id });
   if (row) return row.id;
-  const existing = await tx.query.importFinding.findFirst({
+  const existing = await tx.query.runFinding.findFirst({
     where: and(
       eq(
-        importFinding.ledgerPartyId,
+        runFinding.ledgerPartyId,
         parseEntityId("ledgerParty", input.ledgerPartyId),
       ),
-      eq(importFinding.targetId, purchaseId),
-      eq(importFinding.kind, kind),
-      eq(importFinding.evidenceFingerprint, evidenceFingerprint),
-      eq(importFinding.status, "open"),
+      eq(runFinding.targetId, purchaseId),
+      eq(runFinding.kind, kind),
+      eq(runFinding.evidenceFingerprint, evidenceFingerprint),
+      eq(runFinding.status, "open"),
     ),
   });
   if (!existing) throw new Error("Import finding conflict did not resolve");
@@ -804,7 +804,7 @@ export async function importVendorOrder(
   // Validation consumes this exact deterministic projection before any writer
   // side effect. Keep it on the mutation path so plan drift is explicit.
   const semanticPlan = buildPurchaseImportPlan(input.extraction);
-  await assertImportRunCapabilityById(db, input.runId, "business_writer");
+  await assertRunCapabilityById(db, input.runId, "business_writer");
   await assertImportOwnership(db, input, actorUserId);
   const skipsLineWrites = semanticPlan.writeBlockReason !== null;
   const explicitResolutions = input.productResolutions;
@@ -827,11 +827,11 @@ export async function importVendorOrder(
       .select({ partyId: ledgerParty.id })
       .from(ledgerParty)
       .innerJoin(
-        importRun,
+        runTable,
         and(
-          eq(importRun.id, importRunId.parse(input.runId)),
-          eq(importRun.ledgerPartyId, ledgerParty.id),
-          eq(importRun.actorUserId, userIdSchema.parse(actorUserId)),
+          eq(runTable.id, runEntityId.parse(input.runId)),
+          eq(runTable.ledgerPartyId, ledgerParty.id),
+          eq(runTable.actorUserId, userIdSchema.parse(actorUserId)),
         ),
       )
       .leftJoin(
@@ -905,7 +905,7 @@ export async function importVendorOrder(
         defaultProjectId: input.defaultProjectId
           ? parseEntityId("project", input.defaultProjectId)
           : null,
-        importRunId: input.runId,
+        runId: input.runId,
         orderId: candidate.orderId,
         displayLabel: candidate.merchant,
         date: dateOnly(candidate.orderedAt),
@@ -920,7 +920,7 @@ export async function importVendorOrder(
           defaultProjectId: input.defaultProjectId
             ? parseEntityId("project", input.defaultProjectId)
             : target.defaultProjectId,
-          importRunId: target.importRunId ?? input.runId,
+          runId: target.runId ?? input.runId,
           displayLabel: target.displayLabel ?? candidate.merchant,
           statedTotal: target.statedTotal ?? candidate.printedGrandTotal,
         })
@@ -929,7 +929,7 @@ export async function importVendorOrder(
     const purchaseId = parseEntityId("purchase", target.id);
     const findingIds: string[] = [];
     const rowMutations: Array<{
-      targetType: "expense" | "product";
+      targetKind: "expense" | "product";
       targetId: string;
       mutationKind: "create" | "update" | "delete";
       fields: string[];
@@ -968,7 +968,7 @@ export async function importVendorOrder(
             trade: null,
           });
           rowMutations.push({
-            targetType: "expense",
+            targetKind: "expense",
             targetId: inserted.id,
             mutationKind: "create",
             fields: ["name", "cost", "lineKind", "purchaseId"],
@@ -1025,7 +1025,7 @@ export async function importVendorOrder(
             .set({ deletedAt: new Date() })
             .where(eq(expense.id, parseEntityId("expense", aggregate.id)));
           rowMutations.push({
-            targetType: "expense",
+            targetKind: "expense",
             targetId: aggregate.id,
             mutationKind: "delete",
             fields: ["deletedAt"],
@@ -1083,7 +1083,7 @@ export async function importVendorOrder(
             productQuantity: quantity,
           });
           rowMutations.push({
-            targetType: "expense",
+            targetKind: "expense",
             targetId: inserted.id,
             mutationKind: "create",
             fields: [
@@ -1298,21 +1298,21 @@ export async function importVendorOrder(
           transactionIds,
           before,
           actor: buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
-            runId: importRunId.parse(input.runId),
+            runId: runEntityId.parse(input.runId),
           }),
         });
       }
     }
-    await tx.insert(importRunMutation).values({
+    await tx.insert(runMutation).values({
       runId: input.runId,
-      targetType: "purchase",
+      targetKind: "purchase",
       targetId: purchaseId,
       mutationKind: created ? "create" : "update",
       fields: ["header", "documents", "expenses", "paymentEvidence"],
       postFingerprint: claimFingerprint,
     });
     if (rowMutations.length > 0) {
-      await tx.insert(importRunMutation).values(
+      await tx.insert(runMutation).values(
         rowMutations.map((mutation) => ({
           runId: input.runId,
           ...mutation,
@@ -1320,7 +1320,7 @@ export async function importVendorOrder(
         })),
       );
     }
-    await tx.execute(sql`UPDATE "ImportRun" SET
+    await tx.execute(sql`UPDATE "Run" SET
       "ordersSeen" = "ordersSeen" + 1,
       ${created ? sql`"imported" = "imported" + 1` : sql`"updated" = "updated" + 1`},
       "updatedAt" = now()

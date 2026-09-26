@@ -16,7 +16,11 @@ import {
   usePageWorkbenchTarget,
 } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
-import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
+import {
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+} from "~/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -36,6 +40,7 @@ import {
 } from "../actions/entity-actions";
 import { EntityDisplayImagesProvider } from "../entity-media/entity-display-images";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
+import type { BulkActionPreview } from "./bulk-actions.types";
 import { CellSelectionContext } from "./cell-selection-context";
 import { columnWidthValue } from "./column-layout";
 import { DataTablePagination } from "./data-table-pagination";
@@ -160,6 +165,11 @@ export interface RTableProps<TItem extends RowData> {
   onRowHoverEnd?: (row: Row<TItem>) => void;
   /** Bulk action bar (rendered in toolbar when rows are selected) */
   bulkActionBar?: ReactNode;
+  /**
+   * The list's bulk verbs, listed disabled in the page-mode `Actions ▾` menu
+   * while nothing is selected, so they are discoverable at rest.
+   */
+  bulkActionPreview?: readonly BulkActionPreview[];
   /** Infinite scroll controls — when provided, mobile hides pagination and auto-loads more */
   infiniteScroll?: InfiniteScrollControls;
   /** Pull-to-refresh controls for mobile list rendering */
@@ -287,6 +297,7 @@ function DesktopTableToolbar<TItem extends RowData>({
   onGroupedChange,
   actions,
   bulkActionBar,
+  bulkActionPreview,
   externalToolbar,
   isTransitioning,
   embedded,
@@ -303,6 +314,7 @@ function DesktopTableToolbar<TItem extends RowData>({
   | "onGroupedChange"
   | "actions"
   | "bulkActionBar"
+  | "bulkActionPreview"
   | "embedded"
   | "showColumnMenu"
 > & {
@@ -340,6 +352,17 @@ function DesktopTableToolbar<TItem extends RowData>({
         grouped={grouped}
         onGroupedChange={onGroupedChange}
       />
+      {bulkActionPreview && bulkActionPreview.length > 0 && (
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Select rows to</DropdownMenuLabel>
+          {bulkActionPreview.map((action) => (
+            <DropdownMenuItem key={action.id} disabled>
+              {action.icon}
+              {action.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+      )}
     </>
   );
 
@@ -901,6 +924,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     actions,
     inspectorToggle,
     bulkActionBar,
+    bulkActionPreview,
     isLoading = false,
     error,
     ariaLabel = "Data Table",
@@ -1029,6 +1053,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       onGroupedChange={onGroupedChange}
       actions={actions}
       bulkActionBar={bulkActionBar}
+      bulkActionPreview={bulkActionPreview}
       externalToolbar={externalToolbar}
       isTransitioning={isTransitioning}
       embedded={embedded}

@@ -4,8 +4,20 @@ import { useMemo } from "react";
 export interface GroupConfig<TItem> {
   /** DB column name for server-side group ordering (e.g., "type", "category") */
   field: string;
-  /** Extract the group key from an item. Null/undefined becomes "(unspecified)". */
+  /** Extract the group key from an item. Null/undefined becomes "(unspecified)".
+   * Used as-is only until full-set server `groups` arrive; see `rawKeyFn`. */
   keyFn: (item: TItem) => string | null | undefined;
+  /**
+   * Extract the row's raw grouped-field value — the same value the server
+   * grouped on (a category id, a location type), not a rendered label. Once
+   * full-set `groups` load, `useEntityList` matches rows to sections by this
+   * value (falling back to the entity's declared null-group key), because
+   * `keyFn` may render a label instead (see `PRODUCT_GROUP_CONFIG`, whose
+   * `keyFn` renders the category's formatted path for the groups-less local
+   * fallback). Omit it when `keyFn` already returns the raw value (see
+   * `LOCATION_GROUP_CONFIG`).
+   */
+  rawKeyFn?: (item: TItem) => string | null | undefined;
   colorFn: (key: string) => string;
   /** Ordered summaries of the entire filtered set, including unloaded pages. */
   groups?: readonly ListGroupSummary[];

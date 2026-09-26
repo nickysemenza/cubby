@@ -1,3 +1,4 @@
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type ProductFilters,
   type ProductListItem,
@@ -10,7 +11,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { treePickerItems } from "~/app/_components/combobox/tree-items";
-import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
+import { useEntityListSource } from "~/app/_components/combobox/with-search-hook";
 import {
   createBooleanColumn,
   createExternalLinkColumn,
@@ -29,10 +30,10 @@ import {
 import type { GroupConfig } from "~/app/_components/data-table/useGroupedList";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
+import { useTagOptions } from "~/app/_components/hooks/useEntityOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useProductCategories } from "~/app/_components/hooks/useProductCategories";
-import { useProductTagOptions } from "~/app/_components/hooks/useProductTagOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { useCreateInventoryMutation } from "~/app/_components/inventory/hooks";
 import { InventoryEntriesQuickEditDialog } from "~/app/_components/inventory/inventory-entries-quick-edit-dialog";
@@ -169,7 +170,7 @@ function ProductFoodCell({ product }: { product: ProductListItem }) {
 
 function useProductFilterOptions() {
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
-  const { options: tagOptions } = useProductTagOptions();
+  const { options: tagOptions } = useTagOptions("product");
   const { categories } = useProductCategories();
   const projectOptions = useDeferredFilterOptions("project");
   const locationOptions = useDeferredFilterOptions("locationWithInventory");
@@ -264,11 +265,23 @@ function useProductFilterOptions() {
   });
 }
 
+const productGrouping = generatedEntitySort.product.grouping;
+if (!productGrouping)
+  throw new Error("product entity declares no list-grouping contract.");
+
+// UI-only: the local (groups-less) fallback groups by the category's
+// formatted path, and every group gets the same neutral swatch — unlike
+// Location, categories have no inherent color. The server-key match once
+// full-set groups load is generic (`useEntityList.tsx`'s
+// `effectiveGroupConfig`, keyed by the declared `field`/`nullGroupKey`
+// above), so this `keyFn` only has to look right before that data arrives.
 const groupKeyFn = (item: ProductTreeRow) => formatCategoryLabel(item.category);
 const groupColorFn = (_key: string) => "var(--chart-neutral)";
-const PRODUCT_GROUP_CONFIG: GroupConfig<ProductTreeRow> = {
-  field: "category",
+export const PRODUCT_GROUP_CONFIG: GroupConfig<ProductTreeRow> = {
+  field: productGrouping.field,
   keyFn: groupKeyFn,
+  // The raw value the server grouped on — the category id, not its label.
+  rawKeyFn: (item) => item.categoryId,
   colorFn: groupColorFn,
 };
 
@@ -772,9 +785,18 @@ export const productListOverride = defineListOverride<
                 provenance: relationshipFieldProvenance("product", "inventory"),
                 onQuickEdit: (product) => setQuickEditProductId(product.id),
                 inlineEdit: {
-                  SearchProvider: (props) => (
-                    <WithEntitySearch entity="location" {...props} />
-                  ),
+                  SearchProvider: (props) => {
+                    const { dialog, ...search } = useEntityListSource(
+                      "location",
+                      { scope: props.scope },
+                    );
+                    return (
+                      <>
+                        {dialog}
+                        {props.children(search)}
+                      </>
+                    );
+                  },
                   onMoveEntry: async (entry, locationId) => {
                     await updateInventoryMutation.mutateAsync({
                       id: entry.id,

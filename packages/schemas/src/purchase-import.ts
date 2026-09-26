@@ -5,18 +5,14 @@ import { externalIdKind, externalIdSource } from "./external-id";
 import { flueImportRunPurpose } from "./import-run-agent";
 
 import { money } from "./money";
-import {
-  importRunPurpose,
-  importRunStatus,
-  importRunTrigger,
-} from "./import-run-fields";
+import { runPurpose, runStatus, runTrigger } from "./run-fields";
 import { expenseLineKindSchema } from "./expense-line-kind";
 import {
   imageShortcode,
   productShortcode,
   projectShortcode,
-  importRunId,
-  importRunShortcode,
+  runEntityId,
+  runShortcode,
   purchaseShortcode,
   vendorShortcode,
 } from "./identifier-fields";
@@ -37,19 +33,15 @@ export const importSourceKind = z.enum([
 ]);
 export type ImportSourceKind = z.infer<typeof importSourceKind>;
 
-export {
-  importRunPurpose,
-  importRunStatus,
-  importRunTrigger,
-} from "./import-run-fields";
-export type ImportRunTrigger = z.infer<typeof importRunTrigger>;
-export type ImportRunStatus = z.infer<typeof importRunStatus>;
-export type ImportRunPurpose = z.infer<typeof importRunPurpose>;
+export { runPurpose, runStatus, runTrigger } from "./run-fields";
+export type RunTrigger = z.infer<typeof runTrigger>;
+export type RunStatus = z.infer<typeof runStatus>;
+export type RunPurpose = z.infer<typeof runPurpose>;
 
-export const importRunTargetKind = z.enum(["purchase", "product"]);
-export type ImportRunTargetKind = z.infer<typeof importRunTargetKind>;
+export const runTargetKind = z.enum(["purchase", "product"]);
+export type RunTargetKind = z.infer<typeof runTargetKind>;
 
-export const importRunTargetState = z.enum([
+export const runTargetState = z.enum([
   "pending",
   "prepared",
   "completed",
@@ -58,9 +50,9 @@ export const importRunTargetState = z.enum([
   "needs_evidence",
   "unavailable",
 ]);
-export type ImportRunTargetState = z.infer<typeof importRunTargetState>;
+export type RunTargetState = z.infer<typeof runTargetState>;
 
-export const importRunTargetOutcome = z.enum([
+export const runTargetOutcome = z.enum([
   "replayed",
   "raw_evidence_drift",
   "semantic_drift",
@@ -68,25 +60,25 @@ export const importRunTargetOutcome = z.enum([
   "unavailable",
   "skipped",
 ]);
-export type ImportRunTargetOutcome = z.infer<typeof importRunTargetOutcome>;
+export type RunTargetOutcome = z.infer<typeof runTargetOutcome>;
 
-export const importRunEvidenceKind = z.enum([
+export const runEvidenceKind = z.enum([
   "browser_capture",
   "gmail_attachment",
   "manual_upload",
 ]);
-export type ImportRunEvidenceKind = z.infer<typeof importRunEvidenceKind>;
+export type RunEvidenceKind = z.infer<typeof runEvidenceKind>;
 
-export { importRunShortcode };
-export type ImportRunPublicId = z.infer<typeof importRunShortcode>;
+export { runShortcode };
+export type RunPublicId = z.infer<typeof runShortcode>;
 
 /** Stage bytes for a run target only; this never creates an Image or Document. */
-export const initiateImportRunEvidenceUploadInput = z.object({
+export const initiateRunEvidenceUploadInput = z.object({
   // The run's public code: the browser page names runs by it and the Mac
   // echoes the one its capture command's evidence scope carried.
-  runId: importRunShortcode,
+  runId: runShortcode,
   targetId: z.uuid(),
-  kind: importRunEvidenceKind,
+  kind: runEvidenceKind,
   contentType: z.enum([
     "application/pdf",
     "image/jpeg",
@@ -104,18 +96,18 @@ export const initiateImportRunEvidenceUploadInput = z.object({
   filename: z.string().trim().min(1).max(255),
   sourceMetadata: z.record(z.string(), z.json()).default({}),
 });
-export type InitiateImportRunEvidenceUploadInput = z.infer<
-  typeof initiateImportRunEvidenceUploadInput
+export type InitiateRunEvidenceUploadInput = z.infer<
+  typeof initiateRunEvidenceUploadInput
 >;
 
-export const initiateImportRunEvidenceUploadOut = z.object({
+export const initiateRunEvidenceUploadOut = z.object({
   evidenceId: z.uuid(),
   objectKey: z.string().min(1),
   uploadUrl: z.url(),
   expiresAt: z.iso.datetime(),
 });
-export type InitiateImportRunEvidenceUploadOut = z.infer<
-  typeof initiateImportRunEvidenceUploadOut
+export type InitiateRunEvidenceUploadOut = z.infer<
+  typeof initiateRunEvidenceUploadOut
 >;
 
 const targetedSource = z.object({
@@ -132,7 +124,7 @@ export const purchaseValidationTargetInput = z.object({
 export const createPurchaseValidationRunInput = z.object({
   vendorId: vendorShortcode,
   vendorAccountId: z.uuid().nullable().optional(),
-  trigger: importRunTrigger.default("manual"),
+  trigger: runTrigger.default("manual"),
   targets: z.array(purchaseValidationTargetInput).min(1).max(50),
 });
 export type CreatePurchaseValidationRunInput = z.infer<
@@ -147,26 +139,24 @@ export const productEnrichmentTargetInput = z.object({
 });
 export const createProductEnrichmentRunsInput = z.object({
   vendorId: vendorShortcode,
-  trigger: importRunTrigger.default("manual"),
+  trigger: runTrigger.default("manual"),
   targets: z.array(productEnrichmentTargetInput).min(1).max(50),
 });
 export type CreateProductEnrichmentRunsInput = z.infer<
   typeof createProductEnrichmentRunsInput
 >;
 
-export const targetedImportRunStartOut = z.object({
+export const targetedRunStartOut = z.object({
   created: z.boolean(),
   run: z
     .object({
-      id: importRunShortcode,
-      status: importRunStatus,
-      purpose: importRunPurpose,
+      id: runShortcode,
+      status: runStatus,
+      purpose: runPurpose,
       dispatchEventId: z.string().uuid().nullable(),
     })
     .nullable(),
-  blockingRun: z
-    .object({ id: importRunShortcode, status: importRunStatus })
-    .nullable(),
+  blockingRun: z.object({ id: runShortcode, status: runStatus }).nullable(),
 });
 
 const importOperationId = z.string().trim().min(1).max(200);
@@ -361,7 +351,7 @@ export function normalizeImportExtractionModelOutput(
   return { status: "unreadable", detail };
 }
 
-export const importFindingKind = z.enum([
+export const runFindingKind = z.enum([
   "wrong_product",
   "duplicate_product",
   "sum_mismatch",
@@ -381,9 +371,9 @@ export const importFindingKind = z.enum([
   "unclassified_vendor",
   "other",
 ]);
-export type ImportFindingKind = z.infer<typeof importFindingKind>;
+export type RunFindingKind = z.infer<typeof runFindingKind>;
 
-export const importFindingStatus = z.enum(["open", "applied", "dismissed"]);
+export const runFindingStatus = z.enum(["open", "applied", "dismissed"]);
 
 export const proposedImportFix = z.discriminatedUnion("kind", [
   z.object({
@@ -491,7 +481,7 @@ export const browserBridgeOperation = z.discriminatedUnion("type", [
     // Targeted browser evidence must retain the scope that authorizes its R2
     // upload; account-sync captures intentionally omit it.
     evidenceScope: z
-      .object({ runId: importRunShortcode, targetId: z.uuid() })
+      .object({ runId: runShortcode, targetId: z.uuid() })
       .optional(),
   }),
 ]);
@@ -634,7 +624,7 @@ export const browserBridgeRunCompletion = z.object({
     "failed",
     "dispatch_failed",
   ]),
-  outcome: importRunTargetOutcome.nullish(),
+  outcome: runTargetOutcome.nullish(),
   imported: z.number().int().nonnegative(),
   updated: z.number().int().nonnegative(),
   skipped: z.number().int().nonnegative(),
@@ -700,13 +690,13 @@ export const purchaseAgentEvent = z.discriminatedUnion("type", [
 ]);
 export type PurchaseAgentEvent = z.infer<typeof purchaseAgentEvent>;
 
-export const importRunScope = z.object({
-  runId: importRunId,
-  shortcode: importRunShortcode,
+export const runScope = z.object({
+  runId: runEntityId,
+  shortcode: runShortcode,
   agentId: z.string().trim().min(1),
-  trigger: importRunTrigger,
-  purpose: importRunPurpose,
-  status: importRunStatus,
+  trigger: runTrigger,
+  purpose: runPurpose,
+  status: runStatus,
   vendorAccountId: z.uuid().nullable(),
   vendorLabel: z.string().trim().min(1).max(500).nullable(),
   allowedHosts: z.array(z.string().trim().min(1).max(253)).max(20),
@@ -719,7 +709,7 @@ export const importRunScope = z.object({
   dispatchError: z.string().nullable(),
   coordinatorStartedAt: z.iso.datetime().nullable(),
 });
-export type ImportRunScope = z.infer<typeof importRunScope>;
+export type RunScope = z.infer<typeof runScope>;
 
 export const importWriterInput = z.object({
   defaultTrade: tradeSchema.optional(),
@@ -833,7 +823,7 @@ export const preparedProductCandidate = z.object({
 });
 
 export const preparePurchaseImportOut = z.object({
-  runId: importRunShortcode,
+  runId: runShortcode,
   operationId: importOperationId,
   status: z.literal("running"),
   orders: z.array(
@@ -887,9 +877,9 @@ export type CommitPurchaseImportInput = z.infer<
 >;
 
 export const commitPurchaseImportOut = z.object({
-  runId: importRunShortcode,
+  runId: runShortcode,
   operationId: importOperationId,
-  status: importRunStatus,
+  status: runStatus,
   items: z.array(
     z.object({
       stableOrderId: stableImportItemId,
@@ -911,7 +901,7 @@ export type ValidatePurchaseImportInput = z.infer<
 >;
 
 export const validatePurchaseImportOut = z.object({
-  runId: importRunShortcode,
+  runId: runShortcode,
   operationId: importOperationId,
   status: z.enum(["completed", "needs_review"]),
   targets: z.array(
@@ -964,7 +954,7 @@ export type CommitProductEnrichmentInput = z.infer<
 >;
 
 export const commitProductEnrichmentOut = z.object({
-  runId: importRunShortcode,
+  runId: runShortcode,
   operationId: importOperationId,
   productId: productShortcode,
   status: z.enum(["running", "needs_review"]),
@@ -997,7 +987,7 @@ export type OverwriteProductEnrichmentInput = z.infer<
 >;
 
 export const overwriteProductEnrichmentOut = z.object({
-  runId: importRunShortcode,
+  runId: runShortcode,
   productId: productShortcode,
   changedField: z.enum(["manufacturer", "categoryId", "model"]),
 });
@@ -1010,7 +1000,7 @@ export type ImportOperationStatusInput = z.infer<
 >;
 
 export const importOperationStatusOut = z.object({
-  runId: importRunShortcode,
+  runId: runShortcode,
   operationId: importOperationId,
   kind: z.string(),
   state: z.enum(["started", "paused_approval", "completed", "failed"]),
@@ -1058,7 +1048,7 @@ export const listReceiptHuntsOut = z.object({
 });
 
 export const importAuditFinding = z.object({
-  kind: importFindingKind,
+  kind: runFindingKind,
   targetPurchaseId: z.uuid(),
   summary: z.string().trim().min(1).max(1_000),
   probability: z.number().finite().min(0).max(1),
@@ -1079,7 +1069,7 @@ export type ImportAuditOutput = z.infer<typeof importAuditOutput>;
 export const importAuditModelOutput = z.object({
   findings: z.array(
     z.object({
-      kind: importFindingKind,
+      kind: runFindingKind,
       targetPurchaseId: z.string(),
       summary: z.string(),
       probability: z.number(),

@@ -1,4 +1,4 @@
-import { importRunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import {
   type RecipeOut,
   recipeOut,
@@ -28,7 +28,7 @@ const RECIPE_ID = testEntityId(
   "recipe",
   "00000000-0000-4000-8000-000000000001",
 );
-const RUN_ID = importRunId.parse("00000000-0000-4000-8000-000000000009");
+const RUN_ID = runEntityId.parse("00000000-0000-4000-8000-000000000009");
 const SECTION_ID = "00000000-0000-4000-8000-000000000002";
 const USAGE_ID = "00000000-0000-4000-8000-000000000003";
 const db = new Database(() => {

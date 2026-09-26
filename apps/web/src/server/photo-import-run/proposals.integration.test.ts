@@ -1,5 +1,7 @@
+import { buildActorContext } from "@cubby/schemas/context";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PhotoGroupProposalGroup } from "@cubby/schemas/photo-import-run";
+import { testUserId } from "@cubby/schemas/testing";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq, ilike, sql } from "drizzle-orm";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
@@ -9,16 +11,16 @@ import {
   image,
   imageProcessingJob,
   imageProcessingAttempt,
-  importRun,
-  importRunTarget,
+  run as runTable,
+  runTarget,
   inventoryEntry,
   photoGroupProposal,
   product,
 } from "~/server/db/schema";
 import {
-  loadImportRunDetail,
-  reconcileSettledImportRun,
-  stopImportRunForReview,
+  loadRunDetail,
+  reconcileSettledRun,
+  stopRunForReview,
 } from "~/server/purchase-import/run-service";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { deleteImages } from "~/server/repo/image";
@@ -36,6 +38,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
   approvePhotoGroupProposals,
+  assertPhotoRunReviewer,
   chooseExistingProductForPhotoGroup,
   updatePhotoGroupProductDraft,
   discardPhotoGroupProposal,
@@ -55,12 +58,12 @@ describe("photo group proposals", () => {
       kind: "member" as const,
       userId: ctx.actor.userId,
     });
-    const id = parseEntityId("importRun", crypto.randomUUID());
+    const id = parseEntityId("run", crypto.randomUUID());
     const [run] = await getDb(ctx.db)
-      .insert(importRun)
+      .insert(runTable)
       .values({
         id,
-        shortcode: generateShortcode("importRun"),
+        shortcode: generateShortcode("run"),
         ledgerPartyId: party.id,
         actorUserId: ctx.actor.userId,
         actorName: "Proposal Tester",
@@ -81,7 +84,7 @@ describe("photo group proposals", () => {
       ),
     );
     await getDb(ctx.db)
-      .insert(importRunTarget)
+      .insert(runTarget)
       .values(
         images.map((image, index) => ({
           runId: run.id,
@@ -113,12 +116,27 @@ describe("photo group proposals", () => {
       .from(photoGroupProposal)
       .where(
         and(
-          eq(photoGroupProposal.runId, parseEntityId("importRun", runId)),
+          eq(photoGroupProposal.runId, parseEntityId("run", runId)),
           eq(photoGroupProposal.groupKey, groupKey),
         ),
       );
     return row;
   };
+
+  // Regression: `assertPhotoRunReviewer` is every review handler's gate
+  // (`photoImportHandlers` in `photo-import.server.ts` calls it before doing
+  // anything else). It must reject an actor with no live `member`
+  // LedgerParty the exact same way as a run that doesn't exist — a 404, not a
+  // 403 — so a non-member can never learn a run exists by the shape of the
+  // error they get back.
+  it("treats an actor with no member LedgerParty as if the run doesn't exist", async () => {
+    const { run } = await seedRun(1);
+    const outsider = buildActorContext(testUserId("outsider-user-id"), "web");
+
+    await expect(
+      assertPhotoRunReviewer(ctx.db, outsider, run.shortcode),
+    ).rejects.toThrow(`Import run ${run.shortcode} was not found`);
+  });
 
   it("hands a saved photo proposal to human review when the agent ends without a final progress call", async () => {
     const { run, codes } = await seedRun(2);
@@ -127,7 +145,7 @@ describe("photo group proposals", () => {
       groups: [createGroup("shirt", codes)],
     });
 
-    const settled = await reconcileSettledImportRun(
+    const settled = await reconcileSettledRun(
       ctx.db,
       {
         getByName: () => {
@@ -138,7 +156,7 @@ describe("photo group proposals", () => {
     );
     expect(settled).toEqual({ reconciled: false, status: "running" });
     expect(
-      (await loadImportRunDetail(ctx.db, run.shortcode)).latestProgress,
+      (await loadRunDetail(ctx.db, run.shortcode)).latestProgress,
     ).toMatchObject({
       phase: "awaiting_approval",
       awaitingApproval: true,
@@ -167,7 +185,7 @@ describe("photo group proposals", () => {
         createGroup("hat", [codes[2]!]),
       ],
     });
-    await stopImportRunForReview(ctx.db, {
+    await stopRunForReview(ctx.db, {
       runId: run.id,
       operationId: "synthetic-photo-review-stop",
       kind: "other",
@@ -680,11 +698,11 @@ describe("photo group proposals", () => {
       result.proposals.find((entry) => entry.groupKey === "junk")?.state,
     ).toBe("discarded");
     const targets = await getDb(ctx.db)
-      .select({ state: importRunTarget.state })
-      .from(importRunTarget)
+      .select({ state: runTarget.state })
+      .from(runTarget)
       .where(
         eq(
-          importRunTarget.imageId,
+          runTarget.imageId,
           parseEntityId(
             "image",
             (await readRow(run.id, "junk"))!.images[0]!.imageId,
@@ -826,9 +844,9 @@ describe("photo group proposals", () => {
       groups: [createGroup("late", codes)],
     });
     await getDb(ctx.db)
-      .update(importRun)
+      .update(runTable)
       .set({ status: "failed" })
-      .where(eq(importRun.id, run.id));
+      .where(eq(runTable.id, run.id));
 
     await proposePhotoGroups(ctx.db, {
       runId: run.shortcode,
@@ -838,7 +856,7 @@ describe("photo group proposals", () => {
     expect(await readRow(run.id, "late")).toBeUndefined();
   });
 
-  // Regression: deleting a run photo hard-deletes its ImportRunTarget but not
+  // Regression: deleting a run photo hard-deletes its RunTarget but not
   // the id in the proposal's JSON, and every reader threw "left its run" —
   // breaking the review page, approve-all, and discard.
   it("tolerates a proposal photo deleted after proposing: lists, approves and discards without it", async () => {
@@ -857,8 +875,8 @@ describe("photo group proposals", () => {
     ];
     for (const deleted of deletedIds)
       await getDb(ctx.db)
-        .delete(importRunTarget)
-        .where(eq(importRunTarget.imageId, parseEntityId("image", deleted)));
+        .delete(runTarget)
+        .where(eq(runTarget.imageId, parseEntityId("image", deleted)));
 
     const listed = await listPhotoGroupProposals(ctx.db, run.shortcode);
     const kept = listed.proposals.find((entry) => entry.groupKey === "kept");
@@ -912,12 +930,12 @@ describe("photo group proposals", () => {
     // reused across tests, so the trigger is dropped in `finally`.
     const firstId = (await readRow(run.id, "hat"))!.images[0]!.imageId;
     const [other] = await getDb(ctx.db)
-      .select({ imageId: importRunTarget.imageId })
-      .from(importRunTarget)
+      .select({ imageId: runTarget.imageId })
+      .from(runTarget)
       .where(
         and(
-          eq(importRunTarget.runId, run.id),
-          sql`${importRunTarget.imageId} <> ${firstId}`,
+          eq(runTarget.runId, run.id),
+          sql`${runTarget.imageId} <> ${firstId}`,
         ),
       );
     const db = getDb(ctx.db);
@@ -932,7 +950,7 @@ describe("photo group proposals", () => {
         END $$ LANGUAGE plpgsql`),
     );
     await db.execute(
-      sql.raw(`CREATE TRIGGER test_mid_approval_save AFTER UPDATE ON "ImportRunTarget"
+      sql.raw(`CREATE TRIGGER test_mid_approval_save AFTER UPDATE ON "RunTarget"
         FOR EACH ROW EXECUTE FUNCTION test_mid_approval_save()`),
     );
 
@@ -945,7 +963,7 @@ describe("photo group proposals", () => {
       );
     } finally {
       await db.execute(
-        sql.raw(`DROP TRIGGER test_mid_approval_save ON "ImportRunTarget"`),
+        sql.raw(`DROP TRIGGER test_mid_approval_save ON "RunTarget"`),
       );
       await db.execute(sql.raw(`DROP FUNCTION test_mid_approval_save()`));
     }

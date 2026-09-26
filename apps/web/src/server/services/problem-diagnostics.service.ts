@@ -33,7 +33,7 @@ import {
   findIncompleteStatementImports,
   findInvalidFinancialJson,
   findManufacturerSpellingVariants,
-  findOpenImportFindings,
+  findOpenRunFindings,
   findOrphanedProducts,
   findParentRecipesWithDeletedSubRecipes,
   findPartiallyImportedCookbooks,
@@ -219,9 +219,8 @@ async function runUpcProposals(
 export const diagnosticAdapters = {
   "import-findings": {
     sample: (db, _options, limit) =>
-      healthySample(findOpenImportFindings(db), limit),
-    count: async (db) =>
-      healthyCount((await findOpenImportFindings(db)).length),
+      healthySample(findOpenRunFindings(db), limit),
+    count: async (db) => healthyCount((await findOpenRunFindings(db)).length),
   },
   "duplicate-product-identities": {
     sample: (db, _options, limit) =>

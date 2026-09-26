@@ -151,11 +151,11 @@ describe("resolveListView", () => {
     expect(resolveListView("project", { view: "gallery" }).view).toBe("shelf");
   });
 
-  // Regression: the Runs index (importRun has no create/update contract, so
+  // Regression: the Runs index (run has no create/update contract, so
   // no kernel list read) shipped with no override and crashed on SSR with
   // "has no list read and no list override source". Every generated index
   // outside the roster must page its own rows — a client projection
-  // (cookbook) or a module `source` (image, importRun).
+  // (cookbook) or a module `source` (image, run).
   it.each(offRosterGeneratedIndexEntities)(
     "%s: a generated index outside the kernel list roster pages its own rows",
     (entity) => {
