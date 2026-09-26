@@ -408,6 +408,52 @@ const ENRICH_EXTRAS = new Map<
 ]);
 
 /**
+ * Measure one edge against one target inside a rolled-back savepoint.
+ * `false` when this target cannot isolate the edge (no source row could be
+ * pointed at it, or another edge's blocker could not be cleared).
+ */
+async function measureEdge(
+  db: Database,
+  {
+    item,
+    target,
+    synthetic,
+    blockEdges,
+    failures,
+  }: {
+    item: Parameters<typeof checkDisposition>[1];
+    target: Parameters<typeof checkDisposition>[2];
+    synthetic: boolean;
+    blockEdges: readonly IncomingEdge[];
+    failures: string[];
+  },
+): Promise<boolean> {
+  const edge = edgeOf(item.entity, item.edge);
+  let measured = false;
+  await getDb(db)
+    .transaction(async (tx) => {
+      const txDb = databaseForTransaction(tx);
+      if (synthetic && !(await pointEdgeAt(txDb, edge, target.id)))
+        throw new Rollback();
+      // Every other guard is cleared, so a refusal is this edge's own.
+      const others = blockEdges.filter((other) => other !== edge);
+      if (!(await clearBlockers(txDb, others, edge, target.id)))
+        throw new Rollback();
+      measured = true;
+      const problem = await checkDisposition(txDb, item, target);
+      if (problem)
+        failures.push(
+          `${item.entity} ${item.edge} (${item.disposition.effect}): ${problem}`,
+        );
+      throw new Rollback();
+    })
+    .catch((err) => {
+      if (!(err instanceof Rollback)) throw err;
+    });
+  return measured;
+}
+
+/**
  * Tombstone the live rows that reference `targetId` over the block edges, so
  * a non-block edge whose every target is also blocked can still be measured.
  * A blocker on a table with no `deletedAt` is removed (the savepoint rolls it
@@ -964,50 +1010,31 @@ describe("entity delete policy — declared dispositions at the DB boundary", ()
           synthetic ? await liveTargets(ctx.db, entity) : referenced
         ).filter((row) => row.shortcode !== TEST_HOME_SHORTCODE);
         // The house root is undeletable by design, whatever references it.
-        const target =
+        // Candidates come back in no particular order, and clearing another
+        // edge's blockers can fail for one target (a non-soft-deletable row
+        // that is itself undeletable) yet succeed for the next, so try each
+        // candidate until one can be measured; otherwise the edge flickers
+        // between covered and uncovered from run to run.
+        const candidates =
           disposition.effect === "block"
-            ? pool[0]
-            : (pool.find((row) => !blocked.has(row.id)) ?? pool[0]);
-        if (!target) {
-          uncovered.push(`${entity} ${edge}`);
-          continue;
-        }
-        await getDb(ctx.db)
-          .transaction(async (tx) => {
-            const db = databaseForTransaction(tx);
-            if (
-              synthetic &&
-              !(await pointEdgeAt(db, edgeOf(entity, edge), target.id))
-            ) {
-              uncovered.push(`${entity} ${edge}`);
-              throw new Rollback();
-            }
-            // Every other guard is cleared, so a refusal is this edge's own.
-            const others = blockEdges.filter(
-              (other) => other !== edgeOf(entity, edge),
-            );
-            if (
-              !(await clearBlockers(
-                db,
-                others,
-                edgeOf(entity, edge),
-                target.id,
-              ))
-            ) {
-              uncovered.push(`${entity} ${edge}`);
-              throw new Rollback();
-            }
-            covered += 1;
-            const problem = await checkDisposition(db, item, target);
-            if (problem)
-              failures.push(
-                `${entity} ${edge} (${disposition.effect}): ${problem}`,
-              );
-            throw new Rollback();
-          })
-          .catch((err) => {
-            if (!(err instanceof Rollback)) throw err;
+            ? pool
+            : [
+                ...pool.filter((row) => !blocked.has(row.id)),
+                ...pool.filter((row) => blocked.has(row.id)),
+              ];
+        let measured = false;
+        for (const target of candidates) {
+          measured = await measureEdge(ctx.db, {
+            item,
+            target,
+            synthetic,
+            blockEdges,
+            failures,
           });
+          if (measured) break;
+        }
+        if (measured) covered += 1;
+        else uncovered.push(`${entity} ${edge}`);
       }
     }
 
