@@ -69,8 +69,9 @@ function parsePng(bytes: Uint8Array): ParsedPng {
     }
     offset = dataEnd + 4;
   }
-  if (!dimensions || idat.length === 0)
-    throw new Error("Transparent derivative PNG is unsupported or too large");
+  if (!dimensions) throw new Error("Transparent derivative PNG has no header");
+  if (idat.length === 0)
+    throw new Error("Transparent derivative PNG has no image data");
   const compressed = new Uint8Array(
     idat.reduce((total, chunk) => total + chunk.length, 0),
   );
@@ -143,7 +144,9 @@ export async function hasMeaningfulPngTransparency(
     !Number.isSafeInteger(expectedBytes) ||
     expectedBytes > MAX_DECODED_PNG_BYTES
   )
-    throw new Error("Transparent derivative PNG is unsupported or too large");
+    throw new Error(
+      `Transparent derivative PNG is ${width}x${height}, which decodes to ${expectedBytes} bytes; the limit is ${MAX_DECODED_PNG_BYTES}`,
+    );
   const stream = new Blob([Uint8Array.from(compressed).buffer])
     .stream()
     .pipeThrough(new DecompressionStream("deflate"));

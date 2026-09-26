@@ -1168,14 +1168,27 @@ const PROCESSING_VARIANT = {
   failed: "destructive",
 } satisfies Record<ImageProcessingJobState, BadgeVariant>;
 
+/**
+ * A cutout is parked as `waiting_for_device` until its description decides
+ * whether the photo is worth cutting out (`getCurrentImageCutoutEligibility`),
+ * so a queued description, not a missing device, is what it waits on.
+ */
+const cutoutWaitsOnDescription = (photo: {
+  cutout: ImageProcessingJobState | null;
+  describe: ImageProcessingJobState | null;
+}) => photo.cutout === "waiting_for_device" && photo.describe !== "ready";
+
 function ProcessingBadge({
   label,
   state,
   reason,
+  waitingFor,
 }: {
   label: string;
   state: ImageProcessingJobState | null;
   reason?: string | null;
+  /** Overrides the state label with what the job is actually blocked on. */
+  waitingFor?: string | null;
 }) {
   if (!state)
     return (
@@ -1201,12 +1214,16 @@ function ProcessingBadge({
         ? "This photo is label evidence, so it does not need a cutout."
         : reason;
   const badge = (
-    <Badge variant={PROCESSING_VARIANT[state]} className="max-w-full">
+    <Badge
+      variant={waitingFor ? "secondary" : PROCESSING_VARIANT[state]}
+      className="max-w-full"
+    >
       <Icon
         className={`size-3 shrink-0 ${state === "leased" ? "animate-spin" : ""}`}
         aria-hidden="true"
       />
-      {label}: {PROCESSING_LABEL[state]}
+      {label}:{" "}
+      {waitingFor ? `Waiting for ${waitingFor}` : PROCESSING_LABEL[state]}
     </Badge>
   );
   if (!explanation) return badge;
@@ -1335,6 +1352,9 @@ function PhotoTable({
                           photo.targetState === "completed"
                             ? "Image is attached only as label evidence"
                             : null)
+                        }
+                        waitingFor={
+                          cutoutWaitsOnDescription(photo) ? "description" : null
                         }
                       />
                       <ProcessingBadge

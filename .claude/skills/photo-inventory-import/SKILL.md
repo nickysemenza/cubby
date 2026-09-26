@@ -20,13 +20,14 @@ party. Free-text `notes` gives context such as a location by time window
 ## Read the run
 
 Call `get_photo_run_context { runId }` for `ledgerPartyId`, `notes`, and the
-run's photos. Filter its images to `targetState: "pending"`; the list is
-already ordered by the run's picker `position`, which reflects
-capture order. Each image carries `targetState`, `position`, `description`,
-and `recognizedText` (on-device Vision OCR plus the cloud
-description, when either has run). Read those summaries and `position`
-adjacency first; open an image (`originalUrl` or `cutoutUrl`)
-only when the summary leaves the item, its label text, or a group boundary
+run's photos, one page at a time: pass `nextCursor` back as `cursor` until it
+is null. Filter its images to `targetState: "pending"`; the pages are ordered
+by the run's picker `position`, which reflects capture order. Each image
+carries `targetState`, `position`, `description`, and `recognizedText`
+(on-device Vision OCR plus the cloud description, when either has run). Read
+those summaries and `position` adjacency first. If you can view images, pass
+`withImageUrls: true` and open an image (`originalUrl` or `cutoutUrl`) only
+when the summary leaves the item, its label text, or a group boundary
 genuinely unclear — most groups resolve from the summary alone. Background
 removal is queued for every image automatically; cutouts appear only while
 image processing is enabled and a paired Apple device is connected, so a

@@ -8,6 +8,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { imageProcessingJob } from "~/server/db/image-processing-schema";
 import { aiUsage, image, importRun, importRunTarget } from "~/server/db/schema";
@@ -81,6 +82,66 @@ describe("photo import finalize", () => {
       images: [],
       ledgerPartyId: expect.stringMatching(/^LPY-/),
     });
+  });
+
+  // Every page stays in the coordinator's context for the rest of the run, so
+  // a large run must be readable in bounded pages without URLs or timings.
+  it("pages the agent's photo context in shot order", async () => {
+    const run = await startRun();
+    for (const position of [0, 1, 2]) {
+      const photo = await createImageFixture(ctx.db, `page-${position}`, {
+        status: "UPLOADED",
+        sha256: String(position).repeat(64),
+      });
+      await getDb(ctx.db)
+        .insert(importRunTarget)
+        .values({
+          runId: run.id,
+          imageId: parseImageId.parse(photo.id),
+          position,
+          state: "pending",
+          targetFingerprint: String(position).repeat(64),
+        });
+    }
+    const server = new McpServer({ name: "photo-test", version: "1.0.0" });
+    registerPhotoImportTools(server);
+    const entityKernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
+    );
+    const page = async (cursor: number) => {
+      const response = await callMcpTool(
+        server,
+        "get_photo_run_context",
+        { runId: run.publicId, limit: 2, cursor },
+        {},
+        { entityKernel },
+      );
+      expect(response.isError).not.toBe(true);
+      return z
+        .object({
+          totalImages: z.number(),
+          nextCursor: z.number().nullable(),
+          images: z.array(z.looseObject({ position: z.number().nullable() })),
+        })
+        .parse(response.structuredContent);
+    };
+
+    const first = await page(0);
+    expect(first).toMatchObject({ totalImages: 3, nextCursor: 2 });
+    expect(first.images.map((image) => image.position)).toEqual([0, 1]);
+    expect(Object.keys(first.images[0] ?? {}).sort()).toEqual([
+      "describe",
+      "description",
+      "id",
+      "position",
+      "recognizedText",
+      "targetState",
+    ]);
+    const last = await page(2);
+    expect(last).toMatchObject({ totalImages: 3, nextCursor: null });
+    expect(last.images.map((image) => image.position)).toEqual([2]);
   });
 
   /** Bytes/hash never touch real R2 — the same seam the commit integration

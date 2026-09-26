@@ -75,7 +75,11 @@ import {
 
 import { assertImportRunCapability } from "./capabilities";
 import { learnPurchaseProductExternalId } from "./external-id-learning";
-import { attachPendingOrderMailEvidence } from "./gmail/process";
+import {
+  attachPendingOrderMailEvidence,
+  type AttachOrderMailFile,
+} from "./gmail/process";
+import { productEnrichmentTarget } from "./product-enrichment-target";
 import { auditAllImportBatches, loadRunScope } from "./run-service";
 import { buildPurchaseImportPlan, importVendorOrder } from "./writer";
 
@@ -551,6 +555,7 @@ export async function commitPurchaseImport(
   db: Database,
   rawInput: CommitPurchaseImportInput,
   actor: ActorContext,
+  attachMailFile?: AttachOrderMailFile,
 ) {
   const input = commitPurchaseImportInput.parse(rawInput);
   const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
@@ -785,12 +790,16 @@ export async function commitPurchaseImport(
                 .limit(1)
             : [];
           if (written && extraction.candidate?.orderId) {
-            await attachPendingOrderMailEvidence(transactionDb, {
-              vendorId,
-              orderId: extraction.candidate.orderId,
-              purchaseShortcode: written.shortcode,
-              ledgerPartyId: scope.ledgerPartyId,
-            });
+            await attachPendingOrderMailEvidence(
+              transactionDb,
+              {
+                vendorId,
+                orderId: extraction.candidate.orderId,
+                purchaseShortcode: written.shortcode,
+                ledgerPartyId: scope.ledgerPartyId,
+              },
+              attachMailFile,
+            );
           }
           items.push({
             stableOrderId: order.stableOrderId,
@@ -1229,23 +1238,13 @@ export async function commitProductEnrichment(
           .for("update");
         if (!target || target.targetFingerprint !== input.targetFingerprint)
           throw new Error("Product enrichment target changed before commit");
-        const [live] = await tx
-          .select({
-            name: product.name,
-            manufacturer: product.manufacturer,
-            categoryId: product.categoryId,
-            model: product.model,
-            updatedAt: product.updatedAt,
-          })
-          .from(product)
-          .where(and(eq(product.id, productId), notDeleted(product)))
-          .limit(1)
-          .for("update");
-        if (!live) throw new Error("Product enrichment target was not found");
-        const currentTargetFingerprint = await sha256Hex(
-          JSON.stringify({ product: live }),
-        );
-        if (currentTargetFingerprint !== input.targetFingerprint)
+        const current = await productEnrichmentTarget(tx, productId, {
+          lock: true,
+        });
+        if (!current)
+          throw new Error("Product enrichment target was not found");
+        const { live } = current;
+        if (current.fingerprint !== input.targetFingerprint)
           throw new Error("Product enrichment target changed before commit");
         if (
           (changes.manufacturer && live.manufacturer.trim()) ||
@@ -1480,22 +1479,10 @@ export async function overwriteProductEnrichment(
       .limit(1);
     if (!target || target.targetFingerprint !== input.targetFingerprint)
       throw new Error("Product enrichment target changed before approval");
-    const [live] = await database
-      .select({
-        name: product.name,
-        manufacturer: product.manufacturer,
-        categoryId: product.categoryId,
-        model: product.model,
-        updatedAt: product.updatedAt,
-      })
-      .from(product)
-      .where(and(eq(product.id, resolvedProductId), notDeleted(product)))
-      .limit(1);
-    if (!live) throw new Error("Product enrichment target was not found");
-    if (
-      (await sha256Hex(JSON.stringify({ product: live }))) !==
-      input.targetFingerprint
-    )
+    const current = await productEnrichmentTarget(database, resolvedProductId);
+    if (!current) throw new Error("Product enrichment target was not found");
+    const { live } = current;
+    if (current.fingerprint !== input.targetFingerprint)
       throw new Error("Product enrichment target changed after proposal");
 
     const categoryId =

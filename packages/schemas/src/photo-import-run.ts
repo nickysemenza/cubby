@@ -367,6 +367,26 @@ export const photoRunImage = z.object({
 });
 export type PhotoRunImage = z.infer<typeof photoRunImage>;
 
+/**
+ * The agent's per-photo summary in `get_photo_run_context`. Every field is
+ * carried in each later model call, so timings and cutout state are left out
+ * and image URLs are opt-in.
+ */
+export const photoRunContextImage = photoRunImage
+  .pick({
+    id: true,
+    position: true,
+    targetState: true,
+    describe: true,
+    description: true,
+    recognizedText: true,
+  })
+  .extend({
+    /** Present only with `withImageUrls`, for a caller that can view images. */
+    originalUrl: z.string().optional(),
+    cutoutUrl: z.string().nullable().optional(),
+  });
+
 export const photoProductCandidate = z.object({
   id: productShortcode,
   name: z.string(),

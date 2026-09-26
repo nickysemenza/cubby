@@ -97,6 +97,29 @@ function PhotoRunProgress({
   );
 }
 
+/**
+ * Mirrors the server gate in `startPhotoGroupingForActor`: a coordinator
+ * started before descriptions settle has nothing to group on.
+ */
+function descriptionsInFlight(review: PhotoRunReview | undefined) {
+  return Boolean(
+    review?.images.some(
+      (image) =>
+        image.targetState === "pending" &&
+        (image.describe === "pending" ||
+          image.describe === "leased" ||
+          image.describe === "waiting_for_device"),
+    ),
+  );
+}
+
+function groupingHint(pending: number, analyzing: boolean) {
+  if (!pending) return "Upload and finalize photos in the Cubby app first.";
+  if (analyzing)
+    return "Photos are processing. Grouping starts once descriptions are ready.";
+  return "The agent proposes items; you approve each one before anything is created.";
+}
+
 /** The photo-inventory counterpart of the purchase-agent run workflow: the
  * agent's proposed item groups to review and every run photo, rather than an
  * agent transcript. */
@@ -108,6 +131,7 @@ export function PhotoImportRunView({ run }: { run: ImportRunDetail }) {
     (target) => target.targetType === "image" && target.state === "pending",
   ).length;
   const hasProposals = Boolean(review.data?.review.proposals.length);
+  const analyzing = descriptionsInFlight(review.data);
   useEffect(() => {
     if (
       autoStartAttempted.current ||
@@ -117,6 +141,7 @@ export function PhotoImportRunView({ run }: { run: ImportRunDetail }) {
       run.dispatch?.eventId ||
       !pending ||
       review.isPending ||
+      analyzing ||
       hasProposals
     )
       return;
@@ -128,6 +153,7 @@ export function PhotoImportRunView({ run }: { run: ImportRunDetail }) {
     run.dispatch?.eventId,
     pending,
     review.isPending,
+    analyzing,
     hasProposals,
     start,
   ]);
@@ -138,16 +164,14 @@ export function PhotoImportRunView({ run }: { run: ImportRunDetail }) {
           <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
             <Button
               type="button"
-              disabled={!pending || start.isPending}
+              disabled={!pending || analyzing || start.isPending}
               onClick={() => start.mutate({ runId: run.publicId })}
               className="min-h-11"
             >
               {start.isPending ? "Starting agent…" : "Start grouping"}
             </Button>
             <p className="text-sm text-muted-foreground">
-              {pending
-                ? "The agent proposes items; you approve each one before anything is created."
-                : "Upload and finalize photos in the Cubby app first."}
+              {groupingHint(pending, analyzing)}
             </p>
             {start.isError ? (
               <StatusText tone="destructive">

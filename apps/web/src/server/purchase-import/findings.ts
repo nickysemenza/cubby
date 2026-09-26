@@ -12,9 +12,9 @@ import {
   type ProposedImportFix,
 } from "@cubby/schemas/purchase-import";
 import { tradeSchema } from "@cubby/schemas/task-fields";
-import { and, eq, gt, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   expense,
   auditLog,
@@ -24,6 +24,8 @@ import {
   importSourceClaim,
   inventoryEntry,
   ledgerParty,
+  orderMail,
+  orderMailEvent,
   product,
   purchase,
 } from "~/server/db/schema";
@@ -67,6 +69,73 @@ const loadExpenses = async (
     sourceClaimed: sourceClaimId !== null,
   }));
 };
+
+/**
+ * Refund Expenses of this amount already on the Purchase, and refund mails
+ * for the order and amount.
+ *
+ * Equal partial refunds on one order are distinct money, so "an Expense of
+ * this amount already exists" cannot mean "already booked". Each distinct
+ * refund mail is one refund; a booked Expense of the amount (from an applied
+ * finding, order history, or a human) covers one of them. Mails are counted
+ * by content, so a resent copy stays one refund. A vendor's "refund
+ * initiated" and "refund issued" mails still count as two: the mail alone
+ * cannot tell them from two equal refunds, so the finding says so and the
+ * reviewer decides.
+ */
+export async function refundTally(
+  executor: DrizzleClient | DrizzleTransaction,
+  input: { purchaseId: string; ledgerPartyId: string; amount: number },
+): Promise<{ booked: number; evidenced: number }> {
+  const refundCents = Math.round(Math.abs(input.amount) * 100);
+  const purchaseId = parseEntityId("purchase", input.purchaseId);
+  // Sequential: a transaction handle runs one statement at a time.
+  const [booked] = await executor
+    .select({ count: sql<number>`count(*)::int` })
+    .from(expense)
+    .where(
+      and(
+        eq(expense.purchaseId, purchaseId),
+        sql`round(${expense.cost} * 100) = ${-refundCents}`,
+        notDeleted(expense),
+      ),
+    );
+  const [evidenced] = await executor
+    .select({
+      count: sql<number>`count(distinct ${orderMail.rawChecksum})::int`,
+    })
+    .from(orderMailEvent)
+    .innerJoin(orderMail, eq(orderMail.id, orderMailEvent.orderMailId))
+    .innerJoin(
+      purchase,
+      and(
+        eq(purchase.vendorId, orderMail.vendorId),
+        eq(purchase.orderId, orderMailEvent.orderId),
+      ),
+    )
+    .where(
+      and(
+        eq(purchase.id, purchaseId),
+        eq(
+          orderMail.ledgerPartyId,
+          parseEntityId("ledgerParty", input.ledgerPartyId),
+        ),
+        eq(orderMailEvent.event, "refunded"),
+        sql`round(abs(${orderMailEvent.amount}) * 100) = ${refundCents}`,
+      ),
+    );
+  return { booked: booked?.count ?? 0, evidenced: evidenced?.count ?? 0 };
+}
+
+/** Whether another refund Expense of this amount belongs on the Purchase. */
+async function refundStillUnbooked(
+  executor: DrizzleClient | DrizzleTransaction,
+  input: { purchaseId: string; ledgerPartyId: string; amount: number },
+): Promise<boolean> {
+  const { booked, evidenced } = await refundTally(executor, input);
+  // A refund finding without mail evidence still stands for one refund.
+  return booked < Math.max(evidenced, 1);
+}
 
 const assertFixTargetsFinding = (
   finding: {
@@ -138,6 +207,7 @@ async function applyFix(
   tx: DrizzleTransaction,
   fix: ProposedImportFix,
   actor: ActorContext,
+  ledgerPartyId: string,
 ) {
   if (fix.kind === "receive_purchase") {
     throw new Error(
@@ -192,18 +262,14 @@ async function applyFix(
     throw new Error("The proposed Purchase no longer exists.");
 
   if (fix.kind === "create_refund") {
-    const [existingRefund] = await tx
-      .select({ id: expense.id })
-      .from(expense)
-      .where(
-        and(
-          eq(expense.purchaseId, purchaseId),
-          eq(expense.cost, fix.amount),
-          notDeleted(expense),
-        ),
-      )
-      .limit(1);
-    if (existingRefund) return;
+    if (
+      !(await refundStillUnbooked(tx, {
+        purchaseId,
+        ledgerPartyId,
+        amount: fix.amount,
+      }))
+    )
+      return;
     const row = await insertWithShortcode(tx, "expense", {
       purchaseId,
       name: fix.title,
@@ -289,6 +355,7 @@ export async function resolveImportFinding(
         status: importFinding.status,
         proposedFix: importFinding.proposedFix,
         importRunId: importFinding.importRunId,
+        ledgerPartyId: importFinding.ledgerPartyId,
         targetType: importFinding.targetType,
         targetId: importFinding.targetId,
       })
@@ -341,7 +408,7 @@ export async function resolveImportFinding(
       const fix = proposedImportFix.parse(finding.proposedFix);
       assertFixTargetsFinding(finding, fix);
       await assertRunProvenance(tx, finding);
-      await applyFix(tx, fix, actor);
+      await applyFix(tx, fix, actor, finding.ledgerPartyId);
     }
     const status = input.action === "apply" ? "applied" : "dismissed";
     await tx

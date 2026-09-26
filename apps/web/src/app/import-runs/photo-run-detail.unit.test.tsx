@@ -253,6 +253,58 @@ describe("PhotoImportRunView", () => {
     );
   });
 
+  // Regression: a coordinator started while descriptions were still queued
+  // saw bare photos and stopped for review without grouping any of them.
+  it("waits for photo descriptions before starting grouping", async () => {
+    window.history.replaceState(null, "", "/runs/RUN-4K7M?startGrouping=1");
+    const describing: PhotoRunReview = {
+      ...review,
+      review: { ...review.review, proposals: [] },
+      images: review.images.map((image) => ({
+        ...image,
+        targetState: "pending",
+        describe: "pending",
+      })),
+    };
+    harness.queryClient.setQueryData(
+      photoImport.review.queryKey({ runId: RUN_ID }),
+      describing,
+    );
+    const operations: string[] = [];
+    restoreDispatch = overrideStartDispatch(async (operation) => {
+      operations.push(operation);
+      return {
+        ok: true,
+        data: { runId: RUN_ID, started: true, waitingForAnalysis: 0 },
+      };
+    });
+
+    render(
+      <PhotoImportRunView
+        run={{
+          ...run,
+          status: "running",
+          endedAt: null,
+          targets: run.targets.map((target) => ({
+            ...target,
+            state: "pending",
+          })),
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(
+      await screen.findByText(/Grouping starts once descriptions are ready/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Start grouping" }),
+    ).toBeDisabled();
+    expect(
+      operations.filter((name) => name === "photoImport.startGrouping"),
+    ).toHaveLength(0);
+  });
+
   // The run's status, owner, times and notes render in the generic Run
   // detail's hero and overview; this slot owns only the worklist.
   it("shows the progress tally and every run photo with its cutout and description", async () => {

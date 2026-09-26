@@ -2,13 +2,14 @@ import {
   commitPurchaseImportInput,
   validatePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
   expense,
   financialTransactionAllocation,
+  importFinding,
   importRunOperation,
   importRunTarget,
   product,
@@ -696,5 +697,296 @@ describe("shared purchase-import prepare and commit", () => {
       );
     expect(operation?.state).toBe("failed");
     expect(operation?.error).toContain("PRD-9999");
+  });
+
+  it("replaces a manually recorded Purchase's aggregate expense instead of duplicating it", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Manual-then-import member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Manual-then-import vendor ${crypto.randomUUID()}`,
+      website: "https://shop.example.test",
+      browserDomains: ["shop.example.test"],
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Manual-then-import account",
+      vendorId: vendor.id,
+      ledgerPartyId: party.id,
+    });
+    // A household member recorded this order by hand before any import ran:
+    // one aggregate Expense, no Product, no source claim.
+    const manualPurchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: "MANUAL-ORDER-1",
+      date: "2026-09-18",
+      statedTotal: 45,
+    });
+    const manualExpense = await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: manualPurchase.id,
+      name: "Recorded from a paper receipt",
+      cost: 45,
+      date: "2026-09-18",
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+      future: false,
+      productId: null,
+      productQuantity: null,
+    });
+    const existingProduct = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Manual merge target product" }),
+      ctx.actor,
+    );
+    const [productRow] = await getDb(ctx.db)
+      .select({ shortcode: product.shortcode })
+      .from(product)
+      .where(eq(product.id, existingProduct.entityId));
+    if (!productRow) throw new Error("Product fixture was not created");
+
+    const run = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const prepareInput = {
+      _runExecution: {
+        runId: run.id,
+        operationId: "prepare:manual-order-1",
+        itemOperationIds: ["prepare-item:manual-order-1"],
+      },
+      orders: [
+        {
+          stableOrderId: "manual-order-1",
+          itemOperationId: "prepare-item:manual-order-1",
+          source: {
+            kind: "browser_order" as const,
+            externalKey: "manual-then-import:order:1",
+            checksum: checksum("5"),
+          },
+          evidenceChecksum: checksum("6"),
+          extractionRevision: "manual-then-import@fixture-1",
+          extraction: {
+            status: "ready" as const,
+            candidate: {
+              orderId: "MANUAL-ORDER-1",
+              orderedAt: "2026-09-18T12:00:00.000Z",
+              merchant: "Example",
+              currency: "USD",
+              printedGrandTotal: 45,
+              lines: [
+                {
+                  title: "Manual merge target product",
+                  amount: 45,
+                  lineKind: "principal" as const,
+                },
+              ],
+              payments: [],
+              allShipmentsDelivered: false,
+            },
+          },
+          lineIds: ["manual-order-1:line-1"],
+          primaryDocumentImageId: null,
+          screenshotImageId: null,
+        },
+      ],
+    };
+    await preparePurchaseImport(ctx.db, prepareInput, ctx.actor);
+
+    const commitInput = commitPurchaseImportInput.parse({
+      _runExecution: { runId: run.id, operationId: "commit:manual-order-1" },
+      prepareOperationId: prepareInput._runExecution.operationId,
+      defaultTrade: "other" as const,
+      resolutions: [
+        {
+          stableOrderId: "manual-order-1",
+          stableLineId: "manual-order-1:line-1",
+          resolution: {
+            kind: "existing" as const,
+            productId: productRow.shortcode,
+          },
+        },
+      ],
+    });
+    const result = await commitPurchaseImport(ctx.db, commitInput, ctx.actor);
+    // The order was already a Purchase (found by vendor + orderId), so this
+    // is an update to it, never a second Purchase for the same order.
+    expect(result.items[0]?.outcome).toBe("updated");
+    expect(result.items[0]?.purchaseId).toBe(manualPurchase.shortcode);
+
+    const purchasesForOrder = await getDb(ctx.db)
+      .select({ id: purchase.id })
+      .from(purchase)
+      .where(eq(purchase.orderId, "MANUAL-ORDER-1"));
+    expect(purchasesForOrder).toHaveLength(1);
+    expect(purchasesForOrder[0]?.id).toBe(manualPurchase.id);
+
+    const liveExpenses = await getDb(ctx.db)
+      .select({
+        id: expense.id,
+        productId: expense.productId,
+        cost: expense.cost,
+      })
+      .from(expense)
+      .where(
+        and(
+          eq(expense.purchaseId, manualPurchase.id),
+          isNull(expense.deletedAt),
+        ),
+      );
+    // The import replaced the one legacy aggregate line with an
+    // identified line rather than adding a second Expense beside it.
+    expect(liveExpenses).toHaveLength(1);
+    expect(liveExpenses[0]?.productId).toBe(existingProduct.entityId);
+    expect(Number(liveExpenses[0]?.cost)).toBe(45);
+
+    const [deletedManualExpense] = await getDb(ctx.db)
+      .select({ deletedAt: expense.deletedAt })
+      .from(expense)
+      .where(eq(expense.id, manualExpense.id));
+    expect(deletedManualExpense?.deletedAt).not.toBeNull();
+  });
+
+  it("files a conflict finding instead of duplicating a manual Purchase whose Expense is already identified", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Manual conflict member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Manual conflict vendor ${crypto.randomUUID()}`,
+      website: "https://shop.example.test",
+      browserDomains: ["shop.example.test"],
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Manual conflict account",
+      vendorId: vendor.id,
+      ledgerPartyId: party.id,
+    });
+    const existingProduct = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Already-identified manual product" }),
+      ctx.actor,
+    );
+    // This member already fully recorded the order by hand: a Purchase, an
+    // Expense, AND its Product — nothing here is a replaceable aggregate.
+    const manualPurchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: "MANUAL-ORDER-2",
+      date: "2026-09-19",
+      statedTotal: 18,
+    });
+    const manualExpense = await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: manualPurchase.id,
+      name: "Already-identified manual product",
+      cost: 18,
+      date: "2026-09-19",
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+      future: false,
+      productId: existingProduct.entityId,
+      productQuantity: 1,
+    });
+
+    const run = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const prepareInput = {
+      _runExecution: {
+        runId: run.id,
+        operationId: "prepare:manual-order-2",
+        itemOperationIds: ["prepare-item:manual-order-2"],
+      },
+      orders: [
+        {
+          stableOrderId: "manual-order-2",
+          itemOperationId: "prepare-item:manual-order-2",
+          source: {
+            kind: "browser_order" as const,
+            externalKey: "manual-conflict:order:1",
+            checksum: checksum("7"),
+          },
+          evidenceChecksum: checksum("8"),
+          extractionRevision: "manual-conflict@fixture-1",
+          extraction: {
+            status: "ready" as const,
+            candidate: {
+              orderId: "MANUAL-ORDER-2",
+              orderedAt: "2026-09-19T12:00:00.000Z",
+              merchant: "Example",
+              currency: "USD",
+              printedGrandTotal: 18,
+              lines: [
+                {
+                  title: "Already-identified manual product",
+                  amount: 18,
+                  lineKind: "principal" as const,
+                },
+              ],
+              payments: [],
+              allShipmentsDelivered: false,
+            },
+          },
+          lineIds: ["manual-order-2:line-1"],
+          primaryDocumentImageId: null,
+          screenshotImageId: null,
+        },
+      ],
+    };
+    await preparePurchaseImport(ctx.db, prepareInput, ctx.actor);
+
+    const commitInput = commitPurchaseImportInput.parse({
+      _runExecution: { runId: run.id, operationId: "commit:manual-order-2" },
+      prepareOperationId: prepareInput._runExecution.operationId,
+      defaultTrade: "other" as const,
+      resolutions: [
+        {
+          stableOrderId: "manual-order-2",
+          stableLineId: "manual-order-2:line-1",
+          resolution: {
+            kind: "existing" as const,
+            productId: (
+              await getDb(ctx.db)
+                .select({ shortcode: product.shortcode })
+                .from(product)
+                .where(eq(product.id, existingProduct.entityId))
+            )[0]!.shortcode,
+          },
+        },
+      ],
+    });
+    const result = await commitPurchaseImport(ctx.db, commitInput, ctx.actor);
+    expect(result.items[0]?.outcome).toBe("updated");
+    expect(result.items[0]?.findingCount).toBeGreaterThan(0);
+
+    const purchasesForOrder = await getDb(ctx.db)
+      .select({ id: purchase.id })
+      .from(purchase)
+      .where(eq(purchase.orderId, "MANUAL-ORDER-2"));
+    expect(purchasesForOrder).toHaveLength(1);
+
+    const liveExpenses = await getDb(ctx.db)
+      .select({ id: expense.id })
+      .from(expense)
+      .where(
+        and(
+          eq(expense.purchaseId, manualPurchase.id),
+          isNull(expense.deletedAt),
+        ),
+      );
+    // No second Expense was created, and the original manual line survives
+    // untouched.
+    expect(liveExpenses).toEqual([{ id: manualExpense.id }]);
+
+    const findings = await getDb(ctx.db)
+      .select({ kind: importFinding.kind })
+      .from(importFinding)
+      .where(eq(importFinding.targetId, manualPurchase.id));
+    expect(findings.some((row) => row.kind === "duplicate_lines")).toBe(true);
   });
 });
