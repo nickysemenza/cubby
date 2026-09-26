@@ -621,7 +621,6 @@ export async function seedMealNutritionPrerequisite(
       ledgerPartyId: guest.id,
       sourceKind: "manual",
       name: `${name} manual snack`,
-      grams: null,
       nutrients: { kcal: 250, protein: 20, carbs: 0 },
     }),
     context.actorContext,
@@ -634,7 +633,7 @@ export async function seedMealNutritionPrerequisite(
         ledgerPartyId: member.id,
         sourceKind: "product",
         productId: product.id,
-        grams: 45,
+        amount: { value: 45, unit: "g" },
       }),
       context.actorContext,
     );

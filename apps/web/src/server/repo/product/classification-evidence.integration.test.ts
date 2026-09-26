@@ -128,7 +128,7 @@ describe("retained classification evidence", () => {
       .insert(aiAnalysis)
       .values([
         {
-          entityType: "image",
+          entityKind: "image",
           entityId: photo.id,
           feature: "image-description",
           model: "synthetic",
@@ -137,7 +137,7 @@ describe("retained classification evidence", () => {
           result: { description: "Blue jacket with long sleeves" },
         },
         {
-          entityType: "image",
+          entityKind: "image",
           entityId: label.id,
           feature: "image-description",
           model: "synthetic",

@@ -1,3 +1,4 @@
+import type { RunId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
 
 import { getErrorMessage } from "~/lib/error-utils";
@@ -24,6 +25,7 @@ async function semanticSearchCandidates(
   query: string,
   limit: number,
   entityTypes: SearchableEntity[],
+  runId?: RunId,
 ): Promise<SemanticProductCandidate[]> {
   if (query.trim().length < SEMANTIC_MIN_QUERY_LENGTH) return [];
   if (!semanticEmbeddingsConfigured()) return [];
@@ -31,7 +33,7 @@ async function semanticSearchCandidates(
   const config = getSemanticEmbeddingConfig();
   const embedding = await withTrace(
     TraceNames.service("semanticSearch", "embedQuery"),
-    () => embedQuery(query, { db }),
+    () => embedQuery(query, { db, runId }),
   );
   if (!embedding) return [];
 
@@ -66,9 +68,10 @@ export async function semanticProductCandidates(
   db: Database,
   query: string,
   limit: number,
+  runId?: RunId,
 ): Promise<SemanticProductCandidate[]> {
   try {
-    return await semanticSearchCandidates(db, query, limit, ["product"]);
+    return await semanticSearchCandidates(db, query, limit, ["product"], runId);
   } catch (error) {
     console.warn("semantic.product-candidates.failed", {
       query,

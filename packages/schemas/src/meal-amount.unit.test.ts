@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { testShortcode } from "./test-support/identifiers";
-import {
-  mealFoodAmount,
-  mealFoodAmountFromStored,
-  saveMealFoodInput,
-} from "./meal";
+import { mealFoodAmount, saveMealFoodInput } from "./meal";
 
 describe("logged meal amounts", () => {
   const common = {
@@ -29,21 +25,17 @@ describe("logged meal amounts", () => {
     ])
       expect(mealFoodAmount.safeParse(input).success).toBe(false);
   });
-  it("accepts legacy grams but refuses two competing amounts", () => {
+  it("requires an amount for a product or ingredient source", () => {
     const product = {
       ...common,
       sourceKind: "product",
       productId: testShortcode("product", "amount-product"),
     };
-    const legacy = saveMealFoodInput.parse({ ...product, grams: 125 });
-    expect(mealFoodAmountFromStored(legacy)).toEqual({ value: 125, unit: "g" });
-    expect(
-      saveMealFoodInput.safeParse({
-        ...product,
-        grams: 125,
-        amount: { value: 1, unit: "serving" },
-      }).success,
-    ).toBe(false);
+    const withAmount = saveMealFoodInput.parse({
+      ...product,
+      amount: { value: 125, unit: "g" },
+    });
+    expect(withAmount).toMatchObject({ amount: { value: 125, unit: "g" } });
     expect(saveMealFoodInput.safeParse(product).success).toBe(false);
   });
   it("allows descriptive manual amounts without making them a multiplier", () => {
@@ -58,8 +50,14 @@ describe("logged meal amounts", () => {
       nutrients: { kcal: 200, fat: 0 },
       amount: { value: 2, unit: "pieces" },
     });
+    // Manual entries may omit an amount entirely.
     expect(
-      saveMealFoodInput.safeParse({ ...manual, grams: null }).success,
-    ).toBe(false);
+      saveMealFoodInput.safeParse({
+        ...common,
+        sourceKind: "manual",
+        name: "Lunch",
+        nutrients: { kcal: 200, fat: 0 },
+      }).success,
+    ).toBe(true);
   });
 });

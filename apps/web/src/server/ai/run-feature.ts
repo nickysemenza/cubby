@@ -66,7 +66,7 @@ export interface AiRunContext<T = unknown> {
   operation: string;
   /** Correlates calls emitted while one durable job is executing. */
   job?: { kind: string; id: string } | null;
-  entity?: { entityType: string; entityId: string } | null;
+  entity?: { entityKind: string; entityId: string } | null;
   /** Whether the *caller's* own cache (AiAnalysis) hit, for the usage row. */
   cacheStatus?: "hit" | "miss" | "none";
   applicationCacheStatus?: ApplicationCacheStatus;
@@ -117,7 +117,7 @@ export function planStructuredRun<T = unknown>(
     operation: ctx.operation,
   };
   if (ctx.entity) {
-    metadata.entityType = ctx.entity.entityType;
+    metadata.entityKind = ctx.entity.entityKind;
     metadata.entityId = ctx.entity.entityId;
   }
 

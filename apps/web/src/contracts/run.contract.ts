@@ -1,9 +1,11 @@
 import { aiRunUsageInput, aiRunUsageOut } from "@cubby/schemas/ai";
 import {
   runShortcode,
+  imageShortcode,
   productShortcode,
   purchaseShortcode,
 } from "@cubby/schemas/identifiers";
+import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import { confirmMerchantVendorRuleInput } from "@cubby/schemas/purchase-import";
 import {
   runBrowserListInput,
@@ -430,5 +432,20 @@ export const runContract = defineContract("run", {
     native: "Show live AI spend alongside native run timing",
     input: aiRunUsageInput,
     output: aiRunUsageOut,
+  }),
+  /**
+   * Idempotent device-side status for one photo-run image target. The
+   * uploader reports queued/running/failed/completed as it works through a
+   * run's photos; repeating the same {run, image, state} is a no-op.
+   */
+  reportDeviceWork: mutation({
+    native: "Report on-device photo processing progress for a run target",
+    input: z.object({
+      run: runShortcode,
+      image: imageShortcode,
+      state: runTargetDeviceWorkState,
+      error: z.string().min(1).max(2000).optional(),
+    }),
+    output: z.object({ recorded: z.boolean() }),
   }),
 });

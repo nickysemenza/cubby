@@ -24,7 +24,7 @@ const event: TelemetryMessageV1 = {
   outputTokens: 20,
   durationMs: 42,
   cacheStatus: "miss",
-  entityType: null,
+  entityKind: null,
   entityId: null,
 };
 

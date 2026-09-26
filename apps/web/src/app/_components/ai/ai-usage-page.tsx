@@ -147,29 +147,29 @@ export function AiUsageTableStatus({
 export function UsageEntityLink({
   row,
 }: {
-  row: Pick<AiUsageEntry, "entityType" | "entityId">;
+  row: Pick<AiUsageEntry, "entityKind" | "entityId">;
 }) {
-  if (!row.entityType || !row.entityId) {
+  if (!row.entityKind || !row.entityId) {
     return <span className="text-muted-foreground">-</span>;
   }
-  if (!isSupportedEntityType(row.entityType)) {
-    return <span className="text-muted-foreground">{row.entityType}</span>;
+  if (!isSupportedEntityType(row.entityKind)) {
+    return <span className="text-muted-foreground">{row.entityKind}</span>;
   }
 
   // AiUsage.entityId is recorded from queue/side-effect payloads that carry
   // private uuids, while EntityInlineLinkById expects a public shortcode.
   // Never send a uuid into that boundary.
-  if (parseShortcode(row.entityId)?.type !== row.entityType) {
+  if (parseShortcode(row.entityId)?.type !== row.entityKind) {
     return (
       <span className="text-muted-foreground">
-        {row.entityType} · {row.entityId.slice(0, 8)}
+        {row.entityKind} · {row.entityId.slice(0, 8)}
       </span>
     );
   }
 
   return (
     <EntityInlineLinkById
-      entityType={row.entityType}
+      entityType={row.entityKind}
       entityId={row.entityId}
       compact
     />

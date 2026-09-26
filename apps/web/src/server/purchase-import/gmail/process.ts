@@ -203,7 +203,7 @@ export async function processOrderMails(
         await database.insert(runFinding).values({
           runId: runId,
           ledgerPartyId: mail.ledgerPartyId,
-          targetType: "run",
+          targetKind: "run",
           targetId: runId,
           kind: "unclassified_vendor",
           summary: `Purchase mail from ${mail.sender} does not match a known vendor. Create or update the vendor's order-email sender list.`,
@@ -379,7 +379,7 @@ export async function processOrderMails(
         .insert(runFinding)
         .values({
           ledgerPartyId: mail.ledgerPartyId,
-          targetType: "purchase",
+          targetKind: "purchase",
           targetId: target.id,
           kind,
           summary:
@@ -420,7 +420,7 @@ export async function processOrderMails(
             .insert(runFinding)
             .values({
               ledgerPartyId: mail.ledgerPartyId,
-              targetType: "purchase",
+              targetKind: "purchase",
               targetId: target.id,
               kind: "return_window",
               summary: `${costlyLines.length} line${costlyLines.length === 1 ? "" : "s"} worth at least $50 can be returned until ${expiresAt.toLocaleDateString("en-US", { timeZone: "UTC" })}.`,

@@ -1,4 +1,4 @@
-import type { ImageId } from "@cubby/schemas/identifiers";
+import type { ImageId, RunId } from "@cubby/schemas/identifiers";
 import type {
   ImageDerivativePurpose,
   ImageDerivativeStatus,
@@ -19,7 +19,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { image } from "./schema";
+import { image, run } from "./schema";
 
 const timestamps = () => ({
   createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
@@ -114,6 +114,12 @@ export const imageProcessingJob = pgTable(
       (): AnyPgColumn => imageProcessingSubmission.id,
       { onDelete: "set null" },
     ),
+    // The Run that requested this job, when one exists (a request actor's
+    // photo run, or an inherited run); background maintenance leaves it
+    // null and the dispatcher falls back to `systemActor()`.
+    runId: uuid("runId")
+      .$type<RunId>()
+      .references((): AnyPgColumn => run.id, { onDelete: "set null" }),
     attemptId: uuid("attemptId"),
     leaseExpiresAt: timestamp("leaseExpiresAt", { mode: "date" }),
     attempts: integer("attempts").notNull().default(0),
@@ -140,6 +146,9 @@ export const imageProcessingJob = pgTable(
       table.nextAttemptAt,
     ),
     index("ImageProcessingJob_image_idx").on(table.imageId),
+    index("ImageProcessingJob_runId_idx")
+      .on(table.runId)
+      .where(sql`${table.runId} IS NOT NULL`),
     check(
       "ImageProcessingJob_kind_check",
       sql`${table.kind} IN ('subject_lift', 'describe_image')`,

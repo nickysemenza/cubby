@@ -31,7 +31,7 @@ export async function loadPurchaseAuditBatch(
       and(eq(purchase.id, runMutation.targetId), notDeleted(purchase)),
     )
     .where(
-      and(eq(runMutation.runId, runId), eq(runMutation.targetType, "purchase")),
+      and(eq(runMutation.runId, runId), eq(runMutation.targetKind, "purchase")),
     )
     .orderBy(asc(purchase.id))
     .limit(25)

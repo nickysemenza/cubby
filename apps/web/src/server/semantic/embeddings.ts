@@ -107,7 +107,7 @@ export async function embedTexts(
      */
     runId?: RunId;
     feature?: string;
-    entity?: { entityType: string; entityId: string };
+    entity?: { entityKind: string; entityId: string };
   },
   ports: EmbeddingPorts = productionEmbeddingPorts,
 ): Promise<number[][]> {

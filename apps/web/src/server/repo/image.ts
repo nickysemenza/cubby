@@ -788,7 +788,7 @@ export async function loadAnalysisCapturedAtForImages(
     .from(aiAnalysis)
     .where(
       and(
-        eq(aiAnalysis.entityType, "image"),
+        eq(aiAnalysis.entityKind, "image"),
         inArray(aiAnalysis.entityId, imageIds),
         eq(aiAnalysis.feature, "photo-local-analysis"),
         isNull(aiAnalysis.deletedAt),

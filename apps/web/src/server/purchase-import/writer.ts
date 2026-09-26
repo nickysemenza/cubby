@@ -726,7 +726,7 @@ async function fileFinding(
     .values({
       runId: input.runId,
       ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
-      targetType: "purchase",
+      targetKind: "purchase",
       targetId: purchaseId,
       kind,
       summary,
@@ -929,7 +929,7 @@ export async function importVendorOrder(
     const purchaseId = parseEntityId("purchase", target.id);
     const findingIds: string[] = [];
     const rowMutations: Array<{
-      targetType: "expense" | "product";
+      targetKind: "expense" | "product";
       targetId: string;
       mutationKind: "create" | "update" | "delete";
       fields: string[];
@@ -968,7 +968,7 @@ export async function importVendorOrder(
             trade: null,
           });
           rowMutations.push({
-            targetType: "expense",
+            targetKind: "expense",
             targetId: inserted.id,
             mutationKind: "create",
             fields: ["name", "cost", "lineKind", "purchaseId"],
@@ -1025,7 +1025,7 @@ export async function importVendorOrder(
             .set({ deletedAt: new Date() })
             .where(eq(expense.id, parseEntityId("expense", aggregate.id)));
           rowMutations.push({
-            targetType: "expense",
+            targetKind: "expense",
             targetId: aggregate.id,
             mutationKind: "delete",
             fields: ["deletedAt"],
@@ -1083,7 +1083,7 @@ export async function importVendorOrder(
             productQuantity: quantity,
           });
           rowMutations.push({
-            targetType: "expense",
+            targetKind: "expense",
             targetId: inserted.id,
             mutationKind: "create",
             fields: [
@@ -1305,7 +1305,7 @@ export async function importVendorOrder(
     }
     await tx.insert(runMutation).values({
       runId: input.runId,
-      targetType: "purchase",
+      targetKind: "purchase",
       targetId: purchaseId,
       mutationKind: created ? "create" : "update",
       fields: ["header", "documents", "expenses", "paymentEvidence"],

@@ -292,7 +292,7 @@ export const aiUsageEntrySchema = z.object({
   gatewayLogId: z.string().nullable(),
   estimatedCost: moneyNullable,
   durationMs: z.number().int(),
-  entityType: z.string().nullable(),
+  entityKind: z.string().nullable(),
   entityId: z.string().nullable(),
   createdAt: z.coerce.date(),
 });

@@ -1082,6 +1082,9 @@ export async function listPhotoRunImages(
       sha256: image.sha256,
       position: runTarget.position,
       state: runTarget.state,
+      deviceWorkState: runTarget.deviceWorkState,
+      deviceWorkError: runTarget.deviceWorkError,
+      deviceWorkAttempts: runTarget.deviceWorkAttempts,
     })
     .from(runTarget)
     .innerJoin(image, eq(image.id, runTarget.imageId))
@@ -1117,7 +1120,7 @@ export async function listPhotoRunImages(
       .from(aiAnalysis)
       .where(
         and(
-          eq(aiAnalysis.entityType, "image"),
+          eq(aiAnalysis.entityKind, "image"),
           eq(aiAnalysis.feature, "photo-local-analysis"),
           inArray(
             aiAnalysis.entityId,
@@ -1165,7 +1168,14 @@ export async function listPhotoRunImages(
       cutout: cutout?.state ?? null,
       describe: describe?.state ?? null,
       ...descriptionJobTiming(describe, descriptionAttempts),
-      localAnalysisReady: locallyAnalyzed.has(row.imageId),
+      // Device-reported completion is the source of truth going forward;
+      // an AiAnalysis row from before this column existed still counts, so
+      // an in-flight run's older photos do not regress to "not ready".
+      localAnalysisReady:
+        row.deviceWorkState === "completed" || locallyAnalyzed.has(row.imageId),
+      deviceWorkState: row.deviceWorkState,
+      deviceWorkError: row.deviceWorkError,
+      deviceWorkAttempts: row.deviceWorkAttempts,
       cutoutReason:
         cutout && (cutout.state === "skipped" || cutout.state === "failed")
           ? cutout.lastError

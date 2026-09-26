@@ -37,10 +37,19 @@ logo columns. `role` follows the subject's declared image storage (`attachment`
 for galleries, `cover`, `logo`); detach soft-deletes; upload idempotency is
 scoped to the active association. `DataException(entityId, entityKind, check,
 ...)` replaces the jsonb columns for any entity whose declaration enables
-exceptions. `AuditLog`, `SearchDocument`, `EntityEmbedding`, and
-`DataException` reference `Entity(id, kind)` with a composite FK; history keeps
-the identity that received each event and exposes the survivor only as a
-read-time `canonicalEntityId`.
+exceptions. `AuditLog`, `SearchDocument`, `EntityEmbedding`, `DataException`,
+`RunFinding` (`targetId`/`targetKind`), `RunMutation` (`targetId`/`targetKind`),
+`AiUsage` (`entityId`/`entityKind`), and `AiAnalysis` (`entityId`/`entityKind`)
+reference `Entity(id, kind)` with a composite FK; history keeps the identity
+that received each event and exposes the survivor only as a read-time
+`canonicalEntityId`. `AiUsage` and `AiAnalysis` both allow a null `entityId`
+(a call or analysis with no owning entity — `AiAnalysis`'s `entityKind =
+'global'` always pairs with a null id, enforced by its own check), which the
+composite FK's MATCH SIMPLE semantics pass without requiring a match.
+`RunFinding` and `RunMutation` keep the mutation-provenance behavior this ADR
+established for cross-entity rows: findings are live pointers a merge repoints
+and a removal deletes, while mutations and AI usage/analysis are history that
+keeps its original identity, with no cleanup on merge or removal.
 
 The physical graph is read, not stored: `ENTITY_EDGE_OWNERS` names the owning
 entity of each non-entity row that carries an edge column, and one runtime

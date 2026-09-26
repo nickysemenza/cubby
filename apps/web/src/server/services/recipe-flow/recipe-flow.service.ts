@@ -65,7 +65,7 @@ const productionRecipeFlowPorts: RecipeFlowPorts = {
   listCandidates: async (db, recipeId) =>
     (
       await listAiAnalysesForEntityFeature(db, {
-        entityType: "recipe",
+        entityKind: "recipe",
         entityId: recipeId,
         feature: RECIPE_FLOW_PRIMARY_FEATURE.feature,
         promptVersion: RECIPE_FLOW_PRIMARY_FEATURE.promptVersion,
@@ -85,7 +85,7 @@ const productionRecipeFlowPorts: RecipeFlowPorts = {
     return await upsertAiAnalysis(
       db,
       {
-        entityType: "recipe",
+        entityKind: "recipe",
         entityId: recipeId,
         feature: input.feature,
         inputFingerprint: input.fingerprint,
@@ -286,7 +286,7 @@ async function recordFlowCacheHit(
     runId,
     durationMs: 0,
     cacheStatus: "hit",
-    entity: { entityType: "recipe", entityId: recipeId },
+    entity: { entityKind: "recipe", entityId: recipeId },
   });
 }
 
@@ -334,7 +334,7 @@ export async function generateRecipeFlow(
       runId,
       operation: "generateRecipeFlow",
       cacheStatus: "miss",
-      entity: { entityType: "recipe", entityId: input.id },
+      entity: { entityKind: "recipe", entityId: input.id },
       // A forced regenerate must also skip the AI Gateway's response cache:
       // the request body is unchanged, so an unforced call would be served
       // the very flow the user asked to replace.

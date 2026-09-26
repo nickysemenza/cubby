@@ -38,6 +38,13 @@ export const RECIPE_RECOMPUTE_CHUNK_SIZE = 25;
 const taskEnvelopeFields = {
   /** When the publisher observed the change; handlers use it for freshness gates. */
   requestedAt: z.iso.datetime(),
+  /**
+   * The Run whose actor issued the mutation that queued this task, when one
+   * exists. Optional so a message already in flight from the preceding
+   * deployment (with no `runId` key at all) still parses; the handler falls
+   * back to `systemActor()` when it is absent.
+   */
+  runId: z.uuid().optional(),
 };
 
 export const recipeTotalsRecomputeTaskSchema = z.object({

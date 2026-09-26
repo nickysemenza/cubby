@@ -1,4 +1,5 @@
 import type { EntityId } from "@cubby/schemas/identifiers";
+import type { RunTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import { and, desc, eq, exists, or, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -10,8 +11,15 @@ import {
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  getDb,
+  notDeleted,
+  withTransaction,
+} from "~/server/repo/database-helpers";
+import {
+  resolveLiveShortcode,
+  resolveOrThrow,
+} from "~/server/repo/shortcode-resolver";
 
 /** Resolve the public Purchase id used by the RunMutation target edge. */
 export async function resolvePurchaseImportTarget(
@@ -78,7 +86,7 @@ export function listRuns(
                   .where(
                     and(
                       eq(runMutation.runId, runTable.id),
-                      eq(runMutation.targetType, "purchase"),
+                      eq(runMutation.targetKind, "purchase"),
                       eq(runMutation.targetId, purchaseId),
                     ),
                   ),
@@ -163,4 +171,52 @@ export function listProductRuns(
     .orderBy(desc(runTable.startedAt));
 
   return productId ? query : query.limit(20);
+}
+
+/**
+ * Idempotent device-side status for one photo-run image target
+ * (`run.reportDeviceWork`). Repeating the same {run, image, state} is a
+ * no-op: the report only updates the row when the state actually changes,
+ * so a retried or duplicated device message never double-counts an attempt.
+ */
+export async function reportRunTargetDeviceWork(
+  db: Database,
+  input: {
+    run: string;
+    image: string;
+    state: RunTargetDeviceWorkState;
+    error?: string;
+  },
+): Promise<{ recorded: boolean }> {
+  const runId = await resolveOrThrow(db, "run", input.run);
+  const imageId = await resolveOrThrow(db, "image", input.image);
+  return withTransaction(db, async (tx) => {
+    const [target] = await tx
+      .select({
+        id: runTarget.id,
+        deviceWorkState: runTarget.deviceWorkState,
+        deviceWorkAttempts: runTarget.deviceWorkAttempts,
+      })
+      .from(runTarget)
+      .where(and(eq(runTarget.runId, runId), eq(runTarget.imageId, imageId)))
+      .for("update");
+    if (!target)
+      throw new Error("This run has no photo target for that image.");
+    if (target.deviceWorkState === input.state) return { recorded: true };
+    await tx
+      .update(runTarget)
+      .set({
+        deviceWorkState: input.state,
+        deviceWorkError:
+          input.state === "failed" ? (input.error ?? null) : null,
+        deviceWorkAttempts:
+          input.state === "failed"
+            ? target.deviceWorkAttempts + 1
+            : target.deviceWorkAttempts,
+        deviceWorkUpdatedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(runTarget.id, target.id));
+    return { recorded: true };
+  });
 }

@@ -1,4 +1,4 @@
-import type { ProjectShortcode } from "@cubby/schemas/identifiers";
+import { imageId, type ProjectShortcode } from "@cubby/schemas/identifiers";
 import {
   imageBrowserDeleteInput,
   imageBrowserDeleteOut,
@@ -8,17 +8,20 @@ import {
   imageAttachExistingInput,
   type ImageWithEntity,
 } from "@cubby/schemas/image";
+import { and, eq, ne, or, isNull } from "drizzle-orm";
 import type { z } from "zod";
 
 import { imageUploadContract } from "~/contracts/image-upload.contract";
 import { imageContract } from "~/contracts/image.contract";
 import type { LocalPhotoAnalysis } from "~/contracts/photo-import.contract";
+import { runTarget } from "~/server/db/schema";
 import {
   type EntityKernelContext,
   executeEntity,
 } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { getDb } from "~/server/repo/database-helpers";
 import {
   getImageHashIndex,
   getImagesByProjectIds,
@@ -215,6 +218,22 @@ export async function recordImageAnalysis(
     analysis.analysisVersion,
     analysis.sha256,
   );
+  // The device just finished processing this photo: reflect that on any
+  // run target still tracking it, regardless of which run reported queued
+  // or running earlier — `localAnalysisReady` reads this state instead of
+  // inferring completion from AiAnalysis existing.
+  await getDb(context.db)
+    .update(runTarget)
+    .set({ deviceWorkState: "completed", deviceWorkUpdatedAt: new Date() })
+    .where(
+      and(
+        eq(runTarget.imageId, imageId.parse(row.id)),
+        or(
+          isNull(runTarget.deviceWorkState),
+          ne(runTarget.deviceWorkState, "completed"),
+        ),
+      ),
+    );
   return { saved: true };
 }
 

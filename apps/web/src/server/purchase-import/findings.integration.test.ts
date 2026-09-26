@@ -44,7 +44,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
       .insert(runFinding)
       .values({
         ledgerPartyId: parseEntityId("ledgerParty", ledgerPartyId),
-        targetType: "purchase",
+        targetKind: "purchase",
         targetId: purchaseId,
         kind: "arrived",
         summary:
@@ -269,7 +269,7 @@ describe("create_refund findings", () => {
       .insert(runFinding)
       .values({
         ledgerPartyId: fixture.party.id,
-        targetType: "purchase",
+        targetKind: "purchase",
         targetId: input.purchaseId,
         kind: "refund_unbooked",
         summary:

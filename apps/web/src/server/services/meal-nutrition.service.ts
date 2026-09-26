@@ -1,7 +1,6 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   mealNutritionFood,
-  mealFoodAmountFromStored,
   mealNutritionOut,
   nutritionMeal,
   type MealNutritionInput,
@@ -98,7 +97,7 @@ export async function getMealNutrition(
     person.foods.push(food);
   };
   for (const p of rows.portions) {
-    const amount = mealFoodAmountFromStored(p);
+    const amount = p.amount;
     const result = calculateFoodAmount(amount, {
       kind: "recipe",
       batch: batchTotalsFor(p.recipeTotals, p.totalsComputedAt, p.scale),
@@ -129,7 +128,7 @@ export async function getMealNutrition(
   }
   for (const row of rows.foods) {
     const e = row.entry;
-    const amount = mealFoodAmountFromStored(e);
+    const amount = e.amount;
     const common = { id: e.id, meal: meals.get(e.mealId), amount };
     if (e.sourceKind === "product" && row.productId && row.productName) {
       const source =

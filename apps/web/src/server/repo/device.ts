@@ -42,7 +42,8 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { deriveAndStoreImageCapture } from "~/server/services/image-capture-derivation";
 
 /** `ImageSighting.deviceId` cascades: a sighting reported by a device is
- * meaningless once that device is gone. `AuditLog.deviceId` is cleared. */
+ * meaningless once that device is gone. `AuditLog.deviceId` and
+ * `RunTarget.deviceWorkDeviceId` are cleared. */
 export const DEVICE_DELETE_EDGE_POLICY = {
   "AuditLog.deviceId": {
     code: "clearFk",
@@ -55,6 +56,12 @@ export const DEVICE_DELETE_EDGE_POLICY = {
     effect: "hard-delete",
     description:
       "A device's reported sightings are removed with it; affected images are re-derived in the same transaction.",
+  },
+  "RunTarget.deviceWorkDeviceId": {
+    code: "clearFk",
+    effect: "detach",
+    description:
+      "A run target outlives the install that last reported on it; its recorded device-work state is preserved.",
   },
 } as const satisfies IncomingEdgePolicy<"device", OperationDisposition>;
 

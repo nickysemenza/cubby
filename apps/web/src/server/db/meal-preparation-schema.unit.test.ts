@@ -28,17 +28,12 @@ describe("meal preparation storage schema", () => {
         "mealId",
         "ledgerPartyId",
         "amount",
-        "grams",
         "confirmedAt",
         "deletedAt",
       ]),
     );
     expect(config.checks.map((constraint) => constraint.name)).toEqual(
-      expect.arrayContaining([
-        "MealRecipePortion_grams_check",
-        "MealRecipePortion_amount_check",
-        "MealRecipePortion_amount_source_check",
-      ]),
+      expect.arrayContaining(["MealRecipePortion_amount_check"]),
     );
 
     const liveKey = config.indexes.find(
@@ -75,7 +70,6 @@ describe("meal preparation storage schema", () => {
         "ingredientId",
         "productId",
         "amount",
-        "grams",
         "name",
         "nutrients",
       ]),
@@ -85,9 +79,7 @@ describe("meal preparation storage schema", () => {
     );
     expect(config.checks.map((constraint) => constraint.name)).toEqual(
       expect.arrayContaining([
-        "MealFoodEntry_grams_check",
         "MealFoodEntry_amount_check",
-        "MealFoodEntry_amount_compatibility_check",
         "MealFoodEntry_source_check",
       ]),
     );

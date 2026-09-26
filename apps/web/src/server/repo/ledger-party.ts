@@ -14,10 +14,7 @@ import type {
   LedgerPartyUpdateData,
 } from "@cubby/schemas/ledger-party";
 import { ledgerPartyOut } from "@cubby/schemas/ledger-party";
-import {
-  type MealFoodAmount,
-  mealFoodAmountFromStored,
-} from "@cubby/schemas/meal";
+import { type MealFoodAmount } from "@cubby/schemas/meal";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -536,7 +533,6 @@ const foldMealRecipePortions = async (
       mealId: mealRecipePortion.mealId,
       ledgerPartyId: mealRecipePortion.ledgerPartyId,
       amount: mealRecipePortion.amount,
-      grams: mealRecipePortion.grams,
       confirmedAt: mealRecipePortion.confirmedAt,
     })
     .from(mealRecipePortion)
@@ -557,15 +553,7 @@ const foldMealRecipePortions = async (
   }
   const foldedAmounts = new Map<string, MealFoodAmount>();
   for (const [key, group] of groups) {
-    const amounts = group.map((portion) => mealFoodAmountFromStored(portion));
-    if (amounts.some((amount) => amount === null))
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "A meal portion is missing its amount; reconcile the portion before merging ledger parties.",
-      );
-    const presentAmounts = amounts.filter(
-      (amount): amount is MealFoodAmount => amount !== null,
-    );
+    const presentAmounts = group.map((portion) => portion.amount);
     const units = new Set(presentAmounts.map((amount) => amount.unit));
     if (units.size !== 1)
       throw createAppError(
@@ -601,7 +589,6 @@ const foldMealRecipePortions = async (
       mealId: first.mealId,
       ledgerPartyId: keepId,
       amount: foldedAmounts.get(key)!,
-      grams: null,
       confirmedAt: allConfirmed
         ? new Date(
             Math.max(...group.map((portion) => portion.confirmedAt!.getTime())),

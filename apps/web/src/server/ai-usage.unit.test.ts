@@ -33,7 +33,7 @@ describe("recordAiUsage", () => {
         attempt: 0,
         estimatedCost: 0,
         entity: {
-          entityType: "product",
+          entityKind: "product",
           entityId: "9d4f70aa-5c8f-4f24-b7f8-d67d28111d86",
         },
       },
@@ -53,7 +53,7 @@ describe("recordAiUsage", () => {
         attempt: 0,
         estimatedCost: 0,
         outputTokens: 0,
-        entityType: "product",
+        entityKind: "product",
         entityId: "9d4f70aa-5c8f-4f24-b7f8-d67d28111d86",
       }),
     );

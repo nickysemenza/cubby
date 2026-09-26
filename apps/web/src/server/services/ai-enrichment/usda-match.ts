@@ -65,7 +65,7 @@ export async function suggestUsdaFood(
       operation: "suggestUsdaFood",
       cacheStatus: "none",
       entity: opts.ingredientId
-        ? { entityType: "ingredient", entityId: opts.ingredientId }
+        ? { entityKind: "ingredient", entityId: opts.ingredientId }
         : null,
     },
   });

@@ -216,7 +216,7 @@ async function recordLocationAiUsage(
     outputTokens: null,
     durationMs: input.durationMs,
     cacheStatus: input.cacheStatus,
-    entity: { entityType: "location", entityId: input.locationId },
+    entity: { entityKind: "location", entityId: input.locationId },
   });
 }
 
@@ -254,7 +254,7 @@ export async function describeLocation(
     { locationName: location.name, images },
   );
   const analysisKey = {
-    entityType: "location" as const,
+    entityKind: "location" as const,
     entityId: locationId,
     feature: LOCATION_DESCRIPTION_FEATURE,
     inputFingerprint,
@@ -268,7 +268,7 @@ export async function describeLocation(
     );
     console.info("ai.analysis", {
       ...hitMetadata,
-      entityType: "location",
+      entityKind: "location",
       entityId: locationId,
     });
     if (location.aiDescription !== cached.result.description) {
@@ -306,7 +306,7 @@ export async function describeLocation(
       runId,
       operation: "locationDescription",
       cacheStatus: "miss",
-      entity: { entityType: "location", entityId: locationId },
+      entity: { entityKind: "location", entityId: locationId },
     },
   );
   await upsertAiAnalysis(db, analysisKey, result);
@@ -317,7 +317,7 @@ export async function describeLocation(
   );
   console.info("ai.analysis", {
     ...missMetadata,
-    entityType: "location",
+    entityKind: "location",
     entityId: locationId,
   });
 
@@ -335,6 +335,7 @@ async function matchDetectedItems(
   db: Database,
   locationId: LocationId,
   items: DetectedInventoryItem[],
+  runId: RunId,
 ): Promise<DetectedItem[]> {
   const existingInventory = await getInventoryByLocationIds(db, [locationId]);
   const existingProductIds = new Set(
@@ -396,6 +397,7 @@ async function matchDetectedItems(
           const [semanticMatch] = await semanticProductCandidatesBestEffort(
             db,
             productName,
+            runId,
           );
           const semanticShortcode =
             semanticMatch?.item.entityType === "product"
@@ -449,9 +451,10 @@ async function matchDetectedItems(
 async function semanticProductCandidatesBestEffort(
   db: Database,
   query: string,
+  runId: RunId,
 ): ReturnType<typeof semanticProductCandidates> {
   try {
-    return await semanticProductCandidates(db, query, 3);
+    return await semanticProductCandidates(db, query, 3, runId);
   } catch (error) {
     const parsedError = error instanceof Error ? error : null;
     console.warn("ai.inventory.semantic-product-match.failed", {
@@ -495,7 +498,7 @@ export async function detectInventoryItems(
     { locationName: location.name, images },
   );
   const analysisKey = {
-    entityType: "location" as const,
+    entityKind: "location" as const,
     entityId: locationId,
     feature: LOCATION_INVENTORY_DETECTION_FEATURE,
     inputFingerprint,
@@ -525,7 +528,7 @@ export async function detectInventoryItems(
         runId,
         operation: "locationInventoryDetection",
         cacheStatus: "miss",
-        entity: { entityType: "location", entityId: locationId },
+        entity: { entityKind: "location", entityId: locationId },
       },
     );
     await upsertAiAnalysis(db, analysisKey, raw);
@@ -534,13 +537,13 @@ export async function detectInventoryItems(
   const cache = detectionCacheMetadata(cacheStatus, inputFingerprint);
   console.info("ai.analysis", {
     ...cache,
-    entityType: "location",
+    entityKind: "location",
     entityId: locationId,
   });
 
   return {
     ...raw,
-    items: await matchDetectedItems(db, locationId, raw.items),
+    items: await matchDetectedItems(db, locationId, raw.items, runId),
     cache,
     analyzedAt,
   };

@@ -1,11 +1,7 @@
 import { z } from "zod";
 export * from "./meal-nutrition";
 export * from "./meal-amount";
-import {
-  mealFoodAmount,
-  mealAmountInputFields,
-  hasRequiredMealAmount,
-} from "./meal-amount";
+import { mealFoodAmount } from "./meal-amount";
 import { recipeYieldSchema } from "./recipe-shared";
 import { auditDateFilterFields, uniqueBy } from "./base-entity";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
@@ -149,15 +145,13 @@ export type MealPreparationYieldBasis = z.infer<
   typeof mealPreparationYieldBasis
 >;
 
-const mealRecipePreparationSetChange = z
-  .object({
-    action: z.literal("set"),
-    mealId: mealShortcode,
-    ledgerPartyId: ledgerPartyShortcode,
-    ...mealAmountInputFields,
-    confirmed: z.boolean(),
-  })
-  .refine(hasRequiredMealAmount, "Enter either amount or legacy grams");
+const mealRecipePreparationSetChange = z.object({
+  action: z.literal("set"),
+  mealId: mealShortcode,
+  ledgerPartyId: ledgerPartyShortcode,
+  amount: mealFoodAmount,
+  confirmed: z.boolean(),
+});
 
 const mealRecipePreparationRemoveChange = z.object({
   action: z.literal("remove"),

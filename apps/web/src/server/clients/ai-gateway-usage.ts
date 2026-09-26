@@ -15,7 +15,7 @@ export type AiGatewayUsageContext = SupportedAiModelRef & {
   jobId?: string | null;
   cacheStatus?: "hit" | "miss" | "none";
   applicationCacheStatus?: "hit" | "miss" | "none";
-  entity?: { entityType: string; entityId: string } | null;
+  entity?: { entityKind: string; entityId: string } | null;
 };
 
 export function aiGatewayUsageMiddleware(

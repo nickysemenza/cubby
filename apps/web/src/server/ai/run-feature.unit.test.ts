@@ -125,13 +125,13 @@ describe("planStructuredRun", () => {
       db,
       runId,
       operation: "locationDescription",
-      entity: { entityType: "location", entityId: "loc-1" },
+      entity: { entityKind: "location", entityId: "loc-1" },
     });
 
     expect(plan.call.metadata).toEqual({
       feature: "location-description",
       operation: "locationDescription",
-      entityType: "location",
+      entityKind: "location",
       entityId: "loc-1",
     });
   });

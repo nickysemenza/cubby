@@ -1,7 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   mealFoodMutationOut,
-  mealFoodAmountFromStored,
   type MealNutritionInput,
   type SaveMealFoodInput,
   type removeMealFoodInput,
@@ -88,8 +87,7 @@ export const saveMealFood = (
       productId,
       ingredientId,
       sourceKind: input.sourceKind,
-      amount: mealFoodAmountFromStored(input),
-      grams: null,
+      amount: input.amount ?? null,
       name: input.sourceKind === "manual" ? input.name : null,
       nutrients: input.sourceKind === "manual" ? input.nutrients : null,
     };
@@ -186,7 +184,6 @@ export async function getMealNutritionRows(
             mealId: mealRecipePortion.mealId,
             eaterId: ledgerParty.shortcode,
             eaterName: ledgerParty.name,
-            grams: mealRecipePortion.grams,
             amount: mealRecipePortion.amount,
             mealRecipeId: mealRecipe.id,
             sourceMealId: sourceMeal.shortcode,
