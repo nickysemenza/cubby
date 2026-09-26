@@ -32,8 +32,13 @@ const expectedOrderSchema = z.object({
   items: z.array(
     z.object({ asin: z.string(), title: z.string(), unitPrice: z.number() }),
   ),
+  // Present only on an order-details entry whose order id has more than one
+  // shipment (a real order that shipped in separate parcels).
+  shipmentLabel: z.string().nullable().optional(),
 });
 type ExpectedOrder = z.infer<typeof expectedOrderSchema>;
+
+const round2 = (value: number) => Math.round(value * 100) / 100;
 
 function loadExpected(): ExpectedOrder[] {
   const raw = JSON.parse(
@@ -128,4 +133,84 @@ describe("retailer order corpus", () => {
       expect(capture.text).toContain(`$${entry.grandTotal.toFixed(2)}`);
     },
   );
+
+  describe("order/email consistency", () => {
+    // Every order-details entry, grouped by its (synthetic) order id. An
+    // order id with more than one entry is a split-shipment order: the same
+    // real order rendered across separate order-details pages, one per
+    // shipment.
+    const detailsByOrderId = new Map<string, ExpectedOrder[]>();
+    for (const entry of expected) {
+      if (!entry.file.startsWith("order-details-")) continue;
+      const group = detailsByOrderId.get(entry.orderId) ?? [];
+      group.push(entry);
+      detailsByOrderId.set(entry.orderId, group);
+    }
+    const emails = expected.filter((entry) =>
+      entry.file.startsWith("order-email-"),
+    );
+
+    it("has at least one split-shipment order id and at least one email in the fixture set", () => {
+      // Guards against a future edit silently dropping the split-shipment
+      // case or all the email fixtures, which would make the checks below
+      // vacuously pass.
+      const splitShipmentOrderIds = [...detailsByOrderId.entries()].filter(
+        ([, group]) => group.length > 1,
+      );
+      expect(splitShipmentOrderIds.length).toBeGreaterThan(0);
+      expect(emails.length).toBeGreaterThan(0);
+    });
+
+    it("labels every split-shipment order-details page and keeps its shipments on one order date", () => {
+      for (const [orderId, shipments] of detailsByOrderId) {
+        if (shipments.length < 2) continue;
+        const firstDate = shipments[0]!.orderedAt;
+        for (const shipment of shipments) {
+          expect(
+            shipment.orderedAt,
+            `${shipment.file} (order ${orderId})`,
+          ).toBe(firstDate);
+          const html = readFileSync(
+            path.join(FIXTURE_DIR, shipment.file),
+            "utf8",
+          );
+          expect(html).toMatch(/Shipment \d+ of \d+/u);
+        }
+      }
+    });
+
+    it.each(emails)(
+      "agrees with its matching order-details shipment(s) on order date, item lines, and grand total ($file)",
+      (email) => {
+        const shipments = detailsByOrderId.get(email.orderId);
+        expect(
+          shipments,
+          `no order-details fixture shares order id ${email.orderId} with ${email.file}`,
+        ).toBeDefined();
+
+        // Order date: the email and every shipment of its order agree.
+        for (const shipment of shipments!) {
+          expect(email.orderedAt).toBe(shipment.orderedAt);
+        }
+
+        // Grand total: the email's total is the sum across all shipments of
+        // the order (one shipment, in the common case).
+        const combinedTotal = round2(
+          shipments!.reduce((sum, shipment) => sum + shipment.grandTotal, 0),
+        );
+        expect(email.grandTotal).toBeCloseTo(combinedTotal, 2);
+
+        // Item lines and per-line prices: the email lists the same products
+        // (by title) at the same unit price as the combined shipments, order
+        // aside (an email lists items in whatever order the confirmation
+        // used, not necessarily shipment order).
+        const combinedItems = shipments!.flatMap((shipment) => shipment.items);
+        const sortKey = (item: { title: string; unitPrice: number }) =>
+          `${item.title}|${item.unitPrice}`;
+        expect(email.items.map(sortKey).sort()).toEqual(
+          combinedItems.map(sortKey).sort(),
+        );
+      },
+    );
+  });
 });

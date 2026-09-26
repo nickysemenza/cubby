@@ -334,34 +334,23 @@ function extractOrderDetails(
 interface RealOrderEmail {
   sourceFile: string;
   orderIdText: string | null;
-  itemTitle: string | null;
-  grandTotal: number | null;
 }
 
+/**
+ * Only the order id is extracted from a real confirmation email. Every other
+ * field an email fixture needs (order date, item lines, totals) comes from
+ * the matching order-details fixture(s) for the same order id (see
+ * `ordersByOrderId` in buildRetailerCorpus) rather than being independently
+ * re-derived from the email itself — that is what keeps an email/order pair
+ * for the same order id in agreement on date, lines, and totals.
+ */
 function extractOrderEmail(html: string, sourceFile: string): RealOrderEmail {
   const dom = new JSDOM(html);
   const doc = dom.window.document;
   const bodyText = doc.body?.textContent ?? "";
-
   const orderIdMatch = bodyText.match(/\d{3}-\d{7}-\d{7}/u);
-  const itemImg = [...doc.querySelectorAll<HTMLImageElement>("img[alt]")].find(
-    (img) => (img.getAttribute("alt") ?? "").length > 20,
-  );
-  const grandTotalIdx = bodyText.indexOf("Grand Total");
-  const grandTotalMatch =
-    grandTotalIdx >= 0
-      ? bodyText
-          .slice(grandTotalIdx, grandTotalIdx + 60)
-          .match(/\$([0-9]+\.[0-9]{2})/u)
-      : null;
-
   dom.window.close();
-  return {
-    sourceFile,
-    orderIdText: orderIdMatch?.[0] ?? null,
-    itemTitle: itemImg?.getAttribute("alt")?.trim() ?? null,
-    grandTotal: grandTotalMatch ? Number(grandTotalMatch[1]) : null,
-  };
+  return { sourceFile, orderIdText: orderIdMatch?.[0] ?? null };
 }
 
 // ---------------------------------------------------------------------------
@@ -392,6 +381,11 @@ interface SyntheticOrder {
   shipName: string;
   shipStreet: string;
   shipCityStateZip: string;
+  /** Set when this order id has more than one order-details page (a real
+   * order shipped in separate shipments), e.g. "Shipment 1 of 2". Rendered
+   * into the page and used by the corpus unit test to confirm the split is
+   * documented rather than accidental. Null for a single-shipment order. */
+  shipmentLabel: string | null;
 }
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
@@ -451,6 +445,7 @@ function renderOrderDetailsHtml(
             <div class="a-column a-span3" data-component="orderIdLabel"><span>Order #</span></div>
             <div class="a-column a-span3" data-component="orderId"><span>${order.orderId}</span></div>
           </div>
+          ${order.shipmentLabel ? `<div class="a-row" data-component="shipmentLabel"><span>${order.shipmentLabel}</span></div>` : ""}
         </div>
         <div class="a-fixed-right-grid-col a-col-right" data-component="orderInvoice">
           <a class="a-link-normal" href="${invoiceHref}">View invoice</a>
@@ -500,32 +495,44 @@ ${grandTotalRow}
 
 function renderOrderEmailHtml(order: {
   orderId: string;
-  orderedAt: string;
+  orderDateLabel: string;
   arrivingLabel: string;
   shipCity: string;
-  itemTitle: string;
+  items: { title: string; unitPrice: number }[];
   grandTotal: number;
 }): string {
+  const subjectTitle =
+    order.items.length > 1
+      ? `${order.items[0]!.title} and ${order.items.length - 1} more item${order.items.length > 2 ? "s" : ""}`
+      : order.items[0]!.title;
+  const itemRows = order.items
+    .map(
+      (item) => `
+      <tr>
+        <td><img src="${PLACEHOLDER_IMAGE}" alt="${item.title}" width="122"></td>
+        <td><a href="https://www.amazon.example/gp/r.html?R=SYNTHETIC">${item.title}</a><br><span>$${item.unitPrice.toFixed(2)}</span></td>
+      </tr>`,
+    )
+    .join("\n");
+
   return `<!doctype html>
 <html>
-<head><meta charset="utf-8"><title>Gmail - Ordered: "${order.itemTitle}"</title></head>
+<head><meta charset="utf-8"><title>Gmail - Ordered: "${subjectTitle}"</title></head>
 <body>
 <div class="gmail-message">
   <table role="presentation">
     <tr><td><img src="${PLACEHOLDER_IMAGE}" alt="Gmail" class="logo"></td></tr>
   </table>
   <table role="presentation">
-    <tr><td><b>Ordered: "${order.itemTitle}"</b><br><font size="-1">1 message</font></td></tr>
+    <tr><td><b>Ordered: "${subjectTitle}"</b><br><font size="-1">1 message</font></td></tr>
   </table>
   <div class="order-confirmation">
     <div><span>${order.arrivingLabel}</span></div>
     <div><b>${order.shipCity}</b></div>
+    <div><span>Order placed</span> <span>${order.orderDateLabel}</span></div>
     <div><span>Order #</span> <span>${order.orderId}</span></div>
     <table role="presentation">
-      <tr>
-        <td><img src="${PLACEHOLDER_IMAGE}" alt="${order.itemTitle}" width="122"></td>
-        <td><a href="https://www.amazon.example/gp/r.html?R=SYNTHETIC">${order.itemTitle}</a></td>
-      </tr>
+${itemRows}
     </table>
     <table role="presentation">
       <tr><td align="left">Grand Total:</td><td align="right">$${order.grandTotal.toFixed(2)}</td></tr>
@@ -550,6 +557,9 @@ interface ExpectedOrder {
   grandTotal: number;
   currency: "USD";
   items: { asin: string; title: string; unitPrice: number }[];
+  /** Present only on an order-details entry whose order id has more than
+   * one shipment, e.g. "Shipment 1 of 2". */
+  shipmentLabel?: string | null;
 }
 
 export function buildRetailerCorpus(
@@ -613,6 +623,31 @@ export function buildRetailerCorpus(
     return asinMap.get(real)!;
   };
 
+  // A real ASIN always names the same product, so its synthetic title and
+  // price are decided once (on first sight) and reused everywhere that ASIN
+  // reappears — including across the two order-details pages of a
+  // split-shipment order. Without this cache the same ASIN could render two
+  // different product titles/prices depending only on which fixture wrote
+  // it first, which is what produced order-details-3/4's mismatch before.
+  const lineSynthCache = new Map<
+    string,
+    { title: string; unitPrice: number }
+  >();
+
+  // Precompute how many order-details fixtures share each synthetic order
+  // id, so a split-shipment page can be labeled "Shipment N of M" as it is
+  // rendered, and collect each order id's shipments so an email fixture for
+  // that order id can be built from them (real date/lines/totals) instead
+  // of re-deriving its own, which is what used to let an email disagree
+  // with its order.
+  const orderIdCounts = new Map<string, number>();
+  for (const real of realOrders) {
+    const id = synthesizeOrderIdFor(real.orderIdText);
+    orderIdCounts.set(id, (orderIdCounts.get(id) ?? 0) + 1);
+  }
+  const ordersByOrderId = new Map<string, SyntheticOrder[]>();
+  const shipmentIndexSoFar = new Map<string, number>();
+
   const expected: ExpectedOrder[] = [];
   let globalTitleIndex = 0;
 
@@ -629,10 +664,13 @@ export function buildRetailerCorpus(
 
     const lines: SyntheticLine[] = real.items.map((item) => {
       const asin = synthesizeAsinFor(item.asin);
+      const cached = lineSynthCache.get(asin);
+      if (cached) return { asin, ...cached };
       const title = synthesizeProductTitle(item.title, globalTitleIndex);
       globalTitleIndex += 1;
       const basePrice = item.unitPrice ?? 20 + rng() * 40;
       const unitPrice = round2(Math.max(4.99, basePrice * PRICE_SCALE));
+      lineSynthCache.set(asin, { title, unitPrice });
       return { asin, title, unitPrice };
     });
 
@@ -643,12 +681,30 @@ export function buildRetailerCorpus(
     const tax = round2(subtotal * TAX_RATE);
     const grandTotal = round2(subtotal + shipping + tax);
 
+    // A split shipment ships to the same address as the rest of its order,
+    // so a later shipment reuses the first shipment's address rather than
+    // deriving its own from its own array index.
+    const existingShipments = ordersByOrderId.get(orderId) ?? [];
+    const firstShipment = existingShipments[0];
     const cityIndex = index % SYNTHETIC_CITIES.length;
     const nameIndex = index % SYNTHETIC_FIRST_NAMES.length;
     const streetIndex = index % SYNTHETIC_STREETS.length;
-    const shipName = `${SYNTHETIC_FIRST_NAMES[nameIndex]} ${SYNTHETIC_LAST_NAMES[nameIndex]}`;
-    const shipStreet = SYNTHETIC_STREETS[streetIndex]!;
     const { city, state, zip } = SYNTHETIC_CITIES[cityIndex]!;
+    const shipName =
+      firstShipment?.shipName ??
+      `${SYNTHETIC_FIRST_NAMES[nameIndex]} ${SYNTHETIC_LAST_NAMES[nameIndex]}`;
+    const shipStreet =
+      firstShipment?.shipStreet ?? SYNTHETIC_STREETS[streetIndex]!;
+    const shipCityStateZip =
+      firstShipment?.shipCityStateZip ?? `${city}, ${state} ${zip}`;
+
+    const shipmentTotal = orderIdCounts.get(orderId) ?? 1;
+    const shipmentIndex = (shipmentIndexSoFar.get(orderId) ?? 0) + 1;
+    shipmentIndexSoFar.set(orderId, shipmentIndex);
+    const shipmentLabel =
+      shipmentTotal > 1
+        ? `Shipment ${shipmentIndex} of ${shipmentTotal}`
+        : null;
 
     const order: SyntheticOrder = {
       orderId,
@@ -661,8 +717,23 @@ export function buildRetailerCorpus(
       grandTotal,
       shipName,
       shipStreet,
-      shipCityStateZip: `${city}, ${state} ${zip}`,
+      shipCityStateZip,
+      shipmentLabel,
     };
+
+    if (firstShipment && firstShipment.orderedAt !== order.orderedAt) {
+      // A single real order is placed once; if its shipments' fixtures
+      // disagree on the order date, the corpus's split-shipment invariant
+      // (same order id => same order date) is broken and every downstream
+      // email fixture for that order id would inherit an arbitrary date.
+      throw new Error(
+        `Order ${orderId} has shipments with different order dates ` +
+          `(${firstShipment.orderedAt} vs ${order.orderedAt}); a split-shipment ` +
+          "order must share one order date across its order-details fixtures.",
+      );
+    }
+    existingShipments.push(order);
+    ordersByOrderId.set(orderId, existingShipments);
 
     const outFile = `order-details-${index + 1}.html`;
     writeFileSync(
@@ -680,31 +751,41 @@ export function buildRetailerCorpus(
         title: line.title,
         unitPrice: line.unitPrice,
       })),
+      shipmentLabel: order.shipmentLabel,
     });
   });
 
   realEmails.forEach((real, index) => {
     const orderId = synthesizeOrderIdFor(real.orderIdText);
+    const shipments = ordersByOrderId.get(orderId);
+    if (!shipments || shipments.length === 0) {
+      // An email fixture with no matching order-details fixture has nothing
+      // to stay consistent with, so it cannot be built from shared data.
+      throw new Error(
+        `order-email fixture ${real.sourceFile} has no matching order-details ` +
+          `fixture for order id ${orderId}; every email in the corpus must pair ` +
+          "with at least one order-details page.",
+      );
+    }
+    const orderDateLabel = shipments[0]!.orderDateLabel;
+    const orderedAt = shipments[0]!.orderedAt;
+    const items = shipments.flatMap((shipment) => shipment.lines);
+    const grandTotal = round2(
+      shipments.reduce((sum, shipment) => sum + shipment.grandTotal, 0),
+    );
+
     const cityIndex = index % SYNTHETIC_CITIES.length;
     const { city, state } = SYNTHETIC_CITIES[cityIndex]!;
-    const title = synthesizeProductTitle(
-      real.itemTitle ?? "Workwear Item",
-      globalTitleIndex,
-    );
-    globalTitleIndex += 1;
-    const grandTotal = round2(
-      Math.max(4.99, (real.grandTotal ?? 25) * PRICE_SCALE),
-    );
-    const orderedAt = new Date(minRealDate.getTime() + offsetMs)
-      .toISOString()
-      .slice(0, 10);
 
     const html = renderOrderEmailHtml({
       orderId,
-      orderedAt,
+      orderDateLabel,
       arrivingLabel: "Arriving tomorrow",
       shipCity: `${SYNTHETIC_FIRST_NAMES[index % SYNTHETIC_FIRST_NAMES.length]} - ${city}, ${state}`,
-      itemTitle: title,
+      items: items.map((line) => ({
+        title: line.title,
+        unitPrice: line.unitPrice,
+      })),
       grandTotal,
     });
     const outFile = `order-email-${index + 1}.html`;
@@ -715,7 +796,11 @@ export function buildRetailerCorpus(
       orderedAt,
       grandTotal,
       currency: "USD",
-      items: [{ asin: "N/A", title, unitPrice: grandTotal }],
+      items: items.map((line) => ({
+        asin: "N/A",
+        title: line.title,
+        unitPrice: line.unitPrice,
+      })),
     });
   });
 
