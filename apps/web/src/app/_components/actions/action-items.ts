@@ -3,7 +3,6 @@ import {
   browserRoutedEntities,
   type BrowserRoutedEntity,
 } from "@cubby/schemas/entity-manifest";
-import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
@@ -169,14 +168,6 @@ export const actionItems: ActionItem[] = [
   },
   ...genericEntityCreateActions,
   {
-    id: "bulk-move",
-    name: "Bulk Move Inventory",
-    path: "/inventory/bulk-move",
-    icon: ArrowsLeftRightIcon,
-    keywords: ["move", "transfer", "relocate", "inventory"],
-    surfaces: ["palette-quick"],
-  },
-  {
     id: "problems",
     name: "Problems",
     path: "/problems",
@@ -184,13 +175,6 @@ export const actionItems: ActionItem[] = [
     keywords: ["issues", "errors", "warnings", "audit"],
     surfaces: ["palette-quick"],
   },
-  verbAction(
-    "bulkEdit",
-    "bulk-edit",
-    "/inventory/bulk-edit",
-    ["palette-quick", "inventory-page"],
-    ["audit", "bulk", "edit", "inventory", "review"],
-  ),
   verbAction(
     "printLabels",
     "print-labels",

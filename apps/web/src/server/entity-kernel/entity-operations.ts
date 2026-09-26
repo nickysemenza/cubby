@@ -45,7 +45,7 @@ import type {
 } from "./adapter";
 import {
   type EntityKernelEntity,
-  entityMutationResultSchema,
+  entityBrowserMutationResultSchema,
   entityQueryResultSchema,
 } from "./contracts";
 
@@ -474,7 +474,7 @@ export const defineEntityOperations = <
         ),
       )
       .output(({ created }) =>
-        entityMutationResultSchema.parse({
+        entityBrowserMutationResultSchema.parse({
           action: "create",
           entity: binding.entity,
           item: parseSchema<S["output"], typeof created.output>(
@@ -533,7 +533,7 @@ export const defineEntityOperations = <
         ),
       )
       .output(({ updated }) =>
-        entityMutationResultSchema.parse({
+        entityBrowserMutationResultSchema.parse({
           action: "update",
           entity: binding.entity,
           item: parseSchema<S["output"], typeof updated.output>(
@@ -567,7 +567,7 @@ export const defineEntityOperations = <
         deleteStoredObjects(receipt.detachedImageKeys ?? []),
       )
       .output(({ receipt }) =>
-        entityMutationResultSchema.parse({
+        entityBrowserMutationResultSchema.parse({
           action: "delete",
           entity: binding.entity,
           deletedReferences: receipt.deletedReferences,
@@ -607,7 +607,7 @@ export const defineEntityOperations = <
         deleteStoredObjects(updated.detachedImageKeys ?? []),
       )
       .output(({ updated }) =>
-        entityMutationResultSchema.parse({
+        entityBrowserMutationResultSchema.parse({
           action: "bulkUpdate",
           entity: binding.entity,
           updatedReferences: updated.updatedReferences,

@@ -34,8 +34,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
-import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
+import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
 import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
 import { useLocationPhotoCapture } from "~/app/_components/locations/use-location-photo-capture";
 import {
@@ -115,24 +114,16 @@ function PhotoPassStart() {
             <Description>
               Walks everything inside it that has no photo yet.
             </Description>
-            <WithEntitySearch entity="location">
-              {({ items, onSearchChange, isLoading, onOpenChange }) => (
-                <EntityPicker
-                  entity="location"
-                  label="location"
-                  items={items}
-                  value={picked}
-                  setValue={(item) => {
-                    setPicked(item);
-                    if (item) go({ parent: item.id });
-                  }}
-                  onSearchChange={onSearchChange}
-                  onOpenChange={onOpenChange}
-                  isLoading={isLoading}
-                  placeholder="Garage, pantry, shed…"
-                />
-              )}
-            </WithEntitySearch>
+            <EntityReferencePicker
+              entity="location"
+              label="location"
+              value={picked}
+              setValue={(item) => {
+                setPicked(item);
+                if (item) go({ parent: item.id });
+              }}
+              placeholder="Garage, pantry, shed…"
+            />
           </Stack>
 
           <Row gap="sm" wrap>

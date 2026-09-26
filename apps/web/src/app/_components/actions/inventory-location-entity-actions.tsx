@@ -4,7 +4,7 @@ import {
   locationOut,
 } from "@cubby/schemas/location";
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback } from "react";
 
 import {
   type InventoryDialogItem,
@@ -16,6 +16,7 @@ import { typeSupportsQrCode } from "../locations/location-type-theme";
 import { VerbMenuItem } from "./action-verb-ui";
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
+import { useStagedDialogAction } from "./use-staged-dialog-action";
 
 const asInventoryItem = (row: EntityActionRow): InventoryDialogItem | null => {
   const parsed = inventoryDialogItemSchema.safeParse(row);
@@ -27,41 +28,8 @@ const asLocationItem = (row: EntityActionRow): LocationListItemOut | null => {
   return parsed.success ? parsed.data : null;
 };
 
-function useStagedRows<T>(parse: (row: EntityActionRow) => T | null) {
-  const [items, setItems] = useState<T[]>([]);
-  const resolveRef = useRef<((result: { success: boolean }) => void) | null>(
-    null,
-  );
-
-  const stage = useCallback(
-    (rows: readonly EntityActionRow[]) => {
-      const parsed = rows.flatMap((row) => {
-        const item = parse(row);
-        return item === null ? [] : [item];
-      });
-      if (parsed.length !== rows.length) {
-        return Promise.resolve({ success: false });
-      }
-      resolveRef.current?.({ success: false });
-      setItems(parsed);
-      return new Promise<{ success: boolean }>((resolve) => {
-        resolveRef.current = resolve;
-      });
-    },
-    [parse],
-  );
-
-  const finish = useCallback((success: boolean) => {
-    setItems([]);
-    resolveRef.current?.({ success });
-    resolveRef.current = null;
-  }, []);
-
-  return { items, stage, finish };
-}
-
 function useMoveInventoryEntityAction(): EntityActionHandles {
-  const staged = useStagedRows(asInventoryItem);
+  const staged = useStagedDialogAction(asInventoryItem);
 
   return {
     run: staged.stage,
@@ -154,7 +122,7 @@ function usePrintLocationLabelsAction(): EntityActionHandles {
 }
 
 function useMoveLocationUnderAction(): EntityActionHandles {
-  const staged = useStagedRows(asLocationItem);
+  const staged = useStagedDialogAction(asLocationItem);
   return {
     run: staged.stage,
     availability: ({ rows }) =>

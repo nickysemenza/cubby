@@ -10,6 +10,7 @@ import { imageSightingReportFields } from "@cubby/schemas/image-sighting";
 import {
   photoProductCandidatesResponse,
   photoRunReviewResponse,
+  reviewPhotoGroupsAction,
   reviewPhotoGroupsOutput,
   photoImportCreateRunInput,
   photoImportCreateRunOutput,
@@ -242,6 +243,8 @@ export type PhotoImportFinalizeOutput = z.output<
   typeof photoImportFinalizeOutputSchema
 >;
 
+const [saveGroupsAction] = reviewPhotoGroupsAction.options;
+
 export const photoImportContract = defineContract("photoImport", {
   startGrouping: mutation({
     native: "Start photo grouping after a finalized upload",
@@ -287,7 +290,8 @@ export const photoImportContract = defineContract("photoImport", {
     native: "Approve reviewed photo groups in Apple apps",
     input: z.object({
       runId: importRunShortcode,
-      groupKeys: z.array(z.string().min(1).max(200)).min(1).max(200),
+      /** Omit to approve every `proposed` group. */
+      groupKeys: z.array(z.string().min(1).max(200)).min(1).max(200).optional(),
     }),
     output: reviewPhotoGroupsOutput,
   }),
@@ -297,6 +301,12 @@ export const photoImportContract = defineContract("photoImport", {
       runId: importRunShortcode,
       groupKey: z.string().min(1).max(200),
     }),
+    output: reviewPhotoGroupsOutput,
+  }),
+  saveGroups: mutation({
+    input: saveGroupsAction
+      .omit({ action: true })
+      .extend({ runId: importRunShortcode }),
     output: reviewPhotoGroupsOutput,
   }),
   stage: mutation({

@@ -6,7 +6,6 @@ import {
   createSortPaginationFields,
 } from "./pagination";
 import {
-  mergeProductsInput,
   productApplyUpcInput,
   productCategoryDistributionOut,
   productDiscardInput,
@@ -19,7 +18,6 @@ import {
   productInventoryEntriesBatchInput,
   productInventoryEntriesByIdOut,
   productManufacturerOptionsOut,
-  productMergeSummaryOut,
   productPickerItemOut,
   productQuantitySummariesOut,
   productQuantitySummaryBatchInput,
@@ -35,13 +33,10 @@ import {
   productWithFoodAndSideEffectsOut,
 } from "./product";
 import {
-  attachProductComponentsInput,
-  detachProductComponentsInput,
   kitComponentRowsInput,
   kitComponentRowsOut,
   kitMembershipsInput,
   kitMembershipsOut,
-  productComponentMutationOut,
   productComponentsInput,
   productComponentsOut,
 } from "./product-components";
@@ -65,11 +60,6 @@ const productSearchOut = createPaginatedResponseSchemaWithContext(
   productPickerItemOut,
   "product",
 );
-const productMergeOut = z.object({
-  product: productTopLevelOut,
-  mergeSummary: productMergeSummaryOut,
-});
-
 const productCreateManyResult = z.object({
   created: z.number().int().nonnegative(),
   sideEffects: mutationSideEffectsSchema,
@@ -157,7 +147,6 @@ export const productWorkflowSchemas = {
     input: productShortcodesInput,
     output: productShortcodeListOut,
   },
-  merge: { input: mergeProductsInput, output: productMergeOut },
   projectUses: {
     input: productProjectUsesInput,
     output: productProjectUsesOut,
@@ -169,14 +158,6 @@ export const productWorkflowSchemas = {
     output: kitComponentRowsOut,
   },
   kitMembership: { input: kitMembershipsInput, output: kitMembershipsOut },
-  attachComponents: {
-    input: attachProductComponentsInput,
-    output: productComponentMutationOut,
-  },
-  detachComponents: {
-    input: detachProductComponentsInput,
-    output: productComponentMutationOut,
-  },
   setProjectUses: {
     input: productProjectUsesSetInput,
     output: productProjectUsesSetOut,

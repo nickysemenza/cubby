@@ -40,10 +40,9 @@ import {
 } from "~/components/ui/dialog";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
+import { entityRelationMutationOptions } from "~/entities/entity-mutation.functions";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { purchaseLabel } from "~/lib/purchase-label";
-
-import { purchase as purchaseOperations } from "./purchase.functions";
 
 const isRowSelectionUpdater = (
   value: Updater<RowSelectionState>,
@@ -105,7 +104,7 @@ export function LinkProductsDialog({
     onOpenChange(next);
   };
   const attach = useActionMutation({
-    mutationFn: purchaseOperations.attachProducts.mutationOptions,
+    mutationFn: entityRelationMutationOptions,
     success: (result) =>
       `Attached ${result.changed} product${result.changed === 1 ? "" : "s"}`,
     onSuccess: () => resetAndClose(false),
@@ -226,8 +225,11 @@ export function LinkProductsDialog({
             disabled={selected.size === 0 || attach.isPending}
             onClick={() =>
               attach.mutate({
-                purchaseId: purchase.id,
-                productIds: [...selected],
+                action: "attach",
+                entity: "purchase",
+                relation: "products",
+                id: purchase.id,
+                items: [...selected].map((id) => ({ id })),
               })
             }
           >

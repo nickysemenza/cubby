@@ -27,7 +27,6 @@ export const product = defineOperationDomain(productContract, {
     tags: [["product", "externalIdSourceOptions"]],
   },
   getByShortcodes: { tags: [["product", "getByShortcodes"]] },
-  merge: { invalidates: ripple.productMerge },
   projectUses: {
     tags: [
       ["product", "projectUses"],
@@ -53,8 +52,6 @@ export const product = defineOperationDomain(productContract, {
       ["product", "component"],
     ],
   },
-  attachComponents: { invalidates: ripple.productComponent },
-  detachComponents: { invalidates: ripple.productComponent },
   setProjectUses: { invalidates: ripple.projectResource },
   discard: { invalidates: ripple.expense },
 });

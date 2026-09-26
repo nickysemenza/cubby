@@ -30,7 +30,6 @@ import { cn } from "~/lib/utils";
 
 import { ScannerStatusOverlay } from "./scanner-status-overlay";
 import {
-  BARCODE_FORMATS,
   type BarcodeFormat,
   QR_CODE_FORMATS,
   UNIVERSAL_SCAN_FORMATS,
@@ -38,7 +37,7 @@ import {
   useScanBeep,
 } from "./useBarcodeScanner";
 
-export { BARCODE_FORMATS, QR_CODE_FORMATS, UNIVERSAL_SCAN_FORMATS };
+export { QR_CODE_FORMATS, UNIVERSAL_SCAN_FORMATS };
 
 /** One recently-scanned item, shown as a chip under the viewfinder. */
 export interface ScanFeedbackEntry {

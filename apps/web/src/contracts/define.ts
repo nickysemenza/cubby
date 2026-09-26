@@ -14,6 +14,23 @@ import type { z } from "zod";
  * generator enforces that boundary.
  */
 
+/**
+ * Publishes the operation as an MCP tool that calls its
+ * `implementOperationDomain` handler directly and validates against this
+ * member's own object-rooted `input`/`output` schemas. The name, description,
+ * and schemas are an outward contract for MCP clients. Annotations follow
+ * `kind`; `destructive` and `openWorld` mark the exceptions. `readPolicy:
+ * "strong"` keeps an MCP read on the authoritative adapter where the shared
+ * operation read policy would accept the request-selected one.
+ */
+export interface McpToolSpec {
+  readonly name: string;
+  readonly description: string;
+  readonly destructive?: true;
+  readonly openWorld?: true;
+  readonly readPolicy?: "strong";
+}
+
 interface OperationObservability {
   readonly entities?: readonly string[];
   readonly productPhases?: readonly string[];
@@ -41,6 +58,7 @@ export interface QueryContract<
   readonly observability?: OperationObservability;
   readonly http?: false;
   readonly native?: string;
+  readonly mcp?: McpToolSpec;
 }
 
 export interface MutationContract<
@@ -53,6 +71,7 @@ export interface MutationContract<
   readonly observability?: OperationObservability;
   readonly http?: false;
   readonly native?: string;
+  readonly mcp?: McpToolSpec;
 }
 
 /**

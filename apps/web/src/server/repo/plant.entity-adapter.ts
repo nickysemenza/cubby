@@ -6,10 +6,10 @@ import {
   entityMutationReferences,
 } from "~/server/entity-kernel/adapter";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
+import { policyDelete } from "~/server/repo/removal";
 
 import {
   createPlant,
-  deletePlants,
   getPlantByShortcode,
   listPlants,
   mergePlants,
@@ -43,7 +43,11 @@ export const plantEntityAdapter = defineEntityAdapter({
     create: (ctx, data) => createPlant(ctx.db, data, ctx.actorContext),
     update: (ctx, id, data) => updatePlant(ctx.db, id, data, ctx.actorContext),
     delete: async (ctx, ids) => {
-      await deletePlants(ctx.db, ids, ctx.actorContext);
+      await policyDelete("plant", PLANT_DELETE_EDGE_POLICY)(
+        ctx.db,
+        ids,
+        ctx.actorContext,
+      );
       return { deletedReferences: entityMutationReferences("plant", ids) };
     },
     bulkUpdate: async (ctx, ids, data) => {

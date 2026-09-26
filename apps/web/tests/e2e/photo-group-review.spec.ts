@@ -11,6 +11,7 @@ test.use({ video: recording ? "on" : "off" });
 test("reviews, approves, and discards proposed photo groups on the photo-inventory run page", async ({
   page,
   e2eRuntime,
+  baseURL,
 }) => {
   const name = `Photo run ${Date.now()}`;
   const seed = await seedPhotoGroupReviewRun(
@@ -33,10 +34,11 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     page.getByRole("button", { name: "Start grouping" }),
   ).toBeVisible();
   if (recording) await page.waitForTimeout(1_500);
-  const proposed = await page.request.post(
-    `/api/import/runs/${seed.runId}/photo-groups`,
-    { data: { action: "save", groups: seed.groups } },
-  );
+  const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
+    data: { runId: seed.runId, groups: seed.groups },
+    // API writes require a same-origin request.
+    headers: { Origin: baseURL! },
+  });
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
 
   // Both proposed groups render, and every seeded photo is assigned to one.
@@ -89,7 +91,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect
     .poll(async () => {
       const response = await page.request.get(
-        `/api/import/runs/${seed.runId}/photo-groups`,
+        `/api/v1/photoImport/review?runId=${seed.runId}`,
       );
       const body = await response.json();
       return body.review.proposals.find(
@@ -100,9 +102,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   if (recording) await page.waitForTimeout(1_500);
 
   // The Photos table lists every seeded image.
-  const photosCard = page.locator('[data-slot="card"]').filter({
-    has: page.getByRole("heading", { name: "Photos" }),
-  });
+  const photosCard = page.getByRole("region", { name: "Run photos" });
   await expect(
     photosCard.getByRole("link", { name: /^Open photo / }),
   ).toHaveCount(3);
@@ -114,9 +114,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     .getByRole("textbox", { name: "New product name" })
     .fill(correctedName);
   await g1Card.getByRole("button", { name: "Approve", exact: true }).click();
-  const settledCard = page.locator('[data-slot="card"]').filter({
-    has: page.getByRole("heading", { name: "Settled groups" }),
-  });
+  const settledCard = page.getByRole("region", { name: "Settled groups" });
   await expect(settledCard).toBeVisible();
   await expect(
     settledCard.getByRole("link", { name: correctedName }),
@@ -147,9 +145,11 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect(page).not.toHaveURL(new RegExp(`/runs/${seed.runId}$`));
   const restartedId = new URL(page.url()).pathname.split("/").at(-1);
   expect(restartedId).toBeTruthy();
-  const restarted = await page.request.get(`/api/import/runs/${restartedId}`);
+  const restarted = await page.request.get(
+    `/api/v1/run/work?runId=${restartedId}`,
+  );
   expect(restarted.ok(), await restarted.text()).toBeTruthy();
-  const restartedRun = (await restarted.json()).run;
+  const restartedRun = await restarted.json();
   expect(restartedRun.predecessorRunPublicId).toBe(seed.runId);
   expect(restartedRun.targets).toHaveLength(3);
   expect(
@@ -163,6 +163,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
 test("suggests an existing variant and previews every merge decision for a created photo product", async ({
   page,
   e2eRuntime,
+  baseURL,
 }) => {
   const name = `Photo match ${Date.now()}`;
   const candidateName = `Gray crew t-shirt M ${name}`;
@@ -177,12 +178,11 @@ test("suggests an existing variant and previews every merge decision for a creat
     `/runs/${seed.runId}`,
     page.getByRole("heading", { name: "Proposed items" }),
   );
-  const proposed = await page.request.post(
-    `/api/import/runs/${seed.runId}/photo-groups`,
-    {
-      data: { action: "save", groups: seed.groups },
-    },
-  );
+  const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
+    data: { runId: seed.runId, groups: seed.groups },
+    // API writes require a same-origin request.
+    headers: { Origin: baseURL! },
+  });
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
 
   const group = page.locator('[data-slot="card"]').filter({
@@ -198,7 +198,7 @@ test("suggests an existing variant and previews every merge decision for a creat
     page.getByRole("link", { name: "Gray crew t-shirt — M" }),
   ).toBeVisible();
   const review = await page.request.get(
-    `/api/import/runs/${seed.runId}/photo-groups`,
+    `/api/v1/photoImport/review?runId=${seed.runId}`,
   );
   const body = await review.json();
   const createdId = body.review.proposals.find(
@@ -206,9 +206,7 @@ test("suggests an existing variant and previews every merge decision for a creat
   )?.committedProduct?.id;
   expect(createdId).toBeTruthy();
 
-  const settled = page.locator('[data-slot="card"]').filter({
-    has: page.getByRole("heading", { name: "Settled groups" }),
-  });
+  const settled = page.getByRole("region", { name: "Settled groups" });
   await settled
     .getByRole("button", { name: "Review possible matches" })
     .click();

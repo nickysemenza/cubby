@@ -1,7 +1,12 @@
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  type UseQueryResult,
+} from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { importRunHref } from "~/app/purchases/purchase-import-links";
@@ -16,13 +21,26 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { StatusText } from "~/components/ui/status-text";
-import {
-  loadTargetedImportLaunch,
-  startTargetedImport,
-  type TargetedImportPurpose,
-  type TargetedProductCandidate,
-  type TargetedImportSource,
-} from "~/lib/targeted-import-api";
+import type {
+  TargetedImportLaunch,
+  TargetedImportPurpose,
+  TargetedImportSource,
+  TargetedImportStartInput,
+  TargetedProductCandidate,
+} from "~/contracts/run.contract";
+import { run as runOperations } from "~/entities/run.functions";
+
+const startTargetedImport = (input: TargetedImportStartInput) =>
+  runOperations.startTargeted.call(input);
+
+/** Every product's launch, flattened once all have loaded. */
+const combineLaunches = (results: UseQueryResult<TargetedImportLaunch>[]) => ({
+  products: results.every((result) => result.data)
+    ? results.flatMap((result) => result.data?.products ?? [])
+    : undefined,
+  isPending: results.some((result) => result.isPending),
+  error: results.find((result) => result.error)?.error ?? null,
+});
 
 export function TargetedImportLaunchButton({
   targetId,
@@ -73,25 +91,28 @@ export function TargetedProductBulkEnrichmentDialog({
   products: Array<{ id: string; name: string }>;
   onFinished: (success: boolean) => void;
 }) {
-  const launch = useQuery({
-    queryKey: [
-      "targeted-import",
-      "bulk-enrichment",
-      products.map(({ id }) => id),
-    ],
-    queryFn: async () =>
-      await Promise.all(
-        products.map(({ id }) =>
-          loadTargetedImportLaunch("product_enrichment", id),
-        ),
-      ),
-    enabled: open && products.length > 0,
+  const launch = useQueries({
+    queries: products.map(({ id }) => ({
+      ...runOperations.targetedLaunch.queryOptions({
+        purpose: "product_enrichment",
+        targetId: id,
+      }),
+      enabled: open,
+    })),
+    combine: combineLaunches,
   });
-  const [targets, setTargets] = useState<TargetedProductCandidate[]>([]);
-  useEffect(() => {
-    if (launch.data)
-      setTargets(launch.data.flatMap((result) => result.products));
-  }, [launch.data]);
+  // The dialog stays mounted across stagings: edits belong to one product set.
+  const productSet = products.map(({ id }) => id).join(" ");
+  const [edited, setEdited] = useState<{
+    productSet: string;
+    targets: TargetedProductCandidate[];
+  } | null>(null);
+  const targets =
+    (edited?.productSet === productSet ? edited.targets : null) ??
+    launch.products ??
+    [];
+  const setTargets = (next: TargetedProductCandidate[]) =>
+    setEdited({ productSet, targets: next });
   const selected = targets.filter((target) => target.selected);
   const start = useMutation({
     mutationFn: () =>
@@ -124,10 +145,10 @@ export function TargetedProductBulkEnrichmentDialog({
         {launch.isPending ? (
           <StatusText>Loading verified sources…</StatusText>
         ) : null}
-        {launch.isError ? (
+        {launch.error ? (
           <StatusText tone="destructive">{launch.error.message}</StatusText>
         ) : null}
-        {launch.data ? (
+        {launch.products ? (
           <ProductTargetChecklist targets={targets} onChange={setTargets} />
         ) : null}
         {start.data?.runs
@@ -183,8 +204,7 @@ export function TargetedImportLaunchDialog({
   purpose: TargetedImportPurpose;
 }) {
   const launch = useQuery({
-    queryKey: ["targeted-import", "launch", purpose, targetId],
-    queryFn: () => loadTargetedImportLaunch(purpose, targetId),
+    ...runOperations.targetedLaunch.queryOptions({ purpose, targetId }),
     enabled: open,
   });
   const [sourceId, setSourceId] = useState<string | null>(null);

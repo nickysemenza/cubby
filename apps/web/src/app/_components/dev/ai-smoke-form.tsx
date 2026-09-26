@@ -6,14 +6,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { z } from "zod";
 
-import {
-  buildSearchHitComboboxItem,
-  buildVendorComboboxItem,
-} from "~/app/_components/combobox/combobox-builders";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import type { PickerSearchEntity } from "~/app/_components/combobox/entity-search-hooks";
-import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
+import { referenceEntitySearch } from "~/app/_components/combobox/reference-entity-search";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
@@ -205,17 +201,8 @@ function RecordPicker({
       clearable
     />
   );
-  if (entity === "vendor")
-    return (
-      <WithEntitySearch
-        entity="vendor"
-        build={(row) => buildVendorComboboxItem(row, { itemId: "shortcode" })}
-        buildSearchHit={(hit) => buildSearchHitComboboxItem(hit, "vendor")}
-      >
-        {renderPicker}
-      </WithEntitySearch>
-    );
-  return <WithEntitySearch entity={entity}>{renderPicker}</WithEntitySearch>;
+  const Search = referenceEntitySearch(entity);
+  return <Search>{renderPicker}</Search>;
 }
 
 function RecordField({

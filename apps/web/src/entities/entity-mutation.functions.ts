@@ -1,5 +1,7 @@
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
+import type { RelationMutationOut } from "@cubby/schemas/common";
 import { hasFdcLink } from "@cubby/schemas/product";
+import type { UseMutationOptions } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { entityMutationContract } from "~/contracts/entity-mutation.contract";
@@ -66,17 +68,99 @@ export const entityMutation = defineOperationDomain(entityMutationContract, {
      * ingredient/usda-food link (see `productWriteTags`), and a `location`
      * bulk reparent, which moves inventory and problem views too.
      */
-    invalidates: (input) =>
-      input.entity === "product"
+    invalidates: (input) => {
+      if (input.action === "attach" || input.action === "detach")
+        return RELATION_RIPPLE[
+          // SAFETY: the command schema only admits declared entity/relation
+          // pairs; TS cannot correlate the two fields across the union.
+          `${input.entity}:${input.relation}` as RelationKey<RelationCommand>
+        ];
+      // A product merge re-parents inventory, expenses and project uses and
+      // recomputes dependent recipe costs, none of which a product write does.
+      if (input.action === "merge")
+        return input.entity === "product"
+          ? ripple.productMerge
+          : entityRipple(input.entity);
+      return input.entity === "product"
         ? productWriteTags(input)
         : // A location reparent moves inventory, product and problem views
           // too — the wide fan-out `location.bulkUpdateParent` declares.
           // `entityRipple("location")` is the narrow one.
           input.entity === "location" && input.action === "bulkUpdate"
           ? ripple.locationReparent
-          : entityRipple(input.entity),
+          : entityRipple(input.entity);
+    },
   },
 });
+
+type RelationCommand = Extract<
+  EntityBrowserMutationInput,
+  { action: "attach" | "detach" }
+>;
+export type MergeCommand = Extract<
+  EntityBrowserMutationInput,
+  { action: "merge" }
+>;
+
+/** A relation write moves both ends' views and the shared relationship surface. */
+type RelationKey<C> = C extends { entity: string; relation: string }
+  ? `${C["entity"]}:${C["relation"]}`
+  : never;
+
+const RELATION_RIPPLE = {
+  "product:components": ripple.productComponent,
+  "project:resources": ripple.projectResource,
+  "purchase:products": ripple.purchaseProduct,
+} satisfies Record<RelationKey<RelationCommand>, InvalidationTagSet>;
+
+const kernelMutationIdentity = ({
+  mutationKey,
+  meta,
+}: {
+  mutationKey?: readonly unknown[];
+  meta?: UseMutationOptions["meta"];
+}) => ({ mutationKey, meta });
+
+/**
+ * Mutation options for one relation attach/detach, resolving to its counts.
+ * The variables stay the full kernel command: invalidation reads them.
+ */
+export const entityRelationMutationOptions = (): UseMutationOptions<
+  RelationMutationOut,
+  Error,
+  RelationCommand
+> => ({
+  ...kernelMutationIdentity(entityMutation.mutate.mutationOptions()),
+  mutationFn: async (command) => {
+    const result = await entityMutation.mutate.call(command);
+    if (!("relation" in result))
+      throw new Error("Entity mutation result did not match its command");
+    return result.result;
+  },
+});
+
+/** Mutation options for one entity merge, resolving to the kernel result. */
+export const entityMergeMutationOptions =
+  <E extends MergeCommand["entity"]>(entity: E) =>
+  (): UseMutationOptions<EntityMergeResult<E>, Error, MergeCommand> => {
+    const operation = entityMutation.mutate.forEntity(entity);
+    return {
+      ...kernelMutationIdentity(operation.mutationOptions()),
+      mutationFn: async (command) => {
+        const result = await operation.call(command);
+        if (result.action !== "merge" || result.entity !== entity)
+          throw new Error("Entity mutation result did not match its command");
+        // SAFETY: narrowed by `entity` above; TS cannot correlate the
+        // generic parameter through the discriminated union.
+        return result as EntityMergeResult<E>;
+      },
+    };
+  };
+
+export type EntityMergeResult<E extends MergeCommand["entity"]> = Extract<
+  EntityBrowserMutationResult,
+  { action: "merge"; entity: E }
+>;
 
 /** Recover the entity-specific output through the same schema that backs the kernel. */
 export function parseEntityMutationResultFor<E extends EditableEntity>(

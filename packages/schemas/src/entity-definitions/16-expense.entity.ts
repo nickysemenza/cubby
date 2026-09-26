@@ -164,7 +164,13 @@ export default defineEntity({
           sectionOverride: "schedule",
           initial: "today",
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          format: "plainDate",
+          mobile: { slot: "subtitle", priority: 15 },
+        },
         validation: {
           read: plainDate.nullable(),
           create: plainDate.nullable(),
@@ -291,7 +297,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "text", renderer: "url", sectionOverride: "details" },
-        display: { list: true, detail: true },
+        display: { list: true, detail: true, width: "xs" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -314,7 +320,12 @@ export default defineEntity({
         key: "future",
         kind: "boolean",
         control: { kind: "checkbox", sectionOverride: "details" },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          mobile: { slot: "meta", priority: 50 },
+        },
         validation: {
           read: z.boolean(),
           create: z.boolean().default(false),
@@ -335,6 +346,8 @@ export default defineEntity({
           list: true,
           detail: true,
           renderer: { detail: "expense-project" },
+          width: "md",
+          mobile: { slot: "meta", priority: 40, interactive: true },
         },
         resolution: {
           reset: { projectId: null },
@@ -383,6 +396,8 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          width: "md",
+          mobile: { slot: "meta", priority: 45, interactive: true },
         },
         validation: {
           read: productShortcode
@@ -399,7 +414,12 @@ export default defineEntity({
         kind: "number",
         nullable: true,
         control: { kind: "number", sectionOverride: "details" },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          mobile: { slot: "meta", priority: 47, interactive: true },
+        },
         validation: {
           read: signedProductQuantity
             .describe(

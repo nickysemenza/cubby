@@ -30,19 +30,9 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import {
-  expense,
-  expenseAttribution,
-  ledgerSourceClaim,
-  purchase,
-} from "~/server/db/schema";
+import { expense, purchase } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  type AuditEntryInput,
-  computeChanges,
-  logAuditEntries,
-  logAuditEntry,
-} from "~/server/repo/audit-log";
+import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
   loadDataQualities,
   touchDataQualityTargets,
@@ -50,14 +40,13 @@ import {
 import {
   buildPartialUpdateValues,
   getDb,
-  lockAndValidateForDelete,
   notDeleted,
   relations,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
-import { patchEntityRows } from "~/server/repo/entity-patch";
+import { bulkPatchEntities, patchEntityRows } from "~/server/repo/entity-patch";
 import { replaceExpenseAttributionRole } from "~/server/repo/expense-attribution";
 import {
   assertExplicitSourceClaimsForAmountChange,
@@ -73,7 +62,7 @@ import {
   foldChargeInto,
   renameChargeOrderId,
 } from "~/server/repo/purchase";
-import { removeEntity } from "~/server/repo/removal";
+import { deleteByPolicy } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -165,113 +154,38 @@ type ExpenseBulkPatch = Pick<
   "projectId" | "trade" | "costType" | "date"
 >;
 
-export const updateExpensesInBulk = async (
+export const updateExpensesInBulk = (
   db: Database,
   shortcodes: ExpenseShortcode[],
   data: ExpenseBulkPatch,
   actor: ActorContext,
-): Promise<{
-  updatedIds: ExpenseId[];
-  updatedShortcodes: ExpenseShortcode[];
-}> => {
-  if (new Set(shortcodes).size !== shortcodes.length) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Bulk expense IDs must be unique.",
-    );
-  }
-  if (
-    data.projectId === undefined &&
-    data.trade === undefined &&
-    data.costType === undefined &&
-    data.date === undefined
-  ) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "A bulk expense patch must supply at least one field.",
-    );
-  }
-
-  return await withTransaction(db, async (tx) => {
-    const projectId =
-      data.projectId === undefined
-        ? undefined
-        : data.projectId === null
-          ? null
-          : await resolveLiveProjectId(tx, data.projectId);
-    const ids = await resolveAllOrThrow(tx, "expense", shortcodes);
-    const before = await tx
-      .select({
-        id: expense.id,
-        shortcode: expense.shortcode,
-        projectId: expense.projectId,
-        trade: expense.trade,
-        costType: expense.costType,
-        cost: expense.cost,
-        date: expense.date,
-        lineKind: expense.lineKind,
-        productId: expense.productId,
-        purchaseId: expense.purchaseId,
-      })
-      .from(expense)
-      .where(and(inArray(expense.id, ids), notDeleted(expense)))
-      .for("update");
-    if (before.length !== ids.length) {
-      throw createAppError(
-        "EXPENSE_NOT_FOUND",
-        "One or more expenses are missing.",
-      );
-    }
-
-    const values = buildPartialUpdateValues({
-      projectId,
-      trade: data.trade,
-      costType: data.costType,
-      date: data.date,
-    });
-    for (const row of before) {
-      assertExpenseDate(
-        row.cost,
-        values.date === undefined ? row.date : values.date,
-      );
-      await validateExpenseInheritance(tx, {
-        lineKind: row.lineKind,
+) =>
+  bulkPatchEntities(
+    db,
+    actor,
+    {
+      entity: "expense",
+      table: expense,
+      values: async (tx) => ({
         projectId:
-          values.projectId === undefined ? row.projectId : values.projectId,
-        productId: row.productId,
-        purchaseId: row.purchaseId,
-        trade: values.trade === undefined ? row.trade : values.trade,
-      });
-    }
-    await tx
-      .update(expense)
-      .set(values)
-      .where(and(inArray(expense.id, ids), notDeleted(expense)));
-
-    const auditEntries: AuditEntryInput[] = [];
-    for (const row of before) {
-      const changes = computeChanges(row, { ...row, ...values }, [
-        ...entityFieldModels.expense.bulk,
-      ]);
-      if (changes) {
-        auditEntries.push({
-          entityType: "expense",
-          entityId: row.id,
-          action: "update",
-          changes,
-        });
-      }
-    }
-    await logAuditEntries(tx, actor, auditEntries);
-
-    return {
-      updatedIds: before.map((row) => row.id),
-      updatedShortcodes: before.map((row) =>
-        parseShortcodeFor("expense", row.shortcode),
-      ),
-    };
-  });
-};
+          data.projectId == null
+            ? data.projectId
+            : await resolveLiveProjectId(tx, data.projectId),
+        trade: data.trade,
+        costType: data.costType,
+        date: data.date,
+      }),
+      validate: async (tx, before, values) => {
+        for (const row of before) {
+          const next = { ...row, ...values };
+          assertExpenseDate(next.cost, next.date);
+          await validateExpenseInheritance(tx, next);
+        }
+      },
+    },
+    shortcodes,
+    data,
+  );
 
 const fetchExpenseById = (
   db: Database | DrizzleTransaction,
@@ -1159,8 +1073,6 @@ export const deleteExpensesWithPurchaseEffects = async (
 
   return await withTransaction(db, async (tx) => {
     const ids = await resolveAllOrThrow(tx, "expense", shortcodes);
-    await lockAndValidateForDelete(tx, expense, ids, "Expense");
-
     const qualityTargets = await tx.query.expense.findMany({
       where: and(inArray(expense.id, ids), notDeleted(expense)),
       columns: { shortcode: true, productId: true, purchaseId: true },
@@ -1175,23 +1087,13 @@ export const deleteExpensesWithPurchaseEffects = async (
       pricingProductIds(qualityTargets.map((row) => row.productId)),
     );
 
-    const { deleted } = await removeEntity(tx, {
+    // The generic delete (policy dispositions + removal) joins this
+    // transaction; the purchase and pricing effects around it are expense's.
+    const { deleted } = await deleteByPolicy(tx, {
       entity: "expense",
+      policy: EXPENSE_DELETE_EDGE_POLICY,
       ids,
-      removal: "soft",
       actor,
-      children: [
-        {
-          table: expenseAttribution,
-          parentColumns: [expenseAttribution.expenseId],
-          auditKey: "cascadedExpenseAttributions",
-        },
-        {
-          table: ledgerSourceClaim,
-          parentColumns: [ledgerSourceClaim.expenseId],
-          auditKey: "cascadedLedgerSourceClaims",
-        },
-      ],
     });
 
     await touchDataQualityTargets(tx, {

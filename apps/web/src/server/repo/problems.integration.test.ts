@@ -29,6 +29,7 @@ import {
 } from "../../../tooling/product-category-fixtures";
 import { requireActor } from "../request-context";
 import { runDiagnostic } from "../services/problem-diagnostics.service";
+import { findViewProblems } from "../services/problem-views.service";
 import { findFastProblems } from "../services/problems.service";
 import { createTestRequestContext } from "../testing/request-context";
 import {
@@ -44,9 +45,12 @@ import { findEntitiesMissingEmbeddings } from "./problems";
 import { getPurchaseByID, purchaseList, updatePurchase } from "./purchase";
 import {
   createIngredientFixture,
+  createInventoryFixture,
+  createLocationFixture,
   createProductFixture,
   createRecipeFixture,
   makeExpenseInput,
+  makeLocationInput,
   makeProductInput,
   makeRecipeInput,
 } from "./repo.fixtures";
@@ -116,6 +120,79 @@ describe("problems — unlinked exit expenses", () => {
     expect(ids).toContain(soldItem.id);
     expect(ids).not.toContain(taxCredit.id);
     expect(ids).not.toContain(allocatedCredit.id);
+  });
+});
+
+describe("problems — view-backed uniform rows", () => {
+  const ctx = withTestDb();
+
+  // The presenters parse list rows by field name, so a renamed list field
+  // fails only once a real row reaches the section.
+  it("presents list rows as entity rows with evidence and record badges", async () => {
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Test shelf", type: "shelf" }),
+      ctx.actor,
+    );
+    const thing = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Unpriced test good" }),
+      ctx.actor,
+    );
+    const entry = await createInventoryFixture(
+      ctx.db,
+      {
+        productId: thing.id,
+        locationId: shelf.id,
+        amount: { value: 2, unit: "each" },
+      },
+      ctx.actor,
+    );
+    const unused = await createIngredientFixture(
+      ctx.db,
+      { name: "Unused test ingredient" },
+      ctx.actor,
+    );
+
+    const views = await findViewProblems(ctx.db);
+    const shelfBadge = {
+      label: "Test shelf",
+      entity: "location",
+      id: shelf.id,
+    };
+
+    expect(
+      views.neverVerifiedInventory.find((row) => row.id === entry.id),
+    ).toEqual({
+      entity: "inventory",
+      id: entry.id,
+      name: "Unpriced test good",
+      subtitle: "2 each",
+      badges: [shelfBadge],
+    });
+    expect(
+      views.productsMissingPrice.find((row) => row.id === thing.id),
+    ).toMatchObject({
+      entity: "product",
+      subtitle: "by Test Manufacturer · 2 units unvalued",
+      badges: [shelfBadge],
+    });
+    expect(views.staleLocations.find((row) => row.id === shelf.id)).toEqual({
+      entity: "location",
+      id: shelf.id,
+      name: "Test shelf",
+      subtitle: "never recounted",
+      badges: [
+        { label: "shelf", entity: null, id: null },
+        { label: "1 item", entity: null, id: null },
+      ],
+    });
+    expect(
+      views.unusedIngredientsWithoutProduct.find((row) => row.id === unused.id),
+    ).toMatchObject({
+      entity: "ingredient",
+      subtitle: "Used in no recipes · no product attached",
+    });
   });
 });
 

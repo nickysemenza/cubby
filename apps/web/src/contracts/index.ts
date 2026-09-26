@@ -25,7 +25,6 @@ export { entityMutationContract } from "./entity-mutation.contract";
 export { entityTimelineContract } from "./entity-timeline.contract";
 export { expenseContract } from "./expense.contract";
 export {
-  financialAccountContract,
   ledgerPartyContract,
   financialTransactionContract,
 } from "./finance.contract";

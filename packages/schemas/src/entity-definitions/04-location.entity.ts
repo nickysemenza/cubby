@@ -233,7 +233,12 @@ export default defineEntity({
         validation: {
           read: null,
           create: null,
-          update: z.array(imageShortcode).optional(),
+          update: z
+            .array(imageShortcode)
+            .optional()
+            .describe(
+              "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
+            ),
         },
       },
       {
@@ -248,7 +253,10 @@ export default defineEntity({
         validation: {
           read: locationIdentityProductOut.nullable(),
           create: null,
-          update: z.array(imageShortcode).optional(),
+          update: z
+            .array(imageShortcode)
+            .optional()
+            .describe("existing image ids in display order; first = cover"),
         },
       },
       {
@@ -287,7 +295,13 @@ export default defineEntity({
         key: "lastBulkInventory",
         kind: "timestamp",
         nullable: true,
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          format: "timestamp",
+          mobile: { slot: "meta", priority: 90 },
+        },
         validation: {
           read: z.date().nullable(),
           create: null,
@@ -618,7 +632,6 @@ export default defineEntity({
         field: "parentId",
         kind: "idMulti",
         placeholder: "Filter parent...",
-        optionsKey: "parentLocation",
         brandRef: { entity: "location" },
         nullable: { field: "parentPresenceFilter", label: "parent" },
       },

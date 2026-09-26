@@ -1,10 +1,11 @@
 import {
   type CostType,
+  type ExpenseFilters,
   expenseFiltersSchema,
   type Trade,
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
@@ -29,6 +30,7 @@ import {
 } from "./charts/trade-cost-aggregate";
 import { VendorBreakdown } from "./charts/vendor-breakdown";
 import {
+  DEFAULT_EXPENSE_ANALYZE_CONFIG,
   type ExpenseAnalyzeConfig,
   expenseAnalyzeConfigFromSearch,
   expenseAnalyzeSearchFields,
@@ -57,38 +59,30 @@ const ExpenseAggregateExplorer = lazy(() =>
   })),
 );
 
+function parseExpenseFilters<TSearch extends {}>(
+  search: TSearch,
+): ExpenseFilters {
+  const specs = getEntityFilters("expense");
+  return expenseFiltersSchema.parse(
+    buildFiltersFromManifest(specs, filterGetterFromSearch(specs, search)),
+  );
+}
+
 /**
  * `view=analytics` — chart-first read over `expense.analytics`'s
  * server-side aggregates (see packages/schemas/src/project.ts's
- * `expenseAnalyticsOut`), replacing the old always-mounted
- * `ExpenseChartStrip` (which fetched every matching row via
- * `expense.chartData` and grouped client-side).
+ * `expenseAnalyticsOut`).
  *
  * Filters are read straight off the route's URL search params through the
- * expense filter manifest — the SAME specs `expenselist.tsx`'s ledger table
- * syncs its column filters through — so this view's totals always agree with
- * the Ledger view's, and a Trade × Cost Type matrix click here writes back to
- * those same params (switching to Ledger afterwards shows the matching rows).
+ * expense filter manifest — the SAME specs the ledger table syncs its column
+ * filters through — so this view's totals always agree with the Ledger
+ * view's, and a Trade × Cost Type matrix click here writes back to those same
+ * params (switching to Ledger afterwards shows the matching rows).
  */
 export function ExpenseAnalyticsView() {
   const search = route.useSearch();
   const navigate = route.useNavigate();
-  const [selectedCostType, setSelectedCostType] = useState<string | null>(null);
-
-  // The SAME manifest the ledger table's filters go through, decoded from the
-  // same URL params — so `expense.analytics` is always called with the exact
-  // filter set the Ledger view shows (the invariant the two share an input
-  // schema for).
-  const filters = useMemo(() => {
-    const specs = getEntityFilters("expense");
-    return expenseFiltersSchema.parse(
-      buildFiltersFromManifest(specs, filterGetterFromSearch(specs, search)),
-    );
-  }, [search]);
-
-  const { data, isLoading } = useQuery({
-    ...expense.analytics.queryOptions(filters),
-  });
+  const filters = useMemo(() => parseExpenseFilters(search), [search]);
   // The generated search carries the analyzer keys as plain strings (the
   // slot's `searchKeys`); the analyzer's own enums validate them here.
   const analyzeConfig = useMemo(
@@ -159,6 +153,80 @@ export function ExpenseAnalyticsView() {
     [navigate],
   );
 
+  return (
+    <ExpenseAnalytics
+      filters={filters}
+      analyzeConfig={analyzeConfig}
+      onAnalyzeConfigChange={handleAnalyzeConfigChange}
+      activeCell={activeCell}
+      onCellClick={handleCellClick}
+      onOpenLedger={handleOpenLedger}
+    />
+  );
+}
+
+/**
+ * The same analytics over one project and its sub-project subtree. Drill-downs
+ * open the Ledger with that project scope, so the rows behind a bucket are one
+ * click away.
+ */
+export function ProjectExpenseAnalytics({ projectId }: { projectId: string }) {
+  const navigate = useNavigate();
+  const scope = useMemo(
+    () => ({ project: projectId, subprojects: "true" }),
+    [projectId],
+  );
+  const filters = useMemo(() => parseExpenseFilters(scope), [scope]);
+  const [analyzeConfig, setAnalyzeConfig] = useState(
+    DEFAULT_EXPENSE_ANALYZE_CONFIG,
+  );
+  const openLedger = useCallback(
+    (filter: Record<string, string>) =>
+      void navigate({
+        to: "/expenses",
+        search: {
+          ...scope,
+          subprojects: filter.project ? undefined : scope.subprojects,
+          ...filter,
+          view: "table",
+        },
+      }),
+    [navigate, scope],
+  );
+  return (
+    <ExpenseAnalytics
+      filters={filters}
+      analyzeConfig={analyzeConfig}
+      onAnalyzeConfigChange={(next) =>
+        setAnalyzeConfig(normalizeExpenseAnalyzeConfig(next, filters))
+      }
+      activeCell={null}
+      onCellClick={(trade, costType) =>
+        openLedger(costType ? { trade, costType } : { trade })
+      }
+      onOpenLedger={openLedger}
+    />
+  );
+}
+
+function ExpenseAnalytics({
+  filters,
+  analyzeConfig,
+  onAnalyzeConfigChange,
+  activeCell,
+  onCellClick,
+  onOpenLedger,
+}: {
+  filters: ExpenseFilters;
+  analyzeConfig: ExpenseAnalyzeConfig;
+  onAnalyzeConfigChange: (next: ExpenseAnalyzeConfig) => void;
+  activeCell: AggregateMatrixCell | null;
+  onCellClick: (trade: Trade, costType: CostType | null) => void;
+  onOpenLedger: (filter: Record<string, string>) => void;
+}) {
+  const [selectedCostType, setSelectedCostType] = useState<string | null>(null);
+  const { data, isLoading } = useQuery(expense.analytics.queryOptions(filters));
+
   if (isLoading || !data) {
     return (
       <Stack gap="lg">
@@ -191,8 +259,8 @@ export function ExpenseAnalyticsView() {
           <ExpenseAggregateExplorer
             filters={filters}
             config={analyzeConfig}
-            onConfigChange={handleAnalyzeConfigChange}
-            onOpenLedger={handleOpenLedger}
+            onConfigChange={onAnalyzeConfigChange}
+            onOpenLedger={onOpenLedger}
           />
         </Suspense>
       </Section>
@@ -244,7 +312,7 @@ export function ExpenseAnalyticsView() {
       >
         <TradeCostMatrixAggregate
           tradeCostMatrix={tradeCostMatrix}
-          onCellClick={handleCellClick}
+          onCellClick={onCellClick}
           activeCell={activeCell}
         />
       </Section>

@@ -1,8 +1,8 @@
 /**
- * Shared destination-location picker for the three inventory "move" surfaces
- * (MoveInventoryDialog, session MoveToDialog, and the bulk-move page).
+ * Shared destination-location picker for the inventory "move" surfaces
+ * (MoveInventoryDialog and session MoveToDialog).
  *
- * All three chose a target location, surfaced a validation error, and enforced
+ * They all chose a target location, surfaced a validation error, and enforced
  * "destination must differ from source" — with three different user-facing
  * strings. This module factors out the common field + validation while letting
  * each caller keep its exact copy via the `messages` override.
@@ -45,8 +45,7 @@ type LocationPickerPath<TFieldValues extends FieldValues> = FieldPathByValue<
  * Presentational destination field: the location combobox plus the inline
  * StatusText error block. Callers keep their own FormProvider / FormWrapper.
  *
- * Omit `error` when the surrounding surface renders errors elsewhere
- * (e.g. bulk-move's FormWrapper `error` prop).
+ * Omit `error` when the surrounding surface renders errors elsewhere.
  */
 export function DestinationLocationField<
   TFieldValues extends FieldValues,

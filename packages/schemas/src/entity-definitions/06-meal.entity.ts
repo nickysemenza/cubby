@@ -88,7 +88,13 @@ export default defineEntity({
           kind: "date",
           initial: "today",
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          format: "plainDate",
+          mobile: { slot: "subtitle", priority: 10 },
+        },
         validation: {
           read: mealDate,
           create: mealDate,
@@ -287,6 +293,40 @@ export default defineEntity({
           update: null,
         },
       },
+      // Flat preview projections of `totals` (`totalsPreview`): a partial
+      // estimate shows what is known, anything else reads as absent.
+      {
+        key: "cost",
+        labelOverride: "Cost",
+        kind: "number",
+        nullable: true,
+        display: { preview: true, format: "currency" },
+        validation: {
+          read: z
+            .number()
+            .nullable()
+            .default(null)
+            .describe("Known cost of the totals, in dollars"),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "calories",
+        labelOverride: "Calories",
+        kind: "number",
+        nullable: true,
+        display: { preview: true },
+        validation: {
+          read: z
+            .number()
+            .nullable()
+            .default(null)
+            .describe("Known kilocalories of the totals"),
+          create: null,
+          update: null,
+        },
+      },
       {
         key: "costTotal",
         kind: "json",
@@ -428,6 +468,8 @@ export default defineEntity({
       "mealKind",
       "recipes",
       "totals",
+      "cost",
+      "calories",
       "images",
       "displayName",
       "recipeNames",

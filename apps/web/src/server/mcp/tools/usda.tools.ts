@@ -7,9 +7,9 @@ import { z } from "zod";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
 
 import {
-  getCaller,
   READ_ONLY_OPEN,
   registerMcpTool,
+  registerRouterTool,
   slimUsdaFood,
   slimUsdaFoodListItem,
 } from "./_shared";
@@ -92,18 +92,17 @@ export function registerUsdaTools(server: McpServer) {
     },
   });
 
-  registerMcpTool(server, {
+  registerRouterTool(server, {
     name: "find_usda_food",
     description:
       "Look up a USDA food by barcode (UPC/GTIN, 12-14 digits) or NDB number. Provide exactly one.",
     inputSchema: findUsdaFoodInput,
     outputSchema: usdaFoodLookupOut,
     annotations: READ_ONLY_OPEN,
-    handler: async (params, extra) => {
-      const caller = getCaller(extra);
+    call: async (context, params) => {
       let result;
       if (params.upc !== undefined) {
-        result = await caller.usda.getByAlternateID({
+        result = await context.usdaService.findFood({
           kind: "upc",
           gtin_upc: params.upc,
         });
@@ -111,7 +110,7 @@ export function registerUsdaTools(server: McpServer) {
         if (params.ndbNumber === undefined) {
           throw new Error("Validated USDA lookup input is incomplete");
         }
-        result = await caller.usda.getByAlternateID({
+        result = await context.usdaService.findFood({
           kind: "ndb",
           ndb_number: params.ndbNumber,
         });

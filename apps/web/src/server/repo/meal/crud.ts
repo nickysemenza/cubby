@@ -1,10 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import type {
-  ImageShortcode,
-  MealId,
-  MealRecipeId,
-} from "@cubby/schemas/identifiers";
+import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   MealCreateInput,
@@ -22,7 +18,6 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   meal,
-  mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
   recipe,
@@ -32,15 +27,10 @@ import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   associatePendingImages,
-  auditDateWhereConditions,
-  countWhere,
-  executeListQueryWithCount,
   getDb,
-  imageCascadeChild,
   imageJoinBindings,
   insertAndReturn,
   type ListReadIntent,
-  lockAndValidateForDelete,
   notDeleted,
   relations,
   syncEntityImages,
@@ -52,7 +42,7 @@ import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { removeEntity } from "~/server/repo/removal";
+import { deleteByPolicy } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -241,7 +231,6 @@ export const buildMealWhere = (
   // unslotted") and `mealKind` are declared stored filters — applied by
   // `mealScaffold.where` before the conditions below.
   return mealScaffold.where(filters, [
-    ...auditDateWhereConditions(meal, filters),
     // `mealFilterFields` spreads `mealRelatedFilterFields` (the recipe trio) and
     // the manifest renders its control — omitting this is the #588 drift, where
     // the UI sends a filter the server silently ignores.
@@ -261,7 +250,6 @@ export const mealList = async (
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
 ) => {
-  const dbClient = getDb(db);
   // `mealType` must sort by slot, not by slug: a plain text ordering puts
   // dessert before dinner, which reads as a broken table. `mealTypeValues`
   // declaration order IS clock order (the calendar sorts a day by it), so
@@ -278,47 +266,31 @@ export const mealList = async (
         : sql`${rank} desc nulls last`,
     ];
   };
-  const orderByArray = mealScaffold.orderBy(
-    sorts,
+  return mealScaffold.list(
+    db,
+    { filters, sorts, pagination, readIntent },
     {
-      resolve: resolveMealSort,
+      where: buildMealWhere(db, filters),
+      resolveSort: resolveMealSort,
       // An unnamed meal displays as its date, so a name sort would otherwise
       // dump every one of them into an arbitrarily-ordered NULL block. This
       // orders that block the way its visible label reads.
       tieBreaker: sql`${meal.date} desc`,
+      select: (page) =>
+        getDb(db).query.meal.findMany({ ...page, ...relations.meal.full }),
+      hydrate: async (rows) => {
+        const qualities = await loadDataQualities(
+          db,
+          "meal",
+          rows.map((row) => row.id),
+        );
+        return withDisplayImages(db, "meal", rows, (row) =>
+          // SAFETY: `row` came from `rows`, which `qualities` was loaded for.
+          dbMealToAPI(row, qualities.get(row.id)!),
+        );
+      },
     },
-    filters,
   );
-  const { take, skip } = mealScaffold.page(pagination);
-
-  const whereCondition = buildMealWhere(db, filters);
-
-  const { data: rows, count } = await executeListQueryWithCount({
-    kind: readIntent,
-    rows: () =>
-      dbClient.query.meal.findMany({
-        where: whereCondition,
-        orderBy: orderByArray,
-        limit: take,
-        offset: skip,
-        ...relations.meal.full,
-      }),
-    count: () => countWhere(db, meal, whereCondition),
-  });
-  if (readIntent === "count") {
-    return { data: [], count };
-  }
-
-  const qualities = await loadDataQualities(
-    db,
-    "meal",
-    rows.map((row) => row.id),
-  );
-  const items = await withDisplayImages(db, "meal", rows, (row) =>
-    // SAFETY: `row` came from `rows`, which `qualities` was loaded for.
-    dbMealToAPI(row, qualities.get(row.id)!),
-  );
-  return { data: items, count };
 };
 
 export const createMealWithEntityId = async (
@@ -420,76 +392,42 @@ export const updateMeal = async (
 };
 
 /**
- * Soft-delete meals and cascade-soft-delete their planned recipes, all in one
- * transaction. Mirrors how other entity deletes cascade to their children.
+ * A portion has two independent meanings: it is served at its target Meal
+ * and sourced from its MealRecipe. Removing the source Meal removes both
+ * sides; a portion targeted at a different Meal remains only when its source
+ * occurrence remains live.
  */
-export const deleteMeals = async (
-  db: Database,
-  ids: MealId[],
-  actor: ActorContext,
-): Promise<{
-  deleted: number;
-  detachedImageKeys: string[];
-  deletedImageShortcodes: ImageShortcode[];
-}> => {
-  if (ids.length === 0)
-    return { deleted: 0, detachedImageKeys: [], deletedImageShortcodes: [] };
-  return await withTransaction(db, async (tx) => {
-    await lockAndValidateForDelete(tx, meal, ids, "Meal");
-    const sourceOccurrences = await tx
-      .select({ id: mealRecipe.id })
-      .from(mealRecipe)
-      .where(and(inArray(mealRecipe.mealId, ids), notDeleted(mealRecipe)))
-      .orderBy(mealRecipe.id)
-      .for("update");
-    const sourceOccurrenceIds = sourceOccurrences.map((row) => row.id);
-    const now = new Date();
-    // A portion has two independent meanings: it is served at its target Meal
-    // and sourced from its MealRecipe. Removing the source Meal removes both
-    // sides; a portion targeted at a different Meal remains only when its
-    // source occurrence remains live.
-    if (sourceOccurrenceIds.length > 0)
-      await tx
-        .update(mealRecipePortion)
-        .set({ deletedAt: now })
-        .where(
-          and(
-            inArray(mealRecipePortion.mealRecipeId, sourceOccurrenceIds),
-            notDeleted(mealRecipePortion),
-          ),
-        );
-    // The meal manifest has onDelete: [], so this transaction is the only place
-    // a meal's EntityEmbedding row gets cleaned up. And because
-    // `removeMealRecipe` unplans rows singly, a meal can already own dead
-    // MealRecipe rows — the soft cascade's `notDeleted` is what preserves them.
-    const { deleted, detachedImageKeys, deletedImageShortcodes } =
-      await removeEntity(tx, {
-        entity: "meal",
-        ids,
-        removal: "soft",
-        actor,
-        children: [
-          {
-            table: mealFoodEntry,
-            parentColumns: [mealFoodEntry.mealId],
-            auditKey: "cascadedMealFoodEntries",
-          },
-          {
-            table: mealRecipe,
-            parentColumns: [mealRecipe.mealId],
-            auditKey: "cascadedMealRecipes",
-          },
-          {
-            table: mealRecipePortion,
-            parentColumns: [mealRecipePortion.mealId],
-            auditKey: "cascadedMealRecipePortions",
-          },
-          imageCascadeChild(),
-        ],
-      });
-    return { deleted, detachedImageKeys, deletedImageShortcodes };
-  });
+const removeSourcedPortions = async (tx: DrizzleTransaction, ids: MealId[]) => {
+  const sourceOccurrences = await tx
+    .select({ id: mealRecipe.id })
+    .from(mealRecipe)
+    .where(and(inArray(mealRecipe.mealId, ids), notDeleted(mealRecipe)))
+    .orderBy(mealRecipe.id)
+    .for("update");
+  if (sourceOccurrences.length === 0) return;
+  await tx
+    .update(mealRecipePortion)
+    .set({ deletedAt: new Date() })
+    .where(
+      and(
+        inArray(
+          mealRecipePortion.mealRecipeId,
+          sourceOccurrences.map((row) => row.id),
+        ),
+        notDeleted(mealRecipePortion),
+      ),
+    );
 };
+
+/** Meal deletes take uuids; the policy cascades entries, plans and portions. */
+export const deleteMeals = (db: Database, ids: MealId[], actor: ActorContext) =>
+  deleteByPolicy(db, {
+    entity: "meal",
+    policy: MEAL_DELETE_EDGE_POLICY,
+    ids,
+    actor,
+    beforeDelete: removeSourcedPortions,
+  });
 
 export const addRecipeToMeal = async (
   db: Database,

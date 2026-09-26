@@ -106,22 +106,30 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
 
 ## Generated files (read-only)
 
-- `CubbyKit/Sources/CubbyKit/Generated/EntityCatalog.swift` and
+- `CubbyKit/Sources/CubbyKit/Generated/entity-manifest.json` and
   `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift` — from
   `scripts/generator/entities/render/swift-catalog.ts`. Regenerate with `pnpm generate`
-  (repo root).
+  (repo root). The manifest is a CubbyKit resource (`Package.swift`) that `EntityCatalog`
+  decodes once into the hand-written `Codable` types in `Catalog/EntityManifest.swift`
+  (synthesized encoding: `{"case":{"_0":…}}` for an unlabelled payload). Those types'
+  `String` enums (renderer, slot, hero-action, field/filter/control kinds, …) are hand-written
+  and `pnpm generate` fails until their cases match the TS vocabulary exactly — add the case
+  it names. `EntityManifestTests` decodes the bundled manifest so a mismatch fails CI.
 - `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift` — from `uniffi-bindgen`. Regenerate with
   `node scripts/ensure-apple-ffi.ts` (or `apps/apple/scripts/build-rust.sh` directly).
 - The `CubbyAPI` target — swift-openapi-generator's typed client and schema types, generated at
   build time by its SwiftPM plugin from `Sources/CubbyAPI/openapi.json` (a copy of
   `apps/web/src/lib/generated/http-openapi.gen.json`) and `openapi-generator-config.yaml`, both
   written by `pnpm generate`.
-- `CubbyKit/Sources/CubbyKit/Generated/{OperationRoutes,EntityOperations,APITypes}.swift` — the
-  runtime route table (`OperationRoute.all`), the per-entity `list`/`timeline`/`get`/`create`/
+- `CubbyKit/Sources/CubbyKit/Generated/{OperationRoutes,EntityOperations,ClientOperations,APITypes}.swift` —
+  the runtime route table (`OperationRoute.all`), the per-entity `list`/`timeline`/`get`/`create`/
   `update`/image-attach switches with `EntityKey.httpActions`/`nativeActions` and the generated
   filter arms (one per list/timeline query parameter, from
   `scripts/generator/http-api/swift-operations.ts`; a parameter schema shape outside its table
-  fails generation), and the public aliases for every generated type the native client carries,
+  fails generation), the `CubbyClient` methods that are exactly one call with the JSON body as
+  their only argument (`CLIENT_PASSTHROUGH_METHODS` in the same file — a new such method is a
+  table entry, not hand-written Swift; anything that maps or branches stays in
+  `API/CubbyClient.swift`), and the public aliases for every generated type the native client carries,
   from `scripts/generator/http-api/native.ts` reading the `native` flags on contracts. Regenerate
   with `pnpm generate`. That same script also writes `Sources/CubbyAPI/openapi-generator-config.yaml`
   from those flags.
@@ -175,7 +183,8 @@ Test on the simulator with `xcrun simctl openurl booted https://cubby.nickysemen
   detail only); image `status` is `PENDING|UPLOADED|FAILED`.
 - A generator must never emit one giant array literal: a ~900-line `EntityCatalog.all` literal
   made Release/WMO spend ~650 s single-threaded in the SIL `COWArrayOpt` pass. Per-entity
-  `private static let` descriptors listed in `all` cut it to 13 s. To find such a stall again:
+  `private static let` descriptors listed in `all` cut it to 13 s; the catalog is now bundled
+  JSON decoded at runtime, so it costs the compiler nothing. To find such a stall again:
   `sample <swift-frontend pid>` shows the pass; `-Xllvm -sil-print-pass-name` is buffered, so
   stream it through `script` under an `alarm` and demangle the last `Function:` line.
   `xcodebuild archive` is not incremental — compare with `xcodebuild build -configuration Release`

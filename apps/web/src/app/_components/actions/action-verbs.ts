@@ -15,7 +15,6 @@ import { PackageIcon } from "@phosphor-icons/react/dist/csr/Package";
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import { PrinterIcon } from "@phosphor-icons/react/dist/csr/Printer";
 import { ScalesIcon } from "@phosphor-icons/react/dist/csr/Scales";
-import { SealCheckIcon } from "@phosphor-icons/react/dist/csr/SealCheck";
 import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { StackMinusIcon } from "@phosphor-icons/react/dist/csr/StackMinus";
@@ -86,8 +85,6 @@ export const actionVerbs = {
   moveUnder: { label: "Move under...", icon: FolderSimplePlusIcon },
   setStatus: { label: "Set status...", icon: ListChecksIcon },
   bulkEdit: { label: "Bulk edit...", icon: NotePencilIcon },
-  setStockTracking: { label: "Set stock tracking...", icon: SealCheckIcon },
-  setUsuallyOnHand: { label: "Set usually on hand...", icon: SealCheckIcon },
   createProjectFrom: {
     label: "Create project from selected...",
     icon: SparkleIcon,

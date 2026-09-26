@@ -58,9 +58,7 @@ import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   associatePendingImages,
   buildPartialUpdateValues,
-  countWhere,
   eqAnyRequested,
-  executeListQueryWithCount,
   imageJoinBindings,
   mapImages,
   type MappableImageRecord,
@@ -719,30 +717,32 @@ export const plantingList = async (
             AND gep."deletedAt" IS NULL
             AND ${shortcodeSetCondition(sql`ge."shortcode"`, filters.gardenEntryId)})`,
   ]);
-  const orderByArray = plantingScaffold.orderBy(sorts, undefined, filters);
-  const { take, skip } = plantingScaffold.page(pagination);
-  const { data: rows, count } = await executeListQueryWithCount({
-    kind: "page",
-    rows: () =>
-      unwrapDb(db).query.planting.findMany({
-        where,
-        with: plantingReferences,
-        orderBy: orderByArray,
-        limit: take,
-        offset: skip,
-      }),
-    count: () => countWhere(db, planting, where),
-  });
-  const dataQualities = await loadDataQualities(
+  return plantingScaffold.list(
     db,
-    "planting",
-    rows.map((row) => parseEntityId("planting", row.id)),
+    { filters, sorts, pagination },
+    {
+      where,
+      select: (page) =>
+        unwrapDb(db).query.planting.findMany({
+          ...page,
+          with: plantingReferences,
+        }),
+      hydrate: async (rows) => {
+        const dataQualities = await loadDataQualities(
+          db,
+          "planting",
+          rows.map((row) => parseEntityId("planting", row.id)),
+        );
+        return withDisplayImages(db, "planting", rows, (row) =>
+          // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+          mapPlanting(
+            row,
+            dataQualities.get(parseEntityId("planting", row.id))!,
+          ),
+        );
+      },
+    },
   );
-  const items = await withDisplayImages(db, "planting", rows, (row) =>
-    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-    mapPlanting(row, dataQualities.get(parseEntityId("planting", row.id))!),
-  );
-  return { data: items, count };
 };
 
 const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry);
@@ -864,54 +864,48 @@ export const gardenEntryList = async (
           )
         : sql`false`,
   ]);
-  // `createdAt desc` is a deliberate stable tiebreak (was hard-coded as a
-  // second `orderBy` entry alongside whichever field the caller picked) — a
-  // `tieBreaker`, not a `resolve` special-case, so it can't swallow a second
-  // user-requested sort (see `buildOrderBy`'s doc comment).
-  const orderByArray = gardenEntryScaffold.orderBy(
-    sorts,
+  return gardenEntryScaffold.list(
+    db,
+    { filters, sorts, pagination },
     {
+      where,
+      // `createdAt desc` is a deliberate stable tiebreak — a `tieBreaker`, not
+      // a `resolve` special-case, so it can't swallow a second user-requested
+      // sort (see `buildOrderBy`'s doc comment).
       tieBreaker: desc(gardenEntry.createdAt),
-    },
-    filters,
-  );
-  const { take, skip } = gardenEntryScaffold.page(pagination);
-  const { data: rows, count } = await executeListQueryWithCount({
-    kind: "page",
-    rows: () =>
-      unwrapDb(db).query.gardenEntry.findMany({
-        where,
-        with: {
-          location: { columns: { shortcode: true, name: true } },
-          plantings: {
-            where: notDeleted(gardenEntryPlanting),
-            with: {
-              planting: {
-                columns: { shortcode: true },
-                with: {
-                  plant: { columns: { name: true, gardenGuideKey: true } },
+      select: (page) =>
+        unwrapDb(db).query.gardenEntry.findMany({
+          ...page,
+          with: {
+            location: { columns: { shortcode: true, name: true } },
+            plantings: {
+              where: notDeleted(gardenEntryPlanting),
+              with: {
+                planting: {
+                  columns: { shortcode: true },
+                  with: {
+                    plant: { columns: { name: true, gardenGuideKey: true } },
+                  },
                 },
               },
             },
+            images: { with: { image: true } },
           },
-          images: { with: { image: true } },
-        },
-        orderBy: orderByArray,
-        limit: take,
-        offset: skip,
-      }),
-    count: () => countWhere(db, gardenEntry, where),
-  });
-  const dataQualities = await loadDataQualities(
-    db,
-    "gardenEntry",
-    rows.map((row) => parseEntityId("gardenEntry", row.id)),
+        }),
+      hydrate: async (rows) => {
+        const dataQualities = await loadDataQualities(
+          db,
+          "gardenEntry",
+          rows.map((row) => parseEntityId("gardenEntry", row.id)),
+        );
+        return withDisplayImages(db, "gardenEntry", rows, (row) =>
+          // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+          mapEntry(
+            row,
+            dataQualities.get(parseEntityId("gardenEntry", row.id))!,
+          ),
+        );
+      },
+    },
   );
-  return {
-    data: await withDisplayImages(db, "gardenEntry", rows, (row) =>
-      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-      mapEntry(row, dataQualities.get(parseEntityId("gardenEntry", row.id))!),
-    ),
-    count,
-  };
 };

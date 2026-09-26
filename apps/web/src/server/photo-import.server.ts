@@ -8,6 +8,7 @@ import {
   discardPhotoGroupProposal,
   listPhotoGroupProposals,
   listPhotoRunImages,
+  proposePhotoGroups,
   updatePhotoGroupProductDraft,
 } from "~/server/photo-import-run/proposals";
 import {
@@ -100,6 +101,15 @@ export const photoImportHandlers = implementOperationDomain(
         context.actorContext,
       );
       return { ...discarded, results: [], frozenGroupKeys: [] };
+    },
+    saveGroups: async (context, input) => {
+      await assertPhotoRunReviewer(
+        context.db,
+        context.actorContext,
+        input.runId,
+      );
+      const saved = await proposePhotoGroups(context.db, input);
+      return { ...saved, results: [] };
     },
     stage: (context, input) => stagePhotoImport(context.db, input),
     commit: (context, input) =>

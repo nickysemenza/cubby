@@ -7,7 +7,6 @@ import {
   inventoryBreakdownWorkflow,
   locationSearchWorkflow,
   makeTreeWorkflow,
-  parentOptionsWorkflow,
   subtreeWorkflow,
   valuationSummaryWorkflow,
 } from "~/server/workflows/location.server";
@@ -17,7 +16,6 @@ export const locationHandlers = implementOperationDomain(locationContract, {
   valuationSummary: valuationSummaryWorkflow,
   subtree: subtreeWorkflow,
   inventoryBreakdown: inventoryBreakdownWorkflow,
-  parentOptions: parentOptionsWorkflow,
   ensureGlobalUnknown: ensureGlobalUnknownWorkflow,
   bulkUpdateParent: bulkUpdateParentWorkflow,
   getByShortcodes: getByShortcodesWorkflow,

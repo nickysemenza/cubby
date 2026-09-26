@@ -5,73 +5,38 @@ import {
   buildPaginatedResponse,
   normalizeSorts,
 } from "@cubby/schemas/pagination";
-import {
-  type mergeProductsInput,
-  type ProductListInventoryEntryOut,
-  type ProductQuantitySummaryOut,
-  type productApplyUpcInput,
-  type productCreateManyInput,
-  type productDiscardInput,
-  type productFindOrCreateByCodeInput,
-  type productFindOrCreateByUPCInput,
-  type productInventoryEntriesBatchInput,
-  type productMarkUsdaUnavailableManyInput,
-  productMergeSummaryOut,
-  type productQuantitySummaryBatchInput,
-  type productQuickCreatePayload,
-  type productShortcodesInput,
-  type productSummariesInput,
-  productTopLevelOut,
-} from "@cubby/schemas/product";
-import type { productResolveNamesInput } from "@cubby/schemas/product";
 import type {
-  AttachProductComponentsInput,
-  attachProductComponentsInput,
-  detachProductComponentsInput,
-  kitComponentRowsInput,
-  kitMembershipsInput,
-  productComponentsInput,
-} from "@cubby/schemas/product-components";
+  ProductListInventoryEntryOut,
+  ProductQuantitySummaryOut,
+  productApplyUpcInput,
+  productCreateManyInput,
+  productDiscardInput,
+  productInventoryEntriesBatchInput,
+  productMarkUsdaUnavailableManyInput,
+  productQuantitySummaryBatchInput,
+  productQuickCreatePayload,
+  productSummariesInput,
+} from "@cubby/schemas/product";
+import type { productComponentsInput } from "@cubby/schemas/product-components";
 import {
   type CreateManyProductResult,
   productSearchInput,
 } from "@cubby/schemas/product-workflow";
-import type {
-  productProjectUsesInput,
-  productProjectUsesSetInput,
-} from "@cubby/schemas/project";
-import type { productPurchasesInput } from "@cubby/schemas/purchase";
+import type { productProjectUsesSetInput } from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { z } from "zod";
 
 import { getErrorMessage } from "~/lib/error-utils";
-import { executeEntity } from "~/server/entity-kernel";
 import {
   discardProductUnits,
-  getCategoryDistribution,
-  getProductExternalIdSourceOptions,
-  getProductManufacturerOptions,
   getProductPickerItemsByIds,
-  getProductsByShortcodes,
-  getProductTagOptions,
   productSearch,
-  resolveProductNames,
   quickCreateProduct,
 } from "~/server/repo/product";
-import {
-  attachProductComponents,
-  detachProductComponents,
-  listKitComponentRows,
-  listKitMembership,
-  listProductComponents,
-} from "~/server/repo/product-components";
+import { listProductComponents } from "~/server/repo/product-components";
 import { loadProductInventoryEntries } from "~/server/repo/product/lookup";
 import { loadProductQuantitySummaries } from "~/server/repo/product/quantity-ledger";
-import {
-  listProductProjectUses,
-  setProductProjectUses,
-} from "~/server/repo/project";
-import { listProductPurchases } from "~/server/repo/purchase-products";
+import { setProductProjectUses } from "~/server/repo/project";
 import {
   bindShortcodeResolver,
   resolveLiveShortcode,
@@ -85,8 +50,6 @@ import {
 } from "~/server/services/mutation-side-effects";
 import {
   applyUpcDataWithSideEffects,
-  findOrCreateByCode,
-  findOrCreateByUPC,
   importUpcImageBackfillCandidate,
   selectUpcImageBackfill,
   summarizeUpcImageBackfill,
@@ -301,128 +264,6 @@ export const quickCreateProductWorkflow = bindWorkflow(
   ) => ({ context, input }),
 );
 
-export const findOrCreateProductByUpcWorkflow = defineWorkflowOperation(
-  "product.findOrCreateByUPC",
-  (
-    context: ProductWorkflowContext,
-    input: z.output<typeof productFindOrCreateByUPCInput>,
-  ) =>
-    findOrCreateByUPC(
-      context.db,
-      context.usdaClient,
-      context.upcLookupClient,
-      input.upc,
-      input.defaultName,
-      context.actorContext,
-    ),
-);
-
-export const findOrCreateProductByCodeWorkflow = defineWorkflowOperation(
-  "product.findOrCreateByCode",
-  (
-    context: ProductWorkflowContext,
-    input: z.output<typeof productFindOrCreateByCodeInput>,
-  ) =>
-    findOrCreateByCode(
-      context.db,
-      context.usdaClient,
-      context.upcLookupClient,
-      input,
-      context.actorContext,
-    ),
-);
-
-export const resolveProductNamesWorkflow = defineWorkflowOperation(
-  "product.resolveNames",
-  (
-    context: ProductWorkflowContext,
-    input: z.output<typeof productResolveNamesInput>,
-  ) => resolveProductNames(context.readDb, input.names),
-);
-
-export const getProductTagOptionsWorkflow = defineWorkflowOperation(
-  "product.tagOptions",
-  (context: ProductWorkflowContext) => getProductTagOptions(context.readDb),
-);
-export const getProductCategoryDistributionWorkflow = defineWorkflowOperation(
-  "product.categoryDistribution",
-  (context: ProductWorkflowContext) => getCategoryDistribution(context.readDb),
-);
-export const getProductManufacturerOptionsWorkflow = defineWorkflowOperation(
-  "product.manufacturerOptions",
-  (context: ProductWorkflowContext) =>
-    getProductManufacturerOptions(context.readDb),
-);
-export const getProductExternalIdSourceOptionsWorkflow =
-  defineWorkflowOperation(
-    "product.externalIdSourceOptions",
-    (context: ProductWorkflowContext) =>
-      getProductExternalIdSourceOptions(context.readDb),
-  );
-export const getProductsByShortcodesWorkflow = defineWorkflowOperation(
-  "product.getByShortcodes",
-  (
-    context: ProductWorkflowContext,
-    input: z.output<typeof productShortcodesInput>,
-  ) => getProductsByShortcodes(context.readDb, input.shortcodes),
-);
-
-export const mergeProductsWorkflow = bindWorkflow(
-  workflow<ProductWorkflowContext, z.output<typeof mergeProductsInput>>(
-    "product.merge",
-  )
-    .commit("result", async ({ context }, { input }) => {
-      const result = await executeEntity(context, {
-        action: "merge",
-        entity: "product",
-        data: input,
-      });
-      if (result.action !== "merge")
-        throw new Error("Entity kernel returned the wrong action");
-      return {
-        product: productTopLevelOut.parse(result.item),
-        mergeSummary: productMergeSummaryOut.parse(result.mergeSummary),
-      };
-    })
-    .output(({ result }) => result),
-  (
-    context: ProductWorkflowContext,
-    input: z.output<typeof mergeProductsInput>,
-  ) => ({ context, input }),
-);
-
-export const listProductProjectUsesWorkflow = bindWorkflow(
-  workflow<ProductWorkflowContext, z.output<typeof productProjectUsesInput>>(
-    "product.projectUses",
-  )
-    .call("productId", async ({ context }, { input }) =>
-      productShortcodes.one(context.readDb, input.productId),
-    )
-    .call("uses", async ({ context }, { productId }) =>
-      listProductProjectUses(context.readDb, productId),
-    )
-    .output(({ uses }) => uses),
-  (
-    context: ProductWorkflowContext,
-    input: z.output<typeof productProjectUsesInput>,
-  ) => ({ context, input }),
-);
-export const listProductPurchasesWorkflow = bindWorkflow(
-  workflow<ProductWorkflowContext, z.output<typeof productPurchasesInput>>(
-    "product.purchases",
-  )
-    .call("productId", async ({ context }, { input }) =>
-      productShortcodes.one(context.readDb, input.productId),
-    )
-    .call("purchases", async ({ context }, { productId }) =>
-      listProductPurchases(context.readDb, productId),
-    )
-    .output(({ purchases }) => purchases),
-  (
-    context: ProductWorkflowContext,
-    input: z.output<typeof productPurchasesInput>,
-  ) => ({ context, input }),
-);
 export const listProductComponentsWorkflow = bindWorkflow(
   workflow<ProductWorkflowContext, z.output<typeof productComponentsInput>>(
     "product.components",
@@ -437,106 +278,6 @@ export const listProductComponentsWorkflow = bindWorkflow(
   (
     context: ProductWorkflowContext,
     input: z.output<typeof productComponentsInput>,
-  ) => ({ context, input }),
-);
-export const listKitComponentRowsWorkflow = bindWorkflow(
-  workflow<ProductWorkflowContext, z.output<typeof kitComponentRowsInput>>(
-    "product.kitComponentRows",
-  )
-    .call("productIds", async ({ context }, { input }) =>
-      productShortcodes.all(context.readDb, input.parentProductIds),
-    )
-    .call("rows", async ({ context }, { productIds }) =>
-      listKitComponentRows(context.readDb, productIds, context.usdaClient),
-    )
-    .output(({ rows }) => rows),
-  (
-    context: ProductWorkflowContext,
-    input: z.output<typeof kitComponentRowsInput>,
-  ) => ({ context, input }),
-);
-export const listKitMembershipWorkflow = bindWorkflow(
-  workflow<ProductWorkflowContext, z.output<typeof kitMembershipsInput>>(
-    "product.kitMembership",
-  )
-    .call("productId", async ({ context }, { input }) =>
-      productShortcodes.one(context.readDb, input.productId),
-    )
-    .call("memberships", async ({ context }, { productId }) =>
-      listKitMembership(context.readDb, productId),
-    )
-    .output(({ memberships }) => memberships),
-  (
-    context: ProductWorkflowContext,
-    input: z.output<typeof kitMembershipsInput>,
-  ) => ({ context, input }),
-);
-
-async function resolveComponentEntries(
-  context: ProductWorkflowContext,
-  input: AttachProductComponentsInput,
-) {
-  const [parentProductId, componentIds] = await Promise.all([
-    productShortcodes.one(context.db, input.parentProductId),
-    productShortcodes.all(
-      context.db,
-      input.components.map((component) => component.productId),
-    ),
-  ]);
-  return {
-    parentProductId,
-    components: input.components.map((component, index) => ({
-      productId: componentIds[index]!,
-      quantity: component.quantity,
-    })),
-  };
-}
-
-export const attachProductComponentsWorkflow = bindWorkflow(
-  workflow<
-    ProductWorkflowContext,
-    z.output<typeof attachProductComponentsInput>
-  >("product.attachComponents")
-    .call("resolved", async ({ context }, { input }) =>
-      resolveComponentEntries(context, input),
-    )
-    .commit("result", async ({ context }, { resolved }) =>
-      attachProductComponents(
-        context.db,
-        resolved.parentProductId,
-        resolved.components,
-        context.actorContext,
-      ),
-    )
-    .output(({ result }) => result),
-  (
-    context: ProductWorkflowContext,
-    input: z.output<typeof attachProductComponentsInput>,
-  ) => ({ context, input }),
-);
-export const detachProductComponentsWorkflow = bindWorkflow(
-  workflow<
-    ProductWorkflowContext,
-    z.output<typeof detachProductComponentsInput>
-  >("product.detachComponents")
-    .call("resolved", async ({ context }, { input }) =>
-      Promise.all([
-        productShortcodes.one(context.db, input.parentProductId),
-        productShortcodes.all(context.db, input.componentProductIds),
-      ]),
-    )
-    .commit("result", async ({ context }, { resolved }) =>
-      detachProductComponents(
-        context.db,
-        resolved[0],
-        resolved[1],
-        context.actorContext,
-      ),
-    )
-    .output(({ result }) => result),
-  (
-    context: ProductWorkflowContext,
-    input: z.output<typeof detachProductComponentsInput>,
   ) => ({ context, input }),
 );
 export const setProductProjectUsesWorkflow = bindWorkflow(

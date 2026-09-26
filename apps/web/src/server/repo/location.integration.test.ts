@@ -191,7 +191,7 @@ describe("location kernel — bulkUpdate (the guards, through the kernel)", () =
 describe("deleteLocations hierarchy", () => {
   const ctx = withTestDb();
 
-  /** LOCATION_HAS_INVENTORY: live inventory blocks delete. */
+  /** InventoryEntry.locationId: live inventory blocks delete. */
   it("rejects a location with live inventory, succeeds once the inventory is removed", async () => {
     const stocked = await createLocation(
       ctx.db,
@@ -232,7 +232,7 @@ describe("deleteLocations hierarchy", () => {
       deleteLocations(ctx.db, [stockedId], ctx.actor),
     ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
-      reason: "LOCATION_HAS_INVENTORY",
+      reason: "ENTITY_DELETE_BLOCKED",
     });
 
     await deleteInventoryEntries(ctx.db, [entryId], ctx.actor);
@@ -247,7 +247,7 @@ describe("deleteLocations hierarchy", () => {
    * nothing generic enforces `block`: without the repository guard these
    * deletes went through and left plantings pointing at a tombstoned bed.
    */
-  it("rejects a bed with a growing planting (LOCATION_HAS_PLANTINGS)", async () => {
+  it("rejects a bed with a growing planting (blocked by Planting.locationId)", async () => {
     const crop = await createPlantFixture(
       ctx.db,
       { name: "Location delete crop" },
@@ -272,11 +272,11 @@ describe("deleteLocations hierarchy", () => {
       deleteLocations(ctx.db, [bedId], ctx.actor),
     ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
-      reason: "LOCATION_HAS_PLANTINGS",
+      reason: "ENTITY_DELETE_BLOCKED",
     });
   });
 
-  it("rejects a bed named by a planned planting's locationId (LOCATION_HAS_PLANTINGS)", async () => {
+  it("rejects a bed named by a planned planting's locationId (blocked by Planting.locationId)", async () => {
     const crop = await createPlantFixture(
       ctx.db,
       { name: "Location intended crop" },
@@ -304,11 +304,11 @@ describe("deleteLocations hierarchy", () => {
       deleteLocations(ctx.db, [bedId], ctx.actor),
     ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
-      reason: "LOCATION_HAS_PLANTINGS",
+      reason: "ENTITY_DELETE_BLOCKED",
     });
   });
 
-  it("rejects a bed that only carries a garden note (LOCATION_HAS_GARDEN_HISTORY)", async () => {
+  it("rejects a bed that only carries a garden note (blocked by GardenEntry.locationId)", async () => {
     const bed = await createLocation(
       ctx.db,
       makeLocationInput({
@@ -337,7 +337,7 @@ describe("deleteLocations hierarchy", () => {
       deleteLocations(ctx.db, [bedId], ctx.actor),
     ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
-      reason: "LOCATION_HAS_GARDEN_HISTORY",
+      reason: "ENTITY_DELETE_BLOCKED",
     });
   });
 });

@@ -36,7 +36,7 @@ identifier is the proof.
 
 Purchase prep only reports `exactIdentifierMatch` for identifiers stored as
 external ids, never for text in `notes`. When a photo shows a legible barcode,
-record it with `patch_product_external_ids` (`source: "gtin"`,
+record it with `patch_products_external_ids` (`source: "gtin"`,
 `kind: "gtin_14"`); prep matches a numeric order-line SKU against it. A style
 number printed on a brand's own tag may also be stored as `retailer_sku`
 under that brand's vendor source slug when the brand sells direct. Otherwise
@@ -54,9 +54,10 @@ later merge requires human confirmation.
 **Purchase first, photos later** — when photo-inventory-import runs after a
 purchase already exists, check for the existing purchase Product before
 creating: exact identifiers first, then the vendor's purchased Products
-(`list_purchase_products`, `resolve_products`, `find_similar_entities`) for a
-descriptive candidate. Purchase-created Products usually have no category and
-an empty manufacturer until enriched, so never filter candidates by either.
+(`list_entity_relation` on the purchase's `products`, `resolve_products`,
+`find_similar_entities`) for a descriptive candidate. Purchase-created
+Products usually have no category and an empty manufacturer until enriched, so
+never filter candidates by either.
 Prioritize the exact variant with no own-item photo and no earlier photo-import
 attachment; a vendor-import association is compatible with this candidate.
 Read label position and context before assigning size or fit (a letter beside

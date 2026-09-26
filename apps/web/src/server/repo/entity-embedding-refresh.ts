@@ -1149,24 +1149,6 @@ const embeddingTextLoaders = {
   gardenEntry: getGardenEntryEmbeddingTexts,
 } satisfies Record<SearchableEntity, EmbeddingTextLoader>;
 
-export async function getEmbeddingTextsForEntityTypes(
-  db: Database | DrizzleTransaction,
-  entityTypes: SearchableEntity[],
-  limit?: number,
-): Promise<SearchableEntityText[]> {
-  const perTypeLimit =
-    limit == null
-      ? undefined
-      : Math.max(1, Math.ceil(limit / entityTypes.length));
-  const chunks = await Promise.all(
-    entityTypes.map((entityType) =>
-      embeddingTextLoaders[entityType](db, { limit: perTypeLimit }),
-    ),
-  );
-  const rows = chunks.flat();
-  return limit == null ? rows : rows.slice(0, limit);
-}
-
 /**
  * One loader call per entity type for a whole set of ids. This replaced a
  * per-entity form that issued a single-id SELECT for every row in a refresh

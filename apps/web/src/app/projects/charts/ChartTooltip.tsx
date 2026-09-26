@@ -1,7 +1,6 @@
-import type { ExpenseOut } from "@cubby/schemas/project";
 import type { CSSProperties, ReactNode } from "react";
 
-import { cn, formatCurrency } from "~/lib/utils";
+import { cn } from "~/lib/utils";
 
 /**
  * The shared nivo/chart tooltip surface. Porcelain separation uses a hairline
@@ -29,35 +28,6 @@ export function ChartTooltip({
       style={style}
     >
       {children}
-    </div>
-  );
-}
-
-/**
- * The top 3 expenses behind a donut slice / bar segment (by cost desc) with a
- * "+N more" roll-up — a shared breakdown row-list for the nivo tooltips.
- */
-export function TooltipExpenseBreakdown({
-  expenses,
-}: {
-  expenses: ExpenseOut[];
-}) {
-  if (expenses.length === 0) return null;
-  const sorted = [...expenses].sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0));
-  const top = sorted.slice(0, 3);
-  const remaining = sorted.length - top.length;
-
-  return (
-    <div className="mt-1 space-y-1 border-t border-border/60 pt-1 text-xs text-muted-foreground">
-      {top.map((p) => (
-        <div key={p.id} className="flex items-baseline justify-between gap-4">
-          <span className="truncate">{p.name}</span>
-          <span className="shrink-0 font-mono tabular-nums">
-            {formatCurrency(p.cost ?? 0, 0)}
-          </span>
-        </div>
-      ))}
-      {remaining > 0 && <div>+{remaining} more</div>}
     </div>
   );
 }

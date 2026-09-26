@@ -10,7 +10,7 @@ import {
   problemsCountSchema,
   productWithBetterUpcDataSchema,
   productWithIslandedMappingsSchema,
-  productWithNoImagesSchema,
+  problemRowSchema,
   productWithoutMappingsSchema,
   staleIngredientParseSchema,
 } from "@cubby/schemas/problems";
@@ -41,7 +41,7 @@ const ROUND_TRIP_CORPUS = {
   productWithoutMappingsSchema,
   ingredientWithPartialCoverageSchema,
   emptyLocationSchema,
-  productWithNoImagesSchema,
+  problemRowSchema,
   productWithIslandedMappingsSchema,
   staleIngredientParseSchema,
   productWithBetterUpcDataSchema,

@@ -280,6 +280,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          preview: true,
         },
         validation: {
           read: positiveMoneyNullable
@@ -494,6 +495,30 @@ export default defineEntity({
           update: null,
         },
       },
+      // Preview projections of `rollup`: the numbers a hover asks for.
+      {
+        key: "spent",
+        kind: "number",
+        display: { preview: true, format: "currency" },
+        validation: {
+          read: z
+            .number()
+            .describe("`rollup.spent`: the project's own net spend"),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "taskProgress",
+        labelOverride: "Tasks",
+        kind: "text",
+        display: { preview: true },
+        validation: {
+          read: z.string().describe("Done over total own tasks, e.g. `3/5`"),
+          create: null,
+          update: null,
+        },
+      },
       {
         key: "dates",
         kind: "json",
@@ -674,6 +699,8 @@ export default defineEntity({
       "createdAt",
       "updatedAt",
       "rollup",
+      "spent",
+      "taskProgress",
       "dates",
     ],
   },
@@ -1049,6 +1076,10 @@ export default defineEntity({
         itemSchema: {
           module: "@cubby/schemas/common",
           export: "entityRelationReferenceItemSchema",
+        },
+        rowSchema: {
+          module: "@cubby/schemas/project",
+          export: "projectResourceOut",
         },
         adapter: {
           module: "~/server/repo/project/tools",

@@ -24,8 +24,10 @@ export const pagination = {
   pageSize: 20,
 };
 
-/** The entities `WithEntitySearch` drives end-to-end (list + typed + exact-code + optional create). */
+/** The entities `useEntityListSource` drives end-to-end (list + typed + exact-code + optional create). */
 export type PickerSearchEntity =
+  | "financialAccount"
+  | "purchase"
   | "ingredient"
   | "ledgerParty"
   | "location"
@@ -104,7 +106,7 @@ export type CreatedResultParser<TDetail> = (
  * `onOpenChange` handler to hand back through the render prop. Once activated it
  * stays on, so closing/reopening keeps the cached options.
  */
-export function useDeferredSearch(searchQuery: string) {
+function useDeferredSearch(searchQuery: string) {
   const [activated, setActivated] = useState(false);
   const onOpenChange = useCallback((open: boolean) => {
     if (open) setActivated(true);
@@ -112,23 +114,6 @@ export function useDeferredSearch(searchQuery: string) {
   return {
     enabled: activated || searchQuery.length > 0,
     onOpenChange,
-  };
-}
-
-/**
- * Custom hook for basic entity search (no dialog).
- * Use this for simple search-only scenarios or when creating entities without a dialog.
- */
-export function useEntitySearch() {
-  const [searchQuery, setSearchQuery] = useState("");
-
-  const onSearchChange = useCallback((query: string) => {
-    setSearchQuery(query);
-  }, []);
-
-  return {
-    searchQuery,
-    onSearchChange,
   };
 }
 
@@ -214,6 +199,8 @@ const FALLBACK_BLANK_FILTER_KEY = {
   task: "search",
   plant: "search",
   planting: "searchQuery",
+  financialAccount: "search",
+  purchase: "search",
 } satisfies Record<Exclude<PickerSearchEntity, "vendor">, string>;
 
 /** Resolves the filter field a blank-query list request should key on. */

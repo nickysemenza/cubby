@@ -21,7 +21,7 @@ import { toast } from "sonner";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
+import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
 import { ledgerParty } from "~/app/finance/finance.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -304,20 +304,15 @@ function FoodSourceFields({
 }) {
   if (kind === "recipe") {
     return (
-      <WithEntitySearch entity="recipe">
-        {(search) => (
-          <EntityPicker<RecipeShortcode>
-            {...search}
-            entity="recipe"
-            value={null}
-            setValue={(item) => {
-              if (item) onRecipe?.(item.id);
-            }}
-            label="Recipe"
-            placeholder="Find a recipe"
-          />
-        )}
-      </WithEntitySearch>
+      <EntityReferencePicker
+        entity="recipe"
+        value={null}
+        setValue={(item) => {
+          if (item) onRecipe?.(item.id);
+        }}
+        label="Recipe"
+        placeholder="Find a recipe"
+      />
     );
   }
   return (
@@ -541,18 +536,14 @@ function ProductFields({
   const { product, estimate, suggestedUnits } = calculation;
   return (
     <>
-      <WithEntitySearch entity="product">
-        {(search) => (
-          <EntityPicker<ProductShortcode>
-            {...search}
-            entity="product"
-            value={draft.productItem}
-            setValue={draft.setProductItem}
-            label="Product"
-            placeholder="Find a packaged food"
-          />
-        )}
-      </WithEntitySearch>
+      <EntityReferencePicker
+        entity="product"
+        creatable
+        value={draft.productItem}
+        setValue={draft.setProductItem}
+        label="Product"
+        placeholder="Find a packaged food"
+      />
       {product.error && (
         <p role="alert" className="text-sm text-destructive">
           {getErrorMessage(product.error)}
@@ -579,18 +570,14 @@ function IngredientFields({
 }) {
   return (
     <>
-      <WithEntitySearch entity="ingredient">
-        {(search) => (
-          <EntityPicker<IngredientShortcode>
-            {...search}
-            entity="ingredient"
-            value={draft.ingredientItem}
-            setValue={draft.setIngredientItem}
-            label="Ingredient"
-            placeholder="Find an ingredient"
-          />
-        )}
-      </WithEntitySearch>
+      <EntityReferencePicker
+        entity="ingredient"
+        creatable
+        value={draft.ingredientItem}
+        setValue={draft.setIngredientItem}
+        label="Ingredient"
+        placeholder="Find an ingredient"
+      />
       {calculation.ingredient.error && (
         <p role="alert" className="text-sm text-destructive">
           {getErrorMessage(calculation.ingredient.error)}

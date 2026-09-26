@@ -13,7 +13,6 @@ import {
   MoneyCell,
 } from "~/app/_components/household-contribution-format";
 import { householdContribution } from "~/app/finance/household-contribution.functions";
-import { ledgerPartyKindOptions } from "~/app/finance/ledger-party-options";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -28,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { fieldEnumOptions } from "~/entities/enum-field-display";
 import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
 
@@ -102,7 +102,10 @@ export function ProjectContributionReport({
                     <TableCell>
                       <Row align="center" gap="xs">
                         <span>{party.name}</span>
-                        {renderOptionCell(party.kind, ledgerPartyKindOptions)}
+                        {renderOptionCell(
+                          party.kind,
+                          fieldEnumOptions("ledgerParty", "kind"),
+                        )}
                       </Row>
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
@@ -146,7 +149,7 @@ export function ProjectContributionReport({
                         <span>{funder.party.name}</span>
                         {renderOptionCell(
                           funder.party.kind,
-                          ledgerPartyKindOptions,
+                          fieldEnumOptions("ledgerParty", "kind"),
                         )}
                       </Row>
                     </TableCell>

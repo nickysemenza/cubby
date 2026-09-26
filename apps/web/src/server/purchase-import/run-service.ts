@@ -56,6 +56,11 @@ import type {
   PhotoImportFinalizeInput,
   PhotoImportFinalizeOutput,
 } from "~/contracts/photo-import.contract";
+import type {
+  ImportRunDetail,
+  ImportRunLogEntry,
+} from "~/contracts/run.contract";
+import { purchaseImportDebugEvent } from "~/lib/purchase-import-debug";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   aiUsage,
@@ -93,7 +98,9 @@ import {
 } from "~/server/repo/database-helpers";
 import { createImageProcessingSubmission } from "~/server/repo/image-processing-history";
 import { persistImageProcessingSubmission } from "~/server/repo/image-processing-submission";
+import { getImportRunByShortcode } from "~/server/repo/import-run";
 import { withPhotoImportTransaction } from "~/server/repo/photo-import";
+import { sha256Hex } from "~/server/semantic/hash";
 import { publishImageProcessingWakeups } from "~/server/services/image-processing.service";
 import {
   productionPhotoImportCommitPorts,
@@ -193,16 +200,6 @@ export type StartTargetedImportRunInput = {
 
 const OFFLINE_EXPIRY_MS = 24 * 60 * 60_000;
 
-const sha256 = async (value: string): Promise<string> => {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-};
-
 /**
  * Postgres-side replay ledger for Flue tools. A completed operation returns its
  * original result even after the run becomes terminal. A concurrent delivery
@@ -225,7 +222,7 @@ export async function runImportOperation<T extends object | null>(
   work: () => Promise<T>,
 ): Promise<T> {
   const runId = importRunId.parse(input.runId);
-  const fingerprint = await sha256(JSON.stringify(input.payload));
+  const fingerprint = await sha256Hex(JSON.stringify(input.payload));
   const database = getDb(db);
   const [inserted] = await database
     .insert(importRunOperation)
@@ -330,7 +327,7 @@ export async function runImportOperation<T extends object | null>(
 }
 
 const operationUuid = async (runId: string, operationId: string) => {
-  const hex = await sha256(`${runId}:${operationId}`);
+  const hex = await sha256Hex(`${runId}:${operationId}`);
   const bytes = Uint8Array.from(
     hex.slice(0, 32).match(/.{2}/gu) ?? [],
     (value) => Number.parseInt(value, 16),
@@ -742,7 +739,11 @@ export async function startPhotoInventoryCoordinator(
   );
 }
 
-/** Consumer-side fence: only the active event generation may admit Flue. */
+/**
+ * Consumer-side fence: only the active event generation may admit Flue.
+ * @lintignore Called through the `PurchaseImportService` RPC namespace in
+ * cf-server.ts.
+ */
 export async function acknowledgeImportRunCoordinator(
   db: Database,
   input: { runId: string; eventId: string },
@@ -766,7 +767,11 @@ export async function acknowledgeImportRunCoordinator(
   return Boolean(run);
 }
 
-/** Read-only consumer fence before Flue admission. */
+/**
+ * Read-only consumer fence before Flue admission.
+ * @lintignore Called through the `PurchaseImportService` RPC namespace in
+ * cf-server.ts.
+ */
 export async function canDispatchImportRunCoordinator(
   db: Database,
   input: { runId: string; eventId: string },
@@ -1031,6 +1036,7 @@ const agentProgressInput = z.object({
   detail: z.string().trim().min(1).max(2_000).optional(),
 });
 
+/** @lintignore Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
 export async function updateAgentProgress(
   db: Database,
   rawInput: z.input<typeof agentProgressInput>,
@@ -1051,38 +1057,7 @@ export async function updateAgentProgress(
   return { recorded: Boolean(inserted) };
 }
 
-export async function listImportRunProgress(db: Database, runId: string) {
-  return getDb(db)
-    .select({
-      eventId: importRunProgress.eventId,
-      phase: importRunProgress.phase,
-      currentItem: importRunProgress.currentItem,
-      awaitingApproval: importRunProgress.awaitingApproval,
-      detail: importRunProgress.detail,
-      createdAt: importRunProgress.createdAt,
-    })
-    .from(importRunProgress)
-    .where(eq(importRunProgress.runId, importRunId.parse(runId)))
-    .orderBy(asc(importRunProgress.createdAt), asc(importRunProgress.id));
-}
-
-export async function latestImportRunProgress(db: Database, runId: string) {
-  const [latest] = await getDb(db)
-    .select({
-      eventId: importRunProgress.eventId,
-      phase: importRunProgress.phase,
-      currentItem: importRunProgress.currentItem,
-      awaitingApproval: importRunProgress.awaitingApproval,
-      detail: importRunProgress.detail,
-      createdAt: importRunProgress.createdAt,
-    })
-    .from(importRunProgress)
-    .where(eq(importRunProgress.runId, importRunId.parse(runId)))
-    .orderBy(desc(importRunProgress.createdAt), desc(importRunProgress.id))
-    .limit(1);
-  return latest ?? null;
-}
-
+/** @lintignore Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
 export async function pauseImportRunForAuthorization(
   db: Database,
   runId: string,
@@ -1796,7 +1771,7 @@ export async function issueBrowserCommand(
       throw new Error("Navigation URL is outside the vendor allowlist");
   }
   const commandId = await operationUuid(input.runId, input.operationId);
-  const fingerprint = await sha256(
+  const fingerprint = await sha256Hex(
     JSON.stringify({
       protocolVersion: 2,
       id: commandId,
@@ -2205,7 +2180,7 @@ export async function importBrowserOrderEvidence(
     links: capture.links.map(({ url, label }) => ({ url, label })),
     images: capture.images.map(({ url, alt }) => ({ url, alt })),
   };
-  const checksum = await sha256(JSON.stringify(stableEvidence));
+  const checksum = await sha256Hex(JSON.stringify(stableEvidence));
   const writeResult = await importVendorOrder(
     db,
     {
@@ -2262,6 +2237,7 @@ export async function importBrowserOrderEvidence(
   return { extraction, writeResult };
 }
 
+/** @lintignore Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
 export async function saveNavigationHints(
   db: Database,
   input: {
@@ -2292,6 +2268,7 @@ export async function saveNavigationHints(
   return next;
 }
 
+/** @lintignore Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
 export async function markHistoryExpired(
   db: Database,
   input: {
@@ -2368,6 +2345,7 @@ export async function markHistoryExpired(
   return { marked };
 }
 
+/** @lintignore Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
 export async function auditImportBatch(
   db: Database,
   input: { runId: string; operationId: string; offset: number },
@@ -2411,7 +2389,7 @@ export async function auditImportBatch(
       !batchExpenseIds.has(parseEntityId("expense", relinkExpenseId))
     )
       continue;
-    const evidenceFingerprint = await sha256(JSON.stringify(finding));
+    const evidenceFingerprint = await sha256Hex(JSON.stringify(finding));
     const [inserted] = await getDb(db)
       .insert(importFinding)
       .values({
@@ -2501,7 +2479,7 @@ export async function stopImportRunForReview(
       "other",
     ])
     .parse(input.kind);
-  const fingerprint = await sha256(`${kind}:${summary}`);
+  const fingerprint = await sha256Hex(`${kind}:${summary}`);
   if (scope.public.purpose === "account_sync") {
     await auditAllImportBatches(db, {
       runId: input.runId,
@@ -2803,6 +2781,7 @@ export async function finishImportRun(
   return { ...run, findingCount: findingCount?.value ?? 0 };
 }
 
+/** @lintignore Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
 export async function markImportRunFailed(
   db: Database,
   input: {
@@ -2840,79 +2819,35 @@ export async function markImportRunFailed(
   return { failed: Boolean(run), detail: input.detail ?? null };
 }
 
-export async function loadImportRunByShortcode(
+const iso = (value: Date | null) => value?.toISOString() ?? null;
+
+/**
+ * The run detail every browser and native surface reads: the kernel
+ * `importRun` row plus its child collections, projected once. Private UUIDs
+ * and operation payloads never cross this boundary.
+ */
+export async function loadImportRunDetail(
   db: Database,
-  actor: ActorContext,
-  rawPublicId: string,
-) {
-  const publicId = importRunShortcode.parse(rawPublicId);
+  shortcode: string,
+): Promise<ImportRunDetail> {
+  const publicId = importRunShortcode.parse(shortcode);
   const database = getDb(db);
-  const [run] = await database
-    .select({
-      id: importRun.id,
-      publicId: importRun.shortcode,
-      ledgerPartyId: importRun.ledgerPartyId,
-      actorUserId: importRun.actorUserId,
-      predecessorRunId: importRun.predecessorRunId,
-      vendorAccountId: importRun.vendorAccountId,
-      vendorAccountShortcode: vendorAccount.shortcode,
-      vendorAccountLabel: vendorAccount.label,
-      vendorName: vendor.name,
-      trigger: importRun.trigger,
-      purpose: importRun.purpose,
-      status: importRun.status,
-      coordinatorModel: importRun.coordinatorModel,
-      skillRevision: importRun.skillRevision,
-      runtimeRevision: importRun.runtimeRevision,
-      decisionRevision: importRun.decisionRevision,
-      startedAt: importRun.startedAt,
-      endedAt: importRun.endedAt,
-      auditedAt: importRun.auditedAt,
-      ordersSeen: importRun.ordersSeen,
-      imported: importRun.imported,
-      updated: importRun.updated,
-      skipped: importRun.skipped,
-      failureCode: importRun.failureCode,
-      notes: importRun.notes,
-      dispatchEventId: importRun.dispatchEventId,
-      dispatchAttempts: importRun.dispatchAttempts,
-      dispatchError: importRun.dispatchError,
-      coordinatorStartedAt: importRun.coordinatorStartedAt,
-      actorName: importRun.actorName,
-      actorEmail: importRun.actorEmail,
-      actorLedgerPartyShortcode: importRun.actorLedgerPartyShortcode,
-      actorLedgerPartyName: importRun.actorLedgerPartyName,
-      actorLedgerPartyKind: importRun.actorLedgerPartyKind,
-      controllerPartyShortcode: ledgerParty.shortcode,
-      controllerPartyName: ledgerParty.name,
-      controllerPartyKind: ledgerParty.kind,
-    })
-    .from(importRun)
-    .innerJoin(
-      ledgerParty,
-      and(
-        eq(ledgerParty.userId, actor.userId),
-        eq(ledgerParty.kind, "member"),
-        notDeleted(ledgerParty),
-      ),
-    )
-    .leftJoin(
-      vendorAccount,
-      and(
-        eq(vendorAccount.id, importRun.vendorAccountId),
-        notDeleted(vendorAccount),
-      ),
-    )
-    .leftJoin(
-      vendor,
-      and(eq(vendor.id, vendorAccount.vendorId), notDeleted(vendor)),
-    )
-    .where(eq(importRun.shortcode, publicId))
-    .limit(1);
-  if (!run) throw new Error("Purchase import run was not found");
+  const [header, [run]] = await Promise.all([
+    getImportRunByShortcode(db, publicId),
+    database
+      .select({
+        id: importRun.id,
+        dispatchEventId: importRun.dispatchEventId,
+        actorLedgerPartyShortcode: importRun.actorLedgerPartyShortcode,
+        actorLedgerPartyName: importRun.actorLedgerPartyName,
+      })
+      .from(importRun)
+      .where(and(eq(importRun.shortcode, publicId), notDeleted(importRun)))
+      .limit(1),
+  ]);
+  if (!header || !run) throw new Error("Import run was not found");
 
   const [
-    predecessor,
     successor,
     operations,
     approvals,
@@ -2926,13 +2861,6 @@ export async function loadImportRunByShortcode(
     agentModelUsage,
     restartTargets,
   ] = await Promise.all([
-    run.predecessorRunId
-      ? database
-          .select({ publicId: importRun.shortcode })
-          .from(importRun)
-          .where(eq(importRun.id, run.predecessorRunId))
-          .limit(1)
-      : Promise.resolve([]),
     database
       .select({ publicId: importRun.shortcode })
       .from(importRun)
@@ -2941,11 +2869,9 @@ export async function loadImportRunByShortcode(
       .limit(1),
     database
       .select({
-        id: importRunOperation.id,
         operationId: importRunOperation.operationId,
         kind: importRunOperation.kind,
         state: importRunOperation.state,
-        result: importRunOperation.result,
         error: importRunOperation.error,
         startedAt: importRunOperation.startedAt,
         completedAt: importRunOperation.completedAt,
@@ -2960,8 +2886,6 @@ export async function loadImportRunByShortcode(
         operationKind: importRunApproval.operationKind,
         args: importRunApproval.args,
         state: importRunApproval.state,
-        createdAt: importRunApproval.createdAt,
-        decidedByUserId: importRunApproval.decidedByUserId,
         decidedAt: importRunApproval.decidedAt,
         rejectedAt: importRunApproval.rejectedAt,
         consumedAt: importRunApproval.consumedAt,
@@ -2972,10 +2896,8 @@ export async function loadImportRunByShortcode(
       .orderBy(asc(importRunApproval.createdAt)),
     database
       .select({
-        id: importPreparedOrder.id,
         stableOrderId: importPreparedOrder.stableOrderId,
         itemOperationId: importPreparedOrder.itemOperationId,
-        prepareOperationId: importPreparedOrder.prepareOperationId,
         sourceKind: importPreparedOrder.sourceKind,
         externalKey: importPreparedOrder.sourceExternalKey,
         preparedAt: importPreparedOrder.createdAt,
@@ -2989,11 +2911,22 @@ export async function loadImportRunByShortcode(
       .where(eq(importPreparedOrder.runId, run.id))
       .groupBy(importPreparedOrder.id)
       .orderBy(asc(importPreparedOrder.createdAt)),
-    listImportRunProgress(db, run.id),
+    database
+      .select({
+        eventId: importRunProgress.eventId,
+        phase: importRunProgress.phase,
+        currentItem: importRunProgress.currentItem,
+        awaitingApproval: importRunProgress.awaitingApproval,
+        detail: importRunProgress.detail,
+        createdAt: importRunProgress.createdAt,
+      })
+      .from(importRunProgress)
+      .where(eq(importRunProgress.runId, run.id))
+      .orderBy(asc(importRunProgress.createdAt), asc(importRunProgress.id)),
     database
       .selectDistinct({
-        id: purchase.shortcode,
-        displayLabel: purchase.displayLabel,
+        shortcode: purchase.shortcode,
+        displayName: purchase.displayLabel,
         orderId: purchase.orderId,
       })
       .from(importRunMutation)
@@ -3026,10 +2959,8 @@ export async function loadImportRunByShortcode(
         action: importRunControlEvent.action,
         userId: importRunControlEvent.controllerUserId,
         name: importRunControlEvent.controllerName,
-        email: importRunControlEvent.controllerEmail,
         ledgerPartyId: importRunControlEvent.controllerLedgerPartyShortcode,
         ledgerPartyName: importRunControlEvent.controllerLedgerPartyName,
-        ledgerPartyKind: importRunControlEvent.controllerLedgerPartyKind,
         createdAt: importRunControlEvent.createdAt,
       })
       .from(importRunControlEvent)
@@ -3045,11 +2976,9 @@ export async function loadImportRunByShortcode(
         sourceExternalKey: importRunTarget.sourceExternalKey,
         state: importRunTarget.state,
         targetFingerprint: importRunTarget.targetFingerprint,
-        evidenceFingerprint: importRunTarget.evidenceFingerprint,
         outcome: importRunTarget.outcome,
         warning: importRunTarget.warning,
         diff: importRunTarget.diff,
-        preparedAt: importRunTarget.preparedAt,
         completedAt: importRunTarget.completedAt,
       })
       .from(importRunTarget)
@@ -3064,13 +2993,9 @@ export async function loadImportRunByShortcode(
     database
       .select({
         id: importRunEvidence.id,
-        targetId: importRunEvidence.targetId,
         kind: importRunEvidence.kind,
-        objectKey: importRunEvidence.objectKey,
         checksum: importRunEvidence.checksum,
         mediaType: importRunEvidence.mediaType,
-        byteSize: importRunEvidence.byteSize,
-        sourceMetadata: importRunEvidence.sourceMetadata,
         createdAt: importRunEvidence.createdAt,
       })
       .from(importRunEvidence)
@@ -3090,73 +3015,66 @@ export async function loadImportRunByShortcode(
       ),
     selectRestartTargets(database, run.id),
   ]);
+  const controller = (event: (typeof controlHistory)[number]) => ({
+    name: event.name,
+    ledgerParty: { id: event.ledgerPartyId, name: event.ledgerPartyName },
+  });
+  const browserProgress = progress.map((event) => ({
+    ...event,
+    createdAt: event.createdAt.toISOString(),
+  }));
   return {
-    publicId: run.publicId,
-    status: run.status,
-    purpose: run.purpose,
-    trigger: run.trigger,
-    source: {
-      kind: run.trigger,
-      vendorName: run.vendorName,
-    },
+    publicId,
+    status: header.status,
+    purpose: header.purpose,
+    trigger: header.trigger,
+    source: { kind: header.trigger, vendorName: header.vendorName },
     actor: {
-      id: run.actorUserId,
-      name: run.actorName,
-      email: run.actorEmail,
+      name: header.actorName,
       ledgerParty: {
         id: run.actorLedgerPartyShortcode,
         name: run.actorLedgerPartyName,
-        kind: run.actorLedgerPartyKind,
       },
     },
-    controllingMembers: [
-      ...new Map(
-        controlHistory.map((event) => [
-          event.userId,
-          {
-            userId: event.userId,
-            name: event.name,
-            email: event.email,
-            ledgerParty: {
-              id: event.ledgerPartyId,
-              name: event.ledgerPartyName,
-              kind: event.ledgerPartyKind,
-            },
-          },
-        ]),
-      ).values(),
-    ],
-    controlHistory,
-    vendorAccount: run.vendorAccountShortcode
-      ? { id: run.vendorAccountShortcode, label: run.vendorAccountLabel }
-      : null,
-    startedAt: run.startedAt,
-    endedAt: run.endedAt,
-    auditedAt: run.auditedAt,
-    ordersSeen: run.ordersSeen,
-    imported: run.imported,
-    updated: run.updated,
-    skipped: run.skipped,
-    failureCode: run.failureCode,
-    notes: run.notes,
+    vendorAccount:
+      header.vendorAccountId && header.vendorAccountLabel
+        ? { id: header.vendorAccountId, label: header.vendorAccountLabel }
+        : null,
+    startedAt: header.startedAt.toISOString(),
+    endedAt: iso(header.endedAt),
+    ordersSeen: header.ordersSeen,
+    imported: header.imported,
+    updated: header.updated,
+    skipped: header.skipped,
+    failureCode: header.failureCode,
+    notes: header.notes,
     dispatch: {
       eventId: run.dispatchEventId,
-      attempts: run.dispatchAttempts,
-      error: run.dispatchError,
-      coordinatorStartedAt: run.coordinatorStartedAt,
+      state: header.coordinatorStartedAt
+        ? "started"
+        : header.dispatchError
+          ? "failed"
+          : "pending",
+      attempts: header.dispatchAttempts,
+      error: header.dispatchError,
+      coordinatorStartedAt: iso(header.coordinatorStartedAt),
     },
-    predecessorRunPublicId: predecessor[0]?.publicId ?? null,
-    successorRunPublicId: successor[0]?.publicId ?? null,
+    predecessorRunPublicId: header.predecessorRunId
+      ? importRunShortcode.parse(header.predecessorRunId)
+      : null,
+    successorRunPublicId: successor[0]
+      ? importRunShortcode.parse(successor[0].publicId)
+      : null,
     // What `restart` writes to its successor: this run's settings and targets.
-    restartInputs: flueImportRunPurpose.safeParse(run.purpose).success
+    restartInputs: flueImportRunPurpose.safeParse(header.purpose).success
       ? {
-          purpose: run.purpose,
+          purpose: header.purpose,
           trigger: "manual",
-          coordinatorModel: coordinatorModelFor(run.purpose),
-          vendorAccount: run.vendorAccountShortcode,
-          notes: run.notes,
-          skillRevision: run.skillRevision,
-          runtimeRevision: run.runtimeRevision,
+          coordinatorModel: coordinatorModelFor(header.purpose),
+          vendorAccount: header.vendorAccountId,
+          notes: header.notes,
+          skillRevision: header.skillRevision,
+          runtimeRevision: header.runtimeRevision,
           targets: restartTargets.map((target) => ({
             position: target.position,
             image: target.imageCode,
@@ -3169,21 +3087,213 @@ export async function loadImportRunByShortcode(
           })),
         }
       : null,
-    coordinatorModel: run.coordinatorModel,
-    skillRevision: run.skillRevision,
-    runtimeRevision: run.runtimeRevision,
+    coordinatorModel: header.coordinatorModel,
+    skillRevision: header.skillRevision,
+    runtimeRevision: header.runtimeRevision,
     agentModelMs: Number(agentModelUsage[0]?.durationMs ?? 0),
-    decisionRevision: run.decisionRevision,
-    operations,
-    approvals,
-    preparedOrders,
-    progress,
-    latestProgress: progress.at(-1) ?? null,
+    operations: operations.map((operation) => ({
+      ...operation,
+      startedAt: operation.startedAt.toISOString(),
+      completedAt: iso(operation.completedAt),
+    })),
+    preparedOrders: preparedOrders.map((order) => ({
+      ...order,
+      preparedAt: order.preparedAt.toISOString(),
+    })),
+    targets: targets.map((target) => ({
+      id: target.id,
+      // A photo-inventory run's targets are always images — it never creates a
+      // purchase or product target row, so the run's purpose alone disambiguates.
+      targetType: target.purchaseId
+        ? "purchase"
+        : header.purpose === "photo_inventory"
+          ? "image"
+          : "product",
+      targetShortcode: target.purchaseId ?? target.productId,
+      targetName: null,
+      sourceId: null,
+      sourceLabel: target.sourceKind
+        ? `${target.sourceKind}${target.sourceExternalKey ? ` · ${target.sourceExternalKey}` : ""}`
+        : null,
+      vendorAccountLabel: target.vendorAccountId,
+      state: target.state,
+      fingerprint: target.targetFingerprint,
+      outcome: target.outcome,
+      warning: target.warning,
+      diff: z
+        .json()
+        .nullable()
+        .parse(target.diff ?? null),
+      completedAt: iso(target.completedAt),
+    })),
+    evidence: evidence.map((item) => ({
+      id: item.id,
+      // Run-target UUIDs are internal. Evidence still renders under the run.
+      targetId: null,
+      sourceKind: item.kind,
+      filename: null,
+      mediaType: item.mediaType,
+      checksum: item.checksum,
+      createdAt: item.createdAt.toISOString(),
+    })),
+    approvals: approvals.map((approval) => ({
+      id: approval.id,
+      operationId: approval.operationId,
+      operationKind: approval.operationKind,
+      args: z.json().parse(approval.args),
+      state: approval.state,
+      grantedAt: approval.state === "granted" ? iso(approval.decidedAt) : null,
+      consumedAt: iso(approval.consumedAt),
+      invalidatedAt: iso(approval.invalidatedAt),
+      rejectedAt: iso(approval.rejectedAt),
+    })),
     affectedPurchases,
-    findings,
-    targets,
-    evidence,
+    findings: findings.map((finding) => ({
+      ...finding,
+      createdAt: finding.createdAt.toISOString(),
+      expiresAt: iso(finding.expiresAt),
+    })),
+    controllingMembers: [
+      ...new Map(
+        controlHistory.map((event) => [event.userId, controller(event)]),
+      ).values(),
+    ],
+    controlHistory: controlHistory.map((event) => ({
+      action: event.action,
+      ...controller(event),
+      createdAt: event.createdAt.toISOString(),
+    })),
+    progress: browserProgress,
+    latestProgress: browserProgress.at(-1) ?? null,
   };
+}
+
+const DEBUG_EVENT_KIND = "__debug_event";
+const MAX_LOG_ENTRIES = 2_000;
+
+const emptyLogMetadata = {
+  commandId: null,
+  operationId: null,
+  operationKind: null,
+  host: null,
+  browser: null,
+  attempt: null,
+  count: null,
+  outcome: null,
+  messageType: null,
+  errorType: null,
+  errorCode: null,
+  error: null,
+} as const;
+
+function operationLogEntry(
+  operation: Pick<
+    typeof importRunOperation.$inferSelect,
+    "id" | "operationId" | "kind" | "state" | "result" | "error" | "startedAt"
+  >,
+): ImportRunLogEntry | null {
+  if (operation.kind === DEBUG_EVENT_KIND) {
+    const event = purchaseImportDebugEvent.safeParse(operation.result);
+    if (!event.success) return null;
+    return {
+      id: operation.id,
+      occurredAt: event.data.occurredAt,
+      source: "mac",
+      level:
+        event.data.outcome?.startsWith("failed:") || event.data.errorType
+          ? "error"
+          : "debug",
+      event: event.data.event,
+      state: operation.state,
+      commandId: event.data.commandId ?? null,
+      operationId: event.data.operationId ?? null,
+      operationKind: event.data.operationKind ?? null,
+      host: event.data.host ?? null,
+      browser: event.data.browser ?? null,
+      attempt: event.data.attempt ?? null,
+      count: event.data.count ?? null,
+      outcome: event.data.outcome ?? null,
+      messageType: event.data.messageType ?? null,
+      errorType: event.data.errorType ?? null,
+      errorCode: event.data.errorCode ?? null,
+      error: null,
+    };
+  }
+  return {
+    id: operation.id,
+    occurredAt: operation.startedAt.toISOString(),
+    source: "server",
+    level: operation.state === "failed" ? "error" : "info",
+    event: `tool.${operation.kind}`,
+    state: operation.state,
+    ...emptyLogMetadata,
+    operationId: operation.operationId,
+    error: operation.error?.slice(0, 300) ?? null,
+  };
+}
+
+/** Server tool calls and Mac bridge debug events, in occurrence order. */
+export async function loadImportRunLog(db: Database, shortcode: string) {
+  const database = getDb(db);
+  const [run] = await database
+    .select({
+      id: importRun.id,
+      status: importRun.status,
+      failureCode: importRun.failureCode,
+      startedAt: importRun.startedAt,
+      endedAt: importRun.endedAt,
+    })
+    .from(importRun)
+    .where(eq(importRun.shortcode, importRunShortcode.parse(shortcode)))
+    .limit(1);
+  if (!run) throw new Error("Import run was not found");
+  const operations = await database
+    .select({
+      id: importRunOperation.id,
+      operationId: importRunOperation.operationId,
+      kind: importRunOperation.kind,
+      state: importRunOperation.state,
+      result: importRunOperation.result,
+      error: importRunOperation.error,
+      startedAt: importRunOperation.startedAt,
+    })
+    .from(importRunOperation)
+    .where(eq(importRunOperation.runId, run.id))
+    .orderBy(asc(importRunOperation.startedAt), asc(importRunOperation.id))
+    .limit(MAX_LOG_ENTRIES + 1);
+
+  const entries: ImportRunLogEntry[] = [
+    {
+      id: `run:${run.id}:started`,
+      occurredAt: run.startedAt.toISOString(),
+      source: "run",
+      level: "info",
+      event: "run.started",
+      state: "running",
+      ...emptyLogMetadata,
+    },
+    ...operations
+      .slice(0, MAX_LOG_ENTRIES)
+      .flatMap((operation) => operationLogEntry(operation) ?? []),
+  ];
+  if (run.endedAt) {
+    entries.push({
+      id: `run:${run.id}:ended`,
+      occurredAt: run.endedAt.toISOString(),
+      source: "run",
+      level: run.status === "failed" ? "error" : "info",
+      event: `run.${run.status}`,
+      state: run.status,
+      ...emptyLogMetadata,
+      error: run.failureCode,
+    });
+  }
+  entries.sort(
+    (left, right) =>
+      Date.parse(left.occurredAt) - Date.parse(right.occurredAt) ||
+      left.id.localeCompare(right.id),
+  );
+  return { entries, truncated: operations.length > MAX_LOG_ENTRIES };
 }
 
 const runControlInput = z.object({
@@ -3585,7 +3695,7 @@ export async function controlImportRun(
               state: isUnavailable ? "unavailable" : "needs_evidence",
               outcome: isUnavailable ? "unavailable" : null,
               evidenceFingerprint: isUnavailable
-                ? await sha256(
+                ? await sha256Hex(
                     `unavailable:${target.evidenceFingerprint ?? target.targetFingerprint}`,
                   )
                 : null,

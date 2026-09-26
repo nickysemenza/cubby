@@ -21,7 +21,7 @@ import {
 import type { Database } from "~/server/db";
 import { previewFinancialStatementImport } from "~/server/repo/financial-statement-preview";
 import { createFinancialTransaction } from "~/server/repo/financial-transaction";
-import { recordStatementRowsWorkflow } from "~/server/workflows/statement-row.server";
+import { recordStatementRows } from "~/server/repo/statement-row";
 
 async function parseFile(input: StatementCsvFileInput) {
   const headers = statementCsvHeaders(input.text);
@@ -118,10 +118,10 @@ export async function commitStatementCsv(
     offset < parsed.recordRows.length;
     offset += STATEMENT_ROW_RECORD_MAX_ROWS
   ) {
-    const result = await recordStatementRowsWorkflow(
+    const result = await recordStatementRows(
       db,
-      actor,
       recordStatementBatch(parsed, offset),
+      actor,
     );
     evidence += result.inserted;
   }

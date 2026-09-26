@@ -54,7 +54,12 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "md",
+          mobile: { slot: "title", priority: 0 },
+        },
         validation: {
           read: ledgerPartyShortcode,
           create: ledgerPartyShortcode,
@@ -66,7 +71,12 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "md",
+          mobile: { slot: "subtitle", priority: 10 },
+        },
         validation: {
           read: ledgerPartyShortcode,
           create: ledgerPartyShortcode,
@@ -95,7 +105,13 @@ export default defineEntity({
         key: "amount",
         kind: "number",
         control: { kind: "number", renderer: "money" },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          format: "currency",
+          mobile: { slot: "trailing", priority: 1 },
+        },
         validation: {
           read: wholeCentAmount,
           create: ledgerTransferAmount,
@@ -153,6 +169,8 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          width: "sm",
+          mobile: { slot: "hidden", priority: 0 },
         },
         validation: {
           read: z.array(financialTransactionShortcode),
@@ -415,8 +433,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/ledger-transfer.entity-adapter",
-        export: "ledgerTransferEntityAdapter",
+        module: "~/server/repo/ledger-transfer",
+        export: "ledgerTransferRepository",
       },
     },
   },

@@ -83,22 +83,6 @@ export const financialAccountOut = z.object(
 );
 export type FinancialAccountOut = z.infer<typeof financialAccountOut>;
 
-/**
- * The account picklist — feeds the transactions table's Account filter. Same
- * shape as `vendorOptionsOut`, and deliberately not the full `financialAccountOut`:
- * a header filter needs an eagerly-loaded roster, so it stays cheap.
- */
-export const financialAccountOptionsOut = z.array(
-  z.object({
-    id: financialAccountShortcode,
-    name: z.string(),
-    count: z.number().int(),
-  }),
-);
-export type FinancialAccountOptionsOut = z.infer<
-  typeof financialAccountOptionsOut
->;
-
 export const financialAccountListResponse =
   createPaginatedResponseSchema(financialAccountOut);
 export type FinancialAccountListResponse = z.infer<

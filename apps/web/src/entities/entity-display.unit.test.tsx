@@ -790,6 +790,48 @@ describe("generic enum fields", () => {
     },
   );
 
+  // Range copy/paste reads `meta.cellData`, never the rendered cell, so an
+  // editable column that renders correctly can still drop out of the copy
+  // range (PR #766 review). Every generic control kind must publish one.
+  it("keeps every editable list control kind in the copy/paste range", async () => {
+    const record = {
+      id: "expense-1",
+      cost: 20,
+      date: "2026-07-20",
+      future: false,
+      productQuantity: 2,
+      costType: "materials",
+    };
+    const helper = createCubbyColumnHelper<typeof record>();
+    const onSaveField = vi.fn().mockResolvedValue(undefined);
+    const columns = createEntityDisplayColumns("expense", helper, undefined, {
+      only: ["cost", "date", "future", "productQuantity", "costType"],
+      onSaveField,
+    });
+    const cells = new Map(
+      columns.visit((column) => [column.id, column.meta?.cellData] as const),
+    );
+    expect(
+      Object.fromEntries([...cells].map(([id, data]) => [id, data?.kind])),
+    ).toEqual({
+      cost: "currency",
+      date: "date",
+      future: "boolean",
+      productQuantity: "number",
+      costType: "select",
+    });
+    expect(cells.get("costType")?.getCopyPayload(record)).toEqual({
+      text: "Materials",
+      json: "materials",
+    });
+    // `productQuantity` is signed: a negative quantity on a $0 line is a
+    // discard, so rejecting one would make discards uneditable everywhere.
+    await cells.get("productQuantity")?.applyPaste?.(record, { json: -1 });
+    expect(onSaveField).toHaveBeenCalledWith(record, "productQuantity", -1);
+    await cells.get("future")?.applyPaste?.(record, { json: true });
+    expect(onSaveField).toHaveBeenCalledWith(record, "future", true);
+  });
+
   it("saves an editable pick through onSaveField, and clears only a nullable enum", async () => {
     const record = { id: "task-1", status: "not_started", trade: "plumbing" };
     const helper = createCubbyColumnHelper<typeof record>();

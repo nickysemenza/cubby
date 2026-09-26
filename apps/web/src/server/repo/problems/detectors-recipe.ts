@@ -15,7 +15,7 @@
  * means a removal path skipped staleness propagation.
  */
 
-import type { StaleParentRecipe } from "@cubby/schemas/problems";
+import { ProblemItem } from "@cubby/schemas/problems";
 import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -27,10 +27,6 @@ import {
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 
-// StaleParentRecipe is the canonical Zod-derived shape from @cubby/schemas/problems
-// (re-exported from the package barrel for the Problems-page components).
-export type { StaleParentRecipe };
-
 /**
  * Live parent recipes whose persisted totals are marked fresh
  * (`totalsComputedAt IS NOT NULL`) but that still reference — via a live
@@ -41,8 +37,8 @@ export type { StaleParentRecipe };
  */
 export const findParentRecipesWithDeletedSubRecipes = async (
   db: Database,
-): Promise<StaleParentRecipe[]> => {
-  const res = await getDb(db).execute<StaleParentRecipe>(sql`
+): Promise<ProblemItem<"staleParentRecipes">[]> => {
+  const res = await getDb(db).execute<ProblemItem<"staleParentRecipes">>(sql`
     SELECT DISTINCT parent.shortcode AS id, parent.name AS name
     FROM ${recipe} parent
     INNER JOIN ${recipeSection} rs

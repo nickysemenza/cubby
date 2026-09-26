@@ -1,9 +1,13 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { LedgerPartyShortcode, UserId } from "@cubby/schemas/identifiers";
+import type {
+  LedgerPartyId,
+  LedgerPartyShortcode,
+  UserId,
+} from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, asc, eq } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { user } from "~/server/db/auth.schema";
 import { ledgerParty } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -11,9 +15,41 @@ import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   getDb,
   notDeleted,
+  unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+
+export type CurrentParty = {
+  id: LedgerPartyId;
+  shortcode: LedgerPartyShortcode;
+  name: string;
+};
+
+/** The live `member` ledger party the acting login is linked to, if any. */
+export async function currentMemberLedgerParty(
+  db: Database | DrizzleTransaction,
+  actor: { userId: UserId },
+): Promise<CurrentParty | null> {
+  const [party] = await unwrapDb(db)
+    .select({
+      id: ledgerParty.id,
+      shortcode: ledgerParty.shortcode,
+      name: ledgerParty.name,
+    })
+    .from(ledgerParty)
+    .where(
+      and(
+        eq(ledgerParty.userId, actor.userId),
+        eq(ledgerParty.kind, "member"),
+        notDeleted(ledgerParty),
+      ),
+    )
+    .limit(1);
+  return party
+    ? { ...party, shortcode: parseShortcodeFor("ledgerParty", party.shortcode) }
+    : null;
+}
 
 export type MemberLoginUser = {
   id: string;

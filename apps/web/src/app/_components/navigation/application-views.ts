@@ -127,12 +127,6 @@ export const activityViews = [
         icon: ClipboardTextIcon,
       },
       {
-        to: "/inventory/bulk-move",
-        label: "Move inventory",
-        description: "Relocate several inventory records together.",
-        icon: CubeFocusIcon,
-      },
-      {
         to: "/locations/photo-pass",
         label: "Location photo pass",
         description:

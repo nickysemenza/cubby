@@ -7,11 +7,8 @@ import { useState } from "react";
 
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
 import { CookbookSelect } from "~/app/_components/recipe/cookbook-select";
+import { HierarchySunburst } from "~/app/_components/visualizations/hierarchy-view";
 import IngredientNetwork from "~/app/_components/visualizations/ingredient-network";
-import LocationSunburst, {
-  LOCATION_SUNBURST_DESCRIPTION,
-} from "~/app/_components/visualizations/location-sunburst";
-import ProductCategoryDonut from "~/app/_components/visualizations/product-category-donut";
 import { Grid, Stack } from "~/components/layout";
 import { DashboardCard } from "~/components/layout/dashboard-card";
 
@@ -22,16 +19,16 @@ export function HomeInsights() {
       <DashboardCard
         icon={ChartPieIcon}
         title="Which categories hold our products?"
-        description="Distribution across categories — click a slice to view products."
+        description="Distribution across categories — click a ring to open one."
       >
-        <ProductCategoryDonut />
+        <HierarchySunburst entity="productCategory" />
       </DashboardCard>
       <DashboardCard
         icon={MapPinIcon}
         title="Where is our inventory?"
-        description={LOCATION_SUNBURST_DESCRIPTION}
+        description="How owned-item counts are distributed across your locations."
       >
-        <LocationSunburst />
+        <HierarchySunburst entity="location" />
       </DashboardCard>
       <DashboardCard
         icon={ShareNetworkIcon}

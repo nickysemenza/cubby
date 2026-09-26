@@ -81,7 +81,6 @@ import {
   loadRelationProducts,
   planRelationAttach,
   planRelationDetach,
-  type RelationPlan,
   type RelationPreflight,
   relationImpact,
   throwRelationRefusal,
@@ -625,44 +624,6 @@ function assertComponentsAttachable(
   }
 }
 
-/**
- * Advisory impact for a component attach, using the SAME predicate the
- * mutation refuses on. Runs on the pooled client, outside any transaction.
- */
-export async function previewAttachProductComponents(
-  db: Database,
-  parentProductId: ProductId,
-  componentProductIds: readonly ProductId[],
-): Promise<RelationPlan> {
-  const pre = await preflightAttachComponents(
-    getDb(db),
-    parentProductId,
-    componentProductIds,
-  );
-  return planRelationAttach(pre, {
-    edgeKey: "ProductComponent.componentProductId",
-    label: "kit components",
-    description: "Component links this attach would create.",
-  });
-}
-
-export async function previewDetachProductComponents(
-  db: Database,
-  parentProductId: ProductId,
-  componentProductIds: readonly ProductId[],
-): Promise<RelationPlan> {
-  const pre = await preflightDetachComponents(
-    getDb(db),
-    parentProductId,
-    componentProductIds,
-  );
-  return planRelationDetach(pre, {
-    edgeKey: "ProductComponent.componentProductId",
-    label: "kit components",
-    description: "Component links this detach would remove.",
-  });
-}
-
 export async function attachProductComponents(
   db: Database,
   parentProductId: ProductId,
@@ -762,17 +723,39 @@ export async function detachProductComponents(
 }
 
 export const productComponentsRelationAdapter = {
-  preview(db, action, ownerId, targetIds) {
+  async list(db, ownerShortcode) {
+    return listProductComponents(
+      db,
+      await resolveOrThrow(db, "product", ownerShortcode),
+    );
+  },
+  // Advisory impact, using the SAME predicate the mutation refuses on. Runs on
+  // the pooled client, outside any transaction.
+  async preview(db, action, ownerId, targetIds) {
     const parentProductId = parseEntityId("product", ownerId);
     const componentProductIds = targetIds.map((id) =>
       parseEntityId("product", id),
     );
+    const edge = {
+      edgeKey: "ProductComponent.componentProductId",
+      label: "kit components",
+    };
     return action === "attach"
-      ? previewAttachProductComponents(db, parentProductId, componentProductIds)
-      : previewDetachProductComponents(
-          db,
-          parentProductId,
-          componentProductIds,
+      ? planRelationAttach(
+          await preflightAttachComponents(
+            getDb(db),
+            parentProductId,
+            componentProductIds,
+          ),
+          { ...edge, description: "Component links this attach would create." },
+        )
+      : planRelationDetach(
+          await preflightDetachComponents(
+            getDb(db),
+            parentProductId,
+            componentProductIds,
+          ),
+          { ...edge, description: "Component links this detach would remove." },
         );
   },
   async execute(ctx, action, ownerShortcode, items) {
@@ -803,7 +786,7 @@ export const productComponentsRelationAdapter = {
           ctx.actorContext,
         );
   },
-} satisfies EntityRelationMutationAdapter<{
-  id: string;
-  quantity?: number;
-}>;
+} satisfies EntityRelationMutationAdapter<
+  { id: string; quantity?: number },
+  ProductComponentOut
+>;

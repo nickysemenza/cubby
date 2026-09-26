@@ -3,7 +3,6 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
 export const inventory = defineOperationDomain(inventoryContract, {
-  bulkProcess: { invalidates: ripple.inventory },
   bulkAdd: { invalidates: ripple.inventory },
   // `ripple.expense`, not `ripple.inventory`: a discard mints a $0 Expense per
   // row, and that ripple already carries the stock surfaces (see `costAndStock`)

@@ -289,31 +289,3 @@ export async function replaceLedgerSourceClaims(
     else await tx.insert(ledgerSourceClaim).values(values);
   }
 }
-
-export async function softDeleteLedgerSourceClaims(
-  tx: DrizzleTransaction,
-  owner: {
-    expenseIds?: readonly ExpenseId[];
-    ledgerTransferIds?: readonly LedgerTransferId[];
-  },
-) {
-  if (owner.expenseIds && owner.expenseIds.length === 0) return 0;
-  if (owner.ledgerTransferIds && owner.ledgerTransferIds.length === 0) return 0;
-  if (!owner.expenseIds && !owner.ledgerTransferIds) return 0;
-  const rows = await tx
-    .update(ledgerSourceClaim)
-    .set({ deletedAt: new Date() })
-    .where(
-      and(
-        owner.expenseIds
-          ? inArray(ledgerSourceClaim.expenseId, owner.expenseIds)
-          : inArray(
-              ledgerSourceClaim.ledgerTransferId,
-              owner.ledgerTransferIds!,
-            ),
-        notDeleted(ledgerSourceClaim),
-      ),
-    )
-    .returning({ id: ledgerSourceClaim.id });
-  return rows.length;
-}

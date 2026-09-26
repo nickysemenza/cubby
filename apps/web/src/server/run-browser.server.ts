@@ -2,13 +2,49 @@ import {
   importRunPurpose,
   importRunStatus,
 } from "@cubby/schemas/import-run-fields";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { runContract } from "~/contracts/run.contract";
+import { oauthRefreshToken } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { loadImportRunByShortcode } from "~/server/purchase-import/run-service";
+import {
+  findActivePurchaseAgentGrant,
+  PURCHASE_AGENT_OAUTH_CLIENT_ID,
+} from "~/server/purchase-import/agent-auth";
+import {
+  confirmMerchantVendorRule,
+  listMerchantVendorRules,
+} from "~/server/purchase-import/hunts";
+import {
+  controlImportRun,
+  loadImportRunDetail,
+  loadImportRunLog,
+  pauseAuthorizedImportRuns,
+} from "~/server/purchase-import/run-service";
+import {
+  listImportRuns,
+  listProductImportRuns,
+  resolveProductImportTarget,
+  resolvePurchaseImportTarget,
+} from "~/server/purchase-import/run-target";
+import {
+  dispatchStartedRun,
+  loadTargetedImportLaunch,
+  startTargetedImport,
+} from "~/server/purchase-import/targeted-run";
+import { getDb } from "~/server/repo/database-helpers";
 import { getImportRunByShortcode } from "~/server/repo/import-run";
+import type { AuthenticatedRequestContext } from "~/server/request-context";
 import { listRunAiUsageWorkflow } from "~/server/workflows/ai.server";
+
+/** Import runs belong to a household member's ledger party. */
+async function memberParty(context: AuthenticatedRequestContext) {
+  const party = await context.currentParty();
+  if (!party)
+    throw new Error("This login is not linked to a member ledger party yet.");
+  return party;
+}
 
 export const runHandlers = implementOperationDomain(runContract, {
   list: async (context, input) => {
@@ -27,17 +63,13 @@ export const runHandlers = implementOperationDomain(runContract, {
   detail: (context, input) =>
     getImportRunByShortcode(context.db, input.shortcode),
   workSnapshot: async (context, input) => {
-    const run = await loadImportRunByShortcode(
-      context.db,
-      context.actorContext,
-      input.runId,
-    );
+    const run = await loadImportRunDetail(context.db, input.runId);
     return {
       runId: input.runId,
       purpose: importRunPurpose.parse(run.purpose),
       status: importRunStatus.parse(run.status),
-      startedAt: run.startedAt.toISOString(),
-      endedAt: run.endedAt?.toISOString() ?? null,
+      startedAt: run.startedAt,
+      endedAt: run.endedAt,
       coordinatorModel: run.coordinatorModel,
       agentModelMs: run.agentModelMs,
       ordersSeen: run.ordersSeen,
@@ -48,19 +80,109 @@ export const runHandlers = implementOperationDomain(runContract, {
       targetsCompleted: run.targets.filter(
         (target) => target.state === "completed" || target.state === "skipped",
       ).length,
-      progress: run.progress.map((event) => ({
-        phase: event.phase,
-        detail: event.detail,
-        createdAt: event.createdAt.toISOString(),
-      })),
-      operations: run.operations.map((operation) => ({
-        kind: operation.kind,
-        state: operation.state,
-        startedAt: operation.startedAt.toISOString(),
-        completedAt: operation.completedAt?.toISOString() ?? null,
-        error: operation.error,
+      progress: run.progress,
+      operations: run.operations,
+    };
+  },
+  history: async (context, input) => {
+    const party = await memberParty(context);
+    const purchaseId = input.purchaseId
+      ? await resolvePurchaseImportTarget(context.db, input.purchaseId)
+      : undefined;
+    if (purchaseId === null) throw new Error("Purchase was not found");
+    const productId = input.productId
+      ? await resolveProductImportTarget(context.db, input.productId)
+      : undefined;
+    if (productId === null) throw new Error("Product was not found");
+    const runs = productId
+      ? await listProductImportRuns(context.db, party.id, productId)
+      : await listImportRuns(context.db, party.id, purchaseId);
+    return {
+      runs: runs.map((run) => ({
+        ...run,
+        purpose: importRunPurpose.parse(run.purpose),
+        startedAt: run.startedAt.toISOString(),
+        endedAt: run.endedAt?.toISOString() ?? null,
       })),
     };
+  },
+  work: async (context, input) => {
+    await memberParty(context);
+    return loadImportRunDetail(context.db, input.runId);
+  },
+  control: async (context, { runId, ...input }) => {
+    await memberParty(context);
+    const control = await controlImportRun(context.db, context.actorContext, {
+      runPublicId: runId,
+      ...input,
+    });
+    if (
+      "dispatchRunId" in control &&
+      control.dispatchRunId &&
+      control.dispatchEventId
+    ) {
+      await dispatchStartedRun(context.db, {
+        id: control.dispatchRunId,
+        eventId: control.dispatchEventId,
+        purpose: control.dispatchPurpose,
+        coordinatorModel: "gpt-6-sol",
+      });
+    }
+    return {
+      run: await loadImportRunDetail(context.db, runId),
+      successor:
+        "successorRunPublicId" in control && control.successorRunPublicId
+          ? {
+              publicId: control.successorRunPublicId,
+              status: control.successorStatus,
+              created: control.created,
+            }
+          : null,
+    };
+  },
+  logs: async (context, input) => {
+    await memberParty(context);
+    return loadImportRunLog(context.db, input.runId);
+  },
+  targetedLaunch: async (context, input) =>
+    loadTargetedImportLaunch(
+      context.db,
+      (await memberParty(context)).id,
+      input.purpose,
+      input.targetId,
+    ),
+  startTargeted: async (context, input) =>
+    startTargetedImport(context.db, (await memberParty(context)).id, input),
+  agentConnection: async (context) => {
+    const grant = await findActivePurchaseAgentGrant(
+      context.db,
+      context.auth.userId,
+    );
+    return {
+      authorized: grant !== null,
+      expiresAt: grant?.expiresAt?.toISOString() ?? null,
+    };
+  },
+  disconnectAgent: async (context) => {
+    await getDb(context.db)
+      .update(oauthRefreshToken)
+      .set({ revoked: new Date() })
+      .where(
+        and(
+          eq(oauthRefreshToken.clientId, PURCHASE_AGENT_OAUTH_CLIENT_ID),
+          eq(oauthRefreshToken.userId, context.auth.userId),
+          isNull(oauthRefreshToken.revoked),
+        ),
+      );
+    await pauseAuthorizedImportRuns(context.db, context.auth.userId);
+    return { authorized: false, expiresAt: null };
+  },
+  merchantRules: async (context) =>
+    listMerchantVendorRules(context.db, (await memberParty(context)).id),
+  confirmMerchantRule: async (context, input) => {
+    const party = await memberParty(context);
+    await confirmMerchantVendorRule(context.db, input, context.actorContext);
+    return listMerchantVendorRules(context.db, party.id);
   },
   aiUsage: (context, input) => listRunAiUsageWorkflow(context.db, input),
 });

@@ -2,10 +2,13 @@ import {
   parseShortcodeFor,
   type VendorShortcode,
 } from "@cubby/schemas/identifiers";
+import type { SearchHit } from "@cubby/schemas/search";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
 
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
+import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
 
 import {
   buildSearchHitComboboxItem,
@@ -13,9 +16,10 @@ import {
 } from "./combobox-builders";
 import type { ComboboxItem } from "./combobox-types";
 import {
-  WithEntitySearch,
-  type WithEntitySearchProps,
-} from "./with-search-hook";
+  type EntitySearchScope,
+  useEntitySearchRows,
+} from "./entity-search-hooks";
+import type { WithEntitySearchProps } from "./with-search-hook";
 
 /**
  * The vendor picker's items key on the vendor's NAME, not its id.
@@ -32,6 +36,68 @@ import {
  * layer.
  */
 export type VendorName = string;
+
+type VendorRow = Parameters<typeof buildVendorComboboxItem>[0];
+
+function useVendorListSource(_searchQuery: string, enabled: boolean) {
+  const { data, isLoading } = useQuery({
+    ...entityFilterOptions.filterOptions.queryOptions({
+      source: "entity",
+      entity: "vendor",
+      // The whole roster, most-purchased first; search filters client-side.
+      limit: 1000,
+      include: ["count", "logo"],
+    }),
+    enabled,
+    select: (page): VendorRow[] =>
+      page.items.map((item) => ({
+        id: parseShortcodeFor("vendor", item.id),
+        name: item.label,
+        count: item.count,
+        logo: item.logo,
+      })),
+  });
+  return { data, isLoading };
+}
+
+/**
+ * Vendor has no shared create dialog: a name that matches no roster row IS
+ * the new vendor, so each identity supplies its own `onCreateNew`.
+ */
+function VendorSearch<TId extends string>({
+  build,
+  buildSearchHit,
+  onCreateNew,
+  scope,
+  children,
+}: {
+  build: (row: VendorRow) => ComboboxItem<TId>;
+  buildSearchHit: (hit: SearchHit) => ComboboxItem<TId>;
+  onCreateNew: (name: string) => Promise<ComboboxItem<TId>>;
+  scope?: EntitySearchScope | null;
+} & Pick<WithEntitySearchProps<TId>, "children">) {
+  const search = useEntitySearchRows(
+    "vendor",
+    {
+      detailPlaceholder: "VEN-2222",
+      splitBlankTyped: true,
+      useListSource: useVendorListSource,
+      build,
+      buildDetail: build,
+      buildSearchHit,
+      useOnCreateNew: () => onCreateNew,
+      createNew: "none",
+    },
+    scope,
+  );
+  return children({
+    items: search.items,
+    onSearchChange: search.onSearchChange,
+    isLoading: search.isLoading,
+    onCreateNew: search.onCreateNew,
+    onOpenChange: search.onOpenChange,
+  });
+}
 
 /**
  * Vendor roster picker. Opening with a blank query uses the compact popularity-
@@ -54,8 +120,7 @@ export function WithVendorSearch({
   scope,
 }: WithEntitySearchProps<VendorName>) {
   return (
-    <WithEntitySearch<VendorName>
-      entity="vendor"
+    <VendorSearch<VendorName>
       build={(row) => buildVendorComboboxItem(row, { itemId: "name" })}
       buildSearchHit={(hit) => {
         // Destructuring the real `id` here while the item's own `id` stays the
@@ -77,7 +142,7 @@ export function WithVendorSearch({
       scope={scope}
     >
       {children}
-    </WithEntitySearch>
+    </VendorSearch>
   );
 }
 
@@ -118,14 +183,13 @@ export function WithVendorShortcodeSearch({
   );
 
   return (
-    <WithEntitySearch<VendorShortcode>
-      entity="vendor"
+    <VendorSearch<VendorShortcode>
       build={(row) => buildVendorComboboxItem(row, { itemId: "shortcode" })}
       buildSearchHit={(hit) => buildSearchHitComboboxItem(hit, "vendor")}
       onCreateNew={onCreateNew}
       scope={scope}
     >
       {children}
-    </WithEntitySearch>
+    </VendorSearch>
   );
 }

@@ -1,11 +1,7 @@
 import {
-  MEAL_KIND_LABELS,
-  MEAL_TYPE_LABELS,
   MEAL_TYPE_START_MINUTES,
   type MealKind,
   type MealType,
-  mealKindValues,
-  mealTypeValues,
 } from "@cubby/schemas/meal-classification";
 import { BreadIcon } from "@phosphor-icons/react/dist/csr/Bread";
 import { CircleDashedIcon } from "@phosphor-icons/react/dist/csr/CircleDashed";
@@ -21,9 +17,7 @@ import { SunHorizonIcon } from "@phosphor-icons/react/dist/csr/SunHorizon";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { format } from "date-fns";
 
-import { type BadgeVariant, badgeVariantColor } from "~/components/ui/badge";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { buildSelectOptions } from "~/lib/select-options";
+import { type BadgeVariant } from "~/components/ui/badge";
 
 /**
  * Presentation for the two meal classification enums.
@@ -34,11 +28,6 @@ import { buildSelectOptions } from "~/lib/select-options";
  * sits apart from `projects/shared.tsx`). Labels live in `@cubby/schemas` so
  * the server can name a slot too; only the chip tones are client-side.
  */
-export const mealTypeOptions: FilterableComboboxItem[] = buildSelectOptions(
-  mealTypeValues,
-  MEAL_TYPE_LABELS,
-);
-
 /**
  * Tone per kind. `cooked` is the overwhelming majority and the default, so it
  * stays neutral — tone is spent on the exceptions, which is the whole point of
@@ -53,16 +42,6 @@ export const mealKindBadgeVariant = {
   takeout: "default",
   other: "outline",
 } satisfies Record<MealKind, BadgeVariant>;
-
-/** Declared after the tone map so the roster can carry it as the dot ink — the
- *  table cell renders label + colour straight off these options. */
-export const mealKindOptions: FilterableComboboxItem[] = mealKindValues.map(
-  (value) => ({
-    value,
-    label: MEAL_KIND_LABELS[value],
-    color: badgeVariantColor[mealKindBadgeVariant[value]],
-  }),
-);
 
 /**
  * Clock label for a slot — "9:00 AM" — or null when the meal is unslotted.

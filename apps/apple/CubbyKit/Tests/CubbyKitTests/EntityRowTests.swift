@@ -158,7 +158,7 @@ struct EntityRowTests {
 
     /// `planting` and `gardenEntry` title from the server's `displayName`
     /// (`docs/terminology.md` § Garden) rather than a raw crop or kind field — both descriptors'
-    /// generated `titleField` is `"displayName"` (`EntityCatalog.swift`).
+    /// generated `titleField` is `"displayName"` (`entity-manifest.json`).
     @Test(
         arguments: [
             (

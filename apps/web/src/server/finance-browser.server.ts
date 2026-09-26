@@ -1,28 +1,33 @@
 import {
-  financialAccountContract,
   financialTransactionContract,
   ledgerPartyContract,
 } from "~/contracts/finance.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { previewFinancialStatementImport } from "~/server/repo/financial-statement-preview";
 import {
-  financialAccountOptionsWorkflow,
+  listMemberLogins,
+  setMemberLoginParty,
+} from "~/server/repo/member-login";
+import {
   financialTransactionSourceOptionsWorkflow,
   ledgerPartyOptionsWorkflow,
   merchantVendorInferenceWorkflow,
 } from "~/server/workflows/finance.server";
 
-export const financialAccountHandlers = implementOperationDomain(
-  financialAccountContract,
-  {
-    options: (context) => financialAccountOptionsWorkflow(context.readDb),
-  },
-);
-
 export const ledgerPartyHandlers = implementOperationDomain(
   ledgerPartyContract,
   {
     options: (context) => ledgerPartyOptionsWorkflow(context.readDb),
+    memberLogins: (context) => listMemberLogins(context.db),
+    setMemberLogin: async (context, input) => {
+      await setMemberLoginParty(
+        context.db,
+        input.userId,
+        input.ledgerParty,
+        context.actorContext,
+      );
+      return listMemberLogins(context.db);
+    },
   },
 );
 

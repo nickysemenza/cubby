@@ -9,13 +9,7 @@ import {
   purchaseSettlementSignSatisfiedExpression,
 } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type {
-  DuplicateFinancialAccountSourceAlias,
-  DuplicateFinancialTransactionSourceRef,
-  FinancialTransactionAllocationDefect,
-  IncompleteStatementImport,
-  InvalidFinancialJson,
-} from "@cubby/schemas/problems";
+import { ProblemItem } from "@cubby/schemas/problems";
 import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -25,7 +19,7 @@ import { getDb } from "~/server/repo/database-helpers";
  * must produce a defect, never make the complete Problems scan unavailable. */
 export async function findInvalidFinancialJson(
   db: Database,
-): Promise<InvalidFinancialJson[]> {
+): Promise<ProblemItem<"invalidFinancialJson">[]> {
   const result = await getDb(db).execute<{
     entity: "financialAccount" | "financialTransaction";
     id: string;
@@ -40,7 +34,7 @@ export async function findInvalidFinancialJson(
     SELECT 'financialTransaction' AS entity, ft.shortcode AS id, NULL AS identity, NULL AS "sourceAliases", NULL AS "cardNumbers", ft."sourceRefs"
     FROM "FinancialTransaction" ft WHERE ft."deletedAt" IS NULL
   `);
-  const problems: InvalidFinancialJson[] = [];
+  const problems: ProblemItem<"invalidFinancialJson">[] = [];
   for (const row of result.rows) {
     if (row.entity === "financialTransaction") {
       const parsed = financialTransactionSourceRefs.safeParse(row.sourceRefs);
@@ -75,7 +69,7 @@ export async function findInvalidFinancialJson(
 
 export async function findDuplicateFinancialTransactionSourceRefs(
   db: Database,
-): Promise<DuplicateFinancialTransactionSourceRef[]> {
+): Promise<ProblemItem<"duplicateFinancialTransactionSourceRefs">[]> {
   const result = await getDb(db).execute<{
     source: string;
     externalId: string;
@@ -126,7 +120,7 @@ type AllocationDefectRow = {
 
 const presentAllocationDefect = (
   row: AllocationDefectRow,
-): FinancialTransactionAllocationDefect => ({
+): ProblemItem<"financialTransactionAllocationDefects"> => ({
   id: parseShortcodeFor("financialTransaction", row.id),
   name: row.merchant ?? row.rawDescription ?? null,
   postedDate: row.postedDate ?? null,
@@ -212,7 +206,7 @@ async function queryAllocationDefects(
 
 export async function findFinancialTransactionAllocationDefects(
   db: Database,
-): Promise<FinancialTransactionAllocationDefect[]> {
+): Promise<ProblemItem<"financialTransactionAllocationDefects">[]> {
   return (await queryAllocationDefects(db, { defectsOnly: true })).map(
     presentAllocationDefect,
   );
@@ -226,7 +220,7 @@ export async function findFinancialTransactionAllocationDefects(
 export async function loadAllocationDefectPresenters(
   db: Database,
   shortcodes: readonly string[],
-): Promise<Map<string, FinancialTransactionAllocationDefect>> {
+): Promise<Map<string, ProblemItem<"financialTransactionAllocationDefects">>> {
   if (shortcodes.length === 0) return new Map();
   const rows = await queryAllocationDefects(db, {
     shortcodes,
@@ -237,7 +231,7 @@ export async function loadAllocationDefectPresenters(
 
 export async function findDuplicateFinancialAccountSourceAliases(
   db: Database,
-): Promise<DuplicateFinancialAccountSourceAlias[]> {
+): Promise<ProblemItem<"duplicateFinancialAccountSourceAliases">[]> {
   const result = await getDb(db).execute<{
     source: string;
     externalAccountId: string;
@@ -267,7 +261,7 @@ export async function findDuplicateFinancialAccountSourceAliases(
  */
 export async function findIncompleteStatementImports(
   db: Database,
-): Promise<IncompleteStatementImport[]> {
+): Promise<ProblemItem<"incompleteStatementImports">[]> {
   const result = await getDb(db).execute<{
     source: string;
     label: string;

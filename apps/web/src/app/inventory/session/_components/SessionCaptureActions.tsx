@@ -20,7 +20,7 @@ import { AiProvenance } from "~/app/_components/ai/ai-proposal-card";
 import { AiProposalList } from "~/app/_components/ai/ai-proposal-list";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
+import { useEntityListSource } from "~/app/_components/combobox/with-search-hook";
 import {
   getProductShortcode,
   requiredProductField,
@@ -519,20 +519,18 @@ function SuggestionProductOverride({
   value: ComboboxItem<ProductShortcode> | null;
   onChange: (value: ComboboxItem<ProductShortcode> | null) => void;
 }) {
+  const { items, onSearchChange, isLoading, onOpenChange } =
+    useEntityListSource("product", { intent: "stock" });
   return (
-    <WithEntitySearch entity="product" intent="stock">
-      {({ items, onSearchChange, isLoading, onOpenChange }) => (
-        <SuggestionProductCombobox
-          itemName={item.name}
-          items={items}
-          onSearchChange={onSearchChange}
-          isLoading={isLoading}
-          onOpenChange={onOpenChange}
-          value={value}
-          onChange={onChange}
-        />
-      )}
-    </WithEntitySearch>
+    <SuggestionProductCombobox
+      itemName={item.name}
+      items={items}
+      onSearchChange={onSearchChange}
+      isLoading={isLoading}
+      onOpenChange={onOpenChange}
+      value={value}
+      onChange={onChange}
+    />
   );
 }
 
@@ -611,6 +609,10 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
   );
   // Paste a UPC into "Manual add" to create from the UPC cascade; a plain name
   // still name-only quick-creates.
+  const { dialog: _productDialog, ...productSearch } = useEntityListSource(
+    "product",
+    { intent: "stock" },
+  );
   const onCreateNew = useUpcAwareCreate(handleQuickCreate);
 
   return (
@@ -632,21 +634,14 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
       className="min-w-0 flex-1"
     >
       <div className="min-w-56 flex-1">
-        <WithEntitySearch entity="product" intent="stock">
-          {({ items, onSearchChange, isLoading, onOpenChange }) => (
-            <ComboboxField
-              form={form}
-              name="product"
-              label="Manual add"
-              items={items}
-              onSearchChange={onSearchChange}
-              isLoading={isLoading}
-              onCreateNew={onCreateNew}
-              onOpenChange={onOpenChange}
-              entity="product"
-            />
-          )}
-        </WithEntitySearch>
+        <ComboboxField
+          form={form}
+          name="product"
+          label="Manual add"
+          {...productSearch}
+          onCreateNew={onCreateNew}
+          entity="product"
+        />
       </div>
       <div className="w-44 shrink-0">
         <AmountFieldGroup

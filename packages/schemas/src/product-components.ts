@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { plainDate } from "./base-entity";
-import { relationMutationOut } from "./common";
 import { productShortcode, purchaseShortcode } from "./identifiers";
 import { moneyNullable } from "./money";
 import { productListItemOut } from "./product";
@@ -45,32 +44,6 @@ export const kitComponentRowsInput = z.object({
   // describe the same contract.
   parentProductIds: z.array(productShortcode).max(200),
 });
-
-export const productComponentEntryInput = z.object({
-  productId: productShortcode,
-  quantity: componentQuantity,
-});
-
-export const attachProductComponentsInput = z.object({
-  parentProductId: productShortcode,
-  components: z.array(productComponentEntryInput).min(1).max(100),
-});
-export type AttachProductComponentsInput = z.infer<
-  typeof attachProductComponentsInput
->;
-
-export const detachProductComponentsInput = z.object({
-  parentProductId: productShortcode,
-  componentProductIds: z.array(productShortcode).min(1).max(100),
-});
-export type DetachProductComponentsInput = z.infer<
-  typeof detachProductComponentsInput
->;
-
-export const productComponentMutationOut = relationMutationOut;
-export type ProductComponentMutationOut = z.infer<
-  typeof productComponentMutationOut
->;
 
 export const productComponentOut = z.object({
   productId: productShortcode,

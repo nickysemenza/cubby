@@ -6,7 +6,6 @@ import {
 import {
   createProjectFromTasksInput,
   projectDependencyGraphInput,
-  projectResourceMutationInput,
   projectResourceProjectInput,
   projectToolUsageSetInput,
   projectTreeInput,
@@ -17,9 +16,6 @@ import type { z } from "zod";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import {
-  attachProjectResources,
-  detachProjectResources,
-  listProjectResources,
   getProjectDependencyGraph,
   projectDashboardSummary,
   projectNameOptions,
@@ -51,7 +47,6 @@ type TreeInput = z.output<typeof projectTreeInput>;
 type MutationContext = { db: Database; actor: ActorContext };
 type CreateFromTasksInput = z.output<typeof createProjectFromTasksInput>;
 type ResourceInput = z.output<typeof projectResourceProjectInput>;
-type ResourceMutationInput = z.output<typeof projectResourceMutationInput>;
 type RepointInput = z.output<typeof repointProjectUsesInput>;
 type ToolUsageInput = z.output<typeof projectToolUsageSetInput>;
 
@@ -141,18 +136,6 @@ const resolveProjectResourceIds = async (
     : [],
 });
 
-export const projectResourcesWorkflow = bindWorkflow(
-  workflow<Database, ResourceInput>("project.resources")
-    .call("projectId", async ({ context }, { input }) =>
-      resolveOrThrow(context, "project", input.projectId),
-    )
-    .call("resources", async ({ context }, { projectId }) =>
-      listProjectResources(context, projectId),
-    )
-    .output(({ resources }) => resources),
-  (db: Database, input: ResourceInput) => ({ context: db, input }),
-);
-
 export const projectToolSuggestionsWorkflow = bindWorkflow(
   workflow<Database, ResourceInput>("project.toolSuggestions")
     .call("projectId", async ({ context }, { input }) =>
@@ -163,46 +146,6 @@ export const projectToolSuggestionsWorkflow = bindWorkflow(
     )
     .output(({ suggestions }) => suggestions),
   (db: Database, input: ResourceInput) => ({ context: db, input }),
-);
-
-export const projectAttachResourcesWorkflow = bindWorkflow(
-  workflow<MutationContext, ResourceMutationInput>("project.attachResources")
-    .call("ids", async ({ context }, { input }) =>
-      resolveProjectResourceIds(context.db, input),
-    )
-    .commit("attached", async ({ context }, { ids }) =>
-      attachProjectResources(
-        context.db,
-        ids.projectId,
-        ids.productIds,
-        context.actor,
-      ),
-    )
-    .output(({ attached }) => attached),
-  (db: Database, input: ResourceMutationInput, actor: ActorContext) => ({
-    context: { db, actor },
-    input,
-  }),
-);
-
-export const projectDetachResourcesWorkflow = bindWorkflow(
-  workflow<MutationContext, ResourceMutationInput>("project.detachResources")
-    .call("ids", async ({ context }, { input }) =>
-      resolveProjectResourceIds(context.db, input),
-    )
-    .commit("detached", async ({ context }, { ids }) =>
-      detachProjectResources(
-        context.db,
-        ids.projectId,
-        ids.productIds,
-        context.actor,
-      ),
-    )
-    .output(({ detached }) => detached),
-  (db: Database, input: ResourceMutationInput, actor: ActorContext) => ({
-    context: { db, actor },
-    input,
-  }),
 );
 
 export const projectRepointUsesWorkflow = bindWorkflow(

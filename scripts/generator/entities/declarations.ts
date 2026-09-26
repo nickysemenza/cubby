@@ -115,6 +115,7 @@ export type RelationMutation = Readonly<{
   target: string;
   source: string;
   itemSchema: SourceRef;
+  rowSchema: SourceRef;
   adapter: SourceRef;
   audiences: readonly ("browser" | "mcp")[];
 }>;
@@ -224,6 +225,7 @@ export type EntityField = Readonly<{
       interactive?: boolean;
     }> | null;
     listHidden: boolean;
+    preview: boolean;
   }>;
   validation: Readonly<{
     read: z.ZodType | null;

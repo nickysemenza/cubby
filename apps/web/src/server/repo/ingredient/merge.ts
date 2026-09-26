@@ -31,11 +31,8 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import {
-  finalizeMerge,
-  repointEdge,
-  resolveMergeTargets,
-} from "~/server/repo/merge";
+import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge";
+import { applyMergePolicy } from "~/server/repo/removal";
 
 type IngredientSurvivorChanges = {
   mergedFrom: { from: null; to: string[] };
@@ -282,38 +279,13 @@ export const mergeIngredients = async (
       })
       .where(eq(ingredient.id, target));
 
-    // Re-point every recipe line, product, and meal food entry linked to an
-    // alias ingredient onto the target. None is optional: every FK would block
-    // the hard delete below. The surviving ingredient inherits both the
-    // aliases' product enrichment and their recorded meal history.
-    //
-    // `liveOnly: false` throughout: the delete below is a HARD delete, and FK
-    // constraints apply to every row regardless of `deletedAt`.
-    await repointEdge(
-      tx,
-      "ingredient",
-      "RecipeSectionIngredient.ingredientId",
-      {
-        from: uniqueAliases,
-        to: target,
-        liveOnly: false,
-      },
-    );
-    await repointEdge(tx, "ingredient", "Product.ingredientId", {
-      from: uniqueAliases,
-      to: target,
-      liveOnly: false,
-    });
-    await repointEdge(tx, "ingredient", "MealFoodEntry.ingredientId", {
-      from: uniqueAliases,
-      to: target,
-      liveOnly: false,
-    });
-    // The plant link is a real FK too, so left unpointed it aborts the hard
-    // delete with a raw FK violation — `liveOnly: false` for the same reason.
-    await repointEdge(tx, "ingredient", "Plant.ingredientId", {
-      from: uniqueAliases,
-      to: target,
+    // Re-point every declared edge onto the target: each is a real FK that
+    // would abort the HARD delete below, tombstones included.
+    await applyMergePolicy(tx, {
+      entity: "ingredient",
+      policy: INGREDIENT_MERGE_EDGE_POLICY,
+      keepId: target,
+      loserIds: uniqueAliases,
       liveOnly: false,
     });
 

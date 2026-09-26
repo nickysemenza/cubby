@@ -13,7 +13,6 @@ import {
   getLocationInventoryBreakdown,
   getLocationsByShortcodes,
   getLocationValuationSummary,
-  locationParentOptions,
   locationSearch,
   reparentLocationsInBulk,
 } from "~/server/repo/location";
@@ -89,11 +88,6 @@ export const inventoryBreakdownWorkflow = bindWorkflow(
     )
     .output(({ read }) => read),
 );
-export const parentOptionsWorkflow = defineWorkflowOperation(
-  "location.parentOptions",
-  async (ctx: LocationWorkflowContext) => locationParentOptions(ctx.db),
-);
-
 export const ensureGlobalUnknownWorkflow = bindWorkflow(
   workflow<LocationWorkflowContext, undefined>("location.ensureGlobalUnknown")
     .commit("location", async ({ context }) =>

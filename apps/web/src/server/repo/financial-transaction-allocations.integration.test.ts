@@ -17,12 +17,7 @@ import {
   updateFinancialTransaction,
 } from "./financial-transaction";
 import { findFinancialTransactionAllocationDefects } from "./problems/detectors-financial";
-import {
-  createPurchase,
-  deleteEmptyPurchases,
-  deletePurchases,
-  mergePurchases,
-} from "./purchase";
+import { createPurchase, deletePurchases, mergePurchases } from "./purchase";
 import { findOrCreateVendor, getVendorByID } from "./vendor";
 
 /**
@@ -279,25 +274,5 @@ describe("settlement allocations — write path", () => {
     );
     expect(items.map((row) => row.id)).not.toContain(txn.id);
     expect(await findFinancialTransactionAllocationDefects(ctx.db)).toEqual([]);
-  });
-
-  it("refuses delete_empty_purchases while a settlement allocation is live", async () => {
-    const account = await mkAccount();
-    const [a, b] = await Promise.all([mkPurchase("WN-O"), mkPurchase("WN-P")]);
-    const txn = await mkTransaction(account.id);
-    await update(txn.id, {
-      allocations: [
-        { purchaseId: a.id, amount: -8.96 },
-        { purchaseId: b.id, amount: -7.8 },
-      ],
-    });
-
-    await expect(
-      deleteEmptyPurchases(
-        ctx.db,
-        [parseShortcodeFor("purchase", a.id)],
-        ctx.actor,
-      ),
-    ).rejects.toThrow(/settlement allocations/);
   });
 });

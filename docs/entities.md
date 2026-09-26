@@ -25,8 +25,11 @@ Browser metadata is generated separately and contains no executable schemas.
 Generated detail and list type maps derive from their schema maps, preserving
 the entity key's input/output correlation. These schema-contract artifacts remain
 separate from browser metadata and executable server bindings.
-A transitive import guard protects this boundary; shared identifier and field
-primitives compose domain projections without importing generated schema maps.
+An oxlint `no-restricted-imports` override on the declarations and the helper
+modules they import protects this boundary (`.oxlintrc.json`); a helper a
+declaration newly imports joins that override's file list. Shared identifier
+and field primitives compose domain projections without importing generated
+schema maps.
 
 Run:
 
@@ -497,7 +500,11 @@ synthetic identity column. A `list: true` field with `readKeyOverride: null` nee
 override; column compilation fails otherwise. `display.listHidden` owns a
 declared column's hidden-by-default state; pages retain
 `initialColumnVisibility` only for computed or relation columns outside the
-field model. Detail overrides may provide a dynamic
+field model. `display.preview` marks the facts of the hover preview card
+(compiled to `detail.preview`, in model order); a computed figure the card
+needs is a read-only projection field on the server output, never a web-side
+map. An entity with no preview field falls back to its hero stats and first
+detail section. Detail overrides may provide a dynamic
 label when the value changes its meaning, such as ISBN versus UPC. Static labels
 remain declared. `EntityBasicInfo.afterFields` anchors computed facts after a
 declared detail field without inventing persisted fields or API contracts.

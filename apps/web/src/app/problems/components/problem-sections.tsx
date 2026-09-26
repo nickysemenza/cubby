@@ -6,27 +6,16 @@ import {
   type AllProblems,
   type CoverageProblemKey,
   type CoverageTotals,
-  type FinancialTransactionAllocationDefect,
-  type KitCountedTwice,
-  type ImportFindingProblem,
-  type ImageProcessingProblem,
-  type LabelVariant,
-  type NegativeExpectedQuantity,
   type ProblemKey,
-  type ProductMissingPrice,
-  type PurchaselessExitExpense,
-  type PurchaseNotReconciling,
-  type SoldButStillStocked,
   sectionSize,
-  type ToolUsedOutsideOwnership,
   TRACKER_PROBLEM_KEY_BY_TYPE,
-  type UnlinkedExitExpense,
+  type ProblemItem,
+  type ProblemRow,
 } from "@cubby/schemas/problems";
 import type {
   ProjectAttentionItem,
   ProjectAttentionType,
 } from "@cubby/schemas/project";
-import { getMiscDisplayName } from "@cubby/shared";
 import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
 import { DownloadIcon } from "@phosphor-icons/react/dist/csr/Download";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
@@ -45,7 +34,6 @@ import type { ReactNode } from "react";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
-import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { mealDateLabel } from "~/app/meals/meal-format";
 import { product as productOperations } from "~/app/products/product.functions";
 import { attentionEvidence } from "~/app/projects/attention-presentation";
@@ -73,7 +61,6 @@ import { countLabel } from "~/lib/pluralize";
 import { problems as problemOperations } from "~/lib/problems.functions";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
-import type { ProductWithBetterUpcData } from "~/server/repo/problems";
 
 import { BACKFILL } from "./backfill-registry";
 import { EmptyLocationsList } from "./empty-locations-list";
@@ -311,6 +298,71 @@ function customSection<T, K extends CoverageProblemKey = never>(def: {
   };
 }
 
+/** A badge that names a record links to it; a plain one is evidence text. */
+function problemRowBadge(badge: ProblemRow["badges"][number]): ReactNode {
+  return badge.entity && badge.id ? (
+    entityBadge(badge.entity, { id: badge.id, name: badge.label })
+  ) : (
+    <Badge key={badge.label} variant="outline">
+      {badge.label}
+    </Badge>
+  );
+}
+
+const rowBadgeId = (
+  row: ProblemRow,
+  entity: ShortcodeEntity,
+): string | undefined =>
+  row.badges.find((b) => b.entity === entity)?.id ?? undefined;
+
+function renderProblemRow(row: ProblemRow): RenderedProblemItem {
+  return {
+    key: `${row.entity}:${row.id}`,
+    title: row.name,
+    subtitle: row.subtitle ?? undefined,
+    badges: row.badges.map(problemRowBadge),
+    route: isBrowserRoutedEntity(row.entity)
+      ? entityDetailLink(row.entity, row.id)
+      : undefined,
+    editLabel: `Open ${entityLabel(row.entity).toLowerCase()}`,
+  };
+}
+
+type RowProblemKey = {
+  [K in ProblemKey]: ProblemItem<K> extends ProblemRow ? K : never;
+}[ProblemKey];
+
+/**
+ * A section over uniform `ProblemRow`s: the server computed the evidence line
+ * and badges, so the card is generic. `actions` adds the section's own fix.
+ */
+function rowSection<K extends CoverageProblemKey = never>(
+  key: RowProblemKey,
+  config: {
+    id: string;
+    label: string;
+    icon?: Icon;
+    entity?: Entity;
+    headerAction?:
+      | ReactNode
+      | ((items: ProblemRow[], count: number) => ReactNode);
+    coverage?: ProblemSectionDeclaredCoverage<K>;
+    actions?: (
+      row: ProblemRow,
+    ) => Pick<RenderedProblemItem, "customActions" | "inlineFix">;
+  },
+): ProblemSectionEntry<K> {
+  const { actions, ...rest } = config;
+  return section<ProblemRow, K>({
+    ...rest,
+    select: (p) => p[key],
+    problemKeys: [key],
+    // Every row lane reports its true population in `sectionTotals`.
+    totalKey: key,
+    renderItem: (row) => ({ ...renderProblemRow(row), ...actions?.(row) }),
+  });
+}
+
 function problemAssembly(
   keys: readonly ProblemKey[] | undefined,
   problems: AllProblems,
@@ -348,7 +400,11 @@ function problemAssembly(
  * component (not `renderItem`) so it can own the mutation hook; the card drops
  * out of the list once the problems queries invalidate.
  */
-function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
+function UpcApplyAction({
+  product,
+}: {
+  product: ProblemItem<"productsWithBetterUpcData">;
+}) {
   const apply = useActionMutation({
     mutationFn: productOperations.applyUpcData.mutationOptions,
     success: `Updated ${product.name} from UPC`,
@@ -369,7 +425,11 @@ function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
   );
 }
 
-function ImportFindingActions({ finding }: { finding: ImportFindingProblem }) {
+function ImportFindingActions({
+  finding,
+}: {
+  finding: ProblemItem<"importFindings">;
+}) {
   const resolve = useActionMutation({
     mutationFn: problemOperations.resolveImportFinding.mutationOptions,
     success: (result) =>
@@ -533,7 +593,8 @@ function renderTrackerItem(item: ProjectAttentionItem): RenderedProblemItem {
  * actually restores inventory truth (tenet 1), so link straight into the audit
  * session scoped to the offending location rather than to a form.
  */
-function RecountLink({ shortcode }: { shortcode: string }) {
+function RecountLink({ shortcode }: { shortcode: string | undefined }) {
+  if (!shortcode) return null;
   return (
     <Button
       size="sm"
@@ -561,7 +622,10 @@ function ManufacturerVariantLink({ manufacturer }: { manufacturer: string }) {
 }
 
 const variantSubtitle = (
-  v: Pick<LabelVariant, "count" | "canonical" | "canonicalCount">,
+  v: Pick<
+    ProblemItem<"manufacturerSpellingVariants">,
+    "count" | "canonical" | "canonicalCount"
+  >,
   noun: string,
 ) =>
   `${v.count} ${noun}${v.count === 1 ? "" : "s"} — "${v.canonical}" has ${
@@ -703,58 +767,13 @@ const ALLOCATION_DEFECT_LABEL = {
   "allocation-sign-mismatch":
     "an allocation's sign differs from the transaction",
 } satisfies Record<
-  FinancialTransactionAllocationDefect["reasons"][number],
+  ProblemItem<"financialTransactionAllocationDefects">["reasons"][number],
   string
 >;
 
-function unpricedSubtitle(product: ProductMissingPrice): string {
-  const qty = product.inventoryQuantity;
-  return `${byManufacturer(product.manufacturer)} · ${qty} ${qty === 1 ? "unit" : "units"} unvalued`;
-}
-
-function soldButStockedSubtitle(product: SoldButStillStocked): string {
-  const live = product.liveQuantity;
-  const stocked = `${live} still on a shelf`;
-  return `${byManufacturer(product.manufacturer)} · sold ${product.soldQuantity}, ${stocked} · ${formatCurrency(Math.abs(product.proceeds))} recovered`;
-}
-
-function kitCountedTwiceSubtitle(product: KitCountedTwice): string {
-  const bought = `${product.expectedUnits} bought`;
-  return `${byManufacturer(product.manufacturer)} · ${product.ownUnits} stocked as itself, plus its parts · more than the ${bought}`;
-}
-
-function negativeExpectedSubtitle(row: NegativeExpectedQuantity): string {
-  const unknown = row.unknownAcquisitionLines + row.unknownExitLines;
-  return [
-    byManufacturer(row.manufacturer),
-    `${row.acquiredUnits} acquired, ${row.exitedUnits} gone → ${row.expectedQuantity}`,
-    unknown > 0 ? `${unknown} line(s) carry no quantity` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
-function unlinkedExitSubtitle(row: UnlinkedExitExpense): string {
-  return [
-    row.vendorName,
-    formatCurrency(Math.abs(row.cost)),
-    row.date ? `sold ${formatDateWithYear(row.date)}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
-function purchaselessExitSubtitle(row: PurchaselessExitExpense): string {
-  return [
-    row.projectName,
-    formatCurrency(Math.abs(row.cost)),
-    row.date ? `sold ${formatDateWithYear(row.date)}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
-function outsideOwnershipSubtitle(row: ToolUsedOutsideOwnership): string {
+function outsideOwnershipSubtitle(
+  row: ProblemItem<"toolsUsedOutsideOwnership">,
+): string {
   // `projectBoundary` already has the detector's grace period applied, so it is
   // not the project's stated date — say "grace" rather than let the reader
   // compare it against the project page and conclude the card is wrong.
@@ -786,17 +805,16 @@ function entityBadge(
   );
 }
 
-const locationBadges = (
-  locations: ProductMissingPrice["locations"],
-): ReactNode[] =>
-  locations.map((location) => entityBadge("location", location));
-
-function purchaseSubtitle(purchase: PurchaseNotReconciling): string {
+function purchaseSubtitle(
+  purchase: ProblemItem<"purchasesNotReconciling">,
+): string {
   const expenses = `${purchase.expenseCount} ${purchase.expenseCount === 1 ? "expense" : "expenses"}`;
   return `Stated ${formatCurrency(purchase.statedTotal)} · expenses ${formatCurrency(purchase.expenseTotal)} across ${expenses}`;
 }
 
-function purchaseDeltaHint(purchase: PurchaseNotReconciling): string | null {
+function purchaseDeltaHint(
+  purchase: ProblemItem<"purchasesNotReconciling">,
+): string | null {
   const delta = reconciliationDelta(purchase);
   if (delta === null) return null;
   const gap = formatCurrency(Math.abs(delta));
@@ -861,26 +879,10 @@ const DECLARED_SECTIONS = [
       customActions: <ImportFindingActions finding={finding} />,
     }),
   }),
-  section({
+  rowSection("duplicateInventory", {
     id: "duplicates",
     label: "Duplicates",
-    select: (p) => p.duplicateInventory,
-    problemKeys: ["duplicateInventory"],
     entity: "product",
-    renderItem: (product) => ({
-      title: product.name,
-      subtitle: [
-        byManufacturer(product.manufacturer),
-        `${product.locations.length} entries across ${product.locations.length === 1 ? "1 location" : `${product.locations.length} locations`}`,
-        product.expectedQuantity != null
-          ? `${product.expectedQuantity} expected`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      badges: locationBadges(product.locations),
-      route: entityDetailLink("product", product.id),
-    }),
   }),
   section({
     id: "duplicate-products",
@@ -965,87 +967,41 @@ const DECLARED_SECTIONS = [
           : undefined,
     }),
   }),
-  section({
+  rowSection("productsMissingPrice", {
     id: "missing-price",
     label: "Unpriced",
-    select: (p) => p.productsMissingPrice,
-    problemKeys: ["productsMissingPrice"],
-    totalKey: "productsMissingPrice",
     entity: "product",
-    renderItem: (product) => ({
-      title: product.name,
-      subtitle: unpricedSubtitle(product),
-      badges: locationBadges(product.locations),
-      route: entityDetailLink("product", product.id),
-    }),
   }),
-  section({
+  rowSection("soldButStillStocked", {
     id: "sold-but-still-stocked",
     label: "Sold but stocked",
-    select: (p) => p.soldButStillStocked,
-    problemKeys: ["soldButStillStocked"],
     entity: "product",
-    renderItem: (product) => ({
-      title: product.name,
-      subtitle: soldButStockedSubtitle(product),
-      badges: locationBadges(product.locations),
-      route: entityDetailLink("product", product.id),
-    }),
   }),
-  section({
+  rowSection("kitsCountedTwice", {
     id: "kits-counted-twice",
     label: "Counted twice",
-    select: (p) => p.kitsCountedTwice,
-    problemKeys: ["kitsCountedTwice"],
     entity: "product",
-    renderItem: (product) => ({
-      title: product.name,
-      subtitle: kitCountedTwiceSubtitle(product),
-      route: entityDetailLink("product", product.id),
-    }),
   }),
-  section({
+  rowSection("unlinkedExitExpenses", {
     id: "unlinked-exit-expenses",
     label: "Productless disposal lines",
-    select: (p) => p.unlinkedExitExpenses,
-    problemKeys: ["unlinkedExitExpenses"],
     entity: "expense",
     coverage: { keys: ["unlinkedExitExpenses"] },
-    renderItem: (row) => ({
-      title: row.name,
-      subtitle: unlinkedExitSubtitle(row),
-      route: entityDetailLink("expense", row.id),
-    }),
   }),
-  section({
+  rowSection("purchaselessExitExpenses", {
     id: "purchaseless-exit-expenses",
     label: "Credit with no order",
-    select: (p) => p.purchaselessExitExpenses,
-    problemKeys: ["purchaselessExitExpenses"],
     entity: "expense",
     // No meter: half these rows are correct as they stand, so there is no
     // denominator this is a fraction of — the same reason `unvalued-buckets`
     // declares coverage without one.
     coverage: { keys: ["purchaselessExitExpenses"] },
-    renderItem: (row) => ({
-      title: row.name,
-      subtitle: purchaselessExitSubtitle(row),
-      route: entityDetailLink("expense", row.id),
-    }),
   }),
-  section({
+  rowSection("negativeExpectedQuantity", {
     id: "negative-expected-quantity",
     label: "Negative expected",
-    select: (p) => p.negativeExpectedQuantity,
-    problemKeys: ["negativeExpectedQuantity"],
-    totalKey: "negativeExpectedQuantity",
     entity: "product",
     coverage: { keys: ["negativeExpectedQuantity"] },
-    renderItem: (row) => ({
-      title: row.name,
-      subtitle: negativeExpectedSubtitle(row),
-      route: entityDetailLink("product", row.id),
-    }),
   }),
   section({
     id: "tools-used-outside-ownership",
@@ -1068,22 +1024,13 @@ const DECLARED_SECTIONS = [
       route: entityDetailLink("product", row.id),
     }),
   }),
-  section({
+  rowSection("unvaluedBucketProducts", {
     id: "unvalued-buckets",
     label: "Unvalued buckets",
-    select: (p) => p.unvaluedBucketProducts,
-    problemKeys: ["unvaluedBucketProducts"],
-    totalKey: "unvaluedBucketProducts",
     // Coverage, but with no meter: a misc bucket isn't a fraction of any
     // population, so there's nothing honest to put in a denominator.
     coverage: { keys: ["unvaluedBucketProducts"] },
     entity: "product",
-    renderItem: (product) => ({
-      title: getMiscDisplayName(product.name),
-      subtitle: unpricedSubtitle(product),
-      badges: locationBadges(product.locations),
-      route: entityDetailLink("product", product.id),
-    }),
   }),
   section({
     id: "unit-coverage",
@@ -1133,12 +1080,9 @@ const DECLARED_SECTIONS = [
       "Every food or ingredient product that states a size in its name has it recorded.",
     renderItem: renderUnitCoverageItem,
   }),
-  section({
+  rowSection("ingredientsWithoutProduct", {
     id: "no-product-ingredients",
     label: "No product",
-    select: (p) => p.ingredientsWithoutProduct,
-    problemKeys: ["ingredientsWithoutProduct"],
-    totalKey: "ingredientsWithoutProduct",
     coverage: {
       keys: ["ingredientsWithoutProduct"],
       meter: {
@@ -1147,22 +1091,14 @@ const DECLARED_SECTIONS = [
       },
     },
     entity: "ingredient",
-    renderItem: (ing) => ({
-      title: ing.name,
-      // Recipe count is how much this gap costs — it belongs on the identity
-      // line, like every other section's evidence, not in a detail row below.
-      subtitle: `Used in ${ing.recipeCount} recipe${ing.recipeCount === 1 ? "" : "s"} · no product to price it`,
-      route: entityDetailLink("ingredient", ing.id),
-      // The workbench can actually create the product; the detail page can't.
-      customActions: <WorkbenchFixLink ingredientId={ing.id} />,
+    // The workbench can actually create the product; the detail page can't.
+    actions: (row) => ({
+      customActions: <WorkbenchFixLink ingredientId={row.id} />,
     }),
   }),
-  section({
+  rowSection("unusedIngredientsWithProduct", {
     id: "unused-with-product",
     label: "Unused (has product)",
-    select: (p) => p.unusedIngredientsWithProduct,
-    problemKeys: ["unusedIngredientsWithProduct"],
-    totalKey: "unusedIngredientsWithProduct",
     entity: "ingredient",
     headerAction: (_items, count) => (
       <DeleteAllUnusedButton
@@ -1171,20 +1107,13 @@ const DECLARED_SECTIONS = [
         alsoDeleteProducts
       />
     ),
-    renderItem: (ing) => ({
-      title: ing.name,
-      // The finding is "no recipe references this". Creation age was standing in
-      // for it, which is a different fact and never said the thing being claimed.
-      subtitle: "Used in no recipes",
-      details: [createdAgoDetail(ing.createdAt)],
-      badges: ing.products.map((prod) => entityBadge("product", prod)),
-      route: entityDetailLink("ingredient", ing.id),
+    actions: (row) => ({
       inlineFix: {
         label: "Delete + product(s)",
         render: (close) => (
           <UnusedIngredientDeleteFix
-            id={ing.id}
-            name={ing.name}
+            id={row.id}
+            name={row.name}
             alsoDeleteProducts
             close={close}
           />
@@ -1192,12 +1121,9 @@ const DECLARED_SECTIONS = [
       },
     }),
   }),
-  section({
+  rowSection("unusedIngredientsWithoutProduct", {
     id: "unused-no-product",
     label: "Unused",
-    select: (p) => p.unusedIngredientsWithoutProduct,
-    problemKeys: ["unusedIngredientsWithoutProduct"],
-    totalKey: "unusedIngredientsWithoutProduct",
     entity: "ingredient",
     headerAction: (_items, count) => (
       <DeleteAllUnusedButton
@@ -1206,17 +1132,13 @@ const DECLARED_SECTIONS = [
         alsoDeleteProducts={false}
       />
     ),
-    renderItem: (ing) => ({
-      title: ing.name,
-      subtitle: "Used in no recipes · no product attached",
-      details: [createdAgoDetail(ing.createdAt)],
-      route: entityDetailLink("ingredient", ing.id),
+    actions: (row) => ({
       inlineFix: {
         label: "Delete",
         render: (close) => (
           <UnusedIngredientDeleteFix
-            id={ing.id}
-            name={ing.name}
+            id={row.id}
+            name={row.name}
             alsoDeleteProducts={false}
             close={close}
           />
@@ -1243,68 +1165,31 @@ const DECLARED_SECTIONS = [
       />
     ),
   }),
-  section({
+  rowSection("staleLocations", {
     id: "stale-recounts",
     label: "Stale recounts",
-    select: (p) => p.staleLocations,
-    problemKeys: ["staleLocations"],
-    totalKey: "staleLocations",
     coverage: {
       keys: ["staleLocations"],
       meter: { total: (t) => t.staleLocations, doneLabel: "recounted" },
     },
     entity: "location",
-    renderItem: (loc) => ({
-      title: loc.name,
-      badges: [
-        <Badge key="type" variant="outline" className="capitalize">
-          {loc.type}
-        </Badge>,
-        <Badge key="items" variant="secondary">
-          {loc.itemCount} {loc.itemCount === 1 ? "item" : "items"}
-        </Badge>,
-      ],
-      // The recount age is the finding, so it leads. `AuditedHint` renders it
-      // as a node ("never recounted" / "unverified since Mar 2026"), which is
-      // why it stays a detail rather than a plain-string subtitle.
-      details: [
-        <AuditedHint
-          key="recount"
-          at={loc.lastBulkInventory}
-          label="recounted"
-          className="text-sm text-foreground"
-        />,
-      ],
-      route: entityDetailLink("location", loc.id),
-      editLabel: "Open location",
-      customActions: <RecountLink shortcode={loc.id} />,
-    }),
+    actions: (row) => ({ customActions: <RecountLink shortcode={row.id} /> }),
   }),
-  section({
+  rowSection("neverVerifiedInventory", {
     id: "never-verified",
     label: "Never verified",
-    select: (p) => p.neverVerifiedInventory,
-    problemKeys: ["neverVerifiedInventory"],
-    // Rows are page one of the inventory list; the meter must not read them.
-    totalKey: "neverVerifiedInventory",
     coverage: {
       keys: ["neverVerifiedInventory"],
       meter: { total: (t) => t.neverVerifiedInventory, doneLabel: "verified" },
     },
     entity: "inventory",
-    renderItem: (item) => ({
-      title: item.product.name,
-      subtitle: `${item.amount.value} ${item.amount.unit}`,
-      badges: [entityBadge("location", item.location)],
-      details: [createdAgoDetail(item.createdAt)],
-      route: entityDetailLink("inventory", item.id),
-      editLabel: "Open inventory entry",
+    actions: (row) => ({
       customActions: (
         <Row gap="sm">
-          <RecountLink shortcode={item.location.id} />
+          <RecountLink shortcode={rowBadgeId(row, "location")} />
           <Link
             to="/recommendations/workbench"
-            search={{ kind: "placement", inventory: item.id }}
+            search={{ kind: "placement", inventory: row.id }}
             className="text-sm underline underline-offset-2"
           >
             Review placement recommendation
@@ -1383,48 +1268,24 @@ const DECLARED_SECTIONS = [
       customActions: <VendorLogoFetchAction vendor={vendor} />,
     }),
   }),
-  section({
+  rowSection("unknownParkedItems", {
     id: "unknown-parked",
     label: "Parked in Unknown",
-    select: (p) => p.unknownParkedItems,
-    problemKeys: ["unknownParkedItems"],
     entity: "inventory",
-    renderItem: (item) => ({
-      title: item.product.name,
-      subtitle: `${item.amount.value} ${item.amount.unit}`,
-      details: [createdAgoDetail(item.createdAt)],
-      route: entityDetailLink("inventory", item.id),
-      editLabel: "Open inventory entry",
-      // Draining Unknown is a recount rooted there — same deep link the other
-      // recount detectors offer.
-      customActions: <RecountLink shortcode={item.location.id} />,
+    // Draining Unknown is a recount rooted there — same deep link the other
+    // recount detectors offer.
+    actions: (row) => ({
+      customActions: <RecountLink shortcode={rowBadgeId(row, "location")} />,
     }),
   }),
-  section({
+  rowSection("inventoryWithoutPricePath", {
     id: "inventory-no-price-path",
     label: "Unvaluable units",
-    select: (p) => p.inventoryWithoutPricePath,
-    problemKeys: ["inventoryWithoutPricePath"],
     entity: "inventory",
-    renderItem: (item) => ({
-      title: item.product.name,
-      subtitle: `${item.amount.value} ${item.amount.unit} in ${item.location.name}`,
-      badges: [
-        // This price is what the unit WOULD be valued against — the row exists
-        // precisely because no conversion reaches it. Stated bare it read as the
-        // applicable price, i.e. as though nothing were wrong.
-        <Badge key="price" variant="outline">
-          Unreachable {formatCurrency(item.effectivePrice)} each
-        </Badge>,
-      ],
-      route: entityDetailLink("product", item.product.id),
-    }),
   }),
-  section({
+  rowSection("productsWithNoImages", {
     id: "images",
     label: "Images",
-    select: (p) => p.productsWithNoImages,
-    problemKeys: ["productsWithNoImages"],
     coverage: {
       keys: ["productsWithNoImages"],
       meter: {
@@ -1434,55 +1295,18 @@ const DECLARED_SECTIONS = [
     },
     icon: ImageBrokenIcon,
     headerAction: <BackfillButton {...BACKFILL.fetchUpcImages} />,
-    renderItem: (product) => ({
-      title: product.name,
-      subtitle: byManufacturer(product.manufacturer),
-      badges: product.primaryGtin
-        ? [<CodeChip key="upc">{displayGtin(product.primaryGtin)}</CodeChip>]
-        : [],
-      route: entityDetailLink("product", product.id),
-    }),
   }),
-  section({
+  rowSection("imageProcessingIssues", {
     id: "image-processing",
     label: "Image processing",
-    select: (p) => p.imageProcessingIssues,
-    problemKeys: ["imageProcessingIssues"],
     coverage: { keys: ["imageProcessingIssues"] },
     entity: "image",
-    renderItem: (image: ImageProcessingProblem) => ({
-      title: image.filename,
-      subtitle:
-        image.processingIssue === "failed"
-          ? "Processing failed"
-          : "Cutout eligibility needs review",
-      badges: [
-        <Badge key="issue" variant="warning">
-          {image.processingIssue === "failed" ? "Failed" : "Needs review"}
-        </Badge>,
-      ],
-      route: entityDetailLink("image", image.id),
-      editLabel: "Open image",
-    }),
   }),
-  section({
+  rowSection("locationsWithoutAiDescription", {
     id: "ai-descriptions",
     label: "AI Descriptions",
-    select: (p) => p.locationsWithoutAiDescription ?? [],
-    problemKeys: ["locationsWithoutAiDescription"],
-    totalKey: "locationsWithoutAiDescription",
     icon: SparkleIcon,
     headerAction: <BackfillButton {...BACKFILL.analyzeDescriptions} />,
-    renderItem: (location) => ({
-      title: location.name,
-      subtitle: `${location.imageCount} ${location.imageCount === 1 ? "photo" : "photos"} to describe from`,
-      badges: [
-        <Badge key="type" variant="outline" className="capitalize">
-          {location.type}
-        </Badge>,
-      ],
-      route: entityDetailLink("location", location.id),
-    }),
   }),
   section({
     id: "missing-embeddings",

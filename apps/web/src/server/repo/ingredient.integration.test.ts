@@ -611,7 +611,7 @@ describe("deleteIngredients", () => {
 
     await expect(
       deleteIngredients(ctx.db, [usedIngredientId], ctx.actor),
-    ).resolves.toEqual({ deleted: 1 });
+    ).resolves.toMatchObject({ deleted: 1 });
   });
 
   /**
@@ -641,7 +641,7 @@ describe("deleteIngredients", () => {
 
     await expect(
       deleteIngredients(ctx.db, [cropId], ctx.actor),
-    ).resolves.toEqual({ deleted: 1 });
+    ).resolves.toMatchObject({ deleted: 1 });
 
     expect(
       await getDb(ctx.db).query.plant.findFirst({

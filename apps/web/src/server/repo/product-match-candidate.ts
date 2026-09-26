@@ -159,23 +159,3 @@ export async function repointProductMatchCandidatesTx(
       });
   }
 }
-
-/**
- * The delete edge policy for both product columns: a review row dies
- * with either product, so a merged pair can never linger as a self-pair and
- * the table never points at a tombstone.
- */
-export async function deleteProductMatchCandidatesTx(
-  tx: DrizzleTransaction,
-  productIds: readonly ProductId[],
-): Promise<void> {
-  if (productIds.length === 0) return;
-  await tx
-    .delete(productMatchCandidate)
-    .where(
-      or(
-        inArray(productMatchCandidate.productAId, [...productIds]),
-        inArray(productMatchCandidate.productBId, [...productIds]),
-      ),
-    );
-}

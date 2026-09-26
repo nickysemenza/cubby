@@ -274,7 +274,7 @@ export function externalIdsContainIsbn(
  *
  * `null` retires the PRIMARY barcode, not every barcode — a product can hold
  * several, and `ensureSlotPrimaries` then promotes the oldest survivor. That is
- * the same rule `patch_product_external_ids` documents for removing a primary;
+ * the same rule `patch_products_external_ids` documents for removing a primary;
  * to clear the whole set, pass an explicit `externalIds` payload.
  */
 export async function syncPrimaryGtin(

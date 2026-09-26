@@ -4,7 +4,6 @@ import {
   bulkAddInventoryWorkflow,
   bulkDiscardInventoryWorkflow,
   bulkMoveInventoryWorkflow,
-  bulkProcessInventoryWorkflow,
   confirmInventoryOwnershipWorkflow,
   findInventoryDuplicatesWorkflow,
   getInventoryByLocationIdsWorkflow,
@@ -17,8 +16,6 @@ import {
 } from "~/server/workflows/inventory.server";
 
 export const inventoryHandlers = implementOperationDomain(inventoryContract, {
-  bulkProcess: (context, input) =>
-    bulkProcessInventoryWorkflow(context.db, context.actorContext, input),
   bulkAdd: (context, input) =>
     bulkAddInventoryWorkflow(context.db, context.actorContext, input),
   bulkDiscard: (context, input) => bulkDiscardInventoryWorkflow(context, input),

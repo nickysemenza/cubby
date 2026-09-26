@@ -21,7 +21,7 @@ import {
   entityDeleteResultSchema,
   entityMcpCommandSchema,
   entityMcpReadCommandSchema,
-  entityMutationResultSchema,
+  entityBrowserMutationResultSchema,
 } from "./contracts";
 
 const includesAction = (actions: readonly string[], action: string) =>
@@ -144,7 +144,7 @@ describe("entity kernel bindings", () => {
     for (const binding of mergeable) {
       expect(binding.lifecycle.merge).toBeDefined();
       expect(
-        entityMutationResultSchema.safeParse({
+        entityBrowserMutationResultSchema.safeParse({
           action: "merge",
           entity: binding.entity,
           item: mock(binding.schemas.output, {

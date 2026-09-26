@@ -1,4 +1,4 @@
-import type { PartiallyImportedCookbook } from "@cubby/schemas/problems";
+import { ProblemItem } from "@cubby/schemas/problems";
 import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -22,8 +22,10 @@ import { getDb } from "~/server/repo/database-helpers";
  */
 export const findPartiallyImportedCookbooks = async (
   db: Database,
-): Promise<PartiallyImportedCookbook[]> => {
-  const result = await getDb(db).execute<PartiallyImportedCookbook>(sql`
+): Promise<ProblemItem<"partiallyImportedCookbooks">[]> => {
+  const result = await getDb(db).execute<
+    ProblemItem<"partiallyImportedCookbooks">
+  >(sql`
     SELECT
       ${cookbook.shortcode} AS id,
       ${cookbook.name} AS name,

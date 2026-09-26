@@ -12,7 +12,7 @@ the whole file.
   strips (pass a width check), Newegg's 300×146 `not-available` graphic, and a
   shared 1×1 GIF that Whole Foods serves for unphotographed items. Treat the
   floor as a heuristic — a real 186×282 book cover at 19 KB is fine.
-- **`verify_product_images` never decodes the bytes.** It checks R2 existence
+- **`verify_products_images` never decodes the bytes.** It checks R2 existence
   and metadata, so a corrupt or fully transparent file passes as verified. When
   correctness matters, download the stored file and look at it. A subagent
   citing the verify tool is not proof.

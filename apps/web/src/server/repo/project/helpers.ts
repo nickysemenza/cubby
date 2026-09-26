@@ -261,6 +261,8 @@ const dbProjectToAPI = ({
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     rollup: { ...ownRollup, subtree: subtreeRollup },
+    spent: ownRollup.spent,
+    taskProgress: `${ownRollup.doneTaskCount}/${ownRollup.taskCount}`,
     dates,
     dataQuality,
   };

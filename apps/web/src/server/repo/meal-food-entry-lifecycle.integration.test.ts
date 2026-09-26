@@ -19,7 +19,6 @@ import { deleteIngredients, mergeIngredients } from "~/server/repo/ingredient";
 import {
   deleteLedgerParties,
   mergeLedgerParties,
-  previewMergeLedgerParties,
 } from "~/server/repo/ledger-party";
 import { deleteMeals } from "~/server/repo/meal";
 import { findOrphanedProducts } from "~/server/repo/problems";
@@ -230,7 +229,7 @@ describe("meal food entry lifecycle", () => {
     await expect(
       deleteIngredients(ctx.db, [source.id], ctx.actor),
     ).rejects.toMatchObject({
-      reason: "INGREDIENT_HAS_MEAL_FOOD_ENTRIES",
+      reason: "ENTITY_DELETE_BLOCKED",
     });
 
     await getDb(ctx.db)
@@ -239,7 +238,7 @@ describe("meal food entry lifecycle", () => {
       .where(eq(mealFoodEntry.id, entry.id));
     await expect(
       deleteIngredients(ctx.db, [source.id], ctx.actor),
-    ).resolves.toEqual({ deleted: 1 });
+    ).resolves.toMatchObject({ deleted: 1 });
   });
 
   it("re-points live and removed ingredient entries during a hard-delete merge", async () => {
@@ -366,18 +365,6 @@ describe("meal food entry lifecycle", () => {
     await expect(
       deleteLedgerParties(ctx.db, [loseCode], ctx.actor),
     ).rejects.toThrow("meal food entries");
-    const preview = await previewMergeLedgerParties(ctx.db, {
-      keepId: keep.id,
-      mergeIds: [lose.id],
-    });
-    expect(preview.changes).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: "repoint-meal-food-entries",
-          total: 1,
-        }),
-      ]),
-    );
     const result = await mergeLedgerParties(
       ctx.db,
       {

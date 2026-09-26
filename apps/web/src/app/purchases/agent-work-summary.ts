@@ -1,7 +1,7 @@
 import type { PhotoRunImage } from "@cubby/schemas/photo-import-run";
 import type { FlueConversationMessage } from "@flue/sdk";
 
-import type { ImportRunDetail } from "~/lib/purchase-import-run-detail";
+import type { ImportRunDetail } from "~/contracts/run.contract";
 export { formatDuration as formatWorkDuration } from "~/lib/format-duration";
 
 type WorkKind =

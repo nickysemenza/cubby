@@ -1,14 +1,11 @@
 import { projectContract } from "~/contracts/project.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
-  projectAttachResourcesWorkflow,
   projectCreateFromTasksWorkflow,
   projectDashboardSummaryWorkflow,
   projectDependencyGraphWorkflow,
-  projectDetachResourcesWorkflow,
   projectOptionsWorkflow,
   projectPortfolioAnalyticsWorkflow,
-  projectResourcesWorkflow,
   projectSetToolUsageWorkflow,
   projectToolMatrixWorkflow,
   projectToolGalleryWorkflow,
@@ -27,13 +24,8 @@ export const projectHandlers = implementOperationDomain(projectContract, {
   options: (context) => projectOptionsWorkflow(context.db),
   createFromTasks: (context, input) =>
     projectCreateFromTasksWorkflow(context.db, input, context.actorContext),
-  resources: (context, input) => projectResourcesWorkflow(context.db, input),
   toolSuggestions: (context, input) =>
     projectToolSuggestionsWorkflow(context.db, input),
-  attachResources: (context, input) =>
-    projectAttachResourcesWorkflow(context.db, input, context.actorContext),
-  detachResources: (context, input) =>
-    projectDetachResourcesWorkflow(context.db, input, context.actorContext),
   toolMatrix: (context, input) => projectToolMatrixWorkflow(context.db, input),
   toolGallery: (context, input) =>
     projectToolGalleryWorkflow(context.db, input),

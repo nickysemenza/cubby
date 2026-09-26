@@ -412,7 +412,7 @@ async function loadProductPurchaseCostsByProject(
   return result;
 }
 
-export async function listProjectResources(
+async function listProjectResources(
   db: Database,
   projectId: ProjectId,
   options: ResourceReadOptions = {},
@@ -761,7 +761,7 @@ const PROJECT_RESOURCE_EDGE = {
   label: "project resource uses",
 } as const;
 
-export async function previewAttachProjectResources(
+async function previewAttachProjectResources(
   db: Database,
   projectId: ProjectId,
   productIds: readonly ProductId[],
@@ -815,22 +815,6 @@ function withoutTargets(
   };
 }
 
-export async function previewDetachProjectResources(
-  db: Database,
-  projectId: ProjectId,
-  productIds: readonly ProductId[],
-): Promise<RelationPlan> {
-  const pre = await preflightDetachProjectResources(
-    getDb(db),
-    projectId,
-    productIds,
-  );
-  return planRelationDetach(pre, {
-    ...PROJECT_RESOURCE_EDGE,
-    description: "Resource uses this detach would remove.",
-  });
-}
-
 export async function attachProjectResources(
   db: Database,
   projectId: ProjectId,
@@ -880,12 +864,28 @@ export async function attachProjectResources(
 }
 
 export const projectResourcesRelationAdapter = {
-  preview(db, action, ownerId, targetIds) {
+  async list(db, ownerShortcode) {
+    return listProjectResources(
+      db,
+      await resolveOrThrow(db, "project", ownerShortcode),
+    );
+  },
+  async preview(db, action, ownerId, targetIds) {
     const projectId = parseEntityId("project", ownerId);
     const productIds = targetIds.map((id) => parseEntityId("product", id));
     return action === "attach"
       ? previewAttachProjectResources(db, projectId, productIds)
-      : previewDetachProjectResources(db, projectId, productIds);
+      : planRelationDetach(
+          await preflightDetachProjectResources(
+            getDb(db),
+            projectId,
+            productIds,
+          ),
+          {
+            ...PROJECT_RESOURCE_EDGE,
+            description: "Resource uses this detach would remove.",
+          },
+        );
   },
   async execute(ctx, action, ownerShortcode, items) {
     const projectId = await resolveOrThrow(ctx.db, "project", ownerShortcode);
@@ -898,7 +898,7 @@ export const projectResourcesRelationAdapter = {
       ? attachProjectResources(ctx.db, projectId, productIds, ctx.actorContext)
       : detachProjectResources(ctx.db, projectId, productIds, ctx.actorContext);
   },
-} satisfies EntityRelationMutationAdapter<{ id: string }>;
+} satisfies EntityRelationMutationAdapter<{ id: string }, ProjectResourceOut>;
 
 export async function detachProjectResources(
   db: Database,

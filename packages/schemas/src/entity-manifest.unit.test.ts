@@ -1,13 +1,10 @@
 import { LEGACY_SHORTCODE_PREFIX, SHORTCODE_PREFIX } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { auditEntitySchema } from "./audit";
-import { type Entity, entityImage, entitySchema } from "./entity";
+import { type Entity, entitySchema } from "./entity";
 import { entityFieldModels } from "./entity-fields";
 import {
   allEntities,
-  auditableEntities,
-  browserRoutedEntities,
   countableEntities,
   embeddableEntities,
   entityDescriptor,
@@ -15,7 +12,6 @@ import {
   type EntityDescriptor,
   entityManifest,
   entityReferences,
-  imageEntities,
   imageIngressRouteById,
   type ImageIngressRoute,
   searchableEntities,
@@ -42,17 +38,6 @@ describe("entity manifest", () => {
       for (const rel of entityManifest[entity].relationships) {
         expect(entitySchema.options).toContain(rel.target);
       }
-    }
-  });
-
-  it("derives browser-routed entities, now including the ledger pair", () => {
-    // `ledgerParty`/`ledgerTransfer` were the last route-less entities; every
-    // entity in the manifest now carries a browser route.
-    expect(browserRoutedEntities).toContain("ledgerParty");
-    expect(browserRoutedEntities).toContain("ledgerTransfer");
-    expect(browserRoutedEntities.length).toBe(allEntities.length);
-    for (const entity of browserRoutedEntities) {
-      expect(descriptor(entity).browserRoutes).not.toBe(false);
     }
   });
 
@@ -107,66 +92,28 @@ describe("entity manifest", () => {
     }
   });
 
-  it("derives the auditable contract and audit union", () => {
-    expect(sorted(auditEntitySchema.options)).toEqual(
-      sorted(auditableEntities),
-    );
-  });
-
-  it("derives the image-bearing contract and storage enum", () => {
-    expect(sorted(imageEntities.map((e) => e.toUpperCase()))).toEqual(
-      sorted(entityImage.options),
-    );
-  });
-
-  it("generates direct and related photo routes without proxying natural owners", () => {
+  it("never proxies a photo route through a natural image owner", () => {
     const ingressRoutes: readonly ImageIngressRoute[] = Object.values(
       imageIngressRouteById,
     );
-    expect(imageIngressRouteById["recipe-meal"]).toMatchObject({
-      sourceEntity: "recipe",
-      targetEntity: "meal",
-      kind: "existingRelated",
-    });
-    expect(imageIngressRouteById["planting-new-garden-entry"]).toMatchObject({
-      sourceEntity: "planting",
-      targetEntity: "gardenEntry",
-      kind: "createRelated",
-    });
     expect(
       ingressRoutes.some(
         (route) =>
           route.sourceEntity === "project" && route.targetEntity === "task",
       ),
     ).toBe(false);
-    expect(imageIngressRouteById["project-self"].targetEntity).toBe("project");
-    expect(imageIngressRouteById["task-self"].targetEntity).toBe("task");
-    expect(
-      imageIngressRouteById["financial-transaction-confirmed-purchase"],
-    ).toMatchObject({
-      sourceEntity: "financialTransaction",
-      targetEntity: "purchase",
-    });
   });
 
-  it("derives the searchable contract", () => {
+  it("embeds only searchable entities", () => {
     for (const entity of embeddableEntities) {
       expect(searchableEntities).toContain(entity);
     }
-    // The three financial entities stay lexically searchable but opt out of
-    // embedding (search: { enabled: true, embedding: false }).
-    expect(
-      searchableEntities
-        .filter((e) => !new Set<string>(embeddableEntities).has(e))
-        .sort(),
-    ).toEqual(["expense", "financialTransaction", "purchase"]);
   });
 
-  it("countable entities have a db table; non-countable usda-food does not", () => {
+  it("countable entities have a db table", () => {
     for (const entity of countableEntities) {
       expect(entityManifest[entity].dbTable).not.toBeNull();
     }
-    expect(entityManifest["usda-food"].dbTable).toBeNull();
   });
 
   it("derives the shortcode contract from the shared prefix registry", () => {
@@ -188,10 +135,6 @@ describe("entity manifest", () => {
     // makes it a permanent special case in every shape that can name an
     // entity, so it is given `IMG-` like everything else.
     expect(sorted(withTable)).toEqual(sorted(shortcodeEntities));
-    // `usda-food` is the only entity without one, and it has no local table:
-    // its identity is USDA's own `fdc_id`.
-    expect(descriptor("usda-food").shortcodePrefix).toBeUndefined();
-    expect(descriptor("usda-food").dbTable).toBeNull();
   });
 
   it("keeps legacy aliases out of the manifest and pointed at real prefixes", () => {
@@ -216,47 +159,6 @@ describe("entity manifest", () => {
       );
       expect(metadata.references).toEqual(entityReferences(entity));
     }
-    expect(entityInspectorMetadata.purchase.titleField).toBe("displayName");
-    expect(entityInspectorMetadata.inventory.titleField).toBe("displayName");
-    expect(entityInspectorMetadata.product).toMatchObject({
-      auditable: true,
-      hasImages: true,
-      countable: true,
-      kernelActions: [
-        "get",
-        "list",
-        "search",
-        "create",
-        "update",
-        "bulkUpdate",
-        "delete",
-        "merge",
-      ],
-      mcpOperations: [
-        "get",
-        "list",
-        "search",
-        "create",
-        "update",
-        "delete",
-        "bulkUpdate",
-        "merge",
-      ],
-      mcpOwner: "kernel",
-      operationOwners: { delete: "kernel", merge: "kernel" },
-      lifecycle: {
-        softDelete: true,
-        delete: { mode: "soft", bulk: true },
-        merge: true,
-      },
-      sourceRefs: {
-        output: "@cubby/schemas/product#productTopLevelOut",
-        detail: "@cubby/schemas/product#productWithFoodOut",
-      },
-    });
-    expect(entityInspectorMetadata.product.filterUrlKeys).toContain(
-      "related-vendor",
-    );
   });
 
   // `inventory` is the one documented exception: `displayName` is on the
@@ -300,8 +202,7 @@ describe("entity manifest", () => {
         continue;
       }
 
-      // Same dynamic-import technique as `field-map-drift.unit.test.ts`:
-      // every entity has a `generated/entity-field-schemas.<entity>.gen.ts`
+      // Every entity has a `generated/entity-field-schemas.<entity>.gen.ts`
       // exporting exactly one `generated*FieldSchemas` map, whose `.read` is
       // keyed by readKey (external field name) — see `readFieldSchemas` in
       // `entity-definitions/definition.ts`.

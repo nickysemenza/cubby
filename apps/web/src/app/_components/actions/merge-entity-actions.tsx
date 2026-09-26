@@ -1,15 +1,19 @@
-import { useCallback, useRef, useState } from "react";
 import { z } from "zod";
 
-import { product } from "~/app/products/product.functions";
-import { purchase } from "~/app/purchases/purchase.functions";
+import { ingredient } from "~/app/ingredients/ingredient.functions";
 import { vendor } from "~/app/vendors/vendor.functions";
+import {
+  entityMergeMutationOptions,
+  type MergeCommand,
+} from "~/entities/entity-mutation.functions";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 import { useActionMutation } from "../hooks/useActionMutation";
 import { EntityMergeDialog } from "../merge/entity-merge-dialog";
 import { VerbMenuItem } from "./action-verb-ui";
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
+import { useStagedDialogAction } from "./use-staged-dialog-action";
 
 type MergeEntity = "ingredient" | "product" | "purchase" | "vendor";
 type MergeRow = EntityActionRow & { name: string };
@@ -21,28 +25,18 @@ export type MergeMutation<TOutput> = {
   isPending: boolean;
 };
 
+const asMergeRow = (row: EntityActionRow): MergeRow => ({
+  ...row,
+  name: row.name || row.id,
+});
+
 const purchaseMergeRowSchema = z.object({ vendorId: z.string() }).passthrough();
 
 export function useStagedMerge<TOutput>(
   entity: MergeEntity,
   mutation: MergeMutation<TOutput>,
 ): EntityActionHandles {
-  const [rows, setRows] = useState<MergeRow[]>([]);
-  const resolveRef = useRef<((result: { success: boolean }) => void) | null>(
-    null,
-  );
-
-  const finish = useCallback((success: boolean) => {
-    setRows([]);
-    resolveRef.current?.({ success });
-    resolveRef.current = null;
-  }, []);
-  const stage = useCallback((next: readonly EntityActionRow[]) => {
-    setRows(next.map((row) => ({ ...row, name: row.name || row.id })));
-    return new Promise<{ success: boolean }>((resolve) => {
-      resolveRef.current = resolve;
-    });
-  }, []);
+  const { items: rows, stage, finish } = useStagedDialogAction(asMergeRow);
 
   return {
     run: stage,
@@ -96,20 +90,47 @@ function useMergeVendorsEntityAction(): EntityActionHandles {
   return useStagedMerge("vendor", mutation);
 }
 
+function useMergeIngredientsEntityAction(): EntityActionHandles {
+  const mutation = useActionMutation({
+    mutationFn: ingredient.merge.mutationOptions,
+    success: (result) =>
+      savedWithBackgroundWork(result.sideEffects, "Ingredients merged"),
+  });
+  return useStagedMerge("ingredient", mutation);
+}
+
+/** A kernel merge mutation behind the `{ keepId, mergeIds }` dialog shape. */
+export const kernelMerge = <TOutput,>(
+  entity: MergeCommand["entity"],
+  mutation: {
+    mutate: (command: MergeCommand) => void;
+    mutateAsync: (command: MergeCommand) => Promise<TOutput>;
+    isPending: boolean;
+  },
+) => {
+  type Data = Parameters<MergeMutation<TOutput>["mutateAsync"]>[0];
+  return {
+    isPending: mutation.isPending,
+    mutate: (data: Data) => mutation.mutate({ action: "merge", entity, data }),
+    mutateAsync: (data: Data) =>
+      mutation.mutateAsync({ action: "merge", entity, data }),
+  };
+};
+
 function useMergeProductsEntityAction(): EntityActionHandles {
   const mutation = useActionMutation({
-    mutationFn: product.merge.mutationOptions,
+    mutationFn: entityMergeMutationOptions("product"),
     success: "Products merged",
   });
-  return useStagedMerge("product", mutation);
+  return useStagedMerge("product", kernelMerge("product", mutation));
 }
 
 function useMergePurchasesEntityAction(): EntityActionHandles {
   const mutation = useActionMutation({
-    mutationFn: purchase.merge.mutationOptions,
+    mutationFn: entityMergeMutationOptions("purchase"),
     success: "Purchases merged",
   });
-  const action = useStagedMerge("purchase", mutation);
+  const action = useStagedMerge("purchase", kernelMerge("purchase", mutation));
   const baseAvailability = action.availability;
   return {
     ...action,
@@ -134,6 +155,15 @@ function useMergePurchasesEntityAction(): EntityActionHandles {
 }
 
 export const mergeEntityActionDefinitions = [
+  defineEntityAction({
+    verb: "merge",
+    entities: ["ingredient"],
+    arity: "both",
+    minSelection: 2,
+    group: "organize",
+    priority: 100,
+    use: useMergeIngredientsEntityAction,
+  }),
   defineEntityAction({
     verb: "merge",
     entities: ["product"],

@@ -18,6 +18,7 @@ import {
   entityListInputSchema,
   getEntityListOutputSchema,
 } from "~/entities/generated/entity-lists.gen";
+import { generatedEntityRelationListCommandSchema } from "~/entities/generated/entity-relation-lists.gen";
 import {
   entityTimelineInputSchema,
   getEntityTimelineOutputSchema,
@@ -131,6 +132,19 @@ export const entityGraphHandlers = implementOperationDomain(
     graphPaths: (context, input) => getEntityGraphPaths(context.readDb, input),
     connections: (context, input) =>
       getEntityConnections(context.readDb, input),
+    relation: async (context, input) => {
+      const result = await executeEntity(
+        context,
+        generatedEntityRelationListCommandSchema.parse({
+          action: "listRelation",
+          ...input,
+        }),
+      );
+      if (result.action !== "listRelation")
+        throw new Error("Entity kernel returned the wrong action");
+      const { action: _, ...list } = result;
+      return list;
+    },
   },
 );
 

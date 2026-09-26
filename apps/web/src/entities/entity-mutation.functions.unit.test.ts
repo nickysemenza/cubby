@@ -101,6 +101,27 @@ describe("entityMutation.mutate invalidates", () => {
     expect(tags).toEqual(entityRipple("vendor"));
   });
 
+  // The per-entity attach/merge operations these commands replaced carried
+  // wider ripples than a plain write of the owning entity.
+  it("ripples a relation write to both ends and a product merge to cost and stock", () => {
+    expect(
+      entityMutation.mutate.invalidates({
+        action: "attach",
+        entity: "purchase",
+        relation: "products",
+        id: "PUR-4K7M",
+        items: [{ id: "PRD-4K7M" }],
+      }),
+    ).toEqual(ripple.purchaseProduct);
+    expect(
+      entityMutation.mutate.invalidates({
+        action: "merge",
+        entity: "product",
+        data: { keepId: "PRD-4K7M", mergeIds: ["PRD-4K7N"] },
+      }),
+    ).toEqual(ripple.productMerge);
+  });
+
   it("refreshes Product reads after a category taxonomy write", () => {
     const tags = entityMutation.mutate.invalidates({
       action: "update",

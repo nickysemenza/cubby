@@ -9,12 +9,12 @@
  */
 
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
+import type { IngredientShortcode } from "@cubby/schemas/identifiers";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { useEffect, useState } from "react";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
-import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
+import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
 import { getOptionalIngredientId } from "~/app/_components/form-fields";
 import { useEntityActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
@@ -88,7 +88,8 @@ export function SweepProductFollowUp({
   // would make an emptied field snap back to it on the next render.
   const [name, setName] = useState<string | null>(null);
   const [price, setPrice] = useState("");
-  const [ingredient, setIngredient] = useState<ComboboxItem | null>(null);
+  const [ingredient, setIngredient] =
+    useState<ComboboxItem<IngredientShortcode> | null>(null);
 
   const save = useEntityActionMutation({
     entity: "product",
@@ -164,27 +165,13 @@ export function SweepProductFollowUp({
               disabled={save.isPending}
             />
           )}
-          <WithEntitySearch entity="ingredient">
-            {({
-              items,
-              onSearchChange,
-              isLoading,
-              onCreateNew,
-              onOpenChange,
-            }) => (
-              <EntityPicker
-                entity="ingredient"
-                label="ingredient"
-                items={items}
-                onSearchChange={onSearchChange}
-                isLoading={isLoading}
-                value={ingredient}
-                setValue={setIngredient}
-                onCreateNew={onCreateNew}
-                onOpenChange={onOpenChange}
-              />
-            )}
-          </WithEntitySearch>
+          <EntityReferencePicker
+            entity="ingredient"
+            creatable
+            label="ingredient"
+            value={ingredient}
+            setValue={setIngredient}
+          />
           <Row gap="sm" justify="end">
             <Button
               type="button"

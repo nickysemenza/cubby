@@ -40,11 +40,7 @@ export default defineEntity({
     detail: {},
     list: {
       actionOverrides: ["moveTo", "delete"],
-      links: [
-        { label: "Recount", path: "/inventory/session" },
-        { label: "Bulk edit", path: "/inventory/bulk-edit" },
-        { label: "Bulk move", path: "/inventory/bulk-move" },
-      ],
+      links: [{ label: "Recount", path: "/inventory/session" }],
     },
   },
   model: {
@@ -245,7 +241,13 @@ export default defineEntity({
         key: "verifiedAt",
         kind: "timestamp",
         nullable: true,
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          format: "timestamp",
+          mobile: { slot: "meta", priority: 60 },
+        },
         validation: {
           read: z
             .date()

@@ -1,5 +1,6 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { ProblemItem } from "@cubby/schemas/problems";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
@@ -8,10 +9,7 @@ import { setCfEnv } from "~/server/cf-env";
 import { executeEntity } from "~/server/entity-kernel";
 import { upsertCookbook } from "~/server/repo/cookbook";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
-import {
-  findParentRecipesWithDeletedSubRecipes,
-  type StaleParentRecipe,
-} from "~/server/repo/problems";
+import { findParentRecipesWithDeletedSubRecipes } from "~/server/repo/problems";
 import { createProduct } from "~/server/repo/product";
 import {
   createRecipe,
@@ -296,7 +294,7 @@ describe("recipe deletion cost-staleness workflows", () => {
     await recompute([parent]);
     await deleteRecipes(ctx.db, [child], ctx.actor);
 
-    const flagged: StaleParentRecipe[] =
+    const flagged: ProblemItem<"staleParentRecipes">[] =
       await findParentRecipesWithDeletedSubRecipes(ctx.db);
     expect(flagged.map((recipe) => recipe.id)).toContain(parentCode);
   });

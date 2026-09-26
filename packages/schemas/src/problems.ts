@@ -11,9 +11,7 @@ import {
   expenseShortcode,
   financialAccountShortcode,
   financialTransactionShortcode,
-  imageShortcode,
   ingredientShortcode,
-  inventoryShortcode,
   locationShortcode,
   mealShortcode,
   productShortcode,
@@ -24,7 +22,6 @@ import {
   vendorShortcode,
   nonEmptyTuple,
 } from "./identifiers";
-import { imageProcessingIssue } from "./image";
 import {
   plainDate,
   type ProjectAttentionType,
@@ -38,6 +35,31 @@ const publicEntityIdSchema = anyShortcodeSchema(
 );
 
 export { baseKind, type BaseKind } from "./codec";
+
+const problemRowEntity = z.enum(
+  nonEmptyTuple<ShortcodeEntity>(shortcodeEntities),
+);
+
+const problemRowBadgeSchema = z.object({
+  label: z.string(),
+  /** Set when the badge names a record, so it links to that record. */
+  entity: problemRowEntity.nullable(),
+  id: publicEntityIdSchema.nullable(),
+});
+
+/**
+ * The uniform Problems row: the flagged record (public shortcode) plus the
+ * evidence line and badges its detector computed. Detectors whose section has
+ * no inline fix return this; the page renders every such section the same way.
+ */
+export const problemRowSchema = z.object({
+  entity: problemRowEntity,
+  id: publicEntityIdSchema,
+  name: z.string(),
+  subtitle: z.string().nullable(),
+  badges: z.array(problemRowBadgeSchema),
+});
+export type ProblemRow = z.infer<typeof problemRowSchema>;
 
 const productProblemFields = {
   id: productShortcode,
@@ -72,36 +94,6 @@ export const partiallyImportedCookbookSchema = z.object({
   recipeCount: z.number().int().nonnegative(),
   missingRecipeCount: z.number().int().positive(),
 });
-export type PartiallyImportedCookbook = z.infer<
-  typeof partiallyImportedCookbookSchema
->;
-
-/** An uploaded image with a durable current-processing finding. */
-export const imageProcessingProblemSchema = z.object({
-  id: imageShortcode,
-  filename: z.string(),
-  processingIssue: imageProcessingIssue,
-});
-export type ImageProcessingProblem = z.infer<
-  typeof imageProcessingProblemSchema
->;
-
-// A product that is stocked but carries no `price`, so its inventory entries
-// value at nothing and the location rollup silently under-reports. Split into
-// two sections rather than one: a `misc:` bucket is a heterogeneous pile with no
-// meaningful unit price, so flagging it alongside real products would keep the
-// section permanently red. Mirrors the miscNoPrice/missingPricing split the
-// per-location valuation summary already makes.
-export const productMissingPriceSchema = z.object({
-  ...productProblemFields,
-  inventoryQuantity: z.number(),
-  locations: z.array(
-    z.object({
-      id: locationShortcode,
-      name: z.string(),
-    }),
-  ),
-});
 
 /**
  * A product sold by weight whose expense lines nonetheless claim a fixed
@@ -135,78 +127,6 @@ export const weightSoldProductSchema = z.object({
   highUnitCost: money,
   /** Non-null means a recipe can already read through it and mis-cost. */
   ingredientId: ingredientShortcode.nullable(),
-});
-export type WeightSoldProduct = z.infer<typeof weightSoldProductSchema>;
-
-export const negativeExpectedQuantitySchema = z.object({
-  ...productProblemFields,
-  expectedQuantity: z.number(),
-  acquiredUnits: z.number(),
-  exitedUnits: z.number(),
-  unknownAcquisitionLines: z.number().int(),
-  unknownExitLines: z.number().int(),
-});
-
-export const soldButStillStockedSchema = z.object({
-  ...productProblemFields,
-  // Units accounted for by disposal lines. A line with no `productQuantity`
-  // counts as one, matching how the ledger reads a bare sale row. Always a
-  // POSITIVE unit count: `productQuantity` is signed, and a negative-cost line
-  // is read as `−|qty|`, so the detector takes `abs()` and either stored sign
-  // yields the same number here.
-  soldQuantity: z.number(),
-  // Units still owned according to the shared on-hand projection. Mixed-unit
-  // stock has no honest number and is not reported.
-  liveQuantity: z.number(),
-  proceeds: z.number(),
-  locations: z.array(
-    z.object({
-      id: locationShortcode,
-      name: z.string(),
-    }),
-  ),
-});
-
-export const kitCountedTwiceSchema = z.object({
-  ...productProblemFields,
-  ownUnits: z.number(),
-  /**
-   * Units the LEDGER says were acquired and not disposed of.
-   *
-   * Deliberately not named `expectedQuantity`: that is a manual column on
-   * `Product` ("this should appear exactly once"), and reading it here returns
-   * null on every kit. This is the derived `quantityLedger.expectedQuantity`.
-   */
-  expectedUnits: z.number().int(),
-});
-
-export const unlinkedExitExpenseSchema = z.object({
-  id: expenseShortcode,
-  name: z.string(),
-  cost: money,
-  date: plainDate.nullable(),
-  purchaseId: purchaseShortcode,
-  /** Through the join; null only if the vendor was soft-deleted. */
-  vendorName: z.string().nullable(),
-});
-
-// The blind spot in `unlinkedExitExpenseSchema` above, which keys on a disposal
-// Purchase and therefore cannot see a row that has no Purchase at all — an
-// `innerJoin` drops it before the predicate ever runs.
-//
-// Deliberately NOT folded into that detector. A purchase-less negative line is
-// about half sales (an item handed over for cash, entered by hand) and half
-// money that never bought anything (for example, a neighbour's share of a
-// shared cost). Neither the expense nor settlement side carries a
-// signal separating them, so this is reported as `coverage` — a worklist, never
-// a red count. Widening the disposal-Purchase predicate instead would import
-// that same ambiguity into a detector that is currently precise.
-export const purchaselessExitExpenseSchema = z.object({
-  id: expenseShortcode,
-  name: z.string(),
-  cost: money,
-  date: plainDate.nullable(),
-  projectName: z.string().nullable(),
 });
 
 // A recorded ProjectToolUsage edge for a tool we did not own while the project
@@ -280,20 +200,6 @@ export const ingredientWithPartialCoverageSchema = z.object({
   ingredientId: ingredientShortcode,
 });
 
-/**
- * An ingredient a recipe uses but no product backs, so it can't be costed.
- *
- * Cookbook-imported recipes (`Recipe.cookbookId` set) don't count as usage —
- * an EPUB import contributes hundreds of ingredients nobody has committed to
- * cooking, and counting them buried the handful that actually block costing
- * something. `recipeCount` is therefore "how many of my own recipes need this".
- */
-export const ingredientWithoutProductSchema = z.object({
-  id: ingredientShortcode,
-  name: z.string(),
-  recipeCount: z.number(),
-});
-
 // An ingredient carrying ≥1 "unused" alias — one that's redundant (case-only dup
 // of the name/another alias) or never matched by a recipe line. `aliases` is the
 // full current list so the card can compute the keep-set; `unusedAliases` is the
@@ -303,13 +209,6 @@ export const ingredientWithUnusedAliasesSchema = z.object({
   name: z.string(),
   aliases: z.array(z.string()),
   unusedAliases: z.array(z.string()),
-});
-
-export const unusedIngredientSchema = z.object({
-  id: ingredientShortcode,
-  name: z.string(),
-  createdAt: z.date(),
-  products: z.array(z.object({ id: productShortcode, name: z.string() })),
 });
 
 export const emptyLocationSchema = z.object({
@@ -325,82 +224,6 @@ export const emptyLocationSchema = z.object({
 
 // --- Recount staleness (tenet 1: inventory truth is restored only by a
 // deliberate recount, so an uncounted bin is unverified, not accurate). ---
-
-/**
- * A location holding stock whose last recount is missing or older than
- * STALE_RECOUNT_DAYS. `itemCount` is the live entry count (the section shows
- * how much stock is riding on the stale number); `lastBulkInventory` is null
- * for never-recounted bins.
- */
-export const staleLocationSchema = z.object({
-  id: locationShortcode,
-  name: z.string(),
-  type: z.string().nullable(),
-  itemCount: z.number(),
-  lastBulkInventory: z.date().nullable(),
-});
-
-/**
- * A live inventory entry that has never been through a recount
- * (`verifiedAt IS NULL`). Exhaustive — the detector's old 25-row sample cap was
- * removed because it reported a fraction of the real population. Classed
- * `coverage`, so it renders as an "N of M verified" meter, not a red count.
- */
-export const neverVerifiedInventorySchema = z.object({
-  id: inventoryShortcode,
-  amount,
-  createdAt: z.date(),
-  product: z.object({
-    id: productShortcode,
-    name: z.string(),
-  }),
-  location: z.object({
-    id: locationShortcode,
-    name: z.string(),
-  }),
-});
-
-/**
- * A live inventory entry parked in the global "Unknown" location — the bucket
- * a scan/import drops something into when it has no home yet. Every one of
- * these is an unmade filing decision.
- */
-export const unknownParkedItemSchema = z.object({
-  id: inventoryShortcode,
-  amount,
-  createdAt: z.date(),
-  product: z.object({
-    id: productShortcode,
-    name: z.string(),
-  }),
-  location: z.object({
-    id: locationShortcode,
-    name: z.string(),
-  }),
-});
-
-/**
- * A live inventory entry whose Product HAS an effective price, yet whose
- * `valuation` is null — the amount's unit has no path to money through that
- * Product's unit-mapping graph.
- *
- * The actionable distinction the location rollup's `missingPricing` bucket
- * loses: "set a price" and "add a conversion edge" are different fixes, and
- * only the second one is this.
- */
-export const inventoryWithoutPricePathSchema = z.object({
-  id: inventoryShortcode,
-  amount,
-  effectivePrice: money,
-  product: z.object({
-    id: productShortcode,
-    name: z.string(),
-  }),
-  location: z.object({
-    id: locationShortcode,
-    name: z.string(),
-  }),
-});
 
 const labelVariantFields = {
   value: z.string(),
@@ -433,11 +256,6 @@ export const vendorWithoutLogoSchema = z.object({
   expenseRowCount: z.number().int(),
 });
 
-export const productWithNoImagesSchema = z.object({
-  ...productProblemFields,
-  primaryGtin: z.string().nullable(),
-});
-
 export const productWithIslandedMappingsSchema = z.object({
   ...productProblemFields,
   islandCount: z.number(),
@@ -448,13 +266,6 @@ export const productWithIslandedMappingsSchema = z.object({
     }),
   ),
   coverage: z.object(coverageFields),
-});
-
-export const locationWithoutAiDescriptionSchema = z.object({
-  id: locationShortcode,
-  name: z.string(),
-  type: z.string().nullable(),
-  imageCount: z.number(),
 });
 
 /**
@@ -716,7 +527,6 @@ export const importFindingProblemSchema = z.object({
   proposedFix: proposedImportFix.nullable(),
   createdAt: z.date(),
 });
-export type ImportFindingProblem = z.infer<typeof importFindingProblemSchema>;
 
 export const resolveImportFindingInput = z.object({
   id: z.uuid(),
@@ -739,81 +549,383 @@ export const resolveArrivedFindingsOut = z.object({
   resolved: z.number().int().nonnegative(),
 });
 
-const problemsFastFields = {
-  importFindings: z.array(importFindingProblemSchema),
-  duplicateInventory: z.array(duplicateUniqueProductSchema),
-  duplicateProductIdentities: z.array(duplicateProductIdentitySchema),
-  orphanedProducts: z.array(orphanedProductSchema),
-  // Same "nothing refers to this any more" shape as `orphanedProducts`, but
-  // over every `ORPHAN_CHECK_KINDS` entity rather than just Product — reads
-  // the generated EntityEdge source directly instead of the product-specific
-  // ownership scan.
-  unconnectedEntities: z.array(entityConnectionItem),
-  partiallyImportedCookbooks: z.array(partiallyImportedCookbookSchema),
-  soldButStillStocked: z.array(soldButStillStockedSchema),
-  kitsCountedTwice: z.array(kitCountedTwiceSchema),
-  unlinkedExitExpenses: z.array(unlinkedExitExpenseSchema),
-  purchaselessExitExpenses: z.array(purchaselessExitExpenseSchema),
-  toolsUsedOutsideOwnership: z.array(toolUsedOutsideOwnershipSchema),
-  productsWithNoImages: z.array(productWithNoImagesSchema),
-  imageProcessingIssues: z.array(imageProcessingProblemSchema),
-  entitiesMissingEmbeddings: z.array(entityMissingEmbeddingSchema),
-  staleParentRecipes: z.array(staleParentRecipeSchema),
-  understatedCostMeals: z.array(understatedCostMealSchema),
-  unknownParkedItems: z.array(unknownParkedItemSchema),
-  inventoryWithoutPricePath: z.array(inventoryWithoutPricePathSchema),
-  weightSoldProducts: z.array(weightSoldProductSchema),
-  manufacturerSpellingVariants: z.array(labelVariantSchema),
-  duplicateVendors: z.array(duplicateVendorSchema),
-  vendorsWithoutLogos: z.array(vendorWithoutLogoSchema),
-  purchasesNotReconciling: z.array(purchaseNotReconcilingSchema),
-  purchaseFinancialSettlementMismatches: z.array(
+/**
+ * Which cost-grouped query a detector runs in. `fast` is DB-only (no WASM, no
+ * network); `coverage` tolerates a per-product WASM call; `upc` calls the UPC
+ * provider; `tracker` is the project-attention rules; `views` are sampled
+ * pages of entity-list views with true totals in `sectionTotals`.
+ */
+export type ProblemLane = "fast" | "coverage" | "upc" | "tracker" | "views";
+
+/**
+ * `defect` rows are unambiguously wrong and converge to zero; only they reach
+ * `totalProblems` and the navbar badge. `coverage` rows are a standing backlog
+ * (or ambiguous) and are counted separately.
+ */
+export type ProblemClass = "defect" | "coverage";
+
+const detector = <
+  const L extends ProblemLane,
+  const C extends ProblemClass,
+  I extends z.ZodType,
+  const M extends string = never,
+>(
+  lane: L,
+  problemClass: C,
+  item: I,
+  /** The `coverageTotalsSchema` key holding this detector's meter denominator. */
+  meter?: M,
+) => ({ lane, problemClass, item, meter });
+
+/**
+ * Every Problems detector: its cost lane, class, and row schema. The lane
+ * schemas, `PROBLEM_CLASS`, the count payload, the coverage-meter totals, and
+ * `ProblemItem` are all derived from this one table.
+ */
+export const problemDetectors = {
+  // --- fast lane ---
+  importFindings: detector("fast", "defect", importFindingProblemSchema),
+  duplicateInventory: detector("fast", "defect", problemRowSchema),
+  // Two rows for one SKU is unambiguously wrong — spend, stock, and identifiers
+  // are split across both — and it converges to zero: `mergeProducts` folds the
+  // cluster and the cluster never comes back. Same reasoning as
+  // `duplicateVendors`. No auto-fix: which row survives decides which
+  // identifiers and name stand, and there is no restore path.
+  duplicateProductIdentities: detector(
+    "fast",
+    "defect",
+    duplicateProductIdentitySchema,
+  ),
+  orphanedProducts: detector("fast", "defect", orphanedProductSchema),
+  // Unambiguously wrong and converges to zero: a live record of a checked kind
+  // (see `ORPHAN_CHECK_KINDS`) with no physical connection at all is nothing
+  // in the house refers to it, same reasoning as `orphanedProducts` but read
+  // from the generic EntityEdge source rather than a product-specific scan.
+  // No auto-fix: which side is stale is an operator call.
+  unconnectedEntities: detector("fast", "defect", entityConnectionItem),
+  partiallyImportedCookbooks: detector(
+    "fast",
+    "defect",
+    partiallyImportedCookbookSchema,
+  ),
+  // Unambiguously wrong and converges to zero: the item was sold, so the shelf
+  // is stale and the location total is overstated by its full value. Not
+  // `coverage` — there is no denominator and no reported row is legitimately
+  // correct as it stands. No auto-fix: the entry is usually stale but may
+  // instead mean the disposal was mis-recorded, and deleting inventory has no
+  // restore path.
+  soldButStillStocked: detector("fast", "defect", problemRowSchema),
+  // Unambiguously wrong and converges to zero: the same physical thing is on
+  // the books twice and inventory valuation is overstated by a whole kit.
+  // Not `coverage` — there is no denominator, and no reported row is correct as
+  // it stands. No auto-fix: which side is the mistake is the operator's call
+  // (delete the parent's entry, or the parts', or fix the ledger), and deleting
+  // inventory has no restore path.
+  kitsCountedTwice: detector("fast", "defect", problemRowSchema),
+  // A negative itemized principal line in a disposal Purchase with no Product
+  // link. This is useful provenance coverage, but it is not uniformly a defect:
+  // apparel, collectibles, and other deliberately untracked goods legitimately
+  // remain productless. No auto-fix — guessing a Product would write false
+  // ownership history that `soldButStillStocked` would then trust.
+  unlinkedExitExpenses: detector("fast", "coverage", problemRowSchema),
+  // Negative lines with no Purchase are also ambiguous coverage: a family
+  // contribution or a neighbour's share of a shared cost can legitimately be
+  // productless, while a hand-entered cash sale may need provenance. There is
+  // no signal separating those cases, so keep every row available for review
+  // without adding it to the defect count. No auto-fix for the same reason as
+  // `unlinkedExitExpenses` above.
+  purchaselessExitExpenses: detector("fast", "coverage", problemRowSchema),
+  // The edge asserts something that could not have happened, and the gate that
+  // now rejects new ones means the list only shrinks. No auto-fix: detaching is
+  // usually right, but a missing acquisition Expense produces the same row and
+  // deleting the edge would bury the real defect.
+  toolsUsedOutsideOwnership: detector(
+    "fast",
+    "defect",
+    toolUsedOutsideOwnershipSchema,
+  ),
+  productsWithNoImages: detector(
+    "fast",
+    "coverage",
+    problemRowSchema,
+    "productsWithNoImages",
+  ),
+  // Failed processing is actionable, while review-needed eligibility is an
+  // intentionally ambiguous human worklist; keep both under one attention
+  // section so the list and Problems page share one membership predicate.
+  imageProcessingIssues: detector("fast", "coverage", problemRowSchema),
+  entitiesMissingEmbeddings: detector(
+    "fast",
+    "defect",
+    entityMissingEmbeddingSchema,
+  ),
+  staleParentRecipes: detector("fast", "defect", staleParentRecipeSchema),
+  // A cooked meal with nothing planned is unfinished, and it converges to zero
+  // two ways: plan a recipe, or re-kind it to what it actually was. Not
+  // `coverage` — there is no denominator and no backlog being worked through,
+  // just a row that is either finished or mislabelled. No auto-fix: only the
+  // cook knows which of the two resolutions is true.
+  // The number on the meal is wrong, not merely unfinished, and it stays wrong
+  // until someone gives an ingredient a price path. Converges to zero; no
+  // auto-fix, because the fix is a pricing decision.
+  understatedCostMeals: detector("fast", "defect", understatedCostMealSchema),
+  // A recipe you can't cook from. Converges to zero once typed in, and the
+  // book/Notion sources that legitimately have none are excluded rather than
+  // tolerated, so a row here is always real work.
+  unknownParkedItems: detector("fast", "defect", problemRowSchema),
+  // Priced product, unpriceable unit. Converges to zero (add the conversion
+  // edge) and production sits at zero today, so a row is a regression in some
+  // write path rather than a backlog — the `referentialLivenessViolations`
+  // shape. No auto-fix: only a human knows how many rolls are in the pack.
+  inventoryWithoutPricePath: detector("fast", "defect", problemRowSchema),
+  // COVERAGE for the same reason as `productsWithTitleDerivableSize` below: a
+  // household keeps buying weight-sold groceries, so new rows keep arriving no
+  // matter how diligently the backlog is worked. Classing it `defect` would put
+  // a standing population into the navbar badge, which is what that class is
+  // meant to keep clear. Each row is still real work — the fix is a
+  // weight-to-money mapping — it just never reaches zero and stays there.
+  weightSoldProducts: detector("fast", "coverage", weightSoldProductSchema),
+  manufacturerSpellingVariants: detector("fast", "defect", labelVariantSchema),
+  // Two roster rows for one real vendor is simply wrong — that vendor's spend is
+  // split across both — and it converges to zero: `mergeVendors` folds the pair
+  // and the pair never comes back (the live roster sits at 0 across 114 vendors).
+  // Not `coverage`: there is no backlog being worked through and no denominator,
+  // and unlike `purchasesNotReconciling` a reported row is never legitimately
+  // correct as it stands.
+  duplicateVendors: detector("fast", "defect", duplicateVendorSchema),
+  vendorsWithoutLogos: detector(
+    "fast",
+    "coverage",
+    vendorWithoutLogoSchema,
+    "vendorsWithPurchases",
+  ),
+  // Advisory, not backlog (see the note above): a purchase whose expenses disagree
+  // with its stated total is often correct as-is, and the only mechanical "fix"
+  // would be back-computing a cost from `statedTotal` — which nothing may do. So
+  // it is reported, never counted, and never red.
+  purchasesNotReconciling: detector(
+    "fast",
+    "coverage",
+    purchaseNotReconcilingSchema,
+  ),
+  purchaseFinancialSettlementMismatches: detector(
+    "fast",
+    "coverage",
     purchaseFinancialSettlementMismatchSchema,
   ),
-  duplicateSpendCandidates: z.array(duplicateSpendCandidateSchema),
-  duplicateFinancialTransactionSourceRefs: z.array(
+  // Advisory for a different reason than the two above: the match itself is a
+  // heuristic. Amount + date is what finds these at all, and two unrelated things
+  // legitimately cost the same on the same day, so a row here is a cue to look
+  // rather than a fault. It is also the one detector whose "fix" destroys data
+  // (delete the duplicate), which must never be mechanical or red.
+  duplicateSpendCandidates: detector(
+    "fast",
+    "coverage",
+    duplicateSpendCandidateSchema,
+  ),
+  duplicateFinancialTransactionSourceRefs: detector(
+    "fast",
+    "defect",
     duplicateFinancialTransactionSourceRefSchema,
   ),
-  duplicateFinancialAccountSourceAliases: z.array(
+  duplicateFinancialAccountSourceAliases: detector(
+    "fast",
+    "defect",
     duplicateFinancialAccountSourceAliasSchema,
   ),
-  financialTransactionAllocationDefects: z.array(
+  financialTransactionAllocationDefects: detector(
+    "fast",
+    "defect",
     financialTransactionAllocationDefectSchema,
   ),
-  invalidFinancialJson: z.array(invalidFinancialJsonSchema),
+  invalidFinancialJson: detector("fast", "defect", invalidFinancialJsonSchema),
   // A live row still pointing at a soft-deleted target — see
   // `findReferentialLivenessViolations`. DB-only and cheap (one UNION ALL over
   // 34 indexed FK joins), so it belongs in `fast` rather than earning its own
   // cost group: the expense is I/O, not the CPU the other groups isolate.
-  referentialLivenessViolations: z.array(referentialLivenessViolationSchema),
-  dependencyCycles: z.array(
+  // A dangling reference is unambiguously wrong and converges to zero — it can
+  // only appear when a removal path forgets to detach, re-point, or cascade.
+  // Production sat at zero when this detector landed, so any row is a real
+  // regression rather than a backlog to work through. No auto-fix is offered:
+  // clearing the FK and deleting the source row are both plausible and not
+  // interchangeable, and picking wrong destroys data with no restore path.
+  referentialLivenessViolations: detector(
+    "fast",
+    "defect",
+    referentialLivenessViolationSchema,
+  ),
+  // Project/Task blocked-by edges are DAGs. New writes are locked and checked,
+  // so a reported cycle is out-of-band corruption that can make actionable
+  // work and tracker chains contradict one another or terminate defensively.
+  dependencyCycles: detector(
+    "fast",
+    "defect",
     z.object({
       entity: z.enum(["project", "task"]),
       path: z.array(z.union([projectShortcode, taskShortcode])).min(2),
       description: z.string().min(1),
     }),
   ),
-  incompleteStatementImports: z.array(incompleteStatementImportSchema),
+  incompleteStatementImports: detector(
+    "fast",
+    "defect",
+    incompleteStatementImportSchema,
+  ),
+  // --- coverage lane ---
+  // USDA-coverage detectors — share one product scan + USDA enrichment.
+  //
+  // `productsWithTitleDerivableSize` needs no USDA and no network, but it does
+  // run WASM per candidate, which is exactly what the `fast` lane's "DB-only,
+  // no WASM/network" contract excludes. It lives here rather than there because
+  // this is the lane that already tolerates a per-product WASM call, and because
+  // a WASM sweep on the cheap hot path is the specific mistake that took the
+  // Worker down once (see the parse-sweep note above `sectionTotalsSchema`).
+  ingredientsWithPartialCoverage: detector(
+    "coverage",
+    "defect",
+    ingredientWithPartialCoverageSchema,
+  ),
+  productsWithIslandedMappings: detector(
+    "coverage",
+    "defect",
+    productWithIslandedMappingsSchema,
+  ),
+  // COVERAGE, not defect, and the distinction is load-bearing: only `defect`
+  // rows reach `totalProblems` and the navbar badge, and there are ~1,400 of
+  // these. It is also genuinely never-zero — new products keep arriving with a
+  // size in the title — which is the definition of coverage here.
+  productsWithTitleDerivableSize: detector(
+    "coverage",
+    "coverage",
+    productWithTitleDerivableSizeSchema,
+  ),
+  // --- upc lane ---
+  productsWithBetterUpcData: detector(
+    "upc",
+    "defect",
+    productWithBetterUpcDataSchema,
+  ),
+  // --- tracker lane ---
+  overdueTasks: detector("tracker", "defect", projectAttentionItemSchema),
+  stalledProjects: detector("tracker", "defect", projectAttentionItemSchema),
+  projectsMissingBudget: detector(
+    "tracker",
+    "defect",
+    projectAttentionItemSchema,
+  ),
+  pastDuePlannedExpenses: detector(
+    "tracker",
+    "defect",
+    projectAttentionItemSchema,
+  ),
+  unclassifiedExpenses: detector(
+    "tracker",
+    "defect",
+    projectAttentionItemSchema,
+  ),
+  blockedWorkProjects: detector(
+    "tracker",
+    "defect",
+    projectAttentionItemSchema,
+  ),
+  projectsWithDateDrift: detector(
+    "tracker",
+    "defect",
+    projectAttentionItemSchema,
+  ),
+  // --- views lane ---
+  ingredientsWithoutProduct: detector(
+    "views",
+    "coverage",
+    problemRowSchema,
+    "ingredientsWithoutProduct",
+  ),
+  staleLocations: detector(
+    "views",
+    "coverage",
+    problemRowSchema,
+    "staleLocations",
+  ),
+  productsWithoutMappings: detector(
+    "views",
+    "defect",
+    productWithoutMappingsSchema,
+  ),
+  productsMissingPrice: detector("views", "defect", problemRowSchema),
+  // Misc buckets are *expected* to be unpriced — the `product/unpriced-buckets` view
+  // already partitions them out for exactly this reason; classing them here is
+  // what finally keeps them out of the total.
+  unvaluedBucketProducts: detector("views", "coverage", problemRowSchema),
+  neverVerifiedInventory: detector(
+    "views",
+    "coverage",
+    problemRowSchema,
+    "neverVerifiedInventory",
+  ),
+  locationsWithoutAiDescription: detector("views", "defect", problemRowSchema),
+  // Meter denominator: live leaf locations — the only ones that can hold
+  // inventory directly.
+  emptyLocations: detector(
+    "views",
+    "coverage",
+    emptyLocationSchema,
+    "emptyLocations",
+  ),
+  // Recorded exits exceed recorded acquisitions, but acquisition history is
+  // intentionally incomplete for goods owned before Cubby's ledger began.
+  // Keep the arithmetic visible as coverage without claiming that an inferred
+  // acquisition should be invented. A human can add source-backed history or
+  // correct a genuine quantity error when evidence exists.
+  negativeExpectedQuantity: detector("views", "coverage", problemRowSchema),
+  unusedIngredientsWithProduct: detector("views", "defect", problemRowSchema),
+  unusedIngredientsWithoutProduct: detector(
+    "views",
+    "defect",
+    problemRowSchema,
+  ),
 };
+
+type Detectors = typeof problemDetectors;
+export type ProblemKey = keyof Detectors;
+/** The row type a detector returns. */
+export type ProblemItem<K extends ProblemKey> = z.infer<Detectors[K]["item"]>;
+type ProblemRows<K extends ProblemKey> = z.ZodArray<Detectors[K]["item"]>;
+type LaneKey<L extends ProblemLane> = {
+  [K in ProblemKey]: Detectors[K]["lane"] extends L ? K : never;
+}[ProblemKey];
+
+const detectorEntries = Object.entries(problemDetectors);
+
+const mapDetectors = <T>(
+  keep: (entry: Detectors[ProblemKey]) => boolean,
+  value: (entry: Detectors[ProblemKey]) => T,
+): Record<string, T> =>
+  Object.fromEntries(
+    detectorEntries.flatMap(([key, entry]) =>
+      keep(entry) ? [[key, value(entry)]] : [],
+    ),
+  );
+
+const laneFields = <L extends ProblemLane>(
+  lane: L,
+): { [K in LaneKey<L>]: ProblemRows<K> } =>
+  // SAFETY: exactly the detectors whose lane is L, each keyed by its own name
+  // with `z.array` of its own item schema.
+  mapDetectors(
+    (entry) => entry.lane === lane,
+    (entry) => z.array(entry.item),
+  ) as { [K in LaneKey<L>]: ProblemRows<K> };
+
+const problemsFastFields = laneFields("fast");
+const problemsCoverageFields = laneFields("coverage");
+const problemsUpcFields = laneFields("upc");
+const problemsTrackerFields = laneFields("tracker");
+const problemsViewsFields = laneFields("views");
 
 export const problemsFastSchema = z.object({
   ...problemsFastFields,
   sectionTotals: sectionTotalsSchema,
 });
-
-// USDA-coverage detectors — share one product scan + USDA enrichment.
-//
-// `productsWithTitleDerivableSize` needs no USDA and no network, but it does
-// run WASM per candidate, which is exactly what the `fast` lane's "DB-only,
-// no WASM/network" contract excludes. It lives here rather than there because
-// this is the lane that already tolerates a per-product WASM call, and because
-// a WASM sweep on the cheap hot path is the specific mistake that took the
-// Worker down once (see the parse-sweep note above `sectionTotalsSchema`).
-const problemsCoverageFields = {
-  ingredientsWithPartialCoverage: z.array(ingredientWithPartialCoverageSchema),
-  productsWithIslandedMappings: z.array(productWithIslandedMappingsSchema),
-  productsWithTitleDerivableSize: z.array(productWithTitleDerivableSizeSchema),
-};
 
 /**
  * The catalog-level truthfulness signal for filters backed by the conversion
@@ -840,11 +952,6 @@ export const problemsCoverageSchema = z.object({
   /** Exact list filters read this persisted projection, not the card scan. */
   freshness: conversionCoverageFreshnessSchema,
 });
-
-const problemsUpcFields = {
-  productsWithBetterUpcData: z.array(productWithBetterUpcDataSchema),
-};
-
 /**
  * The UPC provider is advisory. Its status is part of the wire contract so an
  * outage cannot masquerade as a healthy empty proposal list.
@@ -864,38 +971,12 @@ export const problemsUpcSchema = z.object({
   sectionTotals: sectionTotalsSchema,
   freshness: upcEnrichmentFreshnessSchema,
 });
-
-const problemsViewsFields = {
-  ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
-  staleLocations: z.array(staleLocationSchema),
-  productsWithoutMappings: z.array(productWithoutMappingsSchema),
-  productsMissingPrice: z.array(productMissingPriceSchema),
-  unvaluedBucketProducts: z.array(productMissingPriceSchema),
-  neverVerifiedInventory: z.array(neverVerifiedInventorySchema),
-  locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
-  emptyLocations: z.array(emptyLocationSchema),
-  negativeExpectedQuantity: z.array(negativeExpectedQuantitySchema),
-  unusedIngredientsWithProduct: z.array(unusedIngredientSchema),
-  unusedIngredientsWithoutProduct: z.array(unusedIngredientSchema),
-};
-
 export const problemsViewsSchema = z.object({
   ...problemsViewsFields,
   /** True population per key; the page above is only what the card shows. */
   sectionTotals: sectionTotalsSchema,
 });
 export type ProblemsViewsOut = z.infer<typeof problemsViewsSchema>;
-
-const problemsTrackerFields = {
-  overdueTasks: z.array(projectAttentionItemSchema),
-  stalledProjects: z.array(projectAttentionItemSchema),
-  projectsMissingBudget: z.array(projectAttentionItemSchema),
-  pastDuePlannedExpenses: z.array(projectAttentionItemSchema),
-  unclassifiedExpenses: z.array(projectAttentionItemSchema),
-  blockedWorkProjects: z.array(projectAttentionItemSchema),
-  projectsWithDateDrift: z.array(projectAttentionItemSchema),
-};
-
 export const problemsTrackerSchema = z.object({
   ...problemsTrackerFields,
   sectionTotals: sectionTotalsSchema,
@@ -917,16 +998,16 @@ export const TRACKER_PROBLEM_KEY_BY_TYPE = {
   date_window_drift: "projectsWithDateDrift",
 } as const satisfies Record<ProjectAttentionType, keyof ProblemsTracker>;
 
-// Combined output schema for all problems. It intentionally spells out the wire
-// contract while sharing the grouped shapes above, so lazy loading/cost grouping
-// never makes fields appear optional on the aggregate response.
+// Combined output schema for all problems: every detector key is required, so
+// lazy loading/cost grouping never makes fields appear optional on the
+// aggregate response.
 const allProblemArrayFields = {
   ...problemsFastFields,
   ...problemsCoverageFields,
   ...problemsUpcFields,
   ...problemsTrackerFields,
   ...problemsViewsFields,
-};
+} satisfies { [K in ProblemKey]: ProblemRows<K> };
 
 export const allProblemsSchema = z.object({
   ...allProblemArrayFields,
@@ -964,8 +1045,6 @@ export const sectionSize = (
   totals: SectionTotals | undefined,
 ): number => (key ? (totals?.[key] ?? items.length) : items.length);
 
-export type ProblemKey = keyof typeof allProblemArrayFields;
-
 export type ProblemArrays = { [K in ProblemKey]: AllProblems[K] };
 
 const problemArraysSchema = z.object(allProblemArrayFields);
@@ -989,171 +1068,23 @@ export const EMPTY_PROBLEM_ARRAYS: ProblemArrays = Object.freeze(
   ),
 );
 
-export const PROBLEM_CLASS = {
-  importFindings: "defect",
-  duplicateInventory: "defect",
-  // Two rows for one SKU is unambiguously wrong — spend, stock, and identifiers
-  // are split across both — and it converges to zero: `mergeProducts` folds the
-  // cluster and the cluster never comes back. Same reasoning as
-  // `duplicateVendors`. No auto-fix: which row survives decides which
-  // identifiers and name stand, and there is no restore path.
-  duplicateProductIdentities: "defect",
-  orphanedProducts: "defect",
-  // Unambiguously wrong and converges to zero: a live record of a checked kind
-  // (see `ORPHAN_CHECK_KINDS`) with no physical connection at all is nothing
-  // in the house refers to it, same reasoning as `orphanedProducts` but read
-  // from the generic EntityEdge source rather than a product-specific scan.
-  // No auto-fix: which side is stale is an operator call.
-  unconnectedEntities: "defect",
-  partiallyImportedCookbooks: "defect",
-  productsMissingPrice: "defect",
-  // Unambiguously wrong and converges to zero: the item was sold, so the shelf
-  // is stale and the location total is overstated by its full value. Not
-  // `coverage` — there is no denominator and no reported row is legitimately
-  // correct as it stands. No auto-fix: the entry is usually stale but may
-  // instead mean the disposal was mis-recorded, and deleting inventory has no
-  // restore path.
-  soldButStillStocked: "defect",
-  // Unambiguously wrong and converges to zero: the same physical thing is on
-  // the books twice and inventory valuation is overstated by a whole kit.
-  // Not `coverage` — there is no denominator, and no reported row is correct as
-  // it stands. No auto-fix: which side is the mistake is the operator's call
-  // (delete the parent's entry, or the parts', or fix the ledger), and deleting
-  // inventory has no restore path.
-  kitsCountedTwice: "defect",
-  // A negative itemized principal line in a disposal Purchase with no Product
-  // link. This is useful provenance coverage, but it is not uniformly a defect:
-  // apparel, collectibles, and other deliberately untracked goods legitimately
-  // remain productless. No auto-fix — guessing a Product would write false
-  // ownership history that `soldButStillStocked` would then trust.
-  unlinkedExitExpenses: "coverage",
-  // Negative lines with no Purchase are also ambiguous coverage: a family
-  // contribution or a neighbour's share of a shared cost can legitimately be
-  // productless, while a hand-entered cash sale may need provenance. There is
-  // no signal separating those cases, so keep every row available for review
-  // without adding it to the defect count. No auto-fix for the same reason as
-  // `unlinkedExitExpenses` above.
-  purchaselessExitExpenses: "coverage",
-  // Recorded exits exceed recorded acquisitions, but acquisition history is
-  // intentionally incomplete for goods owned before Cubby's ledger began.
-  // Keep the arithmetic visible as coverage without claiming that an inferred
-  // acquisition should be invented. A human can add source-backed history or
-  // correct a genuine quantity error when evidence exists.
-  negativeExpectedQuantity: "coverage",
-  // The edge asserts something that could not have happened, and the gate that
-  // now rejects new ones means the list only shrinks. No auto-fix: detaching is
-  // usually right, but a missing acquisition Expense produces the same row and
-  // deleting the edge would bury the real defect.
-  toolsUsedOutsideOwnership: "defect",
-  productsWithoutMappings: "defect",
-  // COVERAGE for the same reason as `productsWithTitleDerivableSize` below: a
-  // household keeps buying weight-sold groceries, so new rows keep arriving no
-  // matter how diligently the backlog is worked. Classing it `defect` would put
-  // a standing population into the navbar badge, which is what that class is
-  // meant to keep clear. Each row is still real work — the fix is a
-  // weight-to-money mapping — it just never reaches zero and stays there.
-  weightSoldProducts: "coverage",
-  // COVERAGE, not defect, and the distinction is load-bearing: only `defect`
-  // rows reach `totalProblems` and the navbar badge, and there are ~1,400 of
-  // these. It is also genuinely never-zero — new products keep arriving with a
-  // size in the title — which is the definition of coverage here.
-  productsWithTitleDerivableSize: "coverage",
-  unusedIngredientsWithProduct: "defect",
-  unusedIngredientsWithoutProduct: "defect",
-  locationsWithoutAiDescription: "defect",
-  entitiesMissingEmbeddings: "defect",
-  staleParentRecipes: "defect",
-  // A cooked meal with nothing planned is unfinished, and it converges to zero
-  // two ways: plan a recipe, or re-kind it to what it actually was. Not
-  // `coverage` — there is no denominator and no backlog being worked through,
-  // just a row that is either finished or mislabelled. No auto-fix: only the
-  // cook knows which of the two resolutions is true.
-  // The number on the meal is wrong, not merely unfinished, and it stays wrong
-  // until someone gives an ingredient a price path. Converges to zero; no
-  // auto-fix, because the fix is a pricing decision.
-  understatedCostMeals: "defect",
-  // A recipe you can't cook from. Converges to zero once typed in, and the
-  // book/Notion sources that legitimately have none are excluded rather than
-  // tolerated, so a row here is always real work.
-  unknownParkedItems: "defect",
-  // Priced product, unpriceable unit. Converges to zero (add the conversion
-  // edge) and production sits at zero today, so a row is a regression in some
-  // write path rather than a backlog — the `referentialLivenessViolations`
-  // shape. No auto-fix: only a human knows how many rolls are in the pack.
-  inventoryWithoutPricePath: "defect",
-  manufacturerSpellingVariants: "defect",
-  // Two roster rows for one real vendor is simply wrong — that vendor's spend is
-  // split across both — and it converges to zero: `mergeVendors` folds the pair
-  // and the pair never comes back (the live roster sits at 0 across 114 vendors).
-  // Not `coverage`: there is no backlog being worked through and no denominator,
-  // and unlike `purchasesNotReconciling` a reported row is never legitimately
-  // correct as it stands.
-  duplicateVendors: "defect",
-  // A dangling reference is unambiguously wrong and converges to zero — it can
-  // only appear when a removal path forgets to detach, re-point, or cascade.
-  // Production sat at zero when this detector landed, so any row is a real
-  // regression rather than a backlog to work through. No auto-fix is offered:
-  // clearing the FK and deleting the source row are both plausible and not
-  // interchangeable, and picking wrong destroys data with no restore path.
-  referentialLivenessViolations: "defect",
-  // Project/Task blocked-by edges are DAGs. New writes are locked and checked,
-  // so a reported cycle is out-of-band corruption that can make actionable
-  // work and tracker chains contradict one another or terminate defensively.
-  dependencyCycles: "defect",
-  ingredientsWithPartialCoverage: "defect",
-  productsWithIslandedMappings: "defect",
-  productsWithBetterUpcData: "defect",
-  overdueTasks: "defect",
-  stalledProjects: "defect",
-  projectsMissingBudget: "defect",
-  pastDuePlannedExpenses: "defect",
-  unclassifiedExpenses: "defect",
-  blockedWorkProjects: "defect",
-  projectsWithDateDrift: "defect",
-
-  // Misc buckets are *expected* to be unpriced — the `product/unpriced-buckets` view
-  // already partitions them out for exactly this reason; classing them here is
-  // what finally keeps them out of the total.
-  unvaluedBucketProducts: "coverage",
-  ingredientsWithoutProduct: "coverage",
-  emptyLocations: "coverage",
-  staleLocations: "coverage",
-  neverVerifiedInventory: "coverage",
-  productsWithNoImages: "coverage",
-  // Failed processing is actionable, while review-needed eligibility is an
-  // intentionally ambiguous human worklist; keep both under one attention
-  // section so the list and Problems page share one membership predicate.
-  imageProcessingIssues: "coverage",
-  vendorsWithoutLogos: "coverage",
-  // Advisory, not backlog (see the note above): a purchase whose expenses disagree
-  // with its stated total is often correct as-is, and the only mechanical "fix"
-  // would be back-computing a cost from `statedTotal` — which nothing may do. So
-  // it is reported, never counted, and never red.
-  purchasesNotReconciling: "coverage",
-  purchaseFinancialSettlementMismatches: "coverage",
-  // Advisory for a different reason than the two above: the match itself is a
-  // heuristic. Amount + date is what finds these at all, and two unrelated things
-  // legitimately cost the same on the same day, so a row here is a cue to look
-  // rather than a fault. It is also the one detector whose "fix" destroys data
-  // (delete the duplicate), which must never be mechanical or red.
-  duplicateSpendCandidates: "coverage",
-  duplicateFinancialTransactionSourceRefs: "defect",
-  duplicateFinancialAccountSourceAliases: "defect",
-  financialTransactionAllocationDefects: "defect",
-  invalidFinancialJson: "defect",
-  incompleteStatementImports: "defect",
-} as const satisfies Record<ProblemKey, ProblemClass>;
-
-export type ProblemClass = "defect" | "coverage";
+// SAFETY: every detector keyed by name with its own declared class.
+const problemClasses = mapDetectors(
+  () => true,
+  (entry) => entry.problemClass,
+) as { [K in ProblemKey]: Detectors[K]["problemClass"] };
+export { problemClasses as PROBLEM_CLASS };
 
 export type CoverageProblemKey = {
-  [K in ProblemKey]: (typeof PROBLEM_CLASS)[K] extends "coverage" ? K : never;
+  [K in ProblemKey]: Detectors[K]["problemClass"] extends "coverage"
+    ? K
+    : never;
 }[ProblemKey];
 
 const isDefectKey = (key: string): boolean =>
-  Object.entries(PROBLEM_CLASS).some(
-    ([candidate, problemClass]) =>
-      candidate === key && problemClass === "defect",
+  detectorEntries.some(
+    ([candidate, entry]) =>
+      candidate === key && entry.problemClass === "defect",
   );
 
 /**
@@ -1176,9 +1107,11 @@ export const sumProblemSections = (
     0,
   );
 
-const byTypeFields = Object.fromEntries(
-  Object.keys(allProblemArrayFields).map((k) => [k, z.number()]),
-);
+// SAFETY: one `z.number()` per detector key.
+const byTypeFields = mapDetectors(
+  () => true,
+  () => z.number(),
+) as { [K in ProblemKey]: z.ZodNumber };
 
 export const problemsCountSchema = z.object({
   /** Defect rows only — what the navbar badge and homepage banner show. */
@@ -1192,8 +1125,8 @@ export const problemsCountSchema = z.object({
  * Denominators for the coverage meters — the "M" in "N of M photographed".
  *
  * Every detector returns only its failing rows, so a percentage needs a
- * population count that nothing else computes. Keyed by the coverage detector
- * each one pairs with, so a meter can't be wired to the wrong denominator.
+ * population count that nothing else computes. Keyed by each detector's
+ * declared `meter`, so a meter can't be wired to the wrong denominator.
  *
  * Deliberately its OWN schema and procedure rather than a field on
  * `problemsFastShape`: `allProblemArrayFields` must stay arrays-only, or the
@@ -1202,15 +1135,16 @@ export const problemsCountSchema = z.object({
  * has no meaningful population to be a fraction of, so it renders as a plain
  * list.
  */
-export const coverageTotalsSchema = z.object({
-  productsWithNoImages: z.number(),
-  /** Live leaf locations — the only ones that can hold inventory directly. */
-  emptyLocations: z.number(),
-  staleLocations: z.number(),
-  neverVerifiedInventory: z.number(),
-  ingredientsWithoutProduct: z.number(),
-  vendorsWithPurchases: z.number(),
-});
+export const coverageTotalsSchema = z.object(
+  // SAFETY: keyed by each metered detector's declared `meter` name.
+  Object.fromEntries(
+    detectorEntries.flatMap(([, entry]) =>
+      entry.meter ? [[entry.meter, z.number()]] : [],
+    ),
+  ) as {
+    [K in ProblemKey as NonNullable<Detectors[K]["meter"]>]: z.ZodNumber;
+  },
+);
 export type CoverageTotals = z.infer<typeof coverageTotalsSchema>;
 
 export type AllProblems = z.infer<typeof allProblemsSchema>;
@@ -1308,91 +1242,10 @@ export const assembleAllProblems = (groups: {
 // Per-detector item types — the canonical shapes the problems repo's find*
 // functions return, inferred from the schemas above so the repo never restates
 // them. `coverage.covered` carries the BaseKind union natively (via baseKind).
-export type DuplicateUniqueProduct = z.infer<
-  typeof duplicateUniqueProductSchema
->;
-export type OrphanedProduct = z.infer<typeof orphanedProductSchema>;
-export type ProductMissingPrice = z.infer<typeof productMissingPriceSchema>;
-export type SoldButStillStocked = z.infer<typeof soldButStillStockedSchema>;
-export type KitCountedTwice = z.infer<typeof kitCountedTwiceSchema>;
-export type UnlinkedExitExpense = z.infer<typeof unlinkedExitExpenseSchema>;
-export type PurchaselessExitExpense = z.infer<
-  typeof purchaselessExitExpenseSchema
->;
-export type NegativeExpectedQuantity = z.infer<
-  typeof negativeExpectedQuantitySchema
->;
-export type ToolUsedOutsideOwnership = z.infer<
-  typeof toolUsedOutsideOwnershipSchema
->;
-export type DuplicateProductIdentity = z.infer<
-  typeof duplicateProductIdentitySchema
->;
-export type ProductWithoutMappings = z.infer<
-  typeof productWithoutMappingsSchema
->;
-export type IngredientWithPartialCoverage = z.infer<
-  typeof ingredientWithPartialCoverageSchema
->;
-export type IngredientWithoutProduct = z.infer<
-  typeof ingredientWithoutProductSchema
->;
 export type IngredientWithUnusedAliases = z.infer<
   typeof ingredientWithUnusedAliasesSchema
 >;
-export type UnusedIngredient = z.infer<typeof unusedIngredientSchema>;
-export type EmptyLocation = z.infer<typeof emptyLocationSchema>;
-export type StaleLocation = z.infer<typeof staleLocationSchema>;
-export type NeverVerifiedInventory = z.infer<
-  typeof neverVerifiedInventorySchema
->;
-export type UnknownParkedItem = z.infer<typeof unknownParkedItemSchema>;
-export type InventoryWithoutPricePath = z.infer<
-  typeof inventoryWithoutPricePathSchema
->;
-export type LabelVariant = z.infer<typeof labelVariantSchema>;
-export type DuplicateVendor = z.infer<typeof duplicateVendorSchema>;
-export type VendorWithoutLogo = z.infer<typeof vendorWithoutLogoSchema>;
-export type ProductWithIslandedMappings = z.infer<
-  typeof productWithIslandedMappingsSchema
->;
-export type ProductWithTitleDerivableSize = z.infer<
-  typeof productWithTitleDerivableSizeSchema
->;
-export type LocationWithoutAiDescription = z.infer<
-  typeof locationWithoutAiDescriptionSchema
->;
 export type StaleIngredientParse = z.infer<typeof staleIngredientParseSchema>;
-export type StaleParentRecipe = z.infer<typeof staleParentRecipeSchema>;
-export type UnderstatedCostMeal = z.infer<typeof understatedCostMealSchema>;
-export type ProductWithBetterUpcData = z.infer<
-  typeof productWithBetterUpcDataSchema
->;
-export type PurchaseNotReconciling = z.infer<
-  typeof purchaseNotReconcilingSchema
->;
-export type PurchaseFinancialSettlementMismatch = z.infer<
-  typeof purchaseFinancialSettlementMismatchSchema
->;
-export type DuplicateSpendCandidate = z.infer<
-  typeof duplicateSpendCandidateSchema
->;
-export type DuplicateFinancialTransactionSourceRef = z.infer<
-  typeof duplicateFinancialTransactionSourceRefSchema
->;
-export type DuplicateFinancialAccountSourceAlias = z.infer<
-  typeof duplicateFinancialAccountSourceAliasSchema
->;
-export type FinancialTransactionAllocationDefect = z.infer<
-  typeof financialTransactionAllocationDefectSchema
->;
-export type InvalidFinancialJson = z.infer<typeof invalidFinancialJsonSchema>;
-export type IncompleteStatementImport = z.infer<
-  typeof incompleteStatementImportSchema
->;
-export type EntityMissingEmbedding = z.infer<
-  typeof entityMissingEmbeddingSchema
->;
 
 // Counts powering the Settings → Maintenance "N affected" dry-run. A focused
 // subset (the batch tools shown there), kept separate from problemsCount so it

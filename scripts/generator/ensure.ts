@@ -17,13 +17,15 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // Every root the generator reads: its own code, the packages the declarations
-// and contracts import, the web app (contracts, routes, list sources) and the
-// preview-fixture builder it loads from apps/web/scripts.
+// and contracts import, the web app (contracts, routes, list sources), the
+// preview-fixture builder it loads from apps/web/scripts, and the hand-written
+// Swift vocabulary the entity manifest is checked against.
 const INPUTS = [
   "scripts/generator",
   "packages",
   "apps/web/src",
   "apps/web/scripts/apple-preview-fixtures.ts",
+  "apps/apple/CubbyKit/Sources/CubbyKit/Catalog/EntityManifest.swift",
   "apps/web/tsconfig.json",
   "package.json",
   "pnpm-lock.yaml",

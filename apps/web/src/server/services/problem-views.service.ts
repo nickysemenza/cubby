@@ -1,31 +1,19 @@
+import { amount } from "@cubby/schemas/codec";
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import { imageListFiltersSchema } from "@cubby/schemas/image";
 import type { SortParams } from "@cubby/schemas/pagination";
 import type {
-  EmptyLocation,
-  IngredientWithoutProduct,
-  LocationWithoutAiDescription,
-  NegativeExpectedQuantity,
-  NeverVerifiedInventory,
   ProblemKey,
   ProblemsViewsOut,
-  ProductMissingPrice,
-  ProductWithoutMappings,
   SectionTotals,
-  StaleLocation,
-  UnusedIngredient,
+  ProblemItem,
 } from "@cubby/schemas/problems";
 import {
   emptyLocationSchema,
-  ingredientWithoutProductSchema,
-  locationWithoutAiDescriptionSchema,
-  negativeExpectedQuantitySchema,
-  neverVerifiedInventorySchema,
-  productMissingPriceSchema,
+  problemsViewsSchema,
   productWithoutMappingsSchema,
-  staleLocationSchema,
-  unusedIngredientSchema,
 } from "@cubby/schemas/problems";
+import { getMiscDisplayName } from "@cubby/shared";
 import { z } from "zod";
 
 import {
@@ -49,6 +37,7 @@ import {
   type ViewProblemDeclaration,
   viewProblemDeclarations,
 } from "~/entities/view-manifest";
+import { countLabel } from "~/lib/pluralize";
 import type { Database } from "~/server/db";
 import { expenseList } from "~/server/repo/expense";
 import { listFinancialTransactions } from "~/server/repo/financial-transaction";
@@ -72,6 +61,14 @@ import {
   diagnosticAdapters,
   runDiagnostic,
 } from "~/server/services/problem-diagnostics.service";
+import {
+  byManufacturer,
+  locationBadges,
+  problemRow,
+  type ProblemRowInput,
+  recordBadge,
+  textBadge,
+} from "~/server/services/problem-rows";
 import { traceAllBounded } from "~/server/tracing";
 
 /**
@@ -360,35 +357,51 @@ const usesConversionCoverageProjection = (key: ProblemKey): boolean =>
   key === "ingredientsWithPartialCoverage" ||
   key === "productsWithIslandedMappings";
 
+/**
+ * Narrow a list row to the card's contract. One entry per view-backed key; a
+ * key without one returns the list rows unchanged.
+ *
+ * Each presenter parses only the fields it reads, rather than the card
+ * schema, because `strictOutput` rejects extra keys and several list fields
+ * (`amount`) are codecs that don't round-trip through their own output.
+ */
+const PROBLEM_ROW_PRESENTERS = {
+  neverVerifiedInventory: (row) => toInventoryRow(row),
+  unusedIngredientsWithProduct: (row) => toUnusedIngredient(row, true),
+  unusedIngredientsWithoutProduct: (row) => toUnusedIngredient(row, false),
+  locationsWithoutAiDescription: (row) => toLocationWithoutAiDescription(row),
+  emptyLocations: (row) => toEmptyLocation(row),
+  negativeExpectedQuantity: (row) => toNegativeExpectedQuantity(row),
+  productsMissingPrice: (row) => toProductMissingPrice(row, false),
+  unvaluedBucketProducts: (row) => toProductMissingPrice(row, true),
+  productsWithoutMappings: (row) => toProductWithoutMappings(row),
+  staleLocations: (row) => toStaleLocation(row),
+  ingredientsWithoutProduct: (row) => toIngredientWithoutProduct(row),
+} satisfies Partial<
+  Record<
+    ProblemKey,
+    (
+      row: ListRow,
+    ) =>
+      | ProblemRowInput
+      | ProblemItem<"emptyLocations">
+      | ProblemItem<"productsWithoutMappings">
+  >
+>;
+
+const hasRowPresenter = (
+  key: ProblemKey,
+): key is keyof typeof PROBLEM_ROW_PRESENTERS =>
+  Object.hasOwn(PROBLEM_ROW_PRESENTERS, key);
+
 /** The same registered card projection is used by grouped and single-type reads. */
 const presentProblemRows = (
   key: ProblemKey,
   rows: ListRow[],
 ): readonly unknown[] => {
-  switch (key) {
-    case "neverVerifiedInventory":
-      return rows.map(toNeverVerified);
-    case "unusedIngredientsWithProduct":
-    case "unusedIngredientsWithoutProduct":
-      return rows.map(toUnusedIngredient);
-    case "locationsWithoutAiDescription":
-      return rows.map(toLocationWithoutAiDescription);
-    case "emptyLocations":
-      return rows.map(toEmptyLocation);
-    case "negativeExpectedQuantity":
-      return rows.map(toNegativeExpectedQuantity);
-    case "productsMissingPrice":
-    case "unvaluedBucketProducts":
-      return rows.map(toProductMissingPrice);
-    case "productsWithoutMappings":
-      return rows.map(toProductWithoutMappings);
-    case "staleLocations":
-      return rows.map(toStaleLocation);
-    case "ingredientsWithoutProduct":
-      return rows.map(toIngredientWithoutProduct);
-    default:
-      return rows;
-  }
+  if (!hasRowPresenter(key)) return rows;
+  const present = PROBLEM_ROW_PRESENTERS[key];
+  return rows.map((row) => present(row));
 };
 
 /**
@@ -480,75 +493,52 @@ export const executeProblem = async (
   };
 };
 
-/**
- * Narrow a list row to the card's contract.
- *
- * The list row is a superset, so this only drops fields — but it must be
- * explicit rather than a `schema.parse()`, because `strictOutput` rejects extra
- * keys and several of these fields (`amount`) are codecs that don't round-trip
- * through their own output. One entry per converted key; the compiler holds it
- * to the schema's shape.
- */
-const toNeverVerified = (row: ListRow): NeverVerifiedInventory => {
-  const r = neverVerifiedInventorySchema.parse(row);
-  return {
-    id: r.id,
-    amount: r.amount,
-    createdAt: r.createdAt,
-    product: { id: r.product.id, name: r.product.name },
-    location: { id: r.location.id, name: r.location.name },
-  };
-};
+const refSchema = z.object({ id: z.string(), name: z.string() });
 
-const toUnusedIngredient = (row: ListRow): UnusedIngredient => {
-  const r = unusedIngredientSchema
-    .omit({ products: true })
-    .extend({
-      product: z.array(
-        z.object({
-          id: unusedIngredientSchema.shape.products.element.shape.id,
-          name: z.string(),
-        }),
-      ),
-    })
+const toInventoryRow = (row: ListRow) => {
+  const r = z
+    .object({ id: z.string(), amount, product: refSchema, location: refSchema })
     .parse(row);
-  return {
-    id: r.id,
-    name: r.name,
-    createdAt: r.createdAt,
-    // The list embeds the full product rows; the card only names them.
-    products: r.product.map((p) => ({ id: p.id, name: p.name })),
-  };
+  return problemRow(
+    "inventory",
+    { id: r.id, name: r.product.name },
+    [`${r.amount.value} ${r.amount.unit}`],
+    locationBadges([r.location]),
+  );
 };
 
-const toLocationWithoutAiDescription = (
-  row: ListRow,
-): LocationWithoutAiDescription => {
-  const r = locationWithoutAiDescriptionSchema
-    .omit({ imageCount: true })
-    .extend({ images: z.array(z.unknown()) })
+const toUnusedIngredient = (row: ListRow, withProduct: boolean) => {
+  const r = refSchema.extend({ product: z.array(refSchema) }).parse(row);
+  return problemRow(
+    "ingredient",
+    r,
+    // The finding is "no recipe references this", not the ingredient's age.
+    ["Used in no recipes", withProduct ? null : "no product attached"],
+    r.product.map((p) => recordBadge("product", p)),
+  );
+};
+
+const toLocationWithoutAiDescription = (row: ListRow) => {
+  const r = refSchema
+    .extend({ type: z.string().nullable(), images: z.array(z.unknown()) })
     .parse(row);
-  return {
-    id: r.id,
-    name: r.name,
-    type: r.type,
-    // The list's `images` relation is soft-delete guarded, which the detector's
-    // raw `innerJoin(locationImage)` was not — so this no longer counts
-    // detached associations. It carries no content-type filter, so a PDF
-    // attachment still counts, exactly as before.
-    imageCount: r.images.length,
-  };
+  // The list's `images` relation is soft-delete guarded and carries no
+  // content-type filter, so a PDF attachment still counts.
+  return problemRow(
+    "location",
+    r,
+    [`${countLabel(r.images.length, "photo")} to describe from`],
+    r.type ? [textBadge(r.type)] : [],
+  );
 };
 
-const toEmptyLocation = (row: ListRow): EmptyLocation => {
+const toEmptyLocation = (row: ListRow): ProblemItem<"emptyLocations"> => {
   const r = emptyLocationSchema
     .omit({ firstImageId: true, firstImageUrl: true })
     .extend({ images: z.array(z.object({ id: z.string(), url: z.string() })) })
     .parse(row);
-  // The detector built these two with a pair of correlated subqueries ordered
-  // by LocationImage.createdAt; the list's `images` relation is `imageOrder`-
-  // first, so this is the cover rather than the oldest. Display-only — the card
-  // shows a thumbnail, and every count comes from `sectionTotals`.
+  // The list's `images` relation is `imageOrder`-first, so this is the cover.
+  // Display-only — every count comes from `sectionTotals`.
   const cover = r.images[0];
   return {
     id: r.id,
@@ -562,55 +552,55 @@ const toEmptyLocation = (row: ListRow): EmptyLocation => {
   };
 };
 
-const toNegativeExpectedQuantity = (row: ListRow): NegativeExpectedQuantity => {
-  const r = z
-    .object({
-      id: negativeExpectedQuantitySchema.shape.id,
-      name: z.string(),
+const toNegativeExpectedQuantity = (row: ListRow) => {
+  const r = refSchema
+    .extend({
       manufacturer: z.string(),
-      quantityLedger: negativeExpectedQuantitySchema.omit({
-        id: true,
-        name: true,
-        manufacturer: true,
+      quantityLedger: z.object({
+        expectedQuantity: z.number(),
+        acquiredUnits: z.number(),
+        exitedUnits: z.number(),
+        unknownAcquisitionLines: z.number().int(),
+        unknownExitLines: z.number().int(),
       }),
     })
     .parse(row);
-  return {
-    id: r.id,
-    name: r.name,
-    manufacturer: r.manufacturer,
-    ...r.quantityLedger,
-  };
+  const ledger = r.quantityLedger;
+  const unknown = ledger.unknownAcquisitionLines + ledger.unknownExitLines;
+  return problemRow("product", r, [
+    byManufacturer(r.manufacturer),
+    `${ledger.acquiredUnits} acquired, ${ledger.exitedUnits} gone → ${ledger.expectedQuantity}`,
+    unknown > 0 ? `${countLabel(unknown, "line")} carry no quantity` : null,
+  ]);
 };
 
-const toProductMissingPrice = (row: ListRow): ProductMissingPrice => {
-  const r = productMissingPriceSchema
-    .omit({ inventoryQuantity: true, locations: true })
+const toProductMissingPrice = (row: ListRow, miscBucket: boolean) => {
+  const r = refSchema
     .extend({
+      manufacturer: z.string(),
       inventoryEntry: z.array(
         z.object({
           amount: z.object({ value: z.number() }),
-          location: z.object({
-            id: productMissingPriceSchema.shape.locations.element.shape.id,
-            name: z.string(),
-          }),
+          location: refSchema,
         }),
       ),
     })
     .parse(row);
-  return {
-    id: r.id,
-    name: r.name,
-    manufacturer: r.manufacturer,
-    inventoryQuantity: r.inventoryEntry.reduce((n, e) => n + e.amount.value, 0),
-    locations: r.inventoryEntry.map((e) => ({
-      id: e.location.id,
-      name: e.location.name,
-    })),
-  };
+  const quantity = r.inventoryEntry.reduce((n, e) => n + e.amount.value, 0);
+  return problemRow(
+    "product",
+    { id: r.id, name: miscBucket ? getMiscDisplayName(r.name) : r.name },
+    [
+      byManufacturer(r.manufacturer),
+      `${countLabel(quantity, "unit")} unvalued`,
+    ],
+    locationBadges(r.inventoryEntry.map((e) => e.location)),
+  );
 };
 
-const toProductWithoutMappings = (row: ListRow): ProductWithoutMappings => {
+const toProductWithoutMappings = (
+  row: ListRow,
+): ProblemItem<"productsWithoutMappings"> => {
   const r = productWithoutMappingsSchema
     .omit({ isIngredient: true, ingredientId: true, usdaUnavailable: true })
     .extend({
@@ -627,58 +617,52 @@ const toProductWithoutMappings = (row: ListRow): ProductWithoutMappings => {
     name: r.name,
     manufacturer: r.manufacturer,
     createdAt: r.createdAt,
-    // The detector read `isIngredient` off the raw FK but `ingredientId` off a
-    // soft-delete-guarded join, so a product whose ingredient was deleted came
-    // back `{isIngredient: true, ingredientId: null}`. The list embed is
-    // guarded, so both now agree — the honest reading, since a deleted
-    // ingredient is no link at all.
+    // The list embed is soft-delete guarded, so a deleted ingredient is no link.
     isIngredient: r.ingredient != null,
     ingredientId: r.ingredient?.id ?? null,
     usdaUnavailable: r.usdaUnavailable ?? false,
   };
 };
 
-const toStaleLocation = (row: ListRow): StaleLocation => {
-  const r = staleLocationSchema
-    .omit({ itemCount: true })
-    .extend({ inventoryEntries: z.array(z.unknown()) })
+const toStaleLocation = (row: ListRow) => {
+  const r = refSchema
+    .extend({
+      type: z.string().nullable(),
+      lastBulkInventory: z.date().nullable(),
+      inventoryEntries: z.array(z.unknown()),
+    })
     .parse(row);
-  return {
-    id: r.id,
-    name: r.name,
-    type: r.type,
-    lastBulkInventory: r.lastBulkInventory,
-    // The list embeds the live entries the count filter selected on, so this is
-    // the same population `directItemCountMin` measured.
-    itemCount: r.inventoryEntries.length,
-  };
+  // The recount age is the finding, so it leads. `inventoryEntries` is the
+  // live population the `directItemCountMin` filter selected on.
+  return problemRow(
+    "location",
+    r,
+    [
+      r.lastBulkInventory
+        ? `last recounted ${r.lastBulkInventory.toISOString().slice(0, 10)}`
+        : "never recounted",
+    ],
+    [
+      ...(r.type ? [textBadge(r.type)] : []),
+      textBadge(countLabel(r.inventoryEntries.length, "item")),
+    ],
+  );
 };
 
-const toIngredientWithoutProduct = (row: ListRow): IngredientWithoutProduct => {
-  const r = ingredientWithoutProductSchema
-    .omit({ recipeCount: true })
-    .extend({ ownRecipeCount: z.number() })
-    .parse(row);
-  return {
-    id: r.id,
-    name: r.name,
-    // `ownRecipeCount`, not `appearsInRecipes.length` — the same non-cookbook
-    // population the filter selected on, so the card's number and the list it
-    // links to can't disagree.
-    recipeCount: r.ownRecipeCount,
-  };
+const toIngredientWithoutProduct = (row: ListRow) => {
+  const r = refSchema.extend({ ownRecipeCount: z.number() }).parse(row);
+  // `ownRecipeCount`, not `appearsInRecipes.length` — the same non-cookbook
+  // population the filter selected on.
+  return problemRow("ingredient", r, [
+    `Used in ${countLabel(r.ownRecipeCount, "recipe")}`,
+    "no product to price it",
+  ]);
 };
 
 type ViewProblemResults = Record<
   string,
   { data: ListRow[]; count: number } | undefined
 >;
-
-const projectViewProblemRows = <T>(
-  results: ViewProblemResults,
-  key: string,
-  presenter: (row: ListRow) => T,
-): T[] => (results[key]?.data ?? []).map(presenter);
 
 const viewProblemSectionTotals = (
   declarations: ViewProblemDeclaration[],
@@ -723,66 +707,15 @@ export const findViewProblems = async (
     4,
   );
 
-  const sectionTotals = viewProblemSectionTotals(declarations, results);
-
-  return {
-    neverVerifiedInventory: projectViewProblemRows(
-      results,
-      "neverVerifiedInventory",
-      toNeverVerified,
+  return problemsViewsSchema.parse({
+    ...Object.fromEntries(
+      declarations.map(({ problem }) => [
+        problem.key,
+        presentProblemRows(problem.key, results[problem.key]?.data ?? []),
+      ]),
     ),
-    unusedIngredientsWithProduct: projectViewProblemRows(
-      results,
-      "unusedIngredientsWithProduct",
-      toUnusedIngredient,
-    ),
-    unusedIngredientsWithoutProduct: projectViewProblemRows(
-      results,
-      "unusedIngredientsWithoutProduct",
-      toUnusedIngredient,
-    ),
-    locationsWithoutAiDescription: projectViewProblemRows(
-      results,
-      "locationsWithoutAiDescription",
-      toLocationWithoutAiDescription,
-    ),
-    emptyLocations: projectViewProblemRows(
-      results,
-      "emptyLocations",
-      toEmptyLocation,
-    ),
-    negativeExpectedQuantity: projectViewProblemRows(
-      results,
-      "negativeExpectedQuantity",
-      toNegativeExpectedQuantity,
-    ),
-    productsMissingPrice: projectViewProblemRows(
-      results,
-      "productsMissingPrice",
-      toProductMissingPrice,
-    ),
-    unvaluedBucketProducts: projectViewProblemRows(
-      results,
-      "unvaluedBucketProducts",
-      toProductMissingPrice,
-    ),
-    productsWithoutMappings: projectViewProblemRows(
-      results,
-      "productsWithoutMappings",
-      toProductWithoutMappings,
-    ),
-    staleLocations: projectViewProblemRows(
-      results,
-      "staleLocations",
-      toStaleLocation,
-    ),
-    ingredientsWithoutProduct: projectViewProblemRows(
-      results,
-      "ingredientsWithoutProduct",
-      toIngredientWithoutProduct,
-    ),
-    sectionTotals,
-  };
+    sectionTotals: viewProblemSectionTotals(declarations, results),
+  });
 };
 
 /**

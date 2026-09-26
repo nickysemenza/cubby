@@ -1,4 +1,3 @@
-import { displayGtin } from "@cubby/schemas/external-id";
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
@@ -9,7 +8,6 @@ import {
   createEditableAmountColumn,
   createImageColumn,
   createSingleEntityInlineLinkColumn,
-  createTimestampColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
@@ -27,7 +25,7 @@ import { useProductCategories } from "~/app/_components/hooks/useProductCategori
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { InventoryValuationSummary } from "~/app/_components/locations/inventory-valuation-summary";
 import { CategoryLabel } from "~/app/_components/products/CategoryLabel";
-import { TableLink } from "~/app/_components/table/TableLink";
+import { ProductGtin } from "~/components/entity/product-gtin";
 import { Stack } from "~/components/layout";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
@@ -139,15 +137,6 @@ export const inventoryListOverride = defineListOverride<
               mobile: { slot: "trailing", priority: 30 },
             }),
           );
-          // Last deliberate recount — the only honest freshness signal for a
-          // count (`updatedAt` moves on a price-driven valuation recompute).
-          add(
-            createTimestampColumn(columnHelper, "verifiedAt", {
-              header: "Verified",
-              className: "w-32",
-              mobile: { slot: "meta", priority: 60 },
-            }),
-          );
         }),
       // oxlint-disable-next-line react/exhaustive-deps -- updateMutation changes every render but is functionally stable
       [],
@@ -183,22 +172,12 @@ export const inventoryListOverride = defineListOverride<
               },
               cell: (info) => {
                 const product = info.getValue();
-                const upc =
-                  product.primaryGtin === null
-                    ? null
-                    : displayGtin(product.primaryGtin);
                 return (
                   <Stack gap="xs" className="min-w-0 flex-1">
                     <InventoryProductLink product={product} />
-                    {upc && (
+                    {product.primaryGtin && (
                       <div className="text-xs text-muted-foreground">
-                        <TableLink
-                          to="/usda/upc/$code"
-                          params={{ code: upc }}
-                          variant="mono"
-                        >
-                          {upc}
-                        </TableLink>
+                        <ProductGtin gtin={product.primaryGtin} />
                       </div>
                     )}
                   </Stack>

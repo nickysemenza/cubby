@@ -1,17 +1,10 @@
 /**
- * The shared walk under every browser-side project-tree surface: the WBS table
- * (`project-tree.ts`) and the Gantt (`charts/gantt/gantt-model.ts`) both need
- * the same parent→children map, the same orphan-promotion rule, the same depth
- * cap, and the same cycle guard — and both had their own copy.
- *
- * What stays out of here: the row shapes. The two surfaces genuinely differ —
- * one nests (`subRows`, TanStack owns expansion), the other flattens with a
- * `depth` field (a caller-owned expanded-set decides what's walked) — so they
- * express that difference as the `fold` and `descend` they hand to
- * {@link foldForest}, not as a shared row builder.
+ * The parent→children walk under the WBS table (`project-tree.ts`): one
+ * orphan-promotion rule, one depth cap, and one cycle guard. Row shapes stay
+ * with the caller as the `fold` and `descend` it hands to {@link foldForest}.
  *
  * No React, no DOM, alias-free: this runs under vitest's `unit` project (see
- * vitest.config.ts), same layer as `spend.ts` and `gantt-model.ts`.
+ * vitest.config.ts), same layer as `spend.ts`.
  */
 
 import { MAX_PROJECT_TREE_DEPTH } from "@cubby/schemas/project";

@@ -4,6 +4,7 @@ import { fromAny } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 import { type JSONType, z } from "zod";
 
+import * as contracts from "~/contracts";
 import { withErrorReporting } from "~/server/errors/report-error";
 
 import { callMcpTool } from "./mcp-test-utils";
@@ -325,7 +326,7 @@ describe("MCP catalog schemas", () => {
     const operationContext = new McpOperationContext(fromAny({}));
     const prepare = vi
       .spyOn(operationContext, "prepare")
-      .mockResolvedValue(fromAny({ caller: {}, entityKernel: {} }));
+      .mockResolvedValue(fromAny({ requestContext: {}, entityKernel: {} }));
     registerMcpTool(server, {
       name: "freshness_scoped_read",
       description: "reads",
@@ -357,6 +358,26 @@ describe("MCP catalog schemas", () => {
     expect(prepare).toHaveBeenCalledTimes(2);
     expect(prepare).toHaveBeenNthCalledWith(1, "context");
     expect(prepare).toHaveBeenNthCalledWith(2, "context");
+  });
+
+  it("publishes every mcp-flagged contract operation as a tool", async () => {
+    const { tools } = await listMcpToolCatalog();
+    const published = new Map(tools.map((tool) => [tool.name, tool]));
+    const flagged = Object.values(contracts).flatMap((contract) =>
+      Object.values(contract.ops).flatMap((op) =>
+        op.kind !== "subscription" && op.mcp
+          ? [{ kind: op.kind, ...op.mcp }]
+          : [],
+      ),
+    );
+
+    expect(flagged.length).toBeGreaterThan(0);
+    for (const op of flagged) {
+      expect([...published.keys()]).toContain(op.name);
+      const tool = published.get(op.name);
+      expect(tool?.description).toBe(op.description);
+      expect(tool?.annotations?.readOnlyHint).toBe(op.kind === "query");
+    }
   });
 
   it("publishes concrete, mock-free input and output schemas for the live catalog", async () => {

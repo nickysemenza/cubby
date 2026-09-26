@@ -27,25 +27,14 @@ describe("presentEntitySelectOptions", () => {
   });
 
   it("keeps explicit colors and icons authoritative while appending rich options", () => {
-    const options = presentEntitySelectOptions("task", "status", [
-      { value: "done", label: "Finished", color: "var(--custom)" },
-      { value: "later", label: "Later" },
+    const options = presentEntitySelectOptions("image", "status", [
+      { value: "FAILED", label: "Broken", color: "var(--custom)" },
     ]);
 
     expect(options).toEqual([
-      { value: "done", label: "Finished", color: "var(--custom)" },
-      { value: "later", label: "Later", color: "var(--chart-2)" },
-      {
-        value: "not_started",
-        label: "Not started",
-        color: "var(--chart-neutral)",
-      },
-      {
-        value: "in_progress",
-        label: "In progress",
-        color: "var(--chart-1)",
-      },
-      { value: "blocked", label: "Blocked", color: "var(--chart-negative)" },
+      { value: "FAILED", label: "Broken", color: "var(--custom)" },
+      { value: "PENDING", label: "Pending", color: "var(--slate)" },
+      { value: "UPLOADED", label: "Uploaded", color: "var(--positive)" },
     ]);
   });
 

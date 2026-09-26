@@ -10,7 +10,9 @@ interface EntityRelationMutationContext {
 }
 
 /** Repository-side seam used by generated entity relation bindings. */
-export interface EntityRelationMutationAdapter<TItem> {
+export interface EntityRelationMutationAdapter<TItem, TRow> {
+  /** The owner's current rows, read for the kernel `listRelation` action. */
+  list(db: Database, ownerShortcode: string): Promise<TRow[]>;
   preview(
     db: Database,
     action: "attach" | "detach",

@@ -22,7 +22,7 @@ description, source page) for human review — see [product
 identity](product-identity.md) for the exact-id-vs-descriptive rule.
 Enrichment itself never merges without that human confirmation.
 
-For identifier-only work, `patch_product_external_ids` upserts one precise
+For identifier-only work, each `patch_products_external_ids` item upserts one precise
 source/kind slot and removes only an explicitly obsolete value with its exact
 `expectedExternalId`; unrelated IDs survive and a changed live slot refuses the
 patch. A full `entity update product` external-ID set is a deliberate complete
@@ -51,7 +51,7 @@ If there is no separate retail/package variant, the listing's UPC remains the
 Product's UPC. Confirm that distinction before treating a standalone listing as
 kit-component evidence.
 
-`verify_product_images`/`verify_products_images` returns the detailed Product.
+`verify_products_images` returns the detailed Product per item.
 Confirm the previous IDs survived, intended removals are absent, the new image
 has a one-based display position and valid dimensions/MIME/SHA-256, and PDFs or
 failed-integrity files remain non-displayable. Stop and report gallery drift on

@@ -1,5 +1,7 @@
+import { taskStatusSchema } from "@cubby/schemas/task-fields";
+
 import { resolveDateRange } from "~/app/expenses/expense-options";
-import { resolveDueRange, taskStatusOptions } from "~/app/tasks/task-options";
+import { resolveDueRange } from "~/app/tasks/task-options";
 import type { FilterPatch } from "~/entities/filters";
 
 interface ProductPurchaseDateRangeFilters {
@@ -123,7 +125,7 @@ export const resolveProductTaskFilter = (value: string | undefined) => {
     return { taskPresenceFilter: value };
   }
   if (value === "open") return { taskOpenOnly: true };
-  if (taskStatusOptions.some((option) => option.value === value)) {
+  if (taskStatusSchema.safeParse(value).success) {
     return { taskStatusFilter: value };
   }
   const { dueFrom, dueTo } = resolveDueRange(value);

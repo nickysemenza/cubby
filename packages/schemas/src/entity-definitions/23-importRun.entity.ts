@@ -652,8 +652,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/import-run.entity-adapter",
-        export: "importRunEntityAdapter",
+        module: "~/server/repo/import-run",
+        export: "importRunRepository",
       },
     },
   },

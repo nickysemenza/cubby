@@ -15,16 +15,12 @@ import {
   expenseMatchInput,
   expenseMatchOut,
   LIVE_PROJECT_STATUSES,
-  productProjectUsesInput,
-  productProjectUsesOut,
   projectAttentionItemSchema,
   projectDashboardFiltersSchema,
   projectDashboardSummaryOut,
   projectOut,
   projectPortfolioAnalyticsOut,
-  projectResourceProjectInput,
   projectTaskStatusBreakdown,
-  projectToolSuggestionsOut,
   repointProjectUsesInput,
   repointProjectUsesOut,
   taskOut,
@@ -34,7 +30,19 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { sumBy } from "es-toolkit";
 import { z } from "zod";
 
-import { projectContract } from "~/contracts/project.contract";
+import {
+  expenseAnalyticsWorkflow,
+  expenseMatchWorkflow,
+} from "~/server/workflows/expense.server";
+import {
+  projectDashboardSummaryWorkflow,
+  projectPortfolioAnalyticsWorkflow,
+  projectRepointUsesWorkflow,
+} from "~/server/workflows/project.server";
+import {
+  taskListActionableWorkflow,
+  taskSummaryWorkflow,
+} from "~/server/workflows/task.server";
 
 import {
   READ_ONLY_CLOSED,
@@ -42,12 +50,6 @@ import {
   strictFilterInput,
   WRITE_CLOSED,
 } from "./_shared";
-import { fromContract, mcpItemsEnvelope } from "./contract-envelope";
-
-/** `{items}` over `project.resources`'s own output — see `mcpItemsEnvelope`. */
-const projectResourcesMcpOut = mcpItemsEnvelope(
-  fromContract(projectContract.ops.resources),
-);
 
 // Synthesis-read / bulk-write projections
 //
@@ -164,29 +166,6 @@ const expenseMatchMcpOut = expenseMatchOut.omit({ matches: true }).extend({
 });
 
 export function registerProjectTools(server: McpServer) {
-  registerRouterTool(server, {
-    name: "list_project_resources",
-    description:
-      "List the reusable tools and software explicitly used on one exact project. Tools include lifetime acquisition/use economics; software includes non-additive household spend charged during the project's effective window. Sub-project uses remain separate and count independently.",
-    inputSchema: projectResourceProjectInput,
-    // `{items}`, like every other list tool — see `projectResourcesMcpOut`.
-    outputSchema: projectResourcesMcpOut,
-    annotations: READ_ONLY_CLOSED,
-    call: async (caller, params) => ({
-      items: await caller.project.resources(params),
-    }),
-  });
-
-  registerRouterTool(server, {
-    name: "suggest_project_tools",
-    description:
-      "Suggest inventoried Cubby tools to attach to one exact project. Suggestions include tools purchased for the project at $100+ and trade-matched tools whose purchase history supports the project's task/expense trades; cheaper trade matches require at least two explicit prior project uses. This is a review queue only and never attaches tools automatically.",
-    inputSchema: projectResourceProjectInput,
-    outputSchema: projectToolSuggestionsOut,
-    annotations: READ_ONLY_CLOSED,
-    call: (caller, params) => caller.project.toolSuggestions(params),
-  });
-
   // The prose that used to be `attach_project_resources`' /
   registerRouterTool(server, {
     name: "repoint_project_uses",
@@ -194,17 +173,8 @@ export function registerProjectTools(server: McpServer) {
     inputSchema: repointProjectUsesInput,
     outputSchema: repointProjectUsesOut,
     annotations: WRITE_CLOSED,
-    call: (caller, params) => caller.project.repointUses(params),
-  });
-
-  registerRouterTool(server, {
-    name: "list_product_project_uses",
-    description:
-      "Show every exact project on which a reusable Cubby tool or software Product is explicitly recorded as used. Tool rows include purchase/use economics; software rows include non-additive spend charged during each project's effective window.",
-    inputSchema: productProjectUsesInput,
-    outputSchema: productProjectUsesOut,
-    annotations: READ_ONLY_CLOSED,
-    call: (caller, params) => caller.product.projectUses(params),
+    call: (context, params) =>
+      projectRepointUsesWorkflow(context.db, params, context.actorContext),
   });
 
   registerRouterTool(server, {
@@ -220,13 +190,11 @@ export function registerProjectTools(server: McpServer) {
     // history when the caller doesn't specify a scope. Behavior-preserving
     // today: `ne(status,'done')` (the old default) is equivalent to
     // `inArray(LIVE_PROJECT_STATUSES)` given exactly 4 statuses.
-    call: async (caller, params) => {
-      const result = await caller.project.dashboardSummary({
+    call: (context, params) =>
+      projectDashboardSummaryWorkflow(context.readDb, {
         statusScope: [...LIVE_PROJECT_STATUSES],
         ...params,
-      });
-      return result;
-    },
+      }),
   });
 
   registerRouterTool(server, {
@@ -236,8 +204,11 @@ export function registerProjectTools(server: McpServer) {
     inputSchema: projectDashboardFiltersSchema,
     outputSchema: projectBudgetOut,
     annotations: READ_ONLY_CLOSED,
-    call: async (caller, params) => {
-      const analytics = await caller.project.portfolioAnalytics(params);
+    call: async (context, params) => {
+      const analytics = await projectPortfolioAnalyticsWorkflow(
+        context.readDb,
+        params,
+      );
       const projects = analytics.costVsEstimate
         .map((row) => {
           const projected = row.actual + row.committed;
@@ -292,7 +263,7 @@ export function registerProjectTools(server: McpServer) {
     inputSchema: z.object({}),
     outputSchema: actionableTasksOut,
     annotations: READ_ONLY_CLOSED,
-    call: (caller) => caller.task.listActionable(),
+    call: (context) => taskListActionableWorkflow(context.readDb, undefined),
   });
 
   registerRouterTool(server, {
@@ -302,7 +273,7 @@ export function registerProjectTools(server: McpServer) {
     inputSchema: z.object({}),
     outputSchema: taskSummaryOut,
     annotations: READ_ONLY_CLOSED,
-    call: (caller) => caller.task.summary(),
+    call: (context) => taskSummaryWorkflow(context.readDb),
   });
 
   registerRouterTool(server, {
@@ -319,7 +290,7 @@ export function registerProjectTools(server: McpServer) {
     ),
     outputSchema: expenseAnalyticsOut,
     annotations: READ_ONLY_CLOSED,
-    call: (caller, params) => caller.expense.analytics(params),
+    call: (context, params) => expenseAnalyticsWorkflow(context.readDb, params),
   });
 
   registerRouterTool(server, {
@@ -336,8 +307,6 @@ export function registerProjectTools(server: McpServer) {
     inputSchema: expenseMatchInput,
     outputSchema: expenseMatchMcpOut,
     annotations: READ_ONLY_CLOSED,
-    call: async (caller, params) => {
-      return await caller.expense.match(params);
-    },
+    call: (context, params) => expenseMatchWorkflow(context.readDb, params),
   });
 }

@@ -29,22 +29,20 @@
         "src/router.tsx!",
         "src/routes/**/*.{ts,tsx}!",
         "src/server.ts!",
+        "src/cf-server.ts!",
         "src/styles.css!",
         "src/lib/recipebridge-cf.ts!",
         "src/lib/sentry-cf-shim.ts!",
-        "src/server/purchase-import/run-service.ts!",
         "src/integrations/**/*.{ts,tsx}!",
         "src/contracts/index.ts!",
         "src/lib/generated/http-resources.gen.ts!",
         // The `<entity>ListItem` exports name the OpenAPI components; the
         // generator reads them, nothing in the web app does.
         "src/entities/generated/entity-lists.gen.ts!",
-        "src/**/*.test.{ts,tsx}!",
         // Opt-in `live-eval` vitest project (billed model evals).
         "src/**/*.live-eval.ts!",
         "tests/**/*.{ts,tsx}!",
         "scripts/check-client-bundle.ts!",
-        "scripts/check-client-bundle.unit.test.ts!",
         "scripts/ensure-db-extensions.ts!",
         "scripts/apple-preview-fixtures.ts!",
         "tooling/**/*.{ts,tsx}!",

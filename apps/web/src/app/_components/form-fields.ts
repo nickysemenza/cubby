@@ -1,4 +1,3 @@
-import { positiveAmount } from "@cubby/schemas/codec";
 import {
   type IngredientShortcode,
   ingredientShortcode,
@@ -63,13 +62,3 @@ export function getOptionalRecipeId(
 ): RecipeShortcode | undefined {
   return item?.id ? recipeShortcode.parse(item.id) : undefined;
 }
-
-/**
- * Carries an optional id, for bulk-edit forms that mix existing (with id) and
- * new (without) rows.
- */
-export const inventoryItemWithIdFields = z.object({
-  product: requiredProductField,
-  amount: positiveAmount,
-  id: z.string().optional(),
-});

@@ -22,9 +22,7 @@
 
 import { expenseOut } from "@cubby/schemas/project";
 import {
-  linkExpensesToPurchaseInput,
   purchaseOut,
-  purchaseProductsInput,
   reclassifyPurchaseDocumentInput,
   splitExpenseDelta,
   splitExpenseInput,
@@ -60,7 +58,9 @@ import {
   purchaseImportOperationStatus,
   validatePurchaseImport,
 } from "~/server/purchase-import/import-orders";
+import { reclassifyPurchaseDocument } from "~/server/repo/purchase";
 import { getVendorCoverage } from "~/server/repo/vendor";
+import { splitExpenseWorkflow } from "~/server/workflows/purchase.server";
 
 import { getEntityKernelContext } from "../kernel-context";
 import {
@@ -102,13 +102,6 @@ export const splitExpenseMcpOut = mcpItemsEnvelope(
       "partsSum minus originalCost, in dollars. Priced splits require zero; null when originalCost is null and there is no source amount to conserve.",
     ),
 });
-
-/**
- * `{items}` over `purchase.products`'s own output — see `mcpItemsEnvelope`.
- */
-const purchaseProductsMcpOut = mcpItemsEnvelope(
-  fromContract(purchaseContract.ops.products),
-);
 
 export function registerPurchaseTools(server: McpServer) {
   registerMcpTool(server, {
@@ -234,7 +227,8 @@ export function registerPurchaseTools(server: McpServer) {
     inputSchema: reclassifyPurchaseDocumentInput,
     outputSchema: purchaseOut,
     annotations: WRITE_CLOSED,
-    call: (caller, params) => caller.purchase.reclassifyDocument(params),
+    call: (context, params) =>
+      reclassifyPurchaseDocument(context.db, params, context.actorContext),
   });
 
   registerRouterTool(server, {
@@ -248,13 +242,10 @@ export function registerPurchaseTools(server: McpServer) {
     inputSchema: splitExpenseInput,
     outputSchema: splitExpenseMcpOut,
     annotations: WRITE_CLOSED,
-    call: async (caller, params, context) => {
-      if (!context) {
-        throw new Error("Authenticated entity-kernel context is missing");
-      }
+    call: async (context, params, extra) => {
       // Read before the split runs — the original row is soft-deleted by the
       // time `purchase.split` returns, so its cost has to be captured first.
-      const original = await executeEntity(context, {
+      const original = await executeEntity(getEntityKernelContext(extra), {
         action: "get",
         entity: "expense",
         id: params.expenseId,
@@ -263,37 +254,12 @@ export function registerPurchaseTools(server: McpServer) {
       if (original.action !== "get" || !original.item) {
         throw new Error("Entity kernel returned the wrong expense detail");
       }
-      const items = await caller.purchase.split(params);
+      const items = await splitExpenseWorkflow(context, params);
       const { originalCost, partsSum, delta } = splitExpenseDelta(
         expenseOut.parse(original.item).cost,
         params.parts.map((part) => part.cost),
       );
       return { items, originalCost, partsSum, delta };
     },
-  });
-
-  registerRouterTool(server, {
-    name: "link_expenses_to_purchase",
-    description:
-      "Re-parent existing Expenses onto ONE existing purchase — e.g. one plumbing transaction that spans both rough-in and fixtures. This only rewrites `purchaseId` on the given expenses; it creates no money, changes no cost/trade/costType/project on any Expense, and leaves the target purchase's identity (vendorId/orderId/date/statedTotal/documents) untouched aside from gaining those expenses. " +
-      "NOT for payment schedules: a contractor's progress payments are separate transactions and therefore separate purchases. Do not combine them just because they share a project or vendor; use the Project rollup for that view. " +
-      "REFUSES when `purchaseId` does not resolve to a live purchase.",
-    inputSchema: linkExpensesToPurchaseInput,
-    outputSchema: purchaseOut,
-    annotations: WRITE_CLOSED,
-    call: (caller, params) => caller.purchase.link(params),
-  });
-
-  registerRouterTool(server, {
-    name: "list_purchase_products",
-    description:
-      'List the Products one Purchase acquired. Rows come from TWO sources and `source` says which: "expense" means one of this order\'s own itemized Expenses names the product (the common case), "link" means an explicit PurchaseProduct row, and "both" means each exists for that pair. Only Expenses that ACQUIRE count — a negative Expense records an exit (sale, return, disposal), so a disposal order does not list the goods it sold. This is PROVENANCE, not money: nothing here carries an amount or quantity or appears in any spend total. The explicit link exists because an order paid in installments has Expenses with lineBasis "allocation" — a slice of a total that was never itemized, either by payment schedule (a deposit buys no particular item) or by an estimated materials/labor split — and such a row can never carry a productId. Where spend IS itemized per product (lineBasis "item_line"), the Expense\'s own productId already records it and is the better source; those pairs appear here with source "expense" and need no link. `linkAttachedAt` is when the explicit link was recorded, and is null on a source "expense" row — it is also the test for whether detach_entity has anything to remove.',
-    inputSchema: purchaseProductsInput,
-    // `{items}`, like every other list tool — see `purchaseProductsMcpOut`.
-    outputSchema: purchaseProductsMcpOut,
-    annotations: READ_ONLY_CLOSED,
-    call: async (caller, params) => ({
-      items: await caller.purchase.products(params),
-    }),
   });
 }

@@ -1,4 +1,3 @@
-import { displayGtin } from "@cubby/schemas/external-id";
 import {
   type ProductFilters,
   type ProductListItem,
@@ -14,12 +13,9 @@ import { treePickerItems } from "~/app/_components/combobox/tree-items";
 import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import {
   createBooleanColumn,
-  createCurrencyColumn,
   createExternalLinkColumn,
   createInventoryEntriesColumn,
-  createPlainDateColumn,
   createSingleEntityInlineLinkColumn,
-  createTextColumn,
   productPriceClearLabel,
   renderOptionCell,
   renderProductPriceValue,
@@ -51,6 +47,7 @@ import {
   productTreeSubRows,
 } from "~/app/products/product-kit-rows";
 import { product as productOperations } from "~/app/products/product.functions";
+import { ProductGtin } from "~/components/entity/product-gtin";
 import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
@@ -60,7 +57,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { compactFieldRendererFor } from "~/entities/compact-field-renderers";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
 import {
@@ -106,22 +102,6 @@ const PRODUCT_INITIAL_COLUMN_VISIBILITY = {
   components: false,
   ...entityListHiddenColumns("product"),
 };
-
-function renderNotesValue(notes: string | null): ReactNode {
-  if (!notes) return <NoneValue />;
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={<span className="block truncate text-muted-foreground" />}
-      >
-        {notes}
-      </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-xs">
-        {notes}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
 
 /**
  * Units bought minus units gone, with its own uncertainty attached.
@@ -322,36 +302,6 @@ export const productListOverride = defineListOverride<
       () =>
         createCubbyColumnCollection<ProductTreeRow>((add) => {
           add(
-            columnHelper.accessor("category", {
-              id: "categoryId",
-              header: "Classification",
-              meta: {
-                className: "w-48",
-                mobile: { slot: "subtitle", priority: 30 },
-              },
-              cell: (info) =>
-                compactFieldRendererFor(
-                  "product",
-                  "categoryId",
-                )?.(info.row.original),
-            }),
-          );
-          add(
-            createTextColumn(columnHelper, "manufacturer", {
-              header: "Manufacturer",
-              className: "min-w-0 w-40 truncate",
-              mobile: { slot: "subtitle", priority: 20 },
-              editable: {
-                onSave: async (newValue, product) => {
-                  await updateProductMutation.mutateAsync({
-                    id: product.id,
-                    data: { manufacturer: newValue ?? "" },
-                  });
-                },
-              },
-            }),
-          );
-          add(
             columnHelper.accessor("primaryGtin", {
               header: "Barcode / ISBN",
               meta: {
@@ -375,25 +325,9 @@ export const productListOverride = defineListOverride<
                     }}
                     config={{ type: "text" }}
                     trigger="pencil"
-                    renderValue={(current) => {
-                      if (!current) return <NoneValue />;
-                      const isbn = wasm.isbn_from_gtin(current);
-                      if (isbn) {
-                        return (
-                          <span className="tabular-nums">{isbn.isbn13}</span>
-                        );
-                      }
-                      const shown = displayGtin(current);
-                      return (
-                        <Link
-                          to="/usda/upc/$code"
-                          params={{ code: shown }}
-                          className="text-primary hover:underline"
-                        >
-                          {shown}
-                        </Link>
-                      );
-                    }}
+                    renderValue={(current) =>
+                      current ? <ProductGtin gtin={current} /> : <NoneValue />
+                    }
                   />
                 );
               },
@@ -407,34 +341,6 @@ export const productListOverride = defineListOverride<
                   await updateProductMutation.mutateAsync({
                     id: product.id,
                     data: { fdc_id: newValue ? Number(newValue) : null },
-                  });
-                },
-              },
-            }),
-          );
-          add(
-            createTextColumn(columnHelper, "model", {
-              className: "min-w-0 w-40 truncate",
-              editable: {
-                onSave: async (newValue, product) => {
-                  await updateProductMutation.mutateAsync({
-                    id: product.id,
-                    data: { model: newValue },
-                  });
-                },
-              },
-            }),
-          );
-          add(
-            createTextColumn(columnHelper, "notes", {
-              header: "Notes",
-              className: "min-w-0 w-40",
-              renderValue: renderNotesValue,
-              editable: {
-                onSave: async (newNotes, product) => {
-                  await updateProductMutation.mutateAsync({
-                    id: product.id,
-                    data: { notes: newNotes },
                   });
                 },
               },
@@ -461,22 +367,6 @@ export const productListOverride = defineListOverride<
                   });
                 },
               },
-            }),
-          );
-          add(
-            columnHelper.accessor("externalIds", {
-              id: "externalIds",
-              header: "External IDs",
-              enableSorting: false,
-              meta: {
-                className: "w-36",
-                mobile: { slot: "meta", priority: 85 },
-              },
-              cell: (info) =>
-                compactFieldRendererFor(
-                  "product",
-                  "externalIds",
-                )?.(info.row.original),
             }),
           );
           add(
@@ -522,17 +412,6 @@ export const productListOverride = defineListOverride<
               },
             }),
           );
-          // Net cost basis — SUM(cost) over this product's live expenses, so
-          // an exit (a sale booked as a negative row) telescopes against its
-          // acquisition.
-          add(
-            createCurrencyColumn(columnHelper, "expenseTotal", {
-              header: "Net basis",
-              className: "w-28",
-              signedTone: true,
-              mobile: { slot: "trailing", priority: 5 },
-            }),
-          );
           // Counts render a literal `0`, not a dash: `locationCount` and
           // `componentCount` are never null, so "none" is a known fact and a
           // dash would claim "unknown".
@@ -544,18 +423,6 @@ export const productListOverride = defineListOverride<
                 numeric: true,
                 className: "w-24",
                 mobile: { slot: "meta", priority: 43 },
-              },
-              cell: (info) => info.getValue(),
-            }),
-          );
-          add(
-            columnHelper.accessor((row) => row.componentCount, {
-              id: "componentCount",
-              header: "Components",
-              meta: {
-                numeric: true,
-                className: "w-28",
-                mobile: { slot: "meta", priority: 44 },
               },
               cell: (info) => info.getValue(),
             }),
@@ -621,13 +488,6 @@ export const productListOverride = defineListOverride<
                   </Tooltip>
                 );
               },
-            }),
-          );
-          add(
-            createPlainDateColumn(columnHelper, "purchaseDate", {
-              header: "Purchase date",
-              className: "w-32",
-              mobile: { slot: "meta", priority: 55 },
             }),
           );
           // Read-only: the Tags filter spec declares `columnId: "tags"`, and

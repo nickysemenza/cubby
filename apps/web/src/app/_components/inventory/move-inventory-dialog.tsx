@@ -1,15 +1,6 @@
 /**
- * MoveInventoryDialog - Lightweight modal for moving inventory items to another location.
- *
- * Use this component when:
- * - Moving items from a known source location (e.g., location detail page)
- * - Quick single or bulk moves where source context is already established
- * - Moves that don't require partial quantity selection
- *
- * For more complex move workflows with source/target selection, partial quantities,
- * and select-all functionality, use the dedicated BulkMoveForm page instead.
- *
- * @see /inventory/bulk-move - Full page bulk move workflow
+ * MoveInventoryDialog — move one inventory row or a whole selection (a
+ * bulk of one is the single-row case) to another location.
  */
 
 import type { LocationShortcode } from "@cubby/schemas/identifiers";

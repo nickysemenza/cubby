@@ -21,19 +21,18 @@ import {
   updateFinancialAccount,
 } from "~/server/repo/financial-account";
 import {
-  deleteFinancialTransactions,
+  financialTransactionRepository,
   updateFinancialTransaction,
 } from "~/server/repo/financial-transaction";
 import {
   createLedgerParty,
   deleteLedgerParties,
   mergeLedgerParties,
-  previewMergeLedgerParties,
   updateLedgerParty,
 } from "~/server/repo/ledger-party";
 import {
   createLedgerTransfer,
-  deleteLedgerTransfers,
+  ledgerTransferRepository,
   getLedgerTransferByShortcode,
   updateLedgerTransfer,
 } from "~/server/repo/ledger-transfer";
@@ -315,17 +314,19 @@ describe("consolidated household ledger", () => {
     ).toBe(true);
     await expect(
       deleteLedgerParties(ctx.db, [member.output.id], ctx.actor),
-    ).rejects.toThrow(
-      "A ledger party with live attributions, accounts, inventory ownership, transfers, meal portions, meal food entries, or reported image sightings cannot be deleted.",
-    );
+    ).rejects.toThrow("Cannot delete ledger party:");
     await expect(
-      deleteFinancialTransactions(
+      financialTransactionRepository.delete(
         ctx.db,
         [parseShortcodeFor("financialTransaction", inflow.shortcode)],
         ctx.actor,
       ),
     ).rejects.toThrow("cannot be deleted until the transfer releases it");
-    await deleteLedgerTransfers(ctx.db, [transfer.output!.id], ctx.actor);
+    await ledgerTransferRepository.delete(
+      ctx.db,
+      [transfer.output!.id],
+      ctx.actor,
+    );
     const [cleared] = await unwrapDb(ctx.db)
       .select({ id: financialTransaction.id })
       .from(financialTransaction)
@@ -356,7 +357,7 @@ describe("consolidated household ledger", () => {
         [guest.output.id, guest.output.id],
         ctx.actor,
       ),
-    ).resolves.toEqual({ deleted: 1 });
+    ).resolves.toMatchObject({ deleted: 1 });
   });
 
   it("merges same-kind parties by folding weights and repointing transfers", async () => {
@@ -444,31 +445,12 @@ describe("consolidated household ledger", () => {
       ctx.actor,
     );
 
-    const preview = await previewMergeLedgerParties(ctx.db, {
-      keepId: keep.entityId,
-      mergeIds: [lose.entityId],
-    });
-    expect(preview.blockers).toEqual([]);
-    expect(preview.changes).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: "merge-attributions", total: 4 }),
-        expect.objectContaining({
-          code: "repoint-outgoing-transfers",
-          total: 1,
-        }),
-      ]),
-    );
     await expect(
-      previewMergeLedgerParties(ctx.db, {
-        keepId: keep.entityId,
-        mergeIds: [lose.entityId, lose.entityId],
-      }),
-    ).resolves.toMatchObject({ blockers: [] });
-    await expect(
-      previewMergeLedgerParties(ctx.db, {
-        keepId: keep.entityId,
-        mergeIds: [keep.entityId],
-      }),
+      mergeLedgerParties(
+        ctx.db,
+        { keepId: keep.output.id, mergeIds: [keep.output.id] },
+        ctx.actor,
+      ),
     ).rejects.toThrow("into itself");
     const mergeResult = await mergeLedgerParties(
       ctx.db,

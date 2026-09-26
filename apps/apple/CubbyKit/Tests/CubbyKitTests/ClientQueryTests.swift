@@ -122,6 +122,17 @@ struct ClientQueryTests {
         #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tok")
     }
 
+    /// `row(_:id:)` answers a 404 with `nil` rather than throwing.
+    @Test func rowReturnsNilOn404() async throws {
+        defer { QueryStub.handler.withLock { $0 = nil } }
+        let notFound = Data(#"{"code":"NOT_FOUND","message":"No product called PRD-0000"}"#.utf8)
+        QueryStub.handler.withLock { handler in
+            handler = { _ in (404, notFound) }
+        }
+        let row = try await makeClient().row(EntityCatalog[.product], id: "PRD-0000")
+        #expect(row == nil)
+    }
+
     @Test func stockedProductsSendsTheEnumFilterAsAPlainLiteral() async throws {
         let request = try await capture(returning: try Fixtures.data(named: "products-list.json")) { client in
             _ = try await client.stockedProducts(page: 2, pageSize: 20)

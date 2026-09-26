@@ -1,30 +1,15 @@
-import { financialAccountOut } from "@cubby/schemas/financial-account";
-import { financialTransactionOut } from "@cubby/schemas/financial-transaction";
-import { gardenEntryOut } from "@cubby/schemas/garden-entry";
-import { imageOut, imageWithEntitySchema } from "@cubby/schemas/image";
-import { ingredientWithFoodOut } from "@cubby/schemas/ingredient";
+import { imageWithEntitySchema } from "@cubby/schemas/image";
 import { infLocation } from "@cubby/schemas/location";
 import { plantingOut } from "@cubby/schemas/planting";
-import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
+import { projectOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
-import { wishOut } from "@cubby/schemas/wish";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
-import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
-import {
-  toFinancialAccountCard,
-  toFinancialTransactionCard,
-  toGardenEntryCard,
-  toImageCard,
-  toIngredientCard,
-  toLocationCard,
-  toPlantingCard,
-  toWishCard,
-} from "./EntityPreviewContent";
-import type { BodyBlock } from "./preview/manifest-card";
+import { manifestPreviewCard, toImageCard } from "./EntityPreviewContent";
 import { PreviewQuery } from "./preview/preview-query";
 
 const withMedia = <T,>(value: T, url?: string) => ({
@@ -37,14 +22,11 @@ const withMedia = <T,>(value: T, url?: string) => ({
   previousShortcodes: [],
 });
 
-/** The planting card's first body block is its stats row; anything else is a test failure. */
-function locationStatOf(body: readonly BodyBlock[] | undefined) {
-  const block = body?.[0];
-  if (block?.kind !== "stats") throw new Error("expected a stats block");
-  const stat = block.stats[1];
-  if (!stat) throw new Error("expected a Location stat");
-  return stat;
-}
+let harness: ReturnType<typeof createBrowserTestHarness>;
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+afterEach(() => harness.dispose());
 
 describe("PreviewQuery", () => {
   it("distinguishes loading, failure, deletion, and success states", () => {
@@ -145,220 +127,102 @@ describe("PreviewQuery", () => {
 // nothing without one, which is how every location rendered an imageless card
 // while its photo sat unread on the wire.
 
-describe("toLocationCard", () => {
-  it("emits a thumb block when the location resolves a cover image", () => {
-    const data = mock(infLocation, {
-      seed: 1,
+describe("manifestPreviewCard", () => {
+  it("titles from the declared titleField and reads its hero chip as identity", () => {
+    const tomato = mock(plantingOut, {
+      seed: 8,
       overrides: {
-        name: "garbage bin area",
-        type: "area",
-        product: null,
-        images: [
-          mock(imageOut, {
-            seed: 2,
-            overrides: { url: "https://example.com/bin.jpg" },
-          }),
-        ],
-        totalItemCount: 2,
+        locationId: testShortcode("location", "LOC-4K7M"),
+        locationName: "Raised bed 2",
+        status: "growing",
+        displayName: "Tomato · Cherokee Purple",
       },
     });
 
-    expect(
-      toLocationCard(withMedia(data, "https://example.com/bin.jpg")).body,
-    ).toEqual([
-      { kind: "thumb", url: "https://example.com/bin.jpg" },
-      { kind: "stats", stats: [{ label: "On hand", value: 2 }] },
+    const card = manifestPreviewCard("planting", withMedia(tomato));
+
+    expect(card.name).toBe("Tomato · Cherokee Purple");
+    expect(card.identity).toBe("Growing");
+  });
+
+  // A reference fact renders the resolved name, not the raw shortcode, and
+  // falls back to the shortcode when the projection carries no name.
+  it.each([
+    { locationName: "Raised bed 2", shown: "Raised bed 2" },
+    { locationName: null, shown: "LOC-4K7M" },
+  ])("renders a reference fact as $shown", ({ locationName, shown }) => {
+    const tomato = mock(plantingOut, {
+      seed: 8,
+      overrides: {
+        locationId: testShortcode("location", "LOC-4K7M"),
+        locationName,
+        status: "growing",
+        displayName: "Tomato · Cherokee Purple",
+      },
+    });
+
+    const card = manifestPreviewCard("planting", withMedia(tomato));
+    const stats = card.body?.find((block) => block.kind === "stats");
+    if (stats?.kind !== "stats") throw new Error("expected a stats block");
+    const location = stats.stats.find((stat) => stat.label === "Location");
+    if (!location) throw new Error("expected a Location fact");
+    render(<>{location.value}</>, { wrapper: harness.wrapper });
+    expect(screen.getByText(shown)).toBeInTheDocument();
+  });
+
+  // A declared `display.preview` roster is the whole card, in model order —
+  // the project rollups arrive as projection fields, not a web-side map.
+  it("shows exactly the declared preview facts", () => {
+    const project = mock(projectOut, {
+      seed: 3,
+      overrides: { costEstimate: 500, spent: 120, taskProgress: "3/5" },
+    });
+
+    const card = manifestPreviewCard("project", withMedia(project));
+    const stats = card.body?.find((block) => block.kind === "stats");
+    if (stats?.kind !== "stats") throw new Error("expected a stats block");
+    expect(stats.stats.map((stat) => stat.label)).toEqual([
+      "Cost estimate",
+      "Spent",
+      "Tasks",
     ]);
   });
 
-  it("emits no thumb block when there is no cover image", () => {
-    const data = mock(infLocation, {
+  it("leads with the cover image and links the breadcrumb parent", () => {
+    const parent = mock(infLocation, {
+      seed: 1,
+      overrides: { name: "Garage", type: "room", product: null },
+    });
+    const bin = mock(infLocation, {
       seed: 2,
       overrides: {
         name: "garbage bin area",
         type: "area",
         product: null,
-        images: [],
-        totalItemCount: 2,
+        parent,
       },
     });
 
-    expect(toLocationCard(withMedia(data)).body).toEqual([
-      { kind: "stats", stats: [{ label: "On hand", value: 2 }] },
-    ]);
-  });
-
-  it("names the SKU a product-linked bin IS, which carries no type of its own", () => {
-    const data = mock(infLocation, {
-      seed: 3,
-      overrides: {
-        name: "garbage bin area",
-        type: null,
-        product: {
-          id: testShortcode("product", "PRD-9H64"),
-          name: "27 Gal. Tough Storage Tote",
-          manufacturer: "Example",
-          model: null,
-          category: categorySummaryFixture("supplies"),
-          coverImage: null,
-          price: null,
-        },
-      },
-    });
-
-    expect(toLocationCard(withMedia(data)).identity).toBe(
-      "27 Gal. Tough Storage Tote",
-    );
-  });
-});
-
-describe("toIngredientCard", () => {
-  it("leads with the product photo standing in for the ingredient", () => {
-    const data = mock(ingredientWithFoodOut, {
-      seed: 1,
-      overrides: {
-        name: "olive oil",
-        aliases: [],
-        appearsInRecipes: [],
-        product: [
-          mock(productWithMappingsAndFoodOut, {
-            seed: 2,
-            overrides: {
-              externalIds: [],
-              images: [
-                {
-                  ...mock(imageOut, {
-                    seed: 3,
-                    overrides: { url: "https://example.com/oil.jpg" },
-                  }),
-                  purpose: null,
-                },
-              ],
-            },
-          }),
-        ],
-      },
-    });
-
-    const card = toIngredientCard(
-      withMedia(data, "https://example.com/oil.jpg"),
+    const card = manifestPreviewCard(
+      "location",
+      withMedia(bin, "https://example.com/bin.jpg"),
     );
 
     expect(card.body?.[0]).toEqual({
       kind: "thumb",
-      url: "https://example.com/oil.jpg",
+      url: "https://example.com/bin.jpg",
     });
-  });
-});
-
-describe("first-wave compact cards", () => {
-  it("summarizes account identity and transaction count from the existing detail payload", () => {
-    const account = mock(financialAccountOut, {
-      seed: 4,
-      overrides: {
-        name: "Household Visa",
-        identity: {
-          kind: "credit_card",
-          issuer: "Example Bank",
-          network: "visa",
-        },
-        cardNumbers: [
-          {
-            last4: "4242",
-            kind: "primary",
-            validFrom: null,
-            validTo: null,
-            note: null,
-          },
-        ],
-        provisional: false,
-        transactionCount: 23,
-      },
-    });
-
-    const card = toFinancialAccountCard(withMedia(account));
-
-    expect(card.name).toBe("Household Visa");
-    expect(card.identity).toBe("Credit card · Example Bank · •••• 4242");
-    expect(card.body).toEqual([
-      {
-        kind: "stats",
-        stats: [
-          { label: "Transactions", value: 23 },
-          { label: "Status", value: "Known" },
-        ],
-      },
-    ]);
-  });
-
-  it("keeps a transaction's account connection in its compact card", () => {
-    const transaction = mock(financialTransactionOut, {
-      seed: 5,
-      overrides: {
-        accountId: testShortcode("financialAccount", "FAC-4K7M"),
-        accountName: "Household Visa",
-        merchant: "Hardware store",
-        rawDescription: null,
-        displayName: "Hardware store",
-        allocations: [],
-      },
-    });
-
-    const card = toFinancialTransactionCard(withMedia(transaction));
-
-    expect(card.name).toBe("Hardware store");
     expect(card.crossLinks).toEqual([
       expect.objectContaining({
-        to: "/financial-accounts/$shortcode",
-        params: { shortcode: "FAC-4K7M" },
-        label: "Household Visa",
+        to: "/locations/$shortcode",
+        params: { shortcode: parent.id },
+        label: "Garage",
       }),
     ]);
   });
+});
 
-  it("shows wish candidates and preserves unknown prices as unknown", () => {
-    const wish = mock(wishOut, {
-      seed: 6,
-      overrides: {
-        name: "Workshop light",
-        acquiredAt: null,
-        candidates: [
-          {
-            id: testShortcode("product", "PRD-4K7M"),
-            name: "Bench lamp",
-            manufacturer: "Example",
-            model: null,
-            price: null,
-            inventoried: false,
-          },
-        ],
-      },
-    });
-
-    const card = toWishCard(withMedia(wish));
-
-    expect(card.identity).toBe("Open");
-    expect(card.body).toEqual([
-      {
-        kind: "stats",
-        stats: [
-          { label: "Candidates", value: 1 },
-          { label: "Price range", value: "—" },
-        ],
-      },
-      {
-        kind: "products",
-        products: [
-          {
-            id: "PRD-4K7M",
-            name: "Bench lamp",
-            manufacturer: "Example",
-          },
-        ],
-      },
-    ]);
-  });
-
+describe("toImageCard", () => {
   it("shows every existing image association without a second query", () => {
     const image = mock(imageWithEntitySchema, {
       seed: 7,
@@ -410,79 +274,5 @@ describe("first-wave compact cards", () => {
         },
       ]),
     );
-  });
-
-  it("titles a planting card from displayName and reports its status", () => {
-    const growingTomato = mock(plantingOut, {
-      seed: 8,
-      overrides: {
-        locationId: testShortcode("location", "LOC-4K7M"),
-        locationName: "Raised bed 2",
-        status: "growing",
-        displayName: "Tomato · Cherokee Purple",
-      },
-    });
-
-    const card = toPlantingCard(withMedia(growingTomato));
-
-    expect(card.name).toBe("Tomato · Cherokee Purple");
-    expect(card.body).toEqual([
-      {
-        kind: "stats",
-        stats: [
-          { label: "Status", value: "Growing" },
-          { label: "Location", value: expect.anything() },
-        ],
-      },
-    ]);
-
-    // The Location stat renders the resolved name, not the raw shortcode.
-    const locationStat = locationStatOf(card.body);
-    render(<>{locationStat.value}</>);
-    expect(screen.getByText("Raised bed 2")).toBeInTheDocument();
-  });
-
-  it("falls back to the location shortcode when a planting has no locationName", () => {
-    const namelessBed = mock(plantingOut, {
-      seed: 8,
-      overrides: {
-        locationId: testShortcode("location", "LOC-4K7M"),
-        locationName: null,
-        status: "growing",
-        displayName: "Tomato · Cherokee Purple",
-      },
-    });
-
-    const card = toPlantingCard(withMedia(namelessBed));
-    const locationStat = locationStatOf(card.body);
-    render(<>{locationStat.value}</>);
-    expect(screen.getByText("LOC-4K7M")).toBeInTheDocument();
-  });
-
-  it("titles a gardenEntry card from displayName and maps note to Note", () => {
-    const bedOverview = mock(gardenEntryOut, {
-      seed: 9,
-      overrides: {
-        kind: "note",
-        observedOn: "2026-10-06",
-        locationName: "Garden test bed",
-        displayName: "Note · 2026-10-06 · Garden test bed",
-        images: [],
-      },
-    });
-
-    const card = toGardenEntryCard(withMedia(bedOverview));
-
-    expect(card.name).toBe("Note · 2026-10-06 · Garden test bed");
-    expect(card.body).toEqual([
-      {
-        kind: "stats",
-        stats: [
-          { label: "Kind", value: "Note" },
-          { label: "Date", value: expect.any(String) },
-          { label: "Location", value: expect.anything() },
-        ],
-      },
-    ]);
   });
 });
