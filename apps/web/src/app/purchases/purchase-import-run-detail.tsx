@@ -36,6 +36,7 @@ import type { RunDetail } from "~/contracts/run.contract";
 import { purchaseImport, run as runOperations } from "~/entities/run.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { putPresignedObject } from "~/lib/presigned-upload";
 import { cn, formatCurrency } from "~/lib/utils";
 
 import { AgentContextPerCall } from "./agent-context-breakdown";
@@ -297,12 +298,11 @@ function ManualEvidenceUpload({ run }: { run: RunDetail }) {
         sourceMetadata: { filename: file.name },
       });
       // A presigned object-store PUT, not a Cubby endpoint.
-      const stored = await fetch(staged.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": contentType },
-        body: bytes,
-      });
-      if (!stored.ok) throw new Error("Evidence bytes could not be stored.");
+      try {
+        await putPresignedObject(staged.uploadUrl, bytes, contentType);
+      } catch {
+        throw new Error("Evidence bytes could not be stored.");
+      }
       return runOperations.control.call({
         runId: run.publicId,
         action: "retry_dispatch",

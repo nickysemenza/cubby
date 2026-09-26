@@ -19,6 +19,7 @@ import { Label } from "~/components/ui/label";
 import { NativeSelect } from "~/components/ui/native-select";
 import { getErrorMessage } from "~/lib/error-utils";
 import { imageUpload } from "~/lib/image.functions";
+import { putPresignedObject } from "~/lib/presigned-upload";
 import { cn } from "~/lib/utils";
 
 import { PhotoGrid, type PhotoGridImage } from "./photos/photo-grid";
@@ -272,20 +273,7 @@ export function PendingImageUpload({
         source,
       });
 
-      const uploadResult = await fetch(initResult.uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: {
-          "Content-Type": file.type,
-        },
-      });
-
-      if (!uploadResult.ok) {
-        const errorText = await uploadResult
-          .text()
-          .catch(() => "Unknown error");
-        throw new Error(`Storage error (${uploadResult.status}): ${errorText}`);
-      }
+      await putPresignedObject(initResult.uploadUrl, file, contentType.data);
 
       return {
         id: initResult.imageId,

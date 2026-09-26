@@ -41,6 +41,10 @@ import {
 } from "~/lib/cookbook-graph";
 import { getErrorMessage } from "~/lib/error-utils";
 import { imageUpload } from "~/lib/image.functions";
+import {
+  PresignedUploadError,
+  putPresignedObject,
+} from "~/lib/presigned-upload";
 import { wasm } from "~/lib/wasm";
 
 import { BookGroupCard } from "./book-group-card";
@@ -219,12 +223,14 @@ export function CookbookImport({
       // the Uint8Array<ArrayBufferLike> vs ArrayBuffer lib-type mismatch).
       const buf = new ArrayBuffer(bytes.byteLength);
       new Uint8Array(buf).set(bytes);
-      const res = await fetch(init.uploadUrl, {
-        method: "PUT",
-        body: buf,
-        headers: { "Content-Type": mime },
-      });
-      if (!res.ok) throw new Error(`Storage error (${res.status})`);
+      try {
+        await putPresignedObject(init.uploadUrl, buf, mime);
+      } catch (error) {
+        throw new Error(
+          `Storage error (${error instanceof PresignedUploadError ? error.status : "unknown"})`,
+          { cause: error },
+        );
+      }
       return init.imageId;
     },
     [uploadImageMut],
