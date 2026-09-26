@@ -179,6 +179,15 @@ verify_archive() {
   [[ "$(plutil -extract CFBundleShortVersionString raw -o - "$info")" == "$MARKETING_VERSION" ]]
   [[ "$(plutil -extract CFBundleVersion raw -o - "$info")" == "$build_number" ]]
   [[ -f "$privacy_manifest" && -f "$embedded_profile" ]]
+  # v1.0.7 archived fine but App Store Connect rejected the upload (90360)
+  # because the Live Activity extension had no CFBundleDisplayName.
+  local extension
+  while IFS= read -r -d '' extension; do
+    [[ -n "$(plutil -extract CFBundleDisplayName raw -o - "$extension/Info.plist" 2>/dev/null || true)" ]] || {
+      echo "error: $extension/Info.plist is missing CFBundleDisplayName" >&2
+      exit 1
+    }
+  done < <(find "$app" -name '*.appex' -type d -print0)
   codesign --verify --deep --strict --verbose=2 "$app"
   find "$archive/dSYMs" -name '*.dSYM' -print -quit | grep -q .
   xcrun dwarfdump --uuid "$archive/dSYMs/Cubby.app.dSYM"
