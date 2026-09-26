@@ -190,7 +190,9 @@ struct PhotoImportRunSheet: View {
         case .preparing(let completed, let total):
             preparingView(completed, total)
         case .running:
-            RunningView(session: flow.session, onResume: flow.resume, onDone: finish)
+            RunningView(
+                session: flow.session, onResume: flow.resume,
+                onRetryAnalysis: flow.session.retryFailedAnalysis, onDone: finish)
         }
     }
 
@@ -281,6 +283,7 @@ struct PhotoImportRunSheet: View {
 private struct RunningView: View {
     @Bindable var session: PhotoImportRunSession
     let onResume: () -> Void
+    let onRetryAnalysis: () -> Void
     let onDone: (RunShortcode) -> Void
 
     var body: some View {
@@ -304,6 +307,16 @@ private struct RunningView: View {
                     systemImage: "exclamationmark.triangle"
                 )
                 .foregroundStyle(PorcelainTokens.destructive)
+            }
+            if !session.failedAnalysisPhotos.isEmpty {
+                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+                    ForEach(session.failedAnalysisPhotos, id: \.id) { photo in
+                        Label(photo.file.filename, systemImage: "photo")
+                            .font(.porcelainLabel)
+                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    }
+                }
+                .accessibilityIdentifier("photos.run.failedAnalysis")
             }
             statusAction
         }
@@ -350,7 +363,7 @@ private struct RunningView: View {
                     .buttonStyle(.bordered)
                     .accessibilityIdentifier("photos.run.done")
                 if session.canRetryAnalysis {
-                    Button("Retry photo details") { onResume() }
+                    Button("Retry photo details") { onRetryAnalysis() }
                         .buttonStyle(.bordered)
                         .accessibilityIdentifier("photos.run.retryAnalysis")
                 }

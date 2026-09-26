@@ -720,6 +720,20 @@ public actor CubbyClient {
         }
     }
 
+    /// Idempotent device-side status for one photo-run image target
+    /// (`PhotoImportRunUploader`'s queued/running/paused/failed telemetry as it works through a
+    /// run). Repeating the same `(run, image, state)` is a server no-op, so callers may fire this
+    /// without tracking whether a previous report for the same state landed.
+    public func reportRunDeviceWork(
+        run: RunShortcode, image: ImageCode, state: RunTargetDeviceWorkState, error: String? = nil
+    ) async throws -> Bool {
+        try await perform {
+            try await api.run_reportDeviceWork(
+                body: .json(.init(run: run, image: image, state: state, error: error))
+            ).ok.body.json.recorded
+        }
+    }
+
     // MARK: - Scanning and inventory
 
     /// One raw scanner or keyboard value at a location, classified by the server: a barcode,
