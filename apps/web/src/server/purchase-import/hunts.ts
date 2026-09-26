@@ -6,7 +6,7 @@ import {
   confirmMerchantVendorRuleOut,
   type ConfirmMerchantVendorRuleInput,
 } from "@cubby/schemas/purchase-import";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, or, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -24,6 +24,7 @@ import { currentMemberLedgerParty } from "~/server/repo/member-login";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import { dispatchImportRunEvent } from "./dispatch";
+import { matchProcessedOrderMail } from "./gmail/match";
 import { startOrResumeImportRun } from "./run-service";
 
 const normalizeMerchant = (value: string) =>
@@ -101,6 +102,7 @@ export async function discoverImportHunts(db: Database): Promise<number> {
     .select({
       financialTransactionId: financialTransaction.id,
       ledgerPartyId: financialAccount.ledgerPartyId,
+      amount: financialTransaction.amount,
       transactionDate: financialTransaction.transactionDate,
       vendorId: vendor.id,
       vendorAccountId: vendorAccount.id,
@@ -157,6 +159,10 @@ export async function discoverImportHunts(db: Database): Promise<number> {
   let created = 0;
   for (const row of rows) {
     if (!row.transactionDate || !row.ledgerPartyId) continue;
+    const window = {
+      dateFrom: shiftDate(row.transactionDate, -7),
+      dateTo: shiftDate(row.transactionDate, 7),
+    };
     const inserted = await database
       .insert(importHunt)
       .values({
@@ -168,19 +174,41 @@ export async function discoverImportHunts(db: Database): Promise<number> {
           row.orderEvidence === "receipt_only"
             ? "receipt_required"
             : "pending_mail",
-        dateFrom: shiftDate(row.transactionDate, -7),
-        dateTo: shiftDate(row.transactionDate, 7),
+        ...window,
       })
       .onConflictDoNothing()
-      .returning({ id: importHunt.id });
+      .returning({ id: importHunt.id, state: importHunt.state });
+    const [hunt] = inserted;
     created += inserted.length;
+    // Order confirmations usually arrive days before the statement charge,
+    // so mail processing found no hunt to resolve; match that mail now.
+    if (hunt?.state !== "pending_mail") continue;
+    const matchedOrderIds = await matchProcessedOrderMail(db, {
+      ledgerPartyId: row.ledgerPartyId,
+      vendorId: row.vendorId,
+      amount: row.amount,
+      ...window,
+    });
+    if (!matchedOrderIds) continue;
+    await database
+      .update(importHunt)
+      .set({ state: "pending_browser", matchedOrderIds, updatedAt: new Date() })
+      .where(eq(importHunt.id, hunt.id));
   }
   return created;
 }
 
+/**
+ * How long an unmatched `pending_mail` hunt waits for the hourly mail sync
+ * before a browser run looks for its order. A hunt whose order id is already
+ * known (`pending_browser`) dispatches immediately.
+ */
+export const MAIL_GRACE_MS = 24 * 60 * 60 * 1_000;
+
 export async function dispatchImportHunts(
   db: Database,
   queue: PurchaseAgentQueueProducer,
+  now = new Date(),
 ): Promise<number> {
   const database = getDb(db);
   const hunts = await database
@@ -203,7 +231,15 @@ export async function dispatchImportHunts(
         notDeleted(vendorAccount),
       ),
     )
-    .where(inArray(importHunt.state, ["pending_browser", "pending_mail"]));
+    .where(
+      or(
+        eq(importHunt.state, "pending_browser"),
+        and(
+          eq(importHunt.state, "pending_mail"),
+          lte(importHunt.createdAt, new Date(now.getTime() - MAIL_GRACE_MS)),
+        ),
+      ),
+    );
   let dispatched = 0;
   const runsByAccount = new Map<
     string,

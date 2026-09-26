@@ -1,7 +1,7 @@
 import { parseEntityId, importRunId } from "@cubby/schemas/identifiers";
 import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { generateShortcode } from "@cubby/shared";
-import { and, eq, gte, inArray, isNotNull, isNull, lte, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
 
 import { classifyOrderMail } from "~/server/agents/purchase-import/extract";
 import type { Database } from "~/server/db";
@@ -25,7 +25,7 @@ import { sha256Hex } from "~/server/semantic/hash";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
 
 import { refundTally } from "../findings";
-import { uniqueOrderSubsetForCharge } from "../writer-policy";
+import { orderAmountsInHuntWindow, uniqueOrderSubsetIds } from "./match";
 import type { GmailOrderMailAttachment } from "./types";
 
 const cents = (value: number) => Math.round(value * 100);
@@ -292,46 +292,13 @@ export async function processOrderMails(
       if (!matchedHunt) {
         const subsetMatches: { id: string; orderIds: string[] }[] = [];
         for (const candidate of sameDirection) {
-          const events = await database
-            .select({
-              orderId: orderMailEvent.orderId,
-              amount: orderMailEvent.amount,
-            })
-            .from(orderMailEvent)
-            .innerJoin(orderMail, eq(orderMail.id, orderMailEvent.orderMailId))
-            .where(
-              and(
-                eq(orderMail.ledgerPartyId, mail.ledgerPartyId),
-                eq(orderMail.vendorId, matchedVendor.id),
-                isNotNull(orderMailEvent.orderId),
-                isNotNull(orderMailEvent.amount),
-                isRefund
-                  ? eq(orderMailEvent.event, "refunded")
-                  : ne(orderMailEvent.event, "refunded"),
-                gte(
-                  orderMailEvent.occurredAt,
-                  new Date(`${candidate.dateFrom}T00:00:00.000Z`),
-                ),
-                lte(
-                  orderMailEvent.occurredAt,
-                  new Date(`${candidate.dateTo}T23:59:59.999Z`),
-                ),
-              ),
-            );
-          const byOrder = new Map<string, number>();
-          for (const event of events) {
-            if (event.orderId && event.amount !== null)
-              byOrder.set(event.orderId, Math.abs(event.amount));
-          }
-          const subset = uniqueOrderSubsetForCharge(
-            Math.abs(candidate.amount),
-            [...byOrder].map(([id, amount]) => ({ id, amount })),
-          );
-          if (subset)
-            subsetMatches.push({
-              id: candidate.id,
-              orderIds: subset.map(({ id }) => id),
-            });
+          const orders = await orderAmountsInHuntWindow(db, {
+            ledgerPartyId: mail.ledgerPartyId,
+            vendorId: matchedVendor.id,
+            ...candidate,
+          });
+          const orderIds = uniqueOrderSubsetIds(candidate.amount, orders);
+          if (orderIds) subsetMatches.push({ id: candidate.id, orderIds });
         }
         if (subsetMatches.length === 1) matchedHunt = subsetMatches[0] ?? null;
       }
