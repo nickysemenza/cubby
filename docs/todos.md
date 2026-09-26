@@ -34,13 +34,6 @@ history is the archive. Permanent product constraints live in the
   sentence + action empty states, sentence-case labels and facts, the phone
   edit sheet with header actions, and phone rows as the manifest projection.
   What the pass surfaced but did not finish:
-  - A relation section's empty copy is generic (`No products yet.` under
-    "Kit components"). Declare `empty` copy per relation section in the
-    manifest so web and native read the same sentence.
-  - The `Actions ▾` menu cannot preview bulk verbs at rest: it needs the
-    table's `BulkActionsConfig` threaded from `useListBulkActions` through
-    `RTable`; today the bar still replaces the chip run once rows are
-    selected, so nothing is unreachable.
   - The timeline list view keeps its own controls inside the body; the
     ListTimeline artboard draws them as a second 40px band (mode seg, From /
     To chips, order seg, cohort line).
@@ -51,22 +44,26 @@ history is the archive. Permanent product constraints live in the
     the next canvas edit.
 
 - **Photo-flow leftovers from #1084/#1086.** Small, independent:
-  - `PhotoRelatedCreateEditor.renders(_:)` hides `pendingImageIds`,
-    `removeImageIds`, `imageOrder` by literal; emit the image-field key set
-    from `image-policy.gen.ts` into `PhotoImportCatalog` and read it there.
-  - `EntityDetailView.swift:25` `body` sits at ~207 ms against the 200 ms
-    type-check limit and flickers in and out of the warning; split it like
-    `PhotoImportHero`/`PhotoLibraryCell`.
   - The classification sweep and the review sheet's `LocalPhotoAnalyzer` share no Vision
     gate (sweep 2 concurrent, analyzer 4); if a review-sheet analysis measurably slows while the
     sweep runs, add a `PhotoVisionGate` actor both acquire, with the sheet yielding the sweep.
-  - `query(_:preloaded:)` still does one `hash(for:)` actor round trip per never-hashed asset
-    on first run; batch the misses once the batch read can say "looked up, absent".
   - The `createSelf` compile check verifies "target is creatable" via
     `contract.create !== null`, not the runtime kernel binding's
     `createInput` (the generator runs before that file exists); if the two
     ever disagree the route fails at commit time with `CONSTRAINT_VIOLATION`
     instead of at generation.
+
+- **Durable CalDAV dirty-mark fallback.** `scheduleCalendarFeedDirty`
+  (`apps/web/src/server/calendar/client.ts`) now retries the Durable Object
+  `markDirty` twice inside its `waitUntil`, but a failure that outlasts the
+  retries still leaves the feed stale until the next write. Fall back to a
+  background-queue message; it needs a database handle the call site lacks.
+
+- **Test the photo-approval `lastError` guard.** The `state='proposed'` guard
+  on the approval failure's `lastError` write
+  (`apps/web/src/server/photo-import-run/proposals.ts`) protects a group frozen
+  by a concurrent commit between read and write; exercising it needs a
+  deterministic race harness (a trigger or advisory lock).
 
 - **`location.tags` has no redundant-token prune target.** `product.tags`
   gets `control.suggest.mode: "prune"` (`redundant-tokens.ts`); the mechanism
@@ -1335,7 +1332,10 @@ Deferred from the 2026-09 manifest-rendering and deletion/parity PRs; unordered.
 - **Put `deleteStatementRows` on policy-driven removal.** It is the last
   hand-written cascade (`apps/web/src/server/repo/statement-row.ts`); it takes a
   filter rather than ids and StatementRow has no `AuditEntityType`, so it waits
-  on "StatementRow and StatementImport as manifest entities".
+  on "StatementRow and StatementImport as manifest entities". The image hard
+  delete stays on its own `IMAGE_HARD_DELETE` path on purpose: images are not
+  auditable, and `removeEntity` must not run for them
+  (`repo/removal/core.unit.test.ts` pins this).
 
 - **Expose recipebridge conversion, needs, costing and nutrition via cubby-ffi**
   only alongside the first native screen that scales a recipe or prices a meal.
