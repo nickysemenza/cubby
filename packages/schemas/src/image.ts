@@ -1,3 +1,4 @@
+import { IMAGE_FIELD_KEYS } from "./image-field-keys";
 import {
   imageOut,
   imageAnalysisSummarySchema,
@@ -198,6 +199,17 @@ export const updateInputImages = z.object({
   removeImageIds: z.array(imageShortcode).optional(),
   imageOrder: z.array(imageShortcode).optional(),
 });
+
+// A key added to one list and not the other fails to compile here.
+type ImageFieldKey = (typeof IMAGE_FIELD_KEYS)[number];
+({}) satisfies Record<
+  Exclude<keyof typeof updateInputImages.shape, ImageFieldKey>,
+  never
+>;
+({}) satisfies Record<
+  Exclude<ImageFieldKey, keyof typeof updateInputImages.shape>,
+  never
+>;
 
 export type UpdateInputImages = z.infer<typeof updateInputImages>;
 

@@ -3,21 +3,8 @@ import {
   photoCategories,
   photoCategoryKeys,
 } from "../../../../packages/schemas/src/photo-categories.ts";
-import { updateInputImages } from "../../../../packages/schemas/src/image.ts";
+import { IMAGE_FIELD_KEYS } from "../../../../packages/schemas/src/image-field-keys.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
-
-/**
- * Every entity-create-body key that stages an image action rather than a real field
- * (`pendingImageIds`, `removeImageIds`, `imageOrder`) — `updateInputImages` is the wire
- * schema's own definition of that trio (`packages/schemas/src/image.ts`), so this list
- * cannot drift from it. Emitted into `PhotoImportCatalog.imageFieldKeys` for
- * `PhotoRelatedCreateEditor.renders(_:)` to hide, instead of a hand-maintained Swift literal.
- */
-// SAFETY: `Object.keys` always returns `string[]`; the assertion only narrows away the
-// wider `(keyof typeof updateInputImages.shape)[]` inference to a plain readonly array.
-const IMAGE_FIELD_KEYS = Object.keys(
-  updateInputImages.shape,
-) as readonly string[];
 
 /**
  * Single source of truth for the manifest vocabularies shared by the TS union
