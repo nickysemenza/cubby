@@ -1106,12 +1106,13 @@ private struct PhotoGroupDraftEditView: View {
                     id: itemID, position: 0, targetState: .pending,
                     originalUrl: "synthetic://shirt", cutout: .ready, describe: .ready,
                     describeStartedAt: .now.addingTimeInterval(-1.3), describeCompletedAt: .now,
-                    localAnalysisReady: true, description: "Navy short-sleeve pocket shirt"),
+                    localAnalysisReady: true, description: "Navy short-sleeve pocket shirt",
+                    deviceWorkAttempts: 1),
                 .init(
                     id: labelID, position: 1, targetState: .pending,
                     originalUrl: "synthetic://label", cutout: .skipped, describe: .ready,
                     localAnalysisReady: true, cutoutReason: "Label evidence does not need a cutout",
-                    description: "Neck label close-up"),
+                    description: "Neck label close-up", deviceWorkAttempts: 1),
             ]
             let review = PhotoRunReviewResponse(
                 review: PhotoGroupProposalList(
