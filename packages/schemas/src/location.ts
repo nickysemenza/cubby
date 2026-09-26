@@ -10,7 +10,6 @@ import {
 } from "./generated/entity-field-schemas.location.gen";
 import {
   auditDateFilterFields,
-  deriveUpdateData,
   numericRangeFields,
   timestampedFields,
 } from "./base-entity";
@@ -18,7 +17,6 @@ import { amount } from "./codec";
 import { money, moneyNullable } from "./money";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import {
-  imageShortcode,
   inventoryShortcode,
   locationShortcode,
   productShortcode,
@@ -243,19 +241,6 @@ export const locationInventoryBreakdownOut: z.ZodType<LocationInventoryBreakdown
   );
 
 /**
- * Lightweight `{id, name}` roster for the location filter's `parentLocation`
- * picklist (see `useLocationParentOptions`) — only locations with at least
- * one live child (repo/location/lookup.ts's `locationParentOptions`), not the
- * full location universe. Mirrors `projectOptionsOut`'s role for projects.
- */
-export const locationParentOptionsOut = z.object({
-  id: locationShortcode,
-  name: z.string(),
-  ancestors: z.array(locationAncestorOut),
-});
-export type LocationParentOptionsOut = z.infer<typeof locationParentOptionsOut>;
-
-/**
  * Breadcrumb-only roster row — scalar columns plus the ancestor chain that
  * tells repeated names apart ("shelf 1" exists in four rooms).
  *
@@ -379,28 +364,13 @@ export const infLocationWithSideEffects = infLocation.and(
 
 const optionalLocationShortcode = locationShortcode.nullable().optional();
 
-const locationCreateFields = generatedLocationFieldSchemas.create;
+export const locationCreateInput = z.object(
+  generatedLocationFieldSchemas.create,
+);
 
-export const locationCreateInput = z.object(locationCreateFields);
-
-// Every create field optional; `removeImageIds` is update-only. (The update
-// `parentId` inherits the create field's description — harmless doc, same type.)
-export const locationUpdateData = deriveUpdateData(locationCreateFields, {
-  extend: {
-    // Public `IMG-` codes, as returned by `LocationOut.images[].id` — resolved
-    // to uuids in the repo before they reach the `LocationImage` join table.
-    removeImageIds: z
-      .array(imageShortcode)
-      .optional()
-      .describe(
-        "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
-      ),
-    imageOrder: z
-      .array(imageShortcode)
-      .optional()
-      .describe("existing image ids in display order; first = cover"),
-  },
-});
+export const locationUpdateData = z.object(
+  generatedLocationFieldSchemas.update,
+);
 
 export const locationUpdateInput = z.object({
   id: locationShortcode,

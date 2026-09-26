@@ -13,13 +13,7 @@ import type {
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type {
-  DuplicateProductIdentity,
-  OrphanedProduct,
-  ProductWithBetterUpcData,
-  ToolUsedOutsideOwnership,
-  WeightSoldProduct,
-} from "@cubby/schemas/problems";
+import { ProblemItem } from "@cubby/schemas/problems";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { isMiscProduct } from "@cubby/shared";
 import {
@@ -93,8 +87,6 @@ import { loadProductPricing } from "~/server/repo/product/pricing";
 import { loadProjectDateWindows } from "~/server/repo/project/subtree";
 import { buildTimelineGates } from "~/server/repo/project/tools";
 import { effectiveTaskSubjectProductSql } from "~/server/repo/task-project-inheritance";
-
-export type { ProductWithBetterUpcData };
 
 type ProductWithUpcGapCandidate = {
   id: ProductId;
@@ -259,7 +251,7 @@ const PRODUCT_RETAINING_NOT_EXISTS = {
 /** Orphan candidates have no live evidence; deletion remains a transactional canonical-policy decision. */
 export const findOrphanedProducts = async (
   db: Database,
-): Promise<OrphanedProduct[]> => {
+): Promise<ProblemItem<"orphanedProducts">[]> => {
   const dbClient = getDb(db);
 
   const orphaned = await dbClient
@@ -381,7 +373,7 @@ export const loadSoldButStockedPresenterTotals = async (
 export const findToolsUsedOutsideOwnership = async (
   db: Database,
   options: { today?: string } = {},
-): Promise<ToolUsedOutsideOwnership[]> => {
+): Promise<ProblemItem<"toolsUsedOutsideOwnership">[]> => {
   const dbClient = getDb(db);
   const today = options.today ?? householdLocalDate();
 
@@ -420,7 +412,7 @@ export const findToolsUsedOutsideOwnership = async (
     uniq(edges.map((edge) => edge.projectId)),
   );
 
-  const rows: ToolUsedOutsideOwnership[] = [];
+  const rows: ProblemItem<"toolsUsedOutsideOwnership">[] = [];
   for (const edge of edges) {
     const gate = gates.get(edge.projectId);
     if (!gate) continue;
@@ -451,7 +443,7 @@ export const findToolsUsedOutsideOwnership = async (
 /** Name variants are merge suggestions only: candidates must not share live evidence and never auto-merge. */
 export const findDuplicateProductIdentities = async (
   db: Database,
-): Promise<DuplicateProductIdentity[]> => {
+): Promise<ProblemItem<"duplicateProductIdentities">[]> => {
   const dbClient = getDb(db);
   const manufacturerKey = canonicalLabelKey(product.manufacturer);
   // JavaScript's trim/lower contract is authoritative below. On ASCII-only
@@ -590,7 +582,7 @@ export const findDuplicateProductIdentities = async (
     groups.set(key, group);
   }
 
-  const out: DuplicateProductIdentity[] = [];
+  const out: ProblemItem<"duplicateProductIdentities">[] = [];
   for (const group of groups.values()) {
     if (group.length < 2) continue;
 
@@ -654,14 +646,14 @@ export const synthesizeEffectiveMappings = (
   }
 };
 
-// ProductWithBetterUpcData (productWithBetterUpcDataSchema): a product whose
+// ProblemItem<"productsWithBetterUpcData"> (productWithBetterUpcDataSchema): a product whose
 // stored UPC-sourced fields have a gap (no manufacturer, price, or image) that
 // a *fresh* UPC lookup could fill. A purchase-derived price already closes the
 // price gap. `proposed` carries the value the live lookup would write per field
 // (null ⇒ no change), so the panel can show the actual before→after, not just
 // which fields are missing.
 
-// DB-only prefilter for ProductWithBetterUpcData. The service layer owns the UPC
+// DB-only prefilter for ProblemItem<"productsWithBetterUpcData">. The service layer owns the UPC
 // client call and proposed-value construction; the repo layer only identifies
 // products with stored UPC-sourced gaps that are worth looking up.
 export const findProductsWithUpcGaps = async (
@@ -794,8 +786,8 @@ export const recipeUsageCountsByProduct = async (
 // The coverage grading (USDA enrichment, synthesis, conversionCoverage,
 // islanding) all lives in the service.
 // Carries `shortcode` (product) and `ingredient.shortcode` — needed by the
-// service layer to populate `IngredientWithPartialCoverage.shortcode`/
-// `ingredientShortcode` and `ProductWithIslandedMappings.shortcode` (see
+// service layer to populate `ProblemItem<"ingredientsWithPartialCoverage">.shortcode`/
+// `ingredientShortcode` and `ProblemItem<"productsWithIslandedMappings">.shortcode` (see
 // problems.service.ts's `findProductCoverageProblems`, which owns assembling
 // those rows and currently omits both fields from its push()es).
 export const loadProductsForCoverage = async (
@@ -933,7 +925,7 @@ export const findLinkedProductIds = async (
  */
 export const findWeightSoldProducts = async (
   db: Database,
-): Promise<WeightSoldProduct[]> => {
+): Promise<ProblemItem<"weightSoldProducts">[]> => {
   const res = await getDb(db).execute<{
     id: string;
     name: string;

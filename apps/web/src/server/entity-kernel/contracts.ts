@@ -18,6 +18,10 @@ import {
 import { z } from "zod";
 
 import {
+  generatedEntityRelationListCommandSchema,
+  generatedEntityRelationListResultSchema,
+} from "~/entities/generated/entity-relation-lists.gen";
+import {
   generatedEntityBulkUpdateCommandSchema,
   generatedEntityCreateCommandSchema,
   generatedEntityGetResultSchema,
@@ -108,25 +112,28 @@ const mcpListCommandSchema = z.union(
   ],
 );
 
-const entityQueryCommandSchema = z.discriminatedUnion("action", [
-  z.object({
-    action: z.literal("get"),
-    entity: entityKernelEntitySchema,
-    id: z.string().min(1),
-    missing: z.enum(["error", "null"]).default("error"),
-  }),
-  z.object({
-    action: z.literal("list"),
-    entity: entityKernelEntitySchema,
-    ...listFields,
-  }),
-  z.object({
-    action: z.literal("search"),
-    entity: searchableKernelEntitySchema,
-    query: z.string().trim().min(1).max(100),
-    limit: z.number().int().min(1).max(50).default(5),
-    semantic: z.boolean().default(true),
-  }),
+const entityQueryCommandSchema = z.union([
+  z.discriminatedUnion("action", [
+    z.object({
+      action: z.literal("get"),
+      entity: entityKernelEntitySchema,
+      id: z.string().min(1),
+      missing: z.enum(["error", "null"]).default("error"),
+    }),
+    z.object({
+      action: z.literal("list"),
+      entity: entityKernelEntitySchema,
+      ...listFields,
+    }),
+    z.object({
+      action: z.literal("search"),
+      entity: searchableKernelEntitySchema,
+      query: z.string().trim().min(1).max(100),
+      limit: z.number().int().min(1).max(50).default(5),
+      semantic: z.boolean().default(true),
+    }),
+  ]),
+  generatedEntityRelationListCommandSchema,
 ]);
 
 // Images are deliberately absent: image creation is an upload workflow, not a
@@ -164,10 +171,7 @@ export const entityBrowserMutationCommandSchema = z.union([
   deleteCommandSchema,
   bulkUpdateCommandSchema,
   generatedBrowserEntityRelationCommandSchema,
-]);
-
-const entityMutationCommandSchema = z.union([
-  entityBrowserMutationCommandSchema,
+  // `data` is the entity's own merge input, parsed by its merge port.
   z.object({
     action: z.literal("merge"),
     entity: mergeableEntitySchema,
@@ -177,7 +181,7 @@ const entityMutationCommandSchema = z.union([
 
 export const entityCommandSchema = z.union([
   entityQueryCommandSchema,
-  entityMutationCommandSchema,
+  entityBrowserMutationCommandSchema,
 ]);
 
 export const entityMcpReadCommandSchema = z.union([
@@ -221,7 +225,9 @@ export const entityMcpCommandSchema = z.union([
 ]);
 
 export type EntityQueryCommand = z.infer<typeof entityQueryCommandSchema>;
-export type EntityMutationCommand = z.infer<typeof entityMutationCommandSchema>;
+export type EntityMutationCommand = z.infer<
+  typeof entityBrowserMutationCommandSchema
+>;
 export type EntityBrowserMutationCommand = z.infer<
   typeof entityBrowserMutationCommandSchema
 >;
@@ -237,10 +243,13 @@ export const entitySearchResultSchema = z.object({
   semantic: relatedSearchOutSchema,
 });
 
-export const entityQueryResultSchema = z.discriminatedUnion("action", [
-  generatedEntityGetResultSchema,
-  generatedEntityListResultSchema,
-  entitySearchResultSchema,
+export const entityQueryResultSchema = z.union([
+  z.discriminatedUnion("action", [
+    generatedEntityGetResultSchema,
+    generatedEntityListResultSchema,
+    entitySearchResultSchema,
+  ]),
+  generatedEntityRelationListResultSchema,
 ]);
 
 export const entityDeleteResultSchema = z.object({
@@ -283,23 +292,19 @@ export const entityBulkUpdateResultSchema = z.object({
 export const entityRelationMutationResultSchema =
   generatedEntityRelationMutationResultSchema;
 
-/** Strict wire result for browser mutations; merge remains a workflow API. */
+/** Strict wire result for browser mutations. */
 export const entityBrowserMutationResultSchema = z.union([
   generatedEntityMutationCreateResultSchema,
   generatedEntityMutationUpdateResultSchema,
   entityDeleteResultSchema,
   entityBulkUpdateResultSchema,
   entityRelationMutationResultSchema,
-]);
-
-export const entityMutationResultSchema = z.union([
-  entityBrowserMutationResultSchema,
   generatedEntityMergeResultSchema,
 ]);
 
 type EntityKernelResult =
   | z.infer<typeof entityQueryResultSchema>
-  | z.infer<typeof entityMutationResultSchema>;
+  | z.infer<typeof entityBrowserMutationResultSchema>;
 
 type ResultForCommand<Command extends EntityCommand> =
   EntityKernelResult extends infer Result

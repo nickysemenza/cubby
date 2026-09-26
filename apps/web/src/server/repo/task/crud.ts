@@ -1,17 +1,8 @@
-/**
- * Task CRUD operations.
- *
- * Mirrors project/crud.ts's shape: the read path goes through
- * `createEntityReader`, the write path is hand-rolled so `update` can manage
- * the `blockedByIds` replacement set (delete-then-insert `taskDependency`
- * rows) inside the same transaction as the column update.
- */
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
-  ImageShortcode,
   ProductId,
   ProductShortcode,
   ProjectId,
@@ -33,13 +24,12 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { planting, product, task, taskDependency } from "~/server/db/schema";
+import { product, task, taskDependency } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
   computeChanges,
   diffUnorderedIdSet,
-  logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
@@ -49,9 +39,7 @@ import {
   buildPartialUpdateValues,
   dependencyIdsFor,
   getDb,
-  imageCascadeChild,
   imageJoinBindings,
-  lockAndValidateForDelete,
   notDeleted,
   relations,
   replaceDependencyEdges,
@@ -60,9 +48,17 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import { patchEntityRows } from "~/server/repo/entity-patch";
+import { bulkPatchEntities, patchEntityRows } from "~/server/repo/entity-patch";
 import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
-import { removeEntity } from "~/server/repo/removal";
+/**
+ * Task CRUD operations.
+ *
+ * Mirrors project/crud.ts's shape: the read path goes through
+ * `createEntityReader`, the write path is hand-rolled so `update` can manage
+ * the `blockedByIds` replacement set (delete-then-insert `taskDependency`
+ * rows) inside the same transaction as the column update.
+ */
+import { policyDelete } from "~/server/repo/removal";
 import {
   type EntityRef,
   lookupShortcodes,
@@ -672,106 +668,44 @@ type TaskBulkPatch = Pick<
   "projectId" | "projectMode" | "status" | "trade" | "dueDate" | "dueEndDate"
 >;
 
-export const updateTasksInBulk = async (
+export const updateTasksInBulk = (
   db: Database,
   shortcodes: TaskShortcode[],
   data: TaskBulkPatch,
   actor: ActorContext,
-): Promise<{ updatedIds: TaskId[]; updatedShortcodes: TaskShortcode[] }> => {
-  if (new Set(shortcodes).size !== shortcodes.length) {
+) => {
+  if ((data.dueDate === undefined) !== (data.dueEndDate === undefined)) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "Bulk task IDs must be unique.",
+      "A bulk due-date patch must supply both dueDate and dueEndDate.",
     );
   }
-  if (data.dueDate !== undefined || data.dueEndDate !== undefined) {
-    if (data.dueDate === undefined || data.dueEndDate === undefined) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "A bulk due-date patch must supply both dueDate and dueEndDate.",
-      );
-    }
-  }
-
-  const hasPatch =
-    data.projectId !== undefined ||
-    data.projectMode !== undefined ||
-    data.status !== undefined ||
-    data.trade !== undefined ||
-    data.dueDate !== undefined ||
-    data.dueEndDate !== undefined;
-  if (!hasPatch) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "A bulk task patch must supply at least one field.",
-    );
-  }
-
-  return await withTransaction(db, async (tx) => {
-    const projectId =
-      data.projectId === undefined
-        ? undefined
-        : data.projectId === null
-          ? null
-          : await resolveLiveTaskProjectId(tx, data.projectId);
-    const ids = await resolveLiveTaskIdsOrThrow(tx, shortcodes);
-    const before = await tx
-      .select({
-        id: task.id,
-        shortcode: task.shortcode,
-        projectId: task.projectId,
-        projectMode: task.projectMode,
-        status: task.status,
-        trade: task.trade,
-        dueDate: task.dueDate,
-        dueEndDate: task.dueEndDate,
-      })
-      .from(task)
-      .where(and(inArray(task.id, ids), notDeleted(task)))
-      .for("update");
-    if (before.length !== ids.length) {
-      throw createAppError("TASK_NOT_FOUND", "One or more tasks are missing.");
-    }
-
-    const values = buildPartialUpdateValues({
-      projectId: data.projectMode === "inherit" ? null : projectId,
-      projectMode:
-        data.projectMode ??
-        (data.projectId === undefined ? undefined : "explicit"),
-      status: data.status,
-      trade: data.trade,
-      dueDate: data.dueDate,
-      dueEndDate: data.dueEndDate,
-    });
-    await tx
-      .update(task)
-      .set(values)
-      .where(and(inArray(task.id, ids), notDeleted(task)));
-    await validateLiveEffectiveTrades(tx);
-
-    const auditEntries: AuditEntryInput[] = [];
-    for (const row of before) {
-      const changes = computeChanges(row, { ...row, ...values }, [
-        ...entityFieldModels.task.bulk,
-      ]);
-      if (changes) {
-        auditEntries.push({
-          entityType: "task",
-          entityId: row.id,
-          action: "update",
-          changes,
-        });
-      }
-    }
-    await logAuditEntries(tx, actor, auditEntries);
-
-    return {
-      updatedIds: before.map((row) => row.id),
-      updatedShortcodes: before.map((row) =>
-        parseShortcodeFor("task", row.shortcode),
-      ),
-    };
-  });
+  return bulkPatchEntities(
+    db,
+    actor,
+    {
+      entity: "task",
+      table: task,
+      values: async (tx) => ({
+        projectId:
+          data.projectMode === "inherit" || data.projectId === null
+            ? null
+            : data.projectId === undefined
+              ? undefined
+              : await resolveLiveTaskProjectId(tx, data.projectId),
+        projectMode:
+          data.projectMode ??
+          (data.projectId === undefined ? undefined : "explicit"),
+        status: data.status,
+        trade: data.trade,
+        dueDate: data.dueDate,
+        dueEndDate: data.dueEndDate,
+      }),
+      afterWrite: validateLiveEffectiveTrades,
+    },
+    shortcodes,
+    data,
+  );
 };
 
 /**
@@ -898,98 +832,13 @@ const fetchLiveSubtasks = (dbc: TaskQueryClient, ids: TaskId[]) =>
 /**
  * Soft-delete tasks. One-level cascade: a deleted task's live subtasks have
  * no independent existence (they're checklist items represented via their
- * parent), so they're soft-deleted alongside it — same dependency-edge
- * hard-delete, audit, and embedding cleanup as the explicitly-requested ids.
+ * parent), so they join the removal set and get every disposition too.
  */
-export const deleteTasks = async (
-  db: Database,
-  shortcodes: TaskShortcode[],
-  actor: ActorContext,
-): Promise<{
-  deletedShortcodes: TaskShortcode[];
-  detachedImageKeys: string[];
-  deletedImageShortcodes: ImageShortcode[];
-}> => {
-  if (shortcodes.length === 0)
-    return {
-      deletedShortcodes: [],
-      detachedImageKeys: [],
-      deletedImageShortcodes: [],
-    };
-
-  return await withTransaction(db, async (tx) => {
-    const ids = await resolveLiveTaskIdsOrThrow(tx, shortcodes);
-    await lockAndValidateForDelete(tx, task, ids, "Task");
-
-    const liveSubtasks = await fetchLiveSubtasks(tx, ids);
-    const explicitlyDeletedIds = new Set(ids);
-    const cascadedSubtasks = liveSubtasks.filter(
-      (subtask) => !explicitlyDeletedIds.has(subtask.id),
-    );
-    const allIds = [...ids, ...cascadedSubtasks.map((subtask) => subtask.id)];
-
-    // TASK_DELETE_EDGE_POLICY declares `Planting.taskId` `detach`: a planting
-    // outlives the task that produced it. `removeEntity`'s cascade has no
-    // detach arm, so this is hand-written — mirrors `purchase.ts`'s
-    // expense-detach pattern. Over `allIds` so a cascaded subtask's plantings
-    // detach too.
-    const detachingPlantings = await tx
-      .select({ id: planting.id, taskId: planting.taskId })
-      .from(planting)
-      .where(and(inArray(planting.taskId, allIds), notDeleted(planting)));
-    if (detachingPlantings.length > 0) {
-      await tx
-        .update(planting)
-        .set({ taskId: null })
-        .where(and(inArray(planting.taskId, allIds), notDeleted(planting)));
-      await logAuditEntries(
-        tx,
-        actor,
-        detachingPlantings.map((row) => ({
-          entityType: "planting" as const,
-          entityId: row.id,
-          action: "update" as const,
-          changes: { taskId: { from: row.taskId, to: null } },
-        })),
-      );
-    }
-
-    // Over `allIds`, not `ids`: the cascaded subtasks are removals too — this
-    // also makes the image cascade below reap a subtask's own photos, not just
-    // the parent's. Their public shortcodes are returned below so callers
-    // report what was actually deleted rather than projecting the request into
-    // an incomplete result.
-    const { detachedImageKeys, deletedImageShortcodes } = await removeEntity(
-      tx,
-      {
-        entity: "task",
-        ids: allIds,
-        removal: "soft",
-        actor,
-        children: [
-          // Both ends: a dependency edge carries no meaning once either endpoint
-          // is gone, so it is hard-deleted rather than soft-deleted.
-          {
-            table: taskDependency,
-            parentColumns: [
-              taskDependency.taskId,
-              taskDependency.blockedByTaskId,
-            ],
-            mode: "hard",
-          },
-          imageCascadeChild(),
-        ],
-      },
-    );
-    return {
-      deletedShortcodes: [
-        ...shortcodes,
-        ...cascadedSubtasks.map((row) =>
-          parseShortcodeFor("task", row.shortcode),
-        ),
-      ],
-      detachedImageKeys,
-      deletedImageShortcodes,
-    };
-  });
-};
+export const deleteTasks = policyDelete("task", TASK_DELETE_EDGE_POLICY, {
+  expand: async (tx, ids) => [
+    ...new Set([
+      ...ids,
+      ...(await fetchLiveSubtasks(tx, ids)).map((subtask) => subtask.id),
+    ]),
+  ],
+});

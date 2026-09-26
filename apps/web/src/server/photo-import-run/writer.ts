@@ -52,18 +52,9 @@ import { attachExistingImageToEntity } from "~/server/repo/image";
 import { createInventoryEntry } from "~/server/repo/inventory/crud";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/request-context";
+import { sha256Hex } from "~/server/semantic/hash";
 import { createProductWithSideEffects } from "~/server/services/product-orchestration.service";
 import { createProductWriteActions } from "~/server/services/product.service";
-
-const sha256 = async (value: string): Promise<string> => {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-};
 
 /**
  * Bookkeeping recorded on `ImportRunTarget.diff` for an attached (or skipped)
@@ -366,7 +357,7 @@ async function resolveProduct(
       targetId: productEntityId,
       mutationKind: "create",
       fields: ["name", "categoryId", "manufacturer", "model", "notes", "tags"],
-      postFingerprint: await sha256(
+      postFingerprint: await sha256Hex(
         JSON.stringify({ groupKey: input.groupKey, product: input.product }),
       ),
       auditLogId: await latestAuditLogId(txDb, "product", productEntityId),
@@ -441,7 +432,7 @@ async function receiveInventory(
       targetId: inventoryEntityId,
       mutationKind: "create",
       fields: ["amount", "ownershipMode", "ownerLedgerPartyId"],
-      postFingerprint: await sha256(
+      postFingerprint: await sha256Hex(
         JSON.stringify({
           groupKey: input.groupKey,
           inventory: input.inventory,
@@ -519,7 +510,7 @@ async function markTargets(
         targetId: entry.imageId,
         mutationKind: "attach",
         fields: ["purpose"],
-        postFingerprint: await sha256(
+        postFingerprint: await sha256Hex(
           JSON.stringify({
             groupKey,
             imageId: entry.code,
@@ -550,7 +541,7 @@ async function markTargets(
         targetId: entry.imageId,
         mutationKind: "skip",
         fields: ["warning"],
-        postFingerprint: await sha256(
+        postFingerprint: await sha256Hex(
           JSON.stringify({
             groupKey,
             imageId: entry.code,

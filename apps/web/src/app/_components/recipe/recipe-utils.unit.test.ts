@@ -1,3 +1,4 @@
+import { totalsPreview } from "@cubby/schemas/nutrition";
 import type { RecipeOut, SectionIngredient } from "@cubby/schemas/recipe";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { expect, it } from "vitest";
@@ -70,6 +71,7 @@ it("recipe utils", () => {
     updatedAt: new Date(),
     forkedFromRecipeId: null,
     forkedFromRecipeName: null,
+    ...totalsPreview(null),
   };
   let si: SectionIngredient | undefined = recipe.sections[1]?.ingredients[0];
   expect(si).toBeDefined();
@@ -136,6 +138,7 @@ it("getServingBasis prefers servings and labels yield units", () => {
     updatedAt: new Date(),
     forkedFromRecipeId: null,
     forkedFromRecipeName: null,
+    ...totalsPreview(null),
   };
 
   expect(getServingBasis({ ...base, servings: 4 })).toEqual({

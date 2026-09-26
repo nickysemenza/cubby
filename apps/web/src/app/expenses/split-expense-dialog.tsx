@@ -39,11 +39,11 @@ import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatusText } from "~/components/ui/status-text";
 import { entityDetailLink } from "~/entities/entities";
+import { fieldEnumOptions } from "~/entities/enum-field-display";
 import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
 
 import { useActionMutation } from "../_components/hooks/useActionMutation";
-import { costTypeOptions } from "./expense-options";
 
 /**
  * One part being drafted. `cost` stays a string so a half-typed or cleared
@@ -261,7 +261,7 @@ export function SplitExpenseDialog({
               </Row>
               <Row align="center" gap="sm" wrap>
                 <StaticPicker
-                  items={costTypeOptions}
+                  items={fieldEnumOptions("expense", "costType")}
                   value={part.costType}
                   onValueChange={(next) => {
                     // Required enum — a cleared picker is a no-op.

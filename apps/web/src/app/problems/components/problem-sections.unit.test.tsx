@@ -2,7 +2,7 @@ import {
   type AllProblems,
   EMPTY_PROBLEM_ARRAYS,
   PROBLEM_CLASS,
-  imageProcessingProblemSchema,
+  problemRowSchema,
   type ProblemKey,
   understatedCostMealSchema,
 } from "@cubby/schemas/problems";
@@ -154,7 +154,7 @@ describe("PROBLEM_SECTIONS", () => {
     harness.dispose();
   });
 
-  it("renders current image processing findings as image links", async () => {
+  it("renders a uniform problem row as an entity link with its badges", async () => {
     const harness = createBrowserTestHarness();
     await act(async () => {
       await harness.loadRouter();
@@ -163,10 +163,12 @@ describe("PROBLEM_SECTIONS", () => {
       (candidate) => candidate.id === "image-processing",
     );
     if (!section) throw new Error("Missing image-processing Problems section");
-    const issue = imageProcessingProblemSchema.parse({
+    const issue = problemRowSchema.parse({
+      entity: "image",
       id: testShortcode("image", "needs-review"),
-      filename: "garden-photo.jpg",
-      processingIssue: "review_needed",
+      name: "garden-photo.jpg",
+      subtitle: "Cutout eligibility needs review",
+      badges: [{ label: "Needs review", entity: null, id: null }],
     });
     const problems: AllProblems = {
       ...EMPTY_PROBLEM_ARRAYS,

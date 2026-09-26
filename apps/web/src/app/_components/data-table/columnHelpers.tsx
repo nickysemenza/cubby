@@ -5,8 +5,6 @@ import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   type LocationShortcode,
-  type ProductShortcode,
-  type ProjectShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
@@ -58,16 +56,15 @@ import {
   entityPluralLabel,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
-import { multiSelectFilterFn, multiSelectFilterFnBy } from "~/entities/filters";
+import { multiSelectFilterFn } from "~/entities/filters";
 import { type BaseKind, gradedKinds } from "~/lib/conversion-coverage";
 import { colorizeSelectOptions } from "~/lib/select-options";
 import { cn, formatCurrency } from "~/lib/utils";
 
 import {
-  buildIngredientComboboxItem,
   buildLocationComboboxItem,
   buildProductComboboxItem,
-  buildRecipeComboboxItem,
+  buildRecordComboboxItem,
 } from "../combobox/combobox-builders";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import {
@@ -111,7 +108,6 @@ import type {
   CubbyCellContext as CellContext,
   CubbyColumnDef,
   CubbyColumnHelper as ColumnHelper,
-  CubbyRow as TableRow,
 } from "./table-features";
 import {
   attachCubbyColumnMeta,
@@ -122,47 +118,6 @@ import {
 export type { FilterConfig, MobileColumnMeta, MobileSlot } from "./table-meta";
 
 export { multiSelectFilterFn };
-
-const projectRefSchema = z.object({ id: z.string().nullish() }).nullish();
-const sortableEntityRefSchema = z
-  .object({ name: z.string().nullish() })
-  .nullish();
-
-const projectRefFilterFn = multiSelectFilterFnBy((value) => {
-  const parsed = projectRefSchema.safeParse(value);
-  return parsed.success ? (parsed.data?.id ?? null) : null;
-});
-
-/**
- * Sorts an entity-reference column ({id, name}) by name.
- *
- * REQUIRED on any column with an object accessor that allows sorting. TanStack's
- * `getAutoSortingFn` sees no string/Date and falls back to `sortingFns.basic`
- * (`a === b ? 0 : a > b ? 1 : -1`) — for two distinct objects BOTH comparisons
- * are false, so it returns -1 for every pair. That's an inconsistent
- * comparator, and Array.sort on one yields an arbitrary permutation, not an
- * unsorted list.
- *
- * Nulls last in both directions, matching the server's convention
- * (`buildOrderBy` in database-helpers/query.ts) so a client-sorted table and a
- * server-sorted one agree.
- */
-function entityRefSortingFn(
-  a: Pick<TableRow<RowData>, "getValue">,
-  b: Pick<TableRow<RowData>, "getValue">,
-  columnId: string,
-): number {
-  const nameOf = (row: Pick<TableRow<RowData>, "getValue">) => {
-    const parsed = sortableEntityRefSchema.safeParse(row.getValue(columnId));
-    return parsed.success ? (parsed.data?.name ?? null) : null;
-  };
-  const left = nameOf(a);
-  const right = nameOf(b);
-  if (left === right) return 0;
-  if (left === null) return 1;
-  if (right === null) return -1;
-  return left.localeCompare(right);
-}
 
 interface BaseRow {
   id: string | number;
@@ -1286,48 +1241,6 @@ function CanonicalSingleEntityLink({
   );
 }
 
-type CanonicalEntityRefLinkProps =
-  | { entity: "task" | "project"; data: { id: string; name: string } }
-  | {
-      entity: "product";
-      data: { id: string; name: string; manufacturer?: string };
-    };
-
-function CanonicalEntityRefLink({ entity, data }: CanonicalEntityRefLinkProps) {
-  const displayImage = useEntityDisplayImage({
-    entityType: entity,
-    entityId: data.id,
-  });
-  if (entity === "task") {
-    return (
-      <EntityInlineLink
-        displayImage={displayImage}
-        entity="task"
-        data={data}
-        truncate
-      />
-    );
-  }
-  if (entity === "project") {
-    return (
-      <EntityInlineLink
-        displayImage={displayImage}
-        entity="project"
-        data={data}
-        truncate
-      />
-    );
-  }
-  return (
-    <EntityInlineLink
-      displayImage={displayImage}
-      entity="product"
-      data={data}
-      truncate
-    />
-  );
-}
-
 type SingleEntityAdapter = {
   /** Validates a row's relation summary once before constructing its UI data. */
   parse: (
@@ -1386,11 +1299,7 @@ function defineSingleEntityAdapter<TData>(
  */
 const singleEntityAdapters = {
   ingredient: defineSingleEntityAdapter(ingredientInlineSchema, {
-    buildItem: (data) =>
-      buildIngredientComboboxItem({
-        ...data,
-        id: parseShortcodeFor("ingredient", data.id),
-      }),
+    buildItem: (data) => buildRecordComboboxItem("ingredient", data),
     renderLink: (data) => (
       <CanonicalSingleEntityLink entity="ingredient" data={data} />
     ),
@@ -1430,11 +1339,7 @@ const singleEntityAdapters = {
     SearchProvider: (props) => <WithEntitySearch entity="product" {...props} />,
   }),
   recipe: defineSingleEntityAdapter(recipeInlineSchema, {
-    buildItem: (data) =>
-      buildRecipeComboboxItem({
-        ...data,
-        id: parseShortcodeFor("recipe", data.id),
-      }),
+    buildItem: (data) => buildRecordComboboxItem("recipe", data),
     renderLink: (data) => (
       <CanonicalSingleEntityLink entity="recipe" data={data} />
     ),
@@ -1885,125 +1790,6 @@ export function createBooleanColumn<
   );
 }
 
-export function createFilterableSelectColumn<
-  K extends PropertyKey,
-  T extends Record<K, string | null | undefined>,
->(
-  columnHelper: ColumnHelper<T>,
-  accessor: K,
-  options: {
-    header?: string;
-    placeholder: string;
-    selectOptions: FilterableComboboxItem[];
-    /**
-     * Override the default tinted-pill render. Omit it — the default reads the
-     * label and tone straight off `selectOptions`, which is what keeps a cell
-     * and its editor in agreement.
-     */
-    renderCell?: (value: T[K]) => ReactNode;
-    className?: string;
-    mobile?: MobileColumnMeta;
-    /**
-     * Override the derived filter control — pass `manifestFilterConfig(...)`
-     * so a table that bypasses `useStandardColumns` (the embedded
-     * project-detail tables) still gets the manifest's control type instead of
-     * silently staying single-select.
-     *
-     * Pass `null` for **no filter control at all**. Omitting this prop derives
-     * one from `selectOptions`, so a column that must not be filterable here
-     * (because something else already owns that concept — e.g. the `/projects`
-     * dashboard's server-side status/kind chips) has no other way to say so,
-     * and would otherwise silently AND a second, client-side filter on top.
-     */
-    filterConfig?: FilterConfig | null;
-    editable?: {
-      parseValue: (value: string | null) => T[K];
-      onSave: (newValue: T[K], row: T) => Promise<void>;
-      /** When the column's `control.suggest` exists — the row's entity and
-       * the manifest field key this column edits. Basis is built from `row`
-       * per cell, queried only while its editor is open. */
-      suggest?: { entity: ShortcodeEntity; field: string };
-    };
-  },
-) {
-  const selectOptions = colorizeSelectOptions(options.selectOptions);
-  const renderCell =
-    options.renderCell ??
-    ((value: T[K]) => renderOptionCell(value ?? null, selectOptions));
-  const editable = options.editable;
-  const cellData = selectCellData<T>(
-    (row) => row[accessor] ?? null,
-    selectOptions,
-    editable
-      ? (row, value) => editable.onSave(editable.parseValue(value), row)
-      : undefined,
-  );
-  // `null` is an explicit opt-out (no control); `undefined` derives one.
-  const filterConfig: FilterConfig | undefined =
-    options.filterConfig === null
-      ? undefined
-      : (options.filterConfig ?? {
-          placeholder: options.placeholder,
-          filterType: "select",
-          options: selectOptions,
-        });
-  const columnOptions = createEditableAccessorColumn(
-    columnHelper,
-    (row: T) => row[accessor],
-    {
-      id: String(accessor),
-      header: options.header,
-      className: options.className,
-      mobile: options.mobile,
-      filterConfig,
-      cellData,
-      renderValue: renderCell,
-      renderEditable: editable
-        ? (value, row, clipboard) => {
-            const suggestConfig = editable.suggest;
-            const suggest = suggestConfig
-              ? {
-                  basisMode: "provided" as const,
-                  entity: suggestConfig.entity,
-                  targets: [suggestConfig.field],
-                  basis: fieldSuggestionBasisFromRecord(
-                    suggestConfig.entity,
-                    suggestTargetsFor(suggestConfig.entity, [
-                      suggestConfig.field,
-                    ]),
-                    row,
-                  ),
-                }
-              : undefined;
-            return (
-              <EditableCell
-                value={value ?? null}
-                onSave={(nextValue) =>
-                  editable.onSave(editable.parseValue(nextValue), row)
-                }
-                clipboard={clipboard}
-                config={{
-                  type: "select",
-                  options: selectOptions,
-                  placeholder: options.placeholder,
-                  suggest,
-                }}
-                renderValue={(nextValue) =>
-                  renderCell(editable.parseValue(nextValue))
-                }
-              />
-            );
-          }
-        : undefined,
-    },
-  );
-  // Client-side tables resolve a filter function from the row value's type.
-  if (filterConfig?.filterType === "multiselect") {
-    Object.assign(columnOptions, { filterFn: multiSelectFilterFn });
-  }
-  return columnOptions;
-}
-
 export function createExternalLinkColumn<
   K extends PropertyKey,
   T extends Record<K, string | number | null | undefined>,
@@ -2084,40 +1870,6 @@ export function createExternalLinkColumn<
           {shown}
         </TableLink>
       );
-    },
-  });
-}
-
-export function createTimestampColumn<
-  K extends PropertyKey,
-  T extends Record<K, string | Date | null | undefined>,
->(
-  columnHelper: ColumnHelper<T>,
-  accessor: K,
-  options?: {
-    header?: string;
-    fallback?: ReactNode;
-    className?: string;
-    mobile?: MobileColumnMeta;
-  },
-) {
-  const fallback = options?.fallback ?? <NoneValue />;
-  const valueFor = (row: T) => row[accessor] ?? null;
-
-  return columnHelper.accessor(valueFor, {
-    id: String(accessor),
-    header: options?.header,
-    meta: attachCubbyColumnMeta({
-      className: options?.className,
-      mobile: options?.mobile,
-      // Copy-only ISO date-time (see createCreatedAtColumn).
-      cellData: timestampCellData<T>(valueFor),
-    }),
-    cell: (info) => {
-      const value = info.getValue();
-      return value
-        ? renderScalarValue({ kind: "timestamp", raw: value })
-        : fallback;
     },
   });
 }
@@ -2291,374 +2043,4 @@ export function createPlainDateColumn<
         }
       : undefined,
   });
-}
-
-interface ProjectRefRow {
-  projectId: string | null;
-  projectName: string | null;
-}
-
-export function createProjectLinkColumn<T extends ProjectRefRow>(
-  columnHelper: ColumnHelper<T>,
-  options?: {
-    id?: string;
-    header?: string;
-    className?: string;
-    mobile?: MobileColumnMeta;
-    filterConfig?: FilterConfig;
-    editable?: {
-      enabled?: (row: T) => boolean;
-      onSave: (newProjectId: ProjectShortcode | null, row: T) => Promise<void>;
-      /** When the owning field's `control.suggest` exists — the row's own
-       * entity and the manifest field key this column edits (`T` is shared
-       * across task/expense, so the caller names which). */
-      suggest?: { entity: ShortcodeEntity; field: string };
-    };
-  },
-) {
-  const editable = options?.editable;
-  const canEdit = (row: T) =>
-    editable?.enabled?.(row) ?? editable !== undefined;
-  const cellData = entityCellData<T, ProjectShortcode>(
-    "project",
-    (value) => parseShortcodeFor("project", value),
-    (row) =>
-      row.projectId && row.projectName
-        ? {
-            id: parseShortcodeFor("project", row.projectId),
-            name: row.projectName,
-          }
-        : null,
-    editable
-      ? (row, id) =>
-          canEdit(row)
-            ? editable.onSave(id, row)
-            : Promise.reject(
-                new Error("This project is allocated by its purchase."),
-              )
-      : undefined,
-    editable
-      ? (row) =>
-          canEdit(row)
-            ? editable.onSave(null, row)
-            : Promise.reject(
-                new Error("This project is allocated by its purchase."),
-              )
-      : undefined,
-  );
-  const columnOptions = {
-    id: options?.id ?? "project",
-    header: options?.header ?? "Project",
-    sortFn: entityRefSortingFn,
-    meta: attachCubbyColumnMeta({
-      className: options?.className,
-      mobile: options?.mobile,
-      filterConfig: options?.filterConfig,
-      cellData,
-      entityRefs: (row) =>
-        row.projectId
-          ? [{ entityType: "project", entityId: row.projectId }]
-          : [],
-    }),
-    cell: (
-      info: CellContext<T, { id: string | null; name: string | null }>,
-    ) => {
-      const { id, name } = info.getValue();
-
-      if (editable && canEdit(info.row.original)) {
-        const current: ComboboxItem<ProjectShortcode> | null =
-          id && name ? { id: parseShortcodeFor("project", id), name } : null;
-        const row = info.row.original;
-        const suggestConfig = editable.suggest;
-        const suggest = suggestConfig
-          ? {
-              basisMode: "provided" as const,
-              entity: suggestConfig.entity,
-              targets: [suggestConfig.field],
-              basis: fieldSuggestionBasisFromRecord(
-                suggestConfig.entity,
-                suggestTargetsFor(suggestConfig.entity, [suggestConfig.field]),
-                row,
-              ),
-            }
-          : undefined;
-        return (
-          <EditableEntityCell
-            value={current}
-            label="project"
-            clearable
-            trigger="pencil"
-            onSave={(newId) => editable.onSave(newId, row)}
-            clipboard={specFromCellData(cellData, row)}
-            suggest={suggest}
-            SearchProvider={(props) => (
-              <WithEntitySearch entity="project" {...props} />
-            )}
-            renderValue={(value) => {
-              if (!value) return <NoneValue />;
-              return (
-                <TableLink
-                  to="/projects/$shortcode"
-                  params={{ shortcode: row.projectId ?? "" }}
-                  variant="muted"
-                >
-                  {value.name}
-                </TableLink>
-              );
-            }}
-          />
-        );
-      }
-
-      if (!id || !name) return <NoneValue />;
-      return <CanonicalEntityRefLink entity="project" data={{ id, name }} />;
-    },
-  };
-  // Client-side project-detail tables filter the object-valued accessor by id.
-  if (options?.filterConfig?.filterType === "multiselect") {
-    Object.assign(columnOptions, { filterFn: projectRefFilterFn });
-  }
-  return columnHelper.accessor(
-    (row: T) => ({
-      id: row.projectId,
-      name: row.projectName,
-    }),
-    columnOptions,
-  );
-}
-
-interface ProductRefRow {
-  productId: string | null;
-  productName: string | null;
-}
-
-interface SubjectProductRefRow {
-  subjectProductId: string | null;
-  subjectProductName: string | null;
-}
-
-export function createProductLinkColumn<T extends ProductRefRow>(
-  columnHelper: ColumnHelper<T>,
-  options?: {
-    id?: string;
-    header?: string;
-    className?: string;
-    mobile?: MobileColumnMeta;
-    filterConfig?: FilterConfig;
-    editable?: {
-      onSave: (newProductId: ProductShortcode | null, row: T) => Promise<void>;
-    };
-  },
-) {
-  const editable = options?.editable;
-  const cellData = entityCellData<T, ProductShortcode>(
-    "product",
-    (value) => parseShortcodeFor("product", value),
-    (row) =>
-      row.productId && row.productName
-        ? {
-            id: parseShortcodeFor("product", row.productId),
-            name: row.productName,
-          }
-        : null,
-    editable ? (row, id) => editable.onSave(id, row) : undefined,
-    editable ? (row) => editable.onSave(null, row) : undefined,
-  );
-  return columnHelper.accessor(
-    (row) => ({
-      id: row.productId,
-      name: row.productName,
-    }),
-    {
-      id: options?.id ?? "product",
-      header: options?.header ?? "Product",
-      sortFn: entityRefSortingFn,
-      meta: attachCubbyColumnMeta({
-        className: options?.className,
-        mobile: options?.mobile,
-        filterConfig: options?.filterConfig,
-        cellData,
-        entityRefs: (row) =>
-          row.productId
-            ? [{ entityType: "product", entityId: row.productId }]
-            : [],
-      }),
-      cell: (info) => {
-        const { id, name } = info.getValue();
-
-        if (editable) {
-          const current: ComboboxItem<ProductShortcode> | null =
-            id && name ? { id: parseShortcodeFor("product", id), name } : null;
-          const row = info.row.original;
-          return (
-            <EditableEntityCell
-              value={current}
-              label="product"
-              clearable
-              trigger="pencil"
-              onSave={(newId) => editable.onSave(newId, row)}
-              clipboard={specFromCellData(cellData, row)}
-              SearchProvider={(props) => (
-                <WithEntitySearch entity="product" {...props} />
-              )}
-              renderValue={(v) =>
-                v ? (
-                  <CanonicalEntityRefLink
-                    entity="product"
-                    data={{ id: v.id, name: v.name }}
-                  />
-                ) : (
-                  <NoneValue />
-                )
-              }
-            />
-          );
-        }
-
-        if (!id || !name) return <NoneValue />;
-        return <CanonicalEntityRefLink entity="product" data={{ id, name }} />;
-      },
-    },
-  );
-}
-
-export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
-  columnHelper: ColumnHelper<T>,
-  options?: {
-    id?: string;
-    className?: string;
-    mobile?: MobileColumnMeta;
-    filterConfig?: FilterConfig;
-    editable?: {
-      onSave: (newProductId: ProductShortcode | null, row: T) => Promise<void>;
-    };
-  },
-) {
-  const editable = options?.editable;
-  const cellData = entityCellData<T, ProductShortcode>(
-    "product",
-    (value) => parseShortcodeFor("product", value),
-    (row) =>
-      row.subjectProductId && row.subjectProductName
-        ? {
-            id: parseShortcodeFor("product", row.subjectProductId),
-            name: row.subjectProductName,
-          }
-        : null,
-    editable ? (row, id) => editable.onSave(id, row) : undefined,
-    editable ? (row) => editable.onSave(null, row) : undefined,
-  );
-
-  return columnHelper.accessor(
-    (row) => ({
-      id: row.subjectProductId,
-      name: row.subjectProductName,
-    }),
-    {
-      id: options?.id ?? "subjectProduct",
-      header: "For",
-      sortFn: entityRefSortingFn,
-      meta: attachCubbyColumnMeta({
-        className: options?.className,
-        mobile: options?.mobile,
-        filterConfig: options?.filterConfig,
-        cellData,
-        entityRefs: (row) =>
-          row.subjectProductId
-            ? [{ entityType: "product", entityId: row.subjectProductId }]
-            : [],
-      }),
-      cell: (info) => {
-        const { id, name } = info.getValue();
-
-        if (editable) {
-          const current: ComboboxItem<ProductShortcode> | null =
-            id && name ? { id: parseShortcodeFor("product", id), name } : null;
-          const row = info.row.original;
-          return (
-            <EditableEntityCell
-              value={current}
-              label="product"
-              clearable
-              trigger="pencil"
-              onSave={(newId) => editable.onSave(newId, row)}
-              clipboard={specFromCellData(cellData, row)}
-              SearchProvider={(props) => (
-                <WithEntitySearch entity="product" {...props} />
-              )}
-              renderValue={(v) =>
-                v ? (
-                  <CanonicalEntityRefLink
-                    entity="product"
-                    data={{ id: v.id, name: v.name }}
-                  />
-                ) : (
-                  <NoneValue />
-                )
-              }
-            />
-          );
-        }
-
-        if (!id || !name) return <NoneValue />;
-        return <CanonicalEntityRefLink entity="product" data={{ id, name }} />;
-      },
-    },
-  );
-}
-
-export function createParentLinkColumn<
-  TEntity extends "task" | "project",
-  TIdField extends PropertyKey,
-  TNameField extends PropertyKey,
-  T extends Record<TIdField, string | null | undefined> &
-    Record<TNameField, string | null | undefined>,
->(
-  columnHelper: ColumnHelper<T>,
-  entity: TEntity,
-  idField: TIdField,
-  nameField: TNameField,
-  options?: {
-    id?: string;
-    header?: string;
-    className?: string;
-    mobile?: MobileColumnMeta;
-    filterConfig?: FilterConfig;
-  },
-) {
-  const defaultId = entity === "task" ? "parentTask" : "parent";
-  const defaultHeader = entity === "task" ? "Parent Task" : "Parent";
-  return columnHelper.accessor(
-    (row: T) => ({
-      id: row[idField] ?? null,
-      name: row[nameField] ?? null,
-    }),
-    {
-      id: options?.id ?? defaultId,
-      header: options?.header ?? defaultHeader,
-      enableSorting: false,
-      meta: attachCubbyColumnMeta<T>({
-        className: options?.className ?? "w-40",
-        mobile: options?.mobile,
-        filterConfig: options?.filterConfig,
-        entityRefs: (row) => {
-          const id = row[idField];
-          return id ? [{ entityType: entity, entityId: id }] : [];
-        },
-      }),
-      cell: (info) => {
-        const { id, name } = info.getValue();
-        if (!id || !name) return <NoneValue />;
-        // `{ id, name }` structurally satisfies both branches of
-        // EntityInlineLinkProps; only `entity: TEntity` being a generic
-        // parameter (not a literal) blocks narrowing. Dispatching on the
-        // literal here needs no assertion at all.
-        return entity === "task" ? (
-          <CanonicalEntityRefLink entity="task" data={{ id, name }} />
-        ) : (
-          <CanonicalEntityRefLink entity="project" data={{ id, name }} />
-        );
-      },
-    },
-  );
 }

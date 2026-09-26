@@ -19,7 +19,6 @@ import type {
 import { ledgerTransferOut } from "@cubby/schemas/ledger-transfer";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -28,15 +27,12 @@ import {
   financialTransaction,
   ledgerTransfer,
 } from "~/server/db/schema";
+import { entityRepository } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
-  auditDateWhereConditions,
   buildPartialUpdateValues,
-  countWhere,
-  executeListQueryWithCount,
-  lockAndValidateForDelete,
   notDeleted,
   unwrapDb,
   withTransaction,
@@ -46,11 +42,9 @@ import { lockLedgerPartiesForReference } from "~/server/repo/ledger-party-refere
 import {
   assertExplicitSourceClaimsForAmountChange,
   replaceLedgerSourceClaims,
-  softDeleteLedgerSourceClaims,
 } from "~/server/repo/ledger-source-claim";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { cents } from "~/server/repo/money";
-import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -124,25 +118,9 @@ type LedgerSourceClaimRow = Omit<
   updatedAt: string;
 };
 
-type LedgerTransferRow = {
-  id: LedgerTransferId;
-  shortcode: string;
-  fromPartyId: LedgerPartyId;
-  toPartyId: LedgerPartyId;
-  fromPartyName: string;
-  toPartyName: string;
-  fromPartyShortcode: string;
-  toPartyShortcode: string;
-  fromPartyKind: "member" | "guest" | "household";
-  toPartyKind: "member" | "guest" | "household";
-  amount: number;
-  date: string;
-  notes: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  sourceClaims: LedgerSourceClaimRow[];
-  evidenceTransactionIds: string[];
-};
+const selectTransfers = (db: Database | DrizzleTransaction) =>
+  unwrapDb(db).select(columns).from(ledgerTransfer);
+type LedgerTransferRow = Awaited<ReturnType<typeof selectTransfers>>[number];
 
 const classificationFor = (row: LedgerTransferRow) =>
   row.fromPartyShortcode === row.toPartyShortcode
@@ -182,13 +160,24 @@ const toOut = (
     updatedAt: row.updatedAt,
   });
 
+const hydrate = async (
+  db: Database | DrizzleTransaction,
+  rows: LedgerTransferRow[],
+): Promise<LedgerTransferOut[]> => {
+  const dataQualities = await loadDataQualities(
+    db,
+    "ledgerTransfer",
+    rows.map((row) => row.id),
+  );
+  // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+  return rows.map((row) => toOut(row, dataQualities.get(row.id)!));
+};
+
 const getById = async (
   db: Database | DrizzleTransaction,
   id: LedgerTransferId,
 ): Promise<LedgerTransferRow | undefined> => {
-  const [row] = await unwrapDb(db)
-    .select(columns)
-    .from(ledgerTransfer)
+  const [row] = await selectTransfers(db)
     .where(and(eq(ledgerTransfer.id, id), notDeleted(ledgerTransfer)))
     .limit(1);
   return row;
@@ -202,13 +191,7 @@ const reader = createEntityReader<
 >({
   entity: "ledgerTransfer",
   fetchById: getById,
-  fromDB: async (db, row) => {
-    const dataQualities = await loadDataQualities(db, "ledgerTransfer", [
-      row.id,
-    ]);
-    // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
-    return toOut(row, dataQualities.get(row.id)!);
-  },
+  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
 });
 
 export const getLedgerTransferByShortcode = reader.getByShortcode;
@@ -481,33 +464,6 @@ export async function updateLedgerTransfer(
   return { output: await reader.getByID(db, id), entityId: id };
 }
 
-export async function deleteLedgerTransfers(
-  db: Database,
-  shortcodes: LedgerTransferShortcode[],
-  actor: ActorContext,
-) {
-  const ids = uniq(await resolveAllOrThrow(db, "ledgerTransfer", shortcodes));
-  return withTransaction(db, async (tx) => {
-    await lockAndValidateForDelete(tx, ledgerTransfer, ids, "LedgerTransfer");
-    await tx
-      .update(financialTransaction)
-      .set({ ledgerTransferId: null })
-      .where(
-        and(
-          inArray(financialTransaction.ledgerTransferId, ids),
-          notDeleted(financialTransaction),
-        ),
-      );
-    await softDeleteLedgerSourceClaims(tx, { ledgerTransferIds: ids });
-    return removeEntity(tx, {
-      entity: "ledgerTransfer",
-      ids,
-      removal: "soft",
-      actor,
-    });
-  });
-}
-
 const ledgerTransferScaffold = listScaffold("ledgerTransfer", ledgerTransfer);
 
 export async function buildLedgerTransferWhere(
@@ -521,42 +477,38 @@ export async function buildLedgerTransferWhere(
     ? await resolveAllPresent(db, "ledgerParty", [filters.toPartyId].flat())
     : undefined;
   return ledgerTransferScaffold.where(filters, [
-    ...auditDateWhereConditions(ledgerTransfer, filters),
     fromIds?.length === 0 || toIds?.length === 0 ? sql`false` : undefined,
     fromIds ? inArray(ledgerTransfer.fromPartyId, fromIds) : undefined,
     toIds ? inArray(ledgerTransfer.toPartyId, toIds) : undefined,
   ]);
 }
 
-export async function listLedgerTransfers(
+export const listLedgerTransfers = async (
   db: Database,
   filters: LedgerTransferFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-) {
-  // fromPartyId/toPartyId stay hand-written — they resolve shortcodes to ids
-  // before the query runs, which a declared stored predicate can't express.
-  // `date` (dateFrom/dateTo) is now a declared stored range descriptor.
-  const where = await buildLedgerTransferWhere(db, filters);
-  const { take, skip } = ledgerTransferScaffold.page(pagination);
-  const { data, count } = await executeListQueryWithCount(
-    unwrapDb(db)
-      .select(columns)
-      .from(ledgerTransfer)
-      .where(where)
-      .orderBy(...ledgerTransferScaffold.orderBy(sorts, undefined, filters))
-      .limit(take)
-      .offset(skip),
-    countWhere(db, ledgerTransfer, where),
-  );
-  const dataQualities = await loadDataQualities(
+) =>
+  ledgerTransferScaffold.list(
     db,
-    "ledgerTransfer",
-    data.map((row) => row.id),
+    { filters, sorts, pagination },
+    {
+      where: await buildLedgerTransferWhere(db, filters),
+      select: (page) =>
+        selectTransfers(db)
+          .where(page.where)
+          .orderBy(...page.orderBy)
+          .limit(page.limit)
+          .offset(page.offset),
+      hydrate: (rows) => hydrate(db, rows),
+    },
   );
-  return {
-    // SAFETY: `row` came from `data`, which `dataQualities` was loaded for.
-    data: data.map((row) => toOut(row, dataQualities.get(row.id)!)),
-    count,
-  };
-}
+
+export const ledgerTransferRepository = entityRepository("ledgerTransfer", {
+  sideEffects: false,
+  lifecycle: { delete: LEDGER_TRANSFER_DELETE_EDGE_POLICY },
+  get: getLedgerTransferByShortcode,
+  list: listLedgerTransfers,
+  create: createLedgerTransfer,
+  update: updateLedgerTransfer,
+});

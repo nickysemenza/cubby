@@ -40,7 +40,6 @@ export {
   getLocationPutAwayCandidates,
   getLocationsByShortcodes,
   type LocationPutAwayCandidate,
-  locationParentOptions,
 } from "./lookup";
 export { reparentLocationsInBulk } from "./reparent";
 // Tree and hierarchy operations

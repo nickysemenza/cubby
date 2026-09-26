@@ -5,11 +5,7 @@ import type {
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import {
-  createBooleanColumn,
-  createImageColumn,
-  createNameColumn,
-} from "~/app/_components/data-table/columnHelpers";
+import { createImageColumn } from "~/app/_components/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -23,7 +19,6 @@ import {
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { EntityInlineLinkList } from "~/app/_components/EntityInlineLinkList";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
-import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import {
   ProductFoodSummariesProvider,
   useHydratedProductFood,
@@ -40,7 +35,6 @@ import {
 import { EntityIcon } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { relationshipFieldProvenance } from "~/entities/field-provenance";
-import { booleanCellOptions } from "~/lib/select-options";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 
 import { useStableIds } from "./stable-ids";
@@ -49,11 +43,6 @@ import { defineListOverride } from "./types";
 type IngredientProduct = IngredientListItem["product"][number];
 
 const columnHelper = createCubbyColumnHelper<IngredientListItem>();
-
-const USUALLY_ON_HAND_OPTIONS = booleanCellOptions({
-  true: "Usually on hand",
-  false: "Not usually on hand",
-});
 
 /**
  * The product pill plus a small USDA adornment when the product resolved to
@@ -147,10 +136,6 @@ export const ingredientListOverride = defineListOverride<
       [],
     );
     const foodByProductId = useProductFoodSummaries(foodHydrationIds);
-    const updateIngredientMutation = useUpdateMutation({
-      mutationFn: entityMutationOptionsFactory("ingredient", "update"),
-      entity: "ingredient",
-    });
     const deletable = useDeletableConfig({
       mutationFn: entityMutationOptionsFactory("ingredient", "delete"),
       entityLabel: "Ingredient",
@@ -165,60 +150,6 @@ export const ingredientListOverride = defineListOverride<
           }),
         ),
       [foodByProductId],
-    );
-
-    const overrides = useMemo(
-      () =>
-        createCubbyColumnCollection<IngredientListItem>((add) => {
-          add(
-            createNameColumn(columnHelper, "ingredient", "name", {
-              // Capped so the flex space goes to Recipes + Product, whose
-              // content benefits from it.
-              className: "w-56",
-              editable: {
-                onSave: async (newName, ingredient) => {
-                  await updateIngredientMutation.mutateAsync({
-                    id: ingredient.id,
-                    data: { name: newName },
-                  });
-                },
-              },
-            }),
-          );
-          add(
-            columnHelper.accessor("aliases", {
-              header: "Aliases",
-              meta: {
-                className: "w-48",
-                mobile: { slot: "subtitle", priority: 20 },
-              },
-              cell: (info) => (
-                <TruncatedList
-                  items={info.getValue()}
-                  maxItems={2}
-                  renderItem={(alias: string) => (
-                    <span key={alias} className="truncate text-xs">
-                      {alias}
-                    </span>
-                  )}
-                />
-              ),
-            }),
-          );
-          add(
-            createBooleanColumn(columnHelper, "usuallyOnHand", {
-              header: "Usually on hand",
-              className: "w-36",
-              mobile: { slot: "meta", priority: 25 },
-              trueFalseOptions: USUALLY_ON_HAND_OPTIONS,
-              // The manifest owns the boolean filter; avoid deriving a second
-              // client-side filter for this declared column.
-              filterConfig: null,
-            }),
-          );
-        }),
-      // oxlint-disable-next-line react/exhaustive-deps -- updateIngredientMutation changes every render but is functionally stable
-      [],
     );
 
     const compose = useMemo(
@@ -280,7 +211,6 @@ export const ingredientListOverride = defineListOverride<
     );
 
     return {
-      overrides,
       compose,
       list,
       wrap: (children, { data }) => (

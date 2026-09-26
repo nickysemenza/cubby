@@ -50,9 +50,7 @@ import { getPlacementRecommendationWorkflow } from "~/server/workflows/recommend
 /**
  * Guards for the additive bulk-add.
  *
- * Unlike `bulkProcessInventoryEntries` (delete-on-omit — see the comment
- * above it in bulk.ts), this flow only ever creates or sums into the rows its
- * own items name. These cover: a fresh row lands as a create; an item that
+ * This flow only ever creates or sums into the rows its own items name. These cover: a fresh row lands as a create; an item that
  * lands on an already-occupied slot sums into it rather than colliding with
  * the partial unique index; a unit mismatch on that merge is refused; naming
  * one product twice in a request is refused (it would collide with itself);

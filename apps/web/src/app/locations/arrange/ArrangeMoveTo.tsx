@@ -5,8 +5,7 @@ import { useState } from "react";
 import { match } from "ts-pattern";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
-import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
+import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { DialogFormActions } from "~/components/ui/dialog-form-actions";
@@ -153,53 +152,48 @@ function MoveToDialog({
             Move to Home
           </Button>
         )}
-        <WithEntitySearch entity="location">
-          {({ items, onSearchChange, isLoading, onOpenChange }) => (
-            <EntityPicker
-              entity="location"
-              label="location"
-              items={items.map((item) => {
-                const valid =
-                  target.kind === "location"
-                    ? isValidLocationDrop(
-                        target.roots,
-                        target.locationId,
-                        item.id,
-                      )
-                    : isValidItemDrop(
-                        target.roots,
-                        target.drag.sourceLocationId,
-                        item.id,
-                      );
-                return valid
-                  ? item
-                  : {
-                      ...item,
-                      presentation: {
-                        ...item.presentation,
-                        group: {
-                          id: "unavailable",
-                          label: "Unavailable",
-                          order: 99,
-                        },
-                        disabledReason:
-                          target.kind === "location"
-                            ? "A location cannot move into itself or its descendants"
-                            : "Already the current location",
+        <EntityReferencePicker
+          entity="location"
+          label="location"
+          mapItems={(items) =>
+            items.map((item) => {
+              const valid =
+                target.kind === "location"
+                  ? isValidLocationDrop(
+                      target.roots,
+                      target.locationId,
+                      item.id,
+                    )
+                  : isValidItemDrop(
+                      target.roots,
+                      target.drag.sourceLocationId,
+                      item.id,
+                    );
+              return valid
+                ? item
+                : {
+                    ...item,
+                    presentation: {
+                      ...item.presentation,
+                      group: {
+                        id: "unavailable",
+                        label: "Unavailable",
+                        order: 99,
                       },
-                    };
-              })}
-              onSearchChange={onSearchChange}
-              isLoading={isLoading}
-              onOpenChange={onOpenChange}
-              value={destination}
-              setValue={(item) => {
-                setDestination(item);
-                setError(null);
-              }}
-            />
-          )}
-        </WithEntitySearch>
+                      disabledReason:
+                        target.kind === "location"
+                          ? "A location cannot move into itself or its descendants"
+                          : "Already the current location",
+                    },
+                  };
+            })
+          }
+          value={destination}
+          setValue={(item) => {
+            setDestination(item);
+            setError(null);
+          }}
+        />
       </Stack>
     </ResponsiveDialog>
   );

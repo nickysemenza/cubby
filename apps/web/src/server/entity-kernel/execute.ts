@@ -4,12 +4,16 @@ import { ENTITY_LABEL, parseEntityRef } from "@cubby/schemas/identifiers";
 import { searchableEntitySchema } from "@cubby/schemas/search";
 import { z } from "zod";
 
+import { generatedEntityRelationListResultSchema } from "~/entities/generated/entity-relation-lists.gen";
 import { createAppError } from "~/server/errors/app-error";
 import {
   ENTITY_KERNEL_BINDINGS,
   ENTITY_KERNEL_OPERATIONS,
 } from "~/server/generated/entity-kernel-bindings.gen";
-import { executeGeneratedRelationMutation } from "~/server/generated/entity-relation-bindings.gen";
+import {
+  executeGeneratedRelationMutation,
+  listGeneratedRelation,
+} from "~/server/generated/entity-relation-bindings.gen";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   isMutationSideEffectRef,
@@ -28,7 +32,7 @@ import {
   type EntityQueryCommand,
   type EntityResultFor,
   entityCommandSchema,
-  entityMutationResultSchema,
+  entityBrowserMutationResultSchema,
   type entityQueryResultSchema,
 } from "./contracts";
 
@@ -88,7 +92,7 @@ const executeMerge = bindWorkflow(
       }
     })
     .output(({ input, merged }) =>
-      entityMutationResultSchema.parse({
+      entityBrowserMutationResultSchema.parse({
         action: input.action,
         entity: input.entity,
         item: merged.item,
@@ -124,20 +128,20 @@ export function executeEntity(
 export function executeEntity(
   ctx: EntityKernelContext,
   rawCommand: EntityMutationCommand,
-): Promise<z.infer<typeof entityMutationResultSchema>>;
+): Promise<z.infer<typeof entityBrowserMutationResultSchema>>;
 export function executeEntity(
   ctx: EntityKernelContext,
   rawCommand: EntityCommand,
 ): Promise<
   | z.infer<typeof entityQueryResultSchema>
-  | z.infer<typeof entityMutationResultSchema>
+  | z.infer<typeof entityBrowserMutationResultSchema>
 >;
 export async function executeEntity(
   ctx: EntityKernelContext,
   rawCommand: EntityCommand,
 ): Promise<
   | z.infer<typeof entityQueryResultSchema>
-  | z.infer<typeof entityMutationResultSchema>
+  | z.infer<typeof entityBrowserMutationResultSchema>
 > {
   const command = entityCommandSchema.parse(rawCommand);
 
@@ -152,6 +156,12 @@ export async function executeEntity(
 
     case "search": {
       return executeSearch(ctx, command);
+    }
+
+    case "listRelation": {
+      return generatedEntityRelationListResultSchema.parse(
+        await listGeneratedRelation(ctx, command),
+      );
     }
 
     case "create": {

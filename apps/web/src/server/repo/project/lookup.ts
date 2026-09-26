@@ -17,7 +17,6 @@ import type { Database } from "~/server/db";
 import { entityAttachment, image, project } from "~/server/db/schema";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
-  auditDateWhereConditions,
   countWhere,
   executeListQueryWithCount,
   getDb,
@@ -237,7 +236,6 @@ export const buildProjectListQuery = async (
         filters.search,
       ),
     ),
-    ...auditDateWhereConditions(project, filters),
     ...relatedWhereConditions("project", filters, project.id),
     dashboardProjectDateCondition(filters),
     attentionCodes

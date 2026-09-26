@@ -5,6 +5,7 @@ import { StackPlusIcon } from "@phosphor-icons/react/dist/csr/StackPlus";
 import { useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -18,8 +19,6 @@ import { productCreateRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
-import { EntityPicker } from "../combobox/entity-picker";
-import { WithEntitySearch } from "../combobox/with-search-hook";
 
 /**
  * USDA-food-derived prefill shared by both actions below: manufacturer/UPC/
@@ -103,29 +102,15 @@ function LinkFoodToIngredientButton({
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4">
-            <WithEntitySearch entity="ingredient">
-              {({
-                items,
-                onSearchChange,
-                isLoading,
-                onCreateNew,
-                onOpenChange,
-              }) => (
-                <EntityPicker
-                  entity="ingredient"
-                  label="ingredient"
-                  items={items}
-                  value={ingredient}
-                  setValue={setIngredient}
-                  onSearchChange={onSearchChange}
-                  isLoading={isLoading}
-                  onCreateNew={onCreateNew}
-                  onOpenChange={onOpenChange}
-                  openOnMount
-                  placeholder="Search ingredients…"
-                />
-              )}
-            </WithEntitySearch>
+            <EntityReferencePicker
+              entity="ingredient"
+              creatable
+              label="ingredient"
+              value={ingredient}
+              setValue={setIngredient}
+              openOnMount
+              placeholder="Search ingredients…"
+            />
           </div>
         </DialogContent>
       </Dialog>

@@ -34,7 +34,7 @@ export type BarcodeFormat =
   | "code_128"
   | "qr_code";
 
-export const BARCODE_FORMATS: BarcodeFormat[] = [
+const BARCODE_FORMATS: BarcodeFormat[] = [
   "upc_a",
   "upc_e",
   "ean_13",

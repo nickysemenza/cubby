@@ -18,10 +18,7 @@ import { ChartTooltip } from "./ChartTooltip";
  * task due dates that used to live in the "Overview"/"Charts" tabs — the
  * server aggregate has no per-day granularity, only an open-count per
  * project, so this reads as "where is the open work concentrated" rather
- * than "when is work due". The project detail page's own `TaskHeatmap`
- * (`./task-heatmap.tsx`, a calendar heatmap over one project's raw dated
- * tasks) is a different component with a different prop shape — kept
- * separate rather than repurposed, since that page is out of scope here.
+ * than "when is work due".
  */
 export function OpenTasksByProject({
   data: rows,

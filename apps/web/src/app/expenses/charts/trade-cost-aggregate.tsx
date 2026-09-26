@@ -10,7 +10,6 @@ import { useMemo } from "react";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { HorizontalBarChart } from "~/app/projects/charts/horizontal-bar-chart";
-import { pivotTradeCostContributions } from "~/app/projects/charts/trade-cost-pivot";
 import { capitalize, TRADE_LABELS } from "~/app/projects/project-formatting";
 import { CrossTabTable } from "~/components/matrix/cross-tab-table";
 import type { CrossTabColumn } from "~/components/matrix/group-columns";
@@ -28,6 +27,8 @@ import {
 } from "~/lib/nivo-theme";
 import { getCostTypeColor } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
+
+import { pivotTradeCostContributions } from "./trade-cost-pivot";
 
 const COST_KEYS = costTypeValues;
 const costTypeForKey = (value: string): CostType | undefined =>

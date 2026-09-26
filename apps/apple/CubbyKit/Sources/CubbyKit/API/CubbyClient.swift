@@ -13,7 +13,8 @@ import OpenAPIURLSession
 public actor CubbyClient {
     public let baseURL: URL
     public let credentials: CredentialProvider
-    private let api: Client
+    /// Internal so `Generated/ClientOperations.swift` can extend the client.
+    let api: Client
 
     public init(
         baseURL: URL, credentials: CredentialProvider, identity: ClientIdentity = .unknown,
@@ -427,16 +428,6 @@ public actor CubbyClient {
         }
     }
 
-    /// Stages immutable browser/manual evidence for one explicit targeted-import scope. The
-    /// server allocates R2 directly; this must never use the shared Image/Document pathways.
-    public func initiateRunEvidenceUpload(_ input: InitiateImportRunEvidenceUploadInput) async throws
-        -> InitiateImportRunEvidenceUploadOut
-    {
-        try await perform {
-            try await api.purchaseImport_initiateRunEvidenceUpload(body: .json(input)).ok.body.json
-        }
-    }
-
     /// The server's hash index, or `HashIndex.Failure.unsupportedRevision` when it was computed
     /// with a different algorithm than this build carries.
     public func imageHashIndex() async throws -> ImageHashIndex {
@@ -446,25 +437,6 @@ public actor CubbyClient {
                 throw HashIndex.Failure.unsupportedRevision(result.algorithmRevision.rawValue)
             }
             return result
-        }
-    }
-
-    public func stagePhotoImport(_ input: PhotoImportStageInput) async throws
-        -> PhotoImportStageOutput
-    {
-        try await perform {
-            try await api.photoImport_stage(body: .json(input)).ok.body.json
-        }
-    }
-
-    /// Starts a native-tagged photo-inventory run (`PhotoImportRunUploader`'s bulk-upload entry
-    /// point). Distinct from the manifest-based `stage`/`commit` pair above: a run has no
-    /// per-photo destination, only ordered positions finalized in chunks.
-    public func createPhotoImportRun(_ input: PhotoImportCreateRunInput) async throws
-        -> PhotoImportCreateRunOutput
-    {
-        try await perform {
-            try await api.photoImport_createRun(body: .json(input)).ok.body.json
         }
     }
 
@@ -500,14 +472,6 @@ public actor CubbyClient {
         }
     }
 
-    public func updatePhotoGroupDraft(_ input: PhotoImportUpdateDraftInput) async throws
-        -> ReviewPhotoGroupsOutput
-    {
-        try await perform {
-            try await api.photoImport_updateDraft(body: .json(input)).ok.body.json
-        }
-    }
-
     public func approvePhotoGroups(
         runID: ImportRunShortcode, groupKeys: [String]
     ) async throws -> ReviewPhotoGroupsOutput {
@@ -535,37 +499,6 @@ public actor CubbyClient {
     public func runAiUsage(_ runID: ImportRunShortcode) async throws -> AiRunUsageOut {
         try await perform {
             try await api.run_aiUsage(query: .init(runId: runID, limit: 1)).ok.body.json
-        }
-    }
-
-    public func previewStatementCsv(_ input: StatementCsvFileInput) async throws -> StatementCsvPreviewOut {
-        try await perform {
-            try await api.statementRow_previewCsv(body: .json(input)).ok.body.json
-        }
-    }
-
-    public func commitStatementCsv(_ input: StatementCsvCommitInput) async throws -> StatementCsvCommitOut {
-        try await perform {
-            try await api.statementRow_commitCsv(body: .json(input)).ok.body.json
-        }
-    }
-
-    /// Finalizes one chunk (≤100 images) of a bulk upload into `input.runId`. Idempotent: a retry
-    /// after a transport error replays safely, since a previously finalized image comes back in
-    /// `alreadyFinalized` rather than erroring.
-    public func finalizePhotoImportRun(_ input: PhotoImportFinalizeInput) async throws
-        -> PhotoImportFinalizeOutput
-    {
-        try await perform {
-            try await api.photoImport_finalize(body: .json(input)).ok.body.json
-        }
-    }
-
-    public func commitPhotoImport(_ input: PhotoImportCommitInput) async throws
-        -> PhotoImportCommitOutput
-    {
-        try await perform {
-            try await api.photoImport_commit(body: .json(input)).ok.body.json
         }
     }
 
@@ -707,10 +640,6 @@ public actor CubbyClient {
             try await api.activity_events(query: .init(id: id, cursor: cursor, limit: limit))
                 .ok.body.json
         }
-    }
-
-    public func activityDevices() async throws -> ActivityDevicesOutput {
-        try await perform { try await api.activity_devices().ok.body.json }
     }
 
     /// Household-wide audit entries, newest first. The opaque cursor is passed back unchanged.
@@ -861,28 +790,6 @@ public actor CubbyClient {
         }
     }
 
-    /// Applies a stored ownership choice to all or part of one inventory row. A partial quantity
-    /// may split the row; callers must refresh the returned entry ids rather than assuming the
-    /// original row is the only record changed.
-    public func setInventoryOwnership(_ input: SetInventoryOwnershipInput) async throws
-        -> InventoryOwnershipMutationOut
-    {
-        try await perform {
-            try await api.inventory_setOwnership(body: .json(input)).ok.body.json
-        }
-    }
-
-    /// Pins the currently inferred owner using the evidence fingerprint returned with the detail.
-    /// The server rejects stale evidence so native cannot confirm a different acquisition than the
-    /// one the person reviewed.
-    public func confirmInventoryOwnership(_ input: ConfirmInventoryOwnershipInput) async throws
-        -> InventoryOwnershipMutationOut
-    {
-        try await perform {
-            try await api.inventory_confirmOwnership(body: .json(input)).ok.body.json
-        }
-    }
-
     // MARK: - Locations
 
     public func locationTree() async throws -> LocationTree {
@@ -1025,19 +932,6 @@ public actor CubbyClient {
         return try await perform {
             try await api.search_find(query: query).ok.body.json
         }
-    }
-
-    public func dashboardCounts() async throws -> DashboardCountsOut {
-        try await perform { try await api.dashboard_counts().ok.body.json }
-    }
-
-    /// The complete ranked task briefing, including summary counts outside the visible prefix.
-    public func todayBriefing() async throws -> TaskTodayBriefingOut {
-        try await perform { try await api.task_todayBriefing().ok.body.json }
-    }
-
-    public func problemCounts() async throws -> ProblemsCount {
-        try await perform { try await api.problems_getCounts().ok.body.json }
     }
 
     public func requestCatchUp() async throws {
@@ -1318,7 +1212,7 @@ public actor CubbyClient {
 
     /// OpenAPIRuntime wraps whatever a middleware throws in a `ClientError`, which would hide the
     /// `CubbyAPIError` every caller switches on. Every request goes through here so it does not.
-    private func perform<T>(_ request: () async throws -> T) async throws -> T {
+    func perform<T>(_ request: () async throws -> T) async throws -> T {
         do {
             return try await request()
         } catch {

@@ -3,11 +3,6 @@ import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 
 import { useProductCategories } from "~/app/_components/hooks/useProductCategories";
-import {
-  WithFinancialAccountSearch,
-  WithPurchaseSearch,
-  WithVendorAccountSearch,
-} from "~/app/finance/financial-selectors";
 
 import type { ComboboxItem, PickerEntity } from "./combobox-types";
 import { treePickerItems } from "./tree-items";
@@ -134,17 +129,6 @@ export function referenceEntitySearch(
   switch (entity) {
     case "productCategory":
       return WithProductCategorySearch;
-    case "financialAccount":
-      // SAFETY: the provider's branded shortcode is a string at this generic
-      // manifest boundary; EntityPicker preserves it back to the mutation.
-      return WithFinancialAccountSearch as never;
-    case "purchase":
-      // SAFETY: see financialAccount — the reference mutation accepts the
-      // manifest's string identifier and server validation remains final.
-      return WithPurchaseSearch as never;
-    case "vendorAccount":
-      // SAFETY: see financialAccount.
-      return WithVendorAccountSearch as never;
     case "vendor":
       // SAFETY: this is the persisted-shortcode vendor provider, not the
       // name-minting picker used by the specialized expense editor.

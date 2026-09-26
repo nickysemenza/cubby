@@ -14,9 +14,9 @@ import {
   UnifiedTextField,
 } from "~/app/_components/form-utils";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { projectKindOptions } from "~/app/projects/project-options";
 import { project } from "~/app/projects/project.functions";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
+import { fieldEnumOptions } from "~/entities/enum-field-display";
 import { getErrorMessage } from "~/lib/error-utils";
 
 const quickAddSchema = z.object({
@@ -112,7 +112,7 @@ export function CreateProjectFromTasksDialog({
             form={form}
             name="kind"
             label="Kind"
-            options={projectKindOptions}
+            options={fieldEnumOptions("project", "kind")}
             nullable
             suggestField="kind"
           />

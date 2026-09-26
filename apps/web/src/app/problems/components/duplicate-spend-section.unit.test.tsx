@@ -1,7 +1,4 @@
-import type {
-  AllProblems,
-  DuplicateSpendCandidate,
-} from "@cubby/schemas/problems";
+import type { AllProblems, ProblemItem } from "@cubby/schemas/problems";
 import { EMPTY_PROBLEM_ARRAYS, PROBLEM_CLASS } from "@cubby/schemas/problems";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
@@ -19,8 +16,8 @@ import { PROBLEM_SECTIONS } from "./problem-sections";
  */
 
 const candidate = (
-  overrides: Partial<DuplicateSpendCandidate> = {},
-): DuplicateSpendCandidate => ({
+  overrides: Partial<ProblemItem<"duplicateSpendCandidates">> = {},
+): ProblemItem<"duplicateSpendCandidates"> => ({
   id: testShortcode("expense", "EXP-VF9A"),
   expenseName: "washer stacking bracket",
   cost: 43.44,
@@ -38,7 +35,9 @@ const candidate = (
   ...overrides,
 });
 
-const problems = (rows: DuplicateSpendCandidate[]): AllProblems => ({
+const problems = (
+  rows: ProblemItem<"duplicateSpendCandidates">[],
+): AllProblems => ({
   ...EMPTY_PROBLEM_ARRAYS,
   duplicateSpendCandidates: rows,
   sectionTotals: {},

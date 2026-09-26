@@ -8,6 +8,10 @@ import {
   productMarkUsdaUnavailableEvent,
   productWorkflowSchemas,
 } from "@cubby/schemas/product-workflow";
+import {
+  mergeProductMatchInput,
+  productMergePreview,
+} from "@cubby/schemas/recommendations";
 import { z } from "zod";
 
 import {
@@ -46,14 +50,23 @@ export const productContract = defineContract("product", {
     ...productWorkflowSchemas.externalIdSourceOptions,
   }),
   getByShortcodes: query({ ...productWorkflowSchemas.getByShortcodes }),
-  merge: mutation({ ...productWorkflowSchemas.merge }),
-  projectUses: query({ ...productWorkflowSchemas.projectUses }),
+  /** Which field wins, and what blocks, before a two-product merge commits. */
+  mergePreview: query({
+    input: mergeProductMatchInput,
+    output: productMergePreview,
+  }),
+  projectUses: query({
+    ...productWorkflowSchemas.projectUses,
+    mcp: {
+      name: "list_product_project_uses",
+      description:
+        "Show every exact project on which a reusable Cubby tool or software Product is explicitly recorded as used. Tool rows include purchase/use economics; software rows include non-additive spend charged during each project's effective window.",
+    },
+  }),
   purchases: query({ ...productWorkflowSchemas.purchases }),
   components: query({ ...productWorkflowSchemas.components }),
   kitComponentRows: query({ ...productWorkflowSchemas.kitComponentRows }),
   kitMembership: query({ ...productWorkflowSchemas.kitMembership }),
-  attachComponents: mutation({ ...productWorkflowSchemas.attachComponents }),
-  detachComponents: mutation({ ...productWorkflowSchemas.detachComponents }),
   setProjectUses: mutation({ ...productWorkflowSchemas.setProjectUses }),
   discard: mutation({ ...productWorkflowSchemas.discard }),
 });

@@ -4,8 +4,6 @@ import { useMemo } from "react";
 
 import {
   createImageColumn,
-  createProductLinkColumn,
-  createProjectLinkColumn,
   hasDisplayImages,
 } from "~/app/_components/data-table/columnHelpers";
 import {
@@ -13,24 +11,18 @@ import {
   createCubbyColumnHelper,
   type CubbyColumnCollection,
 } from "~/app/_components/data-table/table-features";
-import { ExternalLinkIcon } from "~/app/_components/ExternalLink";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { ExpenseSummaryStrip } from "~/app/expenses/expense-summary-strip";
 import { expense } from "~/app/expenses/expense.functions";
 import {
-  expenseCostColumn,
-  expenseDateColumn,
-  expenseFutureColumn,
   expenseOrderIdColumn,
-  expenseProductQuantityColumn,
   expenseVendorColumn,
 } from "~/app/projects/shared";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
 import { relationshipFieldProvenance } from "~/entities/field-provenance";
-import { manifestFilterConfig } from "~/entities/filter-manifest";
 
 import { defineListOverride } from "./types";
 
@@ -131,102 +123,9 @@ export const expenseListOverride = defineListOverride<
       mutationFn: entityMutationOptionsFactory("expense", "update"),
       entity: "expense",
     });
-    // The cost / date / costType / trade / future columns come from the
-    // shared factories also used by the embedded expenses table on the
-    // project detail page, so the two can't drift. `signedTone`: this list
-    // holds refunds and price adjustments, so a credit renders distinctly.
     const overrides = useMemo(
       () =>
         createCubbyColumnCollection<ExpenseOut>((add) => {
-          add(
-            expenseCostColumn(
-              columnHelper,
-              async (cost, row) => {
-                await updateExpenseMutation.mutateAsync({
-                  id: row.id,
-                  data: { cost },
-                });
-              },
-              {
-                mobile: { slot: "trailing", priority: 10, interactive: true },
-                signedTone: true,
-              },
-            ),
-          );
-          add(
-            expenseDateColumn(
-              columnHelper,
-              async (date, row) => {
-                await updateExpenseMutation.mutateAsync({
-                  id: row.id,
-                  data: { date },
-                });
-              },
-              { mobile: { slot: "subtitle", priority: 15 } },
-            ),
-          );
-          add(
-            createProjectLinkColumn(columnHelper, {
-              id: "projectId",
-              className: "w-40",
-              mobile: { slot: "meta", priority: 40, interactive: true },
-              editable: {
-                enabled: (row) => row.lineKind === "principal",
-                onSave: async (newProjectId, row) => {
-                  await updateExpenseMutation.mutateAsync({
-                    id: row.id,
-                    data: { projectId: newProjectId },
-                  });
-                },
-                suggest: { entity: "expense", field: "projectId" },
-              },
-            }),
-          );
-          add(
-            createProductLinkColumn(columnHelper, {
-              id: "productId",
-              className: "w-40",
-              mobile: { slot: "meta", priority: 45, interactive: true },
-              editable: {
-                onSave: async (newProductId, row) => {
-                  await updateExpenseMutation.mutateAsync({
-                    id: row.id,
-                    data: { productId: newProductId },
-                  });
-                },
-              },
-            }),
-          );
-          add(
-            expenseProductQuantityColumn(
-              columnHelper,
-              async (productQuantity, row) => {
-                await updateExpenseMutation.mutateAsync({
-                  id: row.id,
-                  data: { productQuantity },
-                });
-              },
-              {
-                mobile: { slot: "meta", priority: 47, interactive: true },
-                filterConfig: manifestFilterConfig(
-                  "expense",
-                  "productQuantity",
-                ),
-              },
-            ),
-          );
-          add(
-            expenseFutureColumn(
-              columnHelper,
-              async (future, row) => {
-                await updateExpenseMutation.mutateAsync({
-                  id: row.id,
-                  data: { future },
-                });
-              },
-              { mobile: { slot: "meta", priority: 50 } },
-            ),
-          );
           // Keeps the `vendor` id and editor/filter wiring, but presents the
           // linked Purchase as the primary accounting relationship.
           add(
@@ -256,19 +155,6 @@ export const expenseListOverride = defineListOverride<
               },
               { mobile: { slot: "meta", priority: 80 } },
             ),
-          );
-          add(
-            columnHelper.accessor((row) => row.url, {
-              id: "url",
-              header: "",
-              enableSorting: false,
-              meta: { className: "w-10" },
-              cell: (info) => {
-                const url = info.getValue();
-                if (!url) return null;
-                return <ExternalLinkIcon href={url} label="Open link" />;
-              },
-            }),
           );
         }),
       // oxlint-disable-next-line react/exhaustive-deps -- updateExpenseMutation changes every render but is functionally stable

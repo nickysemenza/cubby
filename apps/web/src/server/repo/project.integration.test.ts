@@ -344,7 +344,7 @@ describe("project repository", () => {
       deleteProjects(ctx.db, [parent.id], ctx.actor),
     ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
-      reason: "PROJECT_HAS_CHILDREN",
+      reason: "ENTITY_DELETE_BLOCKED",
     });
 
     await deleteProjects(ctx.db, [child.id], ctx.actor);

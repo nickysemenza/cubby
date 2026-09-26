@@ -216,7 +216,7 @@ describe("ingredient delete guard agrees with the live recipe count", () => {
 
     await expect(
       deleteIngredients(ctx.db, [ingredientId], ctx.actor),
-    ).resolves.toEqual({ deleted: 1 });
+    ).resolves.toMatchObject({ deleted: 1 });
 
     // The ingredient row is now soft-deleted.
     const [row] = await getDb(ctx.db)

@@ -7,8 +7,7 @@ import {
 import { inventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import { useState } from "react";
 
-import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
+import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
 import type { DetailRecordOf } from "~/app/_components/entity-detail/detail-record";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { inventory } from "~/app/inventory/inventory.functions";
@@ -71,26 +70,22 @@ function OwnershipControl({ record }: { record: DetailRecordOf<"inventory"> }) {
         disabled={save.isPending}
       >
         {mode === "person" ? (
-          <WithEntitySearch entity="ledgerParty" scope={ownerScope}>
-            {(props) => (
-              <EntityPicker
-                {...props}
-                entity="ledgerParty"
-                label="Individual owner"
-                value={owner}
-                setValue={(item) =>
-                  setOwner(
-                    item
-                      ? {
-                          name: item.name,
-                          id: ledgerPartyShortcode.parse(item.id),
-                        }
-                      : null,
-                  )
-                }
-              />
-            )}
-          </WithEntitySearch>
+          <EntityReferencePicker
+            entity="ledgerParty"
+            scope={ownerScope}
+            label="Individual owner"
+            value={owner}
+            setValue={(item) =>
+              setOwner(
+                item
+                  ? {
+                      name: item.name,
+                      id: ledgerPartyShortcode.parse(item.id),
+                    }
+                  : null,
+              )
+            }
+          />
         ) : null}
       </OverrideControl>
       <div className="flex flex-wrap items-center gap-2">

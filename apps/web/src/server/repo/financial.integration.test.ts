@@ -14,17 +14,17 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "./database-helpers";
 import { createExpense } from "./expense";
+import { getFilterOptions } from "./filter-options";
 import {
   createFinancialAccount,
-  deleteFinancialAccounts,
-  financialAccountOptions,
+  financialAccountRepository,
   listFinancialAccounts,
   updateFinancialAccount,
 } from "./financial-account";
 import { previewFinancialStatementImport } from "./financial-statement-preview";
 import {
   createFinancialTransaction,
-  deleteFinancialTransactions,
+  financialTransactionRepository,
   financialTransactionSourceOptions,
   listFinancialTransactions,
   updateFinancialTransaction,
@@ -157,7 +157,7 @@ describe("financial repositories — critical invariants", () => {
   // query. An all-bogus batch still yields nothing, same as before.
 
   // The two header-filter rosters. Both are load-bearing in a way a shape test
-  // wouldn't catch: `financialAccountOptions` must emit SHORTCODES, because the
+  // wouldn't catch: the account filter-option roster must emit SHORTCODES, because the
   // manifest's `accountId` spec brands option values with
   // Internal shortcode strings are parsed at the server boundary with
   // `oneOrMany(financialAccountShortcode)` — a uuid here would brand into a lie
@@ -188,7 +188,7 @@ describe("financial repositories — critical invariants", () => {
         ctx.actor,
       )
     ).output;
-    await deleteFinancialAccounts(ctx.db, [retired.id], ctx.actor);
+    await financialAccountRepository.delete(ctx.db, [retired.id], ctx.actor);
 
     const txn = (accountId: string, sources: string[], amount: number) =>
       createFinancialTransaction(
@@ -224,22 +224,33 @@ describe("financial repositories — critical invariants", () => {
     // name order. An account with no transactions still appears — a provisional
     // account minted by a statement import is exactly the one you want to filter
     // for before anything is linked to it.
-    const accounts = await financialAccountOptions(ctx.db);
+    const accountRoster = async () =>
+      (
+        await getFilterOptions(ctx.db, {
+          source: "entity",
+          entity: "financialAccount",
+          search: "",
+          selectedIds: [],
+          limit: 1000,
+          include: ["count"],
+        })
+      ).items;
+    const accounts = await accountRoster();
     expect(accounts).toEqual([
-      { id: busy.id, name: "Roster Busy Visa", count: 2 },
-      { id: quiet.id, name: "Roster Quiet Visa", count: 2 },
+      { id: busy.id, label: "Roster Busy Visa", count: 2 },
+      { id: quiet.id, label: "Roster Quiet Visa", count: 2 },
     ]);
     // The id is the shortcode the filter brands, not the uuid.
     expect(accounts[0]?.id).toMatch(/^FAC-/);
 
-    await deleteFinancialTransactions(ctx.db, [doomed.id], ctx.actor);
+    await financialTransactionRepository.delete(ctx.db, [doomed.id], ctx.actor);
     expect(await financialTransactionSourceOptions(ctx.db)).toEqual([
       { source: "monarch", count: 3 },
       { source: "amazon-order-export", count: 1 },
     ]);
-    expect(await financialAccountOptions(ctx.db)).toEqual([
-      { id: busy.id, name: "Roster Busy Visa", count: 2 },
-      { id: quiet.id, name: "Roster Quiet Visa", count: 1 },
+    expect(await accountRoster()).toEqual([
+      { id: busy.id, label: "Roster Busy Visa", count: 2 },
+      { id: quiet.id, label: "Roster Quiet Visa", count: 1 },
     ]);
   });
 
@@ -737,9 +748,9 @@ describe("financial repositories — critical invariants", () => {
     );
 
     await expect(
-      deleteFinancialAccounts(ctx.db, [acct.id], ctx.actor),
+      financialAccountRepository.delete(ctx.db, [acct.id], ctx.actor),
     ).rejects.toMatchObject({
-      reason: "FINANCIAL_ACCOUNT_HAS_STATEMENT_ROWS",
+      reason: "ENTITY_DELETE_BLOCKED",
     });
     // The child survives with its triage intact — the half a fail-open guard
     // would destroy.
@@ -757,7 +768,7 @@ describe("financial repositories — critical invariants", () => {
       ctx.actor,
     );
     await expect(
-      deleteFinancialAccounts(ctx.db, [acct.id], ctx.actor),
+      financialAccountRepository.delete(ctx.db, [acct.id], ctx.actor),
     ).resolves.toBeDefined();
   });
 
@@ -809,9 +820,9 @@ describe("financial repositories — critical invariants", () => {
       )
     ).output;
     await expect(
-      deleteFinancialAccounts(ctx.db, [a.id], ctx.actor),
+      financialAccountRepository.delete(ctx.db, [a.id], ctx.actor),
     ).rejects.toMatchObject({
-      reason: "FINANCIAL_ACCOUNT_HAS_TRANSACTIONS",
+      reason: "ENTITY_DELETE_BLOCKED",
     });
     await expect(
       createFinancialTransaction(
@@ -1159,7 +1170,11 @@ describe("financial repositories — critical invariants", () => {
         ctx.actor,
       )
     ).output;
-    await deleteFinancialTransactions(ctx.db, [deletedRefund.id], ctx.actor);
+    await financialTransactionRepository.delete(
+      ctx.db,
+      [deletedRefund.id],
+      ctx.actor,
+    );
     const adjustedReconciliation = (
       await getPurchaseByID(ctx.db, adjusted.uuid)
     ).financialReconciliation;
@@ -1211,7 +1226,11 @@ describe("financial repositories — critical invariants", () => {
         ctx.actor,
       )
     ).output;
-    await deleteFinancialTransactions(ctx.db, [deleted.id], ctx.actor);
+    await financialTransactionRepository.delete(
+      ctx.db,
+      [deleted.id],
+      ctx.actor,
+    );
     const result = await getPurchaseByID(ctx.db, mismatch.uuid);
     expect(result.expenseTotal).toBe(10);
     expect(result.financialReconciliation).toMatchObject({
@@ -1416,7 +1435,7 @@ describe("financial repositories — critical invariants", () => {
     }
 
     // Soft-deleting frees the pair for a replacement account.
-    await deleteFinancialAccounts(ctx.db, [a.id], ctx.actor);
+    await financialAccountRepository.delete(ctx.db, [a.id], ctx.actor);
     await expect(storedValue("Credit A new", memberA)).resolves.toBeDefined();
     expect(shared.ledgerPartyId).toBeNull();
   });

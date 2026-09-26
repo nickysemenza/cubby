@@ -78,7 +78,7 @@ export function TradeBadge({ trade }: { trade: Trade }) {
 
 /**
  * Bare trade glyph — the same icon as `TradeBadge` without the pill, for tight
- * spots like the Gantt name pane where the label is already present.
+ * spots like a schedule name pane where the label is already present.
  */
 export function TradeIcon({
   trade,

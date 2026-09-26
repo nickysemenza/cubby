@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { entitySchema, type Entity } from "./entity";
 import { shortcodeEntities, type ShortcodeEntity } from "./entity-manifest";
+import { imageUrlSummary } from "./image-summary";
 
 export const filterOptionKind = z.enum([
   "ingredientWithProduct",
@@ -30,9 +31,18 @@ const kindFilterOptionsInput = filterOptionRequest.extend({
   source: z.literal("kind").optional(),
   kind: filterOptionKind,
 });
+const filterOptionProjection = z.enum(["count", "logo"]);
+
 const entityFilterOptionsInput = filterOptionRequest.extend({
   source: z.literal("entity"),
   entity: filterOptionEntity,
+  /**
+   * Optional per-row projections. `count` also orders the roster by it,
+   * descending — the "most used first" order a picker wants.
+   */
+  include: z.array(filterOptionProjection).max(2).default([]),
+  // A picker that filters client-side reads its whole roster in one page.
+  limit: z.number().int().min(1).max(1000).default(25),
 });
 export const filterOptionsInput = z.union([
   kindFilterOptionsInput,
@@ -44,6 +54,9 @@ export const filterOptionItem = z.object({
   id: z.string(),
   label: z.string(),
   detail: z.string().optional(),
+  /** Present when requested through `include`. */
+  count: z.number().int().optional(),
+  logo: imageUrlSummary.nullable().optional(),
 });
 export type FilterOptionItem = z.infer<typeof filterOptionItem>;
 

@@ -2,6 +2,7 @@ import { ingredientResolvableNamesInput } from "@cubby/schemas/ingredient";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { ingredientContract } from "~/contracts/ingredient.contract";
+import { resolveOrCreateWorkflow } from "~/server/workflows/ingredient.server";
 
 import { registerRouterTool, WRITE_CLOSED } from "./_shared";
 import { fromContract, mcpResultsEnvelope } from "./contract-envelope";
@@ -19,11 +20,10 @@ export function registerIngredientTools(server: McpServer) {
     inputSchema: ingredientResolvableNamesInput,
     outputSchema: ingredientResolveOrCreateResponseOut,
     annotations: WRITE_CLOSED,
-    call: (caller, params) =>
-      caller.ingredient
-        .resolveOrCreate({ names: params.names })
-        .then((results) => ({
-          results,
-        })),
+    call: async (context, params) => ({
+      results: await resolveOrCreateWorkflow(context.db, {
+        names: params.names,
+      }),
+    }),
   });
 }

@@ -300,37 +300,7 @@ export const inventoryCreatePayloadData = z
     }
   });
 
-const inventoryBulkOperationItem = z.object({
-  id: inventoryShortcode.optional(),
-  productId: productShortcode,
-  locationId: locationShortcode,
-  amount: positiveAmount,
-  ownership: inventoryOwnershipSelection.optional(),
-});
-
-export type InventoryBulkOperationItem = z.infer<
-  typeof inventoryBulkOperationItem
->;
-
-export const inventoryBulkOperationPayload = z.object({
-  locationId: locationShortcode,
-  items: z.array(inventoryBulkOperationItem),
-  // When the snapshot was loaded — lets the server reject a stale commit that
-  // would delete-on-omit entries another surface added since. Optional so other
-  // callers (MCP, tests) are unaffected.
-  loadedAt: z.coerce.date<Date | string>().optional(),
-  snapshotToken: z.string().min(1).optional(),
-});
-
-/**
- * One product to stock at a shared location.
- *
- * Deliberately NOT `inventoryBulkOperationItem`: that one carries its own
- * `locationId` per item and an optional entry `id`, because `bulkProcess`
- * reconciles a whole shelf. This is additive — every item lands at the one
- * `locationId` on the payload, and there is no entry id because the caller is
- * naming products, not rows.
- */
+/** One product to stock at a shared location; every item lands at the payload `locationId`. */
 const inventoryBulkAddItem = z.object({
   productId: productShortcode,
   amount: positiveAmount,
@@ -345,7 +315,7 @@ export type InventoryBulkAddItem = z.infer<typeof inventoryBulkAddItem>;
 /**
  * Stock many products at one location in a single transaction.
  *
- * Additive, unlike `inventoryBulkOperationPayload`: nothing already at the
+ * Additive: nothing already at the
  * location is touched unless an item names its product, and an item whose slot
  * `(productId, locationId, placement)` is already occupied SUMS into that row
  * rather than colliding with the partial unique index.

@@ -7,12 +7,9 @@ import { Link } from "@tanstack/react-router";
 import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
 import { Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
+import type { ImportRunSummary } from "~/contracts/run.contract";
 import { entityListFor } from "~/entities/entity-list.functions";
-import { readJsonOrThrow } from "~/lib/http-error";
-import {
-  importRunsResponse,
-  type ImportRunSummary,
-} from "~/lib/purchase-import-run-detail";
+import { run as runOperations } from "~/entities/run.functions";
 import { purchaseLabel } from "~/lib/purchase-label";
 
 import { importRunHref } from "../purchases/purchase-import-links";
@@ -48,18 +45,8 @@ export const ProductImportRuns: DetailSlotComponent<"product"> = ({
   record: product,
 }) => {
   const runs = useQuery({
-    queryKey: ["purchase-import", "product-runs", product.id],
-    queryFn: async () => {
-      const response = await fetch(
-        `/api/import/runs?productId=${encodeURIComponent(product.id)}`,
-      );
-      const data = await readJsonOrThrow(
-        response,
-        importRunsResponse,
-        "Product enrichment runs could not load.",
-      );
-      return data.runs;
-    },
+    ...runOperations.history.queryOptions({ productId: product.id }),
+    select: (history) => history.runs,
   });
   const purchases = useQuery(
     entityListFor("purchase").queryOptions({

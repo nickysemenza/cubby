@@ -1,5 +1,5 @@
 import type { PhotoRunReview } from "@cubby/schemas/photo-import-run";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, type ReactNode } from "react";
 
 import { Stack } from "~/components/layout";
@@ -8,10 +8,8 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Progress } from "~/components/ui/progress";
 import { StatusText } from "~/components/ui/status-text";
-import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { throwHttpError } from "~/lib/http-error";
-import type { ImportRunDetail } from "~/lib/purchase-import-run-detail";
+import type { ImportRunDetail } from "~/contracts/run.contract";
+import { photoImport } from "~/entities/run.functions";
 
 import { PhotoGroupReview, usePhotoRunReview } from "./photo-group-review";
 
@@ -103,22 +101,9 @@ function PhotoRunProgress({
  * agent's proposed item groups to review and every run photo, rather than an
  * agent transcript. */
 export function PhotoImportRunView({ run }: { run: ImportRunDetail }) {
-  const queryClient = useQueryClient();
   const review = usePhotoRunReview(run.publicId, run.status);
   const autoStartAttempted = useRef(false);
-  const start = useMutation({
-    mutationFn: async () => {
-      const response = await fetch(
-        `/api/import/runs/${encodeURIComponent(run.publicId)}/photo-agent`,
-        { method: "POST" },
-      );
-      if (!response.ok)
-        await throwHttpError(response, "Photo agent could not start", {
-          method: "POST",
-        });
-    },
-    onSuccess: () => void invalidateOperationTags(queryClient, ripple.runOnly),
-  });
+  const start = useMutation(photoImport.startGrouping.mutationOptions());
   const pending = run.targets.filter(
     (target) => target.targetType === "image" && target.state === "pending",
   ).length;
@@ -136,8 +121,9 @@ export function PhotoImportRunView({ run }: { run: ImportRunDetail }) {
     )
       return;
     autoStartAttempted.current = true;
-    start.mutate();
+    start.mutate({ runId: run.publicId });
   }, [
+    run.publicId,
     run.status,
     run.dispatch?.eventId,
     pending,
@@ -153,7 +139,7 @@ export function PhotoImportRunView({ run }: { run: ImportRunDetail }) {
             <Button
               type="button"
               disabled={!pending || start.isPending}
-              onClick={() => start.mutate()}
+              onClick={() => start.mutate({ runId: run.publicId })}
               className="min-h-11"
             >
               {start.isPending ? "Starting agent…" : "Start grouping"}

@@ -13,7 +13,6 @@ import type {
   DeviceShortcode,
   LedgerPartyId,
   ProductId,
-  UserId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
@@ -22,29 +21,21 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import {
-  device,
-  imageSighting,
-  ledgerParty,
-  product,
-} from "~/server/db/schema";
+import { device, imageSighting } from "~/server/db/schema";
+import { entityRepository } from "~/server/entity-kernel/adapter";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
-  auditDateWhereConditions,
   buildPartialUpdateValues,
-  countWhere,
-  executeListQueryWithCount,
-  getDb,
   notDeleted,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { listScaffold } from "~/server/repo/list-scaffold";
-import { removeEntity } from "~/server/repo/removal";
+import { currentMemberLedgerParty } from "~/server/repo/member-login";
 import {
-  resolveAllOrThrow,
+  lookupEntityReferences,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -67,120 +58,67 @@ export const DEVICE_DELETE_EDGE_POLICY = {
   },
 } as const satisfies IncomingEdgePolicy<"device", OperationDisposition>;
 
-const columns = {
-  id: device.id,
-  shortcode: device.shortcode,
-  installationId: device.installationId,
-  name: device.name,
-  platform: device.platform,
-  appVersion: device.appVersion,
-  osVersion: device.osVersion,
-  lastSeenAt: device.lastSeenAt,
-  automaticWork: device.automaticWork,
-  remotePaused: device.remotePaused,
-  ledgerPartyId: device.ledgerPartyId,
-  productId: device.productId,
-  createdAt: device.createdAt,
-  updatedAt: device.updatedAt,
-} as const;
-
-type DeviceRow = {
-  id: DeviceId;
-  shortcode: string;
-  installationId: string;
-  name: string;
-  platform: typeof device.$inferSelect.platform;
-  appVersion: string | null;
-  osVersion: string | null;
-  lastSeenAt: Date | null;
-  automaticWork: boolean;
-  remotePaused: boolean;
-  ledgerPartyId: LedgerPartyId | null;
-  productId: ProductId | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
+type DeviceRow = typeof device.$inferSelect;
 
 const scaffold = listScaffold("device", device);
 
-const toOut = async (
+const hydrate = async (
   db: Database | DrizzleTransaction,
-  row: DeviceRow,
-): Promise<DeviceOut> => {
-  const [ledgerPartyRow, productRow] = await Promise.all([
-    row.ledgerPartyId
-      ? unwrapDb(db).query.ledgerParty.findFirst({
-          where: and(
-            eq(ledgerParty.id, row.ledgerPartyId),
-            notDeleted(ledgerParty),
-          ),
-          columns: { shortcode: true, name: true },
-        })
-      : undefined,
-    row.productId
-      ? unwrapDb(db).query.product.findFirst({
-          where: and(eq(product.id, row.productId), notDeleted(product)),
-          columns: { shortcode: true, name: true },
-        })
-      : undefined,
+  rows: DeviceRow[],
+): Promise<DeviceOut[]> => {
+  const [parties, products, qualities] = await Promise.all([
+    lookupEntityReferences(
+      db,
+      "ledgerParty",
+      rows.map((row) => row.ledgerPartyId),
+    ),
+    lookupEntityReferences(
+      db,
+      "product",
+      rows.map((row) => row.productId),
+    ),
+    loadDataQualities(
+      db,
+      "device",
+      rows.map((row) => row.id),
+    ),
   ]);
-  const dataQuality = (await loadDataQualities(db, "device", [row.id])).get(
-    row.id,
-  )!;
-  return deviceOut.parse({
-    id: parseShortcodeFor("device", row.shortcode),
-    installationId: row.installationId,
-    name: row.name,
-    platform: row.platform,
-    appVersion: row.appVersion,
-    osVersion: row.osVersion,
-    lastSeenAt: row.lastSeenAt,
-    automaticWork: row.automaticWork,
-    remotePaused: row.remotePaused,
-    ledgerPartyId: ledgerPartyRow
-      ? parseShortcodeFor("ledgerParty", ledgerPartyRow.shortcode)
-      : null,
-    productId: productRow
-      ? parseShortcodeFor("product", productRow.shortcode)
-      : null,
-    ledgerPartyName: ledgerPartyRow?.name ?? null,
-    productName: productRow?.name ?? null,
-    dataQuality,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+  return rows.map((row) => {
+    const party = row.ledgerPartyId ? parties.get(row.ledgerPartyId) : null;
+    const hardware = row.productId ? products.get(row.productId) : null;
+    return deviceOut.parse({
+      ...row,
+      id: parseShortcodeFor("device", row.shortcode),
+      ledgerPartyId: party?.id ?? null,
+      productId: hardware?.id ?? null,
+      ledgerPartyName: party?.name ?? null,
+      productName: hardware?.name ?? null,
+      dataQuality: qualities.get(row.id),
+    });
   });
 };
 
 export const buildDeviceWhere = (filters: DeviceFilters) =>
-  scaffold.where(filters, [...auditDateWhereConditions(device, filters)]);
+  scaffold.where(filters);
 
-export async function listDevices(
+export const listDevices = (
   db: Database,
   filters: DeviceFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-) {
-  const where = buildDeviceWhere(filters);
-  const { take, skip } = scaffold.page(pagination);
-  const { data, count } = await executeListQueryWithCount(
-    getDb(db)
-      .select(columns)
-      .from(device)
-      .where(where)
-      .orderBy(...scaffold.orderBy(sorts, {}, filters))
-      .limit(take)
-      .offset(skip),
-    countWhere(db, device, where),
+) =>
+  scaffold.list(
+    db,
+    { filters, sorts, pagination },
+    { hydrate: (rows) => hydrate(db, rows) },
   );
-  return { data: await Promise.all(data.map((row) => toOut(db, row))), count };
-}
 
 const fetchById = async (
   db: Database | DrizzleTransaction,
   id: DeviceId,
 ): Promise<DeviceRow | undefined> => {
   const [row] = await unwrapDb(db)
-    .select(columns)
+    .select()
     .from(device)
     .where(and(eq(device.id, id), notDeleted(device)))
     .limit(1);
@@ -191,7 +129,7 @@ const deviceCrud = createEntityCrud({
   table: device,
   entity: "device",
   fetchById,
-  fromDB: (db, row) => toOut(db, row),
+  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
   toUpdate: (data: {
     name?: string;
     appVersion?: string | null;
@@ -208,19 +146,6 @@ const deviceCrud = createEntityCrud({
 export const getDeviceByID = deviceCrud.getByID;
 export const getDeviceByShortcode = deviceCrud.getByShortcode;
 
-/** The live member ledger party the acting login is linked to, if any. */
-const resolveActorParty = async (
-  db: Database | DrizzleTransaction,
-  userId: UserId,
-): Promise<LedgerPartyId | null> => {
-  const [row] = await unwrapDb(db)
-    .select({ id: ledgerParty.id })
-    .from(ledgerParty)
-    .where(and(eq(ledgerParty.userId, userId), notDeleted(ledgerParty)))
-    .limit(1);
-  return row?.id ?? null;
-};
-
 export async function createDevice(
   db: Database,
   data: DeviceCreateInput,
@@ -232,7 +157,7 @@ export async function createDevice(
     // hard failure: a device is useful even with no recorded owner.
     const ledgerPartyId =
       data.ledgerPartyId === undefined
-        ? await resolveActorParty(tx, actor.userId)
+        ? ((await currentMemberLedgerParty(tx, actor))?.id ?? null)
         : data.ledgerPartyId === null
           ? null
           : await resolveOrThrow(tx, "ledgerParty", data.ledgerPartyId);
@@ -300,37 +225,30 @@ export async function updateDevice(
   });
 }
 
-export async function deleteDevices(
-  db: Database,
-  shortcodes: DeviceShortcode[],
-  actor: ActorContext,
-) {
-  const ids = uniq(await resolveAllOrThrow(db, "device", shortcodes));
-  return withTransaction(db, async (tx) => {
-    // "ImageSighting.deviceId" is a "hard-delete" (cascade) disposition: a
-    // sighting reported by this device has no meaning once the device is
-    // gone. Every affected image is re-derived in this same transaction so
-    // its capture fields never reflect a sighting that no longer exists.
-    const cascadedSightings = await tx
-      .select({ imageId: imageSighting.imageId })
-      .from(imageSighting)
-      .where(
-        and(inArray(imageSighting.deviceId, ids), notDeleted(imageSighting)),
-      );
-    if (cascadedSightings.length > 0) {
-      await tx
-        .delete(imageSighting)
-        .where(inArray(imageSighting.deviceId, ids));
-      for (const imageId of uniq(cascadedSightings.map((row) => row.imageId))) {
-        await deriveAndStoreImageCapture(tx, parseEntityId("image", imageId));
-      }
-    }
-    await removeEntity(tx, {
-      entity: "device",
-      ids,
-      removal: "soft",
-      actor,
-    });
-    return { deleted: ids.length };
-  });
-}
+/**
+ * A device's reported sightings go with it, and every affected image is
+ * re-derived in the same transaction so its capture fields never reflect a
+ * sighting that no longer exists.
+ */
+const deleteDeviceSightings = async (
+  tx: DrizzleTransaction,
+  ids: DeviceId[],
+) => {
+  const removed = await tx
+    .delete(imageSighting)
+    .where(inArray(imageSighting.deviceId, ids))
+    .returning({ imageId: imageSighting.imageId });
+  for (const imageId of uniq(removed.map((row) => row.imageId)))
+    await deriveAndStoreImageCapture(tx, parseEntityId("image", imageId));
+};
+
+export const deviceRepository = entityRepository("device", {
+  lifecycle: { delete: DEVICE_DELETE_EDGE_POLICY },
+  get: getDeviceByShortcode,
+  list: listDevices,
+  create: createDevice,
+  update: updateDevice,
+  deleteHooks: {
+    overrides: { "ImageSighting.deviceId": deleteDeviceSightings },
+  },
+});

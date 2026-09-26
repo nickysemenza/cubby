@@ -552,9 +552,6 @@ importers:
       '@nivo/bar':
         specifier: ^0.99.0
         version: 0.99.0(@types/react@19.3.0)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
-      '@nivo/calendar':
-        specifier: ^0.99.0
-        version: 0.99.0(@types/react@19.3.0)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
       '@nivo/line':
         specifier: ^0.99.0
         version: 0.99.0(@types/react@19.3.0)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
@@ -2694,15 +2691,6 @@ packages:
 
   '@nivo/bar@0.99.0':
     resolution: {integrity: sha512-9yfMn7H6UF/TqtCwVZ/vihVAXUff9wWvSaeF2Z1DCfgr5S07qs31Qb2p0LZA+YgCWpaU7zqkeb3VZ4WCpZbrDA==}
-    peerDependencies:
-      '@types/react': '*'
-      react: ^16.14 || ^17.0 || ^18.0 || ^19.0
-    peerDependenciesMeta:
-      '@types/react':
-        optional: true
-
-  '@nivo/calendar@0.99.0':
-    resolution: {integrity: sha512-8Y6rIjAMt4hMWpkIUmb7skr8boAdoE7Bb4liAFSkkyRgsK4iFnFbaf1x5wLk7YmyY4v8LZ4PjNyGOYPBJU2wtw==}
     peerDependencies:
       '@types/react': '*'
       react: ^16.14 || ^17.0 || ^18.0 || ^19.0
@@ -13463,26 +13451,6 @@ snapshots:
       '@types/d3-shape': 3.1.8
       d3-scale: 4.0.2
       d3-shape: 3.2.0
-      lodash: 4.18.1
-      react: 19.3.0
-    optionalDependencies:
-      '@types/react': 19.3.0
-    transitivePeerDependencies:
-      - react-dom
-
-  '@nivo/calendar@0.99.0(@types/react@19.3.0)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)':
-    dependencies:
-      '@nivo/core': 0.99.0(@types/react@19.3.0)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
-      '@nivo/legends': 0.99.0(@types/react@19.3.0)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
-      '@nivo/text': 0.99.0(@types/react@19.3.0)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
-      '@nivo/theming': 0.99.0(@types/react@19.3.0)(react@19.3.0)
-      '@nivo/tooltip': 0.99.0(@types/react@19.3.0)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
-      '@types/d3-scale': 4.0.9
-      '@types/d3-time': 1.1.4
-      '@types/d3-time-format': 3.0.4
-      d3-scale: 4.0.2
-      d3-time: 1.1.0
-      d3-time-format: 3.0.0
       lodash: 4.18.1
       react: 19.3.0
     optionalDependencies:

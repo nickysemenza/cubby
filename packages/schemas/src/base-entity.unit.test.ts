@@ -1,58 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { deriveUpdateData } from "./base-entity";
-import { productUpdateData } from "./product";
+import { entityFieldSchemaMaps } from "./generated/entity-field-schema-maps.gen";
 
-describe("deriveUpdateData", () => {
-  const createFields = {
-    name: z.string().min(1),
-    tags: z.array(z.string()).default([]),
-    count: z.number(),
-    serverField: z.string(),
-  };
-
-  it("makes every required create field optional", () => {
-    const schema = deriveUpdateData(createFields);
-    expect(schema.parse({})).toEqual({});
-    expect(schema.parse({ name: "x", count: 1 })).toEqual({
-      name: "x",
-      count: 1,
-    });
-  });
-
-  it("strips create-time defaults so an omitted field stays undefined", () => {
-    // The core guard: a naive `.partial()` keeps `.default([])`, so omitting
-    // `tags` on update would coerce to [] and wipe the existing rows.
-    const schema = deriveUpdateData(createFields);
-    expect(schema.parse({}).tags).toBeUndefined();
-    expect(schema.parse({ tags: ["a"] }).tags).toEqual(["a"]);
-  });
-
-  it("adds update-only fields via `extend`", () => {
-    const schema = deriveUpdateData(createFields, {
-      extend: { removeIds: z.array(z.uuid()).optional() },
-    });
-    const id = "00000000-0000-0000-0000-000000000000";
-    expect(schema.parse({ removeIds: [id] }).removeIds).toEqual([id]);
-  });
-
-  it("drops server-managed fields via `omit`", () => {
-    const schema = deriveUpdateData(createFields, { omit: ["serverField"] });
-    expect("serverField" in schema.shape).toBe(false);
-    expect("name" in schema.shape).toBe(true);
-  });
-});
-
-// Real-world regression: the product update path must not reset array columns
-// when their keys are omitted (this is what the destructive-default trap would
-// silently do). Guards the deriveUpdateData wiring for the most dangerous case.
-describe("productUpdateData destructive-default guard", () => {
-  it("leaves unitMappings/externalIds/aliases/tags undefined when omitted", () => {
-    const parsed = productUpdateData.parse({ name: "Renamed" });
-    expect(parsed.name).toBe("Renamed");
-    expect(parsed.unitMappings).toBeUndefined();
-    expect(parsed.externalIds).toBeUndefined();
-    expect(parsed.aliases).toBeUndefined();
-    expect(parsed.tags).toBeUndefined();
+// Destructive-default regression: an update field carrying a create-time
+// `.default([])` (e.g. product `unitMappings`/`externalIds`/`aliases`/`tags`)
+// turns an omitted key into `[]` and wipes the existing rows. Every canonical
+// `xUpdateData` is `z.object(generated<Entity>FieldSchemas.update)`, so the
+// declared update map itself must leave an omitted key undefined.
+describe("generated update field maps", () => {
+  it("never supply a value for an omitted key", () => {
+    const defaulted = Object.entries(entityFieldSchemaMaps).flatMap(
+      ([entity, maps]) =>
+        Object.entries(maps.update).flatMap(([key, schema]) => {
+          const parsed = z.safeParse(schema, undefined);
+          return parsed.success && parsed.data !== undefined
+            ? [`${entity}.${key}`]
+            : [];
+        }),
+    );
+    expect(defaulted).toEqual([]);
   });
 });

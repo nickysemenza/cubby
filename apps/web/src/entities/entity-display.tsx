@@ -550,6 +550,58 @@ const entityDetailFields = (
   });
 };
 
+/**
+ * The compact facts a record's preview shows: its declared hero stats, then
+ * the first detail `fields` section in order, skipping the title, the hero
+ * chip and breadcrumb (the card header carries those), structured values,
+ * and empty fields — a preview spends its few rows on what is known.
+ */
+export function entityPreviewFacts<TRecord extends object>(
+  entity: Entity,
+  record: TRecord,
+  limit = 4,
+): { label: string; value: ReactNode }[] {
+  const presentation = entitySummary[entity];
+  const { hero, preview } = presentation.detail;
+  const firstSection = presentation.detail.sections.find(
+    (section) => section.kind === "fields",
+  );
+  // A declared `display.preview` roster is the card; otherwise the hero stats
+  // and first fields section stand in, up to `limit` known facts.
+  const keys: readonly string[] =
+    preview.length > 0
+      ? preview
+      : [
+          ...new Set([
+            ...hero.stats,
+            ...(firstSection?.kind === "fields" ? firstSection.fields : []),
+          ]),
+        ].filter(
+          (key) =>
+            key !== presentation.titleField &&
+            key !== hero.chip &&
+            key !== hero.breadcrumb,
+        );
+  const fields = entityFieldModels[entity].fields;
+  const facts: { label: string; value: ReactNode }[] = [];
+  for (const key of keys) {
+    if (preview.length === 0 && facts.length >= limit) break;
+    const field = fields.find((candidate) => candidate.key === key);
+    if (!field || field.kind === "json") continue;
+    const reference = readReferenceField(record, field);
+    const known = reference
+      ? reference.items.length > 0
+      : field.readKey !== null &&
+        copyScalarField(entity, record, field) !== null;
+    if (!known) continue;
+    facts.push({
+      label: field.label,
+      value: renderCompactFieldValue(entity, record, field),
+    });
+  }
+  return facts;
+}
+
 /** The field keys of one declared `fields` detail section. */
 export const entitySectionFields = (
   entity: Entity,
@@ -672,37 +724,112 @@ export function EntityBasicInfo<TRecord extends object>({
   );
 }
 
-/** The concrete value shapes a generic `EditableCell` config can save. */
-type EditableFieldValue = string | number | null;
+/** The concrete value shapes a generic editable control can save. */
+type EditableFieldValue = string | number | boolean | null;
 // `nullish`: an optional read key absent from a partial projection edits
 // from empty rather than failing the whole fields section.
-const editableFieldValue = z.union([z.string(), z.number()]).nullish();
+const editableFieldValue = z
+  .union([z.string(), z.number(), z.boolean()])
+  .nullish();
+
+type EditableField = Pick<
+  DisplayField,
+  "key" | "label" | "nullable" | "display"
+> & {
+  control: NonNullable<DisplayField["control"]>;
+};
+
+const editableControlKinds = new Set([
+  "text",
+  "textarea",
+  "number",
+  "date",
+  "select",
+  "checkbox",
+]);
+
+function isMoneyField(field: EditableField): boolean {
+  const format = field.display.format;
+  return (
+    format === "currency" ||
+    format === "signedCurrency" ||
+    field.control.renderer === "money"
+  );
+}
+
+const asText = (value: EditableFieldValue) =>
+  value === null ? null : String(value);
+const numberOrNull = z.number().nullable().catch(null);
+const booleanOrNull = z.boolean().nullable().catch(null);
+const asNumber = (value: EditableFieldValue) => numberOrNull.parse(value);
+const asBoolean = (value: EditableFieldValue) => booleanOrNull.parse(value);
+
+/** The row-parametrized copy/paste descriptor for an editable field's column. */
+function editableFieldCellData<TRecord extends object>(
+  entity: Entity,
+  field: EditableField,
+  read: (row: TRecord) => EditableFieldValue,
+  save: (row: TRecord, value: EditableFieldValue) => Promise<void>,
+) {
+  const text = (row: TRecord) => asText(read(row));
+  switch (field.control.kind) {
+    case "text":
+    case "textarea":
+      return textCellData<TRecord>("text", text, save);
+    case "date":
+      return dateCellData<TRecord>(text, save);
+    case "number":
+      return numberCellData<TRecord>(
+        isMoneyField(field) ? "currency" : "number",
+        (row) => asNumber(read(row)),
+        save,
+      );
+    case "select":
+      return selectCellData<TRecord>(
+        text,
+        enumFieldOptions(entity, field),
+        save,
+      );
+    case "checkbox":
+      return booleanCellData<TRecord>((row) => asBoolean(read(row)), save);
+    case "specialized":
+      return undefined;
+  }
+}
 
 /**
  * A field's editable control, derived from its declared `control.kind` and
- * `display.format` — the same generic mapping `editableFieldOverrides` below
- * uses for every field in its `keys`. Only the plain scalar shapes: a
- * boolean (`checkbox`) has no `EditableCell` config, and `specialized`
- * controls are, by definition, hand-rendered.
+ * `display.format`. The detail page (`editableFieldOverrides`) and list
+ * columns (`createEntityDisplayColumns`) share this one mapping; only
+ * `specialized` controls are hand-rendered.
  */
 function renderEditableField<TRecord extends object>(
   entity: Entity,
-  key: string,
-  control: NonNullable<DisplayField["control"]>,
-  format: DisplayField["display"]["format"],
+  field: EditableField,
   value: EditableFieldValue,
   save: (next: EditableFieldValue) => Promise<void>,
   record: TRecord,
+  surface: DisplaySurface,
 ): ReactNode {
+  const { key, control } = field;
+  const format = field.display.format;
+  const saveRow = (_row: TRecord, next: EditableFieldValue) => save(next);
   switch (control.kind) {
     case "text":
     case "textarea": {
-      const text = value === null ? null : String(value);
       const prose = isProseField(key, control);
+      const cellData = textCellData<TRecord>(
+        "text",
+        () => asText(value),
+        saveRow,
+      );
       return (
         <EditableCell
-          value={text}
-          trigger={prose ? "pencil-wrap" : "wrap"}
+          value={asText(value)}
+          trigger={
+            prose ? (surface === "detail" ? "pencil-wrap" : "pencil") : "wrap"
+          }
+          clipboard={specFromCellData(cellData, record)}
           config={
             control.kind === "textarea"
               ? { type: "text", multiline: true, rows: 4 }
@@ -726,68 +853,84 @@ function renderEditableField<TRecord extends object>(
       );
     }
     case "number": {
-      const num = value === null ? null : Number(value);
-      if (
-        format === "currency" ||
-        format === "signedCurrency" ||
-        control.renderer === "money"
-      ) {
-        return (
-          <EditableCell
-            value={num}
-            config={{ type: "currency" }}
-            onSave={save}
-            renderValue={(v) =>
-              v === null ? <NoneValue /> : formatCurrency(v)
-            }
-          />
-        );
-      }
-      return (
+      const money = isMoneyField(field);
+      const cellData = numberCellData<TRecord>(
+        money ? "currency" : "number",
+        () => asNumber(value),
+        saveRow,
+      );
+      const clipboard = specFromCellData(cellData, record);
+      return money ? (
         <EditableCell
-          value={num}
+          value={asNumber(value)}
+          config={{ type: "currency" }}
+          clipboard={clipboard}
+          onSave={save}
+          renderValue={(v) => (v === null ? <NoneValue /> : formatCurrency(v))}
+        />
+      ) : (
+        <EditableCell
+          value={asNumber(value)}
           config={{ type: "number" }}
+          clipboard={clipboard}
           onSave={save}
           renderValue={(v) => v ?? <NoneValue />}
         />
       );
     }
-    case "date":
+    case "date": {
+      const cellData = dateCellData<TRecord>(() => asText(value), saveRow);
       return (
         <EditableCell
-          value={value === null ? null : String(value)}
+          value={asText(value)}
           config={{
             type: "date",
-            ...recordFieldClearing(
-              entity,
-              key,
-              entityFieldModels[entity].fields.find(
-                (field) => field.key === key,
-              )?.nullable ?? false,
-              record,
-            ),
+            ...recordFieldClearing(entity, key, field.nullable, record),
           }}
+          clipboard={specFromCellData(cellData, record)}
           onSave={save}
-          renderValue={(v) => v ?? <NoneValue />}
+          renderValue={(v) =>
+            v ? (
+              renderFormattedScalar(format, { kind: "date", raw: v }, surface)
+            ) : (
+              <NoneValue />
+            )
+          }
         />
       );
+    }
     case "select": {
-      const field = { key, control };
       const options: FilterableComboboxItem[] = enumFieldOptions(entity, field);
+      const cellData = selectCellData<TRecord>(
+        () => asText(value),
+        options,
+        saveRow,
+      );
       return (
         <EditableCell
-          value={value === null ? null : String(value)}
+          value={asText(value)}
           config={{
             type: "select",
             options,
+            clearable: field.nullable,
             suggest: enumFieldSuggestSource(entity, field, record),
           }}
+          clipboard={specFromCellData(cellData, record)}
           onSave={save}
           renderValue={(v) => renderOptionCell(v, options)}
         />
       );
     }
     case "checkbox":
+      return (
+        <Checkbox
+          checked={asBoolean(value) ?? false}
+          onCheckedChange={(next) => {
+            void save(next);
+          }}
+          aria-label={`Set ${field.label}`}
+        />
+      );
     case "specialized":
       throw new Error(
         `Editable control kind "${control.kind}" needs a hand-written override`,
@@ -834,12 +977,11 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
       const override = () => ({
         value: renderEditableField(
           entity,
-          key,
-          control,
-          field.display.format,
+          { ...field, control },
           value,
           save,
           record,
+          "detail",
         ),
       });
       return [key, override] as const;
@@ -1168,25 +1310,21 @@ export function createEntityDisplayColumns<TRecord extends object>(
       }
       const format = field.display.format;
       const control = field.control;
-      const editable =
+      if (
         onSaveField !== undefined &&
         control !== null &&
         updateFields.includes(field.key) &&
-        ["text", "textarea", "number", "date", "select", "checkbox"].includes(
-          control.kind,
-        );
-      if (
-        editable &&
-        (control?.kind === "text" || control?.kind === "textarea")
+        editableControlKinds.has(control.kind)
       ) {
-        const prose = isProseField(field.key, control);
-        const cellData = textCellData<TRecord>(
-          "text",
-          (row) => copyScalarField(entity, row, field),
-          (row, value) => save(row, value),
-        );
+        const editableField = { ...field, control };
+        const read = (row: TRecord): EditableFieldValue => {
+          const value = readScalarField(entity, row, field);
+          if (value.kind === "number" || value.kind === "boolean")
+            return value.raw;
+          return copyScalarField(entity, row, field);
+        };
         add(
-          helper.accessor((record) => copyScalarField(entity, record, field), {
+          helper.accessor(read, {
             id: columnId,
             header: field.label,
             enableSorting: defaultEnableSorting,
@@ -1198,231 +1336,24 @@ export function createEntityDisplayColumns<TRecord extends object>(
                 : undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
-              cellData,
+              numeric: control.kind === "number" ? true : undefined,
+              cellData: editableFieldCellData<TRecord>(
+                entity,
+                editableField,
+                read,
+                save,
+              ),
             }),
-            cell: ({ row }) => (
-              <EditableCell
-                value={copyScalarField(entity, row.original, field)}
-                trigger={prose ? "pencil" : "wrap"}
-                onSave={(value) => save(row.original, value)}
-                clipboard={specFromCellData(cellData, row.original)}
-                config={{
-                  type: "text",
-                  multiline: control.kind === "textarea",
-                }}
-                renderValue={(value) =>
-                  value && prose ? (
-                    <ShortcodeProse>{value}</ShortcodeProse>
-                  ) : (
-                    (value ?? <NoneValue />)
-                  )
-                }
-              />
-            ),
+            cell: ({ row }) =>
+              renderEditableField(
+                entity,
+                editableField,
+                read(row.original),
+                (next) => save(row.original, next),
+                row.original,
+                "list",
+              ),
           }),
-        );
-        continue;
-      }
-      if (editable && control?.kind === "date") {
-        const cellData = dateCellData<TRecord>(
-          (row) => copyScalarField(entity, row, field),
-          (row, value) => save(row, value),
-        );
-        add(
-          helper.accessor((record) => copyScalarField(entity, record, field), {
-            id: columnId,
-            header: field.label,
-            enableSorting: defaultEnableSorting,
-            meta: attachCubbyColumnMeta({
-              entityColumnRole: "fact",
-              provenance: field.provenance ?? undefined,
-              explanation: field.explanation
-                ? { entity, field: field.key, label: field.label }
-                : undefined,
-              className: widthClassName(field.display.width),
-              mobile: toMobileColumnMeta(field.display.mobile),
-              cellData,
-            }),
-            cell: ({ row }) => (
-              <EditableCell
-                value={copyScalarField(entity, row.original, field)}
-                onSave={(value) => save(row.original, value)}
-                clipboard={specFromCellData(cellData, row.original)}
-                config={{
-                  type: "date",
-                  ...recordFieldClearing(
-                    entity,
-                    field.key,
-                    field.nullable,
-                    row.original,
-                  ),
-                }}
-                renderValue={(value) =>
-                  value ? (
-                    renderFormattedScalar(format, { kind: "date", raw: value })
-                  ) : (
-                    <NoneValue />
-                  )
-                }
-              />
-            ),
-          }),
-        );
-        continue;
-      }
-      if (editable && control?.kind === "number") {
-        const kind =
-          format === "currency" || format === "signedCurrency"
-            ? "currency"
-            : "number";
-        const cellData = numberCellData<TRecord>(
-          format === "currency" || format === "signedCurrency"
-            ? "currency"
-            : "number",
-          (row) => {
-            const value = readScalarField(entity, row, field);
-            return value.kind === "number" ? value.raw : null;
-          },
-          (row, value) => save(row, value),
-        );
-        add(
-          helper.accessor(
-            (record) => readScalarField(entity, record, field).raw,
-            {
-              id: columnId,
-              header: field.label,
-              enableSorting: defaultEnableSorting,
-              meta: attachCubbyColumnMeta({
-                entityColumnRole: "fact",
-                provenance: field.provenance ?? undefined,
-                explanation: field.explanation
-                  ? { entity, field: field.key, label: field.label }
-                  : undefined,
-                className: widthClassName(field.display.width),
-                mobile: toMobileColumnMeta(field.display.mobile),
-                numeric: true,
-                cellData,
-              }),
-              cell: ({ row }) => {
-                const value = readScalarField(entity, row.original, field);
-                const number = value.kind === "number" ? value.raw : null;
-                const editor = (
-                  <EditableCell
-                    value={number}
-                    onSave={(next) => save(row.original, next)}
-                    clipboard={specFromCellData(cellData, row.original)}
-                    config={{ type: "number" }}
-                    renderValue={(next) =>
-                      next == null ? (
-                        <NoneValue />
-                      ) : format === "currency" ||
-                        format === "signedCurrency" ? (
-                        formatCurrency(next)
-                      ) : (
-                        next
-                      )
-                    }
-                  />
-                );
-                return kind === "currency" ? (
-                  <EditableCell
-                    value={number}
-                    onSave={(next) => save(row.original, next)}
-                    clipboard={specFromCellData(cellData, row.original)}
-                    config={{ type: "currency" }}
-                    renderValue={(next) =>
-                      next == null ? <NoneValue /> : formatCurrency(next)
-                    }
-                  />
-                ) : (
-                  editor
-                );
-              },
-            },
-          ),
-        );
-        continue;
-      }
-      if (editable && control?.kind === "select") {
-        const selectOptions = enumFieldOptions(entity, field);
-        const cellData = selectCellData<TRecord>(
-          (row) => copyScalarField(entity, row, field),
-          selectOptions,
-          (row, value) => save(row, value),
-        );
-        add(
-          helper.accessor((record) => copyScalarField(entity, record, field), {
-            id: columnId,
-            header: field.label,
-            enableSorting: defaultEnableSorting,
-            meta: attachCubbyColumnMeta({
-              entityColumnRole: "fact",
-              provenance: field.provenance ?? undefined,
-              explanation: field.explanation
-                ? { entity, field: field.key, label: field.label }
-                : undefined,
-              className: widthClassName(field.display.width),
-              mobile: toMobileColumnMeta(field.display.mobile),
-              cellData,
-            }),
-            cell: ({ row }) => (
-              <EditableCell
-                value={copyScalarField(entity, row.original, field)}
-                onSave={(value) => save(row.original, value)}
-                clipboard={specFromCellData(cellData, row.original)}
-                config={{
-                  type: "select",
-                  options: selectOptions,
-                  clearable: field.nullable,
-                  suggest: enumFieldSuggestSource(entity, field, row.original),
-                }}
-                renderValue={(value) => renderOptionCell(value, selectOptions)}
-              />
-            ),
-          }),
-        );
-        continue;
-      }
-      if (editable && control?.kind === "checkbox") {
-        const cellData = booleanCellData<TRecord>(
-          (row) => {
-            const value = readScalarField(entity, row, field);
-            return value.kind === "boolean" ? value.raw : null;
-          },
-          (row, value) => save(row, value),
-        );
-        add(
-          helper.accessor(
-            (record) => readScalarField(entity, record, field).raw,
-            {
-              id: columnId,
-              header: field.label,
-              enableSorting: defaultEnableSorting,
-              meta: attachCubbyColumnMeta({
-                entityColumnRole: "fact",
-                provenance: field.provenance ?? undefined,
-                explanation: field.explanation
-                  ? { entity, field: field.key, label: field.label }
-                  : undefined,
-                className: widthClassName(field.display.width),
-                mobile: toMobileColumnMeta(field.display.mobile),
-                cellData,
-              }),
-              cell: ({ row }) => {
-                const value = readScalarField(entity, row.original, field);
-                const checked = value.kind === "boolean" && value.raw;
-                return (
-                  <Checkbox
-                    checked={checked}
-                    onCheckedChange={(next) => {
-                      void save(row.original, next);
-                    }}
-                    aria-label={`Set ${field.label}`}
-                  />
-                );
-              },
-            },
-          ),
         );
         continue;
       }

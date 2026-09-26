@@ -24,6 +24,7 @@ import {
 } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
+import { sha256Hex } from "~/server/semantic/hash";
 
 import {
   resolveBeneficiaryEvidence,
@@ -65,16 +66,6 @@ const isIndividual = <Party extends { kind: string }>(
   party: Party | undefined,
 ): party is Party & { kind: "member" | "guest" } =>
   party?.kind === "member" || party?.kind === "guest";
-
-const sha256 = async (value: string): Promise<string> => {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-};
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
@@ -632,7 +623,7 @@ const resolveEntryOwnership = async (
       : entry.ownershipMode === "inherit"
         ? inherited.owner
         : null;
-  const evidenceFingerprint = await sha256(
+  const evidenceFingerprint = await sha256Hex(
     JSON.stringify({
       ownershipMode: entry.ownershipMode,
       explicitOwnerId: explicit?.id ?? null,

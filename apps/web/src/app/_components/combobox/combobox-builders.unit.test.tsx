@@ -1,17 +1,14 @@
 import type { SearchHit } from "@cubby/schemas/search";
 import { testShortcode } from "@cubby/schemas/testing";
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { categorySummaryFixture } from "../../../../tooling/product-category-fixtures";
 import {
-  buildIngredientComboboxItem,
   buildLocationComboboxItem,
   buildProductComboboxItem,
-  buildProjectComboboxItem,
-  buildRecipeComboboxItem,
+  buildRecordComboboxItem,
   buildSearchHitComboboxItem,
-  buildTaskComboboxItem,
   buildVendorComboboxItem,
 } from "./combobox-builders";
 
@@ -32,13 +29,15 @@ function locationSearchHit(overrides: Partial<SearchHit> = {}): SearchHit {
 }
 
 describe("entity picker value adapters", () => {
-  it("keeps ING, LOC, and RCP assignments shortcode-valued", () => {
+  it("keeps manifest record, LOC, PRD and persisted VEN assignments shortcode-valued", () => {
     const ingredientId = testShortcode("ingredient", "ING-2ABC");
     const locationId = testShortcode("location", "LOC-3ABC");
-    const recipeId = testShortcode("recipe", "RCP-4ABC");
+    const product = testShortcode("product", "PRD-5ABC");
+    const vendor = testShortcode("vendor", "VEN-8ABC");
 
+    // The manifest's `titleField` names the row; declared aliases stay searchable.
     expect(
-      buildIngredientComboboxItem({
+      buildRecordComboboxItem("ingredient", {
         id: ingredientId,
         name: "Scallion",
         aliases: ["green onion"],
@@ -46,8 +45,15 @@ describe("entity picker value adapters", () => {
     ).toMatchObject({
       id: ingredientId,
       shortcode: ingredientId,
+      name: "Scallion",
       aliases: ["green onion"],
     });
+    expect(
+      buildRecordComboboxItem("plant", {
+        id: "PLANT-4ABC",
+        displayName: "Tomato",
+      }),
+    ).toMatchObject({ id: "PLANT-4ABC", name: "Tomato" });
     expect(
       buildLocationComboboxItem({
         id: locationId,
@@ -56,37 +62,12 @@ describe("entity picker value adapters", () => {
       }),
     ).toMatchObject({ id: locationId, shortcode: locationId });
     expect(
-      buildRecipeComboboxItem({
-        id: recipeId,
-        name: "Soup",
-      }),
-    ).toMatchObject({ id: recipeId, shortcode: recipeId });
-  });
-
-  it("keeps PRD, PRJ, TSK, and persisted VEN assignments shortcode-valued", () => {
-    const product = testShortcode("product", "PRD-5ABC");
-    const project = testShortcode("project", "PRJ-6ABC");
-    const task = testShortcode("task", "TSK-7ABC");
-    const vendor = testShortcode("vendor", "VEN-8ABC");
-
-    expect(
       buildProductComboboxItem({
         id: product,
         name: "Drill",
         manufacturer: "Makita",
       }),
     ).toMatchObject({ id: product, shortcode: product, secondary: "Makita" });
-    expect(
-      buildProjectComboboxItem({
-        id: project,
-        name: "Garage",
-        icon: "🔨",
-      }),
-    ).toMatchObject({ id: project, shortcode: project });
-    expect(buildTaskComboboxItem({ id: task, name: "Paint" })).toMatchObject({
-      id: task,
-      shortcode: task,
-    });
     expect(
       buildVendorComboboxItem(
         { id: vendor, name: "Acme" },
@@ -116,17 +97,6 @@ describe("entity picker value adapters", () => {
     });
     expect(byName.id).toBe("Acme");
     expect(byShortcode.id).toBe(vendor);
-  });
-
-  it("uses the project's custom mark in picker rows", () => {
-    const item = buildProjectComboboxItem({
-      id: testShortcode("project", "PRJ-6ABC"),
-      name: "Garage",
-      icon: "🔧",
-    });
-
-    render(item.icon);
-    expect(screen.getByText("🔧")).toHaveAttribute("aria-hidden", "true");
   });
 });
 

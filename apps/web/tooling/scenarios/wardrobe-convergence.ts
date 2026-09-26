@@ -15,15 +15,20 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 
-import { importRunsResponse } from "~/lib/purchase-import-run-detail";
+import superjson from "superjson";
+
+import { runContract } from "~/contracts/run.contract";
+import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import { superJsonResultSchema } from "~/lib/superjson-wire";
+import { unparsedStartOperationResultSchema } from "~/server/start-operation.contract";
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
-import { registerProductTools } from "~/server/mcp/tools/product.tools";
+import { registerContractTools } from "~/server/mcp/tools/contract-tools";
 import { registerPurchaseTools } from "~/server/mcp/tools/purchase.tools";
 import { startOrResumeImportRun } from "~/server/purchase-import/run-service";
 import { classifyOrderCapture } from "~/server/purchase-import/order-list";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { proposeProductMatch } from "~/server/services/product-match.service";
+import { recommendationsHandlers } from "~/server/recommendations-browser.server";
 
 import {
   buildKernelContext,
@@ -456,15 +461,23 @@ async function reviewLateChargeInBrowser(input: {
       });
       const page = await context.newPage();
       try {
-        const importRuns = page.waitForResponse((response) =>
-          response.url().includes("/api/import/runs?purchaseId="),
+        const importRuns = page.waitForResponse(
+          (response) =>
+            response.url().endsWith(BROWSER_OPERATION_PATH) &&
+            (response.request().postData() ?? "").includes('"run.history"'),
         );
         await page.goto(`${input.origin}/purchases/${input.purchaseId}`);
         // The purchase import run that created this Purchase must list; a
         // response-schema drift here once turned the slot into a bare 500.
         const runsResponse = await importRuns;
         expect(runsResponse.status()).toBe(200);
-        const { runs } = importRunsResponse.parse(await runsResponse.json());
+        const result = unparsedStartOperationResultSchema.parse(
+          superjson.deserialize(
+            superJsonResultSchema.parse(await runsResponse.json()),
+          ),
+        );
+        if (!result.ok) throw new Error(JSON.stringify(result.error));
+        const { runs } = runContract.ops.history.output.parse(result.data);
         expect(runs.length).toBeGreaterThan(0);
         await expect(
           page.getByText("Purchase import runs could not load."),
@@ -890,7 +903,7 @@ export async function runWardrobeConvergenceScenario({
       name: "wardrobe-match-sim",
       version: "1.0",
     });
-    registerProductTools(proposalServer);
+    registerContractTools(proposalServer, recommendationsHandlers);
     const proposed = await callMcpTool(
       proposalServer,
       "propose_product_match",
@@ -899,11 +912,7 @@ export async function runWardrobeConvergenceScenario({
         evidence: matchEvidence,
         sourceUrls: ["https://shop.example.test/products/crew-tee"],
       },
-      {
-        recommendations: {
-          proposeProductMatch: (input) => proposeProductMatch(db, input),
-        },
-      },
+      { db, readDb: db },
       { entityKernel: kernel },
     );
     if (

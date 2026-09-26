@@ -2,7 +2,6 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
-  type ImageShortcode,
   type LocationId,
   type ProductId,
   parseEntityId,
@@ -43,12 +42,9 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   entityAttachment,
-  gardenEntry,
   image,
   inventoryEntry,
   location,
-  photoGroupProposal,
-  planting,
   product,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -63,9 +59,7 @@ import {
 } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
-  assertNoDependents,
   associatePendingImages,
-  auditDateWhereConditions,
   buildOrderBy,
   buildPartialUpdateValues,
   countWhere,
@@ -74,11 +68,9 @@ import {
   executeListQueryWithCount,
   getDb,
   idSetPresence,
-  imageCascadeChild,
   imageJoinBindings,
   imageOrder,
   type ListReadIntent,
-  lockAndValidateForDelete,
   mapImages,
   notDeleted,
   rangeConditions,
@@ -90,13 +82,12 @@ import {
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
-import { countByTarget } from "~/server/repo/impact";
 import { stockOnly } from "~/server/repo/inventory/placement";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { parseLocationType } from "~/server/repo/location/parse-type";
 import { loadProductPricing } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { removeEntity } from "~/server/repo/removal";
+import { deleteByPolicy } from "~/server/repo/removal";
 import {
   resolveAllPresent,
   resolveLiveShortcode,
@@ -152,22 +143,6 @@ export const LOCATION_DELETE_EDGE_POLICY = {
     description: "A location with dated garden observations cannot be deleted.",
   },
 } as const satisfies IncomingEdgePolicy<"location", OperationDisposition>;
-
-/**
- * Live inventory sitting in the given locations. Used by `deleteLocations`,
- * which refuses when any exist.
- */
-const findLocationsWithLiveInventory = (
-  db: Database | DrizzleTransaction,
-  ids: LocationId[],
-) =>
-  unwrapDb(db).query.inventoryEntry.findMany({
-    where: and(
-      inArray(inventoryEntry.locationId, ids),
-      notDeleted(inventoryEntry),
-    ),
-    columns: { locationId: true },
-  });
 
 /**
  * Turn a `Location_name_key` violation into an error that names the blocker.
@@ -572,126 +547,73 @@ export const bulkReparentLocations = async (
   });
 };
 
+const refuseHomeLocation = async (
+  tx: DrizzleTransaction,
+  ids: LocationId[],
+) => {
+  const home = await getHomeLocation(tx);
+  // Its own reason rather than the shared CONSTRAINT_VIOLATION: a structural
+  // rule about one specific row, not a generic constraint.
+  if (ids.includes(home.id))
+    throw createAppError("LOCATION_IS_ROOT", "Home cannot be deleted");
+};
+
 /**
- * Soft delete locations by setting deletedAt timestamp.
- * Also soft deletes related images.
- * Child locations are promoted to the nearest surviving ancestor.
- * Throws if any location has inventory.
+ * Promote each surviving child to the nearest ancestor that is not also
+ * being deleted. Multi-delete makes the direct parent insufficient: when a
+ * room and its shelf go together, the shelf's bins belong under Home, not
+ * under the soon-to-be-deleted room.
  */
+const promoteSurvivingChildren = async (
+  tx: DrizzleTransaction,
+  ids: LocationId[],
+) => {
+  const home = await getHomeLocation(tx);
+  const liveLocations = await tx
+    .select({ id: location.id, parentId: location.parentId })
+    .from(location)
+    .where(notDeleted(location));
+  const parentById = new Map(
+    liveLocations.map((row) => [row.id, row.parentId] as const),
+  );
+  const deleting = new Set(ids);
+  const promotions = new Map<LocationId, LocationId[]>();
+  for (const child of liveLocations) {
+    if (!child.parentId || !deleting.has(child.parentId)) continue;
+    if (deleting.has(child.id)) continue;
+    let destinationId: LocationId | null = child.parentId;
+    while (destinationId && deleting.has(destinationId))
+      destinationId = parentById.get(destinationId) ?? null;
+    const survivingParentId = destinationId ?? home.id;
+    promotions.set(survivingParentId, [
+      ...(promotions.get(survivingParentId) ?? []),
+      child.id,
+    ]);
+  }
+  for (const [parentId, childIds] of promotions)
+    await tx
+      .update(location)
+      .set({ parentId })
+      .where(and(inArray(location.id, childIds), notDeleted(location)));
+};
+
 /**
- * Returns the R2 keys of images the cascade reaped, for the caller to drop
- * after this commit — an object delete has no rollback.
+ * Location deletes take uuids. Returns the R2 keys of images the cascade
+ * reaped, for the caller to drop after this commit.
  */
-export const deleteLocations = async (
+export const deleteLocations = (
   db: Database,
   ids: LocationId[],
   actor: ActorContext,
-): Promise<{
-  detachedImageKeys: string[];
-  deletedImageShortcodes: ImageShortcode[];
-  deleted: number;
-}> => {
-  if (ids.length === 0)
-    return { detachedImageKeys: [], deletedImageShortcodes: [], deleted: 0 };
-
-  return await withTransaction(db, async (tx) => {
-    // Lock locations and validate they exist and aren't already deleted
-    // Prevents race conditions by acquiring row-level locks
-    await lockAndValidateForDelete(tx, location, ids, "Location");
-    const home = await getHomeLocation(tx);
-    if (ids.includes(home.id)) {
-      // Its own reason rather than the shared CONSTRAINT_VIOLATION: this is a
-      // structural rule about one specific row, not a generic constraint, and
-      // a caller could not previously tell it apart from any other refusal.
-      throw createAppError("LOCATION_IS_ROOT", "Home cannot be deleted");
-    }
-
-    const fetchLocationNames = (failedIds: LocationId[]) =>
-      tx.query.location.findMany({
-        where: inArray(location.id, failedIds),
-        columns: { name: true },
-      });
-
-    // Safety check: don't delete if any location has inventory
-    const withInventory = await findLocationsWithLiveInventory(tx, ids);
-    await assertNoDependents({
-      offendingParentIds: withInventory.map((e) => e.locationId),
-      fetchNames: fetchLocationNames,
-      reason: "LOCATION_HAS_INVENTORY",
-      message: (count, names) =>
-        `Cannot delete ${count} location(s): ${names} have inventory entries. Move or remove them first.`,
-    });
-
-    // LOCATION_DELETE_EDGE_POLICY declares these two garden edges `block`;
-    // nothing generic enforces `block`, so the repository must (the same call
-    // the preview makes, so the two cannot disagree). `countByTarget` skips
-    // soft-deleted Planting/GardenEntry rows on its own. Any live planting
-    // blocks, finished or not — that is the declared policy.
-    const [byLocation, byEntry] = await Promise.all([
-      countByTarget(tx, planting, planting.locationId, ids),
-      countByTarget(tx, gardenEntry, gardenEntry.locationId, ids),
-    ]);
-    await assertNoDependents({
-      offendingParentIds: ids.filter((id) => byLocation[id]),
-      fetchNames: fetchLocationNames,
-      reason: "LOCATION_HAS_PLANTINGS",
-      message: (count, names) =>
-        `Cannot delete ${count} location(s): ${names} still have plantings (current or planned). Move or delete the plantings first.`,
-    });
-    await assertNoDependents({
-      offendingParentIds: ids.filter((id) => byEntry[id]),
-      fetchNames: fetchLocationNames,
-      reason: "LOCATION_HAS_GARDEN_HISTORY",
-      message: (count, names) =>
-        `Cannot delete ${count} location(s): ${names} carry garden history (dated observations or harvests).`,
-    });
-
-    // Promote each surviving child to the nearest ancestor that is not also
-    // being deleted. Multi-delete makes the direct parent insufficient: when a
-    // room and its shelf go together, the shelf's bins belong under Home, not
-    // under the soon-to-be-deleted room.
-    const liveLocations = await tx
-      .select({ id: location.id, parentId: location.parentId })
-      .from(location)
-      .where(notDeleted(location));
-    const parentById = new Map(
-      liveLocations.map((row) => [row.id, row.parentId] as const),
-    );
-    const deleting = new Set(ids);
-    const promotions = new Map<LocationId, LocationId[]>();
-    for (const child of liveLocations) {
-      if (!child.parentId || !deleting.has(child.parentId)) continue;
-      if (deleting.has(child.id)) continue;
-
-      let destinationId: LocationId | null = child.parentId;
-      while (destinationId && deleting.has(destinationId)) {
-        destinationId = parentById.get(destinationId) ?? null;
-      }
-      const survivingParentId = destinationId ?? home.id;
-      const childIds = promotions.get(survivingParentId) ?? [];
-      childIds.push(child.id);
-      promotions.set(survivingParentId, childIds);
-    }
-    for (const [parentId, childIds] of promotions) {
-      await tx
-        .update(location)
-        .set({ parentId })
-        .where(and(inArray(location.id, childIds), notDeleted(location)));
-    }
-    await tx
-      .update(photoGroupProposal)
-      .set({ inventoryLocationId: null, updatedAt: new Date() })
-      .where(inArray(photoGroupProposal.inventoryLocationId, ids));
-
-    return await removeEntity(tx, {
-      entity: "location",
-      ids,
-      removal: "soft",
-      actor,
-      children: [imageCascadeChild()],
-    });
+) =>
+  deleteByPolicy(db, {
+    entity: "location",
+    policy: LOCATION_DELETE_EDGE_POLICY,
+    ids,
+    actor,
+    beforeDelete: refuseHomeLocation,
+    overrides: { "Location.parentId": promoteSurvivingChildren },
   });
-};
 
 const locationScaffold = listScaffold("location", location);
 
@@ -801,7 +723,6 @@ export const buildLocationWhere = async (
   // `nameFilter`, `type` and `aiDescriptionPresenceFilter` are declared stored
   // filters — applied by `locationScaffold.where` before the conditions below.
   return locationScaffold.where(filters, [
-    ...auditDateWhereConditions(location, filters),
     ...relatedWhereConditions("location", filters, location.id),
     parentCondition,
     productCondition,

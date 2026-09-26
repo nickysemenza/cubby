@@ -1,19 +1,15 @@
 import {
-  financialAccountContract,
   financialTransactionContract,
   ledgerPartyContract,
 } from "~/contracts/finance.contract";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
-
-export const financialAccount = defineOperationDomain(
-  financialAccountContract,
-  {
-    options: { tags: [["financialAccount", "options"]] },
-  },
-);
 
 export const ledgerParty = defineOperationDomain(ledgerPartyContract, {
   options: { tags: [["ledgerParty", "options"]] },
+  memberLogins: { tags: [["ledgerParty", "memberLogins"]] },
+  // A login's party decides which runs it may control.
+  setMemberLogin: { invalidates: ripple.memberLogins },
 });
 
 export const financialTransaction = defineOperationDomain(

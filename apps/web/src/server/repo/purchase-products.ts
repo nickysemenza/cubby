@@ -69,7 +69,6 @@ import {
   loadRelationProducts,
   planRelationAttach,
   planRelationDetach,
-  type RelationPlan,
   type RelationPreflight,
   relationImpact,
   throwRelationRefusal,
@@ -356,7 +355,7 @@ async function livePurchaseProductIds(
  * Everything that decides whether a purchase→product link may be written.
  *
  * Shared by `attachPurchaseProducts` (which passes its `tx`) and
- * `previewAttachPurchaseProducts` (which passes the pooled client); queries run
+ * the adapter's `preview` (which passes the pooled client); queries run
  * SEQUENTIALLY so both call sites are safe — see `repo/relation-preflight.ts`.
  *
  * There is no category gate here on purpose: an order can buy anything. The
@@ -408,38 +407,6 @@ const PURCHASE_PRODUCT_EDGE = {
   edgeKey: "PurchaseProduct.productId",
   label: "purchase product links",
 } as const;
-
-export async function previewAttachPurchaseProducts(
-  db: Database,
-  purchaseId: PurchaseId,
-  productIds: readonly ProductId[],
-): Promise<RelationPlan> {
-  const pre = await preflightAttachPurchaseProducts(
-    getDb(db),
-    purchaseId,
-    productIds,
-  );
-  return planRelationAttach(pre, {
-    ...PURCHASE_PRODUCT_EDGE,
-    description: "Provenance links this attach would create.",
-  });
-}
-
-export async function previewDetachPurchaseProducts(
-  db: Database,
-  purchaseId: PurchaseId,
-  productIds: readonly ProductId[],
-): Promise<RelationPlan> {
-  const pre = await preflightDetachPurchaseProducts(
-    getDb(db),
-    purchaseId,
-    productIds,
-  );
-  return planRelationDetach(pre, {
-    ...PURCHASE_PRODUCT_EDGE,
-    description: "Provenance links this detach would remove.",
-  });
-}
 
 export async function attachPurchaseProducts(
   db: Database,
@@ -551,12 +518,38 @@ export async function detachPurchaseProducts(
 }
 
 export const purchaseProductsRelationAdapter = {
-  preview(db, action, ownerId, targetIds) {
+  async list(db, ownerShortcode) {
+    return listPurchaseProducts(
+      db,
+      await resolveOrThrow(db, "purchase", ownerShortcode),
+    );
+  },
+  async preview(db, action, ownerId, targetIds) {
     const purchaseId = parseEntityId("purchase", ownerId);
     const productIds = targetIds.map((id) => parseEntityId("product", id));
     return action === "attach"
-      ? previewAttachPurchaseProducts(db, purchaseId, productIds)
-      : previewDetachPurchaseProducts(db, purchaseId, productIds);
+      ? planRelationAttach(
+          await preflightAttachPurchaseProducts(
+            getDb(db),
+            purchaseId,
+            productIds,
+          ),
+          {
+            ...PURCHASE_PRODUCT_EDGE,
+            description: "Provenance links this attach would create.",
+          },
+        )
+      : planRelationDetach(
+          await preflightDetachPurchaseProducts(
+            getDb(db),
+            purchaseId,
+            productIds,
+          ),
+          {
+            ...PURCHASE_PRODUCT_EDGE,
+            description: "Provenance links this detach would remove.",
+          },
+        );
   },
   async execute(ctx, action, ownerShortcode, items) {
     const purchaseId = await resolveOrThrow(ctx.db, "purchase", ownerShortcode);
@@ -574,4 +567,4 @@ export const purchaseProductsRelationAdapter = {
           ctx.actorContext,
         );
   },
-} satisfies EntityRelationMutationAdapter<{ id: string }>;
+} satisfies EntityRelationMutationAdapter<{ id: string }, PurchaseProductOut>;

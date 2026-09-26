@@ -7,23 +7,21 @@ import {
   imageAttachExistingInput,
   imageAttachExistingOutput,
 } from "@cubby/schemas/image";
-import {
-  imageDescriptionCorrectionInput,
-  imageDescriptionCorrectionOutput,
-  imageProcessingStatusInput,
-  imageProcessingStatusOutput,
-  scheduleImageProcessingInput,
-  scheduleImageProcessingOutput,
-} from "@cubby/schemas/image-processing";
 import { parseShortcode } from "@cubby/shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import {
-  type Caller,
-  getCaller,
+  attachExistingImageWorkflow,
+  attachFileWorkflow,
+  createFileUploadWorkflow,
+} from "~/server/workflows/image.server";
+
+import {
+  getRequestContext,
   registerBatchTool,
-  registerMcpTool,
+  registerRouterTool,
+  type ToolExtra,
   WRITE_CLOSED,
 } from "./_shared";
 
@@ -92,7 +90,7 @@ export const IMAGE_TOOL_NAMES = {
  * Kept separate from the batch adapter so the prefix check and `entityType`
  * derivation remain one per-item operation with an indexed runtime outcome.
  */
-async function attachOne(caller: Caller, params: AttachFileItem) {
+async function attachOne(params: AttachFileItem, extra: ToolExtra) {
   const parsed = parseShortcode(params.entityId);
   const attachable = attachableImageEntity.safeParse(parsed?.type);
   if (!attachable.success) {
@@ -100,7 +98,7 @@ async function attachOne(caller: Caller, params: AttachFileItem) {
       `${params.entityId} names a ${parsed?.type ?? "unknown"}; files attach to a ${attachableImageEntity.options.join(", ")}.`,
     );
   }
-  return await caller.image.attachFile({
+  return await attachFileWorkflow(getRequestContext(extra).db, {
     ...params,
     entityType: attachable.data,
   });
@@ -119,40 +117,6 @@ async function attachOne(caller: Caller, params: AttachFileItem) {
  * resulting `uploadId` without carrying base64 through MCP.
  */
 export function registerImageTools(server: McpServer) {
-  registerMcpTool(server, {
-    name: "get_image_processing",
-    description:
-      "Read an image's durable description and transparent-cutout processing status.",
-    inputSchema: imageProcessingStatusInput,
-    outputSchema: imageProcessingStatusOutput,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-    handler: async (params, extra) =>
-      await getCaller(extra).imageProcessing.get(params),
-  });
-  registerMcpTool(server, {
-    name: "schedule_image_processing",
-    description:
-      "Schedule description and/or transparent-cutout processing for an uploaded image.",
-    inputSchema: scheduleImageProcessingInput,
-    outputSchema: scheduleImageProcessingOutput,
-    annotations: WRITE_CLOSED,
-    handler: async (params, extra) =>
-      await getCaller(extra).imageProcessing.schedule(params),
-  });
-  registerMcpTool(server, {
-    name: "correct_image_description",
-    description: "Save a confirmed correction for an image description.",
-    inputSchema: imageDescriptionCorrectionInput,
-    outputSchema: imageDescriptionCorrectionOutput,
-    annotations: WRITE_CLOSED,
-    handler: async (params, extra) =>
-      await getCaller(extra).imageProcessing.correctDescription(params),
-  });
   registerBatchTool(server, {
     name: IMAGE_TOOL_NAMES.createFileUploads,
     description:
@@ -164,10 +128,11 @@ export function registerImageTools(server: McpServer) {
     projectReference: (item) => item.uploadId,
     defaultResultDetail: "full",
     annotations: WRITE_CLOSED,
-    run: async (caller, item) => await caller.image.createFileUpload(item),
+    run: async (item, extra) =>
+      await createFileUploadWorkflow(getRequestContext(extra).db, item),
   });
 
-  registerMcpTool(server, {
+  registerRouterTool(server, {
     name: IMAGE_TOOL_NAMES.attachExistingImage,
     description:
       `Attach an existing uploaded image to a live gallery record. The image is not re-uploaded; ` +
@@ -177,7 +142,7 @@ export function registerImageTools(server: McpServer) {
     outputSchema: imageAttachExistingOutput,
     annotations: WRITE_CLOSED,
     telemetryEntity: (params) => parseShortcode(params.targetId)?.type,
-    handler: async (params, extra) => {
+    call: async (context, params) => {
       const parsed = parseShortcode(params.targetId);
       const attachable = attachableImageEntity.safeParse(parsed?.type);
       if (!attachable.success) {
@@ -185,7 +150,11 @@ export function registerImageTools(server: McpServer) {
           `${params.targetId} is not a gallery attachment target; expected ${attachableImageEntity.options.join(", ")}.`,
         );
       }
-      return await getCaller(extra).image.attachExisting(params);
+      return await attachExistingImageWorkflow(
+        context.db,
+        context.actorContext,
+        params,
+      );
     },
   });
 

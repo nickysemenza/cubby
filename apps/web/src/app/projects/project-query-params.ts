@@ -14,13 +14,13 @@
  */
 
 /** Cap well above any real subtree size (hundreds at most) but within the
- * shared `MAX_PAGE_SIZE` — one page covers the Gantt's whole descendant
+ * shared `MAX_PAGE_SIZE` — one page covers the schedule's whole descendant
  * project subtree. */
 const PROJECT_SCOPED_PAGE_SIZE = 500;
 
 /** The task/expense `chartData` endpoints take the bare filters object (no
  * sort/pagination wrapper — they fetch-all). One subtree fetch feeds the
- * Gantt, the Task Timeline, the Task Board view, the Budget/spend charts, AND
+ * schedule, the Task Timeline, the Task Board view, the Budget/spend charts, AND
  * (as of `project-detail-page.tsx`'s embedded Tasks/Expenses section tables)
  * those tables too — the previously-separate scoped `task.list`/`expense.list`
  * queries that bounded what those tables rendered were removed, since they
@@ -36,10 +36,10 @@ export function projectSubtreeExpensesFilters(projectId: string) {
   return { projectId, includeSubProjects: true };
 }
 
-/** The Gantt's sub-project rows span arbitrary depth, so it needs the whole
+/** The schedule's sub-project rows span arbitrary depth, so it needs the whole
  * live descendant subtree — not the direct-children query the Sub-projects
  * section relies on. Kept separate for exactly that reason. */
-export function projectGanttSubtreeQueryParams(projectId: string) {
+export function projectScheduleSubtreeQueryParams(projectId: string) {
   return {
     filters: { parentProjectId: projectId, includeSubProjects: true },
     sort: { orderBy: "name" as const, direction: "asc" as const },

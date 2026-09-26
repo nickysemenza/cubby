@@ -52,8 +52,6 @@ import {
 } from "./product";
 import { measureEstimate } from "./nutrition";
 import {
-  mcpRecipeCreateInput,
-  mcpRecipeUpdateInput,
   recipeCostingExplain,
   recipeIdOut,
   recipeMcpListOut,
@@ -79,8 +77,6 @@ export {
   mealAddRecipeInput,
   mealCreateInput,
   mealUpdateData,
-  mcpRecipeCreateInput,
-  mcpRecipeUpdateInput,
 };
 
 export {

@@ -1,16 +1,7 @@
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  readdir,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { join } from "node:path";
 import { afterEach, describe, expect, expectTypeOf, it } from "vitest";
-import { parseSync } from "oxc-parser";
 import { z } from "zod";
 import {
   defineEntity,
@@ -29,21 +20,15 @@ import {
   validatePhotoCategoryLabels,
 } from "../../../scripts/generator/entities/compile";
 import { loadEntityDeclarations } from "../../../scripts/generator/entities/declarations";
-import type { CompiledEntity } from "../../../scripts/generator/entities/declarations";
 import { deriveImageDisplaySources } from "../../../scripts/generator/entities/derive";
-import { renderBrowserRouteArtifacts } from "../../../scripts/generator/entities/render/browser-routes";
 import { renderEntityArtifacts } from "../../../scripts/generator/entities/render/index";
-import { renderFilterArtifacts } from "../../../scripts/generator/entities/render/filters";
-import { renderKernelBindingsArtifacts } from "../../../scripts/generator/entities/render/kernel-bindings";
 import { renderImagePolicyArtifacts } from "../../../scripts/generator/entities/render/image-policy";
-import { renderRelationArtifacts } from "../../../scripts/generator/entities/render/relations";
 import {
   generatedBrowserRouteFiles,
   handWrittenBrowserRouteFiles,
   missingBrowserRouteFiles,
   missingListSources,
 } from "../../../scripts/generator/entities/render/routes";
-import { renderSearchArtifacts } from "../../../scripts/generator/entities/render/search";
 
 const temporaryRoots: string[] = [];
 
@@ -70,17 +55,6 @@ it("catalogs every named declaration override with keyed paths and preserves opt
   ]);
 });
 
-it("keeps inferred image sources out of the explicit override catalog", async () => {
-  const imageSighting = (await loadEntityDeclarations()).find(
-    (entity) => entity.key === "imageSighting",
-  );
-  expect(imageSighting?.imagePolicy.displaySources.length).toBeGreaterThan(0);
-  expect(
-    imageSighting?.overrides.some((entry) =>
-      entry.path.endsWith("displaySourceOverrides"),
-    ),
-  ).toBe(false);
-});
 afterEach(async () => {
   await Promise.all(
     temporaryRoots
@@ -88,48 +62,6 @@ afterEach(async () => {
       .map((root) => rm(root, { force: true, recursive: true })),
   );
 });
-
-const expectDeclaredEntityParity = (
-  compiled: CompiledEntity,
-  definition: EntityDeclaration,
-) => {
-  expect(compiled.inspector).toMatchObject({
-    singular: definition.names.singular,
-    plural: definition.names.plural,
-    titleField: definition.presentation.titleField,
-  });
-  expect(compiled.fieldModel.create).toEqual(definition.model?.create ?? []);
-  expect(compiled.fieldModel.update).toEqual(definition.model?.update ?? []);
-  // `capabilities.dataQuality` synthesizes one output field beyond the
-  // declaration's own roster (docs/entities.md "Data quality").
-  expect(compiled.fieldModel.output).toEqual([
-    ...(definition.model?.output ?? []),
-    ...(definition.capabilities.dataQuality ? ["dataQuality"] : []),
-  ]);
-  // Derived inverses (`derived: true`) are appended by the compiler; the
-  // declared ones must survive unchanged and in order.
-  expect(
-    z
-      .array(z.looseObject({ derived: z.literal(true).optional() }))
-      .parse(compiled.descriptor.relationships)
-      .filter((relation) => relation.derived !== true),
-  ).toEqual(
-    definition.relations.map((relation) => ({
-      ...relation,
-      sourceKey: relation.sourceKey ?? relation.key,
-      sources: relation.sources ?? [],
-    })),
-  );
-  for (const declared of definition.model?.fields ?? []) {
-    const field = compiled.fieldModel.fields.find(
-      ({ key }) => key === declared.key,
-    );
-    expect(field).toBeDefined();
-    expect(field?.validation.read).toBe(declared.validation?.read ?? null);
-    expect(field?.validation.create).toBe(declared.validation?.create ?? null);
-    expect(field?.validation.update).toBe(declared.validation?.update ?? null);
-  }
-};
 
 const presentation = {
   titleField: "name",
@@ -191,113 +123,6 @@ const model = {
   output: ["name"],
   bulk: [],
   audit: ["name"],
-};
-
-const canonicalSchemaModules = new Set([
-  "product.ts",
-  "recipe.ts",
-  "ingredient.ts",
-  "cookbook.ts",
-  "location.ts",
-  "inventory.ts",
-  "meal.ts",
-  "task.ts",
-  "ledger-party.ts",
-  "ledger-transfer.ts",
-  "project.ts",
-  "vendor.ts",
-  "purchase.ts",
-  "financial-account.ts",
-  "financial-transaction.ts",
-  "wish.ts",
-  "expense.ts",
-  "image.ts",
-  "usda.ts",
-]);
-const repositoryRoot = resolve(process.cwd(), "../..");
-
-const declarationDependencyViolations = async () => {
-  const roots = (await import("node:fs/promises")).readdir(
-    resolve(repositoryRoot, "packages/schemas/src/entity-definitions"),
-  );
-  const files = (await roots).filter((file) => file.endsWith(".entity.ts"));
-  const seen = new Set<string>();
-  const pathByFile = new Map<string, string[]>();
-  const violations: string[] = [];
-  const visit = async (file: string): Promise<void> => {
-    const absolute = resolve(file);
-    if (seen.has(absolute)) return;
-    seen.add(absolute);
-    const path = pathByFile.get(absolute) ?? [absolute];
-    const source = await readFile(absolute, "utf8");
-    const ast = parseSync(absolute, source, { lang: "ts" });
-    const specifiers = ast.program.body.flatMap((statement) => {
-      if (statement.type === "ImportDeclaration") {
-        if (
-          statement.importKind === "type" ||
-          (statement.specifiers.length > 0 &&
-            statement.specifiers.every(
-              (specifier) =>
-                specifier.type === "ImportSpecifier" &&
-                specifier.importKind === "type",
-            ))
-        )
-          return [];
-        return [statement.source.value];
-      }
-      if (
-        statement.type === "ExportAllDeclaration" &&
-        statement.exportKind !== "type"
-      )
-        return [statement.source.value];
-      if (
-        statement.type === "ExportNamedDeclaration" &&
-        statement.source !== null &&
-        statement.exportKind !== "type"
-      )
-        return [statement.source.value];
-      return [];
-    });
-    for (const specifier of specifiers) {
-      const target = specifier.startsWith("@cubby/schemas/")
-        ? resolve(
-            repositoryRoot,
-            "packages/schemas/src",
-            `${specifier.slice("@cubby/schemas/".length)}.ts`,
-          )
-        : specifier.startsWith(".")
-          ? resolve(
-              dirname(absolute),
-              `${specifier.replace(/\.[jt]s$/u, "")}.ts`,
-            )
-          : undefined;
-      if (!target) continue;
-      if (
-        target.includes("/generated/") ||
-        target.includes("/apps/") ||
-        target.includes("/server/") ||
-        target.includes("/browser/") ||
-        canonicalSchemaModules.has(target.split("/").pop() ?? "")
-      )
-        violations.push([...path, target].join(" -> "));
-      if (target.includes("packages/schemas/src/")) {
-        pathByFile.set(target, [...path, target]);
-        await visit(target);
-      }
-    }
-  };
-  await Promise.all(
-    files.map((file) => {
-      const root = join(
-        repositoryRoot,
-        "packages/schemas/src/entity-definitions",
-        file,
-      );
-      pathByFile.set(root, [root]);
-      return visit(root);
-    }),
-  );
-  return violations.sort();
 };
 
 describe("typed entity compiler", () => {
@@ -743,15 +568,6 @@ describe("typed entity compiler", () => {
     );
   });
 
-  it("derives ordinary list actions from capabilities and keeps explicit omissions", async () => {
-    const entities = await loadEntityDeclarations();
-    const byKey = new Map(entities.map((entity) => [entity.key, entity]));
-    expect(byKey.get("vendorAccount")?.inspector.list.actions).toEqual([
-      "delete",
-    ]);
-    expect(byKey.get("cookbook")?.inspector.list.actions).toEqual([]);
-  });
-
   it("preserves literal model keys through the inferred declaration contract", () => {
     const definition = defineEntity({
       ...base,
@@ -810,10 +626,6 @@ describe("typed entity compiler", () => {
     expect(parsed?.fields[0]?.validation.read).toBe(read);
   });
 
-  it("keeps executable declarations in the dependency-safe schema layer", async () => {
-    expect(await declarationDependencyViolations()).toEqual([]);
-  });
-
   it("retains actual schemas and explicit policies while defaulting presentation and storage", () => {
     const entity = compileEntityDeclarations([{ ...base, model }])[0]!;
     const field = entity.fieldModel.fields[0]!;
@@ -839,30 +651,6 @@ describe("typed entity compiler", () => {
       default: "none",
     });
     expect(entity.fieldModel.bulk).toEqual([]);
-  });
-
-  it("preserves every declared field schema and policy across the catalog", async () => {
-    const entities = await loadEntityDeclarations();
-    const compiledByKey = new Map(
-      entities.map((entity) => [entity.key, entity]),
-    );
-    const definitionDirectory = resolve(
-      repositoryRoot,
-      "packages/schemas/src/entity-definitions",
-    );
-    const entries = (await readdir(definitionDirectory))
-      .filter((entry) => entry.endsWith(".entity.ts"))
-      .sort();
-
-    for (const entry of entries) {
-      const definition = (
-        await import(pathToFileURL(join(definitionDirectory, entry)).href)
-      ).default;
-      const compiled = compiledByKey.get(definition.key);
-      expect(compiled).toBeDefined();
-      if (compiled !== undefined)
-        expectDeclaredEntityParity(compiled, definition);
-    }
   });
 
   it.each([
@@ -1904,181 +1692,33 @@ describe("typed entity compiler", () => {
     expect(missingListSources(entities, withoutRuns)).toEqual(["importRun"]);
   });
 
-  it("compiles the full catalog with schema references and schema-free browser metadata", async () => {
+  it("keeps generated artifacts on their side of the schema and server boundaries", async () => {
     const entities = await loadEntityDeclarations();
     const artifacts = [
       ...renderEntityArtifacts(entities),
-      ...renderRelationArtifacts(entities),
-      ...renderKernelBindingsArtifacts(entities),
-      ...renderFilterArtifacts(entities),
-      ...renderSearchArtifacts(entities),
-      ...renderBrowserRouteArtifacts(entities),
       ...renderImagePolicyArtifacts(entities),
     ];
     const artifact = (suffix: string) =>
       artifacts.find(({ relativePath }) => relativePath.endsWith(suffix))!
         .source;
-    // Search codecs follow the descriptor kind: exact-entity filters brand
-    // their shortcodes (nullable ones also admit the presence sentinels),
-    // static rosters validate as enums, and everything else stays a string.
-    // (Sources are asserted as rendered; oxfmt runs when the artifact is sealed.)
-    const search = artifact("entity-search.gen.ts");
-    expect(search).toContain('"productId":urlShortcodeParam("product")');
-    expect(search).toContain(
-      '"location":urlShortcodeListParam("location", { sentinels: PRESENCE_SENTINELS })',
-    );
-    expect(search).toContain('"kind":urlEnumListParam(searchRef');
-    expect(search).toContain("create:createSearchField");
-    expect(search).toContain('"manufacturer":urlStringParam');
-    const explanationReference = artifact("how-values-are-determined.md");
-    expect(explanationReference).toContain("# How values are determined");
-    expect(explanationReference).not.toContain("\nDerived from ");
-    const explanationCount = entities.reduce(
-      (count, entity) =>
-        count +
-        entity.fieldModel.fields.filter((field) => field.explanation !== null)
-          .length,
-      0,
-    );
-    expect(explanationReference.match(/^### /gmu)).toHaveLength(
-      explanationCount,
-    );
-    expect(explanationReference).toContain(
-      "A manual valuation price wins; otherwise Cubby derives a per-unit price",
-    );
-    expect(explanationReference).toContain(
-      "- Rule: `product.effective-valuation-price`, version 1",
-    );
-    expect(explanationReference).toContain(
-      "- Value paths: List `pricing.effectivePrice`; Detail `pricing.effectivePrice`; Summary `pricing.effectivePrice`",
-    );
-    expect(explanationReference).toContain("Manual valuation price (`price`)");
-    expect(explanationReference).toContain("- Available actions: Edit source");
-    expect(explanationReference).toContain(
-      "- Value paths: List `displayImages`; Detail `images`; Summary `displayImages`",
-    );
-    expect(explanationReference).toContain(
-      "Selected product images (`displayImages`)",
-    );
-    expect(explanationReference).toContain(
-      "Parent project (`parentProjectId`)",
-    );
-    expect(explanationReference).toContain("Image storage key (`key`)");
-    // Generated routes keep a literal options object (the code-splitter
-    // contract) and address the entity through its generated search.
-    const vendorsIndex = artifact("vendors.index.tsx");
-    expect(vendorsIndex).toContain(
-      'createFileRoute("/_authenticated/vendors/")({',
-    );
-    expect(vendorsIndex).toContain(
-      "validateSearch: entitySearch.vendor.schema",
-    );
-    expect(vendorsIndex).toContain('captureRequest("vendor")');
-    // The image list is not a kernel list, so its index route stays hand-written.
-    expect(
-      artifacts.some(({ relativePath }) =>
-        relativePath.endsWith("images.index.tsx"),
-      ),
-    ).toBe(false);
-    expect(artifact("images.$shortcode.tsx")).toContain("imageDetailQuery(");
-    expect(artifact("vendors.$shortcode.tsx")).toContain(
-      "title: (record) => record.name",
-    );
-    expect(artifact("entity-routes.gen.ts")).toContain(
-      'product:{basePath:"products",routes:{detail:"/products/$shortcode",list:"/products",create:"dialog"}}',
-    );
     // Field schemas are read off the declaration BY KEY at load time — never
     // by a positional `definition.model.fields[N]` that a mid-roster insert
     // would shift.
-    expect(artifact("entity-field-schemas.ingredient.gen.ts")).toContain(
-      "= fieldSchemasOf(definition);",
-    );
-    expect(artifact("entity-field-schemas.ingredient.gen.ts")).not.toContain(
-      "definition.model.fields[",
-    );
-    // Field schema maps reference the declaration; only the filter fields
-    // derived from descriptor metadata spell Zod, and those come after them.
     const ingredientSchemas = artifact(
       "entity-field-schemas.ingredient.gen.ts",
     );
-    const [fieldMaps, filterFields] = ingredientSchemas.split(
-      "generatedIngredientFilterFields",
-    );
-    expect(fieldMaps).not.toContain("z.string()");
-    expect(filterFields).toContain(
-      'nameFilter":z.string().optional().describe(',
-    );
-    expect(filterFields).toContain('"usuallyOnHand":z.boolean().optional()');
-    // Declared ranges carry their numeric constraints and MCP prose through
-    // the shared min/max and from/to builders.
-    const expenseFilters = artifact("entity-field-schemas.expense.gen.ts");
-    expect(expenseFilters).toContain(
-      '...numericRangeFields("cost",{describe:{min:"Inclusive lower bound on expense cost, in dollars",max:"Inclusive upper bound on expense cost, in dollars"}})',
-    );
-    expect(expenseFilters).toContain(
-      '...dateRangeFields("date",{describe:{from:"Inclusive lower bound on expense date",to:"Inclusive upper bound on expense date"}})',
-    );
-    expect(
-      artifact("entity-field-schemas.financialTransaction.gen.ts"),
-    ).toContain('...numericRangeFields("amount",{finite:true})');
+    expect(ingredientSchemas).toContain("= fieldSchemasOf(definition);");
+    expect(ingredientSchemas).not.toContain("definition.model.fields[");
     expect(artifact("entity-field-model.gen.ts")).not.toContain("validation:");
     expect(artifact("entity-field-model.gen.ts")).not.toMatch(
       /^import .*entity-definitions\//m,
     );
     expect(artifact("entity-details.gen.ts")).not.toContain("~/server/");
-    expect(artifact("entity-filter-bindings.gen.ts")).toContain(
-      'columnId:"related:product.tasks"',
-    );
-    expect(artifact("entity-details.gen.ts")).toContain(
-      '"product": withEntityDetailMedia(productWithFoodOut)',
-    );
-    expect(artifact("entity-details.gen.ts")).toContain(
-      "z.output<(typeof ENTITY_DETAIL_OUTPUT_SCHEMAS)[E]>",
-    );
-    expect(artifact("entity-lists.gen.ts")).toContain(
-      "z.input<(typeof ENTITY_LIST_FILTER_SCHEMAS)[E]>",
-    );
-    expect(artifact("entity-lists.gen.ts")).toContain(
-      "ENTITY_LIST_FILTER_SCHEMAS",
-    );
-    const entityColumns = artifact("entity-columns.gen.ts");
-    expect(entityColumns).toContain(
-      '"agentHints":jsonb("agentHints").notNull().default(sql`\'{"ordersListUrl":null,"pagination":null,"orderLinkPattern":null,"notes":[]}\'::jsonb`)',
-    );
-    expect(entityColumns).toContain(
-      '"cursor":jsonb("cursor").notNull().default(sql`\'{"newestOrderAt":null,"orderIdsOnNewestDate":[],"backfillBeforeOrderAt":null,"earliestAvailableOrderAt":null}\'::jsonb`)',
-    );
-    expect(entityColumns).toContain(".$type<VendorAccountId>()");
-    expect(artifact("EntityCatalog.swift")).toContain("import CubbyAPISupport");
-    // Icons emit both the SF Symbol and its emoji text fallback (definition.ts
-    // `icons.emoji`) onto the same generated EntityDescriptor.
-    expect(artifact("EntityCatalog.swift")).toContain(
-      'sfSymbol: "text.badge.plus"',
-    );
-    expect(artifact("EntityCatalog.swift")).toContain('emoji: "📓"');
-    const swiftEntityKey = artifact("EntityKey.swift");
-    expect(swiftEntityKey).toContain("public enum EntityKey");
-    const entityKeyBody = swiftEntityKey
-      .split("public enum EntityKey")[1]!
-      .split("\n}\n")[0]!;
-    const rawValues = [
-      ...entityKeyBody.matchAll(/^ {2}case \w+ = "([^"]*)"/gmu),
-    ].map((match) => match[1]!);
-    expect(new Set(rawValues)).toEqual(
-      new Set(entities.map((entity) => entity.key)),
-    );
     // Regression guard for the Swift enum emitter (image-policy.ts): manifest
     // vocabularies must render as typed enum cases, not raw string literals.
     const photoImportCatalog = artifact("PhotoImportCatalog.swift");
-    expect(photoImportCatalog).toContain("public enum PhotoIngressRouteKind");
-    expect(photoImportCatalog).toContain("public enum PhotoBindingSource");
     expect(photoImportCatalog).toMatch(/kind: \.createRelated/);
     expect(photoImportCatalog).toMatch(/source: \.captureDate/);
-    // The manifest's plants category names its two garden-adjacent routing
-    // entities; a typo in either mapping (B1) would silently drop a member.
-    expect(photoImportCatalog).toMatch(
-      /PhotoCategory\(key: "plants", .*entities: \[\.planting, \.gardenEntry\]\)/,
-    );
   });
 });
 

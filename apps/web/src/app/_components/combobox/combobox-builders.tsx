@@ -1,18 +1,10 @@
-import type {
-  IngredientShortcode,
-  LocationShortcode,
-  ProductShortcode,
-  ProjectShortcode,
-  RecipeShortcode,
-  TaskShortcode,
-  VendorShortcode,
-} from "@cubby/schemas/identifiers";
-
-type PlantShortcode = ShortcodeFor<"plant">;
-type PlantingShortcode = ShortcodeFor<"planting">;
+import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import {
+  type LocationShortcode,
   parseShortcodeFor,
+  type ProductShortcode,
   type ShortcodeFor,
+  type VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import {
   type ImageRenderStatus,
@@ -22,7 +14,12 @@ import {
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { locationType } from "@cubby/schemas/location";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
-import { formatCategoryLabel, type ProductCategory } from "@cubby/shared";
+import {
+  formatCategoryLabel,
+  type ProductCategory,
+  type ShortcodeType,
+} from "@cubby/shared";
+import { z } from "zod";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { locationToSegments } from "~/app/_components/locations/location-breadcrumb";
@@ -36,11 +33,14 @@ import { EntityIcon } from "~/entities/entities";
 
 export type ProductPickerIntent = "reference" | "stock";
 
+/** The structural slice of any manifest list/detail row a picker reads. */
+export const pickerRecord = z.object({ id: z.string() }).catchall(z.unknown());
+export type PickerRecord = z.infer<typeof pickerRecord>;
+const pickerAliases = z.array(z.string());
+const pickerTitle = z.string();
+
 const formatPickerQuantity = (value: number) =>
   Number.isInteger(value) ? String(value) : value.toLocaleString();
-
-const humanizePickerValue = (value: string) =>
-  value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
 
 function SearchPickerIcon({
   entity,
@@ -385,139 +385,27 @@ export const buildLocationComboboxItemFromDetail = (
     coverImage: resolveLocationPrimaryVisual(location).image,
   });
 
-export const buildIngredientComboboxItem = (ingredient: {
-  id: IngredientShortcode;
-  name: string;
-  aliases?: string[] | null;
-  product?: unknown[];
-  ownRecipeCount?: number;
-}): ComboboxItem<IngredientShortcode> => {
-  const facts = [
-    ingredient.product
-      ? `${ingredient.product.length} ${ingredient.product.length === 1 ? "product" : "products"}`
-      : null,
-    ingredient.ownRecipeCount != null
-      ? `${ingredient.ownRecipeCount} own ${ingredient.ownRecipeCount === 1 ? "recipe" : "recipes"}`
-      : null,
-  ].filter((fact): fact is string => fact != null);
+/**
+ * A picker row for any list-backed manifest entity: the declared
+ * `presentation.titleField` is the name, and declared aliases stay searchable.
+ * Product, location and vendor keep their own builders above/below because
+ * their rows carry stock, tree, and roster evidence.
+ */
+export function buildRecordComboboxItem<E extends ShortcodeType>(
+  entity: E,
+  record: PickerRecord,
+): ComboboxItem<ShortcodeFor<E>> {
+  const shortcode = parseShortcodeFor(entity, record.id);
+  const title = record[entityInspectorMetadata[entity].titleField];
+  const aliases = pickerAliases.safeParse(record.aliases).data;
   return {
-    id: ingredient.id,
-    shortcode: ingredient.id,
-    name: ingredient.name,
-    aliases: ingredient.aliases ?? [],
-    presentation: facts.length ? { facts } : undefined,
-    icon: <EntityIcon entity="ingredient" size={14} colored />,
+    id: shortcode,
+    shortcode,
+    name: pickerTitle.safeParse(title).data ?? shortcode,
+    ...(aliases && { aliases }),
+    icon: <EntityIcon entity={entity} size={14} colored />,
   };
-};
-
-export const buildRecipeComboboxItem = (recipe: {
-  id: RecipeShortcode;
-  name: string;
-  meta?: {
-    times?: { totalMinutes?: number | null } | null;
-    page?: string | null;
-    url?: string | null;
-  } | null;
-}): ComboboxItem<RecipeShortcode> => {
-  const facts = [
-    recipe.meta?.times?.totalMinutes != null
-      ? `${recipe.meta.times.totalMinutes} min`
-      : null,
-    recipe.meta?.page ? `Page ${recipe.meta.page}` : null,
-    recipe.meta?.url ? "Web recipe" : null,
-  ].filter((fact): fact is string => fact != null);
-  return {
-    id: recipe.id,
-    shortcode: recipe.id,
-    name: recipe.name,
-    presentation: facts.length ? { facts } : undefined,
-    icon: <EntityIcon entity="recipe" size={14} colored />,
-  };
-};
-
-export const buildProjectComboboxItem = (project: {
-  id: ProjectShortcode;
-  name: string;
-  icon?: string | null;
-  status?: string;
-  kind?: string | null;
-  parentProjectName?: string | null;
-}): ComboboxItem<ProjectShortcode> => {
-  const done = project.status === "done";
-  return {
-    id: project.id,
-    shortcode: project.id,
-    name: project.name,
-    secondary: project.kind ? humanizePickerValue(project.kind) : undefined,
-    detail: project.parentProjectName ?? undefined,
-    presentation: project.status
-      ? {
-          group: done
-            ? { id: "completed", label: "Completed projects", order: 1 }
-            : { id: "active", label: "Active projects", order: 0 },
-          status: { label: humanizePickerValue(project.status) },
-        }
-      : undefined,
-    icon: <ProjectMark icon={project.icon} />,
-  };
-};
-
-export const buildTaskComboboxItem = (task: {
-  id: TaskShortcode;
-  name: string;
-  status?: string;
-  projectName?: string | null;
-  dueDate?: string | null;
-  trade?: string | null;
-}): ComboboxItem<TaskShortcode> => {
-  const done = task.status === "done";
-  const facts = [
-    task.dueDate ? `Due ${task.dueDate}` : null,
-    task.trade ? humanizePickerValue(task.trade) : null,
-  ].filter((fact): fact is string => fact != null);
-  return {
-    id: task.id,
-    shortcode: task.id,
-    name: task.name,
-    secondary: task.projectName ?? undefined,
-    presentation: task.status
-      ? {
-          group: done
-            ? { id: "completed", label: "Completed tasks", order: 1 }
-            : { id: "open", label: "Open tasks", order: 0 },
-          status: { label: humanizePickerValue(task.status) },
-          facts,
-        }
-      : facts.length
-        ? { facts }
-        : undefined,
-    icon: <EntityIcon entity="task" size={14} colored />,
-  };
-};
-
-export const buildPlantComboboxItem = (plant: {
-  id: PlantShortcode;
-  displayName: string;
-  verdict?: string | null;
-}): ComboboxItem<PlantShortcode> => ({
-  id: plant.id,
-  shortcode: plant.id,
-  name: plant.displayName,
-  secondary: plant.verdict ? humanizePickerValue(plant.verdict) : undefined,
-  icon: <EntityIcon entity="plant" size={14} colored />,
-});
-
-export const buildPlantingComboboxItem = (planting: {
-  id: PlantingShortcode;
-  displayName: string;
-  status?: string;
-}): ComboboxItem<PlantingShortcode> => ({
-  id: planting.id,
-  shortcode: planting.id,
-  name: planting.displayName,
-  secondary: planting.status ? humanizePickerValue(planting.status) : undefined,
-  icon: <EntityIcon entity="planting" size={14} colored />,
-});
+}
 
 type VendorPickerInput = {
   id: VendorShortcode;

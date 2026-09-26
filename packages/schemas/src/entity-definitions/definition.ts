@@ -90,6 +90,8 @@ export type CompiledEntityPresentation = Omit<
 > & {
   detail: Omit<EntityPresentation["detail"], "hero" | "sections"> & {
     sections: NonNullable<EntityPresentation["detail"]["sections"]>;
+    /** Field keys declaring `display.preview`, in model order. */
+    preview: readonly string[];
     hero: Omit<EntityPresentation["detail"]["hero"], "images" | "actions"> & {
       images: boolean;
       actions: readonly string[];
@@ -210,6 +212,8 @@ const buildMetadataSchemas = () => {
               label: nonEmptyString(),
               /** What choosing this option means, shown where it is displayed. */
               description: nonEmptyString().optional(),
+              /** Web swatch (a CSS custom property) the value's pill uses. */
+              color: nonEmptyString().optional(),
             })
             .strict(),
         )
@@ -357,6 +361,15 @@ const buildMetadataSchemas = () => {
         .boolean({ error: "must be a boolean" })
         .optional()
         .default(false),
+      /**
+       * A fact on the entity's hover preview card. An entity that declares
+       * any shows exactly those, in model order; one that declares none falls
+       * back to its hero stats and first detail section.
+       */
+      preview: z
+        .boolean({ error: "must be a boolean" })
+        .optional()
+        .default(false),
     })
     .strict()
     .transform(
@@ -372,6 +385,7 @@ const buildMetadataSchemas = () => {
         renderer,
         mobile,
         listHidden,
+        preview,
       }) => ({
         list,
         detail,
@@ -384,6 +398,7 @@ const buildMetadataSchemas = () => {
         renderer,
         mobile,
         listHidden,
+        preview,
       }),
     );
 
@@ -1529,6 +1544,8 @@ const buildMetadataSchemas = () => {
         .object({
           source: nonEmptyString(),
           itemSchema: sourceRefMetadataSchema,
+          /** One listed row; the relation `listRelation` action returns an array of it. */
+          rowSchema: sourceRefMetadataSchema,
           adapter: sourceRefMetadataSchema,
           audiences: z.array(z.enum(["browser", "mcp"])).min(1),
         })

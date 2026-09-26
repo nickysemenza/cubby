@@ -24,7 +24,7 @@ describe("cubbyMcpConnection", () => {
       "find_similar_entities",
       "propose_photo_groups",
       "list_photo_group_proposals",
-      "patch_product_external_ids",
+      "patch_products_external_ids",
     ]);
     expect(connection.tools).not.toContain("get_entities");
     expect(connection.tools).not.toContain("entity");

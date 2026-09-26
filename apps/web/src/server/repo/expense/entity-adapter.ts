@@ -1,12 +1,9 @@
 import {
+  bulkUpdatedWithSideEffects,
   defineEntityAdapter,
   entityMutationReferences,
 } from "~/server/entity-kernel/adapter";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
-import {
-  mutationEvents,
-  runMutationSideEffectsForEntities,
-} from "~/server/services/mutation-side-effects";
 
 import {
   createExpense,
@@ -61,29 +58,11 @@ export const expenseEntityAdapter = defineEntityAdapter({
         ),
       };
     },
-    /** One complete patch, one transaction, then one side-effect fan-out. */
-    bulkUpdate: async (ctx, ids, data) => {
-      const result = await updateExpensesInBulk(
-        ctx.db,
-        ids,
-        data,
-        ctx.actorContext,
-      );
-      await runMutationSideEffectsForEntities(
-        ctx.db,
-        mutationEvents(
-          "expense",
-          "updated",
-          result.updatedIds,
-          "expense.bulkUpdate",
-        ),
-      );
-      return {
-        updatedReferences: entityMutationReferences(
-          "expense",
-          result.updatedShortcodes,
-        ),
-      };
-    },
+    bulkUpdate: async (ctx, ids, data) =>
+      bulkUpdatedWithSideEffects(
+        ctx,
+        "expense",
+        await updateExpensesInBulk(ctx.db, ids, data, ctx.actorContext),
+      ),
   },
 });

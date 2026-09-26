@@ -37,13 +37,4 @@ public struct OperationRoute: Sendable, Hashable {
         self.queryParameters = queryParameters
         self.hasBody = hasBody
     }
-
-    /// The route for an operationId, or a status-0 `CubbyAPIError` naming the id when the
-    /// document has no such operation.
-    public static func lookup(_ operationID: String) throws -> OperationRoute {
-        guard let route = all[operationID] else {
-            throw CubbyAPIError(status: 0, operationID: operationID, detail: nil)
-        }
-        return route
-    }
 }

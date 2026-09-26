@@ -10,7 +10,4 @@ export const purchase = defineOperationDomain(purchaseContract, {
     // write (a superset of the purchase one, plus the calendar).
     invalidates: ripple.expense,
   },
-  merge: { invalidates: ripple.purchase },
-  attachProducts: { invalidates: ripple.purchaseProduct },
-  detachProducts: { invalidates: ripple.purchaseProduct },
 });

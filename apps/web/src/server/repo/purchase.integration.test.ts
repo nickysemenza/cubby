@@ -29,13 +29,11 @@ import {
   image,
   purchase,
 } from "~/server/db/schema";
+import { executeEntity } from "~/server/entity-kernel";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import {
-  attachPurchaseProductsWorkflow,
-  detachPurchaseProductsWorkflow,
   linkExpensesToPurchaseWorkflow,
-  mergePurchasesWorkflow,
   purchaseProductsWorkflow,
   splitExpenseWorkflow,
 } from "~/server/workflows/purchase.server";
@@ -46,14 +44,12 @@ import { createProduct } from "./product";
 import { createProject } from "./project";
 import {
   createPurchase,
-  deleteEmptyPurchases,
   deletePurchases,
   findOrCreatePurchase,
   getPurchaseByID,
   getPurchaseByShortcode,
   getPurchaseExpenses,
   mergePurchases,
-  previewMergePurchases,
   purchaseList,
   splitExpense,
   updatePurchase,
@@ -147,20 +143,29 @@ describe("purchase application workflows", () => {
       makeProductInput({ name: "Workflow durable item" }),
       ctx.actor,
     );
-    await attachPurchaseProductsWorkflow(context, {
-      purchaseId: source.id,
-      productIds: [item.id],
-    });
+    const products = (
+      action: "attach" | "detach",
+      purchaseId: PurchaseShortcode,
+    ) =>
+      executeEntity(context, {
+        action,
+        entity: "purchase",
+        relation: "products",
+        id: purchaseId,
+        items: [{ id: item.id }],
+      });
+    await products("attach", source.id);
     expect(
       (await purchaseProductsWorkflow(context, { purchaseId: source.id })).map(
         (row) => row.productId,
       ),
     ).toEqual([item.id]);
-    const merged = await mergePurchasesWorkflow(context, {
-      keepId: keep.id,
-      mergeIds: [source.id],
+    const merged = await executeEntity(context, {
+      action: "merge",
+      entity: "purchase",
+      data: { keepId: keep.id, mergeIds: [source.id] },
     });
-    expect(merged.purchase.id).toBe(keep.id);
+    expect(merged.action === "merge" && merged.item.id).toBe(keep.id);
     expect(await getPurchaseByShortcode(ctx.db, source.id)).toBeNull();
     for (const part of parts) {
       const saved = await expenseByShortcode(ctx.db, part.id);
@@ -172,10 +177,7 @@ describe("purchase application workflows", () => {
         (row) => row.productId,
       ),
     ).toEqual([item.id]);
-    await detachPurchaseProductsWorkflow(context, {
-      purchaseId: keep.id,
-      productIds: [item.id],
-    });
+    await products("detach", keep.id);
     expect(
       await purchaseProductsWorkflow(context, { purchaseId: keep.id }),
     ).toEqual([]);
@@ -531,7 +533,6 @@ describe("purchase repository — mergePurchases", () => {
     const { output: keeper } = await createCharge("2024-02-01");
     const { output: loserA } = await createCharge("2024-02-02");
     const { output: loserB } = await createCharge("2024-02-03");
-    const keeperId = await purchaseUuid(ctx.db, keeper.id);
     const loserIds = await Promise.all(
       [loserA.id, loserB.id].map((id) => purchaseUuid(ctx.db, id)),
     );
@@ -571,20 +572,6 @@ describe("purchase repository — mergePurchases", () => {
         notes: null,
       });
     }
-
-    const preview = await previewMergePurchases(ctx.db, {
-      keepId: keeperId,
-      mergeIds: loserIds,
-    });
-    expect(
-      preview.changes.find(
-        (item) => item.edgeKey === "FinancialTransactionAllocation.purchaseId",
-      ),
-    ).toMatchObject({
-      label: "settlement allocations moved",
-      total: 2,
-      byTargetId: { [loserIds[0]!]: 1, [loserIds[1]!]: 1 },
-    });
 
     await mergePurchases(
       ctx.db,
@@ -708,9 +695,8 @@ describe("purchase repository — deletion cascades", () => {
     });
 
     await expect(
-      deleteEmptyPurchases(ctx.db, [emptyPurchase.id], ctx.actor),
-    ).resolves.toEqual({
-      shortcodes: [emptyPurchase.id],
+      deletePurchases(ctx.db, [emptyPurchase.id], ctx.actor),
+    ).resolves.toMatchObject({
       // Nothing else referenced the document, so the delete reaps it and hands
       // back the R2 key for the router to drop after the commit.
       detachedImageKeys: [document.key],
@@ -745,49 +731,6 @@ describe("purchase repository — deletion cascades", () => {
         ),
       );
     expect(auditRows).toEqual([{ action: "delete" }]);
-  });
-
-  it("atomically refuses a delete-empty batch when any Purchase has spend", async () => {
-    const vendorId = await vendorShortcodeByName(
-      ctx.db,
-      "Atomic Empty Delete Vendor",
-    );
-    const { output: emptyPurchase } = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        vendorId,
-        date: "2024-01-15",
-        orderId: "ATOMIC-EMPTY",
-      }),
-      ctx.actor,
-    );
-    const { output: line } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "real spend",
-          cost: 25,
-          vendor: "Atomic Empty Delete Vendor",
-          orderId: "ATOMIC-NONEMPTY",
-        }),
-      ),
-      ctx.actor,
-    );
-
-    await expect(
-      deleteEmptyPurchases(
-        ctx.db,
-        [emptyPurchase.id, line.purchaseId!],
-        ctx.actor,
-      ),
-    ).rejects.toMatchObject({ reason: "PURCHASE_NOT_EMPTY" });
-
-    await expect(
-      getPurchaseByShortcode(ctx.db, emptyPurchase.id),
-    ).resolves.not.toBeNull();
-    const spendAfter = await expenseByShortcode(ctx.db, line.id);
-    expect(spendAfter.cost).toBe(25);
-    expect(spendAfter.purchaseId).toBe(line.purchaseId);
   });
 
   it("NULLS expense.purchaseId (never deletes spend) and soft-deletes its documents", async () => {

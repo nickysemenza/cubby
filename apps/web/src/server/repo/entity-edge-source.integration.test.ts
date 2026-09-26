@@ -1,7 +1,7 @@
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { createAndAssociateUploadedImage } from "~/server/repo/image";
+import { createOrReuseAttachedImage } from "~/server/repo/image";
 import { mergeProducts } from "~/server/repo/product";
 import {
   createInventoryFixture,
@@ -37,7 +37,7 @@ describe("entity edge source", () => {
       },
       TEST_ACTOR,
     );
-    await createAndAssociateUploadedImage(
+    await createOrReuseAttachedImage(
       ctx.db,
       {
         key: `test/${crypto.randomUUID()}.jpg`,

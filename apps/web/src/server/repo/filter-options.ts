@@ -9,16 +9,20 @@ import {
   type AnyColumn,
   and,
   asc,
+  desc,
   eq,
   exists,
   inArray,
   type SQL,
+  sql,
 } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
+  entityAttachment,
+  image,
   ingredient,
   inventoryEntry,
   location,
@@ -32,6 +36,8 @@ import {
   getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
+import { financialAccountTransactionCount } from "~/server/repo/financial-account";
+import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { stockOnly } from "~/server/repo/inventory/placement";
 import { loadLocationAncestors } from "~/server/repo/location/tree";
 import { DISPLAY_NAME_COLUMN } from "~/server/repo/shortcode-resolver";
@@ -39,6 +45,8 @@ import {
   SHORTCODE_TABLE,
   type ShortcodeTable,
 } from "~/server/repo/shortcode-utils";
+import { vendorPurchaseCount } from "~/server/repo/vendor";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 type DbClient = ReturnType<typeof getDb>;
 
@@ -256,16 +264,43 @@ async function loadEntityRows(
   db: Database,
   input: Extract<FilterOptionsInput, { source: "entity" }>,
   selectedOnly: boolean,
-): Promise<OptionRow[]> {
+): Promise<EntityOptionRow[]> {
   const entity: ShortcodeEntity = input.entity;
   const table: ShortcodeTable = SHORTCODE_TABLE[entity];
   const label = DISPLAY_NAME_COLUMN[entity];
   if (!label)
     throw new Error(`Entity filter options require a label for ${entity}`);
+  const count = input.include.includes("count") ? optionCountFor(entity) : null;
+  const withLogo = input.include.includes("logo");
   const selected = selectedOnly ? input.selectedIds : [];
-  const rows = await getDb(db)
-    .select({ id: table.shortcode, label })
+  let query = getDb(db)
+    .select({
+      id: table.shortcode,
+      label,
+      count: count ?? sql<null>`NULL::int`,
+      logoKey: withLogo ? image.key : sql<null>`NULL::text`,
+    })
     .from(table)
+    .$dynamic();
+  if (withLogo)
+    query = query
+      .leftJoin(
+        entityAttachment,
+        and(
+          eq(entityAttachment.subjectEntityId, table.id),
+          eq(entityAttachment.role, "logo"),
+          notDeleted(entityAttachment),
+        ),
+      )
+      .leftJoin(
+        image,
+        and(
+          eq(image.id, entityAttachment.imageId),
+          notDeleted(image),
+          displayableImageWhere,
+        ),
+      );
+  const rows = await query
     .where(
       and(
         notDeleted(table),
@@ -276,11 +311,38 @@ async function loadEntityRows(
           : formatSearchTerm(label, input.search),
       ),
     )
-    .orderBy(asc(label), asc(table.shortcode))
+    .orderBy(...(count ? [desc(count)] : []), asc(label), asc(table.shortcode))
     .limit(selectedOnly ? 50 : input.limit + 1)
     .offset(selectedOnly ? 0 : Number(input.cursor ?? "0"));
-  return rows.map(parseOptionQueryRow).map(toOptionRow);
+  return rows.map((row) => {
+    const option: EntityOptionRow = toOptionRow(
+      parseOptionQueryRow({ id: row.id, label: row.label }),
+    );
+    if (count) option.count = Number(row.count);
+    if (withLogo)
+      option.logo = row.logoKey ? { url: getR2PublicUrl(row.logoKey) } : null;
+    return option;
+  });
 }
+
+type EntityOptionRow = OptionRow &
+  Pick<FilterOptionsOut["items"][number], "count" | "logo">;
+
+/**
+ * The usage a `count` projection ranks by. An entity absent here refuses the
+ * projection rather than reporting a zero it never measured.
+ */
+const OPTION_COUNTS = new Map<ShortcodeEntity, SQL<number>>([
+  ["vendor", vendorPurchaseCount],
+  ["financialAccount", financialAccountTransactionCount],
+]);
+
+const optionCountFor = (entity: ShortcodeEntity): SQL<number> => {
+  const count = OPTION_COUNTS.get(entity);
+  if (!count)
+    throw new Error(`Filter option counts are not defined for ${entity}`);
+  return count;
+};
 
 export async function getFilterOptions(
   db: Database,
@@ -297,10 +359,7 @@ export async function getFilterOptions(
     );
     for (const row of selectedRows) byId.set(row.id, row);
     return {
-      items: [...byId.values()].map((row) => ({
-        id: row.id,
-        label: row.label,
-      })),
+      items: [...byId.values()].map(({ detail: _detail, ...row }) => row),
       nextCursor: hasNextPage
         ? String(Number(input.cursor ?? "0") + input.limit)
         : null,

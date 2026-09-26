@@ -28,11 +28,11 @@ import { Label } from "~/components/ui/label";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutation } from "~/entities/entity-mutation.functions";
+import { fieldEnumOptions } from "~/entities/enum-field-display";
 import { ai } from "~/lib/ai.functions";
 import type { EntityBrowserMutationResult } from "~/server/entity-kernel/contracts";
 
 import { mealListLabel } from "./meal-format";
-import { mealKindOptions, mealTypeOptions } from "./meal-options";
 import { meal } from "./meal.functions";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
@@ -287,7 +287,7 @@ export function AddToMeal({
                 <Stack gap="xs" className="min-w-40 flex-1">
                   <Label>Meal type</Label>
                   <StaticPicker
-                    items={mealTypeOptions}
+                    items={fieldEnumOptions("meal", "mealType")}
                     value={mealType}
                     onValueChange={(value) =>
                       setMealType(mealTypeFromPicker(value))
@@ -300,7 +300,7 @@ export function AddToMeal({
                     applied={false}
                     currentValue={mealType}
                     currentLabel={
-                      mealTypeOptions.find(
+                      fieldEnumOptions("meal", "mealType").find(
                         (option) => option.value === mealType,
                       )?.label
                     }
@@ -317,7 +317,7 @@ export function AddToMeal({
                 <Stack gap="xs" className="min-w-40 flex-1">
                   <Label>Kind</Label>
                   <StaticPicker
-                    items={mealKindOptions}
+                    items={fieldEnumOptions("meal", "mealKind")}
                     value={mealKind}
                     onValueChange={(value) =>
                       setMealKind(mealKindFromPicker(value))

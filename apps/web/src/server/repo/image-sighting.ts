@@ -23,23 +23,21 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { device, image, imageSighting, ledgerParty } from "~/server/db/schema";
+import { device, image, imageSighting } from "~/server/db/schema";
+import { entityRepository } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
-  auditDateWhereConditions,
   buildPartialUpdateValues,
-  countWhere,
-  executeListQueryWithCount,
-  getDb,
   notDeleted,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { listScaffold } from "~/server/repo/list-scaffold";
-import { removeEntity } from "~/server/repo/removal";
+import { currentMemberLedgerParty } from "~/server/repo/member-login";
 import {
+  lookupEntityReferences,
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
@@ -53,158 +51,67 @@ export const IMAGE_SIGHTING_DELETE_EDGE_POLICY =
     OperationDisposition
   >;
 
-const columns = {
-  id: imageSighting.id,
-  shortcode: imageSighting.shortcode,
-  imageId: imageSighting.imageId,
-  ledgerPartyId: imageSighting.ledgerPartyId,
-  deviceId: imageSighting.deviceId,
-  assetKey: imageSighting.assetKey,
-  sourceType: imageSighting.sourceType,
-  mediaSubtypes: imageSighting.mediaSubtypes,
-  originalFilename: imageSighting.originalFilename,
-  pixelWidth: imageSighting.pixelWidth,
-  pixelHeight: imageSighting.pixelHeight,
-  hasAdjustments: imageSighting.hasAdjustments,
-  capturedAt: imageSighting.capturedAt,
-  capturedAtOffsetMinutes: imageSighting.capturedAtOffsetMinutes,
-  addedAt: imageSighting.addedAt,
-  location: imageSighting.location,
-  placeName: imageSighting.placeName,
-  camera: imageSighting.camera,
-  matchKind: imageSighting.matchKind,
-  hashDistance: imageSighting.hashDistance,
-  aspectGate: imageSighting.aspectGate,
-  observedAt: imageSighting.observedAt,
-  createdAt: imageSighting.createdAt,
-  updatedAt: imageSighting.updatedAt,
-} as const;
-
-type ImageSightingRow = {
-  id: ImageSightingId;
-  shortcode: string;
-  // Unbranded: `imageSighting.imageId`'s FK does not carry the `ImageId`
-  // brand — see the `identifierTypeNames` note in
-  // `scripts/generator/entities/render/columns.ts` (branding `Image`'s own
-  // id column broke every plain-`string` comparison against it elsewhere in
-  // the codebase).
-  imageId: string;
-  ledgerPartyId: LedgerPartyId;
-  deviceId: DeviceId;
-  assetKey: string;
-  sourceType: typeof imageSighting.$inferSelect.sourceType;
-  mediaSubtypes: string[];
-  originalFilename: string | null;
-  pixelWidth: number | null;
-  pixelHeight: number | null;
-  hasAdjustments: boolean;
-  capturedAt: Date | null;
-  capturedAtOffsetMinutes: number | null;
-  addedAt: Date | null;
-  location: typeof imageSighting.$inferSelect.location;
-  placeName: string | null;
-  camera: typeof imageSighting.$inferSelect.camera;
-  matchKind: typeof imageSighting.$inferSelect.matchKind;
-  hashDistance: number | null;
-  aspectGate: boolean | null;
-  observedAt: Date;
-  createdAt: Date;
-  updatedAt: Date;
-};
+type ImageSightingRow = typeof imageSighting.$inferSelect;
 
 const scaffold = listScaffold("imageSighting", imageSighting);
 
 const displayDate = (row: ImageSightingRow): string =>
   (row.capturedAt ?? row.observedAt).toISOString().slice(0, 10);
 
-const toOut = async (
+const hydrate = async (
   db: Database | DrizzleTransaction,
-  row: ImageSightingRow,
-): Promise<ImageSightingOut> => {
-  const [ownerRow, deviceRow, imageRow] = await Promise.all([
-    unwrapDb(db).query.ledgerParty.findFirst({
-      where: and(
-        eq(ledgerParty.id, row.ledgerPartyId),
-        notDeleted(ledgerParty),
-      ),
-      columns: { shortcode: true, name: true },
-    }),
-    unwrapDb(db).query.device.findFirst({
-      where: and(eq(device.id, row.deviceId), notDeleted(device)),
-      columns: { shortcode: true, name: true },
-    }),
-    unwrapDb(db).query.image.findFirst({
-      where: eq(image.id, row.imageId),
-      columns: { shortcode: true },
-    }),
+  rows: ImageSightingRow[],
+): Promise<ImageSightingOut[]> => {
+  const [owners, devices, images] = await Promise.all([
+    lookupEntityReferences(
+      db,
+      "ledgerParty",
+      rows.map((row) => row.ledgerPartyId),
+    ),
+    lookupEntityReferences(
+      db,
+      "device",
+      rows.map((row) => row.deviceId),
+    ),
+    lookupEntityReferences(
+      db,
+      "image",
+      rows.map((row) => row.imageId),
+      { includeDeleted: true },
+    ),
   ]);
-  const displayName = `${ownerRow?.name ?? "Unknown owner"} · ${deviceRow?.name ?? "Unknown device"} · ${displayDate(row)}`;
-  return imageSightingOut.parse({
-    id: parseShortcodeFor("imageSighting", row.shortcode),
-    imageId: imageRow
-      ? parseShortcodeFor("image", imageRow.shortcode)
-      : undefined,
-    ledgerPartyId: ownerRow
-      ? parseShortcodeFor("ledgerParty", ownerRow.shortcode)
-      : undefined,
-    deviceId: deviceRow
-      ? parseShortcodeFor("device", deviceRow.shortcode)
-      : undefined,
-    assetKey: row.assetKey,
-    sourceType: row.sourceType,
-    mediaSubtypes: row.mediaSubtypes,
-    originalFilename: row.originalFilename,
-    pixelWidth: row.pixelWidth,
-    pixelHeight: row.pixelHeight,
-    hasAdjustments: row.hasAdjustments,
-    capturedAt: row.capturedAt,
-    capturedAtOffsetMinutes: row.capturedAtOffsetMinutes,
-    addedAt: row.addedAt,
-    location: row.location,
-    placeName: row.placeName,
-    camera: row.camera,
-    matchKind: row.matchKind,
-    hashDistance: row.hashDistance,
-    aspectGate: row.aspectGate,
-    observedAt: row.observedAt,
-    displayName,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+  return rows.map((row) => {
+    const owner = owners.get(row.ledgerPartyId);
+    const reporter = devices.get(row.deviceId);
+    return imageSightingOut.parse({
+      ...row,
+      id: parseShortcodeFor("imageSighting", row.shortcode),
+      imageId: images.get(row.imageId)?.id,
+      ledgerPartyId: owner?.id,
+      deviceId: reporter?.id,
+      displayName: `${owner?.name ?? "Unknown owner"} · ${reporter?.name ?? "Unknown device"} · ${displayDate(row)}`,
+    });
   });
 };
 
-const buildWhere = (filters: ImageSightingFilters) =>
-  scaffold.where(filters, [
-    ...auditDateWhereConditions(imageSighting, filters),
-  ]);
-
-export async function listImageSightings(
+export const listImageSightings = (
   db: Database,
   filters: ImageSightingFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-) {
-  const where = buildWhere(filters);
-  const { take, skip } = scaffold.page(pagination);
-  const { data, count } = await executeListQueryWithCount(
-    getDb(db)
-      .select(columns)
-      .from(imageSighting)
-      .where(where)
-      .orderBy(...scaffold.orderBy(sorts, {}, filters))
-      .limit(take)
-      .offset(skip),
-    countWhere(db, imageSighting, where),
+) =>
+  scaffold.list(
+    db,
+    { filters, sorts, pagination },
+    { hydrate: (rows) => hydrate(db, rows) },
   );
-  return { data: await Promise.all(data.map((row) => toOut(db, row))), count };
-}
 
 const fetchById = async (
   db: Database | DrizzleTransaction,
   id: ImageSightingId,
 ): Promise<ImageSightingRow | undefined> => {
   const [row] = await unwrapDb(db)
-    .select(columns)
+    .select()
     .from(imageSighting)
     .where(and(eq(imageSighting.id, id), notDeleted(imageSighting)))
     .limit(1);
@@ -215,7 +122,7 @@ const imageSightingCrud = createEntityCrud({
   table: imageSighting,
   entity: "imageSighting",
   fetchById,
-  fromDB: (db, row) => toOut(db, row),
+  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
   toUpdate: (data: { placeName?: string | null; capturedAt?: Date | null }) =>
     buildPartialUpdateValues(data),
   auditUpdateFields: [...entityFieldModels.imageSighting.audit],
@@ -236,11 +143,7 @@ async function resolveSightingOwnerParty(
   db: Database | DrizzleTransaction,
   userId: UserId,
 ): Promise<LedgerPartyId> {
-  const [row] = await unwrapDb(db)
-    .select({ id: ledgerParty.id })
-    .from(ledgerParty)
-    .where(and(eq(ledgerParty.userId, userId), notDeleted(ledgerParty)))
-    .limit(1);
+  const row = await currentMemberLedgerParty(db, { userId });
   if (!row) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
@@ -266,16 +169,12 @@ export async function resolveImportSightingContext(
   actorUserId: UserId,
 ): Promise<{ deviceId: DeviceId; ledgerPartyId: LedgerPartyId } | null> {
   if (!installationId) return null;
-  const dbc = unwrapDb(db);
   const [deviceRow, partyRow] = await Promise.all([
-    dbc.query.device.findFirst({
+    unwrapDb(db).query.device.findFirst({
       where: and(eq(device.installationId, installationId), notDeleted(device)),
       columns: { id: true },
     }),
-    dbc.query.ledgerParty.findFirst({
-      where: and(eq(ledgerParty.userId, actorUserId), notDeleted(ledgerParty)),
-      columns: { id: true },
-    }),
+    currentMemberLedgerParty(db, { userId: actorUserId }),
   ]);
   if (!deviceRow || !partyRow) return null;
   return { deviceId: deviceRow.id, ledgerPartyId: partyRow.id };
@@ -507,29 +406,25 @@ export async function updateImageSighting(
   });
 }
 
-export async function deleteImageSightings(
-  db: Database,
-  shortcodes: ImageSightingShortcode[],
-  actor: ActorContext,
-) {
-  const ids = uniq(await resolveAllOrThrow(db, "imageSighting", shortcodes));
-  return withTransaction(db, async (tx) => {
-    // Read the affected images BEFORE the soft delete — `notDeleted` would
-    // otherwise exclude these very rows from the read that finds them.
-    const rows = await unwrapDb(tx)
-      .select({ imageId: imageSighting.imageId })
-      .from(imageSighting)
-      .where(and(inArray(imageSighting.id, ids), notDeleted(imageSighting)));
-    const affectedImageIds = uniq(rows.map((row) => row.imageId));
-    await removeEntity(tx, {
-      entity: "imageSighting",
-      ids,
-      removal: "soft",
-      actor,
-    });
-    for (const imageId of affectedImageIds) {
-      await deriveAndStoreImageCapture(tx, parseEntityId("image", imageId));
-    }
-    return { deleted: ids.length };
-  });
-}
+/** Re-derive each affected image's capture once its sightings are gone. */
+const rederiveSightingImages = async (
+  tx: DrizzleTransaction,
+  ids: ImageSightingId[],
+) => {
+  // includes-deleted: these sightings were tombstoned by this very delete.
+  const rows = await tx
+    .select({ imageId: imageSighting.imageId })
+    .from(imageSighting)
+    .where(inArray(imageSighting.id, ids));
+  for (const imageId of uniq(rows.map((row) => row.imageId)))
+    await deriveAndStoreImageCapture(tx, parseEntityId("image", imageId));
+};
+
+export const imageSightingRepository = entityRepository("imageSighting", {
+  lifecycle: { delete: IMAGE_SIGHTING_DELETE_EDGE_POLICY },
+  get: getImageSightingByShortcode,
+  list: listImageSightings,
+  create: createImageSighting,
+  update: updateImageSighting,
+  deleteHooks: { afterDelete: rederiveSightingImages },
+});

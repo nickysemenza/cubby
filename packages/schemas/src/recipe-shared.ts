@@ -235,6 +235,12 @@ export const recipeSource = z.discriminatedUnion("type", [
 ]);
 export type RecipeSource = z.infer<typeof recipeSource>;
 
+/**
+ * The recipe's scalar read fields. The recipe declaration's `validation.read`
+ * uses these instances, so `generatedRecipeFieldSchemas.read` shares them; they
+ * live here because a sub-recipe line (`recipe-fields.ts`) embeds them inside
+ * that same declaration, which therefore cannot read its own generated map.
+ */
 export const recipeTopLevelFields = {
   id: recipeShortcode,
   name: z.string(),

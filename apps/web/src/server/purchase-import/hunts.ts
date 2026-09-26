@@ -1,11 +1,12 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import { vendorAccountId } from "@cubby/schemas/identifiers";
 import {
   confirmMerchantVendorRuleInput,
   confirmMerchantVendorRuleOut,
   type ConfirmMerchantVendorRuleInput,
 } from "@cubby/schemas/purchase-import";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -13,13 +14,13 @@ import {
   financialTransaction,
   financialTransactionAllocation,
   importHunt,
-  ledgerParty,
   merchantVendorRule,
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
 import type { PurchaseAgentQueueProducer } from "~/server/purchase-agent-queue-types";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { currentMemberLedgerParty } from "~/server/repo/member-login";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import { dispatchImportRunEvent } from "./dispatch";
@@ -34,17 +35,7 @@ export async function confirmMerchantVendorRule(
   actor: ActorContext,
 ) {
   const input = confirmMerchantVendorRuleInput.parse(rawInput);
-  const [party] = await getDb(db)
-    .select({ id: ledgerParty.id })
-    .from(ledgerParty)
-    .where(
-      and(
-        eq(ledgerParty.userId, actor.userId),
-        eq(ledgerParty.kind, "member"),
-        notDeleted(ledgerParty),
-      ),
-    )
-    .limit(1);
+  const party = await currentMemberLedgerParty(db, actor);
   if (!party) throw new Error("Member identity is not configured.");
   const vendorId = await resolveOrThrow(db, "vendor", input.vendorId);
   const normalizedMerchant = normalizeMerchant(input.merchant);
@@ -76,6 +67,34 @@ const shiftDate = (date: string, days: number) => {
 };
 
 /** Create replay-safe work from confirmed merchant routing; no fuzzy vendor guess is persisted. */
+/** A member's confirmed merchant routing, plus every vendor it may route to. */
+export async function listMerchantVendorRules(
+  db: Database,
+  ledgerPartyId: LedgerPartyId,
+) {
+  const [rules, vendors] = await Promise.all([
+    getDb(db)
+      .select({
+        merchant: merchantVendorRule.normalizedMerchant,
+        vendorId: vendor.shortcode,
+        vendorName: vendor.name,
+      })
+      .from(merchantVendorRule)
+      .innerJoin(
+        vendor,
+        and(eq(vendor.id, merchantVendorRule.vendorId), notDeleted(vendor)),
+      )
+      .where(eq(merchantVendorRule.ledgerPartyId, ledgerPartyId))
+      .orderBy(asc(merchantVendorRule.normalizedMerchant)),
+    getDb(db)
+      .select({ shortcode: vendor.shortcode, name: vendor.name })
+      .from(vendor)
+      .where(notDeleted(vendor))
+      .orderBy(asc(vendor.name)),
+  ]);
+  return { rules, vendors };
+}
+
 export async function discoverImportHunts(db: Database): Promise<number> {
   const database = getDb(db);
   const rows = await database

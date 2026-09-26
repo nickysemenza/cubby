@@ -4,8 +4,6 @@ import { z } from "zod";
 import { cookbookContract } from "~/contracts/cookbook.contract";
 import { query } from "~/contracts/define";
 import { ingredientContract } from "~/contracts/ingredient.contract";
-import { productContract } from "~/contracts/product.contract";
-import { projectContract } from "~/contracts/project.contract";
 import { purchaseContract } from "~/contracts/purchase.contract";
 import { recipeContract } from "~/contracts/recipe.contract";
 
@@ -65,29 +63,11 @@ describe("migrated MCP envelope wrappers stay identical to their contract output
     return tool.outputSchema;
   }
 
-  it("list_purchase_products.items is purchase.products' own output", () => {
-    expect(requireObjectOutput("list_purchase_products").shape.items).toBe(
-      purchaseContract.ops.products.output,
-    );
-  });
-
   it("split_expense.items is purchase.split's own output, plus its extra fields", () => {
     const output = requireObjectOutput("split_expense");
     expect(output.shape.items).toBe(purchaseContract.ops.split.output);
     expect(Object.keys(output.shape)).toEqual(
       expect.arrayContaining(["items", "originalCost", "partsSum", "delta"]),
-    );
-  });
-
-  it("list_project_resources.items is project.resources' own output", () => {
-    expect(requireObjectOutput("list_project_resources").shape.items).toBe(
-      projectContract.ops.resources.output,
-    );
-  });
-
-  it("list_product_components.items is product.components' own output", () => {
-    expect(requireObjectOutput("list_product_components").shape.items).toBe(
-      productContract.ops.components.output,
     );
   });
 

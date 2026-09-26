@@ -5,7 +5,6 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { type ReactNode, useMemo } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { provisionalOptions } from "~/app/finance/financial-account-options";
 import { booleanCellOptions } from "~/lib/select-options";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { formatCurrency } from "~/lib/utils";
@@ -16,10 +15,8 @@ import {
   createBooleanColumn,
   createCurrencyColumn,
   createEntityInlineLinkColumn,
-  createFilterableSelectColumn,
   createImageColumn,
   createNameColumn,
-  createParentLinkColumn,
   createSingleEntityInlineLinkColumn,
   describeProductPricingSource,
   productPriceClearLabel,
@@ -35,8 +32,6 @@ import {
   materializeCubbyColumns,
   useCubbyTable,
 } from "./table-features";
-
-type ParentValue = { id: string | null; name: string | null };
 
 const activeBrowserHarnesses: Array<
   ReturnType<typeof createBrowserTestHarness>
@@ -55,22 +50,12 @@ function columnForTable<TRow extends RowData, TValue>(
   );
 }
 
-type TaskRow = {
-  parentTaskId: string | null;
-  parentTaskName: string | null;
-};
-
-type ProjectRow = {
-  parentId: string | null;
-  parentName: string | null;
-};
-
 /**
  * Renders the column through a real table so the accessor and the cell are
  * exercised the way `<RTable>` runs them — a hand-built `info.getValue()` would
  * test the cell body while silently accepting a wrong `idField`/`nameField`.
  */
-function renderColumn<TRow extends RowData, TValue = ParentValue>(
+function renderColumn<TRow extends RowData, TValue>(
   column: ColumnDef<TRow, TValue>,
   row: TRow,
   wrap?: (children: ReactNode) => ReactNode,
@@ -105,73 +90,6 @@ function renderColumn<TRow extends RowData, TValue = ParentValue>(
   );
   return result;
 }
-
-const taskColumn = (
-  options?: Parameters<typeof createParentLinkColumn>[4],
-): ColumnDef<TaskRow, ParentValue> =>
-  createParentLinkColumn(
-    createCubbyColumnHelper<TaskRow>(),
-    "task",
-    "parentTaskId",
-    "parentTaskName",
-    options,
-  );
-
-const projectColumn = (): ColumnDef<ProjectRow, ParentValue> =>
-  createParentLinkColumn(
-    createCubbyColumnHelper<ProjectRow>(),
-    "project",
-    "parentId",
-    "parentName",
-  );
-
-describe("createParentLinkColumn", () => {
-  it("links the parent through the column's own entity and id", async () => {
-    renderColumn(
-      taskColumn(),
-      {
-        parentTaskId: "TSK-9QP2",
-        parentTaskName: "Frame the shed",
-      },
-      undefined,
-      { browser: true },
-    );
-
-    const link = await screen.findByRole("link", { name: /Frame the shed/ });
-    expect(link).toHaveAttribute("href", "/tasks/TSK-9QP2");
-    expect(screen.getByText("Frame the shed")).toBeInTheDocument();
-  });
-
-  it("reads the id and name off the fields it was given", async () => {
-    renderColumn(
-      projectColumn(),
-      {
-        parentId: "PRJ-4K7M",
-        parentName: "Backyard",
-      },
-      undefined,
-      { browser: true },
-    );
-
-    expect(
-      await screen.findByRole("link", { name: /Backyard/ }),
-    ).toHaveAttribute("href", "/projects/PRJ-4K7M");
-  });
-
-  it.each([
-    ["both missing", { parentTaskId: null, parentTaskName: null }],
-    ["id missing", { parentTaskId: null, parentTaskName: "Frame the shed" }],
-    // A name with no id is the one that matters: it reads as linkable but has
-    // nothing to link to, so the guard has to be on both halves, not just the
-    // name it would otherwise render.
-    ["name missing", { parentTaskId: "TSK-9QP2", parentTaskName: null }],
-  ])("renders NoneValue when %s", async (_label, row: TaskRow) => {
-    renderColumn(taskColumn(), row, undefined, { browser: true });
-
-    expect(await screen.findByText("—")).toBeInTheDocument();
-    expect(screen.queryByRole("link")).toBeNull();
-  });
-});
 
 describe("createSingleEntityInlineLinkColumn", () => {
   it("always supplies a semantic entity header unless the caller names one", () => {
@@ -822,48 +740,13 @@ describe("createCurrencyColumn zero handling", () => {
   });
 });
 
-// Range copy/paste reads `meta.cellData`, never the rendered cell — so a column
-// that renders correctly can still be silently absent from the copy range. That
-// is exactly what happened when two `createTextColumn` enum columns were
-// hand-rolled into bare accessors to get a custom enum render (PR #766
-// review): the cells looked right and dropped out of the range engine.
-describe("enum/boolean columns stay in the copy/paste range", () => {
-  type EnumRow = { kind: string | null };
-  const OPTIONS = [{ value: "purchase", label: "Purchase" }];
-
-  it("createFilterableSelectColumn wires cellData even with no filter and no editor", () => {
-    const column = createFilterableSelectColumn(
-      createCubbyColumnHelper<EnumRow>(),
-      "kind",
-      {
-        placeholder: "Filter by kind...",
-        selectOptions: OPTIONS,
-        // The shape the financial-transaction columns use: the manifest owns the
-        // filter control, and the column is read-only.
-        filterConfig: null,
-      },
-    );
-
-    const cellData = column.meta?.cellData;
-    expect(cellData?.kind).toBe("select");
-    expect(cellData?.getCopyPayload({ kind: "purchase" })).toEqual({
-      text: "Purchase",
-      json: "purchase",
-    });
-    expect(cellData?.applyPaste).toBeUndefined();
-    // `filterConfig: null` must leave meta.filterConfig undefined so the
-    // manifest's control is the one that attaches.
-    expect(column.meta?.filterConfig).toBeUndefined();
-
-    renderColumn<EnumRow, string | null>(column, { kind: "purchase" });
-    expect(screen.getByText("Purchase").parentElement).toHaveStyle(
-      "--enum-pill-color: var(--chart-1)",
-    );
-  });
-});
-
 describe("boolean tones come from the roster, not the factory", () => {
   type ProvisionalRow = { provisional: boolean | null };
+  // Inverted against the default: the unresolved state is the flagged one.
+  const provisionalOptions = booleanCellOptions(
+    { true: "Provisional", false: "Known" },
+    { true: "var(--warning)", false: "var(--positive)" },
+  );
 
   it("honours an inverted tone map and matches what other surfaces render", () => {
     const column = createBooleanColumn(

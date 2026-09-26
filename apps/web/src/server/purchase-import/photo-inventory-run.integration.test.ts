@@ -25,7 +25,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 import {
   controlImportRun,
   finalizePhotoImportRun,
-  loadImportRunByShortcode,
+  loadImportRunDetail,
   startPhotoInventoryCoordinator,
   startPhotoInventoryRun,
 } from "./run-service";
@@ -145,8 +145,7 @@ describe("photo import finalize", () => {
       durationMs: 3_200,
     });
     expect(
-      (await loadImportRunByShortcode(ctx.db, ctx.actor, original.publicId))
-        .agentModelMs,
+      (await loadImportRunDetail(ctx.db, original.publicId)).agentModelMs,
     ).toBe(3_200);
 
     const restarted = await controlImportRun(ctx.db, ctx.actor, {

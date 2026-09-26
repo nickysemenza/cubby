@@ -3,8 +3,8 @@ import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { APP_ORIGIN, MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth-constants";
-import type { PurchaseAgentConnectionStatus } from "~/lib/purchase-import-run-detail";
-export type { PurchaseAgentConnectionStatus } from "~/lib/purchase-import-run-detail";
+import type { PurchaseAgentConnectionStatus } from "~/lib/purchase-import-debug";
+export type { PurchaseAgentConnectionStatus } from "~/lib/purchase-import-debug";
 import type { Database } from "~/server/db";
 import {
   oauthClient,

@@ -1,6 +1,9 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
-import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";
+import {
+  type ProductLabelNutrition,
+  totalsPreview,
+} from "@cubby/schemas/nutrition";
 import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 
@@ -209,6 +212,7 @@ export const makeSubRecipe = (
   dataQuality: testCompleteDataQuality(),
   forkedFromRecipeId: null,
   forkedFromRecipeName: null,
+  ...totalsPreview(null),
   sections: [
     { id: `${idStr}-sec`, name: null, instructions: [], ingredients, ...dates },
   ],
@@ -227,6 +231,7 @@ export const makeRootRecipe = (rows: CostingRow[]): RecipeOut => ({
   dataQuality: testCompleteDataQuality(),
   forkedFromRecipeId: null,
   forkedFromRecipeName: null,
+  ...totalsPreview(null),
   sections: rows.map((row, i) => {
     const { sectionName, ...ingredient } = row;
     return {

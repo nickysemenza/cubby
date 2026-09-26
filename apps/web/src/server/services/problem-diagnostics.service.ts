@@ -9,10 +9,7 @@
  * canonical relation internally, but count callers never invoke sample.
  */
 
-import type {
-  ProductWithTitleDerivableSize,
-  UpcEnrichmentFreshness,
-} from "@cubby/schemas/problems";
+import { UpcEnrichmentFreshness, ProblemItem } from "@cubby/schemas/problems";
 import type { ProjectAttentionItem } from "@cubby/schemas/project";
 
 import type { DiagnosticKey } from "~/entities/problem-query";
@@ -113,9 +110,9 @@ const healthySample = async (
  */
 const runTitleSizeProposals = async (
   db: Database,
-): Promise<ProductWithTitleDerivableSize[]> => {
+): Promise<ProblemItem<"productsWithTitleDerivableSize">[]> => {
   const candidates = await findProductsWithoutUnitMappings(db);
-  const proposals: ProductWithTitleDerivableSize[] = [];
+  const proposals: ProblemItem<"productsWithTitleDerivableSize">[] = [];
   for (const row of candidates) {
     const proposal = proposeSizeFromTitle(row.name);
     if (!proposal) continue;

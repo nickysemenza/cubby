@@ -15,7 +15,7 @@ import {
 
 import {
   createProductCategory,
-  deleteProductCategories,
+  productCategoryRepository,
   getProductCategoryByShortcode,
   listProductCategories,
   listProductCategoryTreeOptions,
@@ -240,7 +240,7 @@ describe("product category hierarchy", () => {
     expect(option?.feature).toBe("tool-consumables");
 
     await expect(
-      deleteProductCategories(
+      productCategoryRepository.delete(
         ctx.db,
         [taxonomyShortcode("tool-consumables")],
         ctx.actor,
@@ -255,7 +255,11 @@ describe("product category hierarchy", () => {
       ),
     ).rejects.toThrow("behavior binding");
     await expect(
-      deleteProductCategories(ctx.db, [taxonomyShortcode("food")], ctx.actor),
+      productCategoryRepository.delete(
+        ctx.db,
+        [taxonomyShortcode("food")],
+        ctx.actor,
+      ),
     ).rejects.toThrow("behavior binding");
 
     await expect(

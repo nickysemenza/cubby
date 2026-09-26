@@ -195,6 +195,12 @@ describe("recipe repository helpers", () => {
       expect(result).toEqual({
         id: "RCP-A3F2",
         name: "Test Recipe",
+        // No computed totals yet, so the preview figures are unknown.
+        cost: null,
+        calories: null,
+        protein: null,
+        carbs: null,
+        fat: null,
         createdAt: CREATED_AT,
         updatedAt: UPDATED_AT,
         yield: null,

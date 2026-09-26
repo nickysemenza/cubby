@@ -14,7 +14,6 @@ import type {
   InfLocation,
   LocationAncestorOut,
   LocationOut,
-  LocationParentOptionsOut,
   LocationType,
 } from "@cubby/schemas/location";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
@@ -24,12 +23,10 @@ import {
   asc,
   countDistinct,
   eq,
-  exists,
   inArray,
   ne,
   sql,
 } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
@@ -51,67 +48,6 @@ import { getHomeLocation } from "./home";
 import { parseLocationType } from "./parse-type";
 import { loadLocationAncestors } from "./tree";
 import { computeLocationValuations } from "./valuation";
-
-// Self-join alias for the child-existence check in `locationParentOptions` —
-// the outer query and the EXISTS subquery both read the `location` table, and
-// Drizzle needs a distinct name to correlate `child.parentId = location.id`
-// instead of both referring to the same unaliased relation (mirrors
-// `recipe/crud.ts`'s `parentRecipe` alias for the same self-referential shape).
-const childLocation = alias(location, "childLocation");
-
-/**
- * Locations that have at least one LIVE direct child — the bounded roster for
- * the location filter's `parentLocation` picklist (`optionsKey:
- * "parentLocation"`, see `useLocationParentOptions`). Scoped rather than the
- * full ~136-row location table so every option in the picklist actually
- * matches something (~27 rows) and the list stays scannable.
- *
- * Both the outer rows and the child-existence check exclude soft-deleted rows
- * — a location whose only children were soft-deleted (a shelf emptied via
- * delete, not just its inventory) must NOT appear, or the picklist would offer
- * a "parent" filter value that matches zero locations.
- */
-export const locationParentOptions = async (
-  db: Database,
-): Promise<LocationParentOptionsOut[]> => {
-  const dbClient = getDb(db);
-  const rows = await dbClient
-    .select({
-      id: location.id,
-      shortcode: location.shortcode,
-      name: location.name,
-    })
-    .from(location)
-    .where(
-      and(
-        notDeleted(location),
-        exists(
-          dbClient
-            .select({ one: sql`1` })
-            .from(childLocation)
-            .where(
-              and(
-                eq(childLocation.parentId, location.id),
-                notDeleted(childLocation),
-              ),
-            ),
-        ),
-      ),
-    )
-    .orderBy(asc(location.name));
-
-  // "shelf 1" appears in four rooms; the picklist is unusable without the
-  // chain that tells them apart.
-  const ancestorsById = await loadLocationAncestors(
-    db,
-    rows.map((row) => row.id),
-  );
-  return rows.map((row) => ({
-    id: parseShortcodeFor("location", row.shortcode),
-    name: row.name,
-    ancestors: ancestorsById.get(row.id) ?? [],
-  }));
-};
 
 /**
  * Get full location details by shortcode. Returns null if the code doesn't

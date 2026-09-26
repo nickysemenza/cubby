@@ -55,13 +55,11 @@ import {
   eqAnyRequested,
   getDb,
   type ListReadIntent,
-  lockAndValidateForDelete,
   notDeleted,
   parseInventoryAmount,
   relations,
   unwrapDb,
   updateLiveAndReturn,
-  withTransaction,
 } from "~/server/repo/database-helpers";
 import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
@@ -72,7 +70,7 @@ import {
   loadProductPricing,
 } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { removeEntity } from "~/server/repo/removal";
+import { deleteByPolicy } from "~/server/repo/removal";
 import {
   lexicalEligibility,
   lexicalRelevance,
@@ -925,24 +923,18 @@ export const getInventoryForProducts = async (
   }));
 };
 
-export const deleteInventoryEntries = async (
+/** Inventory deletes take uuids; no incoming edge outlives an entry. */
+export const deleteInventoryEntries = (
   db: Database,
   ids: InventoryId[],
   actor: ActorContext,
-): Promise<{ deleted: number }> => {
-  if (ids.length === 0) return { deleted: 0 };
-
-  return await withTransaction(db, async (tx) => {
-    await lockAndValidateForDelete(tx, inventoryEntry, ids, "Inventory");
-    const { deleted } = await removeEntity(tx, {
-      entity: "inventory",
-      ids,
-      removal: "soft",
-      actor,
-    });
-    return { deleted };
+) =>
+  deleteByPolicy(db, {
+    entity: "inventory",
+    policy: INVENTORY_DELETE_EDGE_POLICY,
+    ids,
+    actor,
   });
-};
 
 import type { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 

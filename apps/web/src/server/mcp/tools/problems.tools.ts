@@ -13,8 +13,17 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { expectedProblemKeys, problemQuery } from "~/entities/problem-registry";
+import { findProblemCountsWorkflow } from "~/server/workflows/problem-counts.server";
+import {
+  findCoverageProblemsWorkflow,
+  findFastProblemsWorkflow,
+  findProblemByTypeWorkflow,
+  findTrackerProblemsWorkflow,
+  findUpcProblemsWorkflow,
+  findViewProblemsWorkflow,
+} from "~/server/workflows/problems.server";
 
-import { getCaller, READ_ONLY_CLOSED, registerMcpTool } from "./_shared";
+import { READ_ONLY_CLOSED, registerRouterTool } from "./_shared";
 
 const problemKeySchema = z.enum(expectedProblemKeys);
 
@@ -33,8 +42,26 @@ function projectProblemTypeSlice(
   }
 }
 
+/** One page of a problem-type report, with internal diagnostic ids projected out. */
+export function pageProblemTypeSlice(
+  value: z.input<typeof problemsTypeSliceOut>,
+  page: { pageIndex: number; pageSize: number },
+) {
+  const slice = projectProblemTypeSlice(value);
+  const start = page.pageIndex * page.pageSize;
+  return {
+    ...slice,
+    items: slice.items.slice(start, start + page.pageSize),
+    meta: {
+      pageIndex: page.pageIndex,
+      pageSize: page.pageSize,
+      totalCount: slice.total,
+    },
+  };
+}
+
 export function registerProblemsTools(server: McpServer) {
-  registerMcpTool(server, {
+  registerRouterTool(server, {
     name: "list_problems",
     description:
       "List data-quality problems and optional coverage backlogs across products, inventory, locations, recipes, and vendors, plus household-tracker items needing attention (overdue tasks, stalled/blocked projects, past-due planned expenses, missing budgets, unclassified expenses).",
@@ -68,13 +95,12 @@ export function registerProblemsTools(server: McpServer) {
       (params.countsOnly === undefined && params.type === undefined)
         ? "strong"
         : "context",
-    handler: async (params, extra) => {
-      const caller = getCaller(extra);
+    call: async (context, params) => {
       if (
         params.countsOnly === true ||
         (params.countsOnly === undefined && params.type === undefined)
       ) {
-        return await caller.problems.getCounts();
+        return await findProblemCountsWorkflow(context);
       }
       if (params.type !== undefined) {
         const parsedProblemKey = problemKeySchema.safeParse(params.type);
@@ -87,26 +113,17 @@ export function registerProblemsTools(server: McpServer) {
         const definition = problemQuery(parsedProblemKey.data);
         if (!definition)
           throw new Error("Problem query registry is incomplete");
-        const slice = projectProblemTypeSlice(
-          await caller.problems.getByType({ key: definition.key }),
+        return pageProblemTypeSlice(
+          await findProblemByTypeWorkflow(context, { key: definition.key }),
+          params,
         );
-        const start = params.pageIndex * params.pageSize;
-        return {
-          ...slice,
-          items: slice.items.slice(start, start + params.pageSize),
-          meta: {
-            pageIndex: params.pageIndex,
-            pageSize: params.pageSize,
-            totalCount: slice.total,
-          },
-        };
       }
       const [fast, coverage, upc, tracker, views] = await Promise.all([
-        caller.problems.getFast(),
-        caller.problems.getCoverage(),
-        caller.problems.getUpc(),
-        caller.problems.getTracker(),
-        caller.problems.getViews(),
+        findFastProblemsWorkflow(context),
+        findCoverageProblemsWorkflow(context),
+        findUpcProblemsWorkflow(context),
+        findTrackerProblemsWorkflow(context),
+        findViewProblemsWorkflow(context),
       ]);
       const all = assembleAllProblems({ fast, coverage, upc, tracker, views });
       return allProblemsMcpSchema.parse(all);

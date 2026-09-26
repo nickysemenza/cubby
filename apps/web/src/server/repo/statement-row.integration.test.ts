@@ -1,7 +1,6 @@
 import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import {
-  listStatementRowsInput,
   recordStatementRowsInput,
   type StatementImportInput,
   type StatementRowInput,
@@ -14,16 +13,12 @@ import {
   commitStatementCsv,
   previewStatementCsv,
 } from "~/server/statement-csv-import";
-import {
-  listStatementRowsWorkflow,
-  recordStatementRowsWorkflow,
-} from "~/server/workflows/statement-row.server";
 
 import { getDb } from "./database-helpers";
 import { createFinancialAccount } from "./financial-account";
 import {
   createFinancialTransaction,
-  deleteFinancialTransactions,
+  financialTransactionRepository,
 } from "./financial-transaction";
 import {
   deleteStatementRows,
@@ -67,14 +62,14 @@ const record = (
   importOverrides: Partial<StatementImportInput> = {},
   dryRun = false,
 ) =>
-  recordStatementRowsWorkflow(
+  recordStatementRows(
     db,
-    actor,
     recordStatementRowsInput.parse({
       import: importInput(importOverrides),
       rows,
       dryRun,
     }),
+    actor,
   );
 
 describe("statement row ledger", () => {
@@ -184,10 +179,7 @@ describe("statement row ledger", () => {
       rowCountStored: 2,
     });
 
-    const listed = await listStatementRowsWorkflow(
-      ctx.db,
-      listStatementRowsInput.parse({}),
-    );
+    const listed = await listStatementRows(ctx.db, {});
     expect(listed.count).toBe(2);
     const charge = listed.data.find((row) => row.providerAmount === -128.5);
     expect(charge).toMatchObject({
@@ -307,7 +299,11 @@ describe("statement row ledger", () => {
     });
 
     // A soft-deleted transaction is not evidence.
-    await deleteFinancialTransactions(ctx.db, [transaction.id], ctx.actor);
+    await financialTransactionRepository.delete(
+      ctx.db,
+      [transaction.id],
+      ctx.actor,
+    );
     const afterDelete = (await listStatementRows(ctx.db, {})).data[0];
     expect(afterDelete).toMatchObject({
       matchState: "unmatched",

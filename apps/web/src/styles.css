@@ -278,7 +278,7 @@
   --chart-neutral: oklch(0.66 0.006 80);
 
   /* Trade *phase* families — a specialist categorical exception,
-     scoped to the project Gantt where grouping 20 trades into six build phases
+     scoped to task trade marks where grouping 20 trades into six build phases
      needs a colour channel the monochrome ramp can't give. Deliberately muted
      (chroma ≤ 0.085) and mid-lightness so they harmonise with the cool planes
      rather than reading as a rainbow. Six distinct hues spread around the

@@ -23,10 +23,19 @@ import { executeEntity } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 import { listCookbooks } from "~/server/repo/cookbook";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
+import { recipeUsagesWorkflow } from "~/server/workflows/ingredient.server";
+import {
+  insertImportWorkflow,
+  scrapeWorkflow,
+} from "~/server/workflows/recipe-import.server";
+import {
+  explainCostingWorkflow,
+  getAllTagsWorkflow,
+  getMakeableWorkflow,
+} from "~/server/workflows/recipe.server";
 
 import { getEntityKernelContext } from "../kernel-context";
 import {
-  getCaller,
   idParam,
   READ_ONLY_CLOSED,
   READ_ONLY_OPEN,
@@ -135,6 +144,25 @@ const recipeLinePatchOut = z.object({
     modifier: z.string().nullish(),
   }),
 });
+
+/** `detail: "lines"` drops both totals blocks and the drift record. */
+export function costingExplanation(
+  explain: RecipeCostingExplain,
+  detail: z.output<typeof recipeCostingExplainDetail>,
+) {
+  if (detail === "full") return explain;
+  const { totals: _persistedTotals, ...persisted } = explain.persisted;
+  const { totals: computedTotals, ...computed } = explain.computed;
+  return {
+    detail: "lines" as const,
+    persisted,
+    computed,
+    coverage: {
+      cost: computedTotals.cost,
+      kcal: computedTotals.nutrition.kcal,
+    },
+  };
+}
 
 export function registerRecipeTools(server: McpServer) {
   registerMcpTool(server, {
@@ -256,16 +284,17 @@ export function registerRecipeTools(server: McpServer) {
     }),
     outputSchema: recipeAvailabilityMcpOut,
     annotations: READ_ONLY_CLOSED,
-    call: async (caller, params) => {
-      const { recipes } = await caller.suggestions.getMakeable({
-        minCoverage: params.minCoverage,
-        limit: params.limit,
-      });
+    call: async (context, params) => {
+      const { recipes } = await getMakeableWorkflow(
+        context.readDb,
+        { minCoverage: params.minCoverage, limit: params.limit },
+        context.services.availability,
+      );
       return { recipes };
     },
   });
 
-  registerMcpTool(server, {
+  registerRouterTool(server, {
     name: "find_recipes_using_ingredient",
     description:
       "Reverse lookup: given an ingredient ID, return every recipe that uses it.",
@@ -275,9 +304,10 @@ export function registerRecipeTools(server: McpServer) {
     // `slimRecipe` already returns `id: shortcode` — nothing to swap here.
     outputSchema: recipesUsingIngredientOut,
     annotations: READ_ONLY_CLOSED,
-    handler: async (params, extra) => {
-      const caller = getCaller(extra);
-      const usages = await caller.ingredient.recipeUsages({ id: params.id });
+    call: async (context, params) => {
+      const usages = await recipeUsagesWorkflow(context.readDb, {
+        id: params.id,
+      });
       const recipes = Object.values(groupBy(usages, (u) => u.recipe.id)).map(
         (rows) => ({
           ...slimRecipe(rows[0]!.recipe),
@@ -303,7 +333,7 @@ export function registerRecipeTools(server: McpServer) {
     inputSchema: z.object({ url: scrapeRecipeInput }),
     outputSchema: scrapeRecipeMcpOut,
     annotations: READ_ONLY_OPEN,
-    call: (caller, params) => caller.recipe.scrape(params.url),
+    call: (_context, params) => scrapeWorkflow(params.url),
   });
 
   registerRouterTool(server, {
@@ -313,21 +343,18 @@ export function registerRecipeTools(server: McpServer) {
     inputSchema: z.object({ url: scrapeRecipeInput }),
     outputSchema: recipeImportIdOut,
     annotations: WRITE_CLOSED,
-    call: async (caller, params) => {
-      const imported = await caller.recipe.scrape(params.url);
-      return await caller.recipe.insertImport(imported);
-    },
+    call: async (context, params) =>
+      await insertImportWorkflow(context, await scrapeWorkflow(params.url)),
   });
 
-  registerMcpTool(server, {
+  registerRouterTool(server, {
     name: "create_recipe_from_text",
     description:
       "Create a recipe from raw text lines WITHOUT pre-resolving ingredient IDs.",
     inputSchema: mcpRecipeCreateFromTextInput,
     outputSchema: recipeImportIdOut,
     annotations: WRITE_CLOSED,
-    handler: async (params, extra) => {
-      const caller = getCaller(extra);
+    call: async (context, params) => {
       const importRecipe = {
         meta: {
           title: params.name,
@@ -342,7 +369,7 @@ export function registerRecipeTools(server: McpServer) {
         references: [],
         servings: params.servings ?? undefined,
       };
-      return await caller.recipe.insertImport(importRecipe);
+      return await insertImportWorkflow(context, importRecipe);
     },
   });
 
@@ -366,10 +393,9 @@ export function registerRecipeTools(server: McpServer) {
     inputSchema: z.object({}),
     outputSchema: recipeTagsListOut,
     annotations: READ_ONLY_CLOSED,
-    call: async (caller) => {
-      const result = await caller.recipe.getAllTags();
-      return { items: result };
-    },
+    call: async (context) => ({
+      items: await getAllTagsWorkflow(context.readDb),
+    }),
   });
 
   registerRouterTool(server, {
@@ -383,20 +409,13 @@ export function registerRecipeTools(server: McpServer) {
     outputSchema: recipeCostingExplainMcpOut,
     annotations: READ_ONLY_CLOSED,
     readPolicy: () => "strong",
-    call: async (caller, params) => {
-      const explain = await caller.recipe.explainCosting({ id: params.id });
-      if (params.detail === "full") return explain;
-      const { totals: _persistedTotals, ...persisted } = explain.persisted;
-      const { totals: computedTotals, ...computed } = explain.computed;
-      return {
-        detail: "lines" as const,
-        persisted,
-        computed,
-        coverage: {
-          cost: computedTotals.cost,
-          kcal: computedTotals.nutrition.kcal,
-        },
-      };
+    call: async (context, params) => {
+      const explain = await explainCostingWorkflow(
+        context.readDb,
+        { id: params.id },
+        context.services.recipeCosting,
+      );
+      return costingExplanation(explain, params.detail);
     },
   });
 }

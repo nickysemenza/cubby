@@ -2,6 +2,7 @@ import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
+import { totalsPreview } from "@cubby/schemas/nutrition";
 import type {
   RecipeGraphOut,
   RecipeListItem,
@@ -205,10 +206,14 @@ type RecipeShallowOut = Omit<
 
 export const dbRecipeToAPIShallow: (
   recipeParam: RecipeSelect,
-) => RecipeShallowOut = (recipeData) => ({
-  ...dbRecipeToTopLevel(recipeData),
-  totals: totalsForRead(recipeData.totals, recipeData.totalsComputedAt),
-});
+) => RecipeShallowOut = (recipeData) => {
+  const totals = totalsForRead(recipeData.totals, recipeData.totalsComputedAt);
+  return {
+    ...dbRecipeToTopLevel(recipeData),
+    totals,
+    ...totalsPreview(totals),
+  };
+};
 
 export type RecipeListDB = RecipeSelect & {
   mealCount: number | string;
@@ -269,7 +274,16 @@ export const dbRecipeToAPI = (
 export const dbRecipeToAPIGraph = (
   recipeData: RecipeGraphDB,
 ): Omit<RecipeGraphOut, "displayImage"> => {
-  const baseRecipe = dbRecipeToAPIShallow(recipeData);
+  // The graph carries full `totals`; the flattened preview figures are a
+  // list/detail projection and are not part of its output schema.
+  const {
+    cost: _cost,
+    calories: _calories,
+    protein: _protein,
+    carbs: _carbs,
+    fat: _fat,
+    ...baseRecipe
+  } = dbRecipeToAPIShallow(recipeData);
   return {
     ...baseRecipe,
     sections: mapRecipeSections(recipeData.sections),

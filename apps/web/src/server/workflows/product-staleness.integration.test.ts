@@ -23,8 +23,6 @@ import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { mergeProductsWorkflow } from "./product.server";
-
 describe("product mutation recipe-cost staleness", () => {
   const ctx = withTestDb();
   const workflowContext = () =>
@@ -124,9 +122,10 @@ describe("product mutation recipe-cost staleness", () => {
     expect(await totalsComputedAt(recipe)).not.toBeNull();
 
     installFakeQueue();
-    await mergeProductsWorkflow(context, {
-      keepId: keeper,
-      mergeIds: [loser],
+    await executeEntity(context, {
+      action: "merge",
+      entity: "product",
+      data: { keepId: keeper, mergeIds: [loser] },
     });
     expect(await totalsComputedAt(recipe)).toBeNull();
   });

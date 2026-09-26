@@ -5,10 +5,8 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useForm, useWatch } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { entityListHiddenColumns } from "~/entities/entity-display";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { purchaseSearchFilters } from "./financial-selectors";
 import {
   emptyFinancialTransactionForm,
   FinancialTransactionFormFields,
@@ -117,19 +115,5 @@ describe("Financial Transaction Vendor suggestions", () => {
     expect(screen.getByTestId("selected-purchase")).toHaveTextContent(
       "PUR-2345",
     );
-  });
-
-  it("combines typed Purchase search with Vendor scope and keeps the list column hidden", () => {
-    expect(purchaseSearchFilters("invoice 42", OLD_VENDOR)).toEqual({
-      search: "invoice 42",
-      vendorId: OLD_VENDOR,
-    });
-    expect(purchaseSearchFilters("invoice 42", null)).toEqual({
-      search: "invoice 42",
-      vendorId: undefined,
-    });
-    expect(entityListHiddenColumns("financialTransaction")).toMatchObject({
-      vendorInference: false,
-    });
   });
 });

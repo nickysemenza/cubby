@@ -1,15 +1,16 @@
-import type {
-  DuplicateProductIdentity,
-  DuplicateVendor,
-} from "@cubby/schemas/problems";
+import { ProblemItem } from "@cubby/schemas/problems";
 
+import { kernelMerge } from "~/app/_components/actions/merge-entity-actions";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
-import { product } from "~/app/products/product.functions";
 import { vendor } from "~/app/vendors/vendor.functions";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import {
+  type EntityMergeResult,
+  entityMergeMutationOptions,
+} from "~/entities/entity-mutation.functions";
 
 const deleteProduct = entityMutationOptionsFactory("product", "delete");
 
@@ -81,7 +82,7 @@ export function DuplicateVendorMergeFix({
   variant,
   close,
 }: {
-  variant: DuplicateVendor;
+  variant: ProblemItem<"duplicateVendors">;
   close: () => void;
 }) {
   const merge = useActionMutation({
@@ -138,7 +139,7 @@ export function DuplicateVendorMergeFix({
  * separate open state to track — Cancel or a successful merge both collapse
  * the card the same way.
  *
- * `product.merge` carries `ripple.productMerge`, not the plain product one —
+ * A product merge carries `ripple.productMerge`, not the plain product one —
  * for the same reason {@link DuplicateVendorMergeFix} reaches past the vendor
  * set. A merge re-parents inventory, expenses, and projectUses and recomputes
  * dependent recipe costs, none of which an ordinary product write touches.
@@ -147,14 +148,16 @@ export function DuplicateProductMergeFix({
   variant,
   close,
 }: {
-  variant: DuplicateProductIdentity;
+  variant: ProblemItem<"duplicateProductIdentities">;
   close: () => void;
 }) {
-  const merge = useActionMutation({
-    mutationFn: product.merge.mutationOptions,
-    success: (result) => `Merged into ${result.product.name}`,
+  const mutation = useActionMutation({
+    mutationFn: entityMergeMutationOptions("product"),
+    success: (result: EntityMergeResult<"product">) =>
+      `Merged into ${result.item.name}`,
     onSuccess: close,
   });
+  const merge = kernelMerge("product", mutation);
 
   return (
     <EntityMergeDialog

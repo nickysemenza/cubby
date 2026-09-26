@@ -1,25 +1,8 @@
 import type { ReactNode } from "react";
 
 import { locationTypeOptionsWithTheme } from "~/app/_components/locations/location-icons";
-import {
-  costTypeOptions,
-  expenseLineBasisOptions,
-  expenseLineKindOptions,
-} from "~/app/expenses/expense-options";
-import {
-  financialTransactionKindOptions,
-  financialTransactionStatusOptions,
-} from "~/app/finance/financial-transaction-kind-options";
-import { ledgerPartyKindOptions } from "~/app/finance/ledger-party-options";
-import { imageStatusOptions } from "~/app/images/image-options";
-import { mealKindOptions, mealTypeOptions } from "~/app/meals/meal-options";
 import { productCategoryFeatureOptions } from "~/app/product-categories/feature-options";
-import {
-  PROJECT_STATUS_OPTIONS,
-  projectKindOptions,
-} from "~/app/projects/project-options";
 import { tradeOptions } from "~/app/projects/trade-options";
-import { taskStatusOptions } from "~/app/tasks/task-options";
 import { colorizeSelectOptions } from "~/lib/select-options";
 
 /** One `<select>`/combobox option: a value/label pair plus an optional leading icon or swatch color. */
@@ -75,28 +58,20 @@ export function presentEntitySelectOptions(
  * options and its auto-suggest hint must agree.
  */
 const ENTITY_SELECT_OPTIONS = {
-  "task.status": taskStatusOptions,
   "task.trade": tradeOptions,
-  "project.status": PROJECT_STATUS_OPTIONS,
-  "project.kind": projectKindOptions,
   "project.defaultTrade": tradeOptions,
-  "meal.mealType": mealTypeOptions,
-  "meal.mealKind": mealKindOptions,
   "expense.trade": tradeOptions,
   "purchase.defaultTrade": tradeOptions,
-  "expense.costType": costTypeOptions,
-  "expense.lineBasis": expenseLineBasisOptions,
-  "financialTransaction.kind": financialTransactionKindOptions,
-  "financialTransaction.status": financialTransactionStatusOptions,
-  "ledgerParty.kind": ledgerPartyKindOptions,
-  "image.status": imageStatusOptions,
+  // `Image.status` is read-only, so it declares no `control.options`.
+  "image.status": [
+    { value: "PENDING", label: "Pending", color: "var(--slate)" },
+    { value: "UPLOADED", label: "Uploaded", color: "var(--positive)" },
+    { value: "FAILED", label: "Failed", color: "var(--destructive)" },
+  ],
   // The capture form's `"auto"` sentinel: `lineKind` is left undecided on
   // create and derived server-side from the name — `buildData` strips it
   // before validation (`entities/editing/definitions.ts`).
-  "expense.lineKind": [
-    { value: "auto", label: "Auto-detect from name" },
-    ...expenseLineKindOptions,
-  ],
+  "expense.lineKind": [{ value: "auto", label: "Auto-detect from name" }],
   "location.type": locationTypeOptionsWithTheme,
   "productCategory.feature": productCategoryFeatureOptions,
 } satisfies Readonly<Record<string, readonly EntitySelectOption[]>>;

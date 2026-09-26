@@ -1,12 +1,8 @@
 import {
+  bulkUpdatedWithSideEffects,
   defineEntityAdapter,
   deletedWithImages,
-  entityMutationReferences,
 } from "~/server/entity-kernel/adapter";
-import {
-  mutationEvents,
-  runMutationSideEffectsForEntities,
-} from "~/server/services/mutation-side-effects";
 
 import {
   createTask,
@@ -29,8 +25,11 @@ export const taskEntityAdapter = defineEntityAdapter({
     update: (ctx, id, data) =>
       updateTask(ctx.db, id, data, ctx.actorContext, ctx.caldavHooks?.task),
     delete: async (ctx, ids) => {
-      const { deletedShortcodes, detachedImageKeys, deletedImageShortcodes } =
-        await deleteTasks(ctx.db, ids, ctx.actorContext);
+      const {
+        shortcodes: deletedShortcodes,
+        detachedImageKeys,
+        deletedImageShortcodes,
+      } = await deleteTasks(ctx.db, ids, ctx.actorContext);
       return {
         deletedReferences: deletedWithImages(
           "task",
@@ -40,24 +39,11 @@ export const taskEntityAdapter = defineEntityAdapter({
         detachedImageKeys,
       };
     },
-    /** One complete patch, one transaction, then one side-effect fan-out. */
-    bulkUpdate: async (ctx, ids, data) => {
-      const result = await updateTasksInBulk(
-        ctx.db,
-        ids,
-        data,
-        ctx.actorContext,
-      );
-      await runMutationSideEffectsForEntities(
-        ctx.db,
-        mutationEvents("task", "updated", result.updatedIds, "task.bulkUpdate"),
-      );
-      return {
-        updatedReferences: entityMutationReferences(
-          "task",
-          result.updatedShortcodes,
-        ),
-      };
-    },
+    bulkUpdate: async (ctx, ids, data) =>
+      bulkUpdatedWithSideEffects(
+        ctx,
+        "task",
+        await updateTasksInBulk(ctx.db, ids, data, ctx.actorContext),
+      ),
   },
 });

@@ -1,6 +1,8 @@
 import { resolvePlantsInput, resolvePlantsOutput } from "@cubby/schemas/plant";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+import { resolveOrCreatePlants } from "~/server/repo/plant";
+
 import { registerRouterTool, WRITE_CLOSED } from "./_shared";
 
 export function registerPlantTools(server: McpServer) {
@@ -11,6 +13,7 @@ export function registerPlantTools(server: McpServer) {
     inputSchema: resolvePlantsInput,
     outputSchema: resolvePlantsOutput,
     annotations: WRITE_CLOSED,
-    call: (caller, params) => caller.plant.resolveOrCreate(params),
+    call: (context, params) =>
+      resolveOrCreatePlants(context.db, params, context.actorContext),
   });
 }

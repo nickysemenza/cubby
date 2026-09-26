@@ -417,6 +417,7 @@ const compileFieldModel = (
         list: field.display.list,
         detail: field.display.detail,
         listHidden: field.display.listHidden ?? false,
+        preview: field.display.preview ?? false,
       },
       validation: field.validation,
     };
@@ -1093,6 +1094,7 @@ const serializedDeclarationRelations = (
       serialized.mutation = {
         source: relation.mutation.source,
         itemSchema: { ...relation.mutation.itemSchema },
+        rowSchema: { ...relation.mutation.rowSchema },
         adapter: { ...relation.mutation.adapter },
         audiences: [...relation.mutation.audiences],
       };
@@ -1554,6 +1556,7 @@ export const compileEntity = (
               target: relation.target,
               source: relation.mutation.source,
               itemSchema: relation.mutation.itemSchema,
+              rowSchema: relation.mutation.rowSchema,
               adapter: relation.mutation.adapter,
               audiences: relation.mutation.audiences,
             },
