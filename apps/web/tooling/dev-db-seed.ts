@@ -85,26 +85,34 @@ async function main(): Promise<void> {
         product_count: string;
         marker_exists: boolean;
         dev_user_exists: boolean;
+        vendor_marker_exists: boolean;
       }>(
         `SELECT (SELECT count(*)::text FROM "Product") AS product_count,
                 EXISTS (SELECT 1 FROM "Task" WHERE name = 'Restock cleaning supplies') AS marker_exists,
-                EXISTS (SELECT 1 FROM "user" WHERE email = $1) AS dev_user_exists`,
+                EXISTS (SELECT 1 FROM "user" WHERE email = $1) AS dev_user_exists,
+                EXISTS (SELECT 1 FROM "Vendor" WHERE name = 'Synthetic Supply Co') AS vendor_marker_exists`,
         [DEV_USER_EMAIL],
       );
       const state = result.rows[0];
-      if (
+      const allMarkersPresent =
         Number(state?.product_count) > 0 &&
         state?.marker_exists &&
-        state.dev_user_exists
-      ) {
+        state.dev_user_exists &&
+        state.vendor_marker_exists;
+      const anyMarkerPresent =
+        Number(state?.product_count) > 0 ||
+        state?.marker_exists ||
+        state?.dev_user_exists ||
+        state?.vendor_marker_exists;
+      if (allMarkersPresent) {
         console.log("[dev-db] Existing synthetic corpus found; seed skipped");
         return;
       }
-      if (
-        Number(state?.product_count) > 0 ||
-        state?.marker_exists ||
-        state?.dev_user_exists
-      ) {
+      // The vendor marker was added after the product/task/user markers, so a
+      // database seeded before it exists has every marker except this one —
+      // caught here as "partial", not silently treated as complete, the same
+      // way any other partial corpus is.
+      if (anyMarkerPresent) {
         throw new Error(
           "Local database contains part of the synthetic corpus; run `pnpm db:dev:reset` for a clean seed",
         );
