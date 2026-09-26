@@ -105,7 +105,7 @@ export default defineEntity({
       actionOverrides: [
         "addToInventory",
         "discard",
-        "setStockTracking",
+        "bulkEdit",
         "printLabels",
         "merge",
         "delete",
@@ -550,6 +550,8 @@ export default defineEntity({
           detail: true,
           renderer: { detail: "product-external-ids" },
           listHidden: true,
+          width: "md",
+          mobile: { slot: "meta", priority: 85 },
         },
         validation: {
           read: z.array(externalIdOut),
@@ -820,7 +822,13 @@ export default defineEntity({
       {
         key: "expenseTotal",
         kind: "number",
-        display: { list: true, listHidden: true },
+        display: {
+          list: true,
+          listHidden: true,
+          width: "sm",
+          format: "signedCurrency",
+          mobile: { slot: "trailing", priority: 5 },
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
@@ -845,6 +853,8 @@ export default defineEntity({
         kind: "number",
         display: {
           list: true,
+          width: "sm",
+          mobile: { slot: "meta", priority: 44 },
         },
         provenance: {
           kind: "derived",
@@ -951,7 +961,12 @@ export default defineEntity({
         nullable: true,
         // Default label would be "Purchase Date"; the list column has
         // always headed this "Purchase date".
-        display: { list: true },
+        display: {
+          list: true,
+          width: "sm",
+          format: "plainDate",
+          mobile: { slot: "meta", priority: 55 },
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
@@ -2211,6 +2226,10 @@ export default defineEntity({
         itemSchema: {
           module: "@cubby/schemas/common",
           export: "productComponentRelationItemSchema",
+        },
+        rowSchema: {
+          module: "@cubby/schemas/product-components",
+          export: "productComponentOut",
         },
         adapter: {
           module: "~/server/repo/product-components",

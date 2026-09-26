@@ -103,6 +103,32 @@ export const withMacros = (totals: StoredNutritionTotals): NutritionTotals => ({
   macros: macrosOf(totals.nutrition),
 });
 
+/**
+ * The preview figure of one estimate: its known amount when complete or
+ * partial (a partial `lower` sums only what is known), `null` otherwise.
+ */
+const estimateFigure = (
+  estimate: MeasureEstimate | undefined,
+  digits: number,
+): number | null =>
+  estimate?.status === "complete" || estimate?.status === "partial"
+    ? Number(estimate.lower.toFixed(digits))
+    : null;
+
+/**
+ * The flat preview projection of recipe or meal totals — the facts the hover
+ * card declares with `display.preview`, read off the same estimates.
+ */
+export const totalsPreview = (
+  totals: Pick<NutritionTotals, "cost" | "macros"> | null | undefined,
+) => ({
+  cost: estimateFigure(totals?.cost, 2),
+  calories: estimateFigure(totals?.macros.calories, 0),
+  protein: estimateFigure(totals?.macros.protein, 1),
+  carbs: estimateFigure(totals?.macros.carbs, 1),
+  fat: estimateFigure(totals?.macros.fat, 1),
+});
+
 /** What to persist: `macros` is a projection and never reaches the column. */
 export const toStoredTotals = ({
   cost,

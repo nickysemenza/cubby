@@ -54,10 +54,7 @@ export { projectPortfolioAnalytics } from "./portfolio-analytics";
 export { projectToolGallery } from "./tool-gallery";
 export { projectToolMatrix } from "./tool-matrix";
 export {
-  attachProjectResources,
-  detachProjectResources,
   listProductProjectUses,
-  listProjectResources,
   repointProjectUses,
   setProductProjectUses,
   setProjectToolUsage,

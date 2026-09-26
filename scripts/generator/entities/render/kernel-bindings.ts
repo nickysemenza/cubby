@@ -8,6 +8,64 @@ import type {
 import { kernelEntitiesFor } from "./shared.ts";
 
 /**
+ * A repository port whose export ends in `Repository` is a standard
+ * `(db, input, actor)` repository object; its kernel adapter is emitted here
+ * rather than hand-written. Any other export is a hand-written adapter.
+ */
+const isStandardRepository = (exportName: string): boolean =>
+  exportName.endsWith("Repository");
+
+const adapterName = (entity: CompiledEntity): string => {
+  const port = entity.ports.repository;
+  if (port === null) return "";
+  return isStandardRepository(port.export)
+    ? `${entity.key}EntityAdapter`
+    : port.export;
+};
+
+/** The concrete, per-entity adapter over a standard repository object. */
+const standardAdapterSource = (entity: CompiledEntity): string => {
+  const repo = entity.ports.repository?.export ?? "";
+  const key = JSON.stringify(entity.key);
+  const methods = [
+    `    get: (ctx, id) => ${repo}.get(ctx.db, id),`,
+    `    list: (ctx, filters, sorts, pagination) => ${repo}.list(ctx.db, filters, sorts, pagination),`,
+    ...(entity.contract?.create
+      ? [
+          `    create: (ctx, data) => ${repo}.create(ctx.db, data, ctx.actorContext),`,
+        ]
+      : []),
+    ...(entity.contract?.update
+      ? [
+          `    update: (ctx, id, data) => ${repo}.update(ctx.db, id, data, ctx.actorContext),`,
+        ]
+      : []),
+    ...(entity.bulkUpdateFields !== null
+      ? [
+          `    bulkUpdate: (ctx, ids, data) => ${repo}.bulkUpdate(ctx.db, ids, data, ctx.actorContext),`,
+        ]
+      : []),
+    entity.lifecycle.delete === null
+      ? `    delete: () => { throw new Error(${JSON.stringify(`${entity.key} declares no delete`)}); },`
+      : `    delete: async (ctx, ids) => standardDeleteResult(${key}, ids, await ${repo}.delete(ctx.db, ids, ctx.actorContext)),`,
+  ];
+  return (
+    `const ${adapterName(entity)} = defineEntityAdapter({
+` +
+    `  entity: ${key},
+` +
+    `  sideEffects: ${repo}.sideEffects,
+` +
+    `  lifecycle: ${repo}.lifecycle,
+` +
+    `  repository: {
+${methods.join("\n")}
+  },
+});`
+  );
+};
+
+/**
  * The runtime kernel-entity binding module: each kernel entity's repository
  * adapter, its `defineEntityOperations` closure, and a type-level check
  * (`EntityPortExportChecks`) that every declared port source reference
@@ -37,16 +95,17 @@ export const renderKernelBindingsArtifacts = (
         `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
     )
     .join("\n");
+  const standardAdapters = kernelEntities
+    .filter(({ ports }) => isStandardRepository(ports.repository?.export ?? ""))
+    .map(standardAdapterSource)
+    .join("\n");
   const runtimeBindings = kernelEntities
-    .map(
-      ({ key, ports }) =>
-        `  ${JSON.stringify(key)}: ${ports.repository?.export},`,
-    )
+    .map((entity) => `  ${JSON.stringify(entity.key)}: ${adapterName(entity)},`)
     .join("\n");
   const runtimeOperations = kernelEntities
     .map(
-      ({ key, ports }) =>
-        `  ${JSON.stringify(key)}: defineEntityOperations(${ports.repository?.export}),`,
+      (entity) =>
+        `  ${JSON.stringify(entity.key)}: defineEntityOperations(${adapterName(entity)}),`,
     )
     .join("\n");
   // `capabilities.timeline: "custom"` binds the declared port; `"default"`
@@ -88,10 +147,13 @@ export const renderKernelBindingsArtifacts = (
           ports.search.semanticText,
           ports.search.dependentRefresh,
           ports.timeline,
-          ...entity.relationMutations.flatMap(({ itemSchema, adapter }) => [
-            itemSchema,
-            adapter,
-          ]),
+          ...entity.relationMutations.flatMap(
+            ({ itemSchema, rowSchema, adapter }) => [
+              itemSchema,
+              rowSchema,
+              adapter,
+            ],
+          ),
           ...entity.filterDescriptors.flatMap((descriptor) => [
             descriptor.optionsRef,
             descriptor.expandRef,
@@ -123,7 +185,7 @@ export const renderKernelBindingsArtifacts = (
       source:
         generatedHeader +
         "// Generated port aliases retain deterministic import order.\n" +
-        'import type { EntityKernelCoreBinding } from "~/server/entity-kernel/adapter";\n' +
+        'import { defineEntityAdapter, type EntityKernelCoreBinding, standardDeleteResult } from "~/server/entity-kernel/adapter";\n' +
         'import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";\n' +
         'import type { TimelineEntity } from "~/entities/generated/entity-timelines.gen";\n' +
         'import type { EntityTimelineImplementation } from "~/server/entity-timeline/contracts";\n\n' +
@@ -138,6 +200,8 @@ export const renderKernelBindingsArtifacts = (
           .join(", ")}];\n\n` +
         `${runtimeAdapterImportSource}\n` +
         `${timelineImportSource}\n\n` +
+        "// Adapters over standard `(db, input, actor)` repository objects.\n// oxfmt-ignore\n" +
+        `${standardAdapters}\n\n` +
         "type CorrelatedEntityKernelBindings = {\n" +
         "  [E in EntityKernelEntity]: EntityKernelCoreBinding<E>;\n" +
         "};\n\n" +

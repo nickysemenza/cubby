@@ -32,7 +32,7 @@ import type { FilterPatch } from "~/entities/filters";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import {
-  projectGanttSubtreeQueryParams,
+  projectScheduleSubtreeQueryParams,
   projectSubtreeTasksFilters,
 } from "./project-query-params";
 import {
@@ -346,7 +346,7 @@ export function ProjectScheduleDetail({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const projectsQuery = useInfiniteQuery(
     entityListFor("project").infiniteQueryOptions(
-      projectGanttSubtreeQueryParams(projectId),
+      projectScheduleSubtreeQueryParams(projectId),
     ),
   );
   useLoadRemainingPages(projectsQuery);

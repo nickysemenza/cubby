@@ -37,9 +37,7 @@
  *
  * Every problem item type is the canonical Zod-derived shape from
  * @cubby/schemas/problems; this repo is checked against those rather than
- * re-declaring parallel interfaces. `EmptyLocation` and `ProductWithBetterUpcData`
- * are re-exported here for the Problems-page components that import them from this
- * package.
+ * re-declaring parallel interfaces.
  */
 
 export { findPartiallyImportedCookbooks } from "./detectors-cookbook";
@@ -83,17 +81,13 @@ export {
   findWeightSoldProducts,
   loadProductsForCoverage,
   loadSoldButStockedPresenterTotals,
-  type ProductWithBetterUpcData,
   recipeUsageCountsByProduct,
   synthesizeEffectiveMappings,
 } from "./detectors-product";
 export { findDuplicateSpendCandidates } from "./detectors-purchase";
 export { findOpenImportFindings } from "./detectors-import";
 // Recipe-centric detectors (derived-data-on-removal guardrail)
-export {
-  findParentRecipesWithDeletedSubRecipes,
-  type StaleParentRecipe,
-} from "./detectors-recipe";
+export { findParentRecipesWithDeletedSubRecipes } from "./detectors-recipe";
 export { loadVendorLogoPresenterCounts } from "./detectors-vendor";
 export {
   applyReparsedStaleLines,

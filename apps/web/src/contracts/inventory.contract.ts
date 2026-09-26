@@ -4,7 +4,6 @@ import {
   inventoryBulkAddPayload,
   inventoryBulkDiscardOut,
   inventoryBulkDiscardPayload,
-  inventoryBulkOperationPayload,
   inventoryDuplicateUniqueProductsOut,
   inventoryFindDuplicatesInput,
   inventoryLocationIdsInput,
@@ -30,10 +29,6 @@ import {
 import { defineContract, mutation, query } from "~/contracts/define";
 
 export const inventoryContract = defineContract("inventory", {
-  bulkProcess: mutation({
-    input: inventoryBulkOperationPayload,
-    output: inventoryWithLocationAndProductListAndSideEffectsOut,
-  }),
   bulkAdd: mutation({
     input: inventoryBulkAddPayload,
     output: inventoryBulkAddOut,

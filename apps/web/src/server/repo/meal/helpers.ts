@@ -10,7 +10,11 @@ import type {
   MealRecipeOut,
   MealType,
 } from "@cubby/schemas/meal";
-import { type NutritionTotals, withMacros } from "@cubby/schemas/nutrition";
+import {
+  type NutritionTotals,
+  totalsPreview,
+  withMacros,
+} from "@cubby/schemas/nutrition";
 import type { StoredRecipeTotals } from "@cubby/schemas/recipe-shared";
 
 import {
@@ -133,6 +137,8 @@ export const dbMealToAPI = (
       updatedAt: mr.updatedAt,
     }));
 
+  const totals = aggregateTotals(recipes.map((recipe) => recipe.scaledTotals));
+  const { cost, calories } = totalsPreview(totals);
   return {
     id: parseShortcodeFor("meal", row.shortcode),
     date: row.date,
@@ -141,7 +147,9 @@ export const dbMealToAPI = (
     mealType: row.mealType,
     mealKind: row.mealKind,
     recipes,
-    totals: aggregateTotals(recipes.map((recipe) => recipe.scaledTotals)),
+    totals,
+    cost,
+    calories,
     images: mapImages(row.images),
     dataQuality,
     // `name` is a nullable, user-editable label; an unnamed meal falls back to

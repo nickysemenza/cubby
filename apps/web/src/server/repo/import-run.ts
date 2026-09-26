@@ -6,106 +6,22 @@ import {
   type ImportRunPurpose,
 } from "@cubby/schemas/import-run-fields";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { formatDuration } from "~/lib/format-duration";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { importRun } from "~/server/db/schema";
-import {
-  countWhere,
-  executeListQueryWithCount,
-  getDb,
-  notDeleted,
-  unwrapDb,
-} from "~/server/repo/database-helpers";
+import { entityRepository } from "~/server/entity-kernel/adapter";
+import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { listScaffold } from "~/server/repo/list-scaffold";
+import { lookupEntityReferences } from "~/server/repo/shortcode-resolver";
 
 /**
  * The manifest read side of an import run. Writes stay in
  * `purchase-import/run-service.ts`; this file only projects the row.
  */
-const columns = {
-  id: importRun.id,
-  shortcode: importRun.shortcode,
-  status: importRun.status,
-  purpose: importRun.purpose,
-  trigger: importRun.trigger,
-  vendorAccountShortcode: sql<
-    string | null
-  >`(SELECT shortcode FROM "VendorAccount" WHERE id = "ImportRun"."vendorAccountId")`,
-  vendorAccountLabel: sql<
-    string | null
-  >`(SELECT label FROM "VendorAccount" WHERE id = "ImportRun"."vendorAccountId")`,
-  vendorShortcode: sql<
-    string | null
-  >`(SELECT shortcode FROM "Vendor" WHERE id = "ImportRun"."vendorId")`,
-  vendorName: sql<
-    string | null
-  >`(SELECT name FROM "Vendor" WHERE id = "ImportRun"."vendorId")`,
-  ledgerPartyShortcode: sql<
-    string | null
-  >`(SELECT shortcode FROM "LedgerParty" WHERE id = "ImportRun"."ledgerPartyId")`,
-  ledgerPartyName: sql<
-    string | null
-  >`(SELECT name FROM "LedgerParty" WHERE id = "ImportRun"."ledgerPartyId")`,
-  predecessorShortcode: sql<
-    string | null
-  >`(SELECT shortcode FROM "ImportRun" p WHERE p.id = "ImportRun"."predecessorRunId")`,
-  actorName: importRun.actorName,
-  startedAt: importRun.startedAt,
-  endedAt: importRun.endedAt,
-  ordersSeen: importRun.ordersSeen,
-  imported: importRun.imported,
-  updated: importRun.updated,
-  skipped: importRun.skipped,
-  failureCode: importRun.failureCode,
-  notes: importRun.notes,
-  coordinatorModel: importRun.coordinatorModel,
-  skillRevision: importRun.skillRevision,
-  runtimeRevision: importRun.runtimeRevision,
-  decisionRevision: importRun.decisionRevision,
-  dispatchAttempts: importRun.dispatchAttempts,
-  dispatchError: importRun.dispatchError,
-  coordinatorStartedAt: importRun.coordinatorStartedAt,
-  auditedAt: importRun.auditedAt,
-  createdAt: importRun.createdAt,
-  updatedAt: importRun.updatedAt,
-} as const;
-
-type ImportRunRow = {
-  id: string;
-  shortcode: string;
-  status: string;
-  purpose: string;
-  trigger: string;
-  vendorAccountShortcode: string | null;
-  vendorAccountLabel: string | null;
-  vendorShortcode: string | null;
-  vendorName: string | null;
-  ledgerPartyShortcode: string | null;
-  ledgerPartyName: string | null;
-  predecessorShortcode: string | null;
-  actorName: string;
-  startedAt: Date;
-  endedAt: Date | null;
-  ordersSeen: number;
-  imported: number;
-  updated: number;
-  skipped: number;
-  failureCode: string | null;
-  notes: string | null;
-  coordinatorModel: string;
-  skillRevision: string;
-  runtimeRevision: string;
-  decisionRevision: number;
-  dispatchAttempts: number;
-  dispatchError: string | null;
-  coordinatorStartedAt: Date | null;
-  auditedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
+type ImportRunRow = typeof importRun.$inferSelect;
 
 const PURPOSE_LABEL = {
   account_sync: "Account sync",
@@ -119,54 +35,75 @@ const PURPOSE_LABEL = {
   legacy: "Legacy",
 } satisfies Record<ImportRunPurpose, string>;
 
-const toOut = (row: ImportRunRow): ImportRunOut =>
-  importRunOut.parse({
-    ...row,
-    id: parseShortcodeFor("importRun", String(row.shortcode)),
-    displayName: `${row.vendorName ?? row.ledgerPartyName ?? row.actorName} · ${PURPOSE_LABEL[importRunPurpose.parse(row.purpose)]}`,
-    wallTime: row.endedAt
-      ? formatDuration(
-          Math.max(0, row.endedAt.getTime() - row.startedAt.getTime()),
-        )
-      : "In progress",
-    vendorAccountId: row.vendorAccountShortcode
-      ? parseShortcodeFor("vendorAccount", row.vendorAccountShortcode)
-      : null,
-    vendorId: row.vendorShortcode
-      ? parseShortcodeFor("vendor", row.vendorShortcode)
-      : null,
-    ledgerPartyId: row.ledgerPartyShortcode
-      ? parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode)
-      : null,
-    predecessorRunId: row.predecessorShortcode
-      ? parseShortcodeFor("importRun", row.predecessorShortcode)
-      : null,
+// includes-deleted: a run is immutable history, so it keeps naming the
+// account, vendor and party it ran for after they are tombstoned.
+const hydrate = async (
+  db: Database | DrizzleTransaction,
+  rows: ImportRunRow[],
+): Promise<ImportRunOut[]> => {
+  const refs = <
+    E extends "vendorAccount" | "vendor" | "ledgerParty" | "importRun",
+  >(
+    entity: E,
+    ids: (string | null)[],
+  ) => lookupEntityReferences(db, entity, ids, { includeDeleted: true });
+  const [accounts, vendors, parties, predecessors] = await Promise.all([
+    refs(
+      "vendorAccount",
+      rows.map((row) => row.vendorAccountId),
+    ),
+    refs(
+      "vendor",
+      rows.map((row) => row.vendorId),
+    ),
+    refs(
+      "ledgerParty",
+      rows.map((row) => row.ledgerPartyId),
+    ),
+    refs(
+      "importRun",
+      rows.map((row) => row.predecessorRunId),
+    ),
+  ]);
+  const at = <V>(map: Map<string, V>, id: string | null) =>
+    id === null ? undefined : map.get(id);
+  return rows.map((row) => {
+    const account = at(accounts, row.vendorAccountId);
+    const vendor = at(vendors, row.vendorId);
+    const party = at(parties, row.ledgerPartyId);
+    return importRunOut.parse({
+      ...row,
+      id: parseShortcodeFor("importRun", row.shortcode),
+      displayName: `${vendor?.name ?? party?.name ?? row.actorName} · ${PURPOSE_LABEL[importRunPurpose.parse(row.purpose)]}`,
+      wallTime: row.endedAt
+        ? formatDuration(
+            Math.max(0, row.endedAt.getTime() - row.startedAt.getTime()),
+          )
+        : "In progress",
+      vendorAccountId: account?.id ?? null,
+      vendorAccountLabel: account?.name ?? null,
+      vendorId: vendor?.id ?? null,
+      vendorName: vendor?.name ?? null,
+      ledgerPartyId: party?.id ?? null,
+      ledgerPartyName: party?.name ?? null,
+      predecessorRunId: at(predecessors, row.predecessorRunId)?.id ?? null,
+    });
   });
+};
 
 const scaffold = listScaffold("importRun", importRun);
 
-const buildWhere = (filters: ImportRunFilters) => scaffold.where(filters);
-
-export async function listImportRuns(
+export const listImportRuns = (
   db: Database,
   filters: ImportRunFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-) {
-  const where = buildWhere(filters);
-  const { take, skip } = scaffold.page(pagination);
-  const { data, count } = await executeListQueryWithCount(
-    getDb(db)
-      .select(columns)
-      .from(importRun)
-      .where(where)
-      .orderBy(...scaffold.orderBy(sorts, {}, filters))
-      .limit(take)
-      .offset(skip),
-    countWhere(db, importRun, where),
+) =>
+  scaffold.list(
+    db,
+    { filters, sorts, pagination },
+    { hydrate: (rows) => hydrate(db, rows) },
   );
-  return { data: data.map((row) => toOut(row)), count };
-}
 
 const reader = createEntityReader<
   ImportRunRow,
@@ -177,13 +114,23 @@ const reader = createEntityReader<
   entity: "importRun",
   fetchById: async (db, id) => {
     const [row] = await unwrapDb(db)
-      .select(columns)
+      .select()
       .from(importRun)
       .where(and(eq(importRun.id, id), notDeleted(importRun)))
       .limit(1);
     return row;
   },
-  fromDB: (_db, row) => toOut(row),
+  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
 });
 
 export const getImportRunByShortcode = reader.getByShortcode;
+
+/**
+ * Read-only: the run service and the import writer own every write, and the
+ * manifest declares `delete: null`, so the generated adapter refuses one.
+ */
+export const importRunRepository = entityRepository("importRun", {
+  lifecycle: { delete: {} },
+  get: getImportRunByShortcode,
+  list: listImportRuns,
+});

@@ -3,7 +3,7 @@ import type { FlueConversationMessage } from "@flue/sdk";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
-import type { ImportRunDetail } from "~/lib/purchase-import-run-detail";
+import type { ImportRunDetail } from "~/contracts/run.contract";
 
 import {
   formatWorkDuration,

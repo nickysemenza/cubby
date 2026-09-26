@@ -78,14 +78,10 @@ export type MutationSideEffectEvent = {
 
 const mutationSideEffectEntitySet = new Set<string>(mutationSideEffectEntities);
 
-export const isMutationSideEffectEntity = (
-  entity: string,
-): entity is MutationSideEffectEntity =>
-  mutationSideEffectEntitySet.has(entity);
-
 export const isMutationSideEffectRef = (
   ref: EntityRef,
-): ref is MutationSideEffectEntityRef => isMutationSideEffectEntity(ref.entity);
+): ref is MutationSideEffectEntityRef =>
+  mutationSideEffectEntitySet.has(ref.entity);
 
 export interface MutationSideEffectPorts {
   /** Publish after commit; failures are reported, never surfaced as rollback. */
@@ -194,7 +190,7 @@ const ownEmbeddingRef = (
  * a swallowed log — the projection is a SQL view of the row being written and
  * has no reason to fail independently.
  */
-export async function collectProjectionRefs(
+async function collectProjectionRefs(
   db: Database | DrizzleTransaction,
   event: MutationSideEffectEvent,
   ports: MutationSideEffectPorts = productionMutationSideEffectPorts,

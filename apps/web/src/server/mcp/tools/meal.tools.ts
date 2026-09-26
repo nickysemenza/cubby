@@ -13,10 +13,6 @@ import {
   mealRecipeIdInput,
   mealScale,
   mealUpdateRecipeInput,
-  shoppingListOut,
-  shoppingListInput,
-  saveMealRecipePreparationInput,
-  saveMealRecipePreparationOut,
 } from "@cubby/schemas/meal";
 import { nutrientKey } from "@cubby/schemas/nutrition";
 import type {
@@ -28,11 +24,16 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { householdLocalDate } from "~/lib/household-date";
+import {
+  addRecipeToMealWorkflow,
+  getMealNutritionWorkflow,
+  getMealPreparationsWorkflow,
+  removeMealRecipeWorkflow,
+  updateMealRecipeWorkflow,
+} from "~/server/workflows/meal.server";
 
 import {
-  getCaller,
   READ_ONLY_CLOSED,
-  registerMcpTool,
   registerRouterTool,
   respond,
   slimMeal,
@@ -145,99 +146,134 @@ const trimNutrition =
     return { cost: totals.cost, nutrition: {} };
   };
 
+/** `get_daily_intake`'s projection of the meal-nutrition read onto one eater. */
+export function dailyIntake(
+  summary: Awaited<ReturnType<typeof getMealNutritionWorkflow>>,
+  params: z.output<typeof dailyIntakeInput>,
+): z.infer<typeof dailyIntakeOut> {
+  const person = summary.people.find(
+    (person) => person.eater.id === params.partyId,
+  );
+  return {
+    date: params.date,
+    partyId: params.partyId,
+    status: params.date > householdLocalDate() ? "planned" : "logged",
+    nutrition: person ? compactTotals(person.totals, params.nutrition) : null,
+    meals:
+      person?.meals.map(({ meal, totals }) => ({
+        mealId: meal.id,
+        name: meal.name,
+        nutrition: compactTotals(totals, params.nutrition),
+        foods: params.includeFoods
+          ? person.foods
+              .filter((food) => food.meal.id === meal.id)
+              .map((food) => ({
+                name: food.name,
+                grams: food.grams,
+                amount: food.amount,
+                sourceKind: food.sourceKind,
+                nutrition: compactTotals(food.totals, params.nutrition),
+              }))
+          : undefined,
+      })) ?? [],
+  };
+}
+
+/** `get_meal_preparations`'s trim of every totals block to the requested detail. */
+export function mealPreparations(
+  view: Awaited<ReturnType<typeof getMealPreparationsWorkflow>>,
+  nutrition: MealPreparationNutritionDetail,
+) {
+  const project = trimNutrition(nutrition);
+  return {
+    mealId: view.mealId,
+    preparations: view.preparations.map((preparation) => ({
+      ...preparation,
+      totals: project(preparation.totals),
+      portions: preparation.portions.map((portion) => ({
+        ...portion,
+        totals: project(portion.totals),
+      })),
+    })),
+    totals: {
+      confirmed: {
+        ...view.totals.confirmed,
+        totals: project(view.totals.confirmed.totals),
+      },
+      projected: {
+        ...view.totals.projected,
+        totals: project(view.totals.projected.totals),
+      },
+    },
+  };
+}
+
+/** `add_recipe_to_meal`'s compact identity and coverage, plus requested nutrients. */
+export function addedMealRecipe(
+  result: Awaited<ReturnType<typeof addRecipeToMealWorkflow>>,
+  nutrition: z.output<typeof addRecipeNutritionDetail>,
+): z.infer<typeof addRecipeToMealOut> {
+  const meal = respond(result.meal, slimMeal);
+  const keys =
+    nutrition === "full"
+      ? nutrientKey.options
+      : nutrition === "macros"
+        ? macroKeys
+        : nutrition === "kcal"
+          ? (["kcal"] as const)
+          : [];
+  return {
+    id: meal.id,
+    mealRecipeId: result.mealRecipeId,
+    name: meal.name ?? meal.mealType ?? meal.date,
+    coverage: {
+      cost: compactValue(meal.totals.cost),
+      kcal: compactValue(meal.totals.nutrition.kcal),
+    },
+    nutrition:
+      keys.length > 0
+        ? Object.fromEntries(
+            keys.map((key) => [key, compactValue(meal.totals.nutrition[key])]),
+          )
+        : undefined,
+  };
+}
+
 export function registerMealTools(server: McpServer) {
-  registerMcpTool(server, {
+  registerRouterTool(server, {
     name: "get_daily_intake",
     description:
       "Read one person's daily nutrition with one line per meal and a daily total. Defaults to macros: kcal plus protein/carbs/fat/fiber in grams. Set includeFoods for food breakdowns, or nutrition=full for all nutrients. Uses the target meal's household date, including leftovers and unconfirmed entered portions. Future dates are planned; today/past are logged. No assigned intake returns nutrition=null and meals=[]. Nutrient null means unavailable, pending means not calculated, and partial bounds describe only known contributions (not bounds on missing food). Exact values are numbers; ranges retain lower/upper. No cost or preparation detail is included.",
     inputSchema: dailyIntakeInput,
     outputSchema: dailyIntakeOut,
     annotations: READ_ONLY_CLOSED,
-    handler: async (params, extra): Promise<z.infer<typeof dailyIntakeOut>> => {
-      const summary = await getCaller(extra).meal.getNutrition({
-        date: params.date,
-      });
-      const person = summary.people.find(
-        (person) => person.eater.id === params.partyId,
-      );
-      return {
-        date: params.date,
-        partyId: params.partyId,
-        status: params.date > householdLocalDate() ? "planned" : "logged",
-        nutrition: person
-          ? compactTotals(person.totals, params.nutrition)
-          : null,
-        meals:
-          person?.meals.map(({ meal, totals }) => ({
-            mealId: meal.id,
-            name: meal.name,
-            nutrition: compactTotals(totals, params.nutrition),
-            foods: params.includeFoods
-              ? person.foods
-                  .filter((food) => food.meal.id === meal.id)
-                  .map((food) => ({
-                    name: food.name,
-                    grams: food.grams,
-                    amount: food.amount,
-                    sourceKind: food.sourceKind,
-                    nutrition: compactTotals(food.totals, params.nutrition),
-                  }))
-              : undefined,
-          })) ?? [],
-      };
-    },
+    call: async (context, params) =>
+      dailyIntake(
+        await getMealNutritionWorkflow(
+          context.readDb,
+          { date: params.date },
+          context.usdaClient,
+          context.services.recipeCosting,
+        ),
+        params,
+      ),
   });
-  registerMcpTool(server, {
+  registerRouterTool(server, {
     name: "get_meal_preparations",
     description:
       "Read recipe preparations made by or served at a meal, including projected and confirmed nutrition. `nutrition` trims every totals block: `full` (default) carries all 22 nutrients, `macros` keeps kcal/protein/carbs/fat/fiber, `kcal` keeps only calories for compatibility, and `none` keeps cost alone. For per-person daily intake use get_daily_intake.",
     inputSchema: getMealPreparationsMcpInput,
     outputSchema: getMealPreparationsMcpOut,
     annotations: READ_ONLY_CLOSED,
-    handler: async (params, extra) => {
-      const view = await getCaller(extra).meal.getPreparations({
-        mealId: params.mealId,
-      });
-      const project = trimNutrition(params.nutrition);
-      return {
-        mealId: view.mealId,
-        preparations: view.preparations.map((preparation) => ({
-          ...preparation,
-          totals: project(preparation.totals),
-          portions: preparation.portions.map((portion) => ({
-            ...portion,
-            totals: project(portion.totals),
-          })),
-        })),
-        totals: {
-          confirmed: {
-            ...view.totals.confirmed,
-            totals: project(view.totals.confirmed.totals),
-          },
-          projected: {
-            ...view.totals.projected,
-            totals: project(view.totals.projected.totals),
-          },
-        },
-      };
-    },
-  });
-
-  registerMcpTool(server, {
-    name: "get_shopping_list",
-    description:
-      "Use this when the user asks what to buy or what they are short on for planned meals in a date range. It compares aggregate recipe needs with recorded inventory. Usually-on-hand ingredients are assumed available, listed separately, and excluded from shopping estimates; assumptions never represent recorded stock. Quantity issues and blocked sub-recipes disclose incomplete information. Do not invoke it to add arbitrary manual household shopping items.",
-    inputSchema: shoppingListInput,
-    outputSchema: shoppingListOut,
-    annotations: READ_ONLY_CLOSED,
-    handler: async (params, extra) => {
-      const caller = getCaller(extra);
-      return await caller.meal.getShoppingList({
-        from: params.from,
-        to: params.to,
-        excludedMealIds: params.excludedMealIds,
-      });
-    },
+    call: async (context, params) =>
+      mealPreparations(
+        await getMealPreparationsWorkflow(
+          context.readDb,
+          { mealId: params.mealId },
+          context.services.recipeCosting,
+        ),
+        params.nutrition,
+      ),
   });
 
   registerRouterTool(server, {
@@ -247,55 +283,23 @@ export function registerMealTools(server: McpServer) {
     inputSchema: addRecipeToMealInput,
     outputSchema: addRecipeToMealOut,
     annotations: WRITE_CLOSED,
-    call: async (caller, params) => {
-      const result = await caller.meal.addRecipe({
-        mealId: params.mealId,
-        recipeId: params.recipeId,
-        scale: params.scale,
-        sortOrder: params.sortOrder,
-      });
-      const meal = respond(result.meal, slimMeal);
-      const keys =
-        params.nutrition === "full"
-          ? nutrientKey.options
-          : params.nutrition === "macros"
-            ? macroKeys
-            : params.nutrition === "kcal"
-              ? (["kcal"] as const)
-              : [];
-      return {
-        id: meal.id,
-        mealRecipeId: result.mealRecipeId,
-        name: meal.name ?? meal.mealType ?? meal.date,
-        coverage: {
-          cost: compactValue(meal.totals.cost),
-          kcal: compactValue(meal.totals.nutrition.kcal),
-        },
-        nutrition:
-          keys.length > 0
-            ? Object.fromEntries(
-                keys.map((key) => [
-                  key,
-                  compactValue(meal.totals.nutrition[key]),
-                ]),
-              )
-            : undefined,
-      };
-    },
+    call: async (context, params) =>
+      addedMealRecipe(
+        await addRecipeToMealWorkflow(
+          context.db,
+          {
+            mealId: params.mealId,
+            recipeId: params.recipeId,
+            scale: params.scale,
+            sortOrder: params.sortOrder,
+          },
+          context.actorContext,
+        ),
+        params.nutrition,
+      ),
   });
 
-  registerMcpTool(server, {
-    name: "save_meal_recipe_preparation",
-    description:
-      "Record measured yield and portions served from one planned recipe occurrence. Assigned portions count in daily intake by the target meal date: future is planned, today/past is logged. Confirmation fields remain for legacy compatibility and do not gate daily intake.",
-    inputSchema: saveMealRecipePreparationInput,
-    outputSchema: saveMealRecipePreparationOut,
-    annotations: WRITE_CLOSED,
-    handler: async (params, extra) =>
-      getCaller(extra).meal.savePreparation(params),
-  });
-
-  registerMcpTool(server, {
+  registerRouterTool(server, {
     name: MEAL_RECIPE_TOOL_NAMES.update,
     description:
       "Adjust a planned recipe's scale or sort order within its meal.",
@@ -315,18 +319,17 @@ export function registerMealTools(server: McpServer) {
     }),
     outputSchema: mealMcpOut,
     annotations: WRITE_CLOSED,
-    handler: async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.meal.updateRecipe({
-        id: params.id,
-        scale: params.scale,
-        sortOrder: params.sortOrder,
-      });
+    call: async (context, params) => {
+      const result = await updateMealRecipeWorkflow(
+        context.db,
+        { id: params.id, scale: params.scale, sortOrder: params.sortOrder },
+        context.actorContext,
+      );
       return respond(result, slimMeal);
     },
   });
 
-  registerMcpTool(server, {
+  registerRouterTool(server, {
     name: MEAL_RECIPE_TOOL_NAMES.remove,
     description: "Remove a planned recipe from its meal.",
     inputSchema: z.object({
@@ -337,9 +340,12 @@ export function registerMealTools(server: McpServer) {
     }),
     outputSchema: mealMcpOut,
     annotations: WRITE_CLOSED,
-    handler: async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.meal.removeRecipe({ id: params.id });
+    call: async (context, params) => {
+      const result = await removeMealRecipeWorkflow(
+        context.db,
+        { id: params.id },
+        context.actorContext,
+      );
       return respond(result, slimMeal);
     },
   });

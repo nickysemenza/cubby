@@ -150,6 +150,7 @@ export const compileDataQuality = (
       renderer: { list: DATA_QUALITY_LIST_RENDERER, detail: null },
       mobile: null,
       listHidden: true,
+      preview: false,
     },
     // The real read schema is `dataQuality` from `@cubby/schemas/data-quality`,
     // spliced in by the field-schema renderer: the compiler cannot import it
@@ -190,6 +191,7 @@ export const compileDataQuality = (
       renderer: null,
       mobile: null,
       listHidden: false,
+      preview: false,
     },
     validation: { read: null, create: null, update: null },
   };

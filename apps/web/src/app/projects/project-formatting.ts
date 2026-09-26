@@ -1,25 +1,13 @@
-import type { CostType } from "@cubby/schemas/project";
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import { capitalize } from "@cubby/shared";
 import { format } from "date-fns";
 
+import { plainDateDaysBetween } from "~/lib/household-date";
 import { parsePlainDate } from "~/lib/plain-date";
-
-import { diffDays } from "./charts/gantt/gantt-date";
 
 export { capitalize } from "@cubby/shared";
 
 export { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
-
-export function normalizeCostTypeKey(
-  costType: CostType | null,
-): CostType | "other" {
-  return costType ?? "other";
-}
-
-export function monthKey(date: string): string {
-  return date.slice(0, 7);
-}
 
 export function monthLabel(key: string): string {
   const [year, month] = key.split("-");
@@ -75,7 +63,7 @@ export interface ProjectDateDelta {
 /**
  * Describe how an explicit start/end override diverges from the derived
  * bound. Returns null when they agree (nothing to show). Both arguments are
- * plain "YYYY-MM-DD" strings; the math goes through `diffDays`' UTC day
+ * plain "YYYY-MM-DD" strings; the math goes through `plainDateDaysBetween`' UTC day
  * index, never a local `Date`.
  */
 export function projectDateDelta(
@@ -83,7 +71,7 @@ export function projectDateDelta(
   derived: string,
   effective: string,
 ): ProjectDateDelta | null {
-  const days = diffDays(derived, effective);
+  const days = plainDateDaysBetween(derived, effective);
   if (days === 0) return null;
   const magnitude = Math.abs(days);
   const unit = `${magnitude} day${magnitude === 1 ? "" : "s"}`;

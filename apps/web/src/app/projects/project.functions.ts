@@ -15,20 +15,12 @@ export const project = defineOperationDomain(projectContract, {
   },
   options: { tags: [["project", "options"]] },
   createFromTasks: { invalidates: ripple.taskProject },
-  resources: {
-    tags: [
-      ["project", "resources"],
-      ["project", "resource"],
-    ],
-  },
   toolSuggestions: {
     tags: [
       ["project", "toolSuggestions"],
       ["project", "resource"],
     ],
   },
-  attachResources: { invalidates: ripple.projectResource },
-  detachResources: { invalidates: ripple.projectResource },
   toolMatrix: {
     tags: [
       ["project", "toolMatrix"],

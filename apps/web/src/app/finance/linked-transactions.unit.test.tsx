@@ -74,23 +74,13 @@ describe("LinkedTransactions", () => {
       wrapper: harness.wrapper,
     });
 
-    expect(
-      await screen.findByRole("columnheader", {
-        name: /^Financial transaction/i,
-      }),
-    ).toHaveClass("w-40");
+    await screen.findByRole("columnheader", {
+      name: /^Financial transaction/i,
+    });
     expect(screen.queryByRole("columnheader", { name: "Account" })).toBeNull();
     expect(screen.queryByRole("columnheader", { name: "Vendor" })).toBeNull();
-    expect(screen.getByRole("columnheader", { name: "Status" })).toHaveClass(
-      "w-24",
-    );
-    expect(screen.getByRole("columnheader", { name: "Posted" })).toHaveClass(
-      "w-24",
-    );
-    expect(screen.getByRole("columnheader", { name: "Amount" })).toHaveClass(
-      "w-36",
-      "text-right",
-    );
+    for (const name of ["Status", "Posted date", "Amount"])
+      expect(screen.getByRole("columnheader", { name })).toBeInTheDocument();
 
     const transactionLink = await screen.findByRole("link", {
       name: "Neighborhood Market",
@@ -132,8 +122,8 @@ describe("LinkedTransactions", () => {
     );
 
     expect(
-      await screen.findByRole("columnheader", { name: "Account" }),
-    ).toHaveClass("w-32");
+      await screen.findByRole("columnheader", { name: /^Account/ }),
+    ).toBeInTheDocument();
     expect(
       await screen.findByRole("link", { name: "Household Card" }),
     ).toHaveAttribute("href", "/financial-accounts/FAC-2345");

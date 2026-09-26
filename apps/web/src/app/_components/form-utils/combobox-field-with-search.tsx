@@ -6,7 +6,7 @@ import type {
 
 import type { ProductPickerIntent } from "../combobox/combobox-builders";
 import type { ComboboxItem } from "../combobox/combobox-types";
-import { WithEntitySearch } from "../combobox/with-search-hook";
+import { useEntityListSource } from "../combobox/with-search-hook";
 import { ComboboxField } from "../form-utils";
 
 type SearchType = "ingredient" | "product" | "location" | "recipe";
@@ -26,8 +26,7 @@ interface ComboboxFieldWithSearchProps<
 }
 
 /**
- * A convenience wrapper that combines a search hook with ComboboxField.
- * Eliminates the boilerplate of wrapping ComboboxField in WithXxxSearch components.
+ * `ComboboxField` fed by `useEntityListSource(searchType)`.
  */
 export function ComboboxFieldWithSearch<
   TFieldValues extends FieldValues,
@@ -41,26 +40,21 @@ export function ComboboxFieldWithSearch<
   disabledItemReasons,
   suggestField,
 }: ComboboxFieldWithSearchProps<TFieldValues, TName>) {
+  const { dialog, ...search } = useEntityListSource(searchType, {
+    intent: productIntent,
+  });
   return (
-    <WithEntitySearch
-      entity={searchType}
-      intent={searchType === "product" ? productIntent : undefined}
-    >
-      {({ items, onSearchChange, isLoading, onCreateNew, onOpenChange }) => (
-        <ComboboxField
-          form={form}
-          name={name}
-          label={label}
-          items={items}
-          onSearchChange={onSearchChange}
-          isLoading={isLoading}
-          onCreateNew={onCreateNew}
-          onOpenChange={onOpenChange}
-          entity={searchType}
-          disabledItemReasons={disabledItemReasons}
-          suggestField={suggestField}
-        />
-      )}
-    </WithEntitySearch>
+    <>
+      {dialog}
+      <ComboboxField
+        form={form}
+        name={name}
+        label={label}
+        {...search}
+        entity={searchType}
+        disabledItemReasons={disabledItemReasons}
+        suggestField={suggestField}
+      />
+    </>
   );
 }

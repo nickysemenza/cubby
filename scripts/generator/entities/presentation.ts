@@ -394,6 +394,17 @@ export const compilePresentation = (
     ...detail.additionalSections,
   ];
   checkHero(detail.hero, lookup);
+  const readable = readableFields(fieldModel);
+  const preview = fieldModel.fields
+    .filter((field) => field.display.preview)
+    .map((field) => {
+      // The card renders one compact value per fact; a json blob has none.
+      if (!readable.has(field.key) || field.kind === "json")
+        throw new EntityDeclarationError(
+          `${context}: display.preview field "${field.key}" must be a readable, non-json field.`,
+        );
+      return field.key;
+    });
   const timelineSection = checkSections(
     sections,
     fieldModel,
@@ -428,6 +439,7 @@ export const compilePresentation = (
         actions: detail.hero.actions ?? (facts.hasUpdate ? ["edit"] : []),
       },
       sections,
+      preview,
       omitRelations: detail.omitRelations,
       additionalSections: detail.additionalSections,
       relationFilterOverrides: detail.relationFilterOverrides,

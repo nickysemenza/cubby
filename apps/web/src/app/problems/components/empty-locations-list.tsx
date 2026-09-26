@@ -1,4 +1,4 @@
-import type { EmptyLocation } from "@cubby/schemas/problems";
+import { ProblemItem } from "@cubby/schemas/problems";
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
 import { formatDistanceToNow } from "date-fns";
 import { type ReactNode, useState } from "react";
@@ -19,14 +19,14 @@ export function EmptyLocationsList({
   count,
   assembly,
 }: {
-  locations: EmptyLocation[];
+  locations: ProblemItem<"emptyLocations">[];
   coverage?: ProblemSectionCoverage;
   /** True population — `locations` is a page of it. */
   count?: number;
   assembly?: ReactNode;
 }) {
   const [addDialogLocation, setAddDialogLocation] =
-    useState<EmptyLocation | null>(null);
+    useState<ProblemItem<"emptyLocations"> | null>(null);
 
   return (
     <>

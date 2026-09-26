@@ -22,9 +22,7 @@ import {
   auditDateFilterFields,
   dateRangeFields,
   plainDate,
-  timestampedFields,
 } from "./base-entity";
-import { relationMutationOut } from "./common";
 import {
   generatedTaskFieldSchemas,
   generatedTaskFilterFields,
@@ -133,9 +131,6 @@ const projectCreateFields = generatedProjectFieldSchemas.create;
 export const projectCreateInput = z.object(projectCreateFields);
 export type ProjectCreateInput = z.infer<typeof projectCreateInput>;
 
-// Every create field optional, with the create-time `.default(...)` stripped
-// (see deriveUpdateData — an omitted key must leave the row unchanged, not
-// reset to the default); `blockedByIds` is update-only.
 export const projectUpdateData = z.object(generatedProjectFieldSchemas.update);
 export type ProjectUpdateData = z.infer<typeof projectUpdateData>;
 export const projectUpdateInput = z.object({
@@ -264,8 +259,6 @@ const taskCreateFields = generatedTaskFieldSchemas.create;
 export const taskCreateInput = z.object(taskCreateFields);
 export type TaskCreateInput = z.infer<typeof taskCreateInput>;
 
-// Every create field optional, with the create-time `.default(...)` stripped
-// (see deriveUpdateData); `blockedByIds` is update-only.
 export const taskUpdateData = z.object(generatedTaskFieldSchemas.update);
 export type TaskUpdateData = z.infer<typeof taskUpdateData>;
 export const taskUpdateInput = z.object({
@@ -350,9 +343,7 @@ export type TaskFilters = z.infer<typeof taskFiltersSchema>;
 
 export type TaskSortField = GeneratedEntitySortField<"task">;
 
-export const taskOut = z.object({
-  ...generatedTaskFieldSchemas.read,
-});
+export const taskOut = z.object(generatedTaskFieldSchemas.read);
 export type TaskOut = z.infer<typeof taskOut>;
 
 /** List-row projection: `taskOut` plus the server-resolved gallery cover(s). */
@@ -406,17 +397,9 @@ export const blockedReasonSchema = z.object({
 });
 export type BlockedReason = z.infer<typeof blockedReasonSchema>;
 
-export const actionableTaskOut = z.object({
-  ...generatedTaskFieldSchemas.read,
-  // Re-declares taskOut's shape rather than extending it (see taskOut) — kept
-  // in sync by hand. Actionable/blocked rows are always top-level (subtask
-  // rows are excluded — see repo/task/actionable.ts), so these count the
-  // row's own live subtasks same as taskOut.
-  subtaskCount: z.number().int(),
-  doneSubtaskCount: z.number().int(),
-  ...timestampedFields,
-});
-export type ActionableTaskOut = z.infer<typeof actionableTaskOut>;
+// Actionable/blocked rows are always top-level (subtask rows are excluded —
+// see repo/task/actionable.ts); the row shape is exactly `taskOut`.
+export type ActionableTaskOut = TaskOut;
 
 export const blockedTaskOut = z.object({
   task: taskOut,
@@ -425,8 +408,8 @@ export const blockedTaskOut = z.object({
 export type BlockedTaskOut = z.infer<typeof blockedTaskOut>;
 
 export const actionableTasksOut = z.object({
-  next: z.array(actionableTaskOut),
-  later: z.array(actionableTaskOut),
+  next: z.array(taskOut),
+  later: z.array(taskOut),
   blocked: z.array(blockedTaskOut),
 });
 export type ActionableTasksOut = z.infer<typeof actionableTasksOut>;
@@ -1108,13 +1091,6 @@ export const productProjectUsesInput = z.object({
   productId: productShortcode,
 });
 
-export const projectResourceMutationInput = z.object({
-  projectId: projectShortcode,
-  productIds: z.array(productShortcode).min(1).max(100),
-});
-
-export const projectResourceMutationOut = relationMutationOut;
-
 // Move a product's project-use history onto another product. Distinct from
 // attach+detach because those two are separable, and a detach without its
 // matching attach silently discards the history — which is the failure mode
@@ -1172,7 +1148,6 @@ export const projectResourceOut = z.object({
   ...projectResourceEconomicsFields,
 });
 export type ProjectResourceOut = z.infer<typeof projectResourceOut>;
-export const projectResourcesOut = z.array(projectResourceOut);
 
 export const projectToolSuggestionLane = z.enum([
   "purchased_here",
@@ -1256,7 +1231,7 @@ export type ProductProjectUsesOut = z.infer<typeof productProjectUsesOut>;
  * re-issuing the current intent is a guaranteed no-op and a retry or a stale
  * mutation is self-healing.
  *
- * `attachResources`/`detachResources` remain the right shape for bulk set
+ * The `project:resources` relation attach/detach remains the right shape for bulk set
  * replacement (the project-detail multi-select), which is why both survive.
  */
 export const projectToolUsageSetInput = z.object({
@@ -1286,7 +1261,7 @@ export type ProjectToolUsageSetOut = z.infer<typeof projectToolUsageSetOut>;
 /**
  * Full replacement of the project set for one tool — `[]` clears it. The
  * product-keyed mirror of the project-keyed bulk attach, for editing a tool's
- * history from the tool's own page. N calls to `attachResources` can't be
+ * history from the tool's own page. N relation attaches can't be
  * atomic and would write N project-keyed audit entries.
  */
 export const productProjectUsesSetInput = z.object({

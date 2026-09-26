@@ -389,8 +389,8 @@ export default defineEntity({
     mcpNames: { plural: "wishes" },
     ports: {
       repository: {
-        module: "~/server/repo/wish.entity-adapter",
-        export: "wishEntityAdapter",
+        module: "~/server/repo/wish",
+        export: "wishRepository",
       },
       search: "document",
     },

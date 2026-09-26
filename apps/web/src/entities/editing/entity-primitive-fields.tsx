@@ -75,7 +75,6 @@ import {
 } from "./product-editor-fields";
 import { referenceScopeFields, referenceScopeFor } from "./reference-scope";
 import {
-  entitySelectOptionsFor,
   presentEntitySelectOptions,
   type EntitySelectOption,
 } from "./select-options";
@@ -809,9 +808,6 @@ export function renderIntentField({
     presentation.control.kind === "text"
   ) {
     fieldOptions.focusOnMount = true;
-  }
-  if (presentation.control.kind === "select") {
-    fieldOptions.options = entitySelectOptionsFor(entity, field.key, mode);
   }
   const rendered = renderPrimitiveField({
     record,

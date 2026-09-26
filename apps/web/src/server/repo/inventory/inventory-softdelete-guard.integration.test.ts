@@ -2,10 +2,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { TEST_ACTOR, TEST_HOME_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import {
-  bulkProcessInventoryEntries,
-  createInventoryEntry,
-} from "~/server/repo/inventory";
+import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation, deleteLocations } from "~/server/repo/location";
 import { createProduct, deleteProducts } from "~/server/repo/product";
 import {
@@ -94,27 +91,6 @@ describe("inventory soft-delete target guard", () => {
       ),
     ).rejects.toThrow(/does not exist or has been deleted/);
   });
-
-  it("bulkProcessInventoryEntries rejects a soft-deleted location", async () => {
-    const { entityId: productId } = await liveProduct();
-    const { entityId: locationId } = await liveLocation();
-    await deleteLocations(ctx.db, [locationId], TEST_ACTOR);
-
-    await expect(
-      bulkProcessInventoryEntries(
-        ctx.db,
-        locationId,
-        [{ productId, locationId, amount }],
-        TEST_ACTOR,
-      ),
-    ).rejects.toThrow(/does not exist or has been deleted/);
-  });
-
-  // Regression guard: bulkProcess is a delete-on-omit reconcile. An existing
-  // entry not present in the submitted batch must be SOFT-deleted (row retained
-  // with deletedAt), not hard-deleted — otherwise an omitted row is
-  // unrecoverable, violating the repo-wide soft-delete invariant. Previously
-  // this branch issued a raw tx.delete.
 
   it("rejects creating inventory directly at Home", async () => {
     const { entityId: productId } = await liveProduct();

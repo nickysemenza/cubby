@@ -5,7 +5,6 @@ import {
   locationBulkUpdateParentOut,
   locationFiltersSchema,
   locationInventoryBreakdownOut,
-  locationParentOptionsOut,
   locationPickerItemOut,
   locationShortcodesInput,
   locationsWithParentNameOut,
@@ -61,9 +60,5 @@ export const locationContract = defineContract("location", {
   inventoryBreakdown: query({
     input: shortcodeInput,
     output: locationInventoryBreakdownOut.nullable(),
-  }),
-  parentOptions: query({
-    input: z.undefined(),
-    output: z.array(locationParentOptionsOut),
   }),
 });

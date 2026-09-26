@@ -1,3 +1,4 @@
+import type { Amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
 import type {
   InventoryId,
@@ -8,7 +9,6 @@ import type {
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type {
   InventoryBulkAddItem,
-  InventoryBulkOperationItem,
   InventoryPlacement,
 } from "@cubby/schemas/inventory";
 import type { InventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
@@ -27,7 +27,6 @@ import {
 } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
-  buildPartialUpdateValues,
   getDb,
   notDeleted,
   parseInventoryAmount,
@@ -47,7 +46,6 @@ import {
 } from "./ownership";
 import { stockOnly } from "./placement";
 import {
-  assertValidRawInventoryOwnership,
   inventorySlotKey,
   inventorySnapshotToken,
   type InventoryRawOwnership,
@@ -55,22 +53,12 @@ import {
 import type { InventoryEntryDeepDB } from "./types";
 import { loadValuationGraphs } from "./valuation";
 
-type ResolvedInventoryBulkOperationItem = Omit<
-  InventoryBulkOperationItem,
-  "id" | "productId" | "locationId" | "ownership"
-> & {
-  id?: InventoryId;
-  productId: ProductId;
-  locationId: LocationId;
-  ownership?: InventoryRawOwnership;
-};
-
 export type ResolvedBulkMovePayload = {
   sourceLocationId: LocationId;
   targetLocationId: LocationId;
   items: Array<{
     inventoryEntryId: InventoryId;
-    quantity: InventoryBulkOperationItem["amount"];
+    quantity: Amount;
   }>;
 };
 
@@ -84,7 +72,7 @@ export type ResolvedReconcileSessionPayload = {
     | {
         kind: "adjust";
         inventoryEntryId: InventoryId;
-        amount: InventoryBulkOperationItem["amount"];
+        amount: Amount;
       }
     | { kind: "remove"; inventoryEntryId: InventoryId }
     | {
@@ -186,334 +174,12 @@ const assertInventoryOwnersLive = async (
   }
 };
 
-const validateBulkInventoryTargets = async (
-  tx: DrizzleTransaction,
-  locationId: LocationId,
-  items: ResolvedInventoryBulkOperationItem[],
-  loadedAt?: Date,
-  snapshotToken?: string,
-) => {
-  await assertLiveTargets(tx, { locationId });
-  if (loadedAt) {
-    const [staleRow] = await tx
-      .select({ latest: max(inventoryEntry.updatedAt) })
-      .from(inventoryEntry)
-      .where(eq(inventoryEntry.locationId, locationId));
-    if (staleRow?.latest && staleRow.latest > loadedAt) {
-      throw createAppError(
-        "INVENTORY_STALE",
-        "Inventory at this location changed since you loaded it — refresh and try again.",
-      );
-    }
-  }
-  const snapshotRows = await tx.query.inventoryEntry.findMany({
-    where: and(
-      eq(inventoryEntry.locationId, locationId),
-      stockOnly(),
-      notDeleted(inventoryEntry),
-    ),
-    columns: {
-      id: true,
-      productId: true,
-      locationId: true,
-      placement: true,
-      ownershipMode: true,
-      ownerLedgerPartyId: true,
-      amount: true,
-    },
-  });
-  if (snapshotToken) {
-    const currentToken = await inventorySnapshotToken(snapshotRows);
-    if (currentToken !== snapshotToken) {
-      throw createAppError(
-        "INVENTORY_STALE",
-        "Inventory at this location changed since the complete snapshot was loaded — refresh and try again.",
-      );
-    }
-  } else if (snapshotRows.some((row) => row.ownershipMode !== "inherit")) {
-    throw createAppError(
-      "INVENTORY_STALE",
-      "This ownership-aware inventory requires a complete snapshot token before delete-on-omit reconciliation.",
-    );
-  }
-  const productIds = uniq(
-    items.flatMap((item) => (item.productId ? [item.productId] : [])),
-  );
-  await assertInventoryProductsLive(tx, productIds);
-  const ownerIds = uniq(
-    items.flatMap((item) =>
-      item.ownership?.ownerLedgerPartyId
-        ? [item.ownership.ownerLedgerPartyId]
-        : [],
-    ),
-  );
-  await assertInventoryOwnersLive(tx, ownerIds);
-};
-
-const deleteOmittedBulkInventory = async (
-  tx: DrizzleTransaction,
-  existing: InventoryEntryDeepDB[],
-  items: ResolvedInventoryBulkOperationItem[],
-  actor: ActorContext,
-) => {
-  const submittedIds = new Set(
-    items.flatMap((item) => (item.id ? [item.id] : [])),
-  );
-  const ids = existing
-    .filter((item) => !submittedIds.has(item.id))
-    .map((item) => item.id);
-  if (ids.length === 0) return;
-  await tx
-    .update(inventoryEntry)
-    .set({ deletedAt: new Date() })
-    .where(and(inArray(inventoryEntry.id, ids), notDeleted(inventoryEntry)));
-  await cascadeRemoval(tx, {
-    entity: "inventory",
-    ids,
-    audit: { actor },
-  });
-};
-
-type ProcessedBulkInventoryItem = { id: string; audit?: AuditEntryInput };
-
-const createBulkInventoryItem = async (
-  tx: DrizzleTransaction,
-  locationId: LocationId,
-  item: ResolvedInventoryBulkOperationItem,
-  valuationGraphs: Awaited<ReturnType<typeof loadValuationGraphs>>,
-): Promise<ProcessedBulkInventoryItem> => {
-  if (!item.productId || !item.amount) {
-    throw createAppError(
-      "REQUIRED_FIELD_MISSING",
-      "productId and amount are required for new items",
-    );
-  }
-  const ownership = item.ownership ?? {
-    ownershipMode: "inherit" as const,
-    ownerLedgerPartyId: null,
-  };
-  assertValidRawInventoryOwnership(ownership);
-  const created = await insertWithShortcode(tx, "inventory", {
-    productId: item.productId,
-    locationId,
-    amount: item.amount,
-    valuation: computeInventoryValuation(
-      item.amount,
-      valuationGraphs.get(item.productId) ?? [],
-    ),
-    ...ownership,
-  });
-  return {
-    id: created.id,
-    audit: {
-      entityType: "inventory",
-      entityId: created.id,
-      action: "create",
-    },
-  };
-};
-
-const updateBulkInventoryItem = async (
-  tx: DrizzleTransaction,
-  item: ResolvedInventoryBulkOperationItem & { id: InventoryId },
-  before: InventoryEntryDeepDB,
-  valuationGraphs: Awaited<ReturnType<typeof loadValuationGraphs>>,
-): Promise<ProcessedBulkInventoryItem> => {
-  const effectiveProductId = item.productId ?? before.productId;
-  const effectiveAmount = item.amount ?? before.amount;
-  const valuation =
-    (item.amount !== undefined || item.productId !== undefined) &&
-    effectiveProductId &&
-    effectiveAmount
-      ? computeInventoryValuation(
-          effectiveAmount,
-          valuationGraphs.get(effectiveProductId) ?? [],
-        )
-      : undefined;
-  const values = buildPartialUpdateValues({
-    amount: item.amount,
-    productId: item.productId,
-    valuation,
-    ownershipMode: item.ownership?.ownershipMode,
-    ownerLedgerPartyId: item.ownership?.ownerLedgerPartyId,
-  });
-  if (Object.keys(values).length === 0) return { id: item.id };
-  const updated = await updateAndReturn(
-    tx,
-    inventoryEntry,
-    values,
-    eq(inventoryEntry.id, item.id),
-  );
-  const changes = computeChanges(before, updated, [
-    "amount",
-    "productId",
-    "ownershipMode",
-    "ownerLedgerPartyId",
-  ]);
-  const result: ProcessedBulkInventoryItem = { id: updated.id };
-  if (changes) {
-    result.audit = {
-      entityType: "inventory",
-      entityId: item.id,
-      action: "update",
-      changes,
-    };
-  }
-  return result;
-};
-
-const processBulkInventoryItem = async (
-  tx: DrizzleTransaction,
-  locationId: LocationId,
-  item: ResolvedInventoryBulkOperationItem,
-  existingById: Map<string, InventoryEntryDeepDB>,
-  valuationGraphs: Awaited<ReturnType<typeof loadValuationGraphs>>,
-): Promise<{ id: string; audit?: AuditEntryInput }> => {
-  if (!item.id) {
-    return await createBulkInventoryItem(tx, locationId, item, valuationGraphs);
-  }
-  const before = existingById.get(item.id);
-  if (!before) {
-    throw createAppError(
-      "INVENTORY_NOT_FOUND",
-      `Inventory entry ${item.id} is not part of this location snapshot`,
-    );
-  }
-  return await updateBulkInventoryItem(
-    tx,
-    { ...item, id: item.id },
-    before,
-    valuationGraphs,
-  );
-};
-
-export const bulkProcessInventoryEntries = async (
-  db: Database,
-  locationId: LocationId,
-  items: ResolvedInventoryBulkOperationItem[],
-  actor: ActorContext,
-  // When the client passes the time it loaded the snapshot, reject the commit if
-  // anything at the location changed since — this form deletes-on-omit, so a stale
-  // snapshot would silently delete entries another surface added after load.
-  loadedAt?: Date,
-  snapshotToken?: string,
-) => {
-  // Transaction boundary: the entire diff (deletes of removed items, creates +
-  // updates of submitted items, audit logging, and the location timestamp bump)
-  // commits or rolls back as one unit so a partial failure leaves no half-applied
-  // bulk state.
-  const processedItems = await withTransaction(
-    db,
-    async (tx: DrizzleTransaction) => {
-      await validateBulkInventoryTargets(
-        tx,
-        locationId,
-        items,
-        loadedAt,
-        snapshotToken,
-      );
-
-      // Stock only, because this reconcile is DELETE-ON-OMIT: anything at the
-      // location that the caller did not resubmit gets removed. A fixture is
-      // outside this flow's jurisdiction — the bulk-capture UI never shows one,
-      // so every submission would silently omit it and delete it.
-      //
-      // Deliberately asymmetric with the max(updatedAt) scan above, which stays
-      // wide (it even includes soft-deleted rows on purpose). Over-broad there
-      // costs a spurious refresh; over-narrow here costs the fixture.
-      const existingItems = await tx.query.inventoryEntry.findMany({
-        where: and(
-          eq(inventoryEntry.locationId, locationId),
-          stockOnly(),
-          notDeleted(inventoryEntry),
-        ),
-        ...relations.inventory.full,
-      });
-
-      const existingItemsMap = new Map(
-        existingItems.map((item) => [item.id, item]),
-      );
-
-      const allProductIds = uniq([
-        ...items.filter((i) => i.productId).map((i) => i.productId),
-        ...existingItems.map((i) => i.productId),
-      ]);
-      const valuationGraphs = await loadValuationGraphs(tx, allProductIds);
-
-      // Soft-delete items not in the submitted array. This is a delete-on-omit
-      // reconcile, so it MUST honor the repo-wide soft-delete invariant (set
-      // deletedAt, keep the row + audit trail) — a hard delete here makes an
-      // omitted entry unrecoverable, and "restore is intentionally not
-      // implemented" (AGENTS.md). NOTE: bulkMoveInventoryEntries' source
-      // collapse below intentionally stays a hard delete — soft-deleting a
-      // fully-moved source would leave a zero-qty ghost that notDeleted() hides
-      // but valuation/duplicate scans resurface.
-      await deleteOmittedBulkInventory(tx, existingItems, items, actor);
-
-      const resultIds: string[] = [];
-      const auditEntries: AuditEntryInput[] = [];
-
-      for (const item of items) {
-        const result = await processBulkInventoryItem(
-          tx,
-          locationId,
-          item,
-          existingItemsMap,
-          valuationGraphs,
-        );
-        resultIds.push(result.id);
-        if (result.audit) auditEntries.push(result.audit);
-      }
-
-      if (auditEntries.length > 0) {
-        await logAuditEntries(tx, actor, auditEntries);
-      }
-
-      const results = await batchFetchResults(tx, resultIds);
-
-      await tx
-        .update(location)
-        .set({ lastBulkInventory: new Date() })
-        .where(eq(location.id, locationId));
-
-      return results;
-    },
-  );
-
-  const [pricing, ownership, dataQualities, locationQualities] =
-    await Promise.all([
-      loadInventoryEntryPricing(db, processedItems),
-      loadEffectiveInventoryOwnership(db, processedItems),
-      loadDataQualities(
-        db,
-        "inventory",
-        processedItems.map((entry) => entry.id),
-      ),
-      loadDataQualities(
-        db,
-        "location",
-        processedItems.map((entry) => entry.location.id),
-      ),
-    ]);
-  return processedItems.map((entry) =>
-    dbInventoryEntryToAPI(
-      entry,
-      requireLoadedProductPricing(pricing, entry.product.id),
-      // SAFETY: `entry` came from `processedItems`, which `dataQualities`/
-      // `locationQualities` were loaded for.
-      dataQualities.get(entry.id)!,
-      locationQualities.get(entry.location.id)!,
-      ownership.get(entry.id),
-    ),
-  );
-};
-
 export type ResolvedMoveInventoryEntriesPayload = {
   items: Array<{
     inventoryEntryId: InventoryId;
     targetLocationId: LocationId;
     /** Omitted = move whatever is left of the entry. */
-    quantity?: InventoryBulkOperationItem["amount"];
+    quantity?: Amount;
   }>;
 };
 
@@ -673,13 +339,8 @@ const applyAddedInventoryItem = async (
 /**
  * Stock many products at one location, additively, in one transaction.
  *
- * Deliberately NOT built on {@link bulkProcessInventoryEntries}: that one is
- * DELETE-ON-OMIT — it reconciles a whole shelf against exactly the items
- * submitted, so a caller that only names the products it wants to add would
- * have every other row at the location soft-deleted out from under it (see
- * the comment above `bulkProcessInventoryEntries`, ~line 170). This flow only
- * ever creates or sums into the rows its own items name; everything else at
- * the location is untouched.
+ * Additive, never delete-on-omit: this flow only ever creates or sums into the
+ * rows its own items name; everything else at the location is untouched.
  *
  * An item whose slot `(productId, locationId, placement)` is already occupied
  * sums into that row rather than colliding with the partial unique index;

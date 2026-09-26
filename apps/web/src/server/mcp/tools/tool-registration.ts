@@ -20,7 +20,6 @@ import {
   errorReportingHeaders,
   withErrorReporting,
 } from "~/server/errors/report-error";
-import { parseMcpWorkflowCaller } from "~/server/mcp/caller-contract";
 import { getEntityKernelContext } from "~/server/mcp/kernel-context";
 import { McpOperationContext } from "~/server/mcp/operation-context";
 import {
@@ -28,13 +27,13 @@ import {
   executePurchaseAgentMutation,
   trustedPurchaseAgent,
 } from "~/server/mcp/purchase-agent-protocol";
-import type { McpWorkflowCaller } from "~/server/mcp/workflow-caller";
 import {
   assertImportRunCapabilityById,
   capabilityForPurchaseAgentTool,
 } from "~/server/purchase-import/capabilities";
 import type { ReadPolicy } from "~/server/read-policy";
 import { getDb } from "~/server/repo/database-helpers";
+import type { AuthenticatedRequestContext } from "~/server/request-context";
 import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";
 import {
   normalizeStartOperationError,
@@ -46,7 +45,7 @@ import { getRequestId } from "~/server/tracing";
 import { declareToolOutputSchema } from "./tool-catalog";
 import { requireObjectInputSchema, sdkOutputSchema } from "./tool-json-schema";
 
-export type Caller = McpWorkflowCaller;
+export type McpRequestContext = AuthenticatedRequestContext;
 
 const toolArgumentsSchema = z.looseObject({});
 const structuredContentSchema = z.looseObject({});
@@ -238,17 +237,23 @@ function formatToolError({ code, reason, message }: ToolErrorDetail): string {
   return reason ? `${code}: ${message} (${reason})` : `${code}: ${message}`;
 }
 
-function callerFromExtra(extra: ToolExtra, key: "caller"): Caller | undefined {
-  const candidate = extra.authInfo?.extra?.[key];
-  return candidate === undefined
-    ? undefined
-    : parseMcpWorkflowCaller(candidate);
-}
+const present = z.custom((value) => value !== undefined);
+const authenticatedRequestFields = z.looseObject({
+  db: present,
+  readDb: present,
+  actorContext: present,
+});
+const requestContextSchema = z.custom<McpRequestContext>(
+  (value) => authenticatedRequestFields.safeParse(value).success,
+  "expected an authenticated request context",
+);
 
-export function getCaller(extra: ToolExtra): Caller {
-  const caller = callerFromExtra(extra, "caller");
-  if (!caller) throw new Error("Authenticated workflow caller is missing");
-  return caller;
+/** The policy-selected request context `prepareToolExtra` placed in the SDK's untyped authInfo bag. */
+export function getRequestContext(extra: ToolExtra): McpRequestContext {
+  const candidate = extra.authInfo?.extra?.requestContext;
+  if (candidate === undefined)
+    throw new Error("Authenticated request context is missing");
+  return requestContextSchema.parse(candidate);
 }
 
 export function operationContextFromExtra(

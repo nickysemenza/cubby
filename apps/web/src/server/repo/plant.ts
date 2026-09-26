@@ -22,7 +22,7 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { ingredient, plant, planting, product } from "~/server/db/schema";
+import { ingredient, plant } from "~/server/db/schema";
 import {
   guideWindowsFor,
   plantDisplayName,
@@ -32,28 +32,18 @@ import {
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
-  assertNoDependents,
-  auditDateWhereConditions,
   buildPartialUpdateValues,
-  countWhere,
-  executeListQueryWithCount,
-  getDb,
   notDeleted,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
-import { countByTarget } from "~/server/repo/impact";
 import { resolveOrCreateIngredients } from "~/server/repo/ingredient/crud";
 import { listScaffold } from "~/server/repo/list-scaffold";
+import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge";
+import { applyMergePolicy } from "~/server/repo/removal";
 import {
-  finalizeMerge,
-  repointEdge,
-  resolveMergeTargets,
-} from "~/server/repo/merge";
-import { removeEntity } from "~/server/repo/removal";
-import {
-  resolveAllOrThrow,
+  lookupEntityReferences,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -86,64 +76,49 @@ export const PLANT_MERGE_EDGE_POLICY = {
   },
 } as const satisfies IncomingEdgePolicy<"plant", OperationDisposition>;
 
-const columns = {
-  id: plant.id,
-  shortcode: plant.shortcode,
-  name: plant.name,
-  gardenGuideKey: plant.gardenGuideKey,
-  verdict: plant.verdict,
-  ingredientId: plant.ingredientId,
-  latinName: plant.latinName,
-  breeding: plant.breeding,
-  daysFromSowMin: plant.daysFromSowMin,
-  daysFromSowMax: plant.daysFromSowMax,
-  daysFromTransplantMin: plant.daysFromTransplantMin,
-  daysFromTransplantMax: plant.daysFromTransplantMax,
-  notes: plant.notes,
-  createdAt: plant.createdAt,
-  updatedAt: plant.updatedAt,
-} as const;
-
-type PlantRow = {
-  [K in keyof typeof columns]: (typeof plant.$inferSelect)[K];
-};
+type PlantRow = typeof plant.$inferSelect;
 
 const scaffold = listScaffold("plant", plant);
 
-const toOut = async (
+const hydrate = async (
   db: Database | DrizzleTransaction,
-  row: PlantRow,
-): Promise<PlantOut> => {
-  const ingredientRow = row.ingredientId
-    ? await unwrapDb(db).query.ingredient.findFirst({
-        where: and(eq(ingredient.id, row.ingredientId), notDeleted(ingredient)),
-        columns: { shortcode: true, name: true },
-      })
-    : undefined;
-  const key = resolveGardenGuideKey(row.gardenGuideKey);
-  const windows = guideWindowsFor(key);
-  const dataQuality = (await loadDataQualities(db, "plant", [row.id])).get(
-    row.id,
-  )!;
-  return plantOut.parse({
-    ...row,
-    id: parseShortcodeFor("plant", row.shortcode),
-    gardenGuideKey: key,
-    ingredientId: ingredientRow
-      ? parseShortcodeFor("ingredient", ingredientRow.shortcode)
-      : null,
-    ingredientName: ingredientRow?.name ?? null,
-    displayName: plantDisplayName(row.name, row.gardenGuideKey),
-    guideSowWindow: windows.sow,
-    guideTransplantWindow: windows.transplant,
-    routes: plantRoutesFor(key, new Date().getUTCMonth() + 1),
-    dataQuality,
+  rows: PlantRow[],
+): Promise<PlantOut[]> => {
+  const [ingredients, qualities] = await Promise.all([
+    lookupEntityReferences(
+      db,
+      "ingredient",
+      rows.map((row) => row.ingredientId),
+    ),
+    loadDataQualities(
+      db,
+      "plant",
+      rows.map((row) => row.id),
+    ),
+  ]);
+  return rows.map((row) => {
+    const key = resolveGardenGuideKey(row.gardenGuideKey);
+    const windows = guideWindowsFor(key);
+    const linked = row.ingredientId
+      ? ingredients.get(row.ingredientId)
+      : undefined;
+    return plantOut.parse({
+      ...row,
+      id: parseShortcodeFor("plant", row.shortcode),
+      gardenGuideKey: key,
+      ingredientId: linked?.id ?? null,
+      ingredientName: linked?.name ?? null,
+      displayName: plantDisplayName(row.name, row.gardenGuideKey),
+      guideSowWindow: windows.sow,
+      guideTransplantWindow: windows.transplant,
+      routes: plantRoutesFor(key, new Date().getUTCMonth() + 1),
+      dataQuality: qualities.get(row.id),
+    });
   });
 };
 
 const buildWhere = (filters: PlantFilters) =>
   scaffold.where(filters, [
-    ...auditDateWhereConditions(plant, filters),
     filters.ingredientId === undefined
       ? undefined
       : sql`${plant.ingredientId} IN (
@@ -152,33 +127,24 @@ const buildWhere = (filters: PlantFilters) =>
         )`,
   ]);
 
-export async function listPlants(
+export const listPlants = (
   db: Database,
   filters: PlantFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-) {
-  const where = buildWhere(filters);
-  const { take, skip } = scaffold.page(pagination);
-  const { data, count } = await executeListQueryWithCount(
-    getDb(db)
-      .select(columns)
-      .from(plant)
-      .where(where)
-      .orderBy(...scaffold.orderBy(sorts, {}, filters))
-      .limit(take)
-      .offset(skip),
-    countWhere(db, plant, where),
+) =>
+  scaffold.list(
+    db,
+    { filters, sorts, pagination },
+    { where: buildWhere(filters), hydrate: (rows) => hydrate(db, rows) },
   );
-  return { data: await Promise.all(data.map((row) => toOut(db, row))), count };
-}
 
 const fetchById = async (
   db: Database | DrizzleTransaction,
   id: PlantId,
 ): Promise<PlantRow | undefined> => {
   const [row] = await unwrapDb(db)
-    .select(columns)
+    .select()
     .from(plant)
     .where(and(eq(plant.id, id), notDeleted(plant)))
     .limit(1);
@@ -193,12 +159,11 @@ const plantCrud = createEntityCrud({
   table: plant,
   entity: "plant",
   fetchById,
-  fromDB: (db, row) => toOut(db, row),
+  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
   toUpdate: (data: PlantWrite) => buildPartialUpdateValues(data),
   auditUpdateFields: [...entityFieldModels.plant.audit],
 });
 
-export const getPlantByID = plantCrud.getByID;
 export const getPlantByShortcode = plantCrud.getByShortcode;
 
 const resolveIngredient = async (
@@ -264,42 +229,6 @@ export async function updatePlant(
   });
 }
 
-export async function deletePlants(
-  db: Database,
-  shortcodes: PlantShortcode[],
-  actor: ActorContext,
-) {
-  const ids = uniq(await resolveAllOrThrow(db, "plant", shortcodes));
-  return withTransaction(db, async (tx) => {
-    const fetchNames = (failedIds: PlantId[]) =>
-      tx.query.plant.findMany({
-        where: inArray(plant.id, failedIds),
-        columns: { name: true },
-      });
-    // PLANT_DELETE_EDGE_POLICY declares both edges `block`; nothing generic
-    // enforces `block`, so the repository must.
-    const [plantings, products] = await Promise.all([
-      countByTarget(tx, planting, planting.plantId, ids),
-      countByTarget(tx, product, product.growsPlantId, ids),
-    ]);
-    await assertNoDependents({
-      offendingParentIds: ids.filter((id) => plantings[id]),
-      fetchNames,
-      reason: "PLANT_HAS_PLANTINGS",
-      message: (count, names) =>
-        `Cannot delete ${count} plant(s): ${names} are grown by a planting.`,
-    });
-    await assertNoDependents({
-      offendingParentIds: ids.filter((id) => products[id]),
-      fetchNames,
-      reason: "PLANT_HAS_PRODUCTS",
-      message: (count, names) =>
-        `Cannot delete ${count} plant(s): ${names} are named by a seed or plant product.`,
-    });
-    return removeEntity(tx, { entity: "plant", ids, removal: "soft", actor });
-  });
-}
-
 export async function mergePlants(
   db: Database,
   input: { keepId: PlantShortcode; mergeIds: PlantShortcode[] },
@@ -310,20 +239,13 @@ export async function mergePlants(
     ...input,
   });
   return withTransaction(db, async (tx) => {
-    const plantingEdgesRepointed = (
-      await repointEdge(tx, "plant", "Planting.plantId", {
-        from: loserIds,
-        to: keepId,
-        liveOnly: false,
-      })
-    ).length;
-    const productEdgesRepointed = (
-      await repointEdge(tx, "plant", "Product.growsPlantId", {
-        from: loserIds,
-        to: keepId,
-        liveOnly: false,
-      })
-    ).length;
+    const repointed = await applyMergePolicy(tx, {
+      entity: "plant",
+      policy: PLANT_MERGE_EDGE_POLICY,
+      keepId,
+      loserIds,
+      liveOnly: false,
+    });
     const { removed } = await finalizeMerge(tx, {
       entity: "plant",
       table: plant,
@@ -337,8 +259,8 @@ export async function mergePlants(
       mergeSummary: {
         deletedIds: uniq(input.mergeIds),
         merged: removed,
-        plantingEdgesRepointed,
-        productEdgesRepointed,
+        plantingEdgesRepointed: repointed["Planting.plantId"] ?? 0,
+        productEdgesRepointed: repointed["Product.growsPlantId"] ?? 0,
       },
     };
   });

@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import { z } from "zod";
 
 import type {
   OperationContract,
@@ -118,7 +118,23 @@ type OperationDescriptorOf<
   >;
 };
 
+/**
+ * The handler as MCP calls it: the caller has already authenticated and
+ * selected a read policy, and validates input and output itself.
+ */
+export type DirectOperationRun = {
+  readonly id: StartOperationId;
+  readonly input: z.ZodType;
+  readonly output: z.ZodType;
+  readonly run: (
+    context: OperationHandlerContext,
+    input: z.output<z.ZodUnknown>,
+  ) => Promise<z.output<z.ZodUnknown>>;
+};
+
 type OperationImplementationMap<Contract extends OperationContract> = {
+  contract: Contract;
+  runs: Readonly<Record<string, DirectOperationRun>>;
   operations: {
     readonly [
       Member in OperationMemberName<Contract["ops"]>
@@ -194,6 +210,7 @@ export function implementOperationDomain(
     string,
     StartOperationHandler<z.output<z.ZodUnknown>>
   > = {};
+  const runs: Record<string, DirectOperationRun> = {};
   for (const [member, definition] of Object.entries(contract.ops)) {
     if (definition.kind === "subscription") continue;
     const operation = startOperationDefinitionFor(
@@ -210,6 +227,16 @@ export function implementOperationDomain(
       entry,
       adapter,
     );
+    const configured = configuredOperationHandler(entry);
+    runs[member] = {
+      id: operation.id,
+      input: configured.input ?? definition.input,
+      output:
+        configured.output instanceof z.ZodType
+          ? configured.output
+          : definition.output,
+      run: configured.run,
+    };
   }
-  return { operations };
+  return { contract, runs, operations };
 }

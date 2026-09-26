@@ -4,9 +4,10 @@ import {
 } from "@cubby/schemas/inventory";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+import { moveInventoryEntriesWorkflow } from "~/server/workflows/inventory.server";
+
 import {
-  getCaller,
-  registerMcpTool,
+  registerRouterTool,
   respondList,
   slimInventory,
   WRITE_DESTRUCTIVE_CLOSED,
@@ -19,20 +20,21 @@ export function registerInventoryTools(server: McpServer) {
   // fanning out across twelve drawers into a run of single-entry updates. This
   // is a strict superset: the source is derivable from the entry, and per-item
   // `quantity` still covers partial moves.
-  registerMcpTool(server, {
+  registerRouterTool(server, {
     name: "move_inventory_entries",
     description:
       "Move inventory entries to per-item destination locations, in one atomic call. Each item names an entry and where it should end up, so a single call can fan one location out across many, consolidate many into one, or both. Omit an item's quantity to move the whole entry; include it for a partial move, and list one entry twice to split it across destinations. Entries merge into an existing entry for the same product at the destination. The source location is not asked for — an entry already knows where it is.",
     inputSchema: moveInventoryEntriesPayload,
     outputSchema: inventoryMcpBulkMoveOut,
     annotations: WRITE_DESTRUCTIVE_CLOSED,
-    handler: async (params, extra) => {
-      const caller = getCaller(extra);
-      // The router returns `{ items, sideEffects }`; MCP publishes just the
+    call: async (context, params) => {
+      // The workflow returns `{ items, sideEffects }`; MCP publishes just the
       // moved rows (side effects are internal bookkeeping).
-      const { items: moved } = await caller.inventory.moveEntries({
-        items: params.items,
-      });
+      const { items: moved } = await moveInventoryEntriesWorkflow(
+        context.db,
+        context.actorContext,
+        { items: params.items },
+      );
       return respondList(moved, slimInventory);
     },
   });

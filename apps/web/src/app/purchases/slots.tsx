@@ -9,11 +9,8 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatusText } from "~/components/ui/status-text";
-import { readJsonOrThrow } from "~/lib/http-error";
-import {
-  importRunsResponse,
-  type ImportRunSummary,
-} from "~/lib/purchase-import-run-detail";
+import type { ImportRunSummary } from "~/contracts/run.contract";
+import { run as runOperations } from "~/entities/run.functions";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
 
@@ -35,20 +32,9 @@ const EMPTY_PURCHASE_PRODUCTS: PurchaseProductOut[] = [];
 export const ImportRuns: DetailSlotComponent<"purchase"> = ({
   record: purchase,
 }) => {
-  const runs = useQuery({
-    queryKey: ["purchase-import", "purchase-runs", purchase.id],
-    queryFn: async () => {
-      const response = await fetch(
-        `/api/import/runs?purchaseId=${encodeURIComponent(purchase.id)}`,
-      );
-      const data = await readJsonOrThrow(
-        response,
-        importRunsResponse,
-        "Purchase import runs could not load.",
-      );
-      return data.runs;
-    },
-  });
+  const runs = useQuery(
+    runOperations.history.queryOptions({ purchaseId: purchase.id }),
+  );
 
   const startValidation = (
     <TargetedImportLaunchButton
@@ -71,7 +57,7 @@ export const ImportRuns: DetailSlotComponent<"purchase"> = ({
         <StatusText tone="destructive">{runs.error.message}</StatusText>
       </Stack>
     );
-  const importRuns = runs.data ?? [];
+  const importRuns = runs.data?.runs ?? [];
   if (importRuns.length === 0) {
     return (
       <Stack gap="sm">

@@ -77,6 +77,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { loadImageRepresentations } from "~/server/repo/image-processing";
+import { currentMemberLedgerParty } from "~/server/repo/member-login";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
@@ -96,7 +97,7 @@ const storedInventory = z.object({
 });
 
 /** A run that does not exist, or that this actor may not review; routes map it to 404. */
-export class PhotoRunNotFoundError extends Error {
+class PhotoRunNotFoundError extends Error {
   constructor(runShortcode: string) {
     super(`Import run ${runShortcode} was not found`);
     this.name = "PhotoRunNotFoundError";
@@ -105,24 +106,14 @@ export class PhotoRunNotFoundError extends Error {
 
 /**
  * The browser surface's household-member gate, matching
- * `loadImportRunByShortcode`: the actor must have a live `member` LedgerParty.
+ * the run operations: the actor must have a live `member` LedgerParty.
  */
 export async function assertPhotoRunReviewer(
   db: Database,
   actor: ActorContext,
   runShortcode: string,
 ): Promise<void> {
-  const [member] = await getDb(db)
-    .select({ id: ledgerParty.id })
-    .from(ledgerParty)
-    .where(
-      and(
-        eq(ledgerParty.userId, actor.userId),
-        eq(ledgerParty.kind, "member"),
-        notDeleted(ledgerParty),
-      ),
-    )
-    .limit(1);
+  const member = await currentMemberLedgerParty(db, actor);
   if (!member) throw new PhotoRunNotFoundError(runShortcode);
   await loadRun(db, runShortcode);
 }

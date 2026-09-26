@@ -7,7 +7,7 @@
  * Expense's cost has to be captured via `expense.getByID` BEFORE
  * `purchase.split` runs, because the split soft-deletes the original in the
  * same transaction — reading it after would 404. Driven through the real MCP
- * server (`client.callTool`) with a real workflow caller, mirroring
+ * server (`client.callTool`) with a real request context, mirroring
  * `mcp-shortcode-boundary.integration.test.ts`.
  */
 
@@ -30,16 +30,15 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { createMcpServer } from "./server";
 import { splitExpenseMcpOut } from "./tools/purchase.tools";
-import type { ToolArguments } from "./tools/tool-registration";
-import {
-  createMcpWorkflowCaller,
-  type McpWorkflowCaller,
-} from "./workflow-caller";
+import type {
+  McpRequestContext,
+  ToolArguments,
+} from "./tools/tool-registration";
 
 async function callTool(
   name: string,
   args: ToolArguments,
-  caller: McpWorkflowCaller,
+  requestContext: McpRequestContext,
   entityKernel: EntityKernelContext,
 ): Promise<CallToolResult> {
   const server = createMcpServer();
@@ -55,7 +54,7 @@ async function callTool(
         token: "",
         clientId: "test",
         scopes: [],
-        extra: { caller, entityKernel },
+        extra: { requestContext, entityKernel },
       },
     });
 
@@ -90,8 +89,7 @@ function workflowContext(
 
 describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
   const ctx = withTestDb();
-  const caller = () =>
-    createMcpWorkflowCaller(workflowContext(ctx.db, ctx.actor.userId));
+  const caller = () => workflowContext(ctx.db, ctx.actor.userId);
 
   it("reports a zero delta when the parts sum exactly to the original", async () => {
     const { output: original } = await createExpense(

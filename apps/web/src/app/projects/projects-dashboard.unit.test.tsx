@@ -67,6 +67,8 @@ function projectFixture(): ProjectOut {
         costEstimate: null,
       },
     },
+    spent: 0,
+    taskProgress: "0/0",
     dataQuality: testCompleteDataQuality(),
   };
 }

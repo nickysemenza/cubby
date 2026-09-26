@@ -1,6 +1,6 @@
 import type { ImportRunOut } from "@cubby/schemas/import-run";
 import { flueImportRunPurpose } from "@cubby/schemas/import-run-agent";
-import { initiateImportRunEvidenceUploadOut } from "@cubby/schemas/purchase-import";
+import { initiateImportRunEvidenceUploadInput } from "@cubby/schemas/purchase-import";
 import {
   createFlueClient,
   type AgentConversationObservationSnapshot,
@@ -22,27 +22,21 @@ import {
 } from "react";
 import { z } from "zod";
 
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { usePhotoRunReview } from "~/app/import-runs/photo-group-review";
 import { PhotoImportRunView } from "~/app/import-runs/photo-run-detail";
 import { importRunHref } from "~/app/purchases/purchase-import-links";
+import { Row, Section, Stack } from "~/components/layout";
 import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import { StatusText } from "~/components/ui/status-text";
-import { run as runOperations } from "~/entities/run.functions";
+import type { ImportRunDetail } from "~/contracts/run.contract";
+import { purchaseImport, run as runOperations } from "~/entities/run.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { readJsonOrThrow } from "~/lib/http-error";
-import {
-  importRunLogResponse,
-  type ImportRunLogEntry,
-} from "~/lib/purchase-import-debug";
-import {
-  importRunControlResponse,
-  importRunDetailResponse,
-  type ImportRunDetail,
-} from "~/lib/purchase-import-run-detail";
-import { formatCurrency } from "~/lib/utils";
+import { cn, formatCurrency } from "~/lib/utils";
 
 import { AgentContextPerCall } from "./agent-context-breakdown";
 import {
@@ -79,18 +73,6 @@ const statusBadgeVariant = (status: string): BadgeVariant => {
 const formatMoment = (value: string | null): string =>
   value ? new Date(value).toLocaleString() : "Still active";
 
-const getRun = async (publicId: string): Promise<ImportRunDetail> => {
-  const response = await fetch(
-    `/api/import/runs/${encodeURIComponent(publicId)}`,
-  );
-  const data = await readJsonOrThrow(
-    response,
-    importRunDetailResponse,
-    "Import run could not load.",
-  );
-  return data.run;
-};
-
 const EMPTY_AGENT_SNAPSHOT: AgentConversationObservationSnapshot = {
   conversation: undefined,
   offset: undefined,
@@ -98,190 +80,177 @@ const EMPTY_AGENT_SNAPSHOT: AgentConversationObservationSnapshot = {
   error: undefined,
 };
 
-function Metadata({ label, value }: { label: string; value: string | null }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd
-        className="truncate font-mono text-xs tabular-nums"
-        title={value ?? undefined}
-      >
-        {value ?? "—"}
-      </dd>
-    </div>
-  );
+type RunControlInput = Parameters<typeof runOperations.control.call>[0];
+
+interface RunAction {
+  action: RunControlInput["action"];
+  label: string;
+  variant?: "outline";
+  disabled?: boolean;
 }
 
-function RunControl({ run }: { run: ImportRunDetail }) {
-  const queryClient = useQueryClient();
-  const update = useMutation({
-    mutationFn: async (action: "pause" | "resume" | "cancel") => {
-      const response = await fetch(
-        `/api/import/runs/${encodeURIComponent(run.publicId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
-        },
-      );
-      const data = await readJsonOrThrow(
-        response,
-        importRunControlResponse,
-        "Run could not be updated.",
-        { method: "PATCH" },
-      );
-      return data.run;
-    },
-    onSuccess: () => {
-      void queryClient.refetchQueries({
-        queryKey: ["purchase-import", "run", run.publicId],
-      });
-    },
-  });
-  const active = ACTIVE_RUN_STATUSES.has(run.status);
-  if (!active) return null;
-  return (
-    <div className="grid gap-2">
-      {run.status === "paused_auth" || run.status === "paused_offline" ? (
-        <div className="grid gap-2 border border-border bg-card p-3 text-sm">
-          <h2 className="font-semibold">
-            {run.status === "paused_auth"
-              ? `Sign in to ${run.vendorAccount?.label ?? "the retailer"}`
-              : "Reconnect the Mac browser"}
-          </h2>
-          <p className="text-muted-foreground">
-            {run.status === "paused_auth"
-              ? "Use the Cubby-managed browser tab on your Mac to finish sign-in. Leave the tab open; the agent will continue with the order page after you resume."
-              : "Open the Cubby Mac app and reconnect its browser bridge. Keep the retailer tab open before resuming."}
-          </p>
-          <div>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => update.mutate("resume")}
-              disabled={update.isPending}
-            >
-              {run.status === "paused_auth"
-                ? "I've signed in — resume run"
-                : "Browser is connected — resume run"}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-      <div>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => update.mutate("cancel")}
-          disabled={update.isPending}
-        >
-          Stop run
-        </Button>
-      </div>
-      {update.isError ? (
-        <StatusText tone="destructive">{update.error.message}</StatusText>
-      ) : null}
-    </div>
-  );
-}
+const EVIDENCE_GAP_STATES = new Set([
+  "needs_evidence",
+  "unavailable",
+  "unresolved",
+]);
 
-function TerminalRunControls({ run }: { run: ImportRunDetail }) {
-  const queryClient = useQueryClient();
-  const retry = useMutation({
-    mutationFn: async (action: "retry" | "restart") => {
-      const response = await fetch(
-        `/api/import/runs/${encodeURIComponent(run.publicId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
-        },
-      );
-      return readJsonOrThrow(
-        response,
-        importRunControlResponse,
-        "A successor run could not be created.",
-        { method: "PATCH" },
-      );
-    },
-    onSuccess: (result) => {
-      if (result.successor) {
-        window.location.assign(importRunHref(result.successor.publicId));
-        return;
-      }
-      void queryClient.refetchQueries({
-        queryKey: ["purchase-import", "run", run.publicId],
-      });
-    },
-  });
+/**
+ * Every control this run's state offers, in one list: live pause handoffs and
+ * stop, dispatch recovery for a run the agent never picked up, evidence
+ * recovery for a validation that found none, and the terminal retries.
+ */
+function runActions(run: ImportRunDetail): RunAction[] {
+  const actions: RunAction[] = [];
+  if (run.status === "paused_auth" || run.status === "paused_offline")
+    actions.push({
+      action: "resume",
+      label:
+        run.status === "paused_auth"
+          ? "I've signed in — resume run"
+          : "Browser is connected — resume run",
+    });
+  if (ACTIVE_RUN_STATUSES.has(run.status))
+    actions.push({ action: "cancel", label: "Stop run", variant: "outline" });
+  const { dispatch } = run;
+  if (!dispatch.coordinatorStartedAt && dispatch.state !== "started")
+    actions.push(
+      {
+        action: "retry_dispatch",
+        label: "Retry dispatch",
+        disabled: dispatch.error === "Awaiting manual evidence upload",
+      },
+      { action: "abort", label: "Abort", variant: "outline" },
+    );
   if (
-    !TERMINAL_RUN_STATUSES.has(run.status) ||
-    !flueImportRunPurpose.safeParse(run.purpose).success
+    run.purpose === "purchase_validation" &&
+    (run.status === "needs_review" || run.status === "failed") &&
+    run.targets.some((target) => EVIDENCE_GAP_STATES.has(target.state))
   )
-    return null;
+    actions.push(
+      { action: "upload_evidence", label: "Upload evidence" },
+      {
+        action: "no_evidence_available",
+        label: "No evidence available",
+        variant: "outline",
+      },
+    );
+  if (
+    TERMINAL_RUN_STATUSES.has(run.status) &&
+    flueImportRunPurpose.safeParse(run.purpose).success
+  ) {
+    if (
+      run.purpose !== "photo_inventory" &&
+      !run.successorRunPublicId &&
+      run.status !== "dispatch_failed"
+    )
+      actions.push({
+        action: "retry",
+        label: "Retry unresolved work",
+        variant: "outline",
+      });
+    actions.push({
+      action: "restart",
+      label: run.successorRunPublicId
+        ? "Start another run with same inputs"
+        : "Start new run with same inputs",
+    });
+  }
+  return actions;
+}
+
+/** One control mutation; a retry that creates a successor run opens it. */
+function RunActionButtons({
+  runId,
+  actions,
+  target,
+  children,
+}: {
+  runId: ImportRunDetail["publicId"];
+  actions: readonly RunAction[];
+  target?: Pick<RunControlInput, "operationId" | "approvalId">;
+  children?: ReactNode;
+}) {
+  const control = useMutation(
+    runOperations.control.mutationOptions({
+      onSuccess: ({ successor }) => {
+        if (successor)
+          window.location.assign(importRunHref(successor.publicId));
+      },
+    }),
+  );
+  if (!actions.length) return null;
   return (
-    <div className="grid justify-items-end gap-2">
-      <div className="flex flex-wrap justify-end gap-2">
-        {run.purpose !== "photo_inventory" &&
-        !run.successorRunPublicId &&
-        run.status !== "dispatch_failed" ? (
+    <Stack gap="sm" className="items-end">
+      <Row wrap gap="sm" justify="end">
+        {actions.map((item) => (
           <Button
+            key={item.action}
             type="button"
             size="sm"
-            variant="outline"
-            onClick={() => retry.mutate("retry")}
-            disabled={retry.isPending}
+            variant={item.variant}
+            disabled={control.isPending || item.disabled}
+            onClick={() =>
+              control.mutate({ runId, action: item.action, ...target })
+            }
           >
-            Retry unresolved work
+            {item.label}
           </Button>
-        ) : null}
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => retry.mutate("restart")}
-          disabled={retry.isPending}
-        >
-          {run.successorRunPublicId
-            ? "Start another run with same inputs"
-            : "Start new run with same inputs"}
-        </Button>
-      </div>
-      {run.purpose === "photo_inventory" ? (
-        <p className="max-w-md text-right text-xs text-muted-foreground">
-          Reuses these uploaded photos and their existing image analysis. The
-          agent groups them again in a separate run.
-        </p>
+        ))}
+      </Row>
+      {children}
+      {control.isError ? (
+        <StatusText tone="destructive">{control.error.message}</StatusText>
       ) : null}
-      {retry.isError ? (
-        <StatusText tone="destructive">{retry.error.message}</StatusText>
-      ) : null}
-    </div>
+    </Stack>
   );
 }
 
-/** A committed run without Flue admission is recoverable, not silently stuck. */
+function RunControls({ run }: { run: ImportRunDetail }) {
+  return (
+    <Stack gap="sm">
+      {run.status === "paused_auth" || run.status === "paused_offline" ? (
+        <Section
+          title={
+            run.status === "paused_auth"
+              ? `Sign in to ${run.vendorAccount?.label ?? "the retailer"}`
+              : "Reconnect the Mac browser"
+          }
+          description={
+            run.status === "paused_auth"
+              ? "Use the Cubby-managed browser tab on your Mac to finish sign-in. Leave the tab open; the agent will continue with the order page after you resume."
+              : "Open the Cubby Mac app and reconnect its browser bridge. Keep the retailer tab open before resuming."
+          }
+        />
+      ) : null}
+      <RunActionButtons runId={run.publicId} actions={runActions(run)}>
+        {run.purpose === "photo_inventory" &&
+        TERMINAL_RUN_STATUSES.has(run.status) ? (
+          <p className="max-w-md text-right text-xs text-muted-foreground">
+            Reuses these uploaded photos and their existing image analysis. The
+            agent groups them again in a separate run.
+          </p>
+        ) : null}
+      </RunActionButtons>
+      <RunLineageAndInputs run={run} />
+      <ManualEvidenceUpload run={run} />
+    </Stack>
+  );
+}
+
 /** Where this run came from, what replaced it, and the inputs a restart copies. */
 function RunLineageAndInputs({ run }: { run: ImportRunDetail }) {
   const links = [
     ["Started from", run.predecessorRunPublicId],
-    ["Restarted as", run.successorRunPublicId ?? null],
+    ["Restarted as", run.successorRunPublicId],
   ] as const;
   if (!run.restartInputs && !links.some(([, publicId]) => publicId))
     return null;
   return (
-    <div className="grid gap-2 text-sm">
+    <Stack gap="sm">
       {links.map(([label, publicId]) =>
         publicId ? (
-          <p key={label} className="text-muted-foreground">
-            {label}{" "}
-            <a
-              className="font-mono text-xs text-primary hover:underline"
-              href={importRunHref(publicId)}
-            >
-              {publicId}
-            </a>
-          </p>
+          <RunLink key={label} label={label} publicId={publicId} />
         ) : null,
       )}
       {run.restartInputs ? (
@@ -301,136 +270,12 @@ function RunLineageAndInputs({ run }: { run: ImportRunDetail }) {
           </pre>
         </details>
       ) : null}
-    </div>
-  );
-}
-
-function DispatchRecoveryControls({ run }: { run: ImportRunDetail }) {
-  const queryClient = useQueryClient();
-  const dispatch = run.dispatch;
-  const action = useMutation({
-    mutationFn: async (next: "retry_dispatch" | "abort") => {
-      const response = await fetch(
-        `/api/import/runs/${encodeURIComponent(run.publicId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: next }),
-        },
-      );
-      const data = await readJsonOrThrow(
-        response,
-        importRunControlResponse,
-        "Run could not be updated.",
-        { method: "PATCH" },
-      );
-      return data.run;
-    },
-    onSuccess: () => {
-      void queryClient.refetchQueries({
-        queryKey: ["purchase-import", "run", run.publicId],
-      });
-    },
-  });
-  if (
-    !dispatch ||
-    dispatch.coordinatorStartedAt ||
-    dispatch.state === "started"
-  )
-    return null;
-  return (
-    <div className="grid justify-items-end gap-2">
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => action.mutate("retry_dispatch")}
-          disabled={
-            action.isPending ||
-            dispatch.error === "Awaiting manual evidence upload"
-          }
-        >
-          Retry dispatch
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => action.mutate("abort")}
-          disabled={action.isPending}
-        >
-          Abort
-        </Button>
-      </div>
-      {action.isError ? (
-        <StatusText tone="destructive">{action.error.message}</StatusText>
-      ) : null}
-    </div>
-  );
-}
-
-/** A terminal validation without usable evidence is retried as an immutable successor. */
-function EvidenceRecoveryControls({ run }: { run: ImportRunDetail }) {
-  const action = useMutation({
-    mutationFn: async (next: "upload_evidence" | "no_evidence_available") => {
-      const response = await fetch(
-        `/api/import/runs/${encodeURIComponent(run.publicId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: next }),
-        },
-      );
-      return readJsonOrThrow(
-        response,
-        importRunControlResponse,
-        "Evidence retry could not start.",
-        { method: "PATCH" },
-      );
-    },
-    onSuccess: ({ successor }) => {
-      if (successor) window.location.assign(importRunHref(successor.publicId));
-    },
-  });
-  if (
-    run.purpose !== "purchase_validation" ||
-    !new Set(["needs_review", "failed"]).has(run.status) ||
-    !run.targets.some((target) =>
-      new Set(["needs_evidence", "unavailable", "unresolved"]).has(
-        target.state,
-      ),
-    )
-  )
-    return null;
-  return (
-    <div className="grid justify-items-end gap-2">
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => action.mutate("upload_evidence")}
-          disabled={action.isPending}
-        >
-          Upload evidence
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => action.mutate("no_evidence_available")}
-          disabled={action.isPending}
-        >
-          No evidence available
-        </Button>
-      </div>
-      {action.isError ? (
-        <StatusText tone="destructive">{action.error.message}</StatusText>
-      ) : null}
-    </div>
+    </Stack>
   );
 }
 
 function ManualEvidenceUpload({ run }: { run: ImportRunDetail }) {
+  const queryClient = useQueryClient();
   const target = run.targets.find((item) => item.state === "needs_evidence");
   const upload = useMutation({
     mutationFn: async (file: File) => {
@@ -440,47 +285,31 @@ function ManualEvidenceUpload({ run }: { run: ImportRunDetail }) {
       const checksum = [...new Uint8Array(digest)]
         .map((byte) => byte.toString(16).padStart(2, "0"))
         .join("");
-      const initiated = await fetch(
-        "/api/v1/purchaseImport/initiateRunEvidenceUpload",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            runId: run.publicId,
-            targetId: target.id,
-            kind: "manual_upload",
-            contentType: file.type || "application/octet-stream",
-            byteSize: file.size,
-            checksum,
-            filename: file.name,
-            sourceMetadata: { filename: file.name },
-          }),
-        },
-      );
-      if (!initiated.ok)
-        throw new Error("Evidence upload could not be staged.");
-      const staged = initiateImportRunEvidenceUploadOut.parse(
-        await initiated.json(),
-      );
+      const contentType =
+        initiateImportRunEvidenceUploadInput.shape.contentType.parse(file.type);
+      const staged = await purchaseImport.initiateRunEvidenceUpload.call({
+        runId: run.publicId,
+        targetId: target.id,
+        kind: "manual_upload",
+        contentType,
+        byteSize: file.size,
+        checksum,
+        filename: file.name,
+        sourceMetadata: { filename: file.name },
+      });
+      // A presigned object-store PUT, not a Cubby endpoint.
       const stored = await fetch(staged.uploadUrl, {
         method: "PUT",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
+        headers: { "Content-Type": contentType },
         body: bytes,
       });
       if (!stored.ok) throw new Error("Evidence bytes could not be stored.");
-      const dispatched = await fetch(
-        `/api/import/runs/${encodeURIComponent(run.publicId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "retry_dispatch" }),
-        },
-      );
-      if (!dispatched.ok)
-        throw new Error("Evidence was stored, but dispatch failed.");
-      return importRunControlResponse.parse(await dispatched.json());
+      return runOperations.control.call({
+        runId: run.publicId,
+        action: "retry_dispatch",
+      });
     },
-    onSuccess: () => window.location.reload(),
+    onSuccess: () => invalidateOperationTags(queryClient, ripple.runOnly),
   });
   if (
     run.purpose !== "purchase_validation" ||
@@ -874,81 +703,88 @@ function useAbsentAgentRefresh(
   }, [phase, dispatchEventId, observation]);
 }
 
+/** Timestamped rows, newest or oldest first as the caller orders them. */
+function TimedRows({
+  label,
+  rows,
+  className = "max-h-[32rem]",
+}: {
+  label: string;
+  rows: ReadonlyArray<{ key: string; at: string; body: ReactNode }>;
+  className?: string;
+}) {
+  return (
+    <div className={cn("overflow-auto", className)} aria-label={label}>
+      {rows.map((row) => (
+        <div
+          key={row.key}
+          className="grid gap-1 border-b border-border py-2 last:border-0 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-2"
+        >
+          <time
+            className="font-mono text-xs text-muted-foreground"
+            dateTime={row.at}
+          >
+            {new Date(row.at).toISOString()}
+          </time>
+          <div className="min-w-0">{row.body}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const memberName = (member: ImportRunDetail["actor"]) =>
+  member.name ?? member.ledgerParty?.name ?? "Household member";
+
 function RunProgress({ run }: { run: ImportRunDetail }) {
   return (
-    <section className="grid gap-3 border border-border bg-card p-4">
-      <div>
-        <h2 className="font-medium">Run progress</h2>
-        <p className="text-sm text-muted-foreground">
-          {run.latestProgress ? (
-            <ShortcodeProse>{`${run.latestProgress.phase}${run.latestProgress.detail ? ` · ${run.latestProgress.detail}` : ""}`}</ShortcodeProse>
-          ) : (
-            "No progress updates have been recorded."
-          )}
-        </p>
-        {run.progress.length ? (
-          <p className="mt-1 text-xs text-muted-foreground">
-            {run.progress.length} updates · newest first
-          </p>
-        ) : null}
-      </div>
+    <Section
+      title="Run progress"
+      description={
+        run.latestProgress ? (
+          <ShortcodeProse>{`${run.latestProgress.phase}${run.latestProgress.detail ? ` · ${run.latestProgress.detail}` : ""}`}</ShortcodeProse>
+        ) : (
+          "No progress updates have been recorded."
+        )
+      }
+    >
       {run.controllingMembers.length ? (
         <p className="text-sm text-muted-foreground">
-          Controlled by{" "}
-          {run.controllingMembers
-            .map(
-              (member) =>
-                member.name ?? member.ledgerParty?.name ?? "Household member",
-            )
-            .join(", ")}
-          .
+          Controlled by {run.controllingMembers.map(memberName).join(", ")}.
         </p>
       ) : null}
       {run.controlHistory.length ? (
-        <div className="grid gap-1 border-t border-border pt-3 text-sm">
-          <h3 className="text-xs font-medium text-muted-foreground">
-            Control history
-          </h3>
-          {run.controlHistory.map((event) => (
-            <p key={`${event.action}-${event.createdAt}`}>
-              <span className="font-medium">
-                {event.name ?? event.ledgerParty?.name ?? "Household member"}
-              </span>{" "}
-              {event.action.replaceAll("_", " ")} ·{" "}
-              <time
-                className="font-mono text-xs text-muted-foreground"
-                dateTime={event.createdAt}
-              >
-                {new Date(event.createdAt).toLocaleString()}
-              </time>
-            </p>
-          ))}
-        </div>
+        <TimedRows
+          label="Control history"
+          className="max-h-60"
+          rows={run.controlHistory.map((event) => ({
+            key: `${event.action}-${event.createdAt}`,
+            at: event.createdAt,
+            body: (
+              <p className="text-sm">
+                <span className="font-medium">{memberName(event)}</span>{" "}
+                {event.action.replaceAll("_", " ")}
+              </p>
+            ),
+          }))}
+        />
       ) : null}
       {run.progress.length ? (
-        <div
-          className="max-h-[50vh] overflow-auto"
-          aria-label="Run progress history"
-        >
-          {[...run.progress].reverse().map((progress) => (
-            <div
-              key={progress.eventId}
-              className="grid gap-1 border-b border-border py-2 last:border-0 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-2"
-            >
-              <time
-                className="font-mono text-xs text-muted-foreground"
-                dateTime={progress.createdAt}
-              >
-                {new Date(progress.createdAt).toISOString()}
-              </time>
+        <TimedRows
+          label="Run progress history"
+          className="max-h-[50vh]"
+          rows={[...run.progress].reverse().map((progress) => ({
+            key: progress.eventId,
+            at: progress.createdAt,
+            body: (
               <p className="text-sm">
                 <ShortcodeProse>{`${progress.phase}${progress.currentItem ? ` · ${progress.currentItem}` : ""}${progress.detail ? ` · ${progress.detail}` : ""}`}</ShortcodeProse>
               </p>
-            </div>
-          ))}
-        </div>
+            ),
+          }))}
+        />
       ) : null}
-    </section>
+    </Section>
   );
 }
 
@@ -960,19 +796,16 @@ function TerminalAgentSurface({ run }: { run: ImportRunDetail }) {
       }),
     [run.publicId],
   );
+  // The Flue conversation route, not a Cubby operation.
   const history = useQuery({
-    queryKey: ["purchase-import", "run-agent-history", run.publicId],
+    queryKey: ["flue-agent-history", run.publicId],
     queryFn: () => client.history(),
   });
   return (
-    <section className="grid gap-3 border border-border bg-card p-4">
-      <div>
-        <h2 className="font-medium">Agent history</h2>
-        <p className="text-sm text-muted-foreground">
-          This terminal run is view-only. The complete materialized conversation
-          remains available as durable evidence.
-        </p>
-      </div>
+    <Section
+      title="Agent history"
+      description="This terminal run is view-only. The complete materialized conversation remains available as durable evidence."
+    >
       {history.isLoading ? (
         <StatusText>Loading agent history…</StatusText>
       ) : null}
@@ -988,7 +821,7 @@ function TerminalAgentSurface({ run }: { run: ImportRunDetail }) {
           />
         </>
       ) : null}
-    </section>
+    </Section>
   );
 }
 
@@ -1025,27 +858,23 @@ function ActiveAgentSurface({ run }: { run: ImportRunDetail }) {
     mutationFn: async () => await client.abort(),
     onSuccess: () => {
       observation.refresh();
-      void queryClient.refetchQueries({
-        queryKey: ["purchase-import", "run", run.publicId],
-      });
+      void invalidateOperationTags(queryClient, ripple.runOnly);
     },
   });
   const messages = agent.conversation?.messages ?? [];
 
   return (
-    <section className="grid gap-3 border border-border bg-card p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="font-medium">Live agent</h2>
-          <p className="text-sm text-muted-foreground">
-            The durable operation timeline is below; this conversation stays
-            current through the agent stream.
-          </p>
-        </div>
-        <Badge variant={agent.phase === "live" ? "positive" : "secondary"}>
-          {agent.phase}
-        </Badge>
-      </div>
+    <Section
+      title={
+        <Row gap="sm" align="center">
+          Live agent
+          <Badge variant={agent.phase === "live" ? "positive" : "secondary"}>
+            {agent.phase}
+          </Badge>
+        </Row>
+      }
+      description="The durable operation timeline is below; this conversation stays current through the agent stream."
+    >
       {agent.phase === "absent" ? (
         <p className="text-sm text-muted-foreground">
           The agent conversation is not available yet. This view will connect
@@ -1110,7 +939,7 @@ function ActiveAgentSurface({ run }: { run: ImportRunDetail }) {
         messages={messages}
         settlements={agent.conversation?.settlements ?? []}
       />
-    </section>
+    </Section>
   );
 }
 
@@ -1260,282 +1089,133 @@ function ToolValue({ label, value }: { label: string; value: unknown }) {
 
 function RunTimeline({ run }: { run: ImportRunDetail }) {
   return (
-    <section className="grid gap-3 border border-border bg-card p-4">
-      <div>
-        <h2 className="font-medium">Durable transcript</h2>
-        <p className="text-sm text-muted-foreground">
-          Oldest first. System and Mac events are retained as structured
-          operation evidence; sensitive page content and credentials are
-          excluded.
-        </p>
-      </div>
+    <Section
+      title="Durable transcript"
+      description="Oldest first. System and Mac events are retained as structured operation evidence; sensitive page content and credentials are excluded."
+    >
       {run.operations.length > 0 ? (
-        <div
-          className="max-h-[32rem] overflow-auto"
-          aria-label="Import run transcript"
-        >
-          {run.operations.map((operation) => (
-            <div
-              key={operation.operationId}
-              className="grid gap-1 border-b border-border py-2 last:border-0 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-2"
-            >
-              <time
-                className="font-mono text-xs text-muted-foreground"
-                dateTime={operation.startedAt}
-              >
-                {new Date(operation.startedAt).toISOString()}
-              </time>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
+        <TimedRows
+          label="Import run transcript"
+          rows={run.operations.map((operation) => ({
+            key: operation.operationId,
+            at: operation.startedAt,
+            body: (
+              <>
+                <Row wrap gap="sm" align="center">
                   <code className="text-xs">{operation.kind}</code>
                   <Badge variant={statusBadgeVariant(operation.state)}>
                     {operation.state}
                   </Badge>
-                </div>
+                </Row>
                 <p className="font-mono text-xs break-all text-muted-foreground">
                   {operation.operationId}
                 </p>
                 {operation.error ? (
                   <p className="text-sm text-destructive">{operation.error}</p>
                 ) : null}
-              </div>
-            </div>
-          ))}
-        </div>
+              </>
+            ),
+          }))}
+        />
       ) : (
         <StatusText>
           No durable operations have been recorded for this run.
         </StatusText>
       )}
-    </section>
+    </Section>
   );
 }
 
-function RunTargets({ run }: { run: ImportRunDetail }) {
-  return (
-    <section className="grid gap-3 border border-border bg-card p-4">
-      <div>
-        <h2 className="font-medium">Targets and outcome</h2>
-        <p className="text-sm text-muted-foreground">
-          The selected source and target are frozen for this run.
-        </p>
-      </div>
-      {run.targets.length ? (
-        <div className="grid gap-2">
-          {run.targets.map((target) => (
-            <article
-              key={target.id}
-              className="grid gap-1 border-b border-border pb-2 text-sm last:border-0 last:pb-0"
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={statusBadgeVariant(target.state)}>
-                  {target.state}
-                </Badge>
-                <span className="font-medium">
-                  {target.targetName ??
-                    target.targetShortcode ??
-                    target.targetType}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {target.sourceLabel ?? "No source selected"}
-                {target.vendorAccountLabel
-                  ? ` · ${target.vendorAccountLabel}`
-                  : ""}
-              </p>
-              {target.outcome ? <p>Outcome: {target.outcome}</p> : null}
-              {target.warning ? (
-                <StatusText tone="warning">{target.warning}</StatusText>
-              ) : null}
-              {target.diff !== null ? (
-                <details className="border border-border bg-muted/30 p-2 text-xs">
-                  <summary className="cursor-pointer font-medium">
-                    Review semantic difference
-                  </summary>
-                  <ToolValue label="Difference" value={target.diff} />
-                </details>
-              ) : null}
-            </article>
-          ))}
-        </div>
-      ) : (
-        <StatusText>
-          No explicit targets were recorded for this account sync.
-        </StatusText>
-      )}
-    </section>
-  );
-}
-
-function RunEvidence({ run }: { run: ImportRunDetail }) {
-  return (
-    <section className="grid gap-3 border border-border bg-card p-4">
-      <div>
-        <h2 className="font-medium">Run evidence</h2>
-        <p className="text-sm text-muted-foreground">
-          This evidence belongs to the run. Validation does not attach it to a
-          purchase or product.
-        </p>
-      </div>
-      {run.evidence.length ? (
-        <div className="grid gap-2">
-          {run.evidence.map((evidence) => (
-            <div
-              key={evidence.id}
-              className="grid gap-0.5 border-b border-border pb-2 text-sm last:border-0 last:pb-0"
-            >
-              <span className="font-medium">
-                {evidence.filename ?? evidence.sourceKind}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {evidence.sourceKind}
-                {evidence.mediaType ? ` · ${evidence.mediaType}` : ""}
-                {evidence.checksum ? ` · ${evidence.checksum}` : ""}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <StatusText>No run-scoped evidence was retained.</StatusText>
-      )}
-    </section>
-  );
-}
-
-function PendingApprovalActions({
-  publicId,
-  operationId,
-  approvalId,
+/** One titled list of run records, or its empty copy. */
+function RunRecordList<T>({
+  title,
+  description,
+  items,
+  empty,
+  render,
 }: {
-  publicId: string;
-  operationId: string;
-  approvalId: string;
+  title: string;
+  description?: string;
+  items: readonly T[];
+  empty: string;
+  render: (item: T) => { key: string; body: ReactNode };
 }) {
-  const queryClient = useQueryClient();
-  const decision = useMutation({
-    mutationFn: async (action: "approve" | "reject") => {
-      const response = await fetch(
-        `/api/import/runs/${encodeURIComponent(publicId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action, operationId, approvalId }),
-        },
-      );
-      const data = await readJsonOrThrow(
-        response,
-        importRunControlResponse,
-        "Approval could not be recorded.",
-        { method: "PATCH" },
-      );
-      return data.run;
-    },
-    onSuccess: () => {
-      void queryClient.refetchQueries({
-        queryKey: ["purchase-import", "run", publicId],
-      });
-    },
-  });
   return (
-    <div className="flex flex-wrap gap-2">
-      <Button
-        type="button"
-        size="sm"
-        onClick={() => decision.mutate("approve")}
-        disabled={decision.isPending}
-      >
-        Approve import proposal
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        onClick={() => decision.mutate("reject")}
-        disabled={decision.isPending}
-      >
-        Reject import proposal
-      </Button>
-      {decision.isError ? (
-        <StatusText tone="destructive">{decision.error.message}</StatusText>
-      ) : null}
-    </div>
+    <Section title={title} description={description}>
+      {items.length ? (
+        <Stack gap="sm">
+          {items.map((item) => {
+            const row = render(item);
+            return (
+              <article
+                key={row.key}
+                className="grid gap-1 border-b border-border pb-2 text-sm last:border-0 last:pb-0"
+              >
+                {row.body}
+              </article>
+            );
+          })}
+        </Stack>
+      ) : (
+        <StatusText>{empty}</StatusText>
+      )}
+    </Section>
   );
 }
 
 function RunDebugLog({
-  publicId,
+  runId,
   active,
 }: {
-  publicId: string;
+  runId: ImportRunDetail["publicId"];
   active: boolean;
 }) {
   const log = useQuery({
-    queryKey: ["purchase-import", "run-log", publicId],
-    queryFn: async () => {
-      const response = await fetch("/api/import/run-logs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ publicId }),
-      });
-      return readJsonOrThrow(
-        response,
-        importRunLogResponse,
-        "The run log could not load.",
-        { method: "POST" },
-      );
-    },
+    ...runOperations.logs.queryOptions({ runId }),
     refetchInterval: active ? 3_000 : false,
   });
   return (
-    <section className="grid gap-3 border border-border bg-card p-4">
-      <div>
-        <h2 className="font-medium">System and Mac log</h2>
-        <p className="text-sm text-muted-foreground">
-          Structured server and browser-bridge events are retained when the
-          agent conversation cannot explain a transition.
-        </p>
-      </div>
+    <Section
+      title="System and Mac log"
+      description="Structured server and browser-bridge events are retained when the agent conversation cannot explain a transition."
+    >
       {log.isLoading ? <StatusText>Loading structured log…</StatusText> : null}
       {log.isError ? (
         <StatusText tone="destructive">{log.error.message}</StatusText>
       ) : null}
       {log.data?.entries.length ? (
-        <div className="max-h-80 overflow-auto" aria-label="System and Mac log">
-          {log.data.entries.map((entry) => (
-            <RunDebugLogEntry key={entry.id} entry={entry} />
-          ))}
-          {log.data.truncated ? (
-            <p className="border-t border-border pt-2 text-xs text-warning">
-              This view is limited to the first 2,000 events.
-            </p>
-          ) : null}
-        </div>
+        <TimedRows
+          label="System and Mac log"
+          className="max-h-80"
+          rows={log.data.entries.map((entry) => ({
+            key: entry.id,
+            at: entry.occurredAt,
+            body: (
+              <>
+                <Row wrap gap="sm" align="center">
+                  <Badge
+                    variant={
+                      entry.level === "error" ? "destructive" : "outline"
+                    }
+                  >
+                    {entry.source}
+                  </Badge>
+                  <code className="text-xs">{entry.event}</code>
+                </Row>
+                {entry.error ? (
+                  <p className="text-sm text-destructive">{entry.error}</p>
+                ) : null}
+              </>
+            ),
+          }))}
+        />
       ) : null}
-    </section>
-  );
-}
-
-function RunDebugLogEntry({ entry }: { entry: ImportRunLogEntry }) {
-  return (
-    <div className="grid gap-1 border-b border-border py-2 last:border-0 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-2">
-      <time
-        className="font-mono text-xs text-muted-foreground"
-        dateTime={entry.occurredAt}
-      >
-        {new Date(entry.occurredAt).toISOString()}
-      </time>
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={entry.level === "error" ? "destructive" : "outline"}>
-            {entry.source}
-          </Badge>
-          <code className="text-xs">{entry.event}</code>
-        </div>
-        {entry.error ? (
-          <p className="text-sm text-destructive">{entry.error}</p>
-        ) : null}
-      </div>
-    </div>
+      {log.data?.truncated ? (
+        <p className="text-xs text-warning">
+          This view is limited to the first 2,000 events.
+        </p>
+      ) : null}
+    </Section>
   );
 }
 
@@ -1543,10 +1223,9 @@ function RunDebugLogEntry({ entry }: { entry: ImportRunLogEntry }) {
  * The import run's live read (agent transcript, operations, evidence), polled
  * while the run is active. Both import slots share it through the cache.
  */
-function useImportRun(publicId: string) {
+function useImportRun(runId: ImportRunOut["id"]) {
   return useQuery({
-    queryKey: ["purchase-import", "run", publicId],
-    queryFn: () => getRun(publicId),
+    ...runOperations.work.queryOptions({ runId }),
     refetchInterval: (query) =>
       query.state.data && ACTIVE_RUN_STATUSES.has(query.state.data.status)
         ? 3_000
@@ -1593,11 +1272,7 @@ export function RunPhotoBatch({ record }: { record: ImportRunOut }) {
     <ImportRunGate record={record}>
       {(run) => (
         <>
-          <TerminalRunControls run={run} />
-          <RunLineageAndInputs run={run} />
-          {run.dispatch?.eventId && !run.dispatch.coordinatorStartedAt ? (
-            <DispatchRecoveryControls run={run} />
-          ) : null}
+          <RunControls run={run} />
           <PhotoImportRunView run={run} />
           <RunProgress run={run} />
           {run.dispatch?.eventId ? <AgentSurface run={run} /> : null}
@@ -1608,7 +1283,7 @@ export function RunPhotoBatch({ record }: { record: ImportRunOut }) {
             <div className="mt-4 grid gap-4">
               <RunTimeline run={run} />
               <RunDebugLog
-                publicId={run.publicId}
+                runId={run.publicId}
                 active={ACTIVE_RUN_STATUSES.has(run.status)}
               />
             </div>
@@ -1637,255 +1312,233 @@ function RunOperationalSections({
 }
 
 // The operational record intentionally renders every durable evidence family
-// together so terminal history cannot silently omit one during refactors.
+// together so terminal history cannot silently omit one during refactors. The
+// run record's own fields (trigger, vendor, dispatch, lineage, runtime) render
+// in the generic Run detail around this slot.
 function ImportRunContent({ run }: { run: ImportRunDetail }) {
   return (
-    <div className="grid gap-4">
-      <section className="grid gap-4">
-        <div className="flex flex-wrap items-start justify-end gap-2">
-          <RunControl run={run} />
-          <DispatchRecoveryControls run={run} />
-          <EvidenceRecoveryControls run={run} />
-          <ManualEvidenceUpload run={run} />
-          <TerminalRunControls run={run} />
-        </div>
-        <RunLineageAndInputs run={run} />
-        <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Metadata label="Source" value={run.source?.kind ?? run.trigger} />
-          <Metadata
-            label="Vendor"
-            value={run.source?.vendorName ?? run.vendorAccount?.label ?? null}
-          />
-          {run.dispatch ? (
-            <Metadata
-              label="Dispatch"
-              value={`${run.dispatch.state} · ${run.dispatch.attempts} attempt${run.dispatch.attempts === 1 ? "" : "s"}`}
-            />
-          ) : null}
-        </dl>
-        <div className="grid grid-cols-2 border border-border sm:grid-cols-4">
-          {[
-            ["Orders seen", run.ordersSeen],
-            ["Imported", run.imported],
-            ["Updated", run.updated],
-            ["Skipped", run.skipped],
-          ].map(([label, value]) => (
-            <div
-              key={label}
-              className="border-r border-b border-border p-3 last:border-r-0 lg:border-b-0"
-            >
-              <dt className="text-xs text-muted-foreground">{label}</dt>
-              <dd className="font-mono text-sm tabular-nums">{value}</dd>
-            </div>
-          ))}
-        </div>
-        {run.dispatch?.error ? (
-          <StatusText tone="destructive">{run.dispatch.error}</StatusText>
-        ) : null}
-      </section>
+    <Stack gap="lg">
+      <RunControls run={run} />
+      <StatGrid>
+        <StatTile label="Orders seen">{run.ordersSeen}</StatTile>
+        <StatTile label="Imported">{run.imported}</StatTile>
+        <StatTile label="Updated">{run.updated}</StatTile>
+        <StatTile label="Skipped">{run.skipped}</StatTile>
+      </StatGrid>
 
       <RunOperationalSections run={run} placement="active" />
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <section className="grid gap-3 border border-border bg-card p-4">
-          <h2 className="font-medium">Run lineage and purchases</h2>
-          <div className="grid gap-2 text-sm">
-            <RunLink
-              label="Predecessor"
-              publicId={run.predecessorRunPublicId}
-            />
-            <RunLink
-              label="Successor"
-              publicId={run.successorRunPublicId ?? null}
-            />
-          </div>
+        <Section title="Purchases changed">
           {run.affectedPurchases.length > 0 ? (
-            <ul className="grid gap-2 border-t border-border pt-3">
+            <Stack gap="sm">
               {run.affectedPurchases.map((purchase) => (
-                <li
+                <EntityInlineLink
                   key={purchase.shortcode}
-                  className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm"
-                >
-                  <a
-                    className="text-primary hover:underline"
-                    href={`/purchases/${encodeURIComponent(purchase.shortcode)}`}
-                  >
-                    {purchase.displayName ??
-                      purchase.orderId ??
-                      purchase.shortcode}
-                  </a>
-                  {purchase.orderId ? (
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {purchase.orderId}
-                    </span>
-                  ) : null}
-                </li>
+                  entity="purchase"
+                  data={{
+                    id: purchase.shortcode,
+                    orderId: purchase.orderId,
+                    displayLabel: purchase.displayName,
+                  }}
+                  displayImage={null}
+                />
               ))}
-            </ul>
+            </Stack>
           ) : (
             <StatusText>No purchases were changed by this run.</StatusText>
           )}
-        </section>
+        </Section>
 
-        <section className="grid gap-3 border border-border bg-card p-4">
-          <h2 className="font-medium">Approvals</h2>
-          {run.approvals.length > 0 ||
-          run.operations.some(
-            (operation) => operation.state === "paused_approval",
-          ) ? (
-            <div className="grid gap-2">
-              {run.approvals.map((approval) => (
-                <div
-                  key={approval.id}
-                  className="grid gap-1 border-b border-border pb-2 text-sm last:border-0 last:pb-0"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={statusBadgeVariant(approval.state)}>
-                      {approval.state}
-                    </Badge>
-                    <code className="text-xs">{approval.operationKind}</code>
-                    <code className="text-xs break-all text-muted-foreground">
-                      {approval.operationId}
-                    </code>
-                  </div>
-                  <ToolValue label="Proposed arguments" value={approval.args} />
-                  <span className="text-xs text-muted-foreground">
-                    {approval.rejectedAt
-                      ? `Rejected ${formatMoment(approval.rejectedAt)}`
-                      : approval.grantedAt
-                        ? `Granted ${formatMoment(approval.grantedAt)}`
-                        : "Awaiting explicit approval"}
-                  </span>
-                  {approval.state === "pending" ? (
-                    <PendingApprovalActions
-                      publicId={run.publicId}
-                      operationId={approval.operationId}
-                      approvalId={approval.id}
-                    />
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <StatusText>No approvals were required for this run.</StatusText>
-          )}
-        </section>
+        <RunRecordList
+          title="Approvals"
+          items={run.approvals}
+          empty="No approvals were required for this run."
+          render={(approval) => ({
+            key: approval.id,
+            body: (
+              <>
+                <Row wrap gap="sm" align="center">
+                  <Badge variant={statusBadgeVariant(approval.state)}>
+                    {approval.state}
+                  </Badge>
+                  <code className="text-xs">{approval.operationKind}</code>
+                  <code className="text-xs break-all text-muted-foreground">
+                    {approval.operationId}
+                  </code>
+                </Row>
+                <ToolValue label="Proposed arguments" value={approval.args} />
+                <span className="text-xs text-muted-foreground">
+                  {approval.rejectedAt
+                    ? `Rejected ${formatMoment(approval.rejectedAt)}`
+                    : approval.grantedAt
+                      ? `Granted ${formatMoment(approval.grantedAt)}`
+                      : "Awaiting explicit approval"}
+                </span>
+                {approval.state === "pending" ? (
+                  <RunActionButtons
+                    runId={run.publicId}
+                    target={{
+                      operationId: approval.operationId,
+                      approvalId: approval.id,
+                    }}
+                    actions={APPROVAL_ACTIONS}
+                  />
+                ) : null}
+              </>
+            ),
+          })}
+        />
       </div>
 
-      <section className="grid gap-3 border border-border bg-card p-4">
-        <h2 className="font-medium">Findings</h2>
-        {run.findings.length > 0 ? (
-          <div className="grid gap-2">
-            {run.findings.map((finding) => (
-              <article
-                key={finding.id}
-                className="grid gap-1 border-b border-border pb-2 text-sm last:border-0 last:pb-0"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={statusBadgeVariant(finding.status)}>
-                    {finding.status}
-                  </Badge>
-                  <code className="text-xs">{finding.kind}</code>
-                  {finding.autoApplied ? (
-                    <Badge variant="outline">auto-applied</Badge>
-                  ) : null}
-                </div>
-                <p>
-                  <ShortcodeProse>{finding.summary}</ShortcodeProse>
-                </p>
-                <p className="font-mono text-xs text-muted-foreground">
-                  {formatMoment(finding.createdAt)}
-                  {finding.probability == null
-                    ? ""
-                    : ` · ${(finding.probability * 100).toFixed(0)}%`}
-                  {finding.expiresAt
-                    ? ` · expires ${formatMoment(finding.expiresAt)}`
-                    : ""}
-                </p>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <StatusText>No findings were recorded for this run.</StatusText>
-        )}
-      </section>
+      <RunRecordList
+        title="Findings"
+        items={run.findings}
+        empty="No findings were recorded for this run."
+        render={(finding) => ({
+          key: finding.id,
+          body: (
+            <>
+              <Row wrap gap="sm" align="center">
+                <Badge variant={statusBadgeVariant(finding.status)}>
+                  {finding.status}
+                </Badge>
+                <code className="text-xs">{finding.kind}</code>
+                {finding.autoApplied ? (
+                  <Badge variant="outline">auto-applied</Badge>
+                ) : null}
+              </Row>
+              <p>
+                <ShortcodeProse>{finding.summary}</ShortcodeProse>
+              </p>
+              <p className="font-mono text-xs text-muted-foreground">
+                {formatMoment(finding.createdAt)}
+                {finding.probability == null
+                  ? ""
+                  : ` · ${(finding.probability * 100).toFixed(0)}%`}
+                {finding.expiresAt
+                  ? ` · expires ${formatMoment(finding.expiresAt)}`
+                  : ""}
+              </p>
+            </>
+          ),
+        })}
+      />
 
       {(run.targets.length > 0 || run.evidence.length > 0) && (
         <div className="grid gap-4 xl:grid-cols-2">
-          <RunTargets run={run} />
-          <RunEvidence run={run} />
+          <RunRecordList
+            title="Targets and outcome"
+            description="The selected source and target are frozen for this run."
+            items={run.targets}
+            empty="No explicit targets were recorded for this account sync."
+            render={(target) => ({
+              key: target.id,
+              body: (
+                <>
+                  <Row wrap gap="sm" align="center">
+                    <Badge variant={statusBadgeVariant(target.state)}>
+                      {target.state}
+                    </Badge>
+                    <span className="font-medium">
+                      {target.targetName ??
+                        target.targetShortcode ??
+                        target.targetType}
+                    </span>
+                  </Row>
+                  <p className="text-xs text-muted-foreground">
+                    {target.sourceLabel ?? "No source selected"}
+                    {target.vendorAccountLabel
+                      ? ` · ${target.vendorAccountLabel}`
+                      : ""}
+                  </p>
+                  {target.outcome ? <p>Outcome: {target.outcome}</p> : null}
+                  {target.warning ? (
+                    <StatusText tone="warning">{target.warning}</StatusText>
+                  ) : null}
+                  {target.diff !== null ? (
+                    <details className="border border-border bg-muted/30 p-2 text-xs">
+                      <summary className="cursor-pointer font-medium">
+                        Review semantic difference
+                      </summary>
+                      <ToolValue label="Difference" value={target.diff} />
+                    </details>
+                  ) : null}
+                </>
+              ),
+            })}
+          />
+          <RunRecordList
+            title="Run evidence"
+            description="This evidence belongs to the run. Validation does not attach it to a purchase or product."
+            items={run.evidence}
+            empty="No run-scoped evidence was retained."
+            render={(evidence) => ({
+              key: evidence.id,
+              body: (
+                <>
+                  <span className="font-medium">
+                    {evidence.filename ?? evidence.sourceKind}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {evidence.sourceKind}
+                    {evidence.mediaType ? ` · ${evidence.mediaType}` : ""}
+                    {evidence.checksum ? ` · ${evidence.checksum}` : ""}
+                  </span>
+                </>
+              ),
+            })}
+          />
         </div>
       )}
 
-      <section className="grid gap-3 border border-border bg-card p-4">
-        <h2 className="font-medium">Prepared orders</h2>
-        {run.preparedOrders.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-border text-xs text-muted-foreground">
-                <tr>
-                  <th className="p-2">Source</th>
-                  <th className="p-2">Order</th>
-                  <th className="p-2">Lines</th>
-                  <th className="p-2">Prepared</th>
-                </tr>
-              </thead>
-              <tbody>
-                {run.preparedOrders.map((order) => (
-                  <tr
-                    key={order.stableOrderId}
-                    className="border-b border-border last:border-0"
-                  >
-                    <td className="p-2">{order.sourceKind}</td>
-                    <td className="p-2 font-mono text-xs">
-                      {order.externalKey ?? order.stableOrderId}
-                    </td>
-                    <td className="p-2 font-mono tabular-nums">
-                      {order.lineCount}
-                    </td>
-                    <td className="p-2 font-mono text-xs">
-                      {formatMoment(order.preparedAt)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <StatusText>No orders were prepared.</StatusText>
-        )}
-      </section>
+      <RunRecordList
+        title="Prepared orders"
+        items={run.preparedOrders}
+        empty="No orders were prepared."
+        render={(order) => ({
+          key: order.stableOrderId,
+          body: (
+            <Row wrap gap="sm" align="baseline" justify="between">
+              <span>
+                {order.sourceKind} ·{" "}
+                <code className="text-xs">
+                  {order.externalKey ?? order.stableOrderId}
+                </code>
+              </span>
+              <span className="font-mono text-xs text-muted-foreground tabular-nums">
+                {order.lineCount} lines · {formatMoment(order.preparedAt)}
+              </span>
+            </Row>
+          ),
+        })}
+      />
       <RunOperationalSections run={run} placement="terminal" />
       <RunTimeline run={run} />
       <RunDebugLog
-        publicId={run.publicId}
+        runId={run.publicId}
         active={ACTIVE_RUN_STATUSES.has(run.status)}
       />
-    </div>
+    </Stack>
   );
 }
 
-function RunLink({
-  label,
-  publicId,
-}: {
-  label: string;
-  publicId: string | null;
-}) {
+const APPROVAL_ACTIONS: readonly RunAction[] = [
+  { action: "approve", label: "Approve import proposal" },
+  { action: "reject", label: "Reject import proposal", variant: "outline" },
+];
+
+function RunLink({ label, publicId }: { label: string; publicId: string }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
+    <Row wrap gap="sm" align="center" justify="between" className="text-sm">
       <span className="text-muted-foreground">{label}</span>
-      {publicId ? (
-        <a
-          className="inline-flex items-center gap-1 font-mono text-xs text-primary hover:underline"
-          href={importRunHref(publicId)}
-        >
-          {publicId}
-          <ArrowSquareOutIcon className="size-3" />
-        </a>
-      ) : (
-        <span>—</span>
-      )}
-    </div>
+      <a
+        className="inline-flex items-center gap-1 font-mono text-xs text-primary hover:underline"
+        href={importRunHref(publicId)}
+      >
+        {publicId}
+        <ArrowSquareOutIcon className="size-3" />
+      </a>
+    </Row>
   );
 }

@@ -65,7 +65,7 @@ const PHOTO_MCP_TOOLS = [
   "find_similar_entities",
   "propose_photo_groups",
   "list_photo_group_proposals",
-  "patch_product_external_ids",
+  "patch_products_external_ids",
 ] as const;
 
 // Tools purchase runs called in production plus those the purchase-import and
@@ -82,11 +82,11 @@ const PURCHASE_MCP_TOOLS = [
   "get_vendor_coverage",
   "global_search",
   "import_operation_status",
-  "list_purchase_products",
+  "list_entity_relation",
   "list_statement_imports",
   "list_statement_rows",
   "lookup_upc",
-  "patch_product_external_ids",
+  "patch_products_external_ids",
   "prepare_purchase_import",
   "preview_financial_statement_import",
   "propose_product_match",
@@ -95,7 +95,6 @@ const PURCHASE_MCP_TOOLS = [
   "schedule_image_processing",
   "update_statement_rows",
   "validate_purchase_import",
-  "verify_product_images",
   "verify_products_images",
 ] as const;
 

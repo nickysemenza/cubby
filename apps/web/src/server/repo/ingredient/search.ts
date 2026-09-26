@@ -40,7 +40,6 @@ import {
   loadDataQualities,
 } from "~/server/repo/data-quality";
 import {
-  auditDateWhereConditions,
   buildSearchConditions,
   countWhere,
   executeListQueryWithCount,
@@ -491,10 +490,7 @@ export const buildIngredientListWhere = async (
 
   // Always filter out recipe-scoped ingredients; `notDeleted` is folded into
   // `ingredientScaffold.where` below.
-  const computed: Array<SQL | undefined> = [
-    isNull(ingredient.recipeId),
-    ...auditDateWhereConditions(ingredient, filters),
-  ];
+  const computed: Array<SQL | undefined> = [isNull(ingredient.recipeId)];
 
   // Add name filter if provided
   if (filters.nameFilter) {

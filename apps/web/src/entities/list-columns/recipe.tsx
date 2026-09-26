@@ -16,7 +16,6 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { useCookbookOptions } from "~/app/_components/hooks/useCookbookOptions";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useRecipeTagOptions } from "~/app/_components/hooks/useRecipeTagOptions";
@@ -101,7 +100,6 @@ export const recipeListOverride = defineListOverride<
 >({
   use() {
     const { options: tagOptions } = useRecipeTagOptions();
-    const { options: cookbookOptions } = useCookbookOptions();
     const ingredientOptionsQuery = useQuery(
       relatedData.options.queryOptions({
         relationKey: "recipe.ingredients",
@@ -119,7 +117,6 @@ export const recipeListOverride = defineListOverride<
     );
     const filterOptions = useFilterOptions({
       tags: tagOptions,
-      cookbook: cookbookOptions,
       recipeIngredients: ingredientOptions,
     });
 

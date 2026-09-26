@@ -1,44 +1,27 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import {
-  parseEntityId,
-  parseShortcodeFor,
-  type PlantingId,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor, type PlantingId } from "@cubby/schemas/identifiers";
 import { and, asc, eq, inArray } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { gardenEntryPlanting, planting } from "~/server/db/schema";
 import {
+  bulkUpdatedWithSideEffects,
   defineEntityAdapter,
   deletedWithImages,
-  entityMutationReferences,
 } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  type AuditEntryInput,
-  computeChanges,
-  diffUnorderedIdSet,
-  logAuditEntries,
-} from "~/server/repo/audit-log";
-import {
-  buildPartialUpdateValues,
-  imageCascadeChild,
-  notDeleted,
-  withTransaction,
-} from "~/server/repo/database-helpers";
-import { removeEntity } from "~/server/repo/removal";
+import { diffUnorderedIdSet, logAuditEntries } from "~/server/repo/audit-log";
+import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import { bulkPatchEntities } from "~/server/repo/entity-patch";
+import { deleteByPolicy } from "~/server/repo/removal";
 import {
   bindShortcodeResolver,
   resolveLiveShortcode,
 } from "~/server/repo/shortcode-resolver";
-import {
-  mutationEvents,
-  refreshDerivedSearchRefs,
-  runMutationSideEffectsForEntities,
-} from "~/server/services/mutation-side-effects";
+import { refreshDerivedSearchRefs } from "~/server/services/mutation-side-effects";
 
 import {
   createGardenEntry,
@@ -91,96 +74,93 @@ const raiseMissingLocation = (): never => {
   );
 };
 
-/**
- * Mirrors `updateTasksInBulk` (`repo/task/crud.ts`): one complete patch, one
- * transaction, per-row audit `changes` computed on the `model.bulk` roster
- * (`status`, `finishedOn`, `locationId`).
- */
-const updatePlantingsInBulk = async (
+const updatePlantingsInBulk = (
   db: Database,
   shortcodes: readonly string[],
   data: PlantingBulkPatch,
   actor: ActorContext,
-): Promise<{ updatedIds: PlantingId[]; updatedShortcodes: string[] }> => {
-  if (new Set(shortcodes).size !== shortcodes.length) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Bulk planting IDs must be unique.",
-    );
-  }
-  const hasPatch =
-    data.status !== undefined ||
-    data.finishedOn !== undefined ||
-    data.locationId !== undefined;
-  if (!hasPatch) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "A bulk planting patch must supply at least one field.",
-    );
-  }
+) =>
+  bulkPatchEntities(
+    db,
+    actor,
+    {
+      entity: "planting",
+      table: planting,
+      values: async (tx) => ({
+        status: data.status,
+        outcome: data.outcome,
+        finishedOn: data.finishedOn,
+        locationId:
+          data.locationId == null
+            ? data.locationId
+            : ((await resolveLiveShortcode(tx, data.locationId, "location")) ??
+              raiseMissingLocation()),
+      }),
+    },
+    shortcodes,
+    data,
+  );
 
-  return await withTransaction(db, async (tx: DrizzleTransaction) => {
-    const locationId =
-      data.locationId === undefined
-        ? undefined
-        : data.locationId === null
-          ? null
-          : ((await resolveLiveShortcode(tx, data.locationId, "location")) ??
-            raiseMissingLocation());
-    const ids = await plantings.all(tx, shortcodes);
-    const before = await tx
-      .select({
-        id: planting.id,
-        shortcode: planting.shortcode,
-        status: planting.status,
-        outcome: planting.outcome,
-        finishedOn: planting.finishedOn,
-        locationId: planting.locationId,
-      })
-      .from(planting)
-      .where(and(inArray(planting.id, ids), notDeleted(planting)))
-      .for("update");
-    if (before.length !== ids.length) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "One or more plantings are missing.",
-      );
-    }
-
-    const values = buildPartialUpdateValues({
-      status: data.status,
-      outcome: data.outcome,
-      finishedOn: data.finishedOn,
-      locationId,
-    });
-    await tx
-      .update(planting)
-      .set(values)
-      .where(and(inArray(planting.id, ids), notDeleted(planting)));
-
-    const auditEntries: AuditEntryInput[] = [];
-    for (const row of before) {
-      const changes = computeChanges(row, { ...row, ...values }, [
-        ...entityFieldModels.planting.bulk,
-      ]);
-      if (changes) {
-        auditEntries.push({
-          entityType: "planting",
-          entityId: row.id,
-          action: "update",
-          changes,
-        });
-      }
-    }
-    await logAuditEntries(tx, actor, auditEntries);
-
-    return {
-      updatedIds: before.map((row) => parseEntityId("planting", row.id)),
-      updatedShortcodes: before.map((row) =>
-        parseShortcodeFor("planting", row.shortcode),
+/** Live (entry, planting code) pairs of every entry naming one of `ids`. */
+const entryPlantingSets = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly PlantingId[],
+) => {
+  const link = gardenEntryPlanting;
+  const touched = unwrapDb(db)
+    .select({ id: link.gardenEntryId })
+    .from(link)
+    .where(and(inArray(link.plantingId, [...ids]), notDeleted(link)));
+  return unwrapDb(db)
+    .select({
+      gardenEntryId: link.gardenEntryId,
+      plantingId: link.plantingId,
+      shortcode: planting.shortcode,
+    })
+    .from(link)
+    .innerJoin(planting, eq(planting.id, link.plantingId))
+    .where(
+      and(
+        inArray(link.gardenEntryId, touched),
+        notDeleted(link),
+        notDeleted(planting),
       ),
-    };
-  });
+    )
+    .orderBy(asc(link.gardenEntryId), asc(planting.shortcode));
+};
+
+/** Each affected entry's `plantingIds` set loses the deleted plantings. */
+const auditEntryPlantingSets = async (
+  tx: DrizzleTransaction,
+  ids: readonly PlantingId[],
+  actor: ActorContext,
+) => {
+  const removed = new Set<string>(ids);
+  const byEntry = new Map<string, { before: string[]; after: string[] }>();
+  for (const row of await entryPlantingSets(tx, ids)) {
+    const sets = byEntry.get(row.gardenEntryId) ?? { before: [], after: [] };
+    const code = parseShortcodeFor("planting", row.shortcode);
+    sets.before.push(code);
+    if (!removed.has(row.plantingId)) sets.after.push(code);
+    byEntry.set(row.gardenEntryId, sets);
+  }
+  await logAuditEntries(
+    tx,
+    actor,
+    [...byEntry].flatMap(([gardenEntryId, { before, after }]) => {
+      const changes = diffUnorderedIdSet(before, after);
+      return changes
+        ? [
+            {
+              entityType: "gardenEntry" as const,
+              entityId: gardenEntryId,
+              action: "update" as const,
+              changes: { plantingIds: changes },
+            },
+          ]
+        : [];
+    }),
+  );
 };
 
 export const plantingEntityAdapter = defineEntityAdapter({
@@ -207,118 +187,17 @@ export const plantingEntityAdapter = defineEntityAdapter({
     },
     delete: async (ctx, shortcodes) => {
       const ids = await plantings.all(ctx.db, shortcodes);
-      const { detachedImageKeys, deletedImageShortcodes, affectedEntryIds } =
-        await withTransaction(ctx.db, async (tx) => {
-          const affectedEntryRows = await tx
-            .select({ gardenEntryId: gardenEntryPlanting.gardenEntryId })
-            .from(gardenEntryPlanting)
-            .where(
-              and(
-                inArray(gardenEntryPlanting.plantingId, ids),
-                notDeleted(gardenEntryPlanting),
-              ),
-            );
-          const affectedEntryIds = [
-            ...new Set(affectedEntryRows.map((row) => row.gardenEntryId)),
-          ];
-          const beforeRows = affectedEntryIds.length
-            ? await tx
-                .select({
-                  gardenEntryId: gardenEntryPlanting.gardenEntryId,
-                  shortcode: planting.shortcode,
-                })
-                .from(gardenEntryPlanting)
-                .innerJoin(
-                  planting,
-                  eq(planting.id, gardenEntryPlanting.plantingId),
-                )
-                .where(
-                  and(
-                    inArray(
-                      gardenEntryPlanting.gardenEntryId,
-                      affectedEntryIds,
-                    ),
-                    notDeleted(gardenEntryPlanting),
-                    notDeleted(planting),
-                  ),
-                )
-                .orderBy(
-                  asc(gardenEntryPlanting.gardenEntryId),
-                  asc(planting.shortcode),
-                )
-            : [];
-          const beforeByEntry = new Map<string, string[]>();
-          for (const row of beforeRows) {
-            const values = beforeByEntry.get(row.gardenEntryId) ?? [];
-            values.push(parseShortcodeFor("planting", row.shortcode));
-            beforeByEntry.set(row.gardenEntryId, values);
-          }
-          const result = await removeEntity(tx, {
-            entity: "planting",
-            ids,
-            removal: "soft",
-            actor: ctx.actorContext,
-            children: [
-              {
-                table: gardenEntryPlanting,
-                parentColumns: [gardenEntryPlanting.plantingId],
-                auditKey: "detachedGardenEntries",
-              },
-            ],
-          });
-          const afterRows = affectedEntryIds.length
-            ? await tx
-                .select({
-                  gardenEntryId: gardenEntryPlanting.gardenEntryId,
-                  shortcode: planting.shortcode,
-                })
-                .from(gardenEntryPlanting)
-                .innerJoin(
-                  planting,
-                  eq(planting.id, gardenEntryPlanting.plantingId),
-                )
-                .where(
-                  and(
-                    inArray(
-                      gardenEntryPlanting.gardenEntryId,
-                      affectedEntryIds,
-                    ),
-                    notDeleted(gardenEntryPlanting),
-                    notDeleted(planting),
-                  ),
-                )
-                .orderBy(
-                  asc(gardenEntryPlanting.gardenEntryId),
-                  asc(planting.shortcode),
-                )
-            : [];
-          const afterByEntry = new Map<string, string[]>();
-          for (const row of afterRows) {
-            const values = afterByEntry.get(row.gardenEntryId) ?? [];
-            values.push(parseShortcodeFor("planting", row.shortcode));
-            afterByEntry.set(row.gardenEntryId, values);
-          }
-          await logAuditEntries(
-            tx,
-            ctx.actorContext,
-            [...beforeByEntry.entries()].flatMap(([gardenEntryId, before]) => {
-              const changes = diffUnorderedIdSet(
-                before,
-                afterByEntry.get(gardenEntryId) ?? [],
-              );
-              return changes
-                ? [
-                    {
-                      entityType: "gardenEntry" as const,
-                      entityId: gardenEntryId,
-                      action: "update" as const,
-                      changes: { plantingIds: changes },
-                    },
-                  ]
-                : [];
-            }),
-          );
-          return { ...result, affectedEntryIds };
+      const affectedEntryIds = uniq(
+        (await entryPlantingSets(ctx.db, ids)).map((row) => row.gardenEntryId),
+      );
+      const { detachedImageKeys, deletedImageShortcodes } =
+        await deleteByPolicy(ctx.db, {
+          entity: "planting",
+          policy: PLANTING_DELETE_EDGE_POLICY,
+          ids,
+          actor: ctx.actorContext,
+          beforeDelete: (tx, removed) =>
+            auditEntryPlantingSets(tx, removed, ctx.actorContext),
         });
       await refreshDerivedSearchRefs(
         ctx.db,
@@ -337,30 +216,12 @@ export const plantingEntityAdapter = defineEntityAdapter({
         detachedImageKeys,
       };
     },
-    /** One complete patch, one transaction, then one side-effect fan-out. */
-    bulkUpdate: async (ctx, ids, data) => {
-      const result = await updatePlantingsInBulk(
-        ctx.db,
-        ids,
-        data,
-        ctx.actorContext,
-      );
-      await runMutationSideEffectsForEntities(
-        ctx.db,
-        mutationEvents(
-          "planting",
-          "updated",
-          result.updatedIds,
-          "planting.bulkUpdate",
-        ),
-      );
-      return {
-        updatedReferences: entityMutationReferences(
-          "planting",
-          result.updatedShortcodes,
-        ),
-      };
-    },
+    bulkUpdate: async (ctx, ids, data) =>
+      bulkUpdatedWithSideEffects(
+        ctx,
+        "planting",
+        await updatePlantingsInBulk(ctx.db, ids, data, ctx.actorContext),
+      ),
   },
 });
 
@@ -384,23 +245,12 @@ export const gardenEntryEntityAdapter = defineEntityAdapter({
       };
     },
     delete: async (ctx, shortcodes) => {
-      const ids = await entries.all(ctx.db, shortcodes);
       const { detachedImageKeys, deletedImageShortcodes } =
-        await withTransaction(ctx.db, async (tx) => {
-          return await removeEntity(tx, {
-            entity: "gardenEntry",
-            ids,
-            removal: "soft",
-            actor: ctx.actorContext,
-            children: [
-              {
-                table: gardenEntryPlanting,
-                parentColumns: [gardenEntryPlanting.gardenEntryId],
-                auditKey: "cascadedPlantings",
-              },
-              imageCascadeChild(),
-            ],
-          });
+        await deleteByPolicy(ctx.db, {
+          entity: "gardenEntry",
+          policy: GARDEN_ENTRY_DELETE_EDGE_POLICY,
+          shortcodes,
+          actor: ctx.actorContext,
         });
       return {
         deletedReferences: deletedWithImages(

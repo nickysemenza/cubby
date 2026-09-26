@@ -37,9 +37,9 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { fieldEnumOptions } from "~/entities/enum-field-display";
 import { getErrorMessage } from "~/lib/error-utils";
 
-import { taskStatusOptions } from "./task-options";
 import { task } from "./task.functions";
 
 /** A single chain node (task or project) as a linked breadcrumb chip. */
@@ -153,7 +153,7 @@ function TaskRows({
               </Row>
             </TableCell>
             <TableCell>
-              {renderOptionCell(t.status, taskStatusOptions)}
+              {renderOptionCell(t.status, fieldEnumOptions("task", "status"))}
             </TableCell>
             <TableCell>
               {t.projectId && t.projectName && t.projectId ? (
@@ -306,7 +306,10 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
                       name: bt.task.name,
                     }}
                   />
-                  {renderOptionCell(bt.task.status, taskStatusOptions)}
+                  {renderOptionCell(
+                    bt.task.status,
+                    fieldEnumOptions("task", "status"),
+                  )}
                   {bt.task.subtaskCount > 0 && (
                     <Badge variant="outline">
                       {bt.task.doneSubtaskCount}/{bt.task.subtaskCount}

@@ -7,7 +7,6 @@ import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { mock } from "~/lib/test/mock-schema";
 import {
   entityBrowserMutationResultSchema,
-  entityMutationResultSchema,
   type EntityBrowserMutationInput,
 } from "~/server/entity-kernel/contracts";
 
@@ -117,7 +116,7 @@ describe("kernel browser transport", () => {
 
   it("keeps the explicit Image update result in the strict mutation union", () => {
     expect(
-      entityMutationResultSchema.safeParse({
+      entityBrowserMutationResultSchema.safeParse({
         action: "update",
         entity: "image",
         item: mock(imageOut, { seed: 1 }),

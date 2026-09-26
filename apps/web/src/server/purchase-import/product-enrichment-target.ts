@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { notDeleted } from "~/server/repo/database-helpers";
+import { sha256Hex } from "~/server/semantic/hash";
 
 type ProductId = typeof product.$inferSelect.id;
 
@@ -30,12 +31,8 @@ export async function productEnrichmentTarget(
     .limit(1);
   const [live] = options?.lock ? await query.for("update") : await query;
   if (!live) return null;
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(JSON.stringify({ product: live })),
-  );
-  const fingerprint = [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-  return { live, fingerprint };
+  return {
+    live,
+    fingerprint: await sha256Hex(JSON.stringify({ product: live })),
+  };
 }

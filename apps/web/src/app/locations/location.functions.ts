@@ -13,5 +13,4 @@ export const location = defineOperationDomain(locationContract, {
   inventoryBreakdown: {
     tags: [["location", "inventoryBreakdown"], ["inventory"]],
   },
-  parentOptions: { tags: [["location", "parentOptions"]] },
 });

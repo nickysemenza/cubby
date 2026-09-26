@@ -151,6 +151,7 @@ const sourceRefSchema = z.object({
 const relationshipMutationSchema = z.object({
   source: z.string().min(1),
   itemSchema: sourceRefSchema,
+  rowSchema: sourceRefSchema,
   adapter: sourceRefSchema,
   audiences: z.array(z.enum(["browser", "mcp"])).min(1),
 });

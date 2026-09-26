@@ -9,13 +9,11 @@ variant from:
 
 Copied registry items:
 
-- `gantt` → `components/reui/gantt/`
 - `event-calendar` → `components/reui/event-calendar/` (also carries its own license notice)
 - `timeline` → `components/reui/timeline.tsx` (now specialized as the audit timeline)
 
-Cubby-specific adaptations add strict TypeScript compatibility, the Gantt
-dependency overlay and event-class hooks, a read-only project timeline, and
-first-party adapters for Cubby entities. The former copied filters and file
+Cubby-specific adaptations add strict TypeScript compatibility, event-class
+hooks, and first-party adapters for Cubby entities. The former copied filters and file
 upload hook were replaced with Cubby-owned modules and are no longer covered
 by this provenance notice.
 

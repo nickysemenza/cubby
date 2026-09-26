@@ -5,7 +5,6 @@ import {
   generatedPurchaseFilterFields,
 } from "./generated/entity-field-schemas.purchase.gen";
 import { auditDateFilterFields, uniqueBy } from "./base-entity";
-import { relationMutationOut } from "./common";
 import {
   expenseShortcode,
   imageShortcode,
@@ -347,16 +346,6 @@ export const purchaseProductsInput = z.object({
 export const productPurchasesInput = z.object({
   productId: productShortcode,
 });
-
-export const purchaseProductMutationInput = z.object({
-  purchaseId: purchaseShortcode,
-  productIds: z.array(productShortcode).min(1).max(100),
-});
-
-export const purchaseProductMutationOut = relationMutationOut;
-export type PurchaseProductMutationOut = z.infer<
-  typeof purchaseProductMutationOut
->;
 
 /**
  * How a purchase⟷product row came to exist.

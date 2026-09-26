@@ -1,19 +1,11 @@
 import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import type {
-  IngredientShortcode,
-  LedgerPartyShortcode,
   LocationShortcode,
   ProductShortcode,
-  ProjectShortcode,
-  RecipeShortcode,
-  TaskShortcode,
   ShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { ingredientOut } from "@cubby/schemas/ingredient";
-import type { LedgerPartyOut } from "@cubby/schemas/ledger-party";
 import { infLocation } from "@cubby/schemas/location";
 import { productTopLevelOut } from "@cubby/schemas/product";
-import type { SearchHit } from "@cubby/schemas/search";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { lazy, Suspense } from "react";
@@ -22,7 +14,6 @@ import type { z } from "zod";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
 import { location } from "~/app/locations/location.functions";
 import { product } from "~/app/products/product.functions";
-import { vendor } from "~/app/vendors/vendor.functions";
 import { captureRequest } from "~/entities/editing/editor-requests";
 import {
   entityListFor,
@@ -30,17 +21,13 @@ import {
 } from "~/entities/entity-list.functions";
 
 import {
-  buildIngredientComboboxItem,
   buildLocationComboboxItem,
   buildLocationComboboxItemFromDetail,
-  buildPlantComboboxItem,
-  buildPlantingComboboxItem,
   buildProductComboboxItem,
-  buildProjectComboboxItem,
-  buildRecipeComboboxItem,
+  buildRecordComboboxItem,
   buildSearchHitComboboxItem,
-  buildTaskComboboxItem,
-  buildVendorComboboxItem,
+  pickerRecord,
+  type PickerRecord,
   type ProductPickerIntent,
 } from "./combobox-builders";
 import type { ComboboxItem } from "./combobox-types";
@@ -54,170 +41,132 @@ import {
   type UseEntitySearchConfig,
 } from "./entity-search-hooks";
 
-type PlantShortcode = ShortcodeFor<"plant">;
-type PlantingShortcode = ShortcodeFor<"planting">;
-
 const EntityEditDialog = lazy(() =>
   import("~/entities/editing/entity-edit-dialog").then((module) => ({
     default: module.EntityEditDialog,
   })),
 );
 
+/** What a picker search source hands its combobox. */
+export interface EntitySearchResult<TId extends string> {
+  items: ComboboxItem<TId>[];
+  onSearchChange: (query: string) => void;
+  isLoading: boolean;
+  onCreateNew?: (name: string) => Promise<ComboboxItem<TId>>;
+  // Wire this to the combobox's open/close so the options query stays
+  // deferred until the user actually opens the picker (off the page's
+  // critical path).
+  onOpenChange: (open: boolean) => void;
+}
+
 export interface WithEntitySearchProps<TId extends string = string> {
   /** Candidate filters derived from the owning editor's dependent fields. */
   scope?: EntitySearchScope | null;
   /**
-   * Bivariant on purpose (the `bivarianceHack` idiom): the shared dispatcher
-   * narrows the entity at runtime and hands `children` to the matching
-   * per-entity shell, which a contravariant callback type would only allow
-   * through an assertion on a branded identifier type.
+   * Bivariant on purpose (the `bivarianceHack` idiom): manifest-driven
+   * callers hand a string-keyed provider to a branded-id picker without an
+   * assertion on the branded identifier type.
    */
   children: {
-    bivarianceHack(props: {
-      items: ComboboxItem<TId>[];
-      onSearchChange: (query: string) => void;
-      isLoading: boolean;
-      onCreateNew?: (name: string) => Promise<ComboboxItem<TId>>;
-      // Wire this to the combobox's open/close so the options query stays
-      // deferred until the user actually opens the picker (off the page's
-      // critical path).
-      onOpenChange: (open: boolean) => void;
-    }): ReactNode;
+    bivarianceHack(props: EntitySearchResult<TId>): ReactNode;
   }["bivarianceHack"];
 }
+
+/** Every non-vendor picker entity writes its own branded shortcode. */
+export type EntitySearchEntity = Exclude<PickerSearchEntity, "vendor">;
 
 const detailPlaceholder = (entity: PickerSearchEntity) =>
   `${entityInspectorMetadata[entity].shortcodePrefix}2222`;
 
-const withScope = <T extends object>(
-  filters: T,
-  scope?: EntitySearchScope | null,
-): T => {
-  // SAFETY: object spread preserves every key and value from `filters`; scope
-  // only contributes additional manifest-declared filter keys.
-  return { ...filters, ...scope } as T;
-};
-
 function parseCreated<T>(schema: z.ZodType<T>): CreatedResultParser<T> {
-  return (result: unknown) => {
-    const parsed = schema.safeParse(result);
-    return parsed.success ? parsed.data : undefined;
+  return (result: unknown) => schema.safeParse(result).data;
+}
+
+// --- create-from-picker resolution (hook-shaped: `useEntitySearchRows`
+// calls it unconditionally through the config). ---
+
+function useDialogCreateNew<TId extends string>(
+  openDialog: (name: string) => Promise<ComboboxItem<TId>>,
+) {
+  return openDialog;
+}
+
+function useNoCreateNew() {
+  return undefined;
+}
+
+/** A pasted/typed UPC skips the name-only dialog via the UPC lookup cascade. */
+function useProductCreateNew(
+  openDialog: (name: string) => Promise<ComboboxItem<ProductShortcode>>,
+) {
+  return useUpcAwareCreate(openDialog);
+}
+
+type ManifestPickerEntity = Exclude<EntitySearchEntity, "location" | "product">;
+
+/**
+ * A list-backed picker's filters: the entity's own manifest name filter, any
+ * dependent-field scope, and — for ledger parties — household members only.
+ * Plantings have no name filter, so their candidates come only from scope.
+ */
+function pickerListFilters(
+  entity: ManifestPickerEntity,
+  searchQuery: string,
+  scope: EntitySearchScope | null | undefined,
+): EntitySearchScope {
+  const own: [string, string | readonly string[]][] = [];
+  if (entity === "ledgerParty") own.push(["kind", ["member"]]);
+  if (entity !== "planting")
+    own.push([resolveBlankFilterKey(entity), searchQuery]);
+  return Object.fromEntries([...own, ...Object.entries(scope ?? {})]);
+}
+
+/** The one list-backed row source: `entityListFor(entity)` + `pickerListFilters`. */
+function manifestListSource<E extends ManifestPickerEntity>(entity: E) {
+  return function useManifestListSource(
+    searchQuery: string,
+    enabled: boolean,
+    scope?: EntitySearchScope | null,
+  ) {
+    const { data, isLoading } = useQuery({
+      ...entityListFor(entity).queryOptions(
+        // SAFETY: every filter key comes from this entity's manifest filter
+        // descriptors or its declared dependent-field scope; the route parser
+        // validates the input again.
+        {
+          filters: pickerListFilters(entity, searchQuery, scope),
+          pagination,
+        } as EntityListParams<E>,
+      ),
+      enabled,
+    });
+    return {
+      data: data?.items.map((item) => pickerRecord.parse(item)),
+      isLoading,
+    };
   };
 }
 
-// --- Blank-query row sources (hook-shaped: each runs its own `useQuery`
-// unconditionally, so selecting between them by object lookup in
-// `useEntitySearchRows` never puts a hook call inside a branch). ---
-
-const ingredientBlankFilterKey = resolveBlankFilterKey("ingredient");
-function useIngredientListSource(
-  searchQuery: string,
-  enabled: boolean,
-  scope?: EntitySearchScope | null,
-) {
-  const { data, isLoading } = useQuery({
-    ...entityListFor("ingredient").queryOptions({
-      // SAFETY: `ingredientBlankFilterKey` is resolved from ingredient's own
-      // `name`-column filter descriptor (`resolveBlankFilterKey`), so this
-      // object always has exactly the one key ingredient's filters expect.
-      filters: withScope(
-        {
-          [ingredientBlankFilterKey]: searchQuery,
-        } as EntityListParams<"ingredient">["filters"],
-        scope,
-      ),
-      pagination,
-    }),
-    enabled,
-  });
-  return { data: data?.items, isLoading };
-}
-
-function useLedgerPartyListSource(
-  searchQuery: string,
-  enabled: boolean,
-  scope?: EntitySearchScope | null,
-) {
-  const { data, isLoading } = useQuery({
-    ...entityListFor("ledgerParty").queryOptions({
-      filters: withScope(
-        {
-          search: searchQuery,
-          kind: ["member"],
-        },
-        scope,
-      ),
-      pagination,
-    }),
-    enabled,
-  });
-  return { data: data?.items, isLoading };
-}
-
-const recipeBlankFilterKey = resolveBlankFilterKey("recipe");
-function useRecipeListSource(
-  searchQuery: string,
-  enabled: boolean,
-  scope?: EntitySearchScope | null,
-) {
-  const { data, isLoading } = useQuery({
-    ...entityListFor("recipe").queryOptions({
-      // SAFETY: see `useIngredientListSource` — same manifest-resolved key.
-      filters: withScope(
-        {
-          [recipeBlankFilterKey]: searchQuery,
-        } as EntityListParams<"recipe">["filters"],
-        scope,
-      ),
-      pagination,
-    }),
-    enabled,
-  });
-  return { data: data?.items, isLoading };
-}
-
-const projectBlankFilterKey = resolveBlankFilterKey("project");
-function useProjectListSource(
-  searchQuery: string,
-  enabled: boolean,
-  scope?: EntitySearchScope | null,
-) {
-  const { data, isLoading } = useQuery({
-    ...entityListFor("project").queryOptions({
-      // SAFETY: see `useIngredientListSource` — same manifest-resolved key.
-      filters: withScope(
-        {
-          [projectBlankFilterKey]: searchQuery,
-        } as EntityListParams<"project">["filters"],
-        scope,
-      ),
-      pagination,
-    }),
-    enabled,
-  });
-  return { data: data?.items, isLoading };
-}
-
-const taskBlankFilterKey = resolveBlankFilterKey("task");
-function useTaskListSource(
-  searchQuery: string,
-  enabled: boolean,
-  scope?: EntitySearchScope | null,
-) {
-  const { data, isLoading } = useQuery({
-    ...entityListFor("task").queryOptions({
-      // SAFETY: see `useIngredientListSource` — same manifest-resolved key.
-      filters: withScope(
-        {
-          [taskBlankFilterKey]: searchQuery,
-        } as EntityListParams<"task">["filters"],
-        scope,
-      ),
-      pagination,
-    }),
-    enabled,
-  });
-  return { data: data?.items, isLoading };
+function manifestConfig<E extends ManifestPickerEntity>(
+  entity: E,
+  create: "dialog" | "none" = "none",
+): UseEntitySearchConfig<ShortcodeFor<E>, PickerRecord, PickerRecord> {
+  const build = (row: PickerRecord) => buildRecordComboboxItem(entity, row);
+  return {
+    detailPlaceholder: detailPlaceholder(entity),
+    splitBlankTyped: true,
+    supportsGlobalSearch: entityInspectorMetadata[entity].searchable,
+    useListSource: manifestListSource(entity),
+    build,
+    buildDetail: build,
+    // SAFETY: only queried when `supportsGlobalSearch` (the manifest's
+    // `searchable` trait) holds, so `entity` is a `SearchableEntity` here.
+    buildSearchHit: (hit) =>
+      buildSearchHitComboboxItem(hit, entity as never) as never,
+    useOnCreateNew: create === "dialog" ? useDialogCreateNew : useNoCreateNew,
+    createNew: create,
+    parseCreatedResult: parseCreated(pickerRecord),
+  };
 }
 
 /**
@@ -232,8 +181,7 @@ function useLocationListSource(searchQuery: string, enabled: boolean) {
       filters: { nameFilter: searchQuery },
       pagination,
       // Explicit: the list factory's default direction is `desc` (right for a
-      // `createdAt` table, backwards for a name-ordered typeahead — it opened
-      // on "zipties & pads").
+      // `createdAt` table, backwards for a name-ordered typeahead).
       sort: { orderBy: "name", direction: "asc" },
     }),
     enabled,
@@ -256,186 +204,6 @@ function useProductListSource(searchQuery: string, enabled: boolean) {
   });
   return { data: data?.items, isLoading };
 }
-
-function usePlantListSource(
-  searchQuery: string,
-  enabled: boolean,
-  scope?: EntitySearchScope | null,
-) {
-  const { data, isLoading } = useQuery({
-    ...entityListFor("plant").queryOptions({
-      filters: withScope({ search: searchQuery }, scope),
-      pagination,
-    }),
-    enabled,
-  });
-  return { data: data?.items, isLoading };
-}
-
-/** Plantings have no ordinary name filter; scoped picks use the list route so
- * dependent filters stay server-enforced instead of widening to global search. */
-function usePlantingListSource(
-  _searchQuery: string,
-  enabled: boolean,
-  scope?: EntitySearchScope | null,
-) {
-  const { data, isLoading } = useQuery({
-    ...entityListFor("planting").queryOptions({
-      // SAFETY: the manifest compiles Planting's declared reference scope into
-      // this list filter contract, and the route parser validates it again.
-      filters: withScope({}, scope) as EntityListParams<"planting">["filters"],
-      pagination,
-    }),
-    enabled,
-  });
-  return { data: data?.items, isLoading };
-}
-
-// --- create-from-picker resolution (hook-shaped for the same reason). ---
-
-function useDialogCreateNew<TId extends string>(
-  openDialog: (name: string) => Promise<ComboboxItem<TId>>,
-) {
-  return openDialog;
-}
-
-function useNoCreateNew() {
-  return undefined;
-}
-
-function useProductCreateNew(
-  openDialog: (name: string) => Promise<ComboboxItem<ProductShortcode>>,
-) {
-  // A pasted/typed UPC skips the name-only dialog and resolves via the UPC
-  // lookup cascade instead; non-UPC input still opens the create dialog.
-  return useUpcAwareCreate(openDialog);
-}
-
-const ingredientConfig: UseEntitySearchConfig<
-  IngredientShortcode,
-  Parameters<typeof buildIngredientComboboxItem>[0],
-  Parameters<typeof buildIngredientComboboxItem>[0]
-> = {
-  detailPlaceholder: detailPlaceholder("ingredient"),
-  splitBlankTyped: true,
-  useListSource: useIngredientListSource,
-  build: buildIngredientComboboxItem,
-  buildDetail: buildIngredientComboboxItem,
-  buildSearchHit: (hit) => buildSearchHitComboboxItem(hit, "ingredient"),
-  useOnCreateNew: useDialogCreateNew,
-  createNew: "dialog",
-  parseCreatedResult: parseCreated(ingredientOut),
-};
-
-const buildLedgerPartyComboboxItem = (
-  party: LedgerPartyOut,
-): ComboboxItem<LedgerPartyShortcode> => ({
-  id: party.id,
-  shortcode: party.id,
-  name: party.name,
-});
-
-const ledgerPartyConfig: UseEntitySearchConfig<
-  LedgerPartyShortcode,
-  LedgerPartyOut,
-  LedgerPartyOut
-> = {
-  detailPlaceholder: detailPlaceholder("ledgerParty"),
-  splitBlankTyped: false,
-  supportsGlobalSearch: false,
-  useListSource: useLedgerPartyListSource,
-  build: buildLedgerPartyComboboxItem,
-  buildDetail: buildLedgerPartyComboboxItem,
-  buildSearchHit: () => {
-    throw new Error("Ledger parties use their list search, not global search");
-  },
-  useOnCreateNew: useNoCreateNew,
-  createNew: "none",
-};
-
-const recipeConfig: UseEntitySearchConfig<
-  RecipeShortcode,
-  Parameters<typeof buildRecipeComboboxItem>[0],
-  Parameters<typeof buildRecipeComboboxItem>[0]
-> = {
-  detailPlaceholder: detailPlaceholder("recipe"),
-  splitBlankTyped: true,
-  useListSource: useRecipeListSource,
-  build: buildRecipeComboboxItem,
-  buildDetail: buildRecipeComboboxItem,
-  buildSearchHit: (hit) => buildSearchHitComboboxItem(hit, "recipe"),
-  // For recipes, we don't provide the ability to create from this interface.
-  useOnCreateNew: useNoCreateNew,
-  createNew: "none",
-};
-
-/**
- * Project search uses the normal searchable list so notes and locations can
- * match in addition to the name. No create-from-picker affordance.
- */
-const projectConfig: UseEntitySearchConfig<
-  ProjectShortcode,
-  Parameters<typeof buildProjectComboboxItem>[0],
-  Parameters<typeof buildProjectComboboxItem>[0]
-> = {
-  detailPlaceholder: detailPlaceholder("project"),
-  splitBlankTyped: true,
-  useListSource: useProjectListSource,
-  build: buildProjectComboboxItem,
-  buildDetail: buildProjectComboboxItem,
-  buildSearchHit: (hit) => buildSearchHitComboboxItem(hit, "project"),
-  useOnCreateNew: useNoCreateNew,
-  createNew: "none",
-};
-
-/**
- * Server-searched task picker — `task.list` filtered by its `search` field.
- * No create-from-picker affordance.
- */
-const taskConfig: UseEntitySearchConfig<
-  TaskShortcode,
-  Parameters<typeof buildTaskComboboxItem>[0],
-  Parameters<typeof buildTaskComboboxItem>[0]
-> = {
-  detailPlaceholder: detailPlaceholder("task"),
-  splitBlankTyped: true,
-  useListSource: useTaskListSource,
-  build: buildTaskComboboxItem,
-  buildDetail: buildTaskComboboxItem,
-  buildSearchHit: (hit) => buildSearchHitComboboxItem(hit, "task"),
-  useOnCreateNew: useNoCreateNew,
-  createNew: "none",
-};
-
-const plantConfig: UseEntitySearchConfig<
-  PlantShortcode,
-  Parameters<typeof buildPlantComboboxItem>[0],
-  Parameters<typeof buildPlantComboboxItem>[0]
-> = {
-  detailPlaceholder: detailPlaceholder("plant"),
-  splitBlankTyped: true,
-  useListSource: usePlantListSource,
-  build: buildPlantComboboxItem,
-  buildDetail: buildPlantComboboxItem,
-  buildSearchHit: (hit) => buildSearchHitComboboxItem(hit, "plant"),
-  useOnCreateNew: useNoCreateNew,
-  createNew: "none",
-};
-
-const plantingConfig: UseEntitySearchConfig<
-  PlantingShortcode,
-  Parameters<typeof buildPlantingComboboxItem>[0],
-  Parameters<typeof buildPlantingComboboxItem>[0]
-> = {
-  detailPlaceholder: detailPlaceholder("planting"),
-  splitBlankTyped: true,
-  useListSource: usePlantingListSource,
-  build: buildPlantingComboboxItem,
-  buildDetail: buildPlantingComboboxItem,
-  buildSearchHit: (hit) => buildSearchHitComboboxItem(hit, "planting"),
-  useOnCreateNew: useNoCreateNew,
-  createNew: "none",
-};
 
 const locationConfig: UseEntitySearchConfig<
   LocationShortcode,
@@ -468,445 +236,127 @@ function productConfig(
     useListSource: useProductListSource,
     build,
     buildDetail: build,
-    // Never actually queried (`splitBlankTyped: false`), but the config shape
-    // still needs a value.
+    // Never queried (`splitBlankTyped: false`), but the config needs a value.
     buildSearchHit: (hit) => buildSearchHitComboboxItem(hit, "product"),
-    // A pasted/typed UPC still skips the create dialog (`useProductCreateNew`
-    // wraps `useUpcAwareCreate` around the same `openDialog` every other
-    // `createNew: "dialog"` entity uses) — the dialog itself is the generic
-    // `EntityEditDialog` capture request now, same as ingredient/location.
     useOnCreateNew: useProductCreateNew,
     createNew: "dialog",
     parseCreatedResult: parseCreated(productTopLevelOut),
   };
 }
 
+const manifestConfigs = {
+  ingredient: manifestConfig("ingredient", "dialog"),
+  ledgerParty: manifestConfig("ledgerParty"),
+  recipe: manifestConfig("recipe"),
+  project: manifestConfig("project"),
+  task: manifestConfig("task"),
+  plant: manifestConfig("plant"),
+  planting: manifestConfig("planting"),
+  financialAccount: manifestConfig("financialAccount"),
+  purchase: manifestConfig("purchase"),
+} satisfies {
+  [K in ManifestPickerEntity]: UseEntitySearchConfig<
+    ShortcodeFor<K>,
+    PickerRecord,
+    PickerRecord
+  >;
+};
+
+const productConfigs = {
+  reference: productConfig("reference"),
+  stock: productConfig("stock"),
+};
+
+function pickerConfig<E extends EntitySearchEntity>(
+  entity: E,
+  intent: ProductPickerIntent,
+): UseEntitySearchConfig<ShortcodeFor<E>, never, never> {
+  // SAFETY: each config is selected by the same entity key its builders and
+  // row sources were declared for, so its item id is `ShortcodeFor<E>`; rows
+  // flow only between that config's own source and builders.
+  const config =
+    entity === "product"
+      ? productConfigs[intent]
+      : entity === "location"
+        ? locationConfig
+        : manifestConfigs[entity as ManifestPickerEntity];
+  // SAFETY: see above — `config` belongs to `entity`'s own id and rows.
+  return config as never;
+}
+
+const dialogCreateEntities = new Set(["ingredient", "location", "product"]);
+
 /**
- * Renders the shared create dialog for the three entities that use it — the
- * generic `EntityEditDialog` capture request. Takes `parseCreatedResult`/
- * `buildDetail` directly (rather than a whole `config`) so each concretely-
- * typed caller feeds it concretely-typed arguments — no generic config union
- * to bridge with an unsafe cast.
+ * The one entity combobox source: search-query state, the deferred-open gate,
+ * the exact-shortcode lookup, the blank/typed row queries and, for
+ * ingredient/location/product, the create-from-picker dialog (`dialog`,
+ * which the caller renders beside its combobox). `intent` only matters for
+ * product (reference vs. stock-inventory presentation).
  */
-function EntitySearchCreateDialog<TId extends string, TDetail>({
-  entity,
-  parseCreatedResult,
-  buildDetail,
-  isDialogOpen,
-  setIsDialogOpen,
-  pendingName,
-  resolveWithEntity,
-}: {
-  entity: "ingredient" | "location" | "product";
-  parseCreatedResult?: CreatedResultParser<TDetail>;
-  buildDetail: (row: TDetail) => ComboboxItem<TId>;
-  isDialogOpen: boolean;
-  setIsDialogOpen: (open: boolean) => void;
-  pendingName: string;
-  resolveWithEntity: (item: ComboboxItem<TId>) => void;
-}) {
-  if (!isDialogOpen) return null;
-  const onSuccess = (result: unknown) => {
-    const parsed = parseCreatedResult?.(result);
-    if (parsed === undefined) return;
-    resolveWithEntity(buildDetail(parsed));
+export function useEntityListSource<E extends EntitySearchEntity>(
+  entity: E,
+  {
+    intent = "reference",
+    scope,
+  }: { intent?: ProductPickerIntent; scope?: EntitySearchScope | null } = {},
+): EntitySearchResult<ShortcodeFor<E>> & { dialog: ReactNode } {
+  const config = pickerConfig(entity, intent);
+  const {
+    items,
+    isLoading,
+    onSearchChange,
+    onOpenChange,
+    onCreateNew,
+    isDialogOpen,
+    setIsDialogOpen,
+    pendingName,
+    resolveWithEntity,
+  } = useEntitySearchRows(entity, config, scope);
+  const dialog =
+    isDialogOpen && dialogCreateEntities.has(entity) ? (
+      <Suspense fallback={null}>
+        <EntityEditDialog
+          open
+          onOpenChange={setIsDialogOpen}
+          // SAFETY: gated on `dialogCreateEntities`, the three editable
+          // entities whose configs declare `createNew: "dialog"`.
+          request={captureRequest(entity as "ingredient", {
+            name: pendingName,
+          })}
+          onSuccess={(result) => {
+            const parsed = config.parseCreatedResult?.(result);
+            if (parsed !== undefined)
+              resolveWithEntity(config.buildDetail(parsed));
+          }}
+        />
+      </Suspense>
+    ) : null;
+  return {
+    items,
+    isLoading,
+    onSearchChange,
+    onOpenChange,
+    onCreateNew,
+    dialog,
   };
-  return (
-    <Suspense fallback={null}>
-      <EntityEditDialog
-        open
-        onOpenChange={setIsDialogOpen}
-        request={captureRequest(entity, { name: pendingName })}
-        onSuccess={onSuccess}
-      />
-    </Suspense>
-  );
 }
 
-/** Row shape shared by every vendor query (list, typed search, and exact-code detail all resolve to it). */
-type VendorRow = Parameters<typeof buildVendorComboboxItem>[0];
-
-function useVendorListSource(_searchQuery: string, enabled: boolean) {
-  const { data, isLoading } = useQuery({
-    ...vendor.options.queryOptions(null),
-    enabled,
-  });
-  return { data, isLoading };
-}
-
-/**
- * Vendor has no shared create dialog — a name that matches no roster row IS
- * the new vendor, minted by the save that follows (`findOrCreateVendor`) or,
- * for the persisted-relation picker, by `useEntityCommands("vendor")` up
- * front. Both call sites supply their own `onCreateNew`.
- */
-function useCallerCreateNew<TId extends string>(
-  _openDialog: (name: string) => Promise<ComboboxItem<TId>>,
-  onCreateNew: ((name: string) => Promise<ComboboxItem<TId>>) | undefined,
-) {
-  return onCreateNew;
-}
-
-/**
- * One tiny concretely-typed wrapper per non-vendor entity. Each is only a
- * render-prop shell now — every query, the exact-code lookup, and the dialog
- * decision live in `useEntitySearchRows` + that entity's config object above.
- * Concrete (not generic over `entity`) so none of them need the unsound
- * union-to-generic cast a single shared component would require: TS already
- * knows `ingredientConfig`'s row/detail/id types line up with `children`'s.
- */
-function IngredientEntitySearch({
-  children,
-  scope,
-}: WithEntitySearchProps<IngredientShortcode>) {
-  const {
-    items,
-    isLoading,
-    onSearchChange,
-    onOpenChange,
-    onCreateNew,
-    isDialogOpen,
-    setIsDialogOpen,
-    pendingName,
-    resolveWithEntity,
-  } = useEntitySearchRows("ingredient", ingredientConfig, scope);
-  return (
-    <>
-      <EntitySearchCreateDialog
-        entity="ingredient"
-        parseCreatedResult={ingredientConfig.parseCreatedResult}
-        buildDetail={ingredientConfig.buildDetail}
-        isDialogOpen={isDialogOpen}
-        setIsDialogOpen={setIsDialogOpen}
-        pendingName={pendingName}
-        resolveWithEntity={resolveWithEntity}
-      />
-      {children({
-        items,
-        onSearchChange,
-        isLoading,
-        onCreateNew,
-        onOpenChange,
-      })}
-    </>
-  );
-}
-
-function LocationEntitySearch({
-  children,
-  scope,
-}: WithEntitySearchProps<LocationShortcode>) {
-  const {
-    items,
-    isLoading,
-    onSearchChange,
-    onOpenChange,
-    onCreateNew,
-    isDialogOpen,
-    setIsDialogOpen,
-    pendingName,
-    resolveWithEntity,
-  } = useEntitySearchRows("location", locationConfig, scope);
-  return (
-    <>
-      <EntitySearchCreateDialog
-        entity="location"
-        parseCreatedResult={locationConfig.parseCreatedResult}
-        buildDetail={locationConfig.buildDetail}
-        isDialogOpen={isDialogOpen}
-        setIsDialogOpen={setIsDialogOpen}
-        pendingName={pendingName}
-        resolveWithEntity={resolveWithEntity}
-      />
-      {children({
-        items,
-        onSearchChange,
-        isLoading,
-        onCreateNew,
-        onOpenChange,
-      })}
-    </>
-  );
-}
-
-function ProductEntitySearch({
-  intent = "reference",
-  children,
-  scope,
-}: WithEntitySearchProps<ProductShortcode> & { intent?: ProductPickerIntent }) {
-  const config = productConfig(intent);
-  const {
-    items,
-    isLoading,
-    onSearchChange,
-    onOpenChange,
-    onCreateNew,
-    isDialogOpen,
-    setIsDialogOpen,
-    pendingName,
-    resolveWithEntity,
-  } = useEntitySearchRows("product", config, scope);
-  return (
-    <>
-      <EntitySearchCreateDialog
-        entity="product"
-        parseCreatedResult={config.parseCreatedResult}
-        buildDetail={config.buildDetail}
-        isDialogOpen={isDialogOpen}
-        setIsDialogOpen={setIsDialogOpen}
-        pendingName={pendingName}
-        resolveWithEntity={resolveWithEntity}
-      />
-      {children({
-        items,
-        onSearchChange,
-        isLoading,
-        onCreateNew,
-        onOpenChange,
-      })}
-    </>
-  );
-}
-
-/**
- * Recipe, project, and task have no create-from-picker affordance, so unlike
- * the three above they need no dialog at all.
- */
-function RecipeEntitySearch({
-  children,
-  scope,
-}: WithEntitySearchProps<RecipeShortcode>) {
-  const { items, isLoading, onSearchChange, onOpenChange } =
-    useEntitySearchRows("recipe", recipeConfig, scope);
-  return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
-}
-
-function LedgerPartyEntitySearch({
-  children,
-  scope,
-}: WithEntitySearchProps<LedgerPartyShortcode>) {
-  const { items, isLoading, onSearchChange, onOpenChange } =
-    useEntitySearchRows("ledgerParty", ledgerPartyConfig, scope);
-  return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
-}
-
-function ProjectEntitySearch({
-  children,
-  scope,
-}: WithEntitySearchProps<ProjectShortcode>) {
-  const { items, isLoading, onSearchChange, onOpenChange } =
-    useEntitySearchRows("project", projectConfig, scope);
-  return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
-}
-
-function TaskEntitySearch({
-  children,
-  scope,
-}: WithEntitySearchProps<TaskShortcode>) {
-  const { items, isLoading, onSearchChange, onOpenChange } =
-    useEntitySearchRows("task", taskConfig, scope);
-  return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
-}
-
-function PlantEntitySearch({
-  children,
-  scope,
-}: WithEntitySearchProps<PlantShortcode>) {
-  const { items, isLoading, onSearchChange, onOpenChange } =
-    useEntitySearchRows("plant", plantConfig, scope);
-  return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
-}
-
-function PlantingEntitySearch({
-  children,
-  scope,
-}: WithEntitySearchProps<PlantingShortcode>) {
-  const { items, isLoading, onSearchChange, onOpenChange } =
-    useEntitySearchRows("planting", plantingConfig, scope);
-  return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
-}
-
-type NonVendorPickerEntity = Exclude<PickerSearchEntity, "vendor">;
-
-// Typed over the UNION of picker ids: the public overloads keep each call
-// site precise, and the bivariant `children` lets every per-entity shell
-// accept the union-typed callback without asserting a branded id type.
-function NonVendorEntitySearch({
+/** Render-prop form of `useEntityListSource`, for `SearchProvider` slots and
+ * pickers rendered inside loops. */
+export function WithEntitySearch<E extends EntitySearchEntity>({
   entity,
   intent,
-  children,
   scope,
+  children,
 }: {
-  entity: NonVendorPickerEntity;
+  entity: E;
   intent?: ProductPickerIntent;
-} & WithEntitySearchProps<EntityIdFor<NonVendorPickerEntity>>) {
-  switch (entity) {
-    case "ingredient":
-      return (
-        <IngredientEntitySearch scope={scope}>
-          {children}
-        </IngredientEntitySearch>
-      );
-    case "ledgerParty":
-      return (
-        <LedgerPartyEntitySearch scope={scope}>
-          {children}
-        </LedgerPartyEntitySearch>
-      );
-    case "location":
-      return (
-        <LocationEntitySearch scope={scope}>{children}</LocationEntitySearch>
-      );
-    case "product":
-      return (
-        <ProductEntitySearch intent={intent} scope={scope}>
-          {children}
-        </ProductEntitySearch>
-      );
-    case "recipe":
-      return <RecipeEntitySearch scope={scope}>{children}</RecipeEntitySearch>;
-    case "project":
-      return (
-        <ProjectEntitySearch scope={scope}>{children}</ProjectEntitySearch>
-      );
-    case "task":
-      return <TaskEntitySearch scope={scope}>{children}</TaskEntitySearch>;
-    case "plant":
-      return <PlantEntitySearch scope={scope}>{children}</PlantEntitySearch>;
-    case "planting":
-      return (
-        <PlantingEntitySearch scope={scope}>{children}</PlantingEntitySearch>
-      );
-  }
-}
-
-function VendorEntitySearch<TId extends string>({
-  build,
-  buildSearchHit,
-  onCreateNew,
-  children,
-  scope,
-}: {
-  build: (row: VendorRow) => ComboboxItem<TId>;
-  buildSearchHit: (hit: SearchHit) => ComboboxItem<TId>;
-  onCreateNew?: (name: string) => Promise<ComboboxItem<TId>>;
-} & WithEntitySearchProps<TId>) {
-  const config: UseEntitySearchConfig<TId, VendorRow, VendorRow> = {
-    detailPlaceholder: detailPlaceholder("vendor"),
-    splitBlankTyped: true,
-    useListSource: useVendorListSource,
-    build,
-    buildDetail: build,
-    buildSearchHit,
-    useOnCreateNew: (openDialog) => useCallerCreateNew(openDialog, onCreateNew),
-    createNew: "none",
-  };
-  const {
-    items,
-    isLoading,
-    onSearchChange,
-    onOpenChange,
-    onCreateNew: resolvedOnCreateNew,
-  } = useEntitySearchRows("vendor", config, scope);
-
+} & WithEntitySearchProps<ShortcodeFor<E>>): ReactNode {
+  const { dialog, ...search } = useEntityListSource(entity, { intent, scope });
   return (
     <>
-      {children({
-        items,
-        onSearchChange,
-        isLoading,
-        onCreateNew: resolvedOnCreateNew,
-        onOpenChange,
-      })}
+      {dialog}
+      {children(search)}
     </>
-  );
-}
-
-/** Every non-vendor entity's item id is its own branded shortcode type. */
-type EntityIdFor<E extends Exclude<PickerSearchEntity, "vendor">> =
-  E extends "ingredient"
-    ? IngredientShortcode
-    : E extends "ledgerParty"
-      ? LedgerPartyShortcode
-      : E extends "location"
-        ? LocationShortcode
-        : E extends "product"
-          ? ProductShortcode
-          : E extends "recipe"
-            ? RecipeShortcode
-            : E extends "project"
-              ? ProjectShortcode
-              : E extends "task"
-                ? TaskShortcode
-                : E extends "plant"
-                  ? PlantShortcode
-                  : PlantingShortcode;
-
-/**
- * The shared entity combobox provider: search-query state, the deferred-open
- * gate, the exact-shortcode detail lookup, the blank/typed row queries, and
- * (for `createNew !== "none"`) the create-from-picker dialog — all wired from
- * one small per-entity config, so `entity` alone picks the right behavior.
- *
- * `intent` only matters for `entity="product"` (reference vs. stock-inventory
- * presentation). Vendor has no shared defaults at all — its item id is either
- * the vendor's name or its shortcode depending on the write path, so callers
- * supply `build`/`onCreateNew` directly.
- */
-export function WithEntitySearch<
-  E extends Exclude<PickerSearchEntity, "vendor">,
->(
-  props: {
-    entity: E;
-    intent?: ProductPickerIntent;
-  } & WithEntitySearchProps<EntityIdFor<E>>,
-): ReactNode;
-export function WithEntitySearch<TId extends string>(
-  props: {
-    entity: "vendor";
-    build: (row: VendorRow) => ComboboxItem<TId>;
-    buildSearchHit: (hit: SearchHit) => ComboboxItem<TId>;
-    onCreateNew?: (name: string) => Promise<ComboboxItem<TId>>;
-  } & WithEntitySearchProps<TId>,
-): ReactNode;
-export function WithEntitySearch<TId extends string>(
-  props:
-    | ({
-        entity: Exclude<PickerSearchEntity, "vendor">;
-        intent?: ProductPickerIntent;
-      } & WithEntitySearchProps<
-        EntityIdFor<Exclude<PickerSearchEntity, "vendor">>
-      >)
-    | ({
-        entity: "vendor";
-        build: (row: VendorRow) => ComboboxItem<TId>;
-        buildSearchHit: (hit: SearchHit) => ComboboxItem<TId>;
-        onCreateNew?: (name: string) => Promise<ComboboxItem<TId>>;
-      } & WithEntitySearchProps<TId>),
-): ReactNode {
-  if (props.entity === "vendor") {
-    return (
-      <VendorEntitySearch
-        build={props.build}
-        buildSearchHit={props.buildSearchHit}
-        onCreateNew={props.onCreateNew}
-        scope={props.scope}
-      >
-        {props.children}
-      </VendorEntitySearch>
-    );
-  }
-  // `props.entity` here is the concrete non-vendor union (not a free generic),
-  // so `props.children`'s type is exactly `NonVendorEntitySearch`'s expected
-  // `WithEntitySearchProps<EntityIdFor<E>>["children"]` once `E` is inferred
-  // from `entity` below — no cast needed to forward it.
-  return (
-    <NonVendorEntitySearch
-      entity={props.entity}
-      intent={props.intent}
-      scope={props.scope}
-    >
-      {props.children}
-    </NonVendorEntitySearch>
   );
 }

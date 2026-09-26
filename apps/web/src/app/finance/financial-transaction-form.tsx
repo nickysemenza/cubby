@@ -9,6 +9,7 @@ import { useId, useState } from "react";
 import { FormProvider, type UseFormReturn, useWatch } from "react-hook-form";
 import { z } from "zod";
 
+import { referenceEntitySearch } from "~/app/_components/combobox/reference-entity-search";
 import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -22,11 +23,9 @@ import { entities, entityDetailParams } from "~/entities/entities";
 
 import { TableLink } from "../_components/table/TableLink";
 import { financialTransaction } from "./finance.functions";
-import {
-  WithFinancialAccountSearch,
-  WithPurchaseSearch,
-  PurchaseVendorScope,
-} from "./financial-selectors";
+
+const AccountSearch = referenceEntitySearch("financialAccount");
+const PurchaseSearch = referenceEntitySearch("purchase");
 
 const financialTransactionSourceRefsField = requiredFieldModel(
   "financialTransaction",
@@ -142,47 +141,46 @@ export function FinancialTransactionFormFields({
         entity="financialAccount"
         label="Account"
         placeholder="Select account"
-        SearchProvider={WithFinancialAccountSearch}
+        SearchProvider={AccountSearch}
       />
       <EntityPrimitiveFields
         entity="financialTransaction"
         mode={mode}
         section="identity"
       />
-      <PurchaseVendorScope vendorId={scopedVendorId}>
-        <Stack gap="tight">
-          {scopedVendorId && suggested ? (
-            <Row align="center" justify="between" gap="sm" wrap>
-              <span className="text-xs text-muted-foreground">
-                Suggested purchases · Showing purchases from{" "}
-                <TableLink
-                  to={entities.vendor.routes.detail}
-                  params={entityDetailParams(scopedVendorId)}
-                >
-                  {suggested.vendorName}
-                </TableLink>
-              </span>
-              <Button
-                type="button"
-                variant="link"
-                size="sm"
-                onClick={() => setAllPurchasesVendorId(scopedVendorId)}
+      <Stack gap="tight">
+        {scopedVendorId && suggested ? (
+          <Row align="center" justify="between" gap="sm" wrap>
+            <span className="text-xs text-muted-foreground">
+              Suggested purchases · Showing purchases from{" "}
+              <TableLink
+                to={entities.vendor.routes.detail}
+                params={entityDetailParams(scopedVendorId)}
               >
-                All purchases
-              </Button>
-            </Row>
-          ) : null}
-          <EntityValueField
-            form={form}
-            name="purchaseId"
-            entity="purchase"
-            label="Purchase"
-            placeholder="Optional linked purchase"
-            SearchProvider={WithPurchaseSearch}
-            clearable
-          />
-        </Stack>
-      </PurchaseVendorScope>
+                {suggested.vendorName}
+              </TableLink>
+            </span>
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              onClick={() => setAllPurchasesVendorId(scopedVendorId)}
+            >
+              All purchases
+            </Button>
+          </Row>
+        ) : null}
+        <EntityValueField
+          form={form}
+          name="purchaseId"
+          entity="purchase"
+          label="Purchase"
+          placeholder="Optional linked purchase"
+          SearchProvider={PurchaseSearch}
+          scope={scopedVendorId ? { vendorId: scopedVendorId } : undefined}
+          clearable
+        />
+      </Stack>
       <EntityPrimitiveFields
         entity="financialTransaction"
         mode={mode}

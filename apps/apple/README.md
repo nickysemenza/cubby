@@ -43,7 +43,9 @@ iteration (`--targets sim`).
 
 ## Generated files (read-only here)
 
-- `CubbyKit/Sources/CubbyKit/Generated/{EntityCatalog,OperationRoutes,EntityOperations,APITypes}.swift`,
+- `CubbyKit/Sources/CubbyKit/Generated/{OperationRoutes,EntityOperations,ClientOperations,APITypes,PhotoImportCatalog}.swift`,
+  `CubbyKit/Sources/CubbyKit/Generated/entity-manifest.json` (the entity catalog, a CubbyKit
+  resource decoded by `Catalog/EntityManifest.swift`),
   `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift`, the `CubbyAPI` target's
   `openapi.json` + `openapi-generator-config.yaml`, and `App/Shared/Previews/Fixtures/*.json` —
   written by `scripts/generator/` (`pnpm generate`) from the entity spine and the OpenAPI document.

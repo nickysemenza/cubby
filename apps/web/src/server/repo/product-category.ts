@@ -1,5 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import {
@@ -24,31 +23,22 @@ import {
   productCategorySummary,
 } from "@cubby/schemas/product-category-fields";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import {
-  photoGroupProposal,
-  product,
-  productCategory,
-} from "~/server/db/schema";
+import { product, productCategory } from "~/server/db/schema";
+import { entityRepository } from "~/server/entity-kernel/adapter";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
-  auditDateWhereConditions,
-  countWhere,
-  executeListQueryWithCount,
-  getDb,
   notDeleted,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { listScaffold } from "~/server/repo/list-scaffold";
-import { removeEntity } from "~/server/repo/removal";
 import {
-  resolveAllOrThrow,
+  lookupEntityReferences,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -78,36 +68,12 @@ export const PRODUCT_CATEGORY_DELETE_EDGE_POLICY = {
   OperationDisposition
 >;
 
-type CategoryRow = {
-  id: string;
-  shortcode: string;
-  name: string;
-  aliases: string[];
-  description: string | null;
-  parentId: string | null;
-  sortOrder: number;
-  feature: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
+type CategoryRow = typeof productCategory.$inferSelect;
 
 type CategoryPathRow = {
   root: string;
   path: Array<{ id: string; name: string; feature: string | null }>;
 };
-
-const columns = {
-  id: productCategory.id,
-  shortcode: productCategory.shortcode,
-  name: productCategory.name,
-  aliases: productCategory.aliases,
-  description: productCategory.description,
-  parentId: productCategory.parentId,
-  sortOrder: productCategory.sortOrder,
-  feature: productCategory.feature,
-  createdAt: productCategory.createdAt,
-  updatedAt: productCategory.updatedAt,
-} as const;
 
 const scaffold = listScaffold("productCategory", productCategory);
 
@@ -264,100 +230,55 @@ const inheritedFeatureResolution = (
   };
 };
 
-const toOut = async (
+const hydrate = async (
   db: Database | DrizzleTransaction,
-  row: CategoryRow,
-  dataQuality: DataQuality,
-  batch?: {
-    paths: Map<string, CategoryPathRow["path"]>;
-    productCounts: Map<string, number>;
-  },
-): Promise<ProductCategoryOut> => {
-  const path =
-    batch?.paths.get(row.id) ?? (await pathsFor(db, [row.id])).get(row.id);
-  const productCounts =
-    batch?.productCounts ?? (await productCountsFor(db, [row.id]));
-  const parsedPath = (path ?? []).map((part) => ({
-    id: parseShortcodeFor("productCategory", part.id),
-    name: part.name,
-  }));
-  const parent = row.parentId
-    ? await unwrapDb(db)
-        .select({
-          shortcode: productCategory.shortcode,
-          name: productCategory.name,
-        })
-        .from(productCategory)
-        .where(
-          and(
-            eq(
-              productCategory.id,
-              parseEntityId("productCategory", row.parentId),
-            ),
-            notDeleted(productCategory),
-          ),
-        )
-        .limit(1)
-    : [];
-  return productCategoryOut.parse({
-    fieldResolutions: inheritedFeatureResolution(row, path ?? []),
-    id: parseShortcodeFor("productCategory", row.shortcode),
-    name: row.name,
-    aliases: row.aliases,
-    description: row.description,
-    parentId: parent[0]
-      ? parseShortcodeFor("productCategory", parent[0].shortcode)
-      : null,
-    parentName: parent[0]?.name ?? null,
-    sortOrder: row.sortOrder,
-    feature: parseFeature(row.feature),
-    path: parsedPath,
-    productCount: productCounts.get(row.id) ?? 0,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    dataQuality,
+  rows: CategoryRow[],
+): Promise<ProductCategoryOut[]> => {
+  const ids = rows.map((row) => row.id);
+  const [paths, productCounts, dataQualities, parents] = await Promise.all([
+    pathsFor(db, ids),
+    productCountsFor(db, ids),
+    loadDataQualities(db, "productCategory", ids),
+    lookupEntityReferences(
+      db,
+      "productCategory",
+      rows.map((row) => row.parentId),
+    ),
+  ]);
+  return rows.map((row) => {
+    const path = paths.get(row.id) ?? [];
+    const parent = row.parentId ? parents.get(row.parentId) : undefined;
+    return productCategoryOut.parse({
+      ...row,
+      fieldResolutions: inheritedFeatureResolution(row, path),
+      id: parseShortcodeFor("productCategory", row.shortcode),
+      parentId: parent?.id ?? null,
+      parentName: parent?.name ?? null,
+      feature: parseFeature(row.feature),
+      path: path.map((part) => ({
+        id: parseShortcodeFor("productCategory", part.id),
+        name: part.name,
+      })),
+      productCount: productCounts.get(row.id) ?? 0,
+      dataQuality: dataQualities.get(row.id),
+    });
   });
 };
 
 export const buildProductCategoryWhere = (filters: ProductCategoryFilters) =>
-  scaffold.where(filters, [
-    ...auditDateWhereConditions(productCategory, filters),
-  ]);
+  scaffold.where(filters);
 
-export async function listProductCategories(
+export const listProductCategories = (
   db: Database,
   filters: ProductCategoryFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-) {
-  const where = buildProductCategoryWhere(filters);
-  const { take, skip } = scaffold.page(pagination);
-  const { data, count } = await executeListQueryWithCount(
-    getDb(db)
-      .select(columns)
-      .from(productCategory)
-      .where(where)
-      .orderBy(...scaffold.orderBy(sorts, {}, filters))
-      .limit(take)
-      .offset(skip),
-    countWhere(db, productCategory, where),
+) =>
+  scaffold.list(
+    db,
+    { filters, sorts, pagination },
+    { hydrate: (rows) => hydrate(db, rows) },
   );
-  const ids = data.map((row) => row.id);
-  const [paths, productCounts, dataQualities] = await Promise.all([
-    pathsFor(db, ids),
-    productCountsFor(db, ids),
-    loadDataQualities(db, "productCategory", ids),
-  ]);
-  return {
-    data: await Promise.all(
-      // SAFETY: `row` came from `data`, which `dataQualities` was loaded for.
-      data.map((row) =>
-        toOut(db, row, dataQualities.get(row.id)!, { paths, productCounts }),
-      ),
-    ),
-    count,
-  };
-}
 
 const reader = createEntityReader<
   CategoryRow,
@@ -368,19 +289,13 @@ const reader = createEntityReader<
   entity: "productCategory",
   fetchById: async (db, id) => {
     const [row] = await unwrapDb(db)
-      .select(columns)
+      .select()
       .from(productCategory)
       .where(and(eq(productCategory.id, id), notDeleted(productCategory)))
       .limit(1);
     return row;
   },
-  fromDB: async (db, row) => {
-    const id = parseEntityId("productCategory", row.id);
-    const dataQuality = (
-      await loadDataQualities(db, "productCategory", [id])
-    ).get(id)!;
-    return toOut(db, row, dataQuality);
-  },
+  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
 });
 
 export const getProductCategoryByShortcode = reader.getByShortcode;
@@ -521,7 +436,7 @@ export async function updateProductCategory(
           : await resolveOrThrow(tx, "productCategory", data.parentId);
     if (parentId !== undefined) await assertValidParent(tx, id, parentId);
     const [before] = await unwrapDb(tx)
-      .select(columns)
+      .select()
       .from(productCategory)
       .where(and(eq(productCategory.id, id), notDeleted(productCategory)))
       .limit(1);
@@ -565,35 +480,18 @@ export async function updateProductCategory(
   return { output: await reader.getByID(db, id), entityId: id };
 }
 
-export async function deleteProductCategories(
-  db: Database,
-  shortcodes: ProductCategoryShortcode[],
-  actor: ActorContext,
-) {
-  const ids = uniq(await resolveAllOrThrow(db, "productCategory", shortcodes));
-  return withTransaction(db, async (tx) => {
-    const bound = await unwrapDb(tx)
-      .select({ feature: productCategory.feature })
-      .from(productCategory)
-      .where(
-        and(inArray(productCategory.id, ids), notDeleted(productCategory)),
-      );
-    if (bound.some((row) => row.feature !== null)) {
-      throw new Error("A category with a behavior binding cannot be deleted");
-    }
-    await tx
-      .update(photoGroupProposal)
-      .set({ productCreateCategoryId: null })
-      .where(inArray(photoGroupProposal.productCreateCategoryId, ids));
-    await removeEntity(tx, {
-      entity: "productCategory",
-      ids,
-      removal: "soft",
-      actor,
-    });
-    return { deleted: ids.length };
-  });
-}
+/** A category bound to a behavior feature is structural; it cannot go. */
+const refuseBoundCategories = async (
+  tx: DrizzleTransaction,
+  ids: ProductCategoryId[],
+) => {
+  const bound = await tx
+    .select({ feature: productCategory.feature })
+    .from(productCategory)
+    .where(inArray(productCategory.id, ids));
+  if (bound.some((row) => row.feature !== null))
+    throw new Error("A category with a behavior binding cannot be deleted");
+};
 
 /** The inherited behavior binding for one category; null means no binding. */
 export async function getCategoryFeature(
@@ -651,7 +549,7 @@ export async function resolveProductCategory(
 
 export async function listProductCategoryTreeOptions(db: Database) {
   const rows = await unwrapDb(db)
-    .select(columns)
+    .select()
     .from(productCategory)
     .where(notDeleted(productCategory))
     .orderBy(asc(productCategory.sortOrder), asc(productCategory.name));
@@ -696,7 +594,7 @@ export async function loadCategorySummaries(
   db: Database | DrizzleTransaction,
 ): Promise<Map<ProductCategoryId, ProductCategorySummary>> {
   const rows = await unwrapDb(db)
-    .select(columns)
+    .select()
     .from(productCategory)
     .where(notDeleted(productCategory));
   const paths = await pathsFor(
@@ -719,3 +617,12 @@ export async function loadCategorySummaries(
     }),
   );
 }
+
+export const productCategoryRepository = entityRepository("productCategory", {
+  lifecycle: { delete: PRODUCT_CATEGORY_DELETE_EDGE_POLICY },
+  get: getProductCategoryByShortcode,
+  list: listProductCategories,
+  create: createProductCategory,
+  update: updateProductCategory,
+  deleteHooks: { beforeDelete: refuseBoundCategories },
+});

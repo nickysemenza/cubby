@@ -72,6 +72,7 @@ import {
   readAllocations,
 } from "~/server/repo/financial-transaction-allocations";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { sha256Hex } from "~/server/semantic/hash";
 
 import { learnPurchaseProductExternalId } from "./external-id-learning";
 import {
@@ -83,14 +84,6 @@ import {
 const PURCHASE_EXTERNAL_ID_KIND = "retailer_sku" as const;
 export const PRODUCT_IDENTITY_RULES =
   "Choose an existing product only when the title, model, size, count, and variant identify the same sellable item. Choose none for a distinct or uncertain variant.";
-
-const sha256 = async (value: string): Promise<string> => {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-};
 
 const dateOnly = (value: string | null): string =>
   (value ? new Date(value) : new Date()).toISOString().slice(0, 10);
@@ -725,7 +718,7 @@ async function fileFinding(
   summary: string,
   proposedFix: ProposedImportFix | null,
 ): Promise<string> {
-  const evidenceFingerprint = await sha256(
+  const evidenceFingerprint = await sha256Hex(
     JSON.stringify({ source: input.source, kind, purchaseId, proposedFix }),
   );
   const [row] = await tx
@@ -1177,7 +1170,7 @@ export async function importVendorOrder(
       );
     }
 
-    const claimFingerprint = await sha256(
+    const claimFingerprint = await sha256Hex(
       JSON.stringify({
         purchaseId,
         lines: candidate.lines,

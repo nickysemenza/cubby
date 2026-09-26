@@ -11,7 +11,6 @@ import {
   bulkMovePayload,
   inventoryBulkAddPayload,
   inventoryBulkDiscardPayload,
-  inventoryBulkOperationPayload,
   inventoryFindDuplicatesInput,
   inventoryLocationIdsInput,
   inventoryLocationSnapshotInput,
@@ -36,7 +35,6 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   addInventoryEntries,
   bulkMoveInventoryEntries,
-  bulkProcessInventoryEntries,
   getInventoryByLocationIds,
   getInventoryLocationSnapshotToken,
   moveInventoryEntries,
@@ -170,91 +168,9 @@ async function resolveEntityIds<
   return ids;
 }
 
-export const bulkProcessInventoryWorkflow = inventoryMutation(
-  "inventory.bulkProcess",
-  async (
-    db: Database,
-    input: z.output<typeof inventoryBulkOperationPayload>,
-  ) => {
-    const productShortcodes = uniq(input.items.map((item) => item.productId));
-    const resolvedProducts = await resolveLiveShortcodes(
-      db,
-      productShortcodes,
-      "product",
-    );
-    const missing = productShortcodes.filter(
-      (shortcode) => !resolvedProducts.has(shortcode),
-    );
-    if (missing.length > 0) {
-      throw createAppError(
-        "PRODUCT_NOT_FOUND",
-        `Product(s) not found: ${missing.join(", ")}`,
-      );
-    }
-    const [resolvedLocations, resolvedInventories] = await Promise.all([
-      resolveEntityIds(
-        db,
-        [input.locationId, ...input.items.map((item) => item.locationId)],
-        "location",
-      ),
-      resolveEntityIds(
-        db,
-        input.items.flatMap((item) => (item.id ? [item.id] : [])),
-        "inventory",
-      ),
-    ]);
-
-    const resolvedOwnership = await Promise.all(
-      input.items.map((item) => resolveOwnership(db, item.ownership)),
-    );
-    return {
-      resolvedProducts,
-      resolvedLocations,
-      resolvedInventories,
-      resolvedOwnership,
-    };
-  },
-  async (
-    db,
-    actorContext,
-    input,
-    {
-      resolvedProducts,
-      resolvedLocations,
-      resolvedInventories,
-      resolvedOwnership,
-    },
-  ) => {
-    const items = await bulkProcessInventoryEntries(
-      db,
-      parseEntityId("location", resolvedLocations.get(input.locationId)!),
-      input.items.map((item, index) => ({
-        id: item.id
-          ? parseEntityId("inventory", resolvedInventories.get(item.id)!)
-          : undefined,
-        productId: parseEntityId(
-          "product",
-          resolvedProducts.get(item.productId) ?? "",
-        ),
-        locationId: parseEntityId(
-          "location",
-          resolvedLocations.get(item.locationId)!,
-        ),
-        amount: item.amount,
-        ownership: resolvedOwnership[index],
-      })),
-      actorContext,
-      input.loadedAt,
-      input.snapshotToken,
-    );
-    return { items };
-  },
-);
-
 /**
- * Additive counterpart to {@link bulkProcessInventoryWorkflow}: only creates
- * or sums into the rows its own items name, and never touches anything else
- * at the location (that one is delete-on-omit; see `bulk.ts`).
+ * Additive: only creates or sums into the rows its own items name, and never
+ * touches anything else at the location.
  */
 export const bulkAddInventoryWorkflow = inventoryMutation(
   "inventory.bulkAdd",

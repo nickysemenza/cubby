@@ -16,12 +16,21 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ImportRunDetail } from "~/lib/purchase-import-run-detail";
+import type { ImportRunDetail } from "~/contracts/run.contract";
+import { photoImport } from "~/entities/run.functions";
+import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import type { UnparsedStartOperationData } from "~/server/start-operation.contract";
 
 import { PhotoImportRunView } from "./photo-run-detail";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
+let restoreDispatch: (() => void) | undefined;
+
+/** Answer every Start operation with `data`, as candidate reads expect. */
+const answerOperations = (data: UnparsedStartOperationData) => {
+  restoreDispatch = overrideStartDispatch(async () => ({ ok: true, data }));
+};
 
 // "RUN-4K7M" is the one synthetic shortcode body AGENTS.md sanctions for
 // outward-facing examples, and it also satisfies the real shortcode format
@@ -42,11 +51,13 @@ const run: ImportRunDetail = {
   failureCode: null,
   notes: "Fall closet batch, top shelf",
   predecessorRunPublicId: null,
+  restartInputs: null,
+  successorRunPublicId: null,
   coordinatorModel: null,
   skillRevision: null,
   runtimeRevision: null,
   agentModelMs: 0,
-  source: null,
+  source: { kind: "manual", vendorName: null },
   actor: {
     name: null,
     ledgerParty: { id: "LPY-4K7M", name: "Fixture household member" },
@@ -54,6 +65,13 @@ const run: ImportRunDetail = {
   controllingMembers: [],
   controlHistory: [],
   vendorAccount: null,
+  dispatch: {
+    eventId: null,
+    state: "pending",
+    attempts: 0,
+    error: null,
+    coordinatorStartedAt: null,
+  },
   affectedPurchases: [],
   findings: [],
   operations: [],
@@ -155,12 +173,14 @@ const review: PhotoRunReview = {
 beforeEach(() => {
   harness = createBrowserTestHarness();
   harness.queryClient.setQueryData(
-    ["purchase-import", "run", RUN_ID, "photo-review"],
+    photoImport.review.queryKey({ runId: RUN_ID }),
     review,
   );
 });
 
 afterEach(() => {
+  restoreDispatch?.();
+  restoreDispatch = undefined;
   harness.dispose();
   window.history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
@@ -197,7 +217,7 @@ describe("PhotoImportRunView", () => {
       ),
     };
     harness.queryClient.setQueryData(
-      ["purchase-import", "run", RUN_ID, "photo-review"],
+      photoImport.review.queryKey({ runId: RUN_ID }),
       stoppedReview,
     );
     render(<PhotoImportRunView run={{ ...run, status: "needs_review" }} />, {
@@ -215,13 +235,11 @@ describe("PhotoImportRunView", () => {
 
   it("starts grouping when the completed iPhone upload opens its review link", async () => {
     window.history.replaceState(null, "", "/runs/RUN-4K7M?startGrouping=1");
-    const fetchMock = vi.fn(
-      async (_input: RequestInfo | URL, init?: RequestInit) =>
-        Response.json(
-          init?.method === "POST" ? { runId: RUN_ID, started: true } : review,
-        ),
-    );
-    vi.stubGlobal("fetch", fetchMock);
+    const operations: string[] = [];
+    restoreDispatch = overrideStartDispatch(async (operation) => {
+      operations.push(operation);
+      return { ok: true, data: { runId: RUN_ID, started: true } };
+    });
 
     render(
       <PhotoImportRunView run={{ ...run, status: "running", endedAt: null }} />,
@@ -230,7 +248,7 @@ describe("PhotoImportRunView", () => {
 
     await waitFor(() =>
       expect(
-        fetchMock.mock.calls.filter(([, init]) => init?.method === "POST"),
+        operations.filter((name) => name === "photoImport.startGrouping"),
       ).toHaveLength(1),
     );
   });
@@ -249,18 +267,17 @@ describe("PhotoImportRunView", () => {
       })),
     };
     harness.queryClient.setQueryData(
-      ["purchase-import", "run", RUN_ID, "photo-review"],
+      photoImport.review.queryKey({ runId: RUN_ID }),
       describing,
     );
-    const fetchMock = vi.fn(
-      async (_input: RequestInfo | URL, init?: RequestInit) =>
-        Response.json(
-          init?.method === "POST"
-            ? { runId: RUN_ID, started: true }
-            : describing,
-        ),
-    );
-    vi.stubGlobal("fetch", fetchMock);
+    const operations: string[] = [];
+    restoreDispatch = overrideStartDispatch(async (operation) => {
+      operations.push(operation);
+      return {
+        ok: true,
+        data: { runId: RUN_ID, started: true, waitingForAnalysis: 0 },
+      };
+    });
 
     render(
       <PhotoImportRunView
@@ -284,7 +301,7 @@ describe("PhotoImportRunView", () => {
       screen.getByRole("button", { name: "Start grouping" }),
     ).toBeDisabled();
     expect(
-      fetchMock.mock.calls.filter(([, init]) => init?.method === "POST"),
+      operations.filter((name) => name === "photoImport.startGrouping"),
     ).toHaveLength(0);
   });
 
@@ -331,7 +348,7 @@ describe("PhotoImportRunView", () => {
 
   it("shows a neutral skipped cutout pill with the label-only reason", async () => {
     harness.queryClient.setQueryData(
-      ["purchase-import", "run", RUN_ID, "photo-review"],
+      photoImport.review.queryKey({ runId: RUN_ID }),
       {
         ...review,
         review: {
@@ -372,33 +389,28 @@ describe("PhotoImportRunView", () => {
         ),
       } satisfies PhotoRunReview,
     );
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        Response.json({
-          candidates: [
-            {
-              id: "PRD-4K7N",
-              name: "ForgeWear pocket tee black small",
-              coverUrl: null,
-              match: {
-                source: "catalog_name",
-                sharedNameTerms: ["pocket", "tee", "black", "small"],
-                brandMatches: true,
-                variant: {
-                  color: { first: null, second: "black", relation: "unknown" },
-                  size: { first: null, second: "small", relation: "unknown" },
-                },
-              },
-              hasOwnPhoto: false,
-              hasPhotoImport: false,
-              hasPurchase: true,
-              hasInventory: false,
+    answerOperations({
+      candidates: [
+        {
+          id: "PRD-4K7N",
+          name: "ForgeWear pocket tee black small",
+          coverUrl: null,
+          match: {
+            source: "catalog_name",
+            sharedNameTerms: ["pocket", "tee", "black", "small"],
+            brandMatches: true,
+            variant: {
+              color: { first: null, second: "black", relation: "unknown" },
+              size: { first: null, second: "small", relation: "unknown" },
             },
-          ],
-        }),
-      ),
-    );
+          },
+          hasOwnPhoto: false,
+          hasPhotoImport: false,
+          hasPurchase: true,
+          hasInventory: false,
+        },
+      ],
+    });
     render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
 
     expect(await screen.findByText("Cutout: Skipped")).toHaveAttribute(
@@ -448,12 +460,9 @@ describe("PhotoImportRunView", () => {
           : image,
       ),
     };
-    const key = ["purchase-import", "run", RUN_ID, "photo-review"];
+    const key = photoImport.review.queryKey({ runId: RUN_ID });
     harness.queryClient.setQueryData(key, pendingReview);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => Response.json({ candidates: [] })),
-    );
+    answerOperations({ candidates: [] });
     render(
       <PhotoImportRunView run={{ ...run, status: "running", endedAt: null }} />,
       { wrapper: harness.wrapper },

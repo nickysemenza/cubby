@@ -10,6 +10,7 @@ import {
   orderMailEvent,
 } from "~/server/db/schema";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
+import { sha256Hex } from "~/server/semantic/hash";
 
 import type {
   GmailAccountTokenPatch,
@@ -43,14 +44,6 @@ export const loadGmailCursor = async (
   return { historyId: row[0]?.historyId ?? null };
 };
 
-const sha256 = async (value: string): Promise<string> => {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-};
-
 const dateFromInternalDate = (value: string | null): Date => {
   if (!value)
     throw new GmailPersistenceError("Gmail message has no internal date");
@@ -72,7 +65,7 @@ const attachmentProviderId = (attachment: GmailOrderMailAttachment): string =>
 const attachmentChecksum = async (
   attachment: GmailOrderMailAttachment,
 ): Promise<string> =>
-  sha256(
+  sha256Hex(
     JSON.stringify({
       sourceKey: attachment.sourceKey,
       dataBase64Url: attachment.dataBase64Url ?? null,
@@ -108,7 +101,7 @@ const upsertMessage = async (
       sender: header(mail, "from"),
       subject: header(mail, "subject"),
       receivedAt: dateFromInternalDate(mail.internalDate),
-      rawChecksum: await sha256(JSON.stringify(mail)),
+      rawChecksum: await sha256Hex(JSON.stringify(mail)),
       content: {
         snippet: mail.snippet,
         bodyText: mail.bodyText,
@@ -123,7 +116,7 @@ const upsertMessage = async (
         sender: header(mail, "from"),
         subject: header(mail, "subject"),
         receivedAt: dateFromInternalDate(mail.internalDate),
-        rawChecksum: await sha256(JSON.stringify(mail)),
+        rawChecksum: await sha256Hex(JSON.stringify(mail)),
         content: {
           snippet: mail.snippet,
           bodyText: mail.bodyText,

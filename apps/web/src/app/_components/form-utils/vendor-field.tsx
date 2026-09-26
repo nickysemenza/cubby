@@ -22,7 +22,7 @@ import { FormFieldGroup } from "../forms/form-field-group";
  * Why not a text input: `findOrCreateVendor` matches names EXACTLY (trimmed,
  * case-sensitive, deliberately — case-folding would merge a genuine `3M`/`3m`
  * distinction), so free text mints a duplicate roster row on any typo, with no
- * detector to catch it. This offers the whole `vendor.options` roster and saves
+ * detector to catch it. This offers the whole vendor roster and saves
  * the picked option's name **verbatim**; typing a genuinely new vendor still
  * works — a first purchase at a new store shouldn't need a detour to /vendors —
  * but is no longer the accidental default, because

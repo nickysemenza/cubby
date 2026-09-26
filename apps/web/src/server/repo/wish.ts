@@ -23,21 +23,19 @@ import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { product, wish, wishCandidate } from "~/server/db/schema";
+import { entityRepository } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
-  auditDateWhereConditions,
-  countWhere,
-  executeListQueryWithCount,
   formatSearchTerm,
   getDb,
-  lockAndValidateForDelete,
   notDeleted,
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import {
@@ -46,10 +44,7 @@ import {
   resolveProductPricing,
 } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { removeEntity } from "~/server/repo/removal";
 import {
-  resolveAllOrThrow,
-  resolveLiveShortcode,
   resolveLiveShortcodes,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
@@ -294,7 +289,6 @@ export const buildWishWhere = async (
     // entity's UI work set out to remove, just pointing the other way (the UI
     // sends a filter the server silently ignores). Every other related-view
     // source repo applies both.
-    ...auditDateWhereConditions(wish, filters),
     ...relatedWhereConditions("wish", filters, wish.id),
   ]);
 };
@@ -310,22 +304,27 @@ export const wishList = async (
   sums: { priceLow: number; priceHigh: number };
 }> => {
   const where = await buildWishWhere(db, filters);
-  const { take, skip } = wishScaffold.page(pagination);
   // Footer totals over the WHOLE filtered set, not the loaded page. Summing the
   // returned rows instead would quietly under-report the moment the wishlist
   // outgrows one page — a wrong number is worse than no number.
-  const [{ data: rows, count }, [totals]] = await Promise.all([
-    executeListQueryWithCount(
-      getDb(db)
-        .select()
-        .from(wish)
-        .where(where)
-        .orderBy(
-          ...wishScaffold.orderBy(sorts, { resolve: resolveWishSort }, filters),
-        )
-        .limit(take)
-        .offset(skip),
-      countWhere(db, wish, where),
+  const [page, [totals]] = await Promise.all([
+    wishScaffold.list(
+      db,
+      { filters, sorts, pagination },
+      {
+        where,
+        resolveSort: resolveWishSort,
+        hydrate: async (rows) => {
+          const hydrated = await hydrateWishes(db, rows);
+          // Display images key on the row uuid; hydrated rows already carry
+          // the public shortcode as `id`, so pair each raw row with its output.
+          const paired = rows.map((row, index) => ({
+            id: row.id,
+            out: hydrated[index]!,
+          }));
+          return withDisplayImages(db, "wish", paired, (entry) => entry.out);
+        },
+      },
     ),
     getDb(db)
       .select({
@@ -335,16 +334,8 @@ export const wishList = async (
       .from(wish)
       .where(where),
   ]);
-  const hydrated = await hydrateWishes(db, rows);
-  // Display images key on the row uuid; hydrated rows already carry the
-  // public shortcode as `id`, so pair each raw row with its output.
-  const paired = rows.map((row, index) => ({
-    id: row.id,
-    out: hydrated[index]!,
-  }));
   return {
-    data: await withDisplayImages(db, "wish", paired, (entry) => entry.out),
-    count,
+    ...page,
     sums: {
       priceLow: Number(totals?.priceLow ?? 0),
       priceHigh: Number(totals?.priceHigh ?? 0),
@@ -352,21 +343,16 @@ export const wishList = async (
   };
 };
 
-const getWishByID = async (db: Database, id: WishId): Promise<WishOut> => {
-  const row = await getDb(db).query.wish.findFirst({
-    where: and(eq(wish.id, id), notDeleted(wish)),
-  });
-  if (!row) throw createAppError("WISH_NOT_FOUND", `Wish not found: ${id}`);
-  return (await hydrateWishes(db, [row]))[0]!;
-};
-
-export const getWishByShortcode = async (
-  db: Database,
-  shortcode: string,
-): Promise<WishOut | null> => {
-  const id = await resolveLiveShortcode(db, shortcode, "wish");
-  return id ? getWishByID(db, id) : null;
-};
+const wishReader = createEntityReader({
+  entity: "wish",
+  fetchById: (db, id) =>
+    getDb(db).query.wish.findFirst({
+      where: and(eq(wish.id, id), notDeleted(wish)),
+    }),
+  fromDB: async (db, row) => (await hydrateWishes(db, [row]))[0]!,
+});
+const getWishByID = wishReader.getByID;
+export const getWishByShortcode = wishReader.getByShortcode;
 
 /** Any live Product can be a wish candidate — the only requirement is that it
  * exists and is live. */
@@ -521,27 +507,10 @@ export const updateWish = async (
   return { output: await getWishByID(db, id), entityId: id };
 };
 
-export const deleteWishes = async (
-  db: Database,
-  shortcodes: WishShortcode[],
-  actor: ActorContext,
-): Promise<{ deleted: number }> => {
-  const ids = await resolveAllOrThrow(db, "wish", shortcodes);
-  return await withTransaction(db, async (tx) => {
-    await lockAndValidateForDelete(tx, wish, ids, "Wish");
-    const { deleted } = await removeEntity(tx, {
-      entity: "wish",
-      ids,
-      removal: "soft",
-      actor,
-      children: [
-        {
-          table: wishCandidate,
-          parentColumns: [wishCandidate.wishId],
-          auditKey: "cascadedCandidates",
-        },
-      ],
-    });
-    return { deleted };
-  });
-};
+export const wishRepository = entityRepository("wish", {
+  lifecycle: { delete: WISH_DELETE_EDGE_POLICY },
+  get: getWishByShortcode,
+  list: wishList,
+  create: createWish,
+  update: updateWish,
+});

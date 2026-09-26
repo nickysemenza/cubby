@@ -23,7 +23,7 @@ import { entities } from "~/entities/entities";
 import { activity } from "~/lib/activity.functions";
 import { auditLogListOptions } from "~/lib/audit-log.functions";
 import { pageTitle } from "~/lib/page-title";
-import { purchaseAgentConnectionStatus } from "~/lib/purchase-import-run-detail";
+import { purchaseAgentConnectionStatus } from "~/lib/purchase-import-debug";
 
 const searchSchema = z.object({
   tab: z.enum(["runs", "changes", "connections"]).optional().catch(undefined),

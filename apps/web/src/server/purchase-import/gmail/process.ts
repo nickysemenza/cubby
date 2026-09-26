@@ -21,21 +21,12 @@ import {
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { sha256Hex } from "~/server/semantic/hash";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
 
 import { refundTally } from "../findings";
 import { uniqueOrderSubsetForCharge } from "../writer-policy";
 import type { GmailOrderMailAttachment } from "./types";
-
-const sha256 = async (value: string) => {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-};
 
 const cents = (value: number) => Math.round(value * 100);
 
@@ -157,7 +148,7 @@ export async function processOrderMails(
       candidate.senders.some((value) => sender.includes(value.toLowerCase())),
     );
     if (matchedVendors.length !== 1) {
-      const fingerprint = await sha256(
+      const fingerprint = await sha256Hex(
         `unknown-sender:${mail.sender.toLowerCase()}`,
       );
       const [existing] = await database
@@ -431,7 +422,7 @@ export async function processOrderMails(
                 ? "Vendor mail reports a refund of the same amount as another refund on this order. Apply only if it is a separate refund, not a second notice for the same one."
                 : "Vendor mail reports a refund that is not yet booked in the expense ledger.",
           proposedFix,
-          evidenceFingerprint: await sha256(
+          evidenceFingerprint: await sha256Hex(
             JSON.stringify({ sourceKey, classification, target: target.id }),
           ),
         })
@@ -466,7 +457,7 @@ export async function processOrderMails(
               targetId: target.id,
               kind: "return_window",
               summary: `${costlyLines.length} line${costlyLines.length === 1 ? "" : "s"} worth at least $50 can be returned until ${expiresAt.toLocaleDateString("en-US", { timeZone: "UTC" })}.`,
-              evidenceFingerprint: await sha256(
+              evidenceFingerprint: await sha256Hex(
                 JSON.stringify({
                   sourceKey,
                   target: target.id,

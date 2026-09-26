@@ -4,6 +4,7 @@ import {
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { z } from "zod";
 
 import {
   fieldSuggestionBasisFromRecord,
@@ -16,6 +17,7 @@ import {
   presentEntitySelectOptions,
   type EntitySelectOption,
 } from "./editing/select-options";
+import { readRecordField } from "./entity-references";
 
 type EnumField = Pick<EntityFieldModel["fields"][number], "key" | "control">;
 
@@ -46,6 +48,19 @@ export function enumFieldOptions(
   );
   optionsCache.set(cacheKey, options);
   return options;
+}
+
+/** `enumFieldOptions` by field key, for surfaces outside a field model loop
+ * (filters, dialogs, calendar chips). */
+export function fieldEnumOptions(
+  entity: Entity,
+  key: string,
+): EntitySelectOption[] {
+  const field = entityFieldModels[entity].fields.find(
+    (candidate) => candidate.key === key,
+  );
+  if (!field) throw new Error(`${entity}.${key} is not a declared field`);
+  return enumFieldOptions(entity, field);
 }
 
 function enumFieldOption(
@@ -93,6 +108,25 @@ export function enumFieldLabel(
   );
   if (!field) return raw;
   return enumFieldOption(entity, field, raw)?.label ?? raw;
+}
+
+const chipValue = z.union([z.string(), z.boolean()]).nullish();
+
+/**
+ * The label a hero chip field's value reads as: its option label, or the
+ * field label / "Not …" for a boolean. Shared by the detail hero and the
+ * preview card's identity line.
+ */
+export function heroChipLabel<TRecord extends object>(
+  entity: Entity,
+  record: TRecord,
+  field: EnumField & { label: string; readKey: string | null },
+): string | null {
+  const value = readRecordField(record, field.readKey ?? field.key, chipValue);
+  if (value === null || value === undefined) return null;
+  if (value === true) return field.label;
+  if (value === false) return `Not ${field.label.toLocaleLowerCase()}`;
+  return enumFieldLabel(entity, field.key, value);
 }
 
 /**

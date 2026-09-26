@@ -63,12 +63,20 @@ const entityToolOutput = z.union([
   entitySummaryResultSchema,
 ]);
 
+/** Relation reads are the `list_entity_relation` tool, not an `entity` command. */
+type McpEntityCommand = Exclude<EntityCommand, { action: "listRelation" }>;
+
 const kernelCommand = (
   command: z.infer<typeof entityMcpCommandSchema>,
-): EntityCommand => {
-  if (!("resultDetail" in command)) return entityCommandSchema.parse(command);
-  const { resultDetail: _resultDetail, ...rest } = command;
-  return entityCommandSchema.parse(rest);
+): McpEntityCommand => {
+  let parsed: EntityCommand;
+  if ("resultDetail" in command) {
+    const { resultDetail: _resultDetail, ...rest } = command;
+    parsed = entityCommandSchema.parse(rest);
+  } else parsed = entityCommandSchema.parse(command);
+  if (parsed.action === "listRelation")
+    throw new Error("listRelation is not an entity tool command");
+  return parsed;
 };
 
 /**
@@ -91,7 +99,7 @@ type EntityResult = z.infer<typeof entityToolOutput>;
 /** A single command-shaped executor makes the MCP port mock-free and overload-free. */
 export type ExecuteEntity = (
   context: EntityKernelContext,
-  command: EntityCommand,
+  command: McpEntityCommand,
 ) => Promise<EntityResult>;
 
 const runKernelEntity: ExecuteEntity = async (context, command) =>
@@ -226,13 +234,10 @@ export function registerEntityTools(
         `${result.entity}:${String(result.proposed.id ?? "preview")}`,
       annotations: READ_ONLY_CLOSED,
       telemetryEntity: ({ items }) => items[0]?.entity,
-      run: async (_caller, item, context) => {
-        if (!context)
-          throw new Error("Authenticated entity-kernel context is missing");
-        return entityPreviewOutputSchema.parse(
-          await previewEntity(context, item),
-        );
-      },
+      run: async (item, extra) =>
+        entityPreviewOutputSchema.parse(
+          await previewEntity(getEntityKernelContext(extra), item),
+        ),
     },
     runtime,
   );
@@ -248,11 +253,10 @@ export function registerEntityTools(
       projectReference: (result) => result.item.id,
       annotations: WRITE_DESTRUCTIVE_CLOSED,
       telemetryEntity: ({ items }) => items[0]?.entity,
-      run: async (_caller, item, context) => {
-        if (!context)
-          throw new Error("Authenticated entity-kernel context is missing");
-        return entityBatchItemOutput.parse(await runEntity(context, item));
-      },
+      run: async (item, extra) =>
+        entityBatchItemOutput.parse(
+          await runEntity(getEntityKernelContext(extra), item),
+        ),
     },
     runtime,
   );

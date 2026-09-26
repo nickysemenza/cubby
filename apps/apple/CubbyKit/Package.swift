@@ -68,7 +68,10 @@ let package = Package(
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
                 .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
                 .product(name: "GRDB", package: "GRDB.swift"),
-            ]
+            ],
+            // `EntityCatalog`'s descriptors, written by `pnpm generate` (gitignored) and decoded
+            // by the hand-written types in Catalog/EntityManifest.swift.
+            resources: [.copy("Generated/entity-manifest.json")]
         ),
         .executableTarget(
             name: "cubby",

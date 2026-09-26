@@ -16,14 +16,14 @@ import {
   product,
 } from "~/server/db/schema";
 import {
-  latestImportRunProgress,
+  loadImportRunDetail,
   reconcileSettledImportRun,
   stopImportRunForReview,
 } from "~/server/purchase-import/run-service";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { deleteImages } from "~/server/repo/image";
 import { mergeLedgerParties } from "~/server/repo/ledger-party";
-import { deleteProductCategories } from "~/server/repo/product-category";
+import { productCategoryRepository } from "~/server/repo/product-category";
 import { mergeProducts } from "~/server/repo/product/merge";
 import {
   createImageFixture,
@@ -137,7 +137,9 @@ describe("photo group proposals", () => {
       { runId: run.id, operationId: "synthetic-photo-settle" },
     );
     expect(settled).toEqual({ reconciled: false, status: "running" });
-    expect(await latestImportRunProgress(ctx.db, run.id)).toMatchObject({
+    expect(
+      (await loadImportRunDetail(ctx.db, run.shortcode)).latestProgress,
+    ).toMatchObject({
       phase: "awaiting_approval",
       awaitingApproval: true,
     });
@@ -790,7 +792,7 @@ describe("photo group proposals", () => {
       },
       ctx.actor,
     );
-    await deleteProductCategories(
+    await productCategoryRepository.delete(
       ctx.db,
       [parseShortcodeFor("productCategory", category.shortcode)],
       ctx.actor,

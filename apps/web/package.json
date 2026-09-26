@@ -74,7 +74,6 @@
     "@modelcontextprotocol/ext-apps": "^2.0.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@nivo/bar": "^0.99.0",
-    "@nivo/calendar": "^0.99.0",
     "@nivo/line": "^0.99.0",
     "@nivo/pie": "^0.99.0",
     "@notionhq/client": "^5.23.2",

@@ -10,7 +10,7 @@
  * sibling group, which is what makes the server's ORDER BY hold at every level.
  *
  * The walk itself — orphan promotion, depth cap, cycle guard — lives in
- * `project-forest.ts`, shared with `charts/gantt/gantt-model.ts`.
+ * `project-forest.ts`, shared with `project-schedule-model.ts`.
  *
  * No React, no DOM: kept alias-free and React-free so it runs under the
  * `*.unit.test.ts` vitest project (see vitest.config.ts).

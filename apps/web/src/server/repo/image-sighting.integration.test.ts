@@ -11,7 +11,7 @@ import { createDevice } from "~/server/repo/device";
 import { getImageById } from "~/server/repo/image";
 import {
   createImageSighting,
-  deleteImageSightings,
+  imageSightingRepository,
   getImageSightingByID,
   listImageSightings,
   updateImageSighting,
@@ -384,7 +384,11 @@ describe("image-sighting", () => {
     expect(derived.captureAttribution).toBe("derived");
     expect(derived.capturedByPartyId).toBe(ana);
 
-    await deleteImageSightings(ctx.db, [sighting.output.id], ctx.actor);
+    await imageSightingRepository.delete(
+      ctx.db,
+      [sighting.output.id],
+      ctx.actor,
+    );
 
     const reverted = await getImageById(ctx.db, image.id);
     expect(reverted.captureAttribution).toBe("none");

@@ -15,7 +15,6 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
-import { formatCurrency } from "~/lib/utils";
 
 import {
   entityDisplayImageKey,
@@ -263,23 +262,6 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
 }
 
 // ── Shared bits used by per-entity specs / fetch wrappers ────────────────────
-
-/** A per-each price figure, e.g. "from $1.99/ea". */
-export function PriceValue({
-  amount,
-  from,
-}: {
-  amount: number;
-  from?: boolean;
-}) {
-  return (
-    <>
-      {from && <span className="text-xs text-muted-foreground">from </span>}
-      {formatCurrency(amount)}
-      <span className="text-xs text-muted-foreground">/ea</span>
-    </>
-  );
-}
 
 export function PreviewLoading() {
   return (

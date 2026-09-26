@@ -129,6 +129,8 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          width: "md",
+          mobile: { slot: "meta", priority: 30, interactive: true },
         },
         resolution: {
           reset: { projectMode: "inherit", projectId: null },
@@ -187,6 +189,8 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          width: "md",
+          mobile: { slot: "meta", priority: 35, interactive: true },
         },
         resolution: {
           reset: { subjectProductMode: "inherit", subjectProductId: null },

@@ -25,24 +25,28 @@ export const renderRelationArtifacts = (
   if (new Set(relationMutationKeys).size !== relationMutationKeys.length) {
     throw new EntityDeclarationError("Relation mutation keys must be unique.");
   }
-  const relationSchemaImports = [
-    ...new Map(
-      relationMutations.map(({ itemSchema }) => [
-        `${itemSchema.module}#${itemSchema.export}`,
-        itemSchema,
-      ]),
-    ).values(),
-  ]
-    .sort((left, right) =>
-      `${left.module}#${left.export}`.localeCompare(
-        `${right.module}#${right.export}`,
-      ),
-    )
-    .map(
-      ({ module, export: exportName }) =>
-        `import { ${exportName} } from ${JSON.stringify(module)};`,
-    )
-    .join("\n");
+  const schemaImports = (refs: readonly RelationMutation["itemSchema"][]) =>
+    [
+      ...new Map(
+        refs.map((ref) => [`${ref.module}#${ref.export}`, ref] as const),
+      ).values(),
+    ]
+      .sort((left, right) =>
+        `${left.module}#${left.export}`.localeCompare(
+          `${right.module}#${right.export}`,
+        ),
+      )
+      .map(
+        ({ module, export: exportName }) =>
+          `import { ${exportName} } from ${JSON.stringify(module)};`,
+      )
+      .join("\n");
+  const relationSchemaImports = schemaImports(
+    relationMutations.map(({ itemSchema }) => itemSchema),
+  );
+  const relationRowSchemaImports = schemaImports(
+    relationMutations.map(({ rowSchema }) => rowSchema),
+  );
   const relationCommandVariant = ({
     entity,
     relation,
@@ -96,6 +100,53 @@ export const renderRelationArtifacts = (
     mcpRelationMutations.length === 0
       ? "z.never()"
       : `z.object({action:z.enum(["attach","detach"]),entity:z.enum(${compactLiteral([...new Set(mcpRelationMutations.map(({ entity }) => entity))])}),relation:z.enum(${compactLiteral([...new Set(mcpRelationMutations.map(({ relation }) => relation))])}),id:${schemaUnion(mcpParentIdSchemas)},items:z.array(${schemaUnion(mcpItemSchemas)}).min(1).max(500)}).strict().superRefine((input,ctx)=>{const result=generatedMcpEntityRelationCommandSchema.safeParse(input);if(!result.success){for(const issue of result.error.issues)ctx.addIssue({code:"custom",path:issue.path,message:issue.message});}})`;
+  // `listRelation` reads every relation that declares an adapter. The kernel
+  // command stays correlated per relation; the operation input/output are the
+  // flat object shapes an MCP tool schema requires, with the input refined
+  // back through the correlated command.
+  const listUnion = (variants: readonly string[]) =>
+    variants.length === 0
+      ? "z.never()"
+      : variants.length === 1
+        ? variants[0]
+        : `z.union([\n  ${variants.join(",\n  ")}\n])`;
+  const relationListCommandSchema = listUnion(
+    relationMutations.map(
+      ({ entity, relation }) =>
+        `z.object({action:z.literal("listRelation"),entity:z.literal(${JSON.stringify(entity)}),relation:z.literal(${JSON.stringify(relation)}),id:shortcodeSchema(${JSON.stringify(entity)})}).strict()`,
+    ),
+  );
+  const relationListResultSchema = listUnion(
+    relationMutations.map(
+      ({ entity, relation, rowSchema }) =>
+        `z.object({action:z.literal("listRelation"),entity:z.literal(${JSON.stringify(entity)}),relation:z.literal(${JSON.stringify(relation)}),id:shortcodeSchema(${JSON.stringify(entity)}),items:z.array(${rowSchema.export})})`,
+    ),
+  );
+  const relationListEntities = compactLiteral([
+    ...new Set(relationMutations.map(({ entity }) => entity)),
+  ]);
+  const relationListRelations = compactLiteral([
+    ...new Set(relationMutations.map(({ relation }) => relation)),
+  ]);
+  const relationListRows = [
+    ...new Set(
+      relationMutations.map(({ rowSchema }) => `z.array(${rowSchema.export})`),
+    ),
+  ];
+  const relationListInputSchema =
+    relationMutations.length === 0
+      ? "z.never()"
+      : `z.object({entity:z.enum(${relationListEntities}),relation:z.enum(${relationListRelations}),id:anyShortcodeSchema(${relationListEntities})}).strict().superRefine((input,ctx)=>{const result=generatedEntityRelationListCommandSchema.safeParse({action:"listRelation",...input});if(!result.success){for(const issue of result.error.issues)ctx.addIssue({code:"custom",path:issue.path,message:issue.message});}})`;
+  const relationListOutputSchema =
+    relationMutations.length === 0
+      ? "z.never()"
+      : `z.object({entity:z.enum(${relationListEntities}),relation:z.enum(${relationListRelations}),id:z.string(),items:${schemaUnion(relationListRows)}})`;
+  const relationListCases = relationMutations
+    .map(
+      ({ entity, relation, adapter }) =>
+        `    case ${JSON.stringify(`${entity}:${relation}`)}: return {...command,entity:${JSON.stringify(entity)},relation:${JSON.stringify(relation)},items:await ${adapter.export}.list(ctx.readDb,command.id)};`,
+    )
+    .join("\n");
   const relationAdapterImports = [
     ...new Map(
       relationMutations.map(({ adapter }) => [
@@ -134,6 +185,21 @@ export const renderRelationArtifacts = (
     .join("\n");
   return [
     {
+      // Client-safe: the `entity.relation` operation contract imports it.
+      relativePath:
+        "apps/web/src/entities/generated/entity-relation-lists.gen.ts",
+      source:
+        generatedHeader +
+        'import { anyShortcodeSchema, shortcodeSchema } from "@cubby/schemas/identifiers";\n' +
+        `${relationRowSchemaImports}\n` +
+        'import { z } from "zod";\n\n' +
+        `export const generatedEntityRelationListCommandSchema = ${relationListCommandSchema};\n\n` +
+        `export const generatedEntityRelationListResultSchema = ${relationListResultSchema};\n\n` +
+        `export const generatedEntityRelationListInputSchema = ${relationListInputSchema};\n\n` +
+        `export const generatedEntityRelationListOutputSchema = ${relationListOutputSchema};\n\n` +
+        "export type GeneratedEntityRelationListCommand = z.infer<typeof generatedEntityRelationListCommandSchema>;\n",
+    },
+    {
       relativePath:
         "apps/web/src/server/generated/entity-relation-contracts.gen.ts",
       source:
@@ -166,6 +232,7 @@ export const renderRelationArtifacts = (
         generatedHeader +
         'import type { EntityKernelContext } from "~/server/entity-kernel/adapter";\n' +
         'import type { Database } from "~/server/db";\n' +
+        'import type { GeneratedEntityRelationListCommand, generatedEntityRelationListResultSchema } from "~/entities/generated/entity-relation-lists.gen";\n' +
         'import type { GeneratedEntityRelationCommand } from "~/server/generated/entity-relation-contracts.gen";\n' +
         'import type { RelationPlan } from "~/server/repo/relation-preflight";\n' +
         'import type { z } from "zod";\n' +
@@ -184,6 +251,13 @@ export const renderRelationArtifacts = (
         `${relationPreviewCases}\n` +
         "  }\n" +
         "  throw new Error(`Unsupported relation preview ${command.entity}:${command.relation}`);\n" +
+        "}\n\n" +
+        "/** Relation reads dispatch through the same generated adapter roster. */\n" +
+        "export async function listGeneratedRelation(ctx: EntityKernelContext, command: GeneratedEntityRelationListCommand): Promise<z.input<typeof generatedEntityRelationListResultSchema>> {\n" +
+        "  switch (`${command.entity}:${command.relation}`) {\n" +
+        `${relationListCases}\n` +
+        "  }\n" +
+        "  throw new Error(`Unsupported relation list ${command.entity}:${command.relation}`);\n" +
         "}\n",
     },
   ];

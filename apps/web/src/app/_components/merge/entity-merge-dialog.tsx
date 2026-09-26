@@ -1,7 +1,7 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { productMergePreview } from "@cubby/schemas/recommendations";
+import type { productMergePreview } from "@cubby/schemas/recommendations";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { type ReactNode, useMemo, useState } from "react";
 import type { z } from "zod";
 
@@ -9,6 +9,7 @@ import {
   type ImpactPreviewOperations,
   MergeImpactPreview,
 } from "~/app/_components/actions/entity-operation-impact-preview";
+import { product } from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -25,7 +26,6 @@ import {
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { entities } from "~/entities/entities";
 import type { MergeDisplayRow, MergeableConfig } from "~/entities/types";
-import { readJsonOrThrow } from "~/lib/http-error";
 
 /** Display text comes from `mergeable.rowLabel`/`rowStat`, not a hardcoded
  * `name` field — a row shape like `PurchaseOut` (no `name`) works here too. */
@@ -263,6 +263,28 @@ function ProductMergeDecisions({
   );
 }
 
+// The operation parses its input when the options are built, so an idle
+// dialog (no keeper or no single alias yet) must not build them at all.
+const useProductMergePreview = (
+  active: boolean,
+  keepId: string | null,
+  aliasIds: readonly string[],
+) => {
+  const mergeId = aliasIds.length === 1 ? aliasIds[0] : undefined;
+  const enabled = active && !!keepId && !!mergeId;
+  // SAFETY: skipToken never runs the idle query, so it needs no operation
+  // input; `never` keeps the enabled branch's typed data.
+  const query = useQuery(
+    enabled && keepId && mergeId
+      ? product.mergePreview.queryOptions({ keepId, mergeId })
+      : ({
+          queryKey: ["product.mergePreview", "idle"],
+          queryFn: skipToken,
+        } as never),
+  );
+  return { enabled, query };
+};
+
 function RankedMergeDialog<T extends MergeRow>({
   entity,
   config,
@@ -290,25 +312,12 @@ function RankedMergeDialog<T extends MergeRow>({
     () => rows.filter((row) => row.id !== effectiveKeepId).map((row) => row.id),
     [effectiveKeepId, rows],
   );
-  const productPreviewEnabled =
-    entity === "product" && open && !!effectiveKeepId && aliasIds.length === 1;
-  const productPreview = useQuery({
-    queryKey: ["product-merge-decisions", effectiveKeepId, aliasIds[0]],
-    enabled: productPreviewEnabled,
-    queryFn: async () => {
-      const response = await fetch("/api/products/merge-preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keepId: effectiveKeepId, mergeId: aliasIds[0] }),
-      });
-      return readJsonOrThrow(
-        response,
-        productMergePreview,
-        "Merge preview could not load.",
-        { method: "POST" },
-      );
-    },
-  });
+  const { enabled: productPreviewEnabled, query: productPreview } =
+    useProductMergePreview(
+      entity === "product" && open,
+      effectiveKeepId,
+      aliasIds,
+    );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

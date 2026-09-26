@@ -24,9 +24,8 @@
  *    outside the transaction, some inside, some are handed ids), cascade
  *    expansion (`deleteTasks` adds subtasks to the id set), and per-site
  *    pre-mutations, each needing its own hook.
- *  - **Blocking guards.** Five mutually incompatible shapes across the repo,
- *    and the error message — which ids blocked, and with how many dependents —
- *    *is* the product. A generic guard could only make it worse.
+ *  - **Blocking guards and detaches.** Those are declared policy, applied
+ *    by `applyDispositions` (`./dispositions.ts`) before this runs.
  *  - **Rich return values and in-transaction side effects.**
  *    `deleteExpensesWithPurchaseEffects` computes newly-empty purchases from
  *    post-delete queries; several sites call `touchDataQualityTargets` or

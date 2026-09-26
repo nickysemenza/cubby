@@ -1,4 +1,4 @@
-import type { ProductId } from "@cubby/schemas/identifiers";
+import type { ProductId, ProductShortcode } from "@cubby/schemas/identifiers";
 import { projectCreateInput } from "@cubby/schemas/project";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -6,9 +6,10 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { projectToolUsage } from "~/server/db/schema";
+import { executeEntity } from "~/server/entity-kernel";
+import { requireActor } from "~/server/request-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
 import {
-  projectAttachResourcesWorkflow,
-  projectDetachResourcesWorkflow,
   projectRepointUsesWorkflow,
   projectSetToolUsageWorkflow,
 } from "~/server/workflows/project.server";
@@ -49,13 +50,31 @@ describe("project reusable resources", () => {
       ctx.actor,
     );
     const projectId = project.output.id;
+    const kernel = requireActor(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const resources = (
+      action: "attach" | "detach",
+      productId: ProductShortcode,
+    ) =>
+      executeEntity(kernel, {
+        action,
+        entity: "project",
+        relation: "resources",
+        id: projectId,
+        items: [{ id: productId }],
+      });
+    await expect(resources("attach", source.id)).resolves.toMatchObject({
+      result: { changed: 1 },
+    });
     await expect(
-      projectAttachResourcesWorkflow(
-        ctx.db,
-        { projectId, productIds: [source.id] },
-        ctx.actor,
-      ),
-    ).resolves.toMatchObject({ changed: 1 });
+      executeEntity(kernel, {
+        action: "listRelation",
+        entity: "project",
+        relation: "resources",
+        id: projectId,
+      }),
+    ).resolves.toMatchObject({ items: [{ productId: source.id }] });
     await expect(
       projectSetToolUsageWorkflow(
         ctx.db,
@@ -87,13 +106,9 @@ describe("project reusable resources", () => {
       columns: { productId: true },
     });
     expect(live).toEqual([{ productId: target.entityId }]);
-    await expect(
-      projectDetachResourcesWorkflow(
-        ctx.db,
-        { projectId, productIds: [target.id] },
-        ctx.actor,
-      ),
-    ).resolves.toMatchObject({ changed: 1 });
+    await expect(resources("detach", target.id)).resolves.toMatchObject({
+      result: { changed: 1 },
+    });
     await expect(
       projectSetToolUsageWorkflow(
         ctx.db,

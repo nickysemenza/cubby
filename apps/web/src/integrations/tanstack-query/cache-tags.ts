@@ -191,6 +191,7 @@ export const ripple = {
   projectOnly: exactRippleTags([["project"]]),
   /** The Run record the generic run detail page reads (`run.detail`). */
   runOnly: exactRippleTags([["run"]]),
+  memberLogins: exactRippleTags([["ledgerParty"], ["run"]]),
   productOnly: exactRippleTags([["product"]]),
   recommendationPlacement: exactRippleTags([["recommendations", "placement"]]),
   recommendationTagPropagation: exactRippleTags([

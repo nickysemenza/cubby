@@ -6,11 +6,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useMemo } from "react";
 
-import { todayPlain } from "~/app/projects/charts/gantt/gantt-date";
 import { project } from "~/app/projects/project.functions";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { NativeSelect } from "~/components/ui/native-select";
+import { householdLocalDate } from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 
 import type { GraphData, GraphFilters } from "./dependency-graph-model";
@@ -37,7 +37,7 @@ export function WorkDependencyGraph({
     project.getDependencyGraph.queryOptions({ projectId }),
   );
   const { data: projects } = useQuery(project.options.queryOptions(undefined));
-  const today = todayPlain();
+  const today = householdLocalDate();
   const graph = useMemo<GraphData>(
     () => ({
       nodes:

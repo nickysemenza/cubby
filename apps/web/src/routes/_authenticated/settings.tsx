@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { CalendarConnectDialog } from "~/app/calendar/calendar-connect-dialog";
 import { calendar } from "~/app/calendar/calendar.functions";
+import { ledgerParty } from "~/app/finance/finance.functions";
 import { AwaitingWorkCard } from "~/app/problems/components/awaiting-work-card";
 import { MaintenanceCard } from "~/app/problems/components/maintenance-card";
 import { Row, Stack } from "~/components/layout";
@@ -33,19 +34,17 @@ import { Eyebrow } from "~/components/ui/eyebrow";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { StatusText } from "~/components/ui/status-text";
+import { run as runOperations } from "~/entities/run.functions";
 import { authClient } from "~/lib/auth-client";
 import { copyText } from "~/lib/clipboard";
 import { getErrorMessage } from "~/lib/error-utils";
 import { hasGmailReadonlyScope } from "~/lib/google-auth";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
-import { readJsonOrThrow } from "~/lib/http-error";
 import { pageTitle } from "~/lib/page-title";
 import {
   timingResponseSchema,
   type TimingResponse,
 } from "~/routes/api/debug/timing";
-import { merchantRulesResponse } from "~/routes/api/import/merchant-rules";
-import { memberLoginsResponse } from "~/routes/api/settings/member-logins";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -127,33 +126,15 @@ function MerchantVendorRulesCard() {
   const queryClient = useQueryClient();
   const [merchant, setMerchant] = useState("");
   const [vendorId, setVendorId] = useState("");
-  const rules = useQuery({
-    queryKey: ["purchase-import", "merchant-rules"],
-    queryFn: async () => {
-      const response = await fetch("/api/import/merchant-rules");
-      return readJsonOrThrow(
-        response,
-        merchantRulesResponse,
-        "Merchant routing rules could not load.",
-      );
-    },
-  });
+  const rules = useQuery(runOperations.merchantRules.queryOptions());
   const save = useMutation({
-    mutationFn: async () => {
-      const response = await fetch("/api/import/merchant-rules", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ merchant, vendorId }),
-      });
-      return readJsonOrThrow(
-        response,
-        merchantRulesResponse,
-        "Merchant routing rule could not save.",
-        { method: "POST" },
-      );
-    },
+    mutationFn: () =>
+      runOperations.confirmMerchantRule.call({
+        merchant,
+        vendorId,
+      }),
     onSuccess: (data) => {
-      queryClient.setQueryData(["purchase-import", "merchant-rules"], data);
+      queryClient.setQueryData(runOperations.merchantRules.queryKey(), data);
       setMerchant("");
       toast.success("Merchant routing saved");
     },
@@ -238,46 +219,15 @@ function MerchantVendorRulesCard() {
 }
 
 function MemberLoginsCard() {
-  const queryClient = useQueryClient();
-  const roster = useQuery({
-    queryKey: ["settings", "member-logins"],
-    queryFn: async () => {
-      const response = await fetch("/api/settings/member-logins");
-      return readJsonOrThrow(
-        response,
-        memberLoginsResponse,
-        "Member logins could not load.",
-      );
-    },
-  });
-  const update = useMutation({
-    mutationFn: async (input: {
-      userId: string;
-      ledgerParty: string | null;
-    }) => {
-      const response = await fetch("/api/settings/member-logins", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return readJsonOrThrow(
-        response,
-        memberLoginsResponse,
-        "Member login could not be updated.",
-        { method: "PATCH" },
-      );
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(["settings", "member-logins"], data);
-      void queryClient.refetchQueries({
-        queryKey: ["purchase-import", "runs"],
-      });
-      toast.success("Member login updated");
-    },
-    // No local onError: the global MutationCache toasts unhandled mutation
-    // failures with the raw diagnostics (root-provider.tsx), and nothing here
-    // renders `update.error` inline.
-  });
+  const roster = useQuery(ledgerParty.memberLogins.queryOptions(null));
+  const update = useMutation(
+    ledgerParty.setMemberLogin.mutationOptions({
+      onSuccess: () => toast.success("Member login updated"),
+      // No local onError: the global MutationCache toasts unhandled mutation
+      // failures with the raw diagnostics (root-provider.tsx), and nothing
+      // here renders `update.error` inline.
+    }),
+  );
 
   return (
     <Card className="max-md:border-x-0">

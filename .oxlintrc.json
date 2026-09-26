@@ -260,6 +260,54 @@
           }
         ]
       }
+    },
+    {
+      "files": [
+        "packages/schemas/src/entity-definitions/**/*.ts",
+        "packages/schemas/src/*-fields.ts",
+        "packages/schemas/src/base-entity.ts",
+        "packages/schemas/src/codec.ts",
+        "packages/schemas/src/data-quality-facets.ts",
+        "packages/schemas/src/data-quality-shape.ts",
+        "packages/schemas/src/expense-line-kind.ts",
+        "packages/schemas/src/external-id.ts",
+        "packages/schemas/src/field-resolution.ts",
+        "packages/schemas/src/financial-reconciliation.ts",
+        "packages/schemas/src/garden-guide.ts",
+        "packages/schemas/src/garden-guides.ts",
+        "packages/schemas/src/garden-practice.ts",
+        "packages/schemas/src/image-summary.ts",
+        "packages/schemas/src/inventory-ownership.ts",
+        "packages/schemas/src/meal-classification.ts",
+        "packages/schemas/src/meal-shared.ts",
+        "packages/schemas/src/money.ts",
+        "packages/schemas/src/nutrition.ts",
+        "packages/schemas/src/photo-categories.ts",
+        "packages/schemas/src/recipe-shared.ts",
+        "packages/schemas/src/unitmapping.ts"
+      ],
+      "excludeFiles": ["**/*.test.ts", "packages/schemas/src/entity-fields.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "(^|/)generated(/|$)",
+                "message": "Entity declarations, and the helper modules they import, are the generator's input: they must not import generated artifacts, a canonical entity schema module (one built from generated field schemas), app code, or the WASM boundary. See docs/entities.md."
+              },
+              {
+                "regex": "^(\\.{1,2}/|@cubby/schemas/)(device|financial-account|financial-transaction|garden-entry|image-sighting|image|import-run|ingredient|inventory|ledger-party|ledger-transfer|location|meal-nutrition|meal|plant|planting|product-category|product|project|purchase|recipe|usda|vendor-account|vendor|wish)(\\.[jt]s)?$",
+                "message": "Entity declarations, and the helper modules they import, are the generator's input: they must not import generated artifacts, a canonical entity schema module (one built from generated field schemas), app code, or the WASM boundary. See docs/entities.md."
+              },
+              {
+                "regex": "^(~/|@cubby/recipebridge(/|$))|(^|/)apps/",
+                "message": "Entity declarations, and the helper modules they import, are the generator's input: they must not import generated artifacts, a canonical entity schema module (one built from generated field schemas), app code, or the WASM boundary. See docs/entities.md."
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }

@@ -8,7 +8,6 @@ import {
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
 import type {
-  ImageShortcode,
   IngredientId,
   PlantId,
   LocationId,
@@ -82,16 +81,11 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { observeOperationPhase } from "~/server/observed-request";
-import {
-  computeChanges,
-  logAuditEntries,
-  logAuditEntry,
-} from "~/server/repo/audit-log";
+import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   assertNoDependents,
   associatePendingImages,
-  auditDateWhereConditions,
   countWhere,
   executeListQueryWithCount,
   formatSearchTerm,
@@ -137,12 +131,11 @@ import {
   categoryFeatureSql,
 } from "~/server/repo/product-category-sql";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
-import { deleteProductMatchCandidatesTx } from "~/server/repo/product-match-candidate";
 import {
   relatedSortExpression,
   relatedWhereConditions,
 } from "~/server/repo/related-view";
-import { removeEntity } from "~/server/repo/removal";
+import { deleteByPolicy } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -826,7 +819,6 @@ export const buildProductWhere = async (
       AND pei."deletedAt" IS NULL))`;
 
   const classificationConditions = () => [
-    ...auditDateWhereConditions(product, filters),
     ...relatedWhereConditions("product", filters, product.id),
     requestedIngredientCodes.length > 0 && selectedIngredientIds.length === 0
       ? sql`false`
@@ -2495,68 +2487,19 @@ const PRODUCT_RETAINING_DEPENDENTS = {
 } satisfies Record<ProductRetainingEdgeKey, ProductDependentFetcher>;
 
 /**
- * Soft delete products by setting deletedAt timestamp.
- * Also soft deletes related unit mappings and images.
- * Throws if any product has live acquisition evidence or durable work history
- * (inventory, expenses, or tasks — see `PRODUCT_EDGE_ROLES` in
- * `./edge-roles`).
+ * Each block edge's guard is its retaining-dependent fetcher (see
+ * `./edge-roles`): some count liveness through a second table, so the FK
+ * column alone is not the rule. The decision still keys off the delete
+ * policy's own `block` effect.
  */
-/**
- * Returns the R2 keys of images the cascade reaped, for the caller to drop
- * after this commit — an object delete has no rollback.
- */
-export const deleteProducts = async (
-  db: Database,
-  ids: ProductId[],
-  actor: ActorContext,
-): Promise<{
-  detachedImageKeys: string[];
-  deletedImageShortcodes: ImageShortcode[];
-  deleted: number;
-  ingredientIds: IngredientId[];
-}> => {
-  if (ids.length === 0)
-    return {
-      detachedImageKeys: [],
-      deletedImageShortcodes: [],
-      deleted: 0,
-      ingredientIds: [],
-    };
-
-  return await withTransaction(db, async (tx) => {
-    // Lock products and validate they exist and aren't already deleted
-    // Prevents race conditions by acquiring row-level locks
-    await lockAndValidateForDelete(tx, product, ids, "Product");
-    const ingredientIds = uniq(
-      (
-        await tx.query.product.findMany({
-          where: inArray(product.id, ids),
-          columns: { ingredientId: true },
-        })
-      ).flatMap((row) => row.ingredientId ?? []),
-    );
-
-    /** Product deletion must reject live acquisition/history evidence through the shared incoming-edge policy. */
-    for (const key of Object.keys(PRODUCT_RETAINING_DEPENDENTS)) {
-      if (!isRetainingEdgeKey(key)) {
-        throw new Error(`Unexpected product retaining edge ${key}`);
-      }
-      // Iterate `PRODUCT_RETAINING_DEPENDENTS`'s own keys — typed
-      // `Record<ProductRetainingEdgeKey, ...>` (see ./edge-roles) — rather
-      // than every policy entry, so `key` is provably in that type with no
-      // cast. Still drive the actual block decision off the delete policy's
-      // own `block` effect rather than the role itself: the roles are shared
-      // vocabulary, so a negative filter would silently promote any
-      // newly-introduced role (e.g. the `media` role `ProductImage.productId`
-      // now carries) into a delete blocker. The `PRODUCT_EDGE_ROLES backstop`
-      // test in product.integration.test.ts guards the two staying in
-      // agreement.
-      const disposition = PRODUCT_DELETE_EDGE_POLICY[key];
-      if (disposition.effect !== "block") continue;
-      const fetchDependents = PRODUCT_RETAINING_DEPENDENTS[key];
-      const dependents = await fetchDependents(tx, ids);
-      await assertNoDependents({
-        offendingParentIds: dependents.map((d) => d.productId),
+const PRODUCT_BLOCK_GUARDS = Object.fromEntries(
+  Object.entries(PRODUCT_RETAINING_DEPENDENTS).flatMap(([key, fetch]) => {
+    if (!isRetainingEdgeKey(key)) return [];
+    const disposition = PRODUCT_DELETE_EDGE_POLICY[key];
+    if (disposition.effect !== "block") return [];
+    const guard = async (tx: DrizzleTransaction, ids: ProductId[]) =>
+      assertNoDependents({
+        offendingParentIds: (await fetch(tx, ids)).map((d) => d.productId),
         fetchNames: (failedIds) =>
           tx.query.product.findMany({
             where: inArray(product.id, failedIds),
@@ -2566,76 +2509,38 @@ export const deleteProducts = async (
         message: (count, names) =>
           `Cannot delete ${count} product(s): ${names} have ${disposition.label}. Remove them first.`,
       });
-    }
+    return [[key, guard]];
+  }),
+);
 
-    // "Device.productId" is a "detach" disposition, not a block: a device
-    // survives its linked hardware Product's deletion as one with no
-    // linked hardware.
-    const detachingDevices = await tx
-      .select({ id: device.id, productId: device.productId })
-      .from(device)
-      .where(and(inArray(device.productId, ids), notDeleted(device)));
-    if (detachingDevices.length > 0) {
-      await tx
-        .update(device)
-        .set({ productId: null })
-        .where(and(inArray(device.productId, ids), notDeleted(device)));
-      await logAuditEntries(
-        tx,
-        actor,
-        detachingDevices.map((row) => ({
-          entityType: "device" as const,
-          entityId: row.id,
-          action: "update" as const,
-          changes: { productId: { from: row.productId, to: null } },
-        })),
-      );
-    }
-
-    // "PhotoGroupProposal.productId" detaches too: a proposed group whose
-    // chosen Product vanished must pick another before approval, and a
-    // committed one keeps its image roster as history.
-    await tx
-      .update(photoGroupProposal)
-      .set({ productId: null, updatedAt: new Date() })
-      .where(inArray(photoGroupProposal.productId, ids));
-
-    await tx
-      .delete(productConversionCoverage)
-      .where(inArray(productConversionCoverage.productId, ids));
-    await deleteProductMatchCandidatesTx(tx, ids);
-
-    const removal = await removeEntity(tx, {
+/**
+ * Product deletes take uuids. Returns the R2 keys of images the cascade
+ * reaped, for the caller to drop after this commit, and the ingredients whose
+ * product roster changed.
+ */
+export const deleteProducts = (
+  db: Database,
+  ids: ProductId[],
+  actor: ActorContext,
+) =>
+  withTransaction(db, async (tx) => {
+    const ingredientIds = uniq(
+      (
+        await tx.query.product.findMany({
+          where: inArray(product.id, ids),
+          columns: { ingredientId: true },
+        })
+      ).flatMap((row) => row.ingredientId ?? []),
+    );
+    const removal = await deleteByPolicy(tx, {
       entity: "product",
+      policy: PRODUCT_DELETE_EDGE_POLICY,
       ids,
-      removal: "soft",
       actor,
-      children: [
-        {
-          table: productUnitMappings,
-          parentColumns: [productUnitMappings.productId],
-          auditKey: "cascadedUnitMappings",
-        },
-        {
-          table: productExternalId,
-          parentColumns: [productExternalId.productId],
-          auditKey: "cascadedExternalIds",
-        },
-        {
-          table: entityAttachment,
-          parentColumns: [entityAttachment.subjectEntityId],
-          auditKey: "cascadedImages",
-        },
-        {
-          table: productComponent,
-          parentColumns: [productComponent.parentProductId],
-          auditKey: "cascadedComponents",
-        },
-      ],
+      overrides: PRODUCT_BLOCK_GUARDS,
     });
     return { ...removal, ingredientIds };
   });
-};
 
 export type ProductRepoCreateInput = Omit<
   ProductCreateInput,

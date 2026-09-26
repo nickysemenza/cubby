@@ -85,6 +85,15 @@ export const collectSwiftRoutes = (document: OpenApiDocument): SwiftRoute[] => {
     new Set(swiftRoutes.map((entry) => entry.id)).size !== swiftRoutes.length
   )
     throw new Error("Every operation needs a unique operationId");
+  // The native wire rule (apps/apple/AGENTS.md): a flat read takes plain query
+  // parameters and anything structured takes a JSON body, never both.
+  const mixed = swiftRoutes.filter(
+    (entry) => entry.hasBody && entry.queryParameters.length > 0,
+  );
+  if (mixed.length > 0)
+    throw new Error(
+      `Operations take a body or query parameters, not both: ${mixed.map((entry) => entry.id).join(", ")}`,
+    );
   return swiftRoutes;
 };
 

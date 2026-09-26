@@ -21,7 +21,7 @@ import type {
 import {
   DUPLICATE_SPEND_DAY_WINDOW,
   DUPLICATE_SPEND_NAME_SIMILARITY,
-  type DuplicateSpendCandidate,
+  type ProblemItem,
 } from "@cubby/schemas/problems";
 import { type SQL, sql } from "drizzle-orm";
 
@@ -116,7 +116,7 @@ type DuplicateSpendRow = {
  */
 export const findDuplicateSpendCandidates = async (
   db: Database,
-): Promise<DuplicateSpendCandidate[]> => {
+): Promise<ProblemItem<"duplicateSpendCandidates">[]> => {
   const cents = (value: SQL) => sql`round(${value}::numeric, 2)`;
   const expenseTotal = sql`COALESCE(sum(le."cost"), 0)`;
 

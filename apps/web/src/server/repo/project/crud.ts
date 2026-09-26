@@ -1,20 +1,7 @@
-/**
- * Project CRUD operations.
- *
- * The read path goes through `createEntityReader`, but the write path is
- * hand-rolled (like meal/location): `update` manages the `blockedByIds`
- * replacement set (delete-then-insert `projectDependency` rows) inside the
- * same transaction as the column update, and `delete` guards against
- * orphaning live tasks/expenses before hard-deleting the dependency edges.
- */
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import type {
-  ImageShortcode,
-  ProjectId,
-  ProjectShortcode,
-} from "@cubby/schemas/identifiers";
+import type { ProjectId, ProjectShortcode } from "@cubby/schemas/identifiers";
 import {
   MAX_PROJECT_TREE_DEPTH,
   type ProjectCreateInput,
@@ -25,15 +12,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import {
-  entityAttachment,
-  expense,
-  project,
-  projectDependency,
-  projectToolUsage,
-  purchase,
-  task,
-} from "~/server/db/schema";
+import { expense, project, projectDependency, task } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditChangeMap,
@@ -46,7 +25,6 @@ import {
   assertNoDependents,
   buildPartialUpdateValues,
   getDb,
-  lockAndValidateForDelete,
   notDeleted,
   replaceDependencyEdges,
   updateLiveAndReturn,
@@ -54,7 +32,16 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
-import { removeEntity } from "~/server/repo/removal";
+/**
+ * Project CRUD operations.
+ *
+ * The read path goes through `createEntityReader`, but the write path is
+ * hand-rolled (like meal/location): `update` manages the `blockedByIds`
+ * replacement set (delete-then-insert `projectDependency` rows) inside the
+ * same transaction as the column update, and `delete` guards against
+ * orphaning live tasks/expenses before hard-deleting the dependency edges.
+ */
+import { policyDelete } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
@@ -405,17 +392,7 @@ export const updateProject = async (
 type ProjectQueryClient = DrizzleClient | DrizzleTransaction;
 
 /**
- * Live sub-projects of `ids`, keyed by `parentProjectId`. Used by
- * `deleteProjects`' PROJECT_HAS_CHILDREN guard.
- */
-const fetchLiveChildProjects = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
-  dbc.query.project.findMany({
-    where: and(inArray(project.parentProjectId, ids), notDeleted(project)),
-    columns: { parentProjectId: true },
-  });
-
-/**
- * Live tasks under `ids`. Used by `deleteProjects`' PROJECT_HAS_TASKS guard.
+ * Live tasks under `ids`. Used by the delete's PROJECT_HAS_TASKS guard.
  */
 const fetchLiveProjectTasks = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
   dbc
@@ -436,116 +413,51 @@ const fetchLiveProjectExpenses = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
     );
 
 /**
- * Soft-delete projects. Guards against orphaning live tasks/expenses/child
- * projects (throws `PROJECT_HAS_TASKS` / `PROJECT_HAS_EXPENSES` /
- * `PROJECT_HAS_CHILDREN` — no cascade, a child project stays a live orphan
- * candidate until reparented or deleted itself), then always hard-deletes the
- * project's dependency edges in both directions — a `projectDependency` row
- * carries no meaning once either endpoint is gone, so it isn't soft-deleted —
- * and soft-deletes the project's images (mirrors product delete's
- * productImage cascade).
+ * Tasks and expenses block by their EFFECTIVE project — one inherited through
+ * a purchase or parent still belongs to it — so those two block edges are
+ * guarded here rather than by the FK column alone.
  */
+const refuseEffectiveMembers =
+  (
+    fetch: (
+      tx: DrizzleTransaction,
+      ids: ProjectId[],
+    ) => PromiseLike<{ projectId: ProjectId | null }[]>,
+    reason: "PROJECT_HAS_TASKS" | "PROJECT_HAS_EXPENSES",
+    noun: string,
+  ) =>
+  async (tx: DrizzleTransaction, ids: ProjectId[]) =>
+    assertNoDependents({
+      offendingParentIds: (await fetch(tx, ids)).map((row) => row.projectId),
+      fetchNames: (failedIds) =>
+        tx.query.project.findMany({
+          where: inArray(project.id, failedIds),
+          columns: { name: true },
+        }),
+      reason,
+      message: (count, names) =>
+        `Cannot delete ${count} project(s): ${names} still have ${noun}. Delete or reassign them first.`,
+    });
+
 /**
  * Returns the R2 keys of images the cascade reaped, for the caller to drop
  * after this commit — an object delete has no rollback.
  */
-export const deleteProjects = async (
-  db: Database,
-  shortcodes: ProjectShortcode[],
-  actor: ActorContext,
-): Promise<{
-  detachedImageKeys: string[];
-  deletedImageShortcodes: ImageShortcode[];
-  deleted: number;
-}> => {
-  if (shortcodes.length === 0)
-    return { detachedImageKeys: [], deletedImageShortcodes: [], deleted: 0 };
-
-  const ids = await resolveAllOrThrow(db, "project", shortcodes);
-
-  return await withTransaction(db, async (tx) => {
-    await lockAndValidateForDelete(tx, project, ids, "Project");
-
-    const liveChildren = await fetchLiveChildProjects(tx, ids);
-    await assertNoDependents({
-      offendingParentIds: liveChildren.map((c) => c.parentProjectId),
-      fetchNames: (failedIds) =>
-        tx.query.project.findMany({
-          where: inArray(project.id, failedIds),
-          columns: { name: true },
-        }),
-      reason: "PROJECT_HAS_CHILDREN",
-      message: (count, names) =>
-        `Cannot delete ${count} project(s): ${names} still have sub-projects. Delete or reparent them first.`,
-    });
-
-    const purchaseDefaults = await tx
-      .select({ id: purchase.id })
-      .from(purchase)
-      .where(
-        and(inArray(purchase.defaultProjectId, ids), notDeleted(purchase)),
-      );
-    if (purchaseDefaults.length)
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "Reassign purchase project defaults before deleting these projects.",
-      );
-
-    const liveTasks = await fetchLiveProjectTasks(tx, ids);
-    await assertNoDependents({
-      offendingParentIds: liveTasks.map((t) => t.projectId),
-      fetchNames: (failedIds) =>
-        tx.query.project.findMany({
-          where: inArray(project.id, failedIds),
-          columns: { name: true },
-        }),
-      reason: "PROJECT_HAS_TASKS",
-      message: (count, names) =>
-        `Cannot delete ${count} project(s): ${names} still have tasks. Delete or reassign them first.`,
-    });
-
-    const liveExpenses = await fetchLiveProjectExpenses(tx, ids);
-    await assertNoDependents({
-      offendingParentIds: liveExpenses.map((p) => p.projectId),
-      fetchNames: (failedIds) =>
-        tx.query.project.findMany({
-          where: inArray(project.id, failedIds),
-          columns: { name: true },
-        }),
-      reason: "PROJECT_HAS_EXPENSES",
-      message: (count, names) =>
-        `Cannot delete ${count} project(s): ${names} still have expenses. Delete or reassign them first.`,
-    });
-
-    return await removeEntity(tx, {
-      entity: "project",
-      ids,
-      removal: "soft",
-      actor,
-      children: [
-        // First, as it was when this was a hand-written statement above the
-        // call. Both columns: a dependency row names the project from either
-        // end, and carries no meaning once either endpoint is gone — so it is
-        // hard-deleted rather than soft-deleted.
-        {
-          table: projectDependency,
-          parentColumns: [
-            projectDependency.projectId,
-            projectDependency.blockedByProjectId,
-          ],
-          mode: "hard",
-        },
-        {
-          table: entityAttachment,
-          parentColumns: [entityAttachment.subjectEntityId],
-          auditKey: "cascadedImages",
-        },
-        {
-          table: projectToolUsage,
-          parentColumns: [projectToolUsage.projectId],
-          auditKey: "cascadedToolUsages",
-        },
-      ],
-    });
-  });
-};
+export const deleteProjects = policyDelete(
+  "project",
+  PROJECT_DELETE_EDGE_POLICY,
+  {
+    overrides: {
+      "Task.projectId": refuseEffectiveMembers(
+        fetchLiveProjectTasks,
+        "PROJECT_HAS_TASKS",
+        "tasks",
+      ),
+      "Expense.projectId": refuseEffectiveMembers(
+        fetchLiveProjectExpenses,
+        "PROJECT_HAS_EXPENSES",
+        "expenses",
+      ),
+    },
+  },
+);

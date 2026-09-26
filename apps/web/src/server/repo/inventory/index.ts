@@ -21,7 +21,6 @@
 export {
   addInventoryEntries,
   bulkMoveInventoryEntries,
-  bulkProcessInventoryEntries,
   getInventoryLocationSnapshotToken,
   moveInventoryEntries,
   reconcileLocationSession,

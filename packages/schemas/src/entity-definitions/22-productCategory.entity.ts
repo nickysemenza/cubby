@@ -494,8 +494,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/product-category.entity-adapter",
-        export: "productCategoryEntityAdapter",
+        module: "~/server/repo/product-category",
+        export: "productCategoryRepository",
       },
     },
   },

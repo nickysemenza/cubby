@@ -16,7 +16,7 @@
  * effects.
  */
 
-import type { EntityMissingEmbedding } from "@cubby/schemas/problems";
+import { ProblemItem } from "@cubby/schemas/problems";
 import {
   embeddableEntities,
   type EmbeddableEntity,
@@ -255,7 +255,10 @@ export const findEntitiesMissingEmbeddingsPage = async (
   db: Database,
   config: SemanticEmbeddingConfig,
   options: { limit?: number } = {},
-): Promise<{ items: EntityMissingEmbedding[]; count: number }> => {
+): Promise<{
+  items: ProblemItem<"entitiesMissingEmbeddings">[];
+  count: number;
+}> => {
   const limit = options.limit ?? MISSING_EMBEDDING_SAMPLE_LIMIT;
   const client = getDb(db);
   const union = sql.join(
@@ -300,7 +303,7 @@ export const findEntitiesMissingEmbeddings = async (
   db: Database,
   config: SemanticEmbeddingConfig,
   options: { limit?: number } = {},
-): Promise<EntityMissingEmbedding[]> =>
+): Promise<ProblemItem<"entitiesMissingEmbeddings">[]> =>
   (await findEntitiesMissingEmbeddingsPage(db, config, options)).items;
 
 export const countEntitiesMissingEmbeddings = async (
