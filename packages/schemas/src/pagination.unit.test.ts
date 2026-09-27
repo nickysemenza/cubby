@@ -1,4 +1,4 @@
-import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
+import { productShortcode, UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
@@ -38,7 +38,7 @@ it("carries ordered full-filter group counts in list metadata", () => {
 });
 
 describe("exact entity filters", () => {
-  const shortcode = z.string().regex(/^PRD-[A-Z2-9]{4}$/);
+  const shortcode = productShortcode;
 
   it("accepts only the internal fallback without weakening the entity schema", () => {
     expect(entityFilter(shortcode).parse("PRD-4K7M")).toBe("PRD-4K7M");

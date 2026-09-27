@@ -1,24 +1,11 @@
-import {
-  LEGACY_SHORTCODE_PREFIX,
-  LEGACY_SHORTCODE_BODY_LENGTH,
-  parseShortcode,
-  SHORTCODE_BODY_LENGTH,
-  SHORTCODE_CHARS,
-  SHORTCODE_PREFIX,
-} from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 import { entityDetailLink, isBrowserRoutedEntity } from "~/entities/entities";
 
-const prefixes = [
-  ...Object.values(SHORTCODE_PREFIX),
-  ...Object.keys(LEGACY_SHORTCODE_PREFIX),
-].map((prefix) => prefix.slice(0, -1));
-const candidate = new RegExp(
-  `(^|[^A-Z0-9_/-])((?:${prefixes.join("|")})-[${SHORTCODE_CHARS}]{${LEGACY_SHORTCODE_BODY_LENGTH},${SHORTCODE_BODY_LENGTH}})(?![A-Z0-9_-])`,
-  "gi",
-);
+// Match candidate tokens in prose; parseShortcode owns the actual code rules.
+const candidate = /(^|[^A-Z0-9_/-])([A-Z]+-[A-Z0-9]+)(?![A-Z0-9_-])/gi;
 
 /** Link shortcode tokens in displayed prose, while leaving surrounding text intact. */
 export function ShortcodeProse({ children }: { children: string }): ReactNode {
