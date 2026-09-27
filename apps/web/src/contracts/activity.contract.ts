@@ -1,6 +1,8 @@
 import {
   activityListInput,
   activityListOutput,
+  activityGroupsOutput,
+  activityGroupChildrenInput,
   activityDetailOutput,
   activityAttemptInput,
   activityEventsOutput,
@@ -16,6 +18,16 @@ export const activityContract = defineContract("activity", {
   list: query({
     native: "Activity runs",
     input: activityListInput,
+    output: activityListOutput,
+  }),
+  groups: query({
+    native: "Grouped work history",
+    input: activityListInput,
+    output: activityGroupsOutput,
+  }),
+  groupChildren: query({
+    native: "Work history group children",
+    input: activityGroupChildrenInput,
     output: activityListOutput,
   }),
   detail: query({

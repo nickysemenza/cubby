@@ -7,8 +7,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { PurchaseImportAgentConnection } from "~/app/activity/purchase-import-agent-connection";
 import { CalendarConnectDialog } from "~/app/calendar/calendar-connect-dialog";
 import { calendar } from "~/app/calendar/calendar.functions";
 import { ledgerParty } from "~/app/finance/finance.functions";
@@ -41,17 +43,22 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { hasGmailReadonlyScope } from "~/lib/google-auth";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
 import { pageTitle } from "~/lib/page-title";
+import { purchaseAgentConnectionStatus } from "~/lib/purchase-import-debug";
 import {
   timingResponseSchema,
   type TimingResponse,
 } from "~/routes/api/debug/timing";
 
 export const Route = createFileRoute("/_authenticated/settings")({
+  validateSearch: z.object({
+    purchaseAgent: purchaseAgentConnectionStatus.optional().catch(undefined),
+  }),
   component: SettingsPage,
   head: () => ({ meta: [{ title: pageTitle("Settings") }] }),
 });
 
 function SettingsPage() {
+  const { purchaseAgent } = Route.useSearch();
   const [devOpen, setDevOpen] = useState(false);
   return (
     <Page variant="list" title="Settings">
@@ -59,22 +66,7 @@ function SettingsPage() {
         {/* User-facing settings — the everyday prefs, kept above the fold. */}
         <CalendarAccessCard />
         <GmailAccessCard />
-        <Card className="max-md:border-x-0">
-          <CardHeader>
-            <CardTitle>Activity connections</CardTitle>
-            <CardDescription>
-              Manage the accounts and devices that can perform household work.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <a
-              className="text-primary hover:underline"
-              href="/activity?view=connections"
-            >
-              Open connections
-            </a>
-          </CardContent>
-        </Card>
+        <PurchaseImportAgentConnection feedback={purchaseAgent} />
         <MemberLoginsCard />
         <MerchantVendorRulesCard />
 

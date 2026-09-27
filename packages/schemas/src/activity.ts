@@ -1,16 +1,14 @@
 import { z } from "zod";
 import { imageShortcode } from "./identifiers";
 import { imageDescriptionAnalysis } from "./image-processing";
+import { imageProcessingJobKind } from "./image-processing";
+import { runPurpose, runTrigger } from "./run-fields";
 
 export const activityRunId = z.string().regex(/^(?:IPR|RUN)-[A-Z0-9]+$/u);
 export const activitySubmissionId = z.string().regex(/^IPS-[A-Z0-9]+$/u);
 export const activityKind = z.enum([
-  "purchase_import",
-  "purchase_validation",
-  "product_enrichment",
-  "photo_inventory",
-  "describe_image",
-  "subject_lift",
+  ...runPurpose.options,
+  ...imageProcessingJobKind.options,
 ]);
 export const activityExecutor = z.object({
   kind: z.enum(["cloud", "device"]),
@@ -23,7 +21,16 @@ export const activityExecutor = z.object({
 export type ActivityExecutor = z.infer<typeof activityExecutor>;
 export const activityRun = z.object({
   id: activityRunId,
+  recordType: z.enum(["run", "image_job"]),
+  parentRunId: z
+    .string()
+    .regex(/^RUN-[A-Z0-9]+$/u)
+    .nullable(),
   kind: activityKind,
+  trigger: runTrigger.nullable(),
+  vendorAccountId: z.string().nullable(),
+  vendorId: z.string().nullable(),
+  ledgerPartyId: z.string().nullable(),
   subjectId: z.string().nullable(),
   subjectName: z.string(),
   subjectHref: z.string().nullable(),
@@ -41,7 +48,16 @@ export const activityRun = z.object({
 });
 export type ActivityRun = z.infer<typeof activityRun>;
 export const activityListInput = z.object({
+  recordType: z.enum(["run", "image_job"]).optional(),
+  parentRunId: z
+    .string()
+    .regex(/^RUN-[A-Z0-9]+$/u)
+    .optional(),
   kind: activityKind.optional(),
+  trigger: runTrigger.optional(),
+  vendorAccountId: z.string().optional(),
+  vendorId: z.string().optional(),
+  ledgerPartyId: z.string().optional(),
   state: z.string().max(50).optional(),
   subjectId: z.string().max(100).optional(),
   submissionId: activitySubmissionId.optional(),
@@ -58,6 +74,22 @@ export const activityListOutput = z.object({
   items: z.array(activityRun),
   total: z.int().nonnegative(),
   nextCursor: z.string().nullable(),
+});
+export const activityGroupsOutput = z.object({
+  items: z.array(
+    z.object({
+      root: activityRun,
+      childCount: z.int().nonnegative(),
+      contextOnly: z.boolean(),
+      latestAt: z.iso.datetime(),
+    }),
+  ),
+  total: z.int().nonnegative(),
+  totalItems: z.int().nonnegative(),
+  nextCursor: z.string().nullable(),
+});
+export const activityGroupChildrenInput = activityListInput.extend({
+  rootId: z.string().regex(/^RUN-[A-Z0-9]+$/u),
 });
 export const activityDetailInput = z.object({ id: activityRunId });
 export const activityAttempt = z.object({

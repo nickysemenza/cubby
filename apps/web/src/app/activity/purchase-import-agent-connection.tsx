@@ -15,7 +15,6 @@ import { run } from "~/entities/run.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import type { PurchaseAgentConnectionStatus } from "~/lib/purchase-import-debug";
 
-/** Connection state is owned by Activity because it governs who may run imports. */
 export function PurchaseImportAgentConnection({
   feedback,
 }: {

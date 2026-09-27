@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 import { taxonomyShortcode } from "../../tooling/product-category-fixtures";
+import { generateShortcode } from "@cubby/shared";
 
 import { upsertCookbook } from "~/server/repo/cookbook";
 import {
@@ -927,8 +928,9 @@ export async function seedWardrobePrerequisites(page: Page, name: string) {
 }
 
 /** Durable failed history only; this fixture never dispatches or calls AI. */
-export async function seedActivityHistory(name: string) {
+export async function seedActivityHistory(page: Page, name: string) {
   const db = getFixtureDb();
+  const actorUserId = await fixtureUserId(page);
   const source = await createUploadedImageRecord(db, {
     key: `tests/${crypto.randomUUID()}.png`,
     filename: `${name}.png`,
@@ -936,6 +938,21 @@ export async function seedActivityHistory(name: string) {
     size: 100,
   });
   const database = getDb(db);
+  const [parent] = await database
+    .insert(schema.run)
+    .values({
+      shortcode: generateShortcode("run"),
+      actorUserId,
+      actorName: "Synthetic member",
+      actorEmail: "synthetic@example.test",
+      purpose: "background",
+      trigger: "manual",
+      status: "completed",
+      startedAt: new Date(),
+      endedAt: new Date(),
+    })
+    .returning();
+  if (!parent) throw new Error("Activity fixture parent not created");
   const [job] = await database
     .insert(schema.imageProcessingJob)
     .values({
@@ -946,9 +963,24 @@ export async function seedActivityHistory(name: string) {
       state: "failed",
       attempts: 1,
       lastError: "Synthetic provider failure",
+      runId: parent.id,
     })
     .returning();
   if (!job) throw new Error("Activity fixture job not created");
+  const [standalone] = await database
+    .insert(schema.imageProcessingJob)
+    .values({
+      imageId: parseEntityId("image", source.id),
+      kind: "subject_lift",
+      sourceContentHash: "a".repeat(64),
+      processorRevision: 1,
+      state: "failed",
+      attempts: 0,
+      lastError: "Synthetic standalone failure",
+    })
+    .returning();
+  if (!standalone)
+    throw new Error("Activity fixture standalone job not created");
   await database.insert(schema.imageProcessingAttempt).values({
     id: crypto.randomUUID(),
     jobId: job.id,
@@ -978,7 +1010,9 @@ export async function seedActivityHistory(name: string) {
   });
   return {
     imageId: source.shortcode,
-    runId: job.publicId,
+    runId: parent.shortcode,
+    jobId: job.publicId,
+    standaloneJobId: standalone.publicId,
     filename: source.filename,
   };
 }

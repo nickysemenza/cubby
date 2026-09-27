@@ -94,6 +94,10 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
   template: string;
 }> = [
   {
+    pattern: /^\/runs\/jobs\/[^/]+$/u,
+    template: "/runs/jobs/:id",
+  },
+  {
     pattern: /^\/runs\/[^/]+$/u,
     template: "/runs/:shortcode",
   },

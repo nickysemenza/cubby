@@ -2,6 +2,8 @@ import { activityContract } from "~/contracts/activity.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   listActivity,
+  listActivityGroups,
+  listActivityGroupChildren,
   activityDetail,
   activityEvents,
   activityDevices,
@@ -10,6 +12,18 @@ import {
 export const activityHandlers = implementOperationDomain(activityContract, {
   list: async (context, input) =>
     listActivity(context.db, (await context.currentParty())?.id ?? null, input),
+  groups: async (context, input) =>
+    listActivityGroups(
+      context.db,
+      (await context.currentParty())?.id ?? null,
+      input,
+    ),
+  groupChildren: async (context, input) =>
+    listActivityGroupChildren(
+      context.db,
+      (await context.currentParty())?.id ?? null,
+      input,
+    ),
   detail: async (context, input) =>
     activityDetail(
       context.db,

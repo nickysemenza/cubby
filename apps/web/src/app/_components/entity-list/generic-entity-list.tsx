@@ -147,7 +147,11 @@ export function resolveListView(
   entity: BrowserRoutedEntity,
   search: ListSearch,
 ) {
-  const views: readonly EntityListView[] = entitySummary[entity].list.views;
+  // Run's shared shelf reads only RUN records; the web history slot also
+  // includes image jobs, so that shelf is not a valid alternate here.
+  const views: readonly EntityListView[] = entitySummary[
+    entity
+  ].list.views.filter((view) => entity !== "run" || view !== "shelf");
   const requested = viewParam.parse(search.view);
   // Retired view ids remain valid URLs while resolving to the shared renderer.
   const aliases: Readonly<Record<string, string>> =

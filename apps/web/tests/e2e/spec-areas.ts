@@ -83,7 +83,11 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     globs: [
       `${WEB}/src/routes/_authenticated/activity.tsx`,
       `${WEB}/src/routes/_authenticated/activities.tsx`,
+      `${WEB}/src/routes/_authenticated/runs.index.tsx`,
+      `${WEB}/src/routes/_authenticated/runs.jobs.$id.tsx`,
+      `${WEB}/src/routes/_authenticated/settings.tsx`,
       `${WEB}/src/app/activity/**`,
+      `${WEB}/src/app/runs/**`,
       `${WEB}/src/server/repo/activity.ts`,
       `${WEB}/src/server/repo/activity-input.ts`,
     ],
@@ -293,6 +297,13 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/routes/_authenticated/inventory.$shortcode.tsx`,
       `${WEB}/src/app/inventory/**`,
       `${WEB}/src/server/repo/inventory/**`,
+    ],
+  },
+  {
+    file: "mcp-worklist.spec.ts",
+    globs: [
+      `${WEB}/src/routes/_authenticated/mcp.tsx`,
+      `${WEB}/src/app/_components/dev/mcp-usage-dashboard.tsx`,
     ],
   },
   {

@@ -615,12 +615,17 @@ public actor CubbyClient {
         _ kind: ActivityKind
     ) -> Operations.Activity_list.Input.Query.KindPayload {
         switch kind {
-        case .purchaseImport: .purchaseImport
+        case .accountSync: .accountSync
         case .purchaseValidation: .purchaseValidation
         case .productEnrichment: .productEnrichment
         case .photoInventory: .photoInventory
         case .describeImage: .describeImage
         case .subjectLift: .subjectLift
+        case .aiSuggest: .aiSuggest
+        case .aiAction: .aiAction
+        case .background: .background
+        case .fileImport: .fileImport
+        case .legacy: .legacy
         }
     }
 

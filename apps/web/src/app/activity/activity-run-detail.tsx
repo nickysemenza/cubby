@@ -15,15 +15,19 @@ import {
 import { StatusText } from "~/components/ui/status-text";
 import { activity } from "~/lib/activity.functions";
 import { copyText } from "~/lib/clipboard";
+import { formatCurrency } from "~/lib/utils";
 
 const moment = (value: string) => new Date(value).toLocaleString();
 
+// oxlint-disable-next-line complexity -- one selected record owns paired attempt and event pagination with their diagnostics.
 export function ActivityRunDetail({
   id,
   onClose,
+  variant = "page",
 }: {
   id: string;
   onClose: () => void;
+  variant?: "page" | "inspector";
 }) {
   const detail = useInfiniteQuery(
     activity.detail.infiniteQueryOptions(
@@ -75,14 +79,20 @@ export function ActivityRunDetail({
   }, [detail, events, run?.active]);
 
   return (
-    <Card className="mt-4 max-w-4xl">
+    <Card
+      className={
+        variant === "inspector"
+          ? "h-full rounded-none border-0 shadow-none"
+          : "mt-4 max-w-4xl"
+      }
+    >
       <CardHeader>
         <Row justify="between" align="start" gap="sm" wrap>
           <div>
-            <CardTitle>{run?.subjectName ?? "Activity run"}</CardTitle>
+            <CardTitle>{run?.subjectName ?? "Work detail"}</CardTitle>
             <CardDescription>
               {run
-                ? `${run.kind.replaceAll("_", " ")} · ${run.state} · ${moment(run.createdAt)}`
+                ? `${run.id} · ${run.recordType === "run" ? "Run" : "Image job"} · ${run.kind.replaceAll("_", " ")} · ${run.state} · ${moment(run.createdAt)}`
                 : id}
             </CardDescription>
           </div>
@@ -100,9 +110,28 @@ export function ActivityRunDetail({
           ) : null}
           {id.startsWith("RUN-") ? (
             <a className="text-primary hover:underline" href={`/runs/${id}`}>
-              Open purchase run details
+              Full details
+            </a>
+          ) : (
+            <a
+              className="text-primary hover:underline"
+              href={`/runs/jobs/${id}`}
+            >
+              Full details
+            </a>
+          )}
+          {run?.parentRunId ? (
+            <a
+              className="text-primary hover:underline"
+              href={`/runs/${run.parentRunId}`}
+            >
+              Parent {run.parentRunId}
             </a>
           ) : null}
+          <Button variant="ghost" size="sm" onClick={() => void copyText(id)}>
+            <CopyIcon />
+            Copy ID
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -120,110 +149,135 @@ export function ActivityRunDetail({
         {run?.error ? (
           <StatusText tone="destructive">{run.error}</StatusText>
         ) : null}
+        {run ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Cost:{" "}
+            {run.estimatedCost === null
+              ? "—"
+              : formatCurrency(run.estimatedCost)}
+            .{" "}
+            {run.recordType === "image_job" && run.parentRunId
+              ? "This job’s cost may already be included in its parent Run total."
+              : "Cost shown for this record."}
+          </p>
+        ) : null}
         <Stack gap="sm">
+          {run?.recordType === "image_job" ? (
+            <section>
+              <h3 className="font-medium">Attempts</h3>
+              {attempts.map((attempt) => (
+                <div
+                  key={`${attempt.number}-${attempt.startedAt}`}
+                  className="border-b border-border py-2 text-sm"
+                >
+                  <Row justify="between" gap="sm" wrap>
+                    <span>
+                      #{attempt.number} · {attempt.state} ·{" "}
+                      {moment(attempt.startedAt)}
+                    </span>
+                    <Row gap="xs">
+                      {attempt.diagnosticsJson ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            void copyText(attempt.diagnosticsJson ?? "")
+                          }
+                        >
+                          <CopyIcon />
+                          Copy diagnostics
+                        </Button>
+                      ) : null}
+                      {attempt.resultJson ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            void copyText(attempt.resultJson ?? "")
+                          }
+                        >
+                          <CopyIcon />
+                          Copy result
+                        </Button>
+                      ) : null}
+                    </Row>
+                  </Row>
+                  {attempt.diagnosticsJson || attempt.resultJson ? (
+                    <details className="mt-2">
+                      <summary>Diagnostics and result</summary>
+                      {attempt.diagnosticsJson ? (
+                        <>
+                          <h4 className="mt-2 font-medium">Diagnostics</h4>
+                          <pre className="max-h-48 overflow-auto text-xs whitespace-pre-wrap">
+                            {attempt.diagnosticsJson}
+                          </pre>
+                        </>
+                      ) : null}
+                      {attempt.resultJson ? (
+                        <>
+                          <h4 className="mt-2 font-medium">Result</h4>
+                          <pre className="max-h-48 overflow-auto text-xs whitespace-pre-wrap">
+                            {attempt.resultJson}
+                          </pre>
+                        </>
+                      ) : null}
+                    </details>
+                  ) : (
+                    <StatusText>
+                      No historical diagnostics were recorded for this attempt.
+                    </StatusText>
+                  )}
+                </div>
+              ))}
+              {detail.hasNextPage ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void detail.fetchNextPage()}
+                  disabled={detail.isFetchingNextPage}
+                >
+                  Load more attempts
+                </Button>
+              ) : null}
+            </section>
+          ) : null}
           <section>
-            <h3 className="font-medium">Attempts</h3>
-            {attempts.map((attempt) => (
+            <h3 className="font-medium">
+              {run?.recordType === "run" ? "Operations and events" : "Events"}
+            </h3>
+            {eventRows.map((event) => (
               <div
-                key={`${attempt.number}-${attempt.startedAt}`}
+                key={event.id}
                 className="border-b border-border py-2 text-sm"
               >
                 <Row justify="between" gap="sm" wrap>
                   <span>
-                    #{attempt.number} · {attempt.state} ·{" "}
-                    {moment(attempt.startedAt)}
+                    {moment(event.occurredAt)} · {event.source} · {event.event}
                   </span>
-                  <Row gap="xs">
-                    {attempt.diagnosticsJson ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          void copyText(attempt.diagnosticsJson ?? "")
-                        }
-                      >
-                        <CopyIcon />
-                        Copy diagnostics
-                      </Button>
-                    ) : null}
-                    {attempt.resultJson ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => void copyText(attempt.resultJson ?? "")}
-                      >
-                        <CopyIcon />
-                        Copy result
-                      </Button>
-                    ) : null}
-                  </Row>
+                  {event.detailsJson ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void copyText(event.detailsJson ?? "")}
+                    >
+                      <CopyIcon />
+                      Copy diagnostics
+                    </Button>
+                  ) : null}
                 </Row>
-                {attempt.diagnosticsJson || attempt.resultJson ? (
-                  <details className="mt-2">
-                    <summary>Diagnostics and result</summary>
-                    {attempt.diagnosticsJson ? (
-                      <>
-                        <h4 className="mt-2 font-medium">Diagnostics</h4>
-                        <pre className="max-h-48 overflow-auto text-xs whitespace-pre-wrap">
-                          {attempt.diagnosticsJson}
-                        </pre>
-                      </>
-                    ) : null}
-                    {attempt.resultJson ? (
-                      <>
-                        <h4 className="mt-2 font-medium">Result</h4>
-                        <pre className="max-h-48 overflow-auto text-xs whitespace-pre-wrap">
-                          {attempt.resultJson}
-                        </pre>
-                      </>
-                    ) : null}
-                  </details>
-                ) : (
-                  <StatusText>
-                    No historical diagnostics were recorded for this attempt.
-                  </StatusText>
-                )}
-              </div>
-            ))}
-            {detail.hasNextPage ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void detail.fetchNextPage()}
-                disabled={detail.isFetchingNextPage}
-              >
-                Load more attempts
-              </Button>
-            ) : null}
-          </section>
-          <section>
-            <h3 className="font-medium">Events</h3>
-            {eventRows.map((event) => (
-              <Row
-                key={event.id}
-                justify="between"
-                gap="sm"
-                wrap
-                className="border-b border-border py-2 text-sm"
-              >
-                <span>
-                  {moment(event.occurredAt)} · {event.source} · {event.event}
-                </span>
                 {event.detailsJson ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => void copyText(event.detailsJson ?? "")}
-                  >
-                    <CopyIcon />
-                    Copy diagnostics
-                  </Button>
+                  <details className="mt-2">
+                    <summary>Diagnostics</summary>
+                    <pre className="max-h-48 overflow-auto text-xs whitespace-pre-wrap">
+                      {event.detailsJson}
+                    </pre>
+                  </details>
                 ) : null}
-              </Row>
+              </div>
             ))}
             {events.hasNextPage ? (
               <Button

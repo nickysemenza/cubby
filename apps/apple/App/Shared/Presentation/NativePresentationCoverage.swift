@@ -161,6 +161,7 @@ enum NativePresentationCoverage {
             "project.schedule",
             "project.gallery",
             "planting.schedule",
+            "run.history",
             "task.agenda":
             .ownedElsewhere
         default:

@@ -7,6 +7,7 @@ import { mealListSlots } from "~/app/meals/list-slots";
 import { plantingListSlots } from "~/app/plantings/list-slots";
 import { productCategoryListSlots } from "~/app/product-categories/list-slots";
 import { projectListSlots } from "~/app/projects/list-slots";
+import { runListSlots } from "~/app/runs/list-slots";
 import { taskListSlots } from "~/app/tasks/list-slots";
 import {
   implemented,
@@ -43,6 +44,7 @@ export const listSlotCoverage = {
   planting: implementedSlots(plantingListSlots),
   productCategory: implementedSlots(productCategoryListSlots),
   project: implementedSlots(projectListSlots),
+  run: implementedSlots(runListSlots),
   task: implementedSlots(taskListSlots),
 } satisfies {
   [E in Entity as ListSlotId<E> extends never ? never : E]: Record<

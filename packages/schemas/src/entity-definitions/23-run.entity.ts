@@ -88,7 +88,28 @@ export default defineEntity({
         },
       ],
     },
-    list: {},
+    list: {
+      viewOverrides: [
+        {
+          kind: "slot",
+          id: "history",
+          label: "History",
+          searchKeys: [
+            "selected",
+            "group",
+            "recordType",
+            "kind",
+            "state",
+            "subjectId",
+            "submissionId",
+            "executor",
+            "deviceId",
+            "from",
+            "to",
+          ],
+        },
+      ],
+    },
   },
   model: {
     fields: [

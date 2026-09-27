@@ -168,6 +168,7 @@ public enum EntityListSlotID: String, CaseIterable, Codable, Sendable {
     case projectAnalytics = "project.analytics"
     case projectOverview = "project.overview"
     case projectSchedule = "project.schedule"
+    case runHistory = "run.history"
     case taskAgenda = "task.agenda"
     case taskBoard = "task.board"
 }
