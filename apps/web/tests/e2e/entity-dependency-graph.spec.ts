@@ -4,6 +4,7 @@ import {
   seedTaskPrerequisite,
 } from "./e2e-fixtures";
 import {
+  SHORTCODE,
   waitForAppHydration,
   waitForFormHydration,
   gotoAuthenticatedPage,
@@ -87,7 +88,7 @@ test("legacy recipe graph URL still opens its graph controls", async ({
   await page.getByRole("button", { name: /Add Instruction/i }).click();
   await page.getByRole("textbox", { name: "Step" }).fill("Stir until smooth.");
   await page.getByRole("button", { name: /^Create$/i }).click();
-  await expect(page).toHaveURL(/\/recipes\/RCP-[A-Z0-9]{4}/, {
+  await expect(page).toHaveURL(new RegExp(`/recipes/RCP-${SHORTCODE}$`), {
     timeout: 15000,
   });
   await gotoAuthenticatedPage(page, "/entities?tab=recipes&hide=false");

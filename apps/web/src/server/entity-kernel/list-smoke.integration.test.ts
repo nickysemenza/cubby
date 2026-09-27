@@ -239,6 +239,14 @@ describe("entity list smoke — dual relational/count FROM-clause aliasing", () 
                 `${entity} filter ${key}=${String(unmatched)}: matched ${result.meta.totalCount} row(s) — the filter is accepted but not applied`,
               );
           } catch (err) {
+            // Category ancestry requires a real category; an unknown code is
+            // deliberately rejected rather than treated as an empty result.
+            if (
+              entity === "product" &&
+              key === "categoryFilter" &&
+              describeError(err).startsWith("Product category not found:")
+            )
+              return;
             failures.push(
               `${entity} filter ${key} (unmatched): ${describeError(err)}`,
             );

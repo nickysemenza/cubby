@@ -352,14 +352,11 @@ export async function seedReferenceUniverse(
     financialAccountOverrides,
   );
 
-  // `financialTransactionCreateInput` cross-field-refines status/postedDate
-  // and purchaseId/allocations coherence; a plain unseeded mock() sample can
-  // fail those refinements outright (its own randomly-picked "posted" status
-  // needs a postedDate), which makes `buildReferenceOverrides`'s probe throw
-  // and silently return no overrides. Pin a combination the refinements
-  // accept instead of relying on generic discovery for this one entity.
+  // Pin a kind whose sign accepts the mock amount and a status that needs no
+  // posted date. Generic samples can violate these cross-field constraints.
   // oxlint-disable-next-line anti-slop/no-known-value-widening, anti-slop/no-unsafe-dictionary-type -- see the walker block comment above
   const financialTransactionOverrides: Record<string, unknown> = {
+    kind: "adjustment",
     status: "pending",
   };
   if (financialAccount)
