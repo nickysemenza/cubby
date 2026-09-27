@@ -267,7 +267,7 @@ export function AiUsagePage() {
         <h2 className="mb-2 font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           Usage by feature / model / day
         </h2>
-        <Table className="w-max min-w-full table-auto whitespace-nowrap [&_td]:px-1 [&_td]:py-1 [&_th]:h-8 [&_th]:px-1 [&_tr]:h-8">
+        <Table className="w-max min-w-full table-auto whitespace-nowrap [&_td]:py-1 [&_th]:h-8 [&_tr]:h-8">
           <TableHeader>
             <TableRow>
               <TableHead>Day</TableHead>
@@ -322,7 +322,7 @@ export function AiUsagePage() {
         <h2 className="mb-2 font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           Recent calls
         </h2>
-        <Table className="w-max min-w-full table-auto whitespace-nowrap [&_td]:px-1 [&_td]:py-1 [&_th]:h-8 [&_th]:px-1 [&_tr]:h-8">
+        <Table className="w-max min-w-full table-auto whitespace-nowrap [&_td]:py-1 [&_th]:h-8 [&_tr]:h-8">
           <TableHeader>
             <TableRow>
               <TableHead>Created</TableHead>
