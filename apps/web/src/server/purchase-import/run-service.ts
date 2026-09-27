@@ -97,7 +97,7 @@ import { persistImageProcessingSubmission } from "~/server/repo/image-processing
 import { withPhotoImportTransaction } from "~/server/repo/photo-import";
 import { getRunByShortcode } from "~/server/repo/run";
 import {
-  generateUniqueShortcode,
+  findOrCreateWithShortcode,
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
 import { sha256Hex } from "~/server/semantic/hash";
@@ -390,44 +390,22 @@ export async function startOrResumeRun(
         ),
       )
       .limit(1);
-    if (!scope?.actorUserId)
+    const actorUserId = scope?.actorUserId;
+    if (!actorUserId)
       throw new Error("Vendor account is not owned by an authenticated member");
     if (!scope.browserSyncEnabled)
       throw new Error("Browser sync is not enabled for this Vendor account");
-    const [existing] = await tx
-      .select({
-        id: runTable.id,
-        publicId: runTable.shortcode,
-        status: runTable.status,
-        dispatchEventId: runTable.dispatchEventId,
-      })
-      .from(runTable)
-      .where(
-        and(
-          eq(runTable.vendorAccountId, input.vendorAccountId),
-          inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
-        ),
-      )
-      .limit(1);
-    if (existing) return { ...existing, created: false };
-    const id = runEntityId.parse(crypto.randomUUID());
-    const dispatchEventId = crypto.randomUUID();
-    let created:
-      | {
-          id: RunId;
-          publicId: string;
-          status: string;
-          dispatchEventId: string | null;
-        }
-      | undefined;
-    for (let attempt = 0; attempt < 10 && !created; attempt += 1) {
-      [created] = await tx
-        .insert(runTable)
-        .values({
+    const result = await findOrCreateWithShortcode(tx, "run", {
+      where: and(
+        eq(runTable.vendorAccountId, input.vendorAccountId),
+        inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
+      ),
+      values: () => {
+        const id = runEntityId.parse(crypto.randomUUID());
+        return {
           id,
-          shortcode: await generateUniqueShortcode(tx, "run"),
           ledgerPartyId: input.ledgerPartyId,
-          actorUserId: scope.actorUserId,
+          actorUserId,
           actorName: scope.actorName,
           actorEmail: scope.actorEmail,
           actorLedgerPartyShortcode: scope.actorLedgerPartyShortcode,
@@ -443,22 +421,22 @@ export async function startOrResumeRun(
           skillRevision: input.skillRevision ?? "purchase-import@1",
           runtimeRevision: input.runtimeRevision ?? "flue@1",
           agentSessionId: importRunAgentIdentity(id, "account_sync"),
-          dispatchEventId,
-        })
-        .onConflictDoNothing()
-        .returning({
-          id: runTable.id,
-          publicId: runTable.shortcode,
-          status: runTable.status,
-          dispatchEventId: runTable.dispatchEventId,
-        });
-    }
-    if (!created) throw new Error("Import run was not created");
+          dispatchEventId: crypto.randomUUID(),
+        };
+      },
+    });
+    const run = {
+      id: result.row.id,
+      publicId: result.row.shortcode,
+      status: result.row.status,
+      dispatchEventId: result.row.dispatchEventId,
+    };
+    if (!result.created) return { ...run, created: false };
     await tx
       .update(vendorAccount)
       .set({ status: "active", lastRunAt: new Date(), updatedAt: new Date() })
       .where(eq(vendorAccount.id, input.vendorAccountId));
-    return { ...created, created: true };
+    return { ...run, created: true };
   });
 }
 

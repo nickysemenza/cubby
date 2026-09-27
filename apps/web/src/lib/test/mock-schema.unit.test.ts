@@ -148,7 +148,7 @@ describe("mock() regex-constrained strings", () => {
   // schema — that was a real 16-test failure before this landed.
   it("satisfies the pattern it was built from", () => {
     const cases = [
-      z.string().regex(/^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/),
+      z.string().regex(/^ABC-[A-Z2-9]{4}$/),
       z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       z.string().regex(/^[a-f0-9]{8}$/),
       z.string().regex(/^v\d+$/),

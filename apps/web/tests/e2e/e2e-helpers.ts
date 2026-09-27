@@ -1,8 +1,4 @@
-import {
-  LEGACY_SHORTCODE_BODY_LENGTH,
-  SHORTCODE_BODY_LENGTH,
-  SHORTCODE_CHARS,
-} from "@cubby/shared";
+import { SHORTCODE_BODY_PATTERN } from "@cubby/shared";
 import {
   expect,
   type Locator,
@@ -18,7 +14,7 @@ import {
 } from "./navigation-timing";
 
 /** A public shortcode body, for composing route and id patterns. */
-export const SHORTCODE = `[${SHORTCODE_CHARS}]{${LEGACY_SHORTCODE_BODY_LENGTH},${SHORTCODE_BODY_LENGTH}}`;
+export const SHORTCODE = SHORTCODE_BODY_PATTERN;
 
 export function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

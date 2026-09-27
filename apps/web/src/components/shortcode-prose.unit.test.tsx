@@ -22,7 +22,7 @@ describe("shortcodes in prose", () => {
       <p>
         <ShortcodeProse>
           {
-            "Compare IMG-4S9Q, img-r6mw, IMG-4S9QZ, and P-4K7M; leave XIMG-4S9Q, IMG-4S9QZZ, and /IMG-4S9Q alone."
+            "Compare IMG-4S9Q, img-r6mw, IMG-4S9QZ, and P-4K7M; leave XIMG-4S9Q, IMG-4S9QZZ, IMG-4I9Q, and /IMG-4S9Q alone."
           }
         </ShortcodeProse>
       </p>,

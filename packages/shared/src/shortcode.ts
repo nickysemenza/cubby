@@ -3,14 +3,15 @@ import { z } from "zod";
 import { mapRecord, recordKeys } from "./record";
 import { capitalize } from "./text-case";
 import {
-  LEGACY_SHORTCODE_BODY_LENGTH,
   SHORTCODE_BODY_LENGTH,
+  SHORTCODE_BODY_PATTERN,
   SHORTCODE_CHARS,
 } from "./shortcode-alphabet";
 
 export {
   LEGACY_SHORTCODE_BODY_LENGTH,
   SHORTCODE_BODY_LENGTH,
+  SHORTCODE_BODY_PATTERN,
   SHORTCODE_CHARS,
 } from "./shortcode-alphabet";
 import {
@@ -22,9 +23,6 @@ export {
   SHORTCODE_PREFIX,
   type ShortcodeType,
 } from "./generated/shortcode-registry.gen";
-
-const BODY_PATTERN = `[${SHORTCODE_CHARS}]{${LEGACY_SHORTCODE_BODY_LENGTH},${SHORTCODE_BODY_LENGTH}}`;
-const BODY_RE = new RegExp(`^${BODY_PATTERN}$`);
 
 /** Every canonical prefix that may legitimately cross an API or MCP boundary. */
 export const PUBLIC_SHORTCODE_PREFIXES = Object.values(SHORTCODE_PREFIX);
@@ -60,7 +58,7 @@ for (const [type, prefix] of Object.entries(SHORTCODE_PREFIX)) {
 }
 
 const shortcodeRegex = (type: ShortcodeType) =>
-  new RegExp(`^${SHORTCODE_PREFIX[type]}${BODY_PATTERN}$`);
+  new RegExp(`^${SHORTCODE_PREFIX[type]}${SHORTCODE_BODY_PATTERN}$`);
 
 /**
  * A schema for a code whose entity isn't known until runtime — an MCP tool
@@ -81,7 +79,7 @@ export const anyShortcodeSchema = <T extends ShortcodeType>(
     .toUpperCase()
     .regex(
       new RegExp(
-        `^(?:${types.map((t) => SHORTCODE_PREFIX[t]).join("|")})${BODY_PATTERN}$`,
+        `^(?:${types.map((t) => SHORTCODE_PREFIX[t]).join("|")})${SHORTCODE_BODY_PATTERN}$`,
       ),
       `Expected one of: ${types.map((t) => `${SHORTCODE_PREFIX[t]}…`).join(", ")}`,
     );
@@ -273,10 +271,13 @@ export type ParsedShortcode = {
  */
 const shortcodeParser =
   <T extends ShortcodeType>(type: T) =>
-  (code: string): ParsedShortcodeFor<T> => ({
-    type,
-    shortcode: parseShortcodeFor(type, code),
-  });
+  (code: string): ParsedShortcodeFor<T> | null => {
+    try {
+      return { type, shortcode: parseShortcodeFor(type, code) };
+    } catch {
+      return null;
+    }
+  };
 
 /**
  * One parser per entity, each keyed by its own literal so the compiler can
@@ -316,7 +317,7 @@ const PARSE_CANONICAL_SHORTCODE = {
   plant: shortcodeParser("plant"),
   imageSighting: shortcodeParser("imageSighting"),
 } as const satisfies {
-  [T in ShortcodeType]: (code: string) => ParsedShortcodeFor<T>;
+  [T in ShortcodeType]: (code: string) => ParsedShortcodeFor<T> | null;
 };
 
 /**
@@ -334,15 +335,14 @@ export function parseShortcode(code: string): ParsedShortcode | null {
   if (dash <= 0) return null;
 
   const prefix = normalized.slice(0, dash + 1);
-  const body = normalized.slice(dash + 1);
-  if (!BODY_RE.test(body)) return null;
-
   const type = isLegacyPrefix(prefix)
     ? LEGACY_SHORTCODE_PREFIX[prefix]
     : PREFIX_TO_TYPE[prefix];
   if (!type) return null;
 
-  return PARSE_CANONICAL_SHORTCODE[type](`${SHORTCODE_PREFIX[type]}${body}`);
+  return PARSE_CANONICAL_SHORTCODE[type](
+    `${SHORTCODE_PREFIX[type]}${normalized.slice(dash + 1)}`,
+  );
 }
 
 /**

@@ -10,3 +10,5 @@
 export const SHORTCODE_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 export const LEGACY_SHORTCODE_BODY_LENGTH = 4;
 export const SHORTCODE_BODY_LENGTH = 5;
+/** Shared by the Zod schemas and tools that must run without dependencies. */
+export const SHORTCODE_BODY_PATTERN = `[${SHORTCODE_CHARS}]{${LEGACY_SHORTCODE_BODY_LENGTH},${SHORTCODE_BODY_LENGTH}}`;

@@ -8,6 +8,7 @@
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
+import { SHORTCODE_BODY_PATTERN } from "../packages/shared/src/shortcode-alphabet.ts";
 
 // Read from the entity declarations' source: the generated registry is not
 // committed, and this runs in hooks and a sparse CI checkout with no install.
@@ -28,11 +29,10 @@ if (prefixes.length === 0)
 
 // The one sanctioned example body, used by docs and error messages.
 const EXAMPLE_BODY = "4K7M";
-const SHORTCODE_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
 export const livePatterns: readonly RegExp[] = [
   new RegExp(
-    `\\b(?:${prefixes.map((p) => p.slice(0, -1)).join("|")})-[${SHORTCODE_CHARS}]{4}\\b`,
+    `\\b(?:${prefixes.map((p) => p.slice(0, -1)).join("|")})-${SHORTCODE_BODY_PATTERN}\\b`,
     "g",
   ),
   // Operational ids that predate the shortcode registry.

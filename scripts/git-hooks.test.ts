@@ -69,6 +69,7 @@ function fixture(t: TestContext) {
     "apps/web/src/server/db/generated/entity-columns.gen.ts",
     "scripts/check-outward-text.ts",
     "scripts/generator/ensure.ts",
+    "packages/shared/src/shortcode-alphabet.ts",
   ]) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
     cpSync(join(source, path), join(root, path));
