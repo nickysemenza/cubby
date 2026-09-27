@@ -31,10 +31,10 @@ import {
 import {
   type ImportAuditModelOutput,
   type ImportExtractionModelOutput,
-  type OrderMailClassification,
+  type OrderMailMessageClassification,
   importAuditModelOutput,
   importExtractionModelOutput,
-  orderMailClassification,
+  orderMailMessageClassification,
 } from "@cubby/schemas/purchase-import";
 import {
   type RecipeFlowAiPlan,
@@ -298,8 +298,8 @@ export const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
   effort: "low",
   cache: true,
   promptVersion: "2026-09-24.1",
-  schema: orderMailClassification,
-}) satisfies AiStructuredFeature<OrderMailClassification>;
+  schema: orderMailMessageClassification,
+}) satisfies AiStructuredFeature<OrderMailMessageClassification>;
 
 // ---------------------------------------------------------------------------
 // Vision batch tier — Gemini 2.5 Flash. Cheap, accurate, ~14 s to first

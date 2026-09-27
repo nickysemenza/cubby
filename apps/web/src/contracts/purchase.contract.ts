@@ -1,4 +1,8 @@
 import {
+  purchaseOrderMailInput,
+  purchaseOrderMailOut,
+} from "@cubby/schemas/order-mail-review";
+import {
   linkExpensesToPurchaseInput,
   purchaseOut,
   purchaseProductsInput,
@@ -10,6 +14,11 @@ import {
 import { defineContract, mutation, query } from "~/contracts/define";
 
 export const purchaseContract = defineContract("purchase", {
+  orderMail: query({
+    native: "Show linked order email events on native Purchase detail",
+    input: purchaseOrderMailInput,
+    output: purchaseOrderMailOut,
+  }),
   products: query({
     input: purchaseProductsInput,
     output: purchaseProductsOut,

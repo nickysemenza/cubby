@@ -23,14 +23,18 @@ export default defineEntity({
   presentation: {
     titleField: "label",
     domain: "finance",
-    description: "Member-owned vendor logins used for purchase discovery.",
+    description: "A member's vendor orders and optional browser connection.",
     emptyState: {
       title: "No vendor accounts yet",
-      description:
-        "Connect a member to a vendor login before running browser imports.",
+      description: "Connect a member to a vendor's orders and mail.",
       actionLabel: "Add vendor account",
     },
     icons: { phosphor: "Key", sfSymbol: "person.badge.key", emoji: "🔑" },
+    detail: {
+      additionalSectionOverrides: [
+        { kind: "slot", id: "order-mail", title: "Order email" },
+      ],
+    },
   },
   model: {
     fields: [
@@ -80,6 +84,17 @@ export default defineEntity({
         validation: {
           read: z.boolean(),
           create: z.boolean().default(false),
+          update: z.boolean().optional(),
+        },
+      },
+      {
+        key: "browserSyncEnabled",
+        kind: "boolean",
+        control: { kind: "checkbox" },
+        display: { list: true, detail: true },
+        validation: {
+          read: z.boolean(),
+          create: z.boolean().default(true),
           update: z.boolean().optional(),
         },
       },
@@ -201,6 +216,7 @@ export default defineEntity({
         key: "inventoryOwnerDefaultEnabled",
         defaultValue: false,
       },
+      { key: "browserSyncEnabled", defaultValue: true },
       {
         key: "status",
         defaultValue: "active",

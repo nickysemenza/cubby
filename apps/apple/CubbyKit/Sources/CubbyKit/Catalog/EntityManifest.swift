@@ -147,6 +147,7 @@ public enum EntityDetailSlotID: String, CaseIterable, Codable, Sendable {
     case projectContribution = "project.contribution"
     case projectSchedule = "project.schedule"
     case purchaseFinancialSettlement = "purchase.financial-settlement"
+    case purchaseOrderMail = "purchase.order-mail"
     case purchaseProjectAllocation = "purchase.project-allocation"
     case purchaseReconciliation = "purchase.reconciliation"
     case purchaseRuns = "purchase.runs"
@@ -155,6 +156,8 @@ public enum EntityDetailSlotID: String, CaseIterable, Codable, Sendable {
     case runChanges = "run.changes"
     case runImportWorkflow = "run.import-workflow"
     case runPhotoBatch = "run.photo-batch"
+    case vendorOrderMail = "vendor.order-mail"
+    case vendorAccountOrderMail = "vendorAccount.order-mail"
 }
 
 public enum EntityListSlotID: String, CaseIterable, Codable, Sendable {

@@ -6,6 +6,28 @@ import {
 } from "./cubby-ai-provider";
 
 describe("createCubbyGatewayFetch", () => {
+  it("attributes a scoped provider request to its import run", async () => {
+    const run = vi.fn(
+      async (
+        _query: Parameters<AiGateway["run"]>[0],
+        _options: Parameters<AiGateway["run"]>[1],
+      ) => new Response("stream"),
+    );
+    const runId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
+    const gatewayFetch = createCubbyGatewayFetch(
+      "openai",
+      () => ({ run }),
+      () => `photo-inventory:${runId}`,
+    );
+    await gatewayFetch("https://ai-gateway.invalid/openai/responses", {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-6-sol" }),
+    });
+    expect(run.mock.calls[0]?.[1]).toMatchObject({
+      gateway: { metadata: { runId } },
+    });
+  });
+
   it.each([
     {
       provider: "openai" as const,

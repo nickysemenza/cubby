@@ -45,6 +45,7 @@ export default defineEntity({
       additionalSectionOverrides: [
         { kind: "slot", id: "project-allocation", title: "Project allocation" },
         { kind: "slot", id: "runs", title: "Import runs" },
+        { kind: "slot", id: "order-mail", title: "Order email" },
         {
           kind: "slot",
           id: "reconciliation",

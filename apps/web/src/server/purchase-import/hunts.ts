@@ -228,6 +228,7 @@ export async function dispatchImportHunts(
       and(
         eq(vendorAccount.id, importHunt.vendorAccountId),
         eq(vendorAccount.status, "active"),
+        eq(vendorAccount.browserSyncEnabled, true),
         notDeleted(vendorAccount),
       ),
     )

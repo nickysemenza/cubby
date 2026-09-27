@@ -728,6 +728,106 @@ export const seedVendorDisplayPrerequisite = (page: Page, name: string) =>
     notes: `${name} notes`,
   });
 
+/** A synthetic recognized email with one exact Purchase candidate. */
+export async function seedVendorMailReviewPrerequisite(
+  page: Page,
+  name: string,
+) {
+  const db = getFixtureDb();
+  const userId = await fixtureUserId(page);
+  let member = await getDb(db).query.ledgerParty.findFirst({
+    where: and(
+      eq(schema.ledgerParty.userId, userId),
+      eq(schema.ledgerParty.kind, "member"),
+      isNull(schema.ledgerParty.deletedAt),
+    ),
+  });
+  member ??= await insertWithShortcode(db, "ledgerParty", {
+    name: `${name} member`,
+    kind: "member",
+    userId,
+  });
+  const vendor = await insertWithShortcode(db, "vendor", { name });
+  const purchase = await insertWithShortcode(db, "purchase", {
+    vendorId: vendor.id,
+    orderId: "SYN-ORDER-1001",
+    date: "2026-09-10",
+    statedTotal: 48,
+  });
+  const [mail] = await getDb(db)
+    .insert(schema.orderMail)
+    .values({
+      ledgerPartyId: member.id,
+      vendorId: vendor.id,
+      messageId: `synthetic-message-${crypto.randomUUID()}`,
+      threadId: `synthetic-thread-${crypto.randomUUID()}`,
+      sender: "Synthetic Outfitters <orders@example.test>",
+      subject: "Synthetic order receipt",
+      receivedAt: new Date("2026-09-10T15:00:00.000Z"),
+      rawChecksum: "synthetic-mail-checksum",
+    })
+    .returning({ id: schema.orderMail.id });
+  if (!mail) throw new Error("Synthetic mail was not saved");
+  await getDb(db).insert(schema.orderMailEvent).values({
+    orderMailId: mail.id,
+    event: "placed",
+    orderId: "SYN-ORDER-1001",
+    amount: 48,
+    currency: "USD",
+    sourceKey: "classified:synthetic-mail-checksum:0",
+  });
+  return { vendor, purchase };
+}
+
+/** Two Purchases sharing one unallocated synthetic statement charge. */
+export async function seedSplitSettlementPrerequisite(
+  page: Page,
+  name: string,
+) {
+  const db = getFixtureDb();
+  const userId = await fixtureUserId(page);
+  let member = await getDb(db).query.ledgerParty.findFirst({
+    where: and(
+      eq(schema.ledgerParty.userId, userId),
+      eq(schema.ledgerParty.kind, "member"),
+      isNull(schema.ledgerParty.deletedAt),
+    ),
+  });
+  member ??= await insertWithShortcode(db, "ledgerParty", {
+    name: `${name} member`,
+    kind: "member",
+    userId,
+  });
+  const vendor = await insertWithShortcode(db, "vendor", { name });
+  const first = await insertWithShortcode(db, "purchase", {
+    vendorId: vendor.id,
+    orderId: "SYN-SPLIT-1",
+    date: "2026-09-10",
+    statedTotal: 42.5,
+  });
+  const second = await insertWithShortcode(db, "purchase", {
+    vendorId: vendor.id,
+    orderId: "SYN-SPLIT-2",
+    date: "2026-09-10",
+    statedTotal: 48.5,
+  });
+  const card = await insertWithShortcode(db, "financialAccount", {
+    name: `${name} card`,
+    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    ledgerPartyId: member.id,
+  });
+  const transaction = await insertWithShortcode(db, "financialTransaction", {
+    accountId: card.id,
+    kind: "purchase",
+    status: "posted",
+    amount: 91,
+    merchant: name,
+    transactionDate: "2026-09-12",
+    postedDate: "2026-09-12",
+  });
+  return { first, second, transaction };
+}
+
 export async function seedRecordListDisplayPrerequisite(
   page: Page,
   name: string,

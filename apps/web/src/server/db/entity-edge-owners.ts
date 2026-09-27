@@ -118,6 +118,7 @@ export const ENTITY_EDGE_OWNERS = {
   MailboxCursor: { excluded: WORKFLOW },
   MerchantVendorRule: { excluded: WORKFLOW },
   OrderMail: { excluded: WORKFLOW },
+  OrderMailCandidateDecision: { excluded: WORKFLOW },
   OrderMailAttachment: { excluded: WORKFLOW },
   ProductMatchCandidate: {
     excluded: "A review queue of possible duplicates, not a relationship.",

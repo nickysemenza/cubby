@@ -107,7 +107,11 @@ export const photoImportHandlers = implementOperationDomain(
       );
       const approved = await approvePhotoGroupProposals(
         context.db,
-        { runId: input.runId, groupKeys: input.groupKeys },
+        {
+          runId: input.runId,
+          groupKeys: input.groupKeys,
+          expectedRevisions: input.expectedRevisions,
+        },
         context.actorContext,
       );
       return { ...approved, frozenGroupKeys: [] };

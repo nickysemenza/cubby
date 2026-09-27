@@ -84,6 +84,16 @@ enum PhotoGroupingReadiness: Equatable {
 }
 
 enum PhotoReviewPolicy {
+    static func approvableSelection(
+        selected: Set<String>, groups: [PhotoGroupProposal], images: [PhotoRunImage],
+        runStatus: RunStatus?
+    ) -> [String] {
+        groups.filter {
+            selected.contains($0.groupKey) && $0.state == .proposed
+                && approvalBlocker(group: $0, images: images, runStatus: runStatus) == nil
+        }.map(\.groupKey)
+    }
+
     /// A photo counts as settled for grouping once its description job reaches a terminal state
     /// (ready, skipped, or failed) — `.pending`/`.leased`/`.waitingForDevice` mean grouping would
     /// start from incomplete evidence.
@@ -135,6 +145,8 @@ struct RunReviewView: View {
     @State private var model = RunReviewModel()
     @State private var confirmingGroup: String?
     @State private var confirmingAll = false
+    @State private var confirmingSelected = false
+    @State private var selectedGroupKeys: Set<String> = []
     @State private var discardingGroup: String?
     @State private var autoStartAttempted = false
     @State private var selectedGroupKey: String?
@@ -147,6 +159,12 @@ struct RunReviewView: View {
 
     private var proposed: [PhotoGroupProposal] {
         model.review?.review.proposals.filter { $0.state == .proposed } ?? []
+    }
+
+    private var approvableSelectedKeys: [String] {
+        PhotoReviewPolicy.approvableSelection(
+            selected: selectedGroupKeys, groups: proposed,
+            images: model.review?.images ?? [], runStatus: model.snapshot?.status)
     }
 
     private var photoStage: String {
@@ -213,6 +231,11 @@ struct RunReviewView: View {
         .confirmationDialog("Approve all proposed items?", isPresented: $confirmingAll) {
             Button("Approve \(proposed.count) items") { approve(proposed.map(\.groupKey)) }
         }
+        .confirmationDialog("Approve selected items?", isPresented: $confirmingSelected) {
+            Button("Approve \(approvableSelectedKeys.count) items") { approve(approvableSelectedKeys) }
+        } message: {
+            Text("Products are created or linked only for the selected, ready items.")
+        }
         .confirmationDialog(
             "Discard this item?",
             isPresented: Binding(
@@ -238,10 +261,13 @@ struct RunReviewView: View {
 
     private func approve(_ keys: [String]) {
         guard !keys.isEmpty else { return }
+        let groups = keys.compactMap { key in proposed.first { $0.groupKey == key } }
+        guard groups.count == keys.count else { return }
         Task {
             await model.act(runID: runID, client: appModel.client) {
-                _ = try await appModel.client.approvePhotoGroups(runID: runID, groupKeys: keys)
+                _ = try await appModel.client.approvePhotoGroups(runID: runID, groups: groups)
             }
+            if model.actionError == nil { selectedGroupKeys.subtract(keys) }
         }
     }
 
@@ -357,6 +383,12 @@ struct RunReviewView: View {
                     HStack {
                         Text("Proposed items · \(proposed.count)")
                         Spacer()
+                        if !selectedGroupKeys.isEmpty {
+                            Button("Approve selected · \(approvableSelectedKeys.count)") {
+                                confirmingSelected = true
+                            }
+                            .disabled(model.busy || approvableSelectedKeys.isEmpty)
+                        }
                         Button("Approve all") { confirmingAll = true }
                             .disabled(
                                 model.busy
@@ -535,7 +567,23 @@ struct RunReviewView: View {
 
     private func proposal(_ group: PhotoGroupProposal, images: [PhotoRunImage]) -> some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-            Text(groupName(group)).font(.headline)
+            HStack {
+                Text(groupName(group)).font(.headline)
+                Spacer()
+                Button {
+                    if selectedGroupKeys.contains(group.groupKey) {
+                        selectedGroupKeys.remove(group.groupKey)
+                    } else {
+                        selectedGroupKeys.insert(group.groupKey)
+                    }
+                } label: {
+                    Label(
+                        selectedGroupKeys.contains(group.groupKey) ? "Selected" : "Select",
+                        systemImage: selectedGroupKeys.contains(group.groupKey)
+                            ? "checkmark.circle.fill" : "circle")
+                }
+                .disabled(model.busy || approvalBlocker(group, images: images) != nil)
+            }
             ScrollView(.horizontal) {
                 HStack(spacing: PorcelainTokens.Space.sm) {
                     ForEach(group.images, id: \.id) { item in

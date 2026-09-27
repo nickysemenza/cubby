@@ -19,8 +19,12 @@
  * classifier (a model call) and object storage.
  */
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import type { OrderMailClassification } from "@cubby/schemas/purchase-import";
+import type {
+  OrderMailClassification,
+  OrderMailMessageClassification,
+} from "@cubby/schemas/purchase-import";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import { testUserId } from "@cubby/schemas/testing";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -32,6 +36,9 @@ import {
   merchantVendorRule,
   orderMail,
   orderMailAttachment,
+  orderMailEvent,
+  vendorAccount,
+  user,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -52,8 +59,9 @@ import {
   purchasesForOrder,
 } from "../order-import.fixtures";
 import { type OrderMailPorts, processOrderMails } from "./process";
+import { decideOrderMailCandidate } from "./review";
 
-const classifications = new Map<string, OrderMailClassification>();
+const classifications = new Map<string, OrderMailMessageClassification>();
 const uploadedKeys: string[] = [];
 const storage = createImageStorageService({
   ...productionImageStoragePorts,
@@ -138,16 +146,16 @@ describe("Gmail order mail processing", () => {
     seed: Seed,
     messageId: string,
     receivedAt: string,
-    classification: OrderMailClassification,
-    options: { pdf?: boolean; rawChecksum?: string } = {},
+    classification: OrderMailClassification | OrderMailMessageClassification,
+    options: { pdf?: boolean; rawChecksum?: string; sender?: string } = {},
   ) {
     const [mail] = await getDb(ctx.db)
       .insert(orderMail)
       .values({
         ledgerPartyId: seed.party.id,
         messageId,
-        sender: SENDER,
-        subject: `ForgeWear ${classification.event} ${classification.orderId ?? ""}`,
+        sender: options.sender ?? SENDER,
+        subject: "ForgeWear order update",
         receivedAt: new Date(receivedAt),
         rawChecksum: options.rawChecksum ?? `raw-${messageId}`,
       })
@@ -165,7 +173,12 @@ describe("Gmail order mail processing", () => {
           pendingDataBase64Url: PDF_BASE64URL,
         });
     }
-    classifications.set(messageId, classification);
+    classifications.set(
+      messageId,
+      "events" in classification
+        ? classification
+        : { events: [classification] },
+    );
     return processOrderMails(ctx.db, [messageId], [], ports);
   }
 
@@ -208,6 +221,231 @@ describe("Gmail order mail processing", () => {
     amount,
     currency: "USD",
     occurredAt,
+  });
+
+  it("does not trust a matching address shown only in the sender display name", async () => {
+    const seed = await seedForgeWear();
+    await receiveMail(
+      seed,
+      "spoofed-display",
+      "2026-08-16T12:00:00Z",
+      {
+        event: "placed",
+        orderId: "FW-FAKE",
+        amount: 42.5,
+        currency: "USD",
+        occurredAt: null,
+      },
+      { sender: "orders@forgewear.example <stranger@other.example>" },
+    );
+    const [mail] = await getDb(ctx.db)
+      .select({ vendorId: orderMail.vendorId })
+      .from(orderMail)
+      .where(eq(orderMail.messageId, "spoofed-display"));
+    expect(mail?.vendorId).toBeNull();
+  });
+
+  it("leaves an unscoped Purchase for review when more than one member has this Vendor", async () => {
+    const seed = await seedForgeWear();
+    const otherUserId = testUserId("other-mail-member");
+    await getDb(ctx.db).insert(user).values({
+      id: otherUserId,
+      name: "Other synthetic member",
+      email: "other-mail-member@example.test",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const otherParty = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Other synthetic member",
+      kind: "member",
+      userId: otherUserId,
+    });
+    await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Other ForgeWear account",
+      vendorId: seed.vendor.id,
+      ledgerPartyId: otherParty.id,
+    });
+    const target = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: seed.vendor.id,
+      orderId: "FW-UNSCOPED-1001",
+      date: "2026-08-16",
+      statedTotal: 42.5,
+    });
+    await receiveMail(
+      seed,
+      "ambiguous-member-mail",
+      "2026-08-16T12:00:00Z",
+      {
+        event: "placed",
+        orderId: "FW-UNSCOPED-1001",
+        amount: 42.5,
+        currency: "USD",
+        occurredAt: null,
+      },
+      { pdf: true },
+    );
+    const attachments = await getDb(ctx.db)
+      .select({ id: entityAttachment.id })
+      .from(entityAttachment)
+      .where(eq(entityAttachment.subjectEntityId, target.id));
+    expect(attachments).toEqual([]);
+  });
+
+  it("records separate order events when one message covers multiple orders", async () => {
+    const seed = await seedForgeWear();
+    const first = placed("FW-SYN-2001", 31, "2026-09-10T15:00:00.000Z");
+    const second = placed("FW-SYN-2002", 42, "2026-09-10T15:00:00.000Z");
+    const multiOrderMail = Object.assign({}, first, {
+      events: [{ ...first }, { ...second }],
+    });
+
+    await receiveMail(
+      seed,
+      "msg-two-orders",
+      "2026-09-10T15:00:00.000Z",
+      multiOrderMail,
+    );
+
+    const events = await getDb(ctx.db)
+      .select({ orderId: orderMailEvent.orderId })
+      .from(orderMailEvent);
+    expect(events.map((event) => event.orderId).sort()).toEqual([
+      "FW-SYN-2001",
+      "FW-SYN-2002",
+    ]);
+  });
+
+  it("creates one mail-only Vendor account for verified orders without a browser login", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Mail-first member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Mail First Outfitters",
+      orderEmailSenders: ["orders@forgewear.example"],
+    });
+    const [mail] = await getDb(ctx.db)
+      .insert(orderMail)
+      .values({
+        ledgerPartyId: party.id,
+        messageId: "mail-first-order",
+        sender: SENDER,
+        subject: "Your order",
+        receivedAt: new Date("2026-09-10T15:00:00.000Z"),
+        rawChecksum: "mail-first-checksum",
+      })
+      .returning({ id: orderMail.id });
+    if (!mail) throw new Error("test setup: mail not inserted");
+    classifications.set("mail-first-order", {
+      events: [placed("FW-SYN-3001", 25, "2026-09-10T15:00:00.000Z")],
+    });
+
+    await processOrderMails(ctx.db, ["mail-first-order"], [], ports);
+    await processOrderMails(ctx.db, ["mail-first-order"], [], ports);
+
+    const accounts = await getDb(ctx.db)
+      .select({
+        vendorId: vendorAccount.vendorId,
+        ledgerPartyId: vendorAccount.ledgerPartyId,
+        status: vendorAccount.status,
+        browserSyncEnabled: vendorAccount.browserSyncEnabled,
+      })
+      .from(vendorAccount);
+    expect(accounts).toEqual([
+      {
+        vendorId: vendor.id,
+        ledgerPartyId: party.id,
+        status: "disabled",
+        browserSyncEnabled: false,
+      },
+    ]);
+  });
+
+  it("does not attach a replayed PDF after an exact mail match was dismissed", async () => {
+    const seed = await seedForgeWear();
+    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: seed.vendor.id,
+      vendorAccountId: seed.account.id,
+      orderId: "FW-SYN-4001",
+      date: "2026-09-10",
+      statedTotal: 54,
+    });
+    await receiveMail(
+      seed,
+      "msg-dismissed-pdf",
+      "2026-09-10T15:00:00.000Z",
+      placed("FW-SYN-4001", 54, "2026-09-10T15:00:00.000Z"),
+    );
+    const [event] = await getDb(ctx.db)
+      .select({ id: orderMailEvent.id })
+      .from(orderMailEvent);
+    if (!event) throw new Error("test setup: classified event missing");
+    await decideOrderMailCandidate(
+      ctx.db,
+      {
+        eventId: event.id,
+        purchaseId: purchase.shortcode,
+        decision: "dismissed",
+        evidenceChecksum: "raw-msg-dismissed-pdf",
+      },
+      ctx.actor,
+    );
+    const [mail] = await getDb(ctx.db)
+      .select({ id: orderMail.id })
+      .from(orderMail);
+    if (!mail) throw new Error("test setup: mail missing");
+    await getDb(ctx.db).insert(orderMailAttachment).values({
+      orderMailId: mail.id,
+      providerAttachmentId: "att-dismissed",
+      filename: "invoice.pdf",
+      mimeType: "application/pdf",
+      checksum: "pdf-dismissed",
+      pendingDataBase64Url: PDF_BASE64URL,
+    });
+
+    await processOrderMails(ctx.db, ["msg-dismissed-pdf"], [], ports);
+
+    const [attachment] = await getDb(ctx.db)
+      .select({ imageId: orderMailAttachment.imageId })
+      .from(orderMailAttachment);
+    expect(attachment?.imageId).toBeNull();
+  });
+
+  it("supersedes classified events when the same message content changes", async () => {
+    const seed = await seedForgeWear();
+    await receiveMail(
+      seed,
+      "msg-revised",
+      "2026-09-10T15:00:00.000Z",
+      placed("FW-SYN-5001", 31, "2026-09-10T15:00:00.000Z"),
+      { rawChecksum: "checksum-before" },
+    );
+    await getDb(ctx.db)
+      .update(orderMail)
+      .set({ rawChecksum: "checksum-after" });
+    classifications.set("msg-revised", {
+      events: [placed("FW-SYN-5002", 42, "2026-09-10T15:00:00.000Z")],
+    });
+
+    await processOrderMails(ctx.db, ["msg-revised"], [], ports);
+
+    const events = await getDb(ctx.db)
+      .select({
+        orderId: orderMailEvent.orderId,
+        supersededAt: orderMailEvent.supersededAt,
+      })
+      .from(orderMailEvent);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          orderId: "FW-SYN-5001",
+          supersededAt: expect.any(Date),
+        }),
+        { orderId: "FW-SYN-5002", supersededAt: null },
+      ]),
+    );
   });
 
   it("matches a statement charge's hunt to the order confirmation and hands the order id to browser dispatch", async () => {

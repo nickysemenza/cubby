@@ -172,7 +172,26 @@ export const detailSlots = {
       })),
     ),
   },
+  vendor: {
+    "order-mail": slot(() =>
+      import("~/app/vendors/order-mail-worklist").then((m) => ({
+        default: m.VendorOrderMail,
+      })),
+    ),
+  },
+  vendorAccount: {
+    "order-mail": slot(() =>
+      import("~/app/vendors/order-mail-worklist").then((m) => ({
+        default: m.VendorAccountOrderMail,
+      })),
+    ),
+  },
   purchase: {
+    "order-mail": slot(() =>
+      import("~/app/purchases/slots").then((m) => ({
+        default: m.PurchaseOrderMail,
+      })),
+    ),
     runs: slot(() =>
       import("~/app/purchases/slots").then((m) => ({
         default: m.Runs,

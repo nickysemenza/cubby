@@ -415,6 +415,15 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
+    file: "purchase-split-settlement.spec.ts",
+    globs: [
+      `${WEB}/src/routes/_authenticated/purchases.$shortcode.tsx`,
+      `${WEB}/src/app/purchases/**`,
+      `${WEB}/src/server/repo/financial-transaction.ts`,
+      `${WEB}/src/server/repo/purchase.ts`,
+    ],
+  },
+  {
     file: "relationship-discovery.spec.ts",
     globs: [
       `${WEB}/tests/e2e/relationship-discovery-contract.ts`,
@@ -462,6 +471,16 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/server/repo/statement-row.ts`,
       `${WEB}/src/server/repo/financial-transaction.ts`,
       `${WEB}/src/server/workflows/statement-row.server.ts`,
+    ],
+  },
+  {
+    file: "vendor-order-mail-review.spec.ts",
+    globs: [
+      `${WEB}/src/routes/_authenticated/vendors.$shortcode.tsx`,
+      `${WEB}/src/routes/_authenticated/purchases.$shortcode.tsx`,
+      `${WEB}/src/app/vendors/**`,
+      `${WEB}/src/app/purchases/**`,
+      `${WEB}/src/server/purchase-import/gmail/**`,
     ],
   },
   {

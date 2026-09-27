@@ -49,7 +49,10 @@ describe("computeAffected", () => {
       ALL_SPECS_TRIGGERS,
     );
     expect(ranEverything).toBe(false);
-    expect(specs).toEqual(["entity-editor-lifecycle.spec.ts"]);
+    expect(specs).toEqual([
+      "entity-editor-lifecycle.spec.ts",
+      "vendor-order-mail-review.spec.ts",
+    ]);
   });
 
   it("selects specs mapped to a changed server repo dir", () => {

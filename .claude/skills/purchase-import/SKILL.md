@@ -137,9 +137,13 @@ Create or update the Vendor deliberately, then configure:
 - `orderEmailSenders` for Gmail discovery;
 - `returnWindowDays` only when the policy is known.
 
-Create one VendorAccount for each member login. Confirm its ownership in the UI.
-Use Sync now while the Mac app and chosen browser are open. Treat cached
-navigation hints as advisory observations within `browserDomains`.
+Recognized order mail with an explicit order id creates a mail-only VendorAccount
+for that member when one does not exist. This records a vendor relationship,
+not proof of a browser login. Turn on browser sync only after confirming that
+member's online account; use Sync now while the Mac app and chosen browser are
+open. Review candidate Purchase links or dismissals from the Vendor's Order
+email worklist. Treat cached navigation hints as advisory observations within
+`browserDomains`.
 
 For every exact merchant descriptor observed on that member's statement, call
 `confirm_purchase_merchant_vendor` after the human/vendor mapping is known.

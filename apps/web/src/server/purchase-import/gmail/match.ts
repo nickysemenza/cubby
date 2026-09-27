@@ -1,5 +1,5 @@
 import type { LedgerPartyId, VendorId } from "@cubby/schemas/identifiers";
-import { and, eq, gte, isNotNull, lte, ne } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, lte, ne } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { orderMail, orderMailEvent } from "~/server/db/schema";
@@ -34,6 +34,7 @@ export async function orderAmountsInHuntWindow(db: Database, hunt: HuntWindow) {
         eq(orderMail.vendorId, hunt.vendorId),
         isNotNull(orderMailEvent.orderId),
         isNotNull(orderMailEvent.amount),
+        isNull(orderMailEvent.supersededAt),
         hunt.amount < 0
           ? eq(orderMailEvent.event, "refunded")
           : ne(orderMailEvent.event, "refunded"),

@@ -8,6 +8,7 @@ import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.l
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
 import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 import { z } from "zod";
+import { importRunIdFromAgentIdentity } from "@cubby/schemas/import-run-agent";
 
 import { type ContextRecorder, withContextCapture } from "./context-breakdown";
 
@@ -53,10 +54,17 @@ async function gatewayQuery(body: BodyInit | null | undefined) {
 export function createCubbyGatewayFetch(
   provider: GatewayProvider,
   gatewayForRequest: () => Gateway,
+  agentScope?: () => string,
 ): typeof fetch {
   return async (input, init) => {
     const headers = new Headers(init?.headers);
     for (const name of STRIPPED_SDK_HEADERS) headers.delete(name);
+    const runId = importRunIdFromAgentIdentity(agentScope?.());
+    const metadata = {
+      feature: "purchase_import_agent",
+      jobKind: "purchase_import_run",
+    };
+    if (runId) Object.assign(metadata, { runId });
     return gatewayForRequest().run(
       {
         provider,
@@ -67,10 +75,7 @@ export function createCubbyGatewayFetch(
       {
         gateway: {
           id: CUBBY_GATEWAY_ID,
-          metadata: {
-            feature: "purchase_import_agent",
-            jobKind: "purchase_import_run",
-          },
+          metadata,
         },
         signal: init?.signal ?? undefined,
       },
@@ -202,10 +207,12 @@ export function cubbyAiGatewayProviders(
   const captured = (fetchFn: typeof fetch) =>
     contextCapture ? withContextCapture(fetchFn, contextCapture) : fetchFn;
   const openaiFetch = captured(
-    testFetch ?? createCubbyGatewayFetch("openai", gateway),
+    testFetch ??
+      createCubbyGatewayFetch("openai", gateway, contextCapture?.scope),
   );
   const anthropicFetch = captured(
-    testFetch ?? createCubbyGatewayFetch("anthropic", gateway),
+    testFetch ??
+      createCubbyGatewayFetch("anthropic", gateway, contextCapture?.scope),
   );
   return [
     createProvider({

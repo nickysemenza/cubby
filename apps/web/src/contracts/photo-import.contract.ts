@@ -332,6 +332,15 @@ export const photoImportContract = defineContract("photoImport", {
       runId: runShortcode,
       /** Omit to approve every `proposed` group. */
       groupKeys: z.array(z.string().min(1).max(200)).min(1).max(200).optional(),
+      expectedRevisions: z
+        .array(
+          z.object({
+            groupKey: z.string().min(1),
+            updatedAt: z.iso.datetime(),
+          }),
+        )
+        .max(200)
+        .optional(),
     }),
     output: reviewPhotoGroupsOutput,
   }),

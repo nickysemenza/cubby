@@ -2290,6 +2290,7 @@ export const orderMailEvent = pgTable(
     payload: jsonb("payload")
       .notNull()
       .default(sql`'{}'::jsonb`),
+    supersededAt: timestamp("supersededAt", { mode: "date" }),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
@@ -2298,6 +2299,39 @@ export const orderMailEvent = pgTable(
       table.sourceKey,
     ),
     index("OrderMailEvent_order_idx").on(table.orderId),
+  ],
+);
+
+/** Human decisions about a specific mail event and proposed Purchase match. */
+export const orderMailCandidateDecision = pgTable(
+  "OrderMailCandidateDecision",
+  {
+    id: pkUuid(),
+    eventId: uuid("eventId")
+      .notNull()
+      .references(() => orderMailEvent.id),
+    purchaseId: uuid("purchaseId")
+      .notNull()
+      .$type<PurchaseId>()
+      .references(() => purchase.id),
+    decision: text("decision").notNull().$type<"linked" | "dismissed">(),
+    evidenceChecksum: text("evidenceChecksum").notNull(),
+    decidedByUserId: text("decidedByUserId").notNull(),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("OrderMailCandidateDecision_event_purchase_key").on(
+      table.eventId,
+      table.purchaseId,
+    ),
+    uniqueIndex("OrderMailCandidateDecision_one_link_key")
+      .on(table.eventId)
+      .where(sql`${table.decision} = 'linked'`),
+    index("OrderMailCandidateDecision_purchase_idx").on(table.purchaseId),
+    check(
+      "OrderMailCandidateDecision_decision_check",
+      sql`${table.decision} IN ('linked', 'dismissed')`,
+    ),
   ],
 );
 
