@@ -1,5 +1,6 @@
 import {
   LEGACY_SHORTCODE_PREFIX,
+  LEGACY_SHORTCODE_BODY_LENGTH,
   parseShortcode,
   SHORTCODE_BODY_LENGTH,
   SHORTCODE_CHARS,
@@ -15,7 +16,7 @@ const prefixes = [
   ...Object.keys(LEGACY_SHORTCODE_PREFIX),
 ].map((prefix) => prefix.slice(0, -1));
 const candidate = new RegExp(
-  `(^|[^A-Z0-9_/-])((?:${prefixes.join("|")})-[${SHORTCODE_CHARS}]{${SHORTCODE_BODY_LENGTH}})(?![A-Z0-9_-])`,
+  `(^|[^A-Z0-9_/-])((?:${prefixes.join("|")})-[${SHORTCODE_CHARS}]{${LEGACY_SHORTCODE_BODY_LENGTH},${SHORTCODE_BODY_LENGTH}})(?![A-Z0-9_-])`,
   "gi",
 );
 

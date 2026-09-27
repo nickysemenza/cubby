@@ -1,3 +1,4 @@
+import { parseShortcodeFor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -7,6 +8,17 @@ import { ensureRun } from "~/server/runs/ensure-run";
 
 import { getDb } from "./database-helpers";
 import { getRunByShortcode, listRuns } from "./run";
+import type { ShortcodeGeneratorPort } from "./shortcode-utils";
+
+const collisionGenerator = (
+  first: string,
+  second: string,
+): ShortcodeGeneratorPort => {
+  const codes = [first, second];
+  return {
+    generate: (entity) => parseShortcodeFor(entity, codes.shift() ?? second),
+  };
+};
 
 describe("getRunByShortcode", () => {
   const ctx = withTestDb();
@@ -28,6 +40,61 @@ describe("getRunByShortcode", () => {
       ledgerPartyId: null,
       ledgerPartyName: null,
     });
+  });
+});
+
+describe("ensureRun shortcode collisions", () => {
+  const ctx = withTestDb();
+
+  it("retries a used code for an unkeyed AI run", async () => {
+    const existingId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_action",
+    });
+    const [existing] = await getDb(ctx.db)
+      .select({ shortcode: runTable.shortcode })
+      .from(runTable)
+      .where(eq(runTable.id, existingId));
+    const next = "RUN-YYYY";
+    const id = await ensureRun(
+      ctx.db,
+      ctx.actor,
+      { purpose: "ai_suggest" },
+      collisionGenerator(existing!.shortcode, next),
+    );
+    const [created] = await getDb(ctx.db)
+      .select({ shortcode: runTable.shortcode })
+      .from(runTable)
+      .where(eq(runTable.id, id));
+    expect(created?.shortcode).toBe(next);
+  });
+
+  it("retries a used code and reuses the same client-keyed run", async () => {
+    const existingId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_action",
+    });
+    const [existing] = await getDb(ctx.db)
+      .select({ shortcode: runTable.shortcode })
+      .from(runTable)
+      .where(eq(runTable.id, existingId));
+    const key = "test:shared-suggestion-run";
+    const next = "RUN-ZZZZ";
+    const createdId = await ensureRun(
+      ctx.db,
+      ctx.actor,
+      { purpose: "ai_suggest", clientKey: key },
+      collisionGenerator(existing!.shortcode, next),
+    );
+    expect(
+      await ensureRun(ctx.db, ctx.actor, {
+        purpose: "ai_suggest",
+        clientKey: key,
+      }),
+    ).toBe(createdId);
+    const [created] = await getDb(ctx.db)
+      .select({ shortcode: runTable.shortcode })
+      .from(runTable)
+      .where(eq(runTable.id, createdId));
+    expect(created?.shortcode).toBe(next);
   });
 });
 

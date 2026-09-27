@@ -233,11 +233,12 @@ exception. The remaining uuid exceptions are all _sub-entity_ ids (the
 `mealRecipe` id inside a meal's `recipes[]`, recipe section and section-line ids,
 unit-mapping ids); none of them are manifest entities.
 
-The body is four characters from a 31-character alphabet (digits and uppercase
-letters minus the scan-confusable `0 O 1 I L`) — 923,521 codes per prefix.
+New shortcodes have a five-character body from a 31-character alphabet (digits
+and uppercase letters minus the scan-confusable `0 O 1 I L`) — 28,629,151
+codes per prefix. Existing four-character shortcodes remain valid.
 `P-` and `L-` are permanent inbound aliases for Product and Location because
 physical labels using them already exist. Cubby emits only `PRD-` and `LOC-`;
-the four-character body is preserved during the prefix rewrite, so no alias
+the body is preserved during the prefix rewrite, so no alias
 table is needed. The former Recipe `R-` alias is intentionally no longer
 recognized; old `R-XXXX` links are a breaking compatibility removal and must be
 replaced with `RCP-XXXX`. The generated registry lives

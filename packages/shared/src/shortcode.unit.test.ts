@@ -42,7 +42,7 @@ describe("prefix registry", () => {
 
   it("has an alphabet free of scan-confusable characters", () => {
     // The comment on SHORTCODE_CHARS used to claim 32; it is 31, and the
-    // namespace math (31^4) depends on that being right.
+    // namespace math (31^5 for new codes) depends on that being right.
     expect(SHORTCODE_CHARS).toHaveLength(31);
     for (const confusable of ["0", "O", "1", "I", "L"]) {
       expect(SHORTCODE_CHARS).not.toContain(confusable);
@@ -70,10 +70,11 @@ describe("shortcodeSchema", () => {
 
   it("rejects confusable characters and wrong lengths", () => {
     const schema = shortcodeSchema("product");
+    expect(schema.safeParse("PRD-4K7MN").success).toBe(true);
     for (const bad of [
       "PRD-0OIL",
       "PRD-4K7",
-      "PRD-4K7MM",
+      "PRD-4K7MNN",
       "PRD-",
       "4K7M",
       "",
@@ -128,7 +129,9 @@ describe("generateShortcode", () => {
     (entity) => {
       const schema = shortcodeSchema(entity);
       for (let i = 0; i < 50; i++) {
-        expect(schema.safeParse(generateShortcode(entity)).success).toBe(true);
+        const code = generateShortcode(entity);
+        expect(schema.safeParse(code).success).toBe(true);
+        expect(code.slice(SHORTCODE_PREFIX[entity].length)).toHaveLength(5);
       }
     },
   );

@@ -21,15 +21,17 @@ describe("buildAppleAppSiteAssociation", () => {
     ]);
   });
 
-  it("emits one bare component per canonical shortcode prefix", () => {
+  it("emits four- and five-character components per canonical prefix", () => {
     for (const prefix of Object.values(SHORTCODE_PREFIX)) {
       expect(paths).toContain(`/${prefix}????`);
+      expect(paths).toContain(`/${prefix}?????`);
     }
   });
 
   it("emits one bare component per legacy shortcode prefix", () => {
     for (const prefix of Object.keys(LEGACY_SHORTCODE_PREFIX)) {
       expect(paths).toContain(`/${prefix}????`);
+      expect(paths).toContain(`/${prefix}?????`);
     }
   });
 
@@ -41,14 +43,15 @@ describe("buildAppleAppSiteAssociation", () => {
     }
   });
 
-  it("emits exactly one component per canonical and legacy prefix, no more", () => {
+  it("emits exactly two components per canonical and legacy prefix", () => {
     const expectedCount =
-      Object.keys(SHORTCODE_PREFIX).length +
-      Object.keys(LEGACY_SHORTCODE_PREFIX).length;
+      2 *
+      (Object.keys(SHORTCODE_PREFIX).length +
+        Object.keys(LEGACY_SHORTCODE_PREFIX).length);
     // detailRouteComponents adds further, non-bare components on top of these;
     // assert the bare-prefix ones are present as a subset rather than pinning
     // the total, which would break every time a web detail route is added.
-    const barePaths = paths.filter((path) => /^\/[A-Z]+-\?{4}$/.test(path));
+    const barePaths = paths.filter((path) => /^\/[A-Z]+-\?{4,5}$/.test(path));
     expect(barePaths).toHaveLength(expectedCount);
   });
 });

@@ -7,7 +7,6 @@ import {
   submitReceiptEvidenceOut,
   type SubmitReceiptEvidenceInput,
 } from "@cubby/schemas/purchase-import";
-import { generateShortcode } from "@cubby/shared";
 import { and, eq, inArray, isNotNull, lt, or } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -26,6 +25,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { dispatchRunEvent } from "./dispatch";
@@ -216,32 +216,27 @@ export async function submitReceiptEvidence(
     }
     const runId = runEntityId.parse(crypto.randomUUID());
     const dispatchEventId = `receipt:${input.huntId}:${row.imageChecksum}`;
-    const [run] = await tx
-      .insert(runTable)
-      .values({
-        id: runId,
-        shortcode: generateShortcode("run"),
-        ledgerPartyId: row.ledgerPartyId,
-        actorUserId: row.actorUserId,
-        actorName: row.actorName,
-        actorEmail: row.actorEmail,
-        actorLedgerPartyShortcode: row.actorLedgerPartyShortcode,
-        actorLedgerPartyName: row.actorLedgerPartyName,
-        actorLedgerPartyKind: row.actorLedgerPartyKind,
-        vendorAccountId: row.vendorAccountId
-          ? vendorAccountId.parse(row.vendorAccountId)
-          : null,
-        vendorId: row.vendorId,
-        predecessorRunId: row.receiptRunId
-          ? runEntityId.parse(row.receiptRunId)
-          : null,
-        trigger: "discovery",
-        coordinatorModel: "gpt-6-sol",
-        agentSessionId: importRunAgentIdentity(runId, "account_sync"),
-        dispatchEventId,
-      })
-      .returning({ id: runTable.id });
-    if (!run) throw new Error("Receipt import run was not created.");
+    const run = await insertWithShortcode(tx, "run", {
+      id: runId,
+      ledgerPartyId: row.ledgerPartyId,
+      actorUserId: row.actorUserId,
+      actorName: row.actorName,
+      actorEmail: row.actorEmail,
+      actorLedgerPartyShortcode: row.actorLedgerPartyShortcode,
+      actorLedgerPartyName: row.actorLedgerPartyName,
+      actorLedgerPartyKind: row.actorLedgerPartyKind,
+      vendorAccountId: row.vendorAccountId
+        ? vendorAccountId.parse(row.vendorAccountId)
+        : null,
+      vendorId: row.vendorId,
+      predecessorRunId: row.receiptRunId
+        ? runEntityId.parse(row.receiptRunId)
+        : null,
+      trigger: "discovery",
+      coordinatorModel: "gpt-6-sol",
+      agentSessionId: importRunAgentIdentity(runId, "account_sync"),
+      dispatchEventId,
+    });
     await tx
       .update(importHunt)
       .set({
@@ -253,16 +248,10 @@ export async function submitReceiptEvidence(
         updatedAt: new Date(),
       })
       .where(eq(importHunt.id, row.id));
-    const [createdRun] = await tx
-      .select({ publicId: runTable.shortcode })
-      .from(runTable)
-      .where(eq(runTable.id, run.id))
-      .limit(1);
-    if (!createdRun) throw new Error("Receipt import run was not found.");
     return {
       ...row,
       runId: run.id,
-      publicId: createdRun.publicId,
+      publicId: run.shortcode,
       shouldEnqueue: true,
       created: true,
       dispatchEventId,

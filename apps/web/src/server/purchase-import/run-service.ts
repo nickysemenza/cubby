@@ -35,7 +35,6 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
 import { vendorAgentHints } from "@cubby/schemas/vendor-import-fields";
-import { generateShortcode } from "@cubby/shared";
 import {
   and,
   asc,
@@ -97,6 +96,10 @@ import { createImageProcessingSubmission } from "~/server/repo/image-processing-
 import { persistImageProcessingSubmission } from "~/server/repo/image-processing-submission";
 import { withPhotoImportTransaction } from "~/server/repo/photo-import";
 import { getRunByShortcode } from "~/server/repo/run";
+import {
+  generateUniqueShortcode,
+  insertWithShortcode,
+} from "~/server/repo/shortcode-utils";
 import { sha256Hex } from "~/server/semantic/hash";
 import { publishImageProcessingWakeups } from "~/server/services/image-processing.service";
 import {
@@ -417,12 +420,12 @@ export async function startOrResumeRun(
           dispatchEventId: string | null;
         }
       | undefined;
-    for (let attempt = 0; attempt < 5 && !created; attempt += 1) {
+    for (let attempt = 0; attempt < 10 && !created; attempt += 1) {
       [created] = await tx
         .insert(runTable)
         .values({
           id,
-          shortcode: generateShortcode("run"),
+          shortcode: await generateUniqueShortcode(tx, "run"),
           ledgerPartyId: input.ledgerPartyId,
           actorUserId: scope.actorUserId,
           actorName: scope.actorName,
@@ -542,40 +545,29 @@ export async function startTargetedRun(
 
     const id = runEntityId.parse(crypto.randomUUID());
     const eventId = crypto.randomUUID();
-    const [run] = await tx
-      .insert(runTable)
-      .values({
+    const run = await insertWithShortcode(tx, "run", {
+      id,
+      ledgerPartyId: input.ledgerPartyId,
+      actorUserId: actor.actorUserId,
+      actorName: actor.actorName,
+      actorEmail: actor.actorEmail,
+      actorLedgerPartyShortcode: actor.actorLedgerPartyShortcode,
+      actorLedgerPartyName: actor.actorLedgerPartyName,
+      actorLedgerPartyKind: actor.actorLedgerPartyKind,
+      vendorId: input.vendorId,
+      vendorAccountId: input.vendorAccountId ?? null,
+      predecessorRunId: input.predecessorRunId
+        ? runEntityId.parse(input.predecessorRunId)
+        : null,
+      purpose,
+      trigger,
+      dispatchEventId: eventId,
+      coordinatorModel: coordinatorModelFor(purpose),
+      agentSessionId: importRunAgentIdentity(
         id,
-        shortcode: generateShortcode("run"),
-        ledgerPartyId: input.ledgerPartyId,
-        actorUserId: actor.actorUserId,
-        actorName: actor.actorName,
-        actorEmail: actor.actorEmail,
-        actorLedgerPartyShortcode: actor.actorLedgerPartyShortcode,
-        actorLedgerPartyName: actor.actorLedgerPartyName,
-        actorLedgerPartyKind: actor.actorLedgerPartyKind,
-        vendorId: input.vendorId,
-        vendorAccountId: input.vendorAccountId ?? null,
-        predecessorRunId: input.predecessorRunId
-          ? runEntityId.parse(input.predecessorRunId)
-          : null,
-        purpose,
-        trigger,
-        dispatchEventId: eventId,
-        coordinatorModel: coordinatorModelFor(purpose),
-        agentSessionId: importRunAgentIdentity(
-          id,
-          flueImportRunPurpose.parse(purpose),
-        ),
-      })
-      .returning({
-        id: runTable.id,
-        publicId: runTable.shortcode,
-        status: runTable.status,
-        purpose: runTable.purpose,
-        dispatchEventId: runTable.dispatchEventId,
-      });
-    if (!run) throw new Error("Targeted import run was not created");
+        flueImportRunPurpose.parse(purpose),
+      ),
+    });
     await tx.insert(runTarget).values(
       input.targets.map((target) => ({
         runId: id,
@@ -595,7 +587,16 @@ export async function startTargetedRun(
         evidenceFingerprint: target.evidenceFingerprint ?? null,
       })),
     );
-    return { created: true as const, run };
+    return {
+      created: true as const,
+      run: {
+        id: run.id,
+        publicId: run.shortcode,
+        status: run.status,
+        purpose: run.purpose,
+        dispatchEventId: run.dispatchEventId,
+      },
+    };
   });
 }
 
@@ -661,32 +662,24 @@ export async function startPhotoInventoryRun(
     }
 
     const id = runEntityId.parse(crypto.randomUUID());
-    const [run] = await tx
-      .insert(runTable)
-      .values({
-        id,
-        shortcode: generateShortcode("run"),
-        ledgerPartyId: ownerLedgerPartyId,
-        actorUserId: actor.actorUserId,
-        actorName: actor.actorName,
-        actorEmail: actor.actorEmail,
-        actorLedgerPartyShortcode: actor.actorLedgerPartyShortcode,
-        actorLedgerPartyName: actor.actorLedgerPartyName,
-        actorLedgerPartyKind: actor.actorLedgerPartyKind,
-        vendorId: null,
-        vendorAccountId: null,
-        purpose: runPurpose.enum.photo_inventory,
-        coordinatorModel: coordinatorModelFor("photo_inventory"),
-        trigger: runTrigger.enum.manual,
-        notes: input.notes ?? null,
-        agentSessionId: importRunAgentIdentity(id, "photo_inventory"),
-      })
-      .returning({
-        id: runTable.id,
-        publicId: runTable.shortcode,
-      });
-    if (!run) throw new Error("Photo inventory run was not created");
-    return run;
+    const run = await insertWithShortcode(tx, "run", {
+      id,
+      ledgerPartyId: ownerLedgerPartyId,
+      actorUserId: actor.actorUserId,
+      actorName: actor.actorName,
+      actorEmail: actor.actorEmail,
+      actorLedgerPartyShortcode: actor.actorLedgerPartyShortcode,
+      actorLedgerPartyName: actor.actorLedgerPartyName,
+      actorLedgerPartyKind: actor.actorLedgerPartyKind,
+      vendorId: null,
+      vendorAccountId: null,
+      purpose: runPurpose.enum.photo_inventory,
+      coordinatorModel: coordinatorModelFor("photo_inventory"),
+      trigger: runTrigger.enum.manual,
+      notes: input.notes ?? null,
+      agentSessionId: importRunAgentIdentity(id, "photo_inventory"),
+    });
+    return { id: run.id, publicId: run.shortcode };
   });
 }
 
@@ -3489,38 +3482,30 @@ export async function controlRun(
           );
         const successorId = runEntityId.parse(crypto.randomUUID());
         const dispatchEventId = crypto.randomUUID();
-        const [successor] = await tx
-          .insert(runTable)
-          .values({
-            id: successorId,
-            shortcode: generateShortcode("run"),
-            ledgerPartyId: locked.ledgerPartyId,
-            actorUserId: userId.parse(controller.userId),
-            actorName: controller.name,
-            actorEmail: controller.email,
-            actorLedgerPartyShortcode: controller.ledgerPartyShortcode,
-            actorLedgerPartyName: controller.ledgerPartyName,
-            actorLedgerPartyKind: controller.ledgerPartyKind,
-            vendorAccountId: locked.vendorAccountId,
-            vendorId: locked.vendorId,
-            predecessorRunId: scope.public.runId,
-            purpose: locked.purpose,
-            trigger: "manual",
-            notes: locked.notes,
-            coordinatorModel: coordinatorModelFor(locked.purpose),
-            skillRevision: locked.skillRevision,
-            runtimeRevision: locked.runtimeRevision,
-            dispatchEventId,
-            agentSessionId: importRunAgentIdentity(
-              successorId,
-              flueImportRunPurpose.parse(locked.purpose),
-            ),
-          })
-          .returning({
-            publicId: runTable.shortcode,
-            status: runTable.status,
-          });
-        if (!successor) throw new Error("New import run was not created");
+        const successor = await insertWithShortcode(tx, "run", {
+          id: successorId,
+          ledgerPartyId: locked.ledgerPartyId,
+          actorUserId: userId.parse(controller.userId),
+          actorName: controller.name,
+          actorEmail: controller.email,
+          actorLedgerPartyShortcode: controller.ledgerPartyShortcode,
+          actorLedgerPartyName: controller.ledgerPartyName,
+          actorLedgerPartyKind: controller.ledgerPartyKind,
+          vendorAccountId: locked.vendorAccountId,
+          vendorId: locked.vendorId,
+          predecessorRunId: scope.public.runId,
+          purpose: locked.purpose,
+          trigger: "manual",
+          notes: locked.notes,
+          coordinatorModel: coordinatorModelFor(locked.purpose),
+          skillRevision: locked.skillRevision,
+          runtimeRevision: locked.runtimeRevision,
+          dispatchEventId,
+          agentSessionId: importRunAgentIdentity(
+            successorId,
+            flueImportRunPurpose.parse(locked.purpose),
+          ),
+        });
         if (sourceTargets.length)
           await tx.insert(runTarget).values(
             sourceTargets.map((target) => ({
@@ -3533,12 +3518,12 @@ export async function controlRun(
           publicId: input.runPublicId,
           status: locked.status,
           successorRunId: successorId,
-          successorRunPublicId: successor.publicId,
+          successorRunPublicId: successor.shortcode,
           successorStatus: successor.status,
           successorCoordinatorModel: coordinatorModelFor(locked.purpose),
           created: true,
           dispatchRunId: successorId,
-          dispatchPublicId: successor.publicId,
+          dispatchPublicId: successor.shortcode,
           dispatchPurpose: locked.purpose,
           dispatchCoordinatorModel: coordinatorModelFor(locked.purpose),
           dispatchEventId,
@@ -3616,45 +3601,36 @@ export async function controlRun(
         const successorId = runEntityId.parse(crypto.randomUUID());
         const isUnavailable = input.action === "no_evidence_available";
         const dispatchEventId = isUnavailable ? null : crypto.randomUUID();
-        const [successor] = await tx
-          .insert(runTable)
-          .values({
-            id: successorId,
-            shortcode: generateShortcode("run"),
-            ledgerPartyId: locked.ledgerPartyId,
-            actorUserId: locked.actorUserId,
-            actorName: locked.actorName,
-            actorEmail: locked.actorEmail,
-            actorLedgerPartyShortcode: locked.actorLedgerPartyShortcode,
-            actorLedgerPartyName: locked.actorLedgerPartyName,
-            actorLedgerPartyKind: locked.actorLedgerPartyKind,
-            vendorAccountId: locked.vendorAccountId,
-            vendorId: locked.vendorId,
-            predecessorRunId: scope.public.runId,
-            purpose: "purchase_validation",
-            trigger: "manual",
-            status: isUnavailable ? "needs_review" : "dispatch_failed",
-            coordinatorModel: coordinatorModelFor(locked.purpose),
-            dispatchEventId,
-            failureCode: isUnavailable ? "no_evidence_available" : null,
-            dispatchError: isUnavailable
-              ? null
-              : "Awaiting manual evidence upload",
-            endedAt: isUnavailable ? new Date() : null,
-            skillRevision: locked.skillRevision,
-            runtimeRevision: locked.runtimeRevision,
-            decisionRevision: locked.decisionRevision + 1,
-            agentSessionId: importRunAgentIdentity(
-              successorId,
-              "purchase_validation",
-            ),
-          })
-          .returning({
-            publicId: runTable.shortcode,
-            status: runTable.status,
-          });
-        if (!successor)
-          throw new Error("Evidence successor run was not created");
+        const successor = await insertWithShortcode(tx, "run", {
+          id: successorId,
+          ledgerPartyId: locked.ledgerPartyId,
+          actorUserId: locked.actorUserId,
+          actorName: locked.actorName,
+          actorEmail: locked.actorEmail,
+          actorLedgerPartyShortcode: locked.actorLedgerPartyShortcode,
+          actorLedgerPartyName: locked.actorLedgerPartyName,
+          actorLedgerPartyKind: locked.actorLedgerPartyKind,
+          vendorAccountId: locked.vendorAccountId,
+          vendorId: locked.vendorId,
+          predecessorRunId: scope.public.runId,
+          purpose: "purchase_validation",
+          trigger: "manual",
+          status: isUnavailable ? "needs_review" : "dispatch_failed",
+          coordinatorModel: coordinatorModelFor(locked.purpose),
+          dispatchEventId,
+          failureCode: isUnavailable ? "no_evidence_available" : null,
+          dispatchError: isUnavailable
+            ? null
+            : "Awaiting manual evidence upload",
+          endedAt: isUnavailable ? new Date() : null,
+          skillRevision: locked.skillRevision,
+          runtimeRevision: locked.runtimeRevision,
+          decisionRevision: locked.decisionRevision + 1,
+          agentSessionId: importRunAgentIdentity(
+            successorId,
+            "purchase_validation",
+          ),
+        });
         await tx.insert(runTarget).values(
           await Promise.all(
             sourceTargets.map(async (target) => ({
@@ -3680,11 +3656,11 @@ export async function controlRun(
           publicId: input.runPublicId,
           status: locked.status,
           successorRunId: successorId,
-          successorRunPublicId: successor.publicId,
+          successorRunPublicId: successor.shortcode,
           successorStatus: successor.status,
           successorCoordinatorModel: coordinatorModelFor(locked.purpose),
           dispatchRunId: null,
-          dispatchPublicId: successor.publicId,
+          dispatchPublicId: successor.shortcode,
           dispatchPurpose: "purchase_validation" as const,
           dispatchCoordinatorModel: coordinatorModelFor(locked.purpose),
           dispatchEventId,
@@ -3726,38 +3702,30 @@ export async function controlRun(
         }
         const successorId = runEntityId.parse(crypto.randomUUID());
         const dispatchEventId = crypto.randomUUID();
-        const [successor] = await tx
-          .insert(runTable)
-          .values({
-            id: successorId,
-            shortcode: generateShortcode("run"),
-            ledgerPartyId: locked.ledgerPartyId,
-            actorUserId: locked.actorUserId,
-            actorName: locked.actorName,
-            actorEmail: locked.actorEmail,
-            actorLedgerPartyShortcode: locked.actorLedgerPartyShortcode,
-            actorLedgerPartyName: locked.actorLedgerPartyName,
-            actorLedgerPartyKind: locked.actorLedgerPartyKind,
-            vendorAccountId: successorVendorAccountId,
-            vendorId: locked.vendorId,
-            predecessorRunId: scope.public.runId,
-            purpose: locked.purpose,
-            trigger: locked.trigger,
-            dispatchEventId,
-            coordinatorModel: coordinatorModelFor(locked.purpose),
-            skillRevision: locked.skillRevision,
-            runtimeRevision: locked.runtimeRevision,
-            decisionRevision: locked.decisionRevision + 1,
-            agentSessionId: importRunAgentIdentity(
-              successorId,
-              flueImportRunPurpose.parse(locked.purpose),
-            ),
-          })
-          .returning({
-            publicId: runTable.shortcode,
-            status: runTable.status,
-          });
-        if (!successor) throw new Error("Successor import run was not created");
+        const successor = await insertWithShortcode(tx, "run", {
+          id: successorId,
+          ledgerPartyId: locked.ledgerPartyId,
+          actorUserId: locked.actorUserId,
+          actorName: locked.actorName,
+          actorEmail: locked.actorEmail,
+          actorLedgerPartyShortcode: locked.actorLedgerPartyShortcode,
+          actorLedgerPartyName: locked.actorLedgerPartyName,
+          actorLedgerPartyKind: locked.actorLedgerPartyKind,
+          vendorAccountId: successorVendorAccountId,
+          vendorId: locked.vendorId,
+          predecessorRunId: scope.public.runId,
+          purpose: locked.purpose,
+          trigger: locked.trigger,
+          dispatchEventId,
+          coordinatorModel: coordinatorModelFor(locked.purpose),
+          skillRevision: locked.skillRevision,
+          runtimeRevision: locked.runtimeRevision,
+          decisionRevision: locked.decisionRevision + 1,
+          agentSessionId: importRunAgentIdentity(
+            successorId,
+            flueImportRunPurpose.parse(locked.purpose),
+          ),
+        });
         if (locked.purpose !== "account_sync") {
           const unresolvedTargets = await tx
             .select({
@@ -3815,12 +3783,12 @@ export async function controlRun(
           publicId: input.runPublicId,
           status: locked.status,
           successorRunId: successorId,
-          successorRunPublicId: successor.publicId,
+          successorRunPublicId: successor.shortcode,
           successorStatus: successor.status,
           successorCoordinatorModel: coordinatorModelFor(locked.purpose),
           created: true,
           dispatchRunId: successorId,
-          dispatchPublicId: successor.publicId,
+          dispatchPublicId: successor.shortcode,
           dispatchPurpose: locked.purpose,
           dispatchCoordinatorModel: coordinatorModelFor(locked.purpose),
           dispatchEventId,
