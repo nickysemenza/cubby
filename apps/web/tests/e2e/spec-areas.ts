@@ -236,6 +236,17 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
+    file: "field-guide-mobile.spec.ts",
+    globs: [
+      `${WEB}/src/routes/_authenticated/products.index.tsx`,
+      `${WEB}/src/routes/_authenticated/products.$shortcode.tsx`,
+      `${WEB}/src/app/_components/data-table/shelf.tsx`,
+      `${WEB}/src/components/layouts/page-hero.tsx`,
+      `${WEB}/src/styles.css`,
+      `${WEB}/src/server/repo/product/**`,
+    ],
+  },
+  {
     file: "garden.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/plantings.$shortcode.tsx`,
