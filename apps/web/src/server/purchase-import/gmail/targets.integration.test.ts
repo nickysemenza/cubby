@@ -20,6 +20,7 @@ describe("Gmail sync targets", () => {
     });
     await insertWithShortcode(ctx.db, "vendor", {
       name: "Example Outfitters",
+      website: "https://shop.example-outfitters.test/orders",
       orderEmailSenders: ["orders@example-outfitters.test"],
     });
 
@@ -29,7 +30,12 @@ describe("Gmail sync targets", () => {
       ledgerPartyId: party.id,
       userId: ctx.actor.userId,
       mailboxId: "me",
-      bootstrap: { knownSenders: ["orders@example-outfitters.test"] },
+      bootstrap: {
+        knownSenders: [
+          "example-outfitters.test",
+          "orders@example-outfitters.test",
+        ],
+      },
     });
   });
 });

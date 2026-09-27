@@ -22,7 +22,10 @@ through Cubby's prepare/commit writer rather than generic entity mutation.
 ## Connect and converge evidence
 
 1. In Cubby Settings, connect Google with read-only Gmail access. Search order
-   mail by configured vendor sender, order id, and time window. An email event
+   mail by the Vendor website's domain, any optional known sender, order id,
+   and time window. On Vendor detail, **Search Gmail now** scans a bounded page
+   from the past year; **Search older email** continues when Gmail has more.
+   An email event
    establishes lifecycle context; open the retailer order detail or a receipt
    for itemized variants. If a retailer requests login, pause the browser run
    and let the member sign in to the Cubby-managed browser tab before resuming.
@@ -134,10 +137,12 @@ Create or update the Vendor deliberately, then configure:
 
 - `orderEvidence`: `online_account`, `receipt_only`, or `not_expected`;
 - `browserDomains` and `orderUrlTemplate` for online accounts;
-- `orderEmailSenders` for Gmail discovery;
+- `orderEmailSenders` only for verified senders outside the website domain;
 - `returnWindowDays` only when the policy is known.
 
-Recognized order mail with an explicit order id creates a mail-only VendorAccount
+The website domain is the default Gmail sender signal. When two Vendors share
+that domain, an exact configured sender takes precedence; other ambiguous mail
+stays for review. Recognized order mail with an explicit order id creates a mail-only VendorAccount
 for that member when one does not exist. This records a vendor relationship,
 not proof of a browser login. Turn on browser sync only after confirming that
 member's online account; use Sync now while the Mac app and chosen browser are

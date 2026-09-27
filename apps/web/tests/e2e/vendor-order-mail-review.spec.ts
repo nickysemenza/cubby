@@ -14,6 +14,9 @@ test("reviews a vendor email match and shows the linked conversation on Purchase
     `/vendors/${seed.vendor.shortcode}`,
     page.getByText("Synthetic order receipt"),
   );
+  await expect(
+    page.getByRole("button", { name: "Search Gmail now" }),
+  ).toBeVisible();
   const receipt = page
     .getByRole("article")
     .filter({ hasText: "Synthetic order receipt" });
