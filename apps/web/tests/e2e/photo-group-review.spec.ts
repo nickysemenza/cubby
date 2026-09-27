@@ -253,14 +253,20 @@ test("suggests an existing variant and previews every merge decision for a creat
   await expect(
     page.getByRole("link", { name: "Gray crew t-shirt — M" }),
   ).toBeVisible();
-  const review = await page.request.get(
-    `/api/v1/photoImport/review?runId=${seed.runId}`,
-  );
-  const body = await review.json();
-  const createdId = body.review.proposals.find(
-    (item: { groupKey: string }) => item.groupKey === "g1",
-  )?.committedProduct?.id;
-  expect(createdId).toBeTruthy();
+  let createdId: string | undefined;
+  await expect
+    .poll(async () => {
+      const review = await page.request.get(
+        `/api/v1/photoImport/review?runId=${seed.runId}`,
+      );
+      if (!review.ok()) throw new Error(await review.text());
+      const body = await review.json();
+      createdId = body.review.proposals.find(
+        (item: { groupKey: string }) => item.groupKey === "g1",
+      )?.committedProduct?.id;
+      return createdId;
+    })
+    .toBeTruthy();
 
   await page.getByText("Review possible matches", { exact: true }).click();
   await page.locator(`a[href*="candidate=${existing.id}"]`).click();
