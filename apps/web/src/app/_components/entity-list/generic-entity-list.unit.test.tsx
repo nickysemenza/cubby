@@ -352,8 +352,7 @@ describe("GenericEntityList", () => {
   // table view must build its columns from the manifest alone.
   it.each(
     listedEntities.filter((entity) => {
-      const views: readonly string[] = entitySummary[entity].list.views;
-      return views.includes("table");
+      return entitySummary[entity].list.views.some((view) => view === "table");
     }),
   )(
     "table: %s builds its columns and header without an override",
