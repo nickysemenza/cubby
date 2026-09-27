@@ -95,6 +95,7 @@ import {
   importHunt,
   importPreparedOrder,
   run as runTable,
+  vendorMailSearchJob,
   runApproval,
   runControlEvent,
   runEvidence,
@@ -1238,6 +1239,16 @@ export const ENTITY_EDGES = {
         kind: "allow-target-deleted",
         reason:
           "Append-only provenance: a job keeps naming the run that scheduled it.",
+      },
+    },
+    "VendorMailSearchJob.runId": {
+      column: vendorMailSearchJob.runId,
+      role: "history",
+      label: "Gmail search",
+      description: "The Vendor Gmail search requested by this run.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason: "The search record preserves the run that requested it.",
       },
     },
     "Purchase.runId": {

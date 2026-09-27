@@ -2234,42 +2234,23 @@ export const mailboxCursor = pgTable(
   ],
 );
 
-export const vendorMailSearchJob = pgTable(
-  "VendorMailSearchJob",
-  {
-    id: pkUuid(),
-    vendorId: uuid("vendorId")
-      .notNull()
-      .$type<VendorId>()
-      .references(() => vendor.id),
-    ledgerPartyId: uuid("ledgerPartyId")
-      .notNull()
-      .$type<LedgerPartyId>()
-      .references(() => ledgerParty.id),
-    userId: text("userId")
-      .notNull()
-      .$type<UserId>()
-      .references(() => user.id),
-    after: text("after").notNull(),
-    pageToken: text("pageToken"),
-    status: text("status").notNull().default("queued"),
-    searched: integer("searched").notNull().default(0),
-    skipped: integer("skipped").notNull().default(0),
-    reviewable: integer("reviewable").notNull().default(0),
-    nextPageToken: text("nextPageToken"),
-    error: text("error"),
-    startedAt: timestamp("startedAt", { mode: "date" }),
-    finishedAt: timestamp("finishedAt", { mode: "date" }),
-    ...baseTimestamps(),
-  },
-  (table) => [
-    index("VendorMailSearchJob_party_vendor_created_idx").on(
-      table.ledgerPartyId,
-      table.vendorId,
-      table.createdAt.desc(),
-    ),
-  ],
-);
+export const vendorMailSearchJob = pgTable("VendorMailSearchJob", {
+  runId: uuid("runId")
+    .primaryKey()
+    .$type<RunId>()
+    .references(() => run.id),
+  after: text("after").notNull(),
+  pageToken: text("pageToken"),
+  status: text("status").notNull().default("queued"),
+  searched: integer("searched").notNull().default(0),
+  skipped: integer("skipped").notNull().default(0),
+  reviewable: integer("reviewable").notNull().default(0),
+  nextPageToken: text("nextPageToken"),
+  error: text("error"),
+  startedAt: timestamp("startedAt", { mode: "date" }),
+  finishedAt: timestamp("finishedAt", { mode: "date" }),
+  ...baseTimestamps(),
+});
 
 export const orderMail = pgTable(
   "OrderMail",

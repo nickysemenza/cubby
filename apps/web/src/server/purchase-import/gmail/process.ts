@@ -1,4 +1,8 @@
-import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  runEntityId,
+  type RunId,
+} from "@cubby/schemas/identifiers";
 import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { generateShortcode } from "@cubby/shared";
 import {
@@ -175,6 +179,7 @@ export async function processOrderMails(
   messageIds: readonly string[],
   _attachments: readonly GmailOrderMailAttachment[] = [],
   ports: OrderMailPorts = productionOrderMailPorts,
+  runId?: RunId,
 ): Promise<number> {
   if (messageIds.length === 0) return 0;
   const database = getDb(db);
@@ -287,6 +292,7 @@ export async function processOrderMails(
     try {
       classification = await ports.classify({
         db,
+        runId,
         messageId: mail.messageId,
         sender: mail.sender,
         subject: mail.subject,

@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   ledgerPartyShortcode,
   purchaseShortcode,
+  runShortcode,
   vendorShortcode,
 } from "./identifier-fields.js";
 
@@ -21,6 +22,7 @@ export const vendorSearchMailInput = z.object({
 });
 
 export const vendorSearchMailOut = z.object({
+  runShortcode,
   status: z.enum(["queued", "running", "completed", "failed"]),
   searched: z.number().int().nonnegative(),
   skipped: z.number().int().nonnegative(),

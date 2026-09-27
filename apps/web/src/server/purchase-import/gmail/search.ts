@@ -96,7 +96,13 @@ export async function searchVendorOrderMail(
         attachments: page.attachments,
       },
     });
-    await processOrderMails(db, persisted.messageIds, page.attachments);
+    await processOrderMails(
+      db,
+      persisted.messageIds,
+      page.attachments,
+      undefined,
+      actor.runId ?? undefined,
+    );
     const pageWorklist = await listVendorOrderMail(
       db,
       {

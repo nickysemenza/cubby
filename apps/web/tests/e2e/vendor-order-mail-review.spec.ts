@@ -1,5 +1,6 @@
 import superjson from "superjson";
 import type { VendorSearchMailOut } from "@cubby/schemas/order-mail-review";
+import { runShortcode } from "@cubby/schemas/identifiers";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 
@@ -66,6 +67,7 @@ test("queues a local synthetic Gmail search, shows progress, and continues to ol
     nextPageToken: null,
     error: null,
     createdAt: new Date().toISOString(),
+    runShortcode: runShortcode.parse("RUN-TEST"),
   };
   let status: VendorSearchMailOut | null = null;
   await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
@@ -101,6 +103,10 @@ test("queues a local synthetic Gmail search, shows progress, and continues to ol
   );
   await page.getByRole("button", { name: "Search Gmail now" }).click();
   await expect(page.getByText(/Gmail search is running/u)).toBeVisible();
+  await expect(page.getByRole("link", { name: "View run" })).toHaveAttribute(
+    "href",
+    "/runs/RUN-TEST",
+  );
   await expect(
     page.getByText(/Matches will appear when the job finishes/u),
   ).toBeVisible();

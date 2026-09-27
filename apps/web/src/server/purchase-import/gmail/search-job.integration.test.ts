@@ -1,8 +1,12 @@
 import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
+import { runEntityId } from "@cubby/schemas/identifiers";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { publishBackgroundTasks } from "~/server/background-tasks/publish";
+import { run, vendorMailSearchJob } from "~/server/db/schema";
+import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
@@ -15,7 +19,7 @@ describe("Vendor Gmail search jobs", () => {
   const ctx = withTestDb();
 
   it("queues once, exposes progress, and safely skips a replayed delivery", async () => {
-    await insertWithShortcode(ctx.db, "ledgerParty", {
+    const member = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic Gmail member",
       kind: "member",
       userId: ctx.actor.userId,
@@ -37,8 +41,26 @@ describe("Vendor Gmail search jobs", () => {
       publish,
     });
     expect(first.status).toBe("queued");
+    expect(first.runShortcode).toMatch(/^RUN-/u);
     expect(duplicate.createdAt).toBe(first.createdAt);
     expect(publish).toHaveBeenCalledTimes(1);
+    const [ownedRun] = await getDb(ctx.db)
+      .select({
+        purpose: run.purpose,
+        status: run.status,
+        vendorId: run.vendorId,
+        ledgerPartyId: run.ledgerPartyId,
+      })
+      .from(vendorMailSearchJob)
+      .innerJoin(run, eq(vendorMailSearchJob.runId, run.id))
+      .where(eq(run.vendorId, vendor.id))
+      .limit(1);
+    expect(ownedRun).toMatchObject({
+      purpose: "background",
+      status: "running",
+      vendorId: vendor.id,
+      ledgerPartyId: member.id,
+    });
     const task = published[0]?.[0];
     if (!task || task.kind !== "vendor-mail.search")
       throw new Error("test setup: missing Gmail search task");
@@ -56,6 +78,20 @@ describe("Vendor Gmail search jobs", () => {
       runVendorMailSearchJob(ctx.db, task.jobId, { search }),
     ).resolves.toBe("skipped");
     expect(search).toHaveBeenCalledTimes(1);
+    expect(search).toHaveBeenCalledWith(
+      ctx.db,
+      expect.objectContaining({ vendorId: vendor.shortcode }),
+      expect.objectContaining({ runId: task.jobId }),
+    );
+    const [completedRun] = await getDb(ctx.db)
+      .select({ status: run.status, endedAt: run.endedAt })
+      .from(run)
+      .where(eq(run.id, runEntityId.parse(task.jobId)))
+      .limit(1);
+    expect(completedRun).toMatchObject({
+      status: "completed",
+      endedAt: expect.any(Date),
+    });
     expect(
       await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor),
     ).toMatchObject({
@@ -86,6 +122,15 @@ describe("Vendor Gmail search jobs", () => {
     expect(
       await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor),
     ).toMatchObject({ status: "failed", error: "429 synthetic limit" });
+    const [failedRun] = await getDb(ctx.db)
+      .select({ status: run.status, failureCode: run.failureCode })
+      .from(run)
+      .where(eq(run.id, runEntityId.parse(olderTask.jobId)))
+      .limit(1);
+    expect(failedRun).toMatchObject({
+      status: "failed",
+      failureCode: "vendor_mail_search_failed",
+    });
     await expect(
       runVendorMailSearchJob(ctx.db, olderTask.jobId, {
         search: async () => {

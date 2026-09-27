@@ -13806,29 +13806,10 @@
       "name": "VendorMailSearchJob",
       "schema": "",
       "columns": {
-        "id": {
-          "name": "id",
+        "runId": {
+          "name": "runId",
           "type": "uuid",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "vendorId": {
-          "name": "vendorId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "ledgerPartyId": {
-          "name": "ledgerPartyId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "userId": {
-          "name": "userId",
-          "type": "text",
-          "primaryKey": false,
           "notNull": true
         },
         "after": {
@@ -13910,68 +13891,14 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "VendorMailSearchJob_party_vendor_created_idx": {
-          "name": "VendorMailSearchJob_party_vendor_created_idx",
-          "columns": [
-            {
-              "expression": "ledgerPartyId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "vendorId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "createdAt",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
-        "VendorMailSearchJob_vendorId_Vendor_id_fk": {
-          "name": "VendorMailSearchJob_vendorId_Vendor_id_fk",
+        "VendorMailSearchJob_runId_Run_id_fk": {
+          "name": "VendorMailSearchJob_runId_Run_id_fk",
           "tableFrom": "VendorMailSearchJob",
-          "tableTo": "Vendor",
+          "tableTo": "Run",
           "columnsFrom": [
-            "vendorId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "VendorMailSearchJob_ledgerPartyId_LedgerParty_id_fk": {
-          "name": "VendorMailSearchJob_ledgerPartyId_LedgerParty_id_fk",
-          "tableFrom": "VendorMailSearchJob",
-          "tableTo": "LedgerParty",
-          "columnsFrom": [
-            "ledgerPartyId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "VendorMailSearchJob_userId_user_id_fk": {
-          "name": "VendorMailSearchJob_userId_user_id_fk",
-          "tableFrom": "VendorMailSearchJob",
-          "tableTo": "user",
-          "columnsFrom": [
-            "userId"
+            "runId"
           ],
           "columnsTo": [
             "id"

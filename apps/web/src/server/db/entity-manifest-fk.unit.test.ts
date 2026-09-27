@@ -131,6 +131,10 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records the Run that scheduled a queued image-processing job",
   },
+  "VendorMailSearchJob.runId": {
+    classification: "metadata",
+    reason: "records the Run and its Vendor Gmail search progress",
+  },
   "RunTarget.deviceWorkDeviceId": {
     classification: "metadata",
     reason: "records the device that last reported on-device processing",

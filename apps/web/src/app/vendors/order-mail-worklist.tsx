@@ -7,6 +7,7 @@ import type {
   VendorSearchMailOut,
 } from "@cubby/schemas/order-mail-review";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
@@ -211,6 +212,13 @@ function OrderMailWorklist({
           </Row>
           {currentJob ? (
             <div aria-live="polite" className="text-xs text-muted-foreground">
+              <Link
+                to="/runs/$shortcode"
+                params={{ shortcode: currentJob.runShortcode }}
+                className="mr-2 font-medium text-primary hover:underline"
+              >
+                View run
+              </Link>
               {jobActive
                 ? "Gmail search is running. You can leave this page and return."
                 : null}

@@ -45,7 +45,7 @@ was bought. A delivered email and a card charge do not receive inventory.
 
 ### What works today and what still needs work
 
-Vendor Gmail search now runs as a queued page job. The Vendor page shows its
+Vendor Gmail search now runs as a queued page job linked to a Run. The Vendor page shows its
 status and retry state, searches older pages deliberately, and keeps the
 background mailbox cursor separate. `OrderMail` records the message id and a
 classification checksum; repeat searches skip classified messages but retry
