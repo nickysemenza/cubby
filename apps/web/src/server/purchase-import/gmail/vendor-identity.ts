@@ -12,7 +12,7 @@ const senderAddress = (header: string): string | null => {
   return /^[^<>\s@]+@[^<>\s@]+$/u.test(address) ? address.toLowerCase() : null;
 };
 
-export const vendorWebsiteDomain = (website: string | null): string | null => {
+const vendorWebsiteDomain = (website: string | null): string | null => {
   if (!website) return null;
   try {
     const url = new URL(website);
