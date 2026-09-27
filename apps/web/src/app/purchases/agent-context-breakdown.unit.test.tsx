@@ -1,5 +1,5 @@
 import type { FlueConversationMessage } from "@flue/sdk";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
@@ -99,6 +99,12 @@ describe("AgentContextPerCall", () => {
     render(<AgentContextPerCall messages={messages} />);
 
     const region = screen.getByRole("region", { name: "Context per call" });
+    const disclosure = within(region)
+      .getByText("Context per call")
+      .closest("details");
+    expect(disclosure?.open).toBe(false);
+    fireEvent.click(within(region).getByText("Context per call"));
+    expect(disclosure?.open).toBe(true);
     expect(
       within(region).getByText(
         "Top contributors across the run: get_photo_run_context results 47% · MCP tool schemas 27% · Instructions 7% · Conversation 7%",

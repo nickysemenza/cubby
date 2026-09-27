@@ -267,7 +267,7 @@ export function AiUsagePage() {
         <h2 className="mb-2 font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           Usage by feature / model / day
         </h2>
-        <Table className="table-auto">
+        <Table className="w-max min-w-full table-auto whitespace-nowrap [&_td]:px-1 [&_td]:py-1 [&_th]:h-8 [&_th]:px-1 [&_tr]:h-8">
           <TableHeader>
             <TableRow>
               <TableHead>Day</TableHead>
@@ -290,14 +290,10 @@ export function AiUsagePage() {
                 key={`${row.day}:${row.feature}:${row.provider}:${row.model}:${row.operation}:${row.cacheStatus ?? ""}:${row.applicationCacheStatus ?? ""}`}
               >
                 <TableCell>{row.day}</TableCell>
-                <TableCell className="whitespace-normal">
-                  {row.feature}
-                </TableCell>
+                <TableCell>{row.feature}</TableCell>
                 <TableCell>{row.provider}</TableCell>
-                <TableCell className="whitespace-normal">{row.model}</TableCell>
-                <TableCell className="whitespace-normal">
-                  {row.operation}
-                </TableCell>
+                <TableCell>{row.model}</TableCell>
+                <TableCell>{row.operation}</TableCell>
                 <TableCell>{row.applicationCacheStatus ?? "-"}</TableCell>
                 <TableCell>{row.cacheStatus ?? "-"}</TableCell>
                 <TableCell>{formatTokens(row.count)}</TableCell>
@@ -316,6 +312,7 @@ export function AiUsagePage() {
               emptyLabel="No AI usage recorded"
               retryLabel="Retry summary"
               onRetry={() => void summaryQuery.refetch()}
+              colSpan={12}
             />
           </TableBody>
         </Table>
@@ -325,7 +322,7 @@ export function AiUsagePage() {
         <h2 className="mb-2 font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           Recent calls
         </h2>
-        <Table className="table-auto">
+        <Table className="w-max min-w-full table-auto whitespace-nowrap [&_td]:px-1 [&_td]:py-1 [&_th]:h-8 [&_th]:px-1 [&_tr]:h-8">
           <TableHeader>
             <TableRow>
               <TableHead>Created</TableHead>
@@ -345,15 +342,11 @@ export function AiUsagePage() {
             {recentRows?.map((row) => (
               <TableRow key={row.id}>
                 <TableCell>{row.createdAt.toLocaleString()}</TableCell>
-                <TableCell className="whitespace-normal">
-                  {row.feature}
-                </TableCell>
-                <TableCell className="whitespace-normal">
+                <TableCell>{row.feature}</TableCell>
+                <TableCell>
                   {row.provider} / {row.model}
                 </TableCell>
-                <TableCell className="whitespace-normal">
-                  {row.operation}
-                </TableCell>
+                <TableCell>{row.operation}</TableCell>
                 <TableCell>{row.applicationCacheStatus ?? "-"}</TableCell>
                 <TableCell>{row.cacheStatus ?? "-"}</TableCell>
                 <TableCell>
@@ -374,7 +367,7 @@ export function AiUsagePage() {
               emptyLabel="No recent calls"
               retryLabel="Retry recent calls"
               onRetry={() => void recentQuery.refetch()}
-              colSpan={10}
+              colSpan={11}
             />
           </TableBody>
         </Table>
