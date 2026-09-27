@@ -3,6 +3,8 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
 export const vendor = defineOperationDomain(vendorContract, {
+  orderMail: { tags: [["vendor"]] },
+  decideOrderMail: { invalidates: ripple.vendor },
   merge: { invalidates: ripple.vendorMerge },
   fetchLogo: { invalidates: ripple.vendorLogo },
 });

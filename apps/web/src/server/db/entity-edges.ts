@@ -115,6 +115,7 @@ import {
   mailboxCursor,
   merchantVendorRule,
   orderMail,
+  orderMailCandidateDecision,
   orderMailAttachment,
   photoGroupProposal,
   product,
@@ -958,6 +959,18 @@ export const ENTITY_EDGES = {
     },
   }),
   purchase: edges({
+    "OrderMailCandidateDecision.purchaseId": {
+      column: orderMailCandidateDecision.purchaseId,
+      role: "history",
+      label: "reviewed order email matches",
+      description:
+        "A human link or dismissal for one mail event and Purchase candidate; deletion retains the decision as historical evidence, while merge moves it to the survivor.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Purchase deletion retains reviewed mail history against its tombstone.",
+      },
+    },
     "RunTarget.purchaseId": {
       column: runTarget.purchaseId,
       role: "history",

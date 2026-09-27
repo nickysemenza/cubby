@@ -34,6 +34,27 @@ struct PhotoImportFlowTests {
                 group: group, images: [settled], runStatus: .needsReview) != nil)
     }
 
+    @Test func selectedApprovalExcludesSettledOrBlockedGroups() {
+        let readyImage = PhotoRunImage(
+            id: ImageCode("IMG-2345"), targetState: .pending, originalUrl: "synthetic://shirt",
+            describe: .ready, localAnalysisReady: true, deviceWorkAttempts: 0)
+        let ready = PhotoGroupProposal(
+            groupKey: "shirt", state: .proposed,
+            images: [.init(id: readyImage.id, purpose: .item)], skip: [],
+            product: .create(.init(kind: .create, create: .init(name: "Canvas shirt", manufacturer: "ForgeWear"))),
+            missingImageCount: 0, updatedAt: "2026-09-25T12:00:00Z")
+        var blocked = ready
+        blocked.groupKey = "blocked"
+        blocked.missingImageCount = 1
+        var settled = ready
+        settled.groupKey = "settled"
+        settled.state = .committed
+        #expect(PhotoReviewPolicy.approvableSelection(
+            selected: ["shirt", "blocked", "settled"],
+            groups: [ready, blocked, settled], images: [readyImage], runStatus: .running
+        ) == ["shirt"])
+    }
+
     // Regression for issue #9 (import run detail screen): the "ready to group" copy and the
     // "Start grouping" action appeared with zero uploaded photos, and with photos still mid
     // description. Both must wait for at least one settled (ready/skipped/failed) description.

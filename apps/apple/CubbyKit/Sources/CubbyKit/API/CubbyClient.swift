@@ -446,6 +446,36 @@ public actor CubbyClient {
         }
     }
 
+    public func vendorOrderMail(
+        vendorID: VendorShortcode, ledgerPartyID: LedgerPartyShortcode? = nil
+    ) async throws -> PurchaseOrderMailOut {
+        try await perform {
+            try await api.vendor_orderMail(
+                query: .init(vendorId: vendorID, ledgerPartyId: ledgerPartyID)
+            ).ok.body.json
+        }
+    }
+
+    public func purchaseOrderMail(_ purchaseID: PurchaseShortcode) async throws
+        -> PurchaseOrderMailOut
+    {
+        try await perform {
+            try await api.purchase_orderMail(query: .init(purchaseId: purchaseID)).ok.body.json
+        }
+    }
+
+    public func decideOrderMail(
+        eventID: String, purchaseID: PurchaseShortcode, link: Bool,
+        evidenceChecksum: String
+    ) async throws {
+        _ = try await perform {
+            try await api.vendor_decideOrderMail(body: .json(.init(
+                eventId: eventID, purchaseId: purchaseID, decision: link ? .linked : .dismissed,
+                evidenceChecksum: evidenceChecksum
+            ))).ok.body.json
+        }
+    }
+
     public func startPhotoGrouping(_ runID: RunShortcode) async throws {
         _ = try await perform {
             try await api.photoImport_startGrouping(body: .json(.init(runId: runID))).ok.body.json
@@ -473,10 +503,17 @@ public actor CubbyClient {
     }
 
     public func approvePhotoGroups(
-        runID: RunShortcode, groupKeys: [String]
+        runID: RunShortcode, groups: [PhotoGroupProposal]
     ) async throws -> ReviewPhotoGroupsOutput {
         try await perform {
-            try await api.photoImport_approveGroups(body: .json(.init(runId: runID, groupKeys: groupKeys)))
+            let revisions = try groups.map { group in
+                (groupKey: group.groupKey, updatedAt: try Date(group.updatedAt, strategy: .iso8601))
+            }
+            return try await api.photoImport_approveGroups(body: .json(.init(
+                runId: runID,
+                groupKeys: groups.map(\.groupKey),
+                expectedRevisions: revisions.map { .init(groupKey: $0.groupKey, updatedAt: $0.updatedAt) }
+            )))
                 .ok.body.json
         }
     }

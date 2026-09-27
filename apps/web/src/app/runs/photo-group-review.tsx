@@ -1729,6 +1729,9 @@ export function PhotoGroupReview({
   runStatus: string;
 }) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [batchKeys, setBatchKeys] = useState<Set<string>>(() => new Set());
+  const [batchQueued, setBatchQueued] = useState(false);
+  const queryClient = useQueryClient();
   const query = usePhotoRunReview(runId, runStatus);
   useEffect(() => {
     if (selectedKey) return;
@@ -1779,6 +1782,41 @@ export function PhotoGroupReview({
       // SILENT: the save or approval mutation's onError already displays its failure.
     }
   };
+  const approveBatch = async () => {
+    if (failedSaveBuild.current || batchQueued) return;
+    setBatchQueued(true);
+    try {
+      await pendingSave.current;
+      const latest = queryClient.getQueryData<
+        Awaited<ReturnType<typeof photoImport.review.call>>
+      >(photoImport.review.queryKey({ runId }));
+      const expectedRevisions = (latest?.review.proposals ?? [])
+        .filter((proposal) => batchKeys.has(proposal.groupKey))
+        .map((proposal) => ({
+          groupKey: proposal.groupKey,
+          updatedAt: proposal.updatedAt,
+        }));
+      const groupKeys = [...batchKeys];
+      if (expectedRevisions.length !== groupKeys.length)
+        throw new Error(
+          "Photo group review changed; reload before approving this batch",
+        );
+      await action.mutateAsync({
+        action: "approve",
+        groupKeys,
+        expectedRevisions,
+      });
+      setBatchKeys(new Set());
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.startsWith("Photo group review changed")
+      )
+        showErrorToast(error);
+    } finally {
+      setBatchQueued(false);
+    }
+  };
 
   if (query.isLoading && !query.data)
     return <StatusText>Loading proposed groups…</StatusText>;
@@ -1794,6 +1832,15 @@ export function PhotoGroupReview({
   );
   const settled = review.proposals.filter(
     (proposal) => proposal.state !== "proposed",
+  );
+  const selectedBatch = proposed.filter((proposal) =>
+    batchKeys.has(proposal.groupKey),
+  );
+  const blockedBatch = selectedBatch.some(
+    (proposal) =>
+      isStaleGroup(proposal, imagesById, review.runStatus) ||
+      awaitingDescriptions(proposal, imagesById).length > 0 ||
+      (proposal.product.kind === "existing" && !proposal.product.existing),
   );
   const groupByImage = new Map<string, string>();
   const labelImages = new Set<string>();
@@ -1815,6 +1862,27 @@ export function PhotoGroupReview({
         title="Photo review"
         description={`${proposed.length} to review · ${settled.length} settled · ${review.unassignedImageIds.length} photos not in a group`}
       >
+        {proposed.length > 0 ? (
+          <Row align="center" justify="between" gap="sm" className="flex-wrap">
+            <span className="text-xs text-muted-foreground">
+              Select the reviewed items to approve together. Conflicts remain in
+              review.
+            </span>
+            <Button
+              disabled={
+                selectedBatch.length === 0 ||
+                blockedBatch ||
+                busy ||
+                batchQueued
+              }
+              onClick={() => void approveBatch()}
+            >
+              <CheckIcon />
+              Approve {selectedBatch.length} selected item
+              {selectedBatch.length === 1 ? "" : "s"}
+            </Button>
+          </Row>
+        ) : null}
         {proposed.length === 0 ? (
           settled.length ? (
             <StatusText tone="muted">
@@ -1841,61 +1909,82 @@ export function PhotoGroupReview({
             className="min-w-0 border-y border-border lg:sticky lg:top-16 lg:max-h-[calc(100vh-5rem)] lg:overflow-auto"
           >
             {review.proposals.map((proposal) => (
-              <button
+              <div
                 key={proposal.groupKey}
-                type="button"
-                onClick={() => setSelectedKey(proposal.groupKey)}
-                aria-current={
-                  selected.groupKey === proposal.groupKey ? "true" : undefined
-                }
-                className={`flex w-full min-w-0 items-center gap-2 border-b border-border px-2 py-2 text-left hover:bg-muted/50 ${selected.groupKey === proposal.groupKey ? "bg-muted/70" : ""}`}
+                className="flex border-b border-border"
               >
-                <PhotoThumb
-                  image={
-                    proposal.images[0]
-                      ? imagesById.get(proposal.images[0].id)
-                      : proposal.skip[0]
-                        ? imagesById.get(proposal.skip[0].id)
-                        : undefined
+                {proposal.state === "proposed" ? (
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${proposalName(proposal)} for batch approval`}
+                    checked={batchKeys.has(proposal.groupKey)}
+                    disabled={busy || batchQueued}
+                    onChange={(event) =>
+                      setBatchKeys((current) => {
+                        const next = new Set(current);
+                        if (event.target.checked) next.add(proposal.groupKey);
+                        else next.delete(proposal.groupKey);
+                        return next;
+                      })
+                    }
+                    className="mx-2 min-h-11 shrink-0 accent-primary"
+                  />
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setSelectedKey(proposal.groupKey)}
+                  aria-current={
+                    selected.groupKey === proposal.groupKey ? "true" : undefined
                   }
-                  size={40}
-                  dimmed={proposal.state === "discarded"}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-medium">
-                    {proposalName(proposal)}
-                  </span>
-                  <span className="block text-2xs text-muted-foreground">
-                    {proposal.images
-                      .map((entry) => entry.purpose)
-                      .join(" + ") || "No attached photos"}
-                    {proposal.skip.length
-                      ? ` · ${proposal.skip.length} skipped`
-                      : ""}
-                    {proposal.committedInventoryId
-                      ? ` · ${proposal.committedInventoryId}`
-                      : ""}
-                    {proposal.state === "committed"
-                      ? " · Check Expense links"
-                      : ""}
-                  </span>
-                </span>
-                <Badge
-                  variant={
-                    proposal.state === "committed"
-                      ? "positive"
-                      : proposal.state === "proposed"
-                        ? "default"
-                        : "secondary"
-                  }
+                  className={`flex w-full min-w-0 items-center gap-2 px-2 py-2 text-left hover:bg-muted/50 ${selected.groupKey === proposal.groupKey ? "bg-muted/70" : ""}`}
                 >
-                  {proposal.state === "proposed"
-                    ? "Review"
-                    : proposal.state === "committed"
-                      ? "Approved"
-                      : "Discarded"}
-                </Badge>
-              </button>
+                  <PhotoThumb
+                    image={
+                      proposal.images[0]
+                        ? imagesById.get(proposal.images[0].id)
+                        : proposal.skip[0]
+                          ? imagesById.get(proposal.skip[0].id)
+                          : undefined
+                    }
+                    size={40}
+                    dimmed={proposal.state === "discarded"}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-medium">
+                      {proposalName(proposal)}
+                    </span>
+                    <span className="block text-2xs text-muted-foreground">
+                      {proposal.images
+                        .map((entry) => entry.purpose)
+                        .join(" + ") || "No attached photos"}
+                      {proposal.skip.length
+                        ? ` · ${proposal.skip.length} skipped`
+                        : ""}
+                      {proposal.committedInventoryId
+                        ? ` · ${proposal.committedInventoryId}`
+                        : ""}
+                      {proposal.state === "committed"
+                        ? " · Check Expense links"
+                        : ""}
+                    </span>
+                  </span>
+                  <Badge
+                    variant={
+                      proposal.state === "committed"
+                        ? "positive"
+                        : proposal.state === "proposed"
+                          ? "default"
+                          : "secondary"
+                    }
+                  >
+                    {proposal.state === "proposed"
+                      ? "Review"
+                      : proposal.state === "committed"
+                        ? "Approved"
+                        : "Discarded"}
+                  </Badge>
+                </button>
+              </div>
             ))}
           </nav>
           <div className="min-w-0">

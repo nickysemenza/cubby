@@ -451,6 +451,13 @@ export const orderMailClassification = z.object({
 });
 export type OrderMailClassification = z.infer<typeof orderMailClassification>;
 
+export const orderMailMessageClassification = z.object({
+  events: z.array(orderMailClassification).min(1).max(50),
+});
+export type OrderMailMessageClassification = z.infer<
+  typeof orderMailMessageClassification
+>;
+
 const allowedBrowserHosts = z
   .array(z.string().trim().min(1).max(253))
   .min(1)

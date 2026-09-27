@@ -856,12 +856,16 @@ async function runHeadlessPhotoScenario(
       try {
         await page.goto(`${url.origin}/runs/${runID}`);
         await expect(
-          page.getByRole("heading", { name: "Proposed items" }),
+          page.getByRole("heading", { name: "Photo review" }),
         ).toBeVisible();
         for (const [name, expectedPhotos] of [
           ["Synthetic Gray Crew Shirt", 2],
           ["Synthetic Brown Boots", 1],
         ] as const) {
+          await page
+            .getByRole("navigation", { name: "Photo item groups" })
+            .getByRole("button", { name: new RegExp(name) })
+            .click();
           const card = page.locator('[data-slot="card"]').filter({
             has: page.getByRole("heading", { name }),
           });
@@ -880,9 +884,14 @@ async function runHeadlessPhotoScenario(
                 ),
             )
             .toBe(expectedPhotos);
+          await page
+            .getByRole("checkbox", {
+              name: `Select ${name} for batch approval`,
+            })
+            .check();
         }
         const approveAll = page.getByRole("button", {
-          name: "Approve all (2)",
+          name: "Approve 2 selected items",
         });
         await expect(approveAll).toBeDisabled();
         await exercisePhotoProcessingJobs(imageIDs);

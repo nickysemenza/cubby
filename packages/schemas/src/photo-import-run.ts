@@ -338,6 +338,12 @@ export const reviewPhotoGroupsAction = z.discriminatedUnion("action", [
     action: z.literal("approve"),
     /** Omit to approve every `proposed` group. */
     groupKeys: z.array(z.string().trim().min(1).max(200)).max(200).optional(),
+    expectedRevisions: z
+      .array(
+        z.object({ groupKey: z.string().min(1), updatedAt: z.iso.datetime() }),
+      )
+      .max(200)
+      .optional(),
   }),
   z.object({
     action: z.literal("discard"),

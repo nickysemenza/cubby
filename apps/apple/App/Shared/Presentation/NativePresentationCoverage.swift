@@ -117,7 +117,8 @@ enum NativePresentationCoverage {
             return .unsupported("Unknown native detail slot.")
         }
         return switch id {
-        case .ledgerPartyWardrobe, .mealNutrition, .runImportWorkflow, .runPhotoBatch:
+        case .ledgerPartyWardrobe, .mealNutrition, .runImportWorkflow, .runPhotoBatch,
+            .purchaseOrderMail, .vendorOrderMail, .vendorAccountOrderMail:
             .implemented
         case .productLabels,
             .productNutrition,

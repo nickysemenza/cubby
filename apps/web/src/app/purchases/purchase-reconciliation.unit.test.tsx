@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   FinancialSettlementStatus,
+  initialSettlementAllocations,
+  parseSettlementAllocations,
   financialTransactionCaptureRequestForPurchase,
   rankSettlementCandidates,
 } from "./financial-settlement";
@@ -87,7 +89,7 @@ describe("purchase reconciliation statuses", () => {
     );
   });
 
-  it("ranks a late statement charge by amount, date and merchant without suggesting allocated rows", () => {
+  it("ranks exact, split charge, and refund evidence without suggesting allocated or unrelated rows", () => {
     const purchase = {
       date: "2026-08-14",
       statedTotal: 42.5,
@@ -114,6 +116,8 @@ describe("purchase reconciliation statuses", () => {
         [
           make("FTX-2345", {}),
           make("FTX-3456", { amount: 91 }),
+          make("FTX-6789", { amount: -15, kind: "refund" }),
+          make("FTX-7890", { amount: 19, merchant: "Another Shop" }),
           make("FTX-4567", {
             allocations: [
               {
@@ -125,6 +129,43 @@ describe("purchase reconciliation statuses", () => {
           make("FTX-5678", { kind: "account_transfer" }),
         ],
       ).map((candidate) => candidate.transaction.id),
-    ).toEqual(["FTX-2345"]);
+    ).toEqual(["FTX-2345", "FTX-3456", "FTX-6789"]);
+  });
+
+  it("requires a complete, signed split before saving settlement evidence", () => {
+    const transaction = fromPartial<
+      Parameters<typeof initialSettlementAllocations>[1]
+    >({ amount: 91, kind: "purchase" });
+    const purchase = fromPartial<
+      Parameters<typeof initialSettlementAllocations>[2]
+    >({ statedTotal: 42.5 });
+    const rows = initialSettlementAllocations(
+      "PUR-2345",
+      transaction,
+      purchase,
+    );
+    expect(rows).toEqual([
+      { purchaseId: "PUR-2345", amount: "42.50" },
+      { purchaseId: "", amount: "48.50" },
+    ]);
+    expect(parseSettlementAllocations(rows, 91)).toBeNull();
+    expect(
+      parseSettlementAllocations(
+        [
+          { ...rows[0]!, amount: "42.50" },
+          { purchaseId: "PUR-3456", amount: "48.50" },
+        ],
+        91,
+      ),
+    ).toEqual([
+      { purchaseId: "PUR-2345", amount: 42.5 },
+      { purchaseId: "PUR-3456", amount: 48.5 },
+    ]);
+    expect(
+      parseSettlementAllocations(
+        [{ purchaseId: "PUR-2345", amount: "15.00" }],
+        -15,
+      ),
+    ).toBeNull();
   });
 });

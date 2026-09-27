@@ -82,8 +82,9 @@ it lists the current root/group/type choices and the tag-transcription rules.
 Send groups with `propose_photo_groups` `{ runId, groups }` — the same group
 shape `commit_photo_group` takes, minus `runId`, plus optional `evidence`
 (why these photos are one item and why this Product). Nothing is written to
-Products or Inventory yet: the user reviews, edits and approves each group on
-the run page, and approval runs `commit_photo_group` with that payload. Call
+Products or Inventory yet: the user reviews and edits groups on the run page,
+then approves one or a selected batch. Approval runs `commit_photo_group` for
+each selected group with its reviewed payload. Call
 `commit_photo_group` directly only when the user explicitly asks to skip
 review.
 

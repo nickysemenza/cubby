@@ -1,7 +1,21 @@
-import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  runEntityId,
+  vendorAccountId,
+} from "@cubby/schemas/identifiers";
 import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { generateShortcode } from "@cubby/shared";
-import { and, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  lte,
+  notInArray,
+} from "drizzle-orm";
 
 import { classifyOrderMail } from "~/server/agents/purchase-import/extract";
 import type { Database } from "~/server/db";
@@ -14,9 +28,11 @@ import {
   ledgerParty,
   orderMail,
   orderMailAttachment,
+  orderMailCandidateDecision,
   orderMailEvent,
   purchase,
   vendor,
+  vendorAccount,
   user,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -29,6 +45,13 @@ import { orderAmountsInHuntWindow, uniqueOrderSubsetIds } from "./match";
 import type { GmailOrderMailAttachment } from "./types";
 
 const cents = (value: number) => Math.round(value * 100);
+
+const senderAddress = (header: string) => {
+  const trimmed = header.trim();
+  const bracketed = /<([^<>\s@]+@[^<>\s@]+)>$/u.exec(trimmed);
+  if (bracketed) return bracketed[1]?.toLowerCase() ?? null;
+  return /^[^<>\s@]+@[^<>\s@]+$/u.test(trimmed) ? trimmed.toLowerCase() : null;
+};
 
 export type AttachOrderMailFile = typeof attachFileToEntity;
 
@@ -54,8 +77,15 @@ export async function attachPendingOrderMailEvidence(
   attachFile: AttachOrderMailFile = attachFileToEntity,
 ) {
   const database = getDb(db);
+  const targetPurchaseId = await resolveOrThrow(
+    db,
+    "purchase",
+    input.purchaseShortcode,
+  );
   const rows = await database
     .select({
+      orderMailId: orderMail.id,
+      eventId: orderMailEvent.id,
       id: orderMailAttachment.id,
       messageId: orderMail.messageId,
       subject: orderMail.subject,
@@ -76,6 +106,7 @@ export async function attachPendingOrderMailEvidence(
           : undefined,
         eq(orderMail.vendorId, parseEntityId("vendor", input.vendorId)),
         eq(orderMailEvent.orderId, input.orderId),
+        isNull(orderMailEvent.supersededAt),
         eq(orderMailAttachment.mimeType, "application/pdf"),
         isNull(orderMailAttachment.imageId),
         isNotNull(orderMailAttachment.pendingDataBase64Url),
@@ -84,6 +115,32 @@ export async function attachPendingOrderMailEvidence(
   let attachedCount = 0;
   for (const row of rows) {
     if (!row.data) continue;
+    const decisions = await database
+      .select({
+        purchaseId: orderMailCandidateDecision.purchaseId,
+        decision: orderMailCandidateDecision.decision,
+      })
+      .from(orderMailCandidateDecision)
+      .where(eq(orderMailCandidateDecision.eventId, row.eventId));
+    if (
+      decisions.some(
+        (decision) =>
+          (decision.purchaseId === targetPurchaseId &&
+            decision.decision === "dismissed") ||
+          (decision.purchaseId !== targetPurchaseId &&
+            decision.decision === "linked"),
+      )
+    )
+      continue;
+    const messageOrders = await database
+      .select({ orderId: orderMailEvent.orderId })
+      .from(orderMailEvent)
+      .where(eq(orderMailEvent.orderMailId, row.orderMailId));
+    if (
+      new Set(messageOrders.map((event) => event.orderId).filter(Boolean))
+        .size !== 1
+    )
+      continue;
     const stored = await attachFile(db, {
       entityType: "purchase",
       entityId: input.purchaseShortcode,
@@ -135,6 +192,7 @@ export async function processOrderMails(
     database
       .select({
         id: vendor.id,
+        name: vendor.name,
         senders: vendor.orderEmailSenders,
         returnWindowDays: vendor.returnWindowDays,
       })
@@ -143,9 +201,9 @@ export async function processOrderMails(
   ]);
   let processed = 0;
   for (const mail of mails) {
-    const sender = mail.sender.toLowerCase();
+    const sender = senderAddress(mail.sender);
     const matchedVendors = vendors.filter((candidate) =>
-      candidate.senders.some((value) => sender.includes(value.toLowerCase())),
+      candidate.senders.some((value) => sender === value.toLowerCase()),
     );
     if (matchedVendors.length !== 1) {
       const fingerprint = await sha256Hex(
@@ -228,213 +286,354 @@ export async function processOrderMails(
       receivedAt: mail.receivedAt.toISOString(),
       content: mail.content,
     });
-    const sourceKey = `classified:${mail.rawChecksum}`;
-    await database
-      .insert(orderMailEvent)
-      .values({
-        orderMailId: mail.id,
-        event: classification.event,
-        orderId: classification.orderId,
-        amount: classification.amount,
-        currency: classification.currency,
-        occurredAt: classification.occurredAt
-          ? new Date(classification.occurredAt)
-          : mail.receivedAt,
-        sourceKey,
-        payload: classification,
-      })
-      .onConflictDoNothing();
-
-    if (classification.orderId) {
-      const date = mail.receivedAt.toISOString().slice(0, 10);
-      const candidates = await database
-        .select({
-          id: importHunt.id,
-          amount: financialTransaction.amount,
-          dateFrom: importHunt.dateFrom,
-          dateTo: importHunt.dateTo,
-        })
-        .from(importHunt)
-        .innerJoin(
-          financialTransaction,
-          eq(financialTransaction.id, importHunt.financialTransactionId),
-        )
+    const classifiedEvents = [...classification.events].sort((left, right) =>
+      JSON.stringify(left).localeCompare(JSON.stringify(right)),
+    );
+    const sourceKeys = classifiedEvents.map(
+      (_, index) => `classified:${mail.rawChecksum}:${index}`,
+    );
+    const firstSourceKey = sourceKeys[0];
+    if (!firstSourceKey)
+      throw new Error("Order mail classification has no events");
+    const [currentFirst] = await database
+      .select({ id: orderMailEvent.id })
+      .from(orderMailEvent)
+      .where(
+        and(
+          eq(orderMailEvent.orderMailId, mail.id),
+          eq(orderMailEvent.sourceKey, firstSourceKey),
+        ),
+      )
+      .limit(1);
+    if (!currentFirst) {
+      await database
+        .update(orderMailEvent)
+        .set({ sourceKey: firstSourceKey })
         .where(
           and(
-            eq(importHunt.ledgerPartyId, mail.ledgerPartyId),
-            eq(importHunt.vendorId, matchedVendor.id),
-            eq(importHunt.state, "pending_mail"),
-            lte(importHunt.dateFrom, date),
-            gte(importHunt.dateTo, date),
+            eq(orderMailEvent.orderMailId, mail.id),
+            eq(orderMailEvent.sourceKey, `classified:${mail.rawChecksum}`),
           ),
         );
-      // Statement charges are positive and credits negative, while mail
-      // amounts are unsigned: only the event kind says which way money moved.
-      // A refund may resolve only a credit hunt, and any other event only a
-      // charge hunt, or an equal-amount refund for another order claims a
-      // new charge.
-      const isRefund = classification.event === "refunded";
-      const sameDirection = candidates.filter(
-        (candidate) => candidate.amount < 0 === isRefund,
-      );
-      const exact =
-        classification.amount === null
-          ? []
-          : sameDirection.filter(
-              (candidate) =>
-                cents(Math.abs(candidate.amount)) ===
-                cents(Math.abs(classification.amount ?? 0)),
-            );
-      let matchedHunt =
-        exact.length === 1
-          ? { id: exact[0]?.id ?? "", orderIds: [classification.orderId] }
-          : null;
-      if (!matchedHunt) {
-        const subsetMatches: { id: string; orderIds: string[] }[] = [];
-        for (const candidate of sameDirection) {
-          const orders = await orderAmountsInHuntWindow(db, {
-            ledgerPartyId: mail.ledgerPartyId,
-            vendorId: matchedVendor.id,
-            ...candidate,
-          });
-          const orderIds = uniqueOrderSubsetIds(candidate.amount, orders);
-          if (orderIds) subsetMatches.push({ id: candidate.id, orderIds });
-        }
-        if (subsetMatches.length === 1) matchedHunt = subsetMatches[0] ?? null;
-      }
-      if (matchedHunt) {
-        await database
-          .update(importHunt)
-          .set({
-            state: "pending_browser",
-            matchedOrderIds: matchedHunt.orderIds,
-            updatedAt: new Date(),
-          })
-          .where(eq(importHunt.id, matchedHunt.id));
-      }
     }
-
-    const [target] = classification.orderId
-      ? await database
-          .select({ id: purchase.id, shortcode: purchase.shortcode })
-          .from(purchase)
-          .where(
-            and(
-              eq(purchase.vendorId, matchedVendor.id),
-              eq(purchase.orderId, classification.orderId),
-              notDeleted(purchase),
-            ),
-          )
-          .limit(1)
-      : [];
-
-    if (target && classification.orderId) {
-      await attachPendingOrderMailEvidence(
-        db,
-        {
-          vendorId: matchedVendor.id,
-          orderId: classification.orderId,
-          purchaseShortcode: target.shortcode,
-          ledgerPartyId: mail.ledgerPartyId,
-        },
-        ports.attachFile,
+    await database
+      .update(orderMailEvent)
+      .set({ supersededAt: new Date() })
+      .where(
+        and(
+          eq(orderMailEvent.orderMailId, mail.id),
+          like(orderMailEvent.sourceKey, "classified:%"),
+          notInArray(orderMailEvent.sourceKey, sourceKeys),
+          isNull(orderMailEvent.supersededAt),
+        ),
       );
-    }
-
     if (
-      target &&
-      (classification.event === "delivered" ||
-        classification.event === "refunded")
+      classifiedEvents.some((event) => event.orderId && event.event !== "other")
     ) {
-      let possibleDuplicateRefund = false;
-      if (
-        classification.event === "refunded" &&
-        classification.amount !== null
-      ) {
-        const tally = await refundTally(database, {
-          purchaseId: target.id,
-          ledgerPartyId: mail.ledgerPartyId,
-          amount: classification.amount,
-        });
-        if (tally.booked >= Math.max(tally.evidenced, 1)) {
-          processed += 1;
-          continue;
-        }
-        possibleDuplicateRefund = tally.booked > 0 || tally.evidenced > 1;
-      }
-      const kind =
-        classification.event === "delivered" ? "arrived" : "refund_unbooked";
-      const proposedFix =
-        classification.event === "delivered"
-          ? { kind: "receive_purchase" as const, purchaseId: target.id }
-          : classification.amount !== null
-            ? {
-                kind: "create_refund" as const,
-                purchaseId: target.id,
-                amount: -Math.abs(classification.amount),
-                title: `Refund for order ${classification.orderId}`,
-              }
-            : null;
       await database
-        .insert(runFinding)
+        .insert(vendorAccount)
         .values({
+          id: vendorAccountId.parse(crypto.randomUUID()),
+          shortcode: generateShortcode("vendorAccount"),
+          label: `${matchedVendor.name} mail`,
+          vendorId: matchedVendor.id,
           ledgerPartyId: mail.ledgerPartyId,
-          targetKind: "purchase",
-          targetId: target.id,
-          kind,
-          summary:
-            classification.event === "delivered"
-              ? "Vendor mail says all items were delivered. Review and receive this purchase."
-              : possibleDuplicateRefund
-                ? "Vendor mail reports a refund of the same amount as another refund on this order. Apply only if it is a separate refund, not a second notice for the same one."
-                : "Vendor mail reports a refund that is not yet booked in the expense ledger.",
-          proposedFix,
-          evidenceFingerprint: await sha256Hex(
-            JSON.stringify({ sourceKey, classification, target: target.id }),
-          ),
+          status: "disabled",
+          browserSyncEnabled: false,
         })
         .onConflictDoNothing();
-      if (
-        classification.event === "delivered" &&
-        matchedVendor.returnWindowDays !== null
-      ) {
-        const costlyLines = await database
-          .select({ name: expense.name, cost: expense.cost })
-          .from(expense)
+    }
+    const vendorMembers = await database
+      .select({ ledgerPartyId: vendorAccount.ledgerPartyId })
+      .from(vendorAccount)
+      .where(
+        and(
+          eq(vendorAccount.vendorId, matchedVendor.id),
+          notDeleted(vendorAccount),
+        ),
+      );
+    const oneMemberVendor =
+      new Set(vendorMembers.map((account) => account.ledgerPartyId)).size <= 1;
+    for (const [eventIndex, event] of classifiedEvents.entries()) {
+      const sourceKey = sourceKeys[eventIndex];
+      if (!sourceKey)
+        throw new Error("Classified order mail source key is missing");
+      const [insertedEvent] = await database
+        .insert(orderMailEvent)
+        .values({
+          orderMailId: mail.id,
+          event: event.event,
+          orderId: event.orderId,
+          amount: event.amount,
+          currency: event.currency,
+          occurredAt: event.occurredAt
+            ? new Date(event.occurredAt)
+            : mail.receivedAt,
+          sourceKey,
+          payload: event,
+        })
+        .onConflictDoNothing()
+        .returning({ id: orderMailEvent.id });
+      const [storedEvent] = insertedEvent
+        ? [insertedEvent]
+        : await database
+            .select({ id: orderMailEvent.id })
+            .from(orderMailEvent)
+            .where(
+              and(
+                eq(orderMailEvent.orderMailId, mail.id),
+                eq(orderMailEvent.sourceKey, sourceKey),
+              ),
+            )
+            .limit(1);
+      if (!storedEvent)
+        throw new Error("Classified order mail event was not persisted");
+
+      if (event.orderId) {
+        const date = mail.receivedAt.toISOString().slice(0, 10);
+        const candidates = await database
+          .select({
+            id: importHunt.id,
+            amount: financialTransaction.amount,
+            dateFrom: importHunt.dateFrom,
+            dateTo: importHunt.dateTo,
+          })
+          .from(importHunt)
+          .innerJoin(
+            financialTransaction,
+            eq(financialTransaction.id, importHunt.financialTransactionId),
+          )
           .where(
             and(
-              eq(expense.purchaseId, target.id),
-              gte(expense.cost, 50),
-              notDeleted(expense),
+              eq(importHunt.ledgerPartyId, mail.ledgerPartyId),
+              eq(importHunt.vendorId, matchedVendor.id),
+              eq(importHunt.state, "pending_mail"),
+              lte(importHunt.dateFrom, date),
+              gte(importHunt.dateTo, date),
             ),
           );
-        if (costlyLines.length > 0) {
-          const deliveredAt = classification.occurredAt
-            ? new Date(classification.occurredAt)
-            : mail.receivedAt;
-          const expiresAt = new Date(
-            deliveredAt.getTime() +
-              matchedVendor.returnWindowDays * 24 * 60 * 60 * 1_000,
-          );
-          await database
-            .insert(runFinding)
-            .values({
+        // Statement charges are positive and credits negative, while mail
+        // amounts are unsigned: only the event kind says which way money moved.
+        // A refund may resolve only a credit hunt, and any other event only a
+        // charge hunt, or an equal-amount refund for another order claims a
+        // new charge.
+        const isRefund = event.event === "refunded";
+        const sameDirection = candidates.filter(
+          (candidate) => candidate.amount < 0 === isRefund,
+        );
+        const exact =
+          event.amount === null
+            ? []
+            : sameDirection.filter(
+                (candidate) =>
+                  cents(Math.abs(candidate.amount)) ===
+                  cents(Math.abs(event.amount ?? 0)),
+              );
+        let matchedHunt =
+          exact.length === 1
+            ? { id: exact[0]?.id ?? "", orderIds: [event.orderId] }
+            : null;
+        if (!matchedHunt) {
+          const subsetMatches: { id: string; orderIds: string[] }[] = [];
+          for (const candidate of sameDirection) {
+            const orders = await orderAmountsInHuntWindow(db, {
               ledgerPartyId: mail.ledgerPartyId,
-              targetKind: "purchase",
-              targetId: target.id,
-              kind: "return_window",
-              summary: `${costlyLines.length} line${costlyLines.length === 1 ? "" : "s"} worth at least $50 can be returned until ${expiresAt.toLocaleDateString("en-US", { timeZone: "UTC" })}.`,
-              evidenceFingerprint: await sha256Hex(
-                JSON.stringify({
-                  sourceKey,
-                  target: target.id,
-                  expiresAt: expiresAt.toISOString(),
-                  lines: costlyLines,
-                }),
-              ),
-              expiresAt,
+              vendorId: matchedVendor.id,
+              ...candidate,
+            });
+            const orderIds = uniqueOrderSubsetIds(candidate.amount, orders);
+            if (orderIds) subsetMatches.push({ id: candidate.id, orderIds });
+          }
+          if (subsetMatches.length === 1)
+            matchedHunt = subsetMatches[0] ?? null;
+        }
+        if (matchedHunt) {
+          await database
+            .update(importHunt)
+            .set({
+              state: "pending_browser",
+              matchedOrderIds: matchedHunt.orderIds,
+              updatedAt: new Date(),
             })
-            .onConflictDoNothing();
+            .where(eq(importHunt.id, matchedHunt.id));
+        }
+      }
+
+      const decisions = await database
+        .select({
+          decision: orderMailCandidateDecision.decision,
+          purchaseId: orderMailCandidateDecision.purchaseId,
+        })
+        .from(orderMailCandidateDecision)
+        .where(eq(orderMailCandidateDecision.eventId, storedEvent.id));
+      const linked = decisions.find(
+        (decision) => decision.decision === "linked",
+      );
+      const [exactTarget] = event.orderId
+        ? await database
+            .select({
+              id: purchase.id,
+              shortcode: purchase.shortcode,
+              accountPartyId: vendorAccount.ledgerPartyId,
+            })
+            .from(purchase)
+            .leftJoin(
+              vendorAccount,
+              and(
+                eq(vendorAccount.id, purchase.vendorAccountId),
+                notDeleted(vendorAccount),
+              ),
+            )
+            .where(
+              and(
+                eq(purchase.vendorId, matchedVendor.id),
+                eq(purchase.orderId, event.orderId),
+                notDeleted(purchase),
+              ),
+            )
+            .limit(1)
+        : [];
+      const [linkedTarget] = linked
+        ? await database
+            .select({
+              id: purchase.id,
+              shortcode: purchase.shortcode,
+              accountPartyId: vendorAccount.ledgerPartyId,
+            })
+            .from(purchase)
+            .leftJoin(
+              vendorAccount,
+              and(
+                eq(vendorAccount.id, purchase.vendorAccountId),
+                notDeleted(vendorAccount),
+              ),
+            )
+            .where(
+              and(
+                eq(purchase.id, linked.purchaseId),
+                eq(purchase.vendorId, matchedVendor.id),
+                notDeleted(purchase),
+              ),
+            )
+            .limit(1)
+        : [];
+      const target =
+        linkedTarget ??
+        (exactTarget &&
+        (!exactTarget.accountPartyId ||
+          exactTarget.accountPartyId === mail.ledgerPartyId) &&
+        (Boolean(exactTarget.accountPartyId) || oneMemberVendor) &&
+        !decisions.some(
+          (decision) =>
+            decision.purchaseId === exactTarget.id &&
+            decision.decision === "dismissed",
+        )
+          ? exactTarget
+          : null);
+
+      if (target && event.orderId) {
+        await attachPendingOrderMailEvidence(
+          db,
+          {
+            vendorId: matchedVendor.id,
+            orderId: event.orderId,
+            purchaseShortcode: target.shortcode,
+            ledgerPartyId: mail.ledgerPartyId,
+          },
+          ports.attachFile,
+        );
+      }
+
+      if (
+        target &&
+        (event.event === "delivered" || event.event === "refunded")
+      ) {
+        let possibleDuplicateRefund = false;
+        if (event.event === "refunded" && event.amount !== null) {
+          const tally = await refundTally(database, {
+            purchaseId: target.id,
+            ledgerPartyId: mail.ledgerPartyId,
+            amount: event.amount,
+          });
+          if (tally.booked >= Math.max(tally.evidenced, 1)) {
+            continue;
+          }
+          possibleDuplicateRefund = tally.booked > 0 || tally.evidenced > 1;
+        }
+        const kind =
+          event.event === "delivered" ? "arrived" : "refund_unbooked";
+        const proposedFix =
+          event.event === "delivered"
+            ? { kind: "receive_purchase" as const, purchaseId: target.id }
+            : event.amount !== null
+              ? {
+                  kind: "create_refund" as const,
+                  purchaseId: target.id,
+                  amount: -Math.abs(event.amount),
+                  title: `Refund for order ${event.orderId}`,
+                }
+              : null;
+        await database
+          .insert(runFinding)
+          .values({
+            ledgerPartyId: mail.ledgerPartyId,
+            targetKind: "purchase",
+            targetId: target.id,
+            kind,
+            summary:
+              event.event === "delivered"
+                ? "Vendor mail says all items were delivered. Review and receive this purchase."
+                : possibleDuplicateRefund
+                  ? "Vendor mail reports a refund of the same amount as another refund on this order. Apply only if it is a separate refund, not a second notice for the same one."
+                  : "Vendor mail reports a refund that is not yet booked in the expense ledger.",
+            proposedFix,
+            evidenceFingerprint: await sha256Hex(
+              JSON.stringify({ sourceKey, event, target: target.id }),
+            ),
+          })
+          .onConflictDoNothing();
+        if (
+          event.event === "delivered" &&
+          matchedVendor.returnWindowDays !== null
+        ) {
+          const costlyLines = await database
+            .select({ name: expense.name, cost: expense.cost })
+            .from(expense)
+            .where(
+              and(
+                eq(expense.purchaseId, target.id),
+                gte(expense.cost, 50),
+                notDeleted(expense),
+              ),
+            );
+          if (costlyLines.length > 0) {
+            const deliveredAt = event.occurredAt
+              ? new Date(event.occurredAt)
+              : mail.receivedAt;
+            const expiresAt = new Date(
+              deliveredAt.getTime() +
+                matchedVendor.returnWindowDays * 24 * 60 * 60 * 1_000,
+            );
+            await database
+              .insert(runFinding)
+              .values({
+                ledgerPartyId: mail.ledgerPartyId,
+                targetKind: "purchase",
+                targetId: target.id,
+                kind: "return_window",
+                summary: `${costlyLines.length} line${costlyLines.length === 1 ? "" : "s"} worth at least $50 can be returned until ${expiresAt.toLocaleDateString("en-US", { timeZone: "UTC" })}.`,
+                evidenceFingerprint: await sha256Hex(
+                  JSON.stringify({
+                    sourceKey,
+                    target: target.id,
+                    expiresAt: expiresAt.toISOString(),
+                    lines: costlyLines,
+                  }),
+                ),
+                expiresAt,
+              })
+              .onConflictDoNothing();
+          }
         }
       }
     }

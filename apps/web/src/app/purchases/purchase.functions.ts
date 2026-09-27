@@ -3,6 +3,7 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
 export const purchase = defineOperationDomain(purchaseContract, {
+  orderMail: { tags: [["purchase"]] },
   products: { tags: [["purchase", "products"]] },
   link: { invalidates: ripple.purchase },
   split: {

@@ -362,6 +362,7 @@ export async function startOrResumeRun(
       .select({
         id: vendorAccount.id,
         vendorId: vendorAccount.vendorId,
+        browserSyncEnabled: vendorAccount.browserSyncEnabled,
         actorUserId: ledgerParty.userId,
         actorName: user.name,
         actorEmail: user.email,
@@ -388,6 +389,8 @@ export async function startOrResumeRun(
       .limit(1);
     if (!scope?.actorUserId)
       throw new Error("Vendor account is not owned by an authenticated member");
+    if (!scope.browserSyncEnabled)
+      throw new Error("Browser sync is not enabled for this Vendor account");
     const [existing] = await tx
       .select({
         id: runTable.id,

@@ -79,6 +79,26 @@ describe("purchase import run admission", () => {
     expect(stored?.coordinatorModel).toBe("gpt-6-sol");
   });
 
+  it("refuses browser import for a mail-only Vendor account", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const { vendorAccount } = await import("~/server/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    await getDb(ctx.db)
+      .update(vendorAccount)
+      .set({ browserSyncEnabled: false, status: "disabled" })
+      .where(eq(vendorAccount.id, account.id));
+
+    await expect(
+      startOrResumeRun(ctx.db, {
+        ledgerPartyId: party.id,
+        vendorAccountId: account.id,
+        trigger: "manual",
+      }),
+    ).rejects.toThrow("Browser sync is not enabled");
+  });
+
   it("retries a historical run on the current coordinator model", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);

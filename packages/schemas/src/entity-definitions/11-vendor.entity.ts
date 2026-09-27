@@ -29,6 +29,7 @@ export default defineEntity({
     icons: { phosphor: "Storefront", sfSymbol: "storefront", emoji: "🏪" },
     detail: {
       additionalSectionOverrides: [
+        { kind: "slot", id: "order-mail", title: "Order email" },
         {
           kind: "relation",
           id: "purchased-products",

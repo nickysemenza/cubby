@@ -95,6 +95,7 @@ const NON_ENTITY_FK_TARGETS = {
   ImageProcessingSubmission:
     "fixed membership of an explicit image-processing request",
   OrderMail: "normalized mailbox evidence, not a domain entity",
+  OrderMailEvent: "one normalized lifecycle event inside a mailbox message",
 };
 
 /**
@@ -106,6 +107,11 @@ const NON_ENTITY_FK_TARGETS = {
  * once its edge becomes graph-visible.
  */
 const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
+  "OrderMailCandidateDecision.purchaseId": {
+    classification: "metadata",
+    reason:
+      "a reviewed mail candidate is surfaced in the Purchase mail timeline",
+  },
   // Caller attribution. AuditLog and AiUsage are append-only telemetry, not
   // entities, so the device/run they name is recorded provenance, not a
   // navigable relationship.

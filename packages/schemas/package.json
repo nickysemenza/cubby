@@ -118,6 +118,7 @@
     "./product-variant-comparison": "./src/product-variant-comparison.ts",
     "./purchase": "./src/purchase.ts",
     "./purchase-import": "./src/purchase-import.ts",
+    "./order-mail-review": "./src/order-mail-review.ts",
     "./purchase-fields": "./src/purchase-fields.ts",
     "./financial-account": "./src/financial-account.ts",
     "./financial-account-fields": "./src/financial-account-fields.ts",

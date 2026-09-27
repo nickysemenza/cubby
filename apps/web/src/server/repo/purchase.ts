@@ -58,6 +58,7 @@ import {
   runTarget,
   importSourceClaim,
   ledgerSourceClaim,
+  orderMailCandidateDecision,
   purchase,
   purchasePaymentEvidence,
   purchaseProduct,
@@ -146,6 +147,12 @@ import { hydrateExpenseProjectAllocations } from "./expense-project-allocation";
 import { validateLiveEffectiveTrades } from "./inheritance-validation";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
+  "OrderMailCandidateDecision.purchaseId": {
+    code: "preserve-reviewed-mail-history",
+    effect: "preserve",
+    description:
+      "A reviewed email decision retains the deleted Purchase tombstone.",
+  },
   "RunTarget.purchaseId": {
     code: "preserve-targeted-import-history",
     effect: "preserve",
@@ -191,6 +198,12 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
 export const PURCHASE_MERGE_EDGE_POLICY = {
+  "OrderMailCandidateDecision.purchaseId": {
+    code: "move-dedupe-to-survivor",
+    effect: "move-dedupe",
+    description:
+      "Reviewed mail decisions follow the survivor; an existing survivor decision wins a conflict.",
+  },
   "RunTarget.purchaseId": {
     code: "repoint-targeted-import-history",
     effect: "repoint",
@@ -1777,6 +1790,24 @@ export const foldChargeInto = async (
     .update(purchasePaymentEvidence)
     .set({ purchaseId: survivorId, updatedAt: new Date() })
     .where(eq(purchasePaymentEvidence.purchaseId, deadId));
+  const mailDecisions = await tx
+    .select()
+    .from(orderMailCandidateDecision)
+    .where(eq(orderMailCandidateDecision.purchaseId, deadId));
+  if (mailDecisions.length) {
+    await tx
+      .delete(orderMailCandidateDecision)
+      .where(eq(orderMailCandidateDecision.purchaseId, deadId));
+    await tx
+      .insert(orderMailCandidateDecision)
+      .values(
+        mailDecisions.map((decision) => ({
+          ...decision,
+          purchaseId: survivorId,
+        })),
+      )
+      .onConflictDoNothing();
+  }
 
   // Evidence-changing invariant: this fold re-points Expenses,
   // FinancialTransactions, and documents onto the survivor. The next quality

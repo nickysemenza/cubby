@@ -996,7 +996,11 @@ async function approveRow(
  */
 export async function approvePhotoGroupProposals(
   db: Database,
-  input: { runId: string; groupKeys?: string[] | undefined },
+  input: {
+    runId: string;
+    groupKeys?: string[] | undefined;
+    expectedRevisions?: { groupKey: string; updatedAt: string }[] | undefined;
+  },
   actor: ActorContext,
 ): Promise<PhotoGroupProposalList & { results: PhotoGroupApprovalResult[] }> {
   const run = await loadRun(db, input.runId);
@@ -1008,6 +1012,24 @@ export async function approvePhotoGroupProposals(
   const keys =
     input.groupKeys ??
     rows.filter((row) => row.state === "proposed").map((row) => row.groupKey);
+  if (input.expectedRevisions) {
+    const expected = new Map(
+      input.expectedRevisions.map((revision) => [
+        revision.groupKey,
+        revision.updatedAt,
+      ]),
+    );
+    if (
+      expected.size !== keys.length ||
+      keys.some((key) => {
+        const row = byKey.get(key);
+        return !row || row.updatedAt.toISOString() !== expected.get(key);
+      })
+    )
+      throw new Error(
+        "Photo group review changed; reload before approving this batch",
+      );
+  }
   const results: PhotoGroupApprovalResult[] = [];
   for (const key of keys) {
     const row = byKey.get(key);

@@ -496,10 +496,10 @@ async function reviewLateChargeInBrowser(input: {
           page.getByText("Purchase import runs could not load."),
         ).toHaveCount(0);
         await page
-          .getByRole("button", { name: "Match a statement charge" })
+          .getByRole("button", { name: "Match statement activity" })
           .click();
         const dialog = page.getByRole("dialog", {
-          name: "Match statement charge",
+          name: "Match statement activity",
         });
         await expect(
           dialog.getByText("SYNTHETIC OUTFITTERS ORDER 1"),
@@ -507,11 +507,11 @@ async function reviewLateChargeInBrowser(input: {
         await dialog
           .getByRole("button", { name: /SYNTHETIC OUTFITTERS ORDER 1/ })
           .click();
-        await dialog.getByRole("button", { name: "Confirm match" }).click();
+        await dialog.getByRole("button", { name: "Save allocation" }).click();
         await expect(dialog).toHaveCount(0);
         await expect(
-          page.getByRole("button", { name: "Match a statement charge" }),
-        ).toHaveCount(0);
+          page.getByRole("button", { name: "Match statement activity" }),
+        ).toBeVisible();
         // The matched charge must list in the settlement panel, not just clear
         // the match button (the panel once kept "No linked transactions").
         await expect(page.getByText("No linked transactions")).toHaveCount(0);
@@ -1254,7 +1254,7 @@ async function runForgeWearTraps(
   );
   const duplicateFinding = await pool.query<{ count: string }>(
     `SELECT count(*)::text AS count FROM "RunFinding"
-     WHERE "targetType" = 'purchase' AND "targetId" = $1 AND kind = 'duplicate_lines'`,
+     WHERE "targetKind" = 'purchase' AND "targetId" = $1 AND kind = 'duplicate_lines'`,
     [facts.purchases[0]?.id ?? null],
   );
   const decoyAllocations = await pool.query<{ count: string }>(

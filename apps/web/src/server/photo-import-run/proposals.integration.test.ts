@@ -176,6 +176,34 @@ describe("photo group proposals", () => {
     expect(approved.runStatus).toBe("completed");
   });
 
+  it("rejects a stale selected batch before committing any group", async () => {
+    const { run, codes } = await seedRun(2);
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [
+        createGroup("shirt", [codes[0]!]),
+        createGroup("hat", [codes[1]!]),
+      ],
+    });
+    const request = {
+      runId: run.shortcode,
+      groupKeys: ["shirt", "hat"],
+      expectedRevisions: [
+        { groupKey: "shirt", updatedAt: "2000-01-01T00:00:00.000Z" },
+        { groupKey: "hat", updatedAt: "2000-01-01T00:00:00.000Z" },
+      ],
+    };
+
+    await expect(
+      approvePhotoGroupProposals(ctx.db, request, ctx.actor),
+    ).rejects.toThrow("Photo group review changed");
+    expect(
+      (await listPhotoGroupProposals(ctx.db, run.shortcode)).proposals.map(
+        (proposal) => proposal.state,
+      ),
+    ).toEqual(["proposed", "proposed"]);
+  });
+
   it("lets a reviewer finish a photo proposal stranded in needs-review", async () => {
     const { run, codes } = await seedRun(3);
     await proposePhotoGroups(ctx.db, {

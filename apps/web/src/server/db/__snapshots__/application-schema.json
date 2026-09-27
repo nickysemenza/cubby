@@ -9194,6 +9194,13 @@
           "notNull": true,
           "default": false
         },
+        "browserSyncEnabled": {
+          "name": "browserSyncEnabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
         "status": {
           "name": "status",
           "type": "text",
@@ -14020,6 +14027,12 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
+        "supersededAt": {
+          "name": "supersededAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
@@ -14085,6 +14098,155 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.OrderMailCandidateDecision": {
+      "name": "OrderMailCandidateDecision",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "eventId": {
+          "name": "eventId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purchaseId": {
+          "name": "purchaseId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decision": {
+          "name": "decision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidenceChecksum": {
+          "name": "evidenceChecksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decidedByUserId": {
+          "name": "decidedByUserId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "OrderMailCandidateDecision_event_purchase_key": {
+          "name": "OrderMailCandidateDecision_event_purchase_key",
+          "columns": [
+            {
+              "expression": "eventId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "purchaseId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "OrderMailCandidateDecision_one_link_key": {
+          "name": "OrderMailCandidateDecision_one_link_key",
+          "columns": [
+            {
+              "expression": "eventId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"OrderMailCandidateDecision\".\"decision\" = 'linked'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "OrderMailCandidateDecision_purchase_idx": {
+          "name": "OrderMailCandidateDecision_purchase_idx",
+          "columns": [
+            {
+              "expression": "purchaseId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "OrderMailCandidateDecision_eventId_OrderMailEvent_id_fk": {
+          "name": "OrderMailCandidateDecision_eventId_OrderMailEvent_id_fk",
+          "tableFrom": "OrderMailCandidateDecision",
+          "tableTo": "OrderMailEvent",
+          "columnsFrom": [
+            "eventId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "OrderMailCandidateDecision_purchaseId_Purchase_id_fk": {
+          "name": "OrderMailCandidateDecision_purchaseId_Purchase_id_fk",
+          "tableFrom": "OrderMailCandidateDecision",
+          "tableTo": "Purchase",
+          "columnsFrom": [
+            "purchaseId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "OrderMailCandidateDecision_decision_check": {
+          "name": "OrderMailCandidateDecision_decision_check",
+          "value": "\"OrderMailCandidateDecision\".\"decision\" IN ('linked', 'dismissed')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.OrderMailAttachment": {

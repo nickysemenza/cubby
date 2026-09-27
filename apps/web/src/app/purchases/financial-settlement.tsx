@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { EnumPill } from "~/components/ui/enum-pill";
+import { Input } from "~/components/ui/input";
 import {
   captureRequest,
   financialTransactionEditRequest,
@@ -66,17 +67,18 @@ export function rankSettlementCandidates(
   const anchor = purchase.date ? Date.parse(`${purchase.date}T00:00:00Z`) : NaN;
   return transactions
     .flatMap((transaction) => {
-      if (transaction.allocations.length || transaction.kind !== "purchase")
+      if (
+        transaction.allocations.length ||
+        (transaction.kind !== "purchase" && transaction.kind !== "refund")
+      )
         return [];
       const value = purchase.statedTotal;
-      if (value == null || Math.abs(transaction.amount - value) > 0.01)
-        return [];
       const posted = transaction.postedDate ?? transaction.transactionDate;
       const days =
         posted && Number.isFinite(anchor)
           ? Math.abs(Date.parse(`${posted}T00:00:00Z`) - anchor) / 86_400_000
           : Number.POSITIVE_INFINITY;
-      if (days > 30) return [];
+      if (days > 45) return [];
       const merchantMatches = Boolean(
         purchase.vendorName &&
         transaction.merchant &&
@@ -84,14 +86,80 @@ export function rankSettlementCandidates(
           .toLocaleLowerCase()
           .includes(purchase.vendorName.toLocaleLowerCase()),
       );
-      return [{ transaction, days, merchantMatches }];
+      const exactAmount =
+        transaction.kind === "purchase" &&
+        value !== null &&
+        Math.abs(transaction.amount - value) <= 0.01;
+      if (!merchantMatches && !exactAmount) return [];
+      return [{ transaction, days, merchantMatches, exactAmount }];
     })
     .sort(
       (a, b) =>
+        Number(b.exactAmount) - Number(a.exactAmount) ||
         Number(b.merchantMatches) - Number(a.merchantMatches) ||
         a.days - b.days,
     )
     .slice(0, 10);
+}
+
+type SettlementAllocationInput = { purchaseId: string; amount: string };
+type SettlementAllocationDraft = SettlementAllocationInput & { key: string };
+const parsePurchaseId = (value: string) => parseShortcodeFor("purchase", value);
+
+export function initialSettlementAllocations(
+  purchaseId: string,
+  transaction: Pick<FinancialTransactionOut, "amount" | "kind">,
+  purchase: Pick<PurchaseOut, "statedTotal">,
+): SettlementAllocationInput[] {
+  const totalCents = Math.round(transaction.amount * 100);
+  const statedCents = Math.round((purchase.statedTotal ?? 0) * 100);
+  const firstCents =
+    transaction.kind === "purchase" && statedCents > 0
+      ? Math.min(totalCents, statedCents)
+      : totalCents;
+  const rows = [{ purchaseId, amount: (firstCents / 100).toFixed(2) }];
+  if (firstCents !== totalCents)
+    rows.push({
+      purchaseId: "",
+      amount: ((totalCents - firstCents) / 100).toFixed(2),
+    });
+  return rows;
+}
+
+export function parseSettlementAllocations(
+  rows: SettlementAllocationInput[],
+  transactionAmount: number,
+) {
+  const totalCents = Math.round(transactionAmount * 100);
+  if (!rows.length || !Number.isSafeInteger(totalCents)) return null;
+  const parsed: {
+    purchaseId: ReturnType<typeof parsePurchaseId>;
+    amount: number;
+  }[] = [];
+  const seen = new Set<string>();
+  let allocatedCents = 0;
+  for (const row of rows) {
+    let purchaseId: ReturnType<typeof parsePurchaseId>;
+    try {
+      purchaseId = parsePurchaseId(row.purchaseId.trim());
+    } catch {
+      return null;
+    }
+    const cents = Math.round(Number(row.amount) * 100);
+    if (
+      !row.amount.trim() ||
+      !Number.isSafeInteger(cents) ||
+      cents === 0 ||
+      Math.abs(Number(row.amount) * 100 - cents) > 0.000001 ||
+      Math.sign(cents) !== Math.sign(totalCents) ||
+      seen.has(purchaseId)
+    )
+      return null;
+    seen.add(purchaseId);
+    allocatedCents += cents;
+    parsed.push({ purchaseId, amount: cents / 100 });
+  }
+  return allocatedCents === totalCents ? parsed : null;
 }
 
 function MatchStatementTransaction({
@@ -103,12 +171,15 @@ function MatchStatementTransaction({
   const [selected, setSelected] = useState<FinancialTransactionOut | null>(
     null,
   );
+  const [allocations, setAllocations] = useState<SettlementAllocationDraft[]>(
+    [],
+  );
   const date = purchase.date ? Date.parse(`${purchase.date}T00:00:00Z`) : NaN;
   const from = Number.isFinite(date)
-    ? new Date(date - 30 * 86_400_000).toISOString().slice(0, 10)
+    ? new Date(date - 45 * 86_400_000).toISOString().slice(0, 10)
     : undefined;
   const to = Number.isFinite(date)
-    ? new Date(date + 30 * 86_400_000).toISOString().slice(0, 10)
+    ? new Date(date + 45 * 86_400_000).toISOString().slice(0, 10)
     : undefined;
   const candidatesQuery = useQuery({
     ...entityListFor("financialTransaction").queryOptions({
@@ -116,13 +187,11 @@ function MatchStatementTransaction({
         purchasePresenceFilter: "none",
         postedDateFrom: from,
         postedDateTo: to,
-        amountMin: purchase.statedTotal ?? undefined,
-        amountMax: purchase.statedTotal ?? undefined,
       },
       pagination: { pageIndex: 0, pageSize: 200 },
       sort: [{ orderBy: "postedDate", direction: "desc" }],
     }),
-    enabled: open && purchase.statedTotal != null && Number.isFinite(date),
+    enabled: open && Number.isFinite(date),
   });
   const candidates = useMemo(
     () => rankSettlementCandidates(purchase, candidatesQuery.data?.items ?? []),
@@ -136,31 +205,31 @@ function MatchStatementTransaction({
   return (
     <>
       <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-        Match a statement charge
+        Match statement activity
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Match statement charge</DialogTitle>
+            <DialogTitle>Match statement activity</DialogTitle>
             <DialogDescription>
-              Compare unlinked charges with this order. Confirming links the
-              charge as settlement evidence; it does not change expenses.
+              Review unallocated charges and refunds near this order. Allocate
+              the full statement amount across Purchases before saving.
             </DialogDescription>
           </DialogHeader>
-          {purchase.statedTotal == null || !Number.isFinite(date) ? (
+          {!Number.isFinite(date) ? (
             <Description>
-              Add the order date and stated total to see likely charges.
+              Add the order date to see likely statement activity.
             </Description>
           ) : candidatesQuery.isPending ? (
-            <Description>Checking statement charges…</Description>
+            <Description>Checking statement activity…</Description>
           ) : null}
           {candidatesQuery.isError ? (
             <Description>{String(candidatesQuery.error)}</Description>
           ) : null}
           {candidatesQuery.isSuccess && !candidates.length ? (
             <Description>
-              No exact amount match within 30 days. You can still add a
-              transaction manually.
+              No unallocated vendor or exact amount match within 45 days. You
+              can still add a transaction manually.
             </Description>
           ) : null}
           <div className="max-h-80 space-y-2 overflow-y-auto">
@@ -170,12 +239,24 @@ function MatchStatementTransaction({
                 type="button"
                 aria-pressed={selected?.id === transaction.id}
                 className="flex w-full items-start justify-between gap-3 rounded-md border border-border p-3 text-left text-sm aria-pressed:border-primary aria-pressed:bg-primary/5"
-                onClick={() => setSelected(transaction)}
+                onClick={() => {
+                  setSelected(transaction);
+                  setAllocations(
+                    initialSettlementAllocations(
+                      purchase.id,
+                      transaction,
+                      purchase,
+                    ).map((row) => ({ ...row, key: crypto.randomUUID() })),
+                  );
+                }}
               >
                 <span className="min-w-0">
                   <strong className="block truncate">
                     {transaction.merchant ?? transaction.displayName}
                   </strong>
+                  <span className="block text-xs text-muted-foreground">
+                    {transaction.kind === "refund" ? "Refund" : "Charge"}
+                  </span>
                   {transaction.rawDescription &&
                   transaction.rawDescription !== transaction.merchant ? (
                     <span className="block text-xs text-muted-foreground">
@@ -197,17 +278,100 @@ function MatchStatementTransaction({
               </button>
             ))}
           </div>
+          {selected ? (
+            <div className="space-y-2 border-t border-border pt-3">
+              <div className="text-sm font-medium">
+                Allocate {formatCurrency(selected.amount)}
+              </div>
+              {allocations.map((allocation, index) => (
+                <div
+                  key={allocation.key}
+                  className="grid grid-cols-[1fr_8rem] gap-2"
+                >
+                  <label
+                    htmlFor={`purchase-${allocation.key}`}
+                    className="space-y-1 text-xs text-muted-foreground"
+                  >
+                    Purchase code
+                    <Input
+                      id={`purchase-${allocation.key}`}
+                      aria-label={`Purchase code ${index + 1}`}
+                      value={allocation.purchaseId}
+                      onChange={(event) =>
+                        setAllocations((current) =>
+                          current.map((row, rowIndex) =>
+                            rowIndex === index
+                              ? { ...row, purchaseId: event.target.value }
+                              : row,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                  <label
+                    htmlFor={`amount-${allocation.key}`}
+                    className="space-y-1 text-xs text-muted-foreground"
+                  >
+                    Amount
+                    <Input
+                      id={`amount-${allocation.key}`}
+                      aria-label={`Amount ${index + 1}`}
+                      type="number"
+                      step="0.01"
+                      value={allocation.amount}
+                      onChange={(event) =>
+                        setAllocations((current) =>
+                          current.map((row, rowIndex) =>
+                            rowIndex === index
+                              ? { ...row, amount: event.target.value }
+                              : row,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                </div>
+              ))}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setAllocations((current) => [
+                    ...current,
+                    { key: crypto.randomUUID(), purchaseId: "", amount: "" },
+                  ])
+                }
+              >
+                Add Purchase
+              </Button>
+              {!parseSettlementAllocations(allocations, selected.amount) ? (
+                <Description size="xs">
+                  Enter unique Purchase codes whose signed amounts total{" "}
+                  {formatCurrency(selected.amount)}.
+                </Description>
+              ) : null}
+            </div>
+          ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
             <Button
-              disabled={!selected || update.isPending}
+              disabled={
+                !selected ||
+                !parseSettlementAllocations(allocations, selected.amount) ||
+                update.isPending
+              }
               onClick={async () => {
                 if (!selected) return;
+                const parsedAllocations = parseSettlementAllocations(
+                  allocations,
+                  selected.amount,
+                );
+                if (!parsedAllocations) return;
                 await update.mutateAsync({
                   id: selected.id,
-                  data: { purchaseId: purchase.id },
+                  data: { allocations: parsedAllocations },
                 });
                 // The global handler fires this ripple without awaiting it;
                 // await it so the panel is fresh before the dialog closes.
@@ -219,7 +383,7 @@ function MatchStatementTransaction({
                 setSelected(null);
               }}
             >
-              Confirm match
+              Save allocation
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -290,9 +454,7 @@ export function FinancialSettlement({
         onAddTransaction={onAddTransaction}
         onEditTransaction={onEditTransaction}
       />
-      {settlement.status !== "match" ? (
-        <MatchStatementTransaction purchase={purchase} />
-      ) : null}
+      <MatchStatementTransaction purchase={purchase} />
     </Stack>
   );
 }

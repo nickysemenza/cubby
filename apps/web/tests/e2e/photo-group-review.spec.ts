@@ -12,6 +12,45 @@ import { expect, test } from "./e2e-test";
 const recording = process.env.CUBBY_PHOTO_REVIEW_VIDEO === "1";
 test.use({ video: recording ? "on" : "off" });
 
+test("approves two selected photo groups with one reviewed batch action", async ({
+  page,
+  e2eRuntime,
+  baseURL,
+}) => {
+  const seed = await seedPhotoGroupReviewRun(
+    page,
+    `Selected batch ${Date.now()}`,
+    e2eRuntime.objectStorageUrl,
+  );
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}`,
+    page.getByRole("heading", { name: "Photo review" }),
+  );
+  const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
+    data: { runId: seed.runId, groups: seed.groups },
+    headers: { Origin: baseURL! },
+  });
+  expect(proposed.ok(), await proposed.text()).toBeTruthy();
+
+  await page
+    .getByRole("checkbox", { name: /Select Gray crew t-shirt/ })
+    .check();
+  await page.getByRole("checkbox", { name: /Select .* solo find/ }).check();
+  await page.getByRole("button", { name: "Approve 2 selected items" }).click();
+
+  await expect(
+    page.getByText("0 to review · 2 settled · 0 photos not in a group", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Photo item groups" })
+      .getByText("Approved", { exact: true }),
+  ).toHaveCount(2);
+});
+
 test("reviews, approves, and discards proposed photo groups on the photo-inventory run page", async ({
   page,
   e2eRuntime,
