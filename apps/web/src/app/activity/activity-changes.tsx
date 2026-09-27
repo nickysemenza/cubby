@@ -8,6 +8,7 @@ import { auditableEntities } from "@cubby/schemas/entity-manifest";
 
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { Row, Stack } from "~/components/layout";
+import { Button } from "~/components/ui/button";
 import { NativeSelect } from "~/components/ui/native-select";
 import { entityPluralLabel } from "~/entities/entities";
 
@@ -16,14 +17,16 @@ export function ActivityChanges({
   channel,
   onEntityTypeChange,
   onChannelChange,
+  onClear,
 }: {
   entityType: AuditEntityType | undefined;
   channel: AuditChannel | undefined;
   onEntityTypeChange: (entityType: AuditEntityType | undefined) => void;
   onChannelChange: (channel: AuditChannel | undefined) => void;
+  onClear: () => void;
 }) {
   return (
-    <Stack className="max-w-3xl">
+    <Stack gap="sm" className="w-full">
       <Row justify="between" align="center" gap="sm" wrap>
         <p className="text-muted-foreground">
           Recent changes across all entities.
@@ -31,6 +34,11 @@ export function ActivityChanges({
         <Row gap="sm" wrap>
           <EntityTypeFilter value={entityType} onChange={onEntityTypeChange} />
           <ChannelFilter value={channel} onChange={onChannelChange} />
+          {entityType || channel ? (
+            <Button variant="ghost" size="sm" onClick={onClear}>
+              Clear
+            </Button>
+          ) : null}
         </Row>
       </Row>
       <AuditLogList showEntityLink entityType={entityType} channel={channel} />

@@ -4,6 +4,7 @@ import {
   activityDevicesOutput,
   activityEvent,
   activityEventsOutput,
+  activityGroupsOutput,
   activityListOutput,
   activityRun,
   activitySubmissionOutput,
@@ -54,12 +55,18 @@ const cloudExecutor = sql`jsonb_build_object(
  * Domain rows remain authoritative. This is only the cross-domain activity
  * projection; it neither schedules work nor infers device activity.
  */
-function runProjection(partyId: string | null): SQL {
+function runProjection(): SQL {
   return sql`
     SELECT
       j.id AS internal_id,
       j."publicId" AS id,
+      'image_job' AS "recordType",
+      parent.shortcode AS "parentRunId",
       j.kind,
+      parent.trigger,
+      parent_account.shortcode AS "vendorAccountId",
+      parent_vendor.shortcode AS "vendorId",
+      parent_party.shortcode AS "ledgerPartyId",
       i.shortcode AS "subjectId",
       i.filename AS "subjectName",
       '/images/' || i.shortcode AS "subjectHref",
@@ -102,34 +109,40 @@ function runProjection(partyId: string | null): SQL {
       ) END AS "estimatedCost",
       j."lastError" AS error,
       EXISTS(SELECT 1 FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id) AS "hasDiagnostics",
-      j.state = 'failed'
+      coalesce(j.state = 'failed'
         AND i.sha256 = j."sourceContentHash"
         AND ((j.kind = 'describe_image' AND j."processorRevision" IN (${IMAGE_DESCRIPTION_PROCESSOR_REVISION}, ${IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION}))
-          OR (j.kind = 'subject_lift' AND j."processorRevision" = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION})) AS "canRetry"
+          OR (j.kind = 'subject_lift' AND j."processorRevision" = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION})), false) AS "canRetry"
     FROM "ImageProcessingJob" j
     JOIN "Image" i ON i.id = j."imageId" AND i."deletedAt" IS NULL
+    LEFT JOIN "Run" parent ON parent.id = j."runId" AND parent."deletedAt" IS NULL
+    LEFT JOIN "VendorAccount" parent_account ON parent_account.id = parent."vendorAccountId" AND parent_account."deletedAt" IS NULL
+    LEFT JOIN "Vendor" parent_vendor ON parent_vendor.id = parent."vendorId" AND parent_vendor."deletedAt" IS NULL
+    LEFT JOIN "LedgerParty" parent_party ON parent_party.id = parent."ledgerPartyId" AND parent_party."deletedAt" IS NULL
 
     UNION ALL
 
     SELECT
       r.id AS internal_id,
       r.shortcode AS id,
-      CASE r.purpose
-        WHEN 'purchase_validation' THEN 'purchase_validation'
-        WHEN 'product_enrichment' THEN 'product_enrichment'
-        WHEN 'photo_inventory' THEN 'photo_inventory'
-        ELSE 'purchase_import'
-      END AS kind,
+      'run' AS "recordType",
+      NULL::text AS "parentRunId",
+      r.purpose AS kind,
+      r.trigger,
+      account.shortcode AS "vendorAccountId",
+      v.shortcode AS "vendorId",
+      party.shortcode AS "ledgerPartyId",
       v.shortcode AS "subjectId",
       -- A photo-inventory run has no vendor: name the run itself rather than
       -- falling into the vendor-agent label every other purpose shares.
       CASE
         WHEN r.purpose = 'photo_inventory' THEN 'Photo inventory'
-        ELSE coalesce(v.name, 'Purchase agent')
+        WHEN v.name IS NOT NULL THEN v.name
+        ELSE initcap(replace(r.purpose, '_', ' '))
       END AS "subjectName",
       CASE
         WHEN v.shortcode IS NOT NULL THEN '/vendors/' || v.shortcode
-        WHEN r.purpose = 'photo_inventory' THEN '/runs/' || r.shortcode
+        ELSE '/runs/' || r.shortcode
       END AS "subjectHref",
       r.status AS state,
       r.status IN ('running', 'paused_auth', 'paused_offline', 'paused_approval') AS active,
@@ -138,13 +151,15 @@ function runProjection(partyId: string | null): SQL {
       CASE WHEN r."endedAt" IS NOT NULL
         THEN greatest(0, extract(epoch FROM (r."endedAt" - r."startedAt")) * 1000)
       END AS "durationMs",
-      r."dispatchAttempts" AS attempts,
-      (SELECT jsonb_agg(DISTINCT executor) FROM (
+      (SELECT count(*)::int FROM "RunOperation" o WHERE o."runId" = r.id) AS attempts,
+      COALESCE((SELECT jsonb_agg(DISTINCT executor) FROM (
         SELECT o.executor
         FROM "RunOperation" o
         WHERE o."runId" = r.id AND o.executor IS NOT NULL
         UNION ALL SELECT ${cloudExecutor}
-      ) execution) AS executors,
+        WHERE r.purpose IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory')
+          OR EXISTS(SELECT 1 FROM "AiUsage" u WHERE u."runId" = r.id AND u."deletedAt" IS NULL)
+      ) execution), '[]'::jsonb) AS executors,
       CASE WHEN EXISTS(
         SELECT 1 FROM "AiUsage" u
         WHERE u."deletedAt" IS NULL AND u."runId" = r.id AND u."estimatedCost" IS NULL
@@ -157,7 +172,9 @@ function runProjection(partyId: string | null): SQL {
       false AS "canRetry"
     FROM "Run" r
     LEFT JOIN "Vendor" v ON v.id = r."vendorId" AND v."deletedAt" IS NULL
-    WHERE ${partyId}::uuid IS NOT NULL AND r."ledgerPartyId" = ${partyId}::uuid
+    LEFT JOIN "VendorAccount" account ON account.id = r."vendorAccountId" AND account."deletedAt" IS NULL
+    LEFT JOIN "LedgerParty" party ON party.id = r."ledgerPartyId" AND party."deletedAt" IS NULL
+    WHERE r."deletedAt" IS NULL
   `;
 }
 
@@ -173,7 +190,16 @@ const runWire = activityRun.extend({
 
 function listPredicate(input: ActivityListInput): SQL {
   const clauses: SQL[] = [sql`true`];
+  if (input.recordType) clauses.push(sql`"recordType" = ${input.recordType}`);
+  if (input.parentRunId)
+    clauses.push(sql`"parentRunId" = ${input.parentRunId}`);
   if (input.kind) clauses.push(sql`kind = ${input.kind}`);
+  if (input.trigger) clauses.push(sql`trigger = ${input.trigger}`);
+  if (input.vendorAccountId)
+    clauses.push(sql`"vendorAccountId" = ${input.vendorAccountId}`);
+  if (input.vendorId) clauses.push(sql`"vendorId" = ${input.vendorId}`);
+  if (input.ledgerPartyId)
+    clauses.push(sql`"ledgerPartyId" = ${input.ledgerPartyId}`);
   if (input.state) clauses.push(sql`state = ${input.state}`);
   if (input.from)
     clauses.push(
@@ -206,7 +232,7 @@ function listPredicate(input: ActivityListInput): SQL {
   if (input.executor === "unknown") {
     clauses.push(sql`(
       jsonb_array_length(executors) = 0
-      OR (kind IN ('purchase_import', 'purchase_validation', 'product_enrichment')
+      OR ("recordType" = 'run'
         AND EXISTS(
           SELECT 1 FROM "RunOperation" operation
           WHERE operation."runId" = internal_id AND operation.executor IS NULL
@@ -237,7 +263,7 @@ function listPredicate(input: ActivityListInput): SQL {
 
 export async function listActivity(
   db: Database,
-  partyId: string | null,
+  _partyId: string | null,
   input: ActivityListInput,
 ) {
   const cursor = decodeCursor(input.cursor);
@@ -249,7 +275,7 @@ export async function listActivity(
       : sql`("createdAt", id) < ((${cursor.at}::timestamptz AT TIME ZONE 'UTC'), ${cursor.id})`
     : sql`true`;
   const query = await getDb(db).execute(sql`
-    WITH runs AS (${runProjection(partyId)}),
+    WITH runs AS (${runProjection()}),
     filtered AS (SELECT * FROM runs WHERE ${listPredicate(input)}),
     page AS (
       SELECT *, to_char("createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorAt"
@@ -289,13 +315,104 @@ export async function listActivity(
   });
 }
 
-async function resolveActivity(
+/** Page root groups, then fetch matched children only when a root expands. */
+export async function listActivityGroups(
+  db: Database,
+  _partyId: string | null,
+  input: ActivityListInput,
+) {
+  const cursor = decodeCursor(input.cursor);
+  const ascending = input.sort === "oldest";
+  const direction = ascending ? sql`ASC` : sql`DESC`;
+  const after = cursor
+    ? ascending
+      ? sql`(aggregate."latestAt", aggregate."rootId") > ((${cursor.at}::timestamptz AT TIME ZONE 'UTC'), ${cursor.id})`
+      : sql`(aggregate."latestAt", aggregate."rootId") < ((${cursor.at}::timestamptz AT TIME ZONE 'UTC'), ${cursor.id})`
+    : sql`true`;
+  const query = await getDb(db).execute(sql`
+    WITH runs AS (${runProjection()}),
+    filtered AS (SELECT * FROM runs WHERE ${listPredicate(input)}),
+    aggregate AS (
+      SELECT
+        CASE WHEN "recordType" = 'image_job' AND "parentRunId" IS NOT NULL
+          THEN "parentRunId" ELSE id END AS "rootId",
+        max("createdAt") AS "latestAt",
+        count(*) FILTER (WHERE "recordType" = 'image_job' AND "parentRunId" IS NOT NULL)::int AS "childCount",
+        bool_or(id = CASE WHEN "recordType" = 'image_job' AND "parentRunId" IS NOT NULL
+          THEN "parentRunId" ELSE id END) AS "rootMatched"
+      FROM filtered
+      GROUP BY 1
+    ),
+    page AS (
+      SELECT
+        jsonb_build_object(
+          'root', to_jsonb(root) || jsonb_build_object(
+            'createdAt', to_char(root."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+            'completedAt', CASE WHEN root."completedAt" IS NULL THEN NULL
+              ELSE to_char(root."completedAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END
+          ),
+          'childCount', aggregate."childCount",
+          'contextOnly', NOT aggregate."rootMatched",
+          'latestAt', to_char(aggregate."latestAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+        ) AS item,
+        to_char(aggregate."latestAt", 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorAt",
+        aggregate."rootId"
+      FROM aggregate
+      JOIN runs root ON root.id = aggregate."rootId"
+      WHERE ${after}
+      ORDER BY aggregate."latestAt" ${direction}, aggregate."rootId" ${direction}
+      LIMIT ${input.limit + 1}
+    )
+    SELECT
+      (SELECT count(*)::int FROM aggregate) AS total,
+      (SELECT count(*)::int FROM filtered) AS "totalItems",
+      coalesce((SELECT jsonb_agg(to_jsonb(page) ORDER BY page."cursorAt" ${direction}, page."rootId" ${direction}) FROM page), '[]'::jsonb) AS items
+  `);
+  const data = z
+    .object({
+      total: z.coerce.number(),
+      totalItems: z.coerce.number(),
+      items: z.array(
+        z.object({
+          item: activityGroupsOutput.shape.items.element,
+          cursorAt: z.iso.datetime(),
+          rootId: z.string(),
+        }),
+      ),
+    })
+    .parse(query.rows[0]);
+  const pageItems = data.items.slice(0, input.limit);
+  const last = pageItems.at(-1);
+  return activityGroupsOutput.parse({
+    items: pageItems.map((row) => row.item),
+    total: data.total,
+    totalItems: data.totalItems,
+    nextCursor:
+      data.items.length > input.limit && last
+        ? encodeCursor(last.cursorAt, last.rootId)
+        : null,
+  });
+}
+
+export async function listActivityGroupChildren(
   db: Database,
   partyId: string | null,
+  input: ActivityListInput & { rootId: string },
+) {
+  return listActivity(db, partyId, {
+    ...input,
+    recordType: "image_job",
+    parentRunId: input.rootId,
+  });
+}
+
+async function resolveActivity(
+  db: Database,
+  _partyId: string | null,
   id: string,
 ) {
   const query = await getDb(db).execute(sql`
-    WITH runs AS (${runProjection(partyId)})
+    WITH runs AS (${runProjection()})
     SELECT * FROM runs WHERE id = ${id} LIMIT 1
   `);
   const found = z
@@ -463,9 +580,9 @@ export async function activityEvents(
   });
 }
 
-export async function activityDevices(db: Database, partyId: string | null) {
+export async function activityDevices(db: Database, _partyId: string | null) {
   const query = await getDb(db).execute(sql`
-    WITH runs AS (${runProjection(partyId)}), observations AS (
+    WITH runs AS (${runProjection()}), observations AS (
       SELECT a.executor, a."startedAt" AS observed_at, a.id::text AS id
       FROM "ImageProcessingAttempt" a JOIN runs r ON r.internal_id = a."jobId" AND r.id LIKE 'IPR-%'
       UNION ALL

@@ -116,8 +116,7 @@ export async function ensurePurchaseAgentOAuthClient(database: Database) {
 export function purchaseAgentConnectionRedirect(
   status: PurchaseAgentConnectionStatus,
 ) {
-  const url = new URL("/activity", APP_ORIGIN);
-  url.searchParams.set("tab", "connections");
+  const url = new URL("/settings", APP_ORIGIN);
   url.searchParams.set("purchaseAgent", status);
   return url.toString();
 }

@@ -9,7 +9,13 @@ import { ResponsiveBar } from "@nivo/bar";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { z } from "zod";
 
 import { RankedBarBreakdown } from "~/app/_components/charts/kit";
@@ -27,6 +33,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
+import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
 import { mcp } from "~/lib/mcp.functions";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
@@ -39,6 +46,14 @@ const windows: Array<{ label: string; value: McpUsageWindow }> = [
   { label: "180d", value: 180 },
   { label: "Lifetime", value: "lifetime" },
 ];
+const toolInspectorWidth = "(min-width: 1280px)";
+const isToolInspectorDocked = () =>
+  globalThis.window.matchMedia(toolInspectorWidth).matches;
+const subscribeToolInspectorWidth = (callback: () => void) => {
+  const media = globalThis.window.matchMedia(toolInspectorWidth);
+  media.addEventListener("change", callback);
+  return () => media.removeEventListener("change", callback);
+};
 
 const isNumber = (value: unknown): value is number => typeof value === "number";
 
@@ -697,6 +712,12 @@ export function McpUsageDashboard() {
   }, [data, search, sort, status]);
   const selected = data?.tools.find((tool) => tool.toolName === selectedTool);
 
+  const wide = useSyncExternalStore(
+    subscribeToolInspectorWidth,
+    isToolInspectorDocked,
+    () => false,
+  );
+
   if (query.isLoading) return <Spinner />;
   if (query.error) {
     return (
@@ -711,6 +732,86 @@ export function McpUsageDashboard() {
     data.totals.calls === 0
       ? "0%"
       : `${((data.totals.errors / data.totals.calls) * 100).toFixed(1)}%`;
+
+  const selectedDetail = selected ? (
+    <div className="space-y-4 p-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-mono">{selected.toolName}</CardTitle>
+          {selected.description ? (
+            <Description>{selected.description}</Description>
+          ) : null}
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <ToolAnnotations tool={selected} />
+          <div className="grid gap-4 md:grid-cols-4">
+            <Metric label="Status" value={selected.status} />
+            <Metric
+              label="First used"
+              value={formatDate(selected.firstUsedAt)}
+            />
+            <Metric label="Last used" value={formatDate(selected.lastUsedAt)} />
+            <Metric
+              label="Last release"
+              value={selected.lastRelease?.slice(0, 10) ?? "—"}
+            />
+          </div>
+        </CardContent>
+      </Card>
+      <div className="grid gap-4">
+        <ChartCard title="Selected-tool trend">
+          {selected.daily.length === 0 ? (
+            <Description>No calls in this window.</Description>
+          ) : (
+            <ResponsiveBar
+              data={selected.daily}
+              keys={["success", "error"]}
+              indexBy="day"
+              groupMode="stacked"
+              colors={["var(--chart-1)", "var(--destructive)"]}
+              margin={{ top: 10, right: 20, bottom: 55, left: 50 }}
+              {...nivoBarChrome}
+              theme={nivoChartTheme}
+              enableLabel={false}
+              axisBottom={{ tickRotation: -45, tickSize: 0 }}
+            />
+          )}
+        </ChartCard>
+        <Card>
+          <CardHeader>
+            <CardTitle>Selected-tool callers</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <div>
+              <div className="mb-2 text-xs text-muted-foreground">Users</div>
+              {selected.users.map((user) => (
+                <div key={user.id} className="border-t py-2">
+                  {user.name ?? user.email}
+                </div>
+              ))}
+            </div>
+            <div>
+              <div className="mb-2 text-xs text-muted-foreground">Clients</div>
+              {selected.clients.map((client) => (
+                <div key={client.id ?? "unknown"} className="border-t py-2">
+                  {client.name ?? client.id ?? "Unknown"}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      <div className="grid gap-4">
+        <SchemaCard title="Input schema" schema={selected.inputSchema} />
+        <SchemaCard title="Output schema" schema={selected.outputSchema} />
+      </div>
+      <ActivityTable
+        window={window}
+        toolName={selected.toolName}
+        entity={entityFilter}
+      />
+    </div>
+  ) : null;
 
   return (
     <div className="space-y-6">
@@ -752,129 +853,86 @@ export function McpUsageDashboard() {
 
       <UsageCharts data={data} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Tool pruning worklist</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <ToolRosterTable
-            tools={tools}
-            sort={sort}
-            onSortChange={setSort}
-            selectedTool={selectedTool}
-            onSelectTool={setSelectedTool}
-            search={search}
-            additionalToolbarContent={
-              <div className="flex flex-wrap gap-2">
-                <Input
-                  className="max-w-sm"
-                  placeholder="Search tools…"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-                {(
-                  ["all", "active", "inactive", "never", "retired"] as const
-                ).map((value) => (
-                  <Button
-                    key={value}
-                    variant={status === value ? "secondary" : "outline"}
-                    onClick={() => setStatus(value)}
-                  >
-                    {value}
-                  </Button>
-                ))}
-              </div>
-            }
-          />
-        </CardContent>
-      </Card>
+      <div className={selected ? "relative xl:pr-[25rem]" : "relative"}>
+        <Card>
+          <CardHeader>
+            <CardTitle>Tool pruning worklist</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ToolRosterTable
+              tools={tools}
+              sort={sort}
+              onSortChange={setSort}
+              selectedTool={selectedTool}
+              onSelectTool={setSelectedTool}
+              search={search}
+              additionalToolbarContent={
+                <div className="flex flex-wrap gap-2">
+                  <Input
+                    className="max-w-sm"
+                    placeholder="Search tools…"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                  {(
+                    ["all", "active", "inactive", "never", "retired"] as const
+                  ).map((value) => (
+                    <Button
+                      key={value}
+                      variant={status === value ? "secondary" : "outline"}
+                      onClick={() => setStatus(value)}
+                    >
+                      {value}
+                    </Button>
+                  ))}
+                </div>
+              }
+            />
+          </CardContent>
+        </Card>
 
-      {selected ? (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-mono">{selected.toolName}</CardTitle>
-              {selected.description ? (
-                <Description>{selected.description}</Description>
-              ) : null}
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <ToolAnnotations tool={selected} />
-              <div className="grid gap-4 md:grid-cols-4">
-                <Metric label="Status" value={selected.status} />
-                <Metric
-                  label="First used"
-                  value={formatDate(selected.firstUsedAt)}
-                />
-                <Metric
-                  label="Last used"
-                  value={formatDate(selected.lastUsedAt)}
-                />
-                <Metric
-                  label="Last release"
-                  value={selected.lastRelease?.slice(0, 10) ?? "—"}
-                />
-              </div>
-            </CardContent>
-          </Card>
-          <div className="grid gap-4 xl:grid-cols-2">
-            <ChartCard title="Selected-tool trend">
-              {selected.daily.length === 0 ? (
-                <Description>No calls in this window.</Description>
-              ) : (
-                <ResponsiveBar
-                  data={selected.daily}
-                  keys={["success", "error"]}
-                  indexBy="day"
-                  groupMode="stacked"
-                  colors={["var(--chart-1)", "var(--destructive)"]}
-                  margin={{ top: 10, right: 20, bottom: 55, left: 50 }}
-                  {...nivoBarChrome}
-                  theme={nivoChartTheme}
-                  enableLabel={false}
-                  axisBottom={{ tickRotation: -45, tickSize: 0 }}
-                />
-              )}
-            </ChartCard>
-            <Card>
-              <CardHeader>
-                <CardTitle>Selected-tool callers</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <div className="mb-2 text-xs text-muted-foreground">
-                    Users
-                  </div>
-                  {selected.users.map((user) => (
-                    <div key={user.id} className="border-t py-2">
-                      {user.name ?? user.email}
-                    </div>
-                  ))}
-                </div>
-                <div>
-                  <div className="mb-2 text-xs text-muted-foreground">
-                    Clients
-                  </div>
-                  {selected.clients.map((client) => (
-                    <div key={client.id ?? "unknown"} className="border-t py-2">
-                      {client.name ?? client.id ?? "Unknown"}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-          <div className="grid gap-4 xl:grid-cols-2">
-            <SchemaCard title="Input schema" schema={selected.inputSchema} />
-            <SchemaCard title="Output schema" schema={selected.outputSchema} />
-          </div>
-          <ActivityTable
-            window={window}
-            toolName={selected.toolName}
-            entity={entityFilter}
-          />
-        </div>
-      ) : null}
+        {selected && wide ? (
+          <aside
+            aria-label="Selected tool detail"
+            className="absolute inset-y-0 right-0 w-[25rem] overflow-y-auto border-l border-border bg-background"
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              className="m-3"
+              onClick={() => setSelectedTool(null)}
+            >
+              Close
+            </Button>
+            {selectedDetail}
+          </aside>
+        ) : null}
+        {selected && !wide ? (
+          <Sheet
+            open
+            onOpenChange={(open) => {
+              if (!open) setSelectedTool(null);
+            }}
+          >
+            <SheetContent
+              side="right"
+              showCloseButton={false}
+              className="!w-[25rem] !max-w-[calc(100vw-2rem)] overflow-y-auto p-0"
+            >
+              <SheetTitle className="sr-only">Selected tool detail</SheetTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="m-3"
+                onClick={() => setSelectedTool(null)}
+              >
+                Close
+              </Button>
+              {selectedDetail}
+            </SheetContent>
+          </Sheet>
+        ) : null}
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">

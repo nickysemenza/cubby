@@ -1,4 +1,5 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { runPurpose } from "@cubby/schemas/run-fields";
 import { generateShortcode } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -23,12 +24,15 @@ import {
   activityDevices,
   activityEvents,
   activitySubmission,
+  listActivityGroups,
+  listActivityGroupChildren,
   imageAnalysisHistory,
   listActivity,
 } from "./activity";
 import { getDb } from "./database-helpers";
 import { createUploadedImageRecord } from "./image";
 import {
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
   createImageProcessingJob,
 } from "./image-processing";
@@ -131,7 +135,7 @@ describe("activity image processing projection", () => {
       ]);
     await getDb(ctx.db)
       .update(imageProcessingJob)
-      .set({ state: "failed", submissionId: submission.id })
+      .set({ state: "failed", submissionId: submission.id, runId })
       .where(eq(imageProcessingJob.id, jobId));
 
     const deviceRuns = await listActivity(ctx.db, null, {
@@ -159,6 +163,7 @@ describe("activity image processing projection", () => {
       kind: "describe_image",
       sourceContentHash: sourceHash,
       processorRevision: 99_991,
+      runId,
     });
     if (!legacyJob) throw new Error("Expected legacy image job");
     const legacyRetryAttempt = crypto.randomUUID();
@@ -202,6 +207,17 @@ describe("activity image processing projection", () => {
     expect(
       allRuns.items.find((run) => run.estimatedCost === 0.7),
     ).toBeDefined();
+    expect(
+      allRuns.items.find((row) => row.recordType === "run")?.estimatedCost,
+    ).toBeCloseTo(1.16);
+    expect(
+      allRuns.items.filter((row) => row.recordType === "image_job"),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ estimatedCost: 0.46 }),
+        expect.objectContaining({ estimatedCost: 0.7 }),
+      ]),
+    );
     expect(deviceRuns.items[0]?.estimatedCost).toBe(0.46);
 
     // This exceeds the detail page's first window. Keyset cursors must keep
@@ -282,7 +298,7 @@ describe("activity image processing projection", () => {
     expect(secondHistory.items.length + secondHistory.unparsed.length).toBe(6);
   });
 
-  it("keeps cross-domain same-time pages stable and scopes purchase runs to the member", async () => {
+  it("keeps cross-domain same-time pages stable and includes account sync runs", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Activity member",
       kind: "member",
@@ -372,12 +388,157 @@ describe("activity image processing projection", () => {
     expect(
       (
         await listActivity(ctx.db, party.id, {
-          kind: "purchase_import",
+          kind: "account_sync",
           limit: 20,
           sort: "newest",
           executor: "cloud",
         })
       ).items,
     ).toHaveLength(1);
+  });
+});
+
+describe("unified Runs history", () => {
+  const ctx = withTestDb();
+
+  it("lists every Run purpose and keeps linked and standalone image jobs distinct", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "History member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const runs = await getDb(ctx.db)
+      .insert(runTable)
+      .values(
+        runPurpose.options.map((purpose) => ({
+          shortcode: generateShortcode("run"),
+          ledgerPartyId: party.id,
+          actorUserId: ctx.actor.userId,
+          actorName: "History member",
+          actorEmail: "history@example.test",
+          actorLedgerPartyShortcode: party.shortcode,
+          actorLedgerPartyName: party.name,
+          actorLedgerPartyKind: party.kind,
+          purpose,
+          trigger: "manual" as const,
+          status: "completed" as const,
+          startedAt: new Date(),
+          endedAt: new Date(),
+        })),
+      )
+      .returning({ id: runTable.id, shortcode: runTable.shortcode });
+    const parent = runs[0];
+    if (!parent) throw new Error("Expected parent Run");
+    const imageRecord = await createUploadedImageRecord(ctx.db, {
+      key: `history/${crypto.randomUUID()}.jpg`,
+      filename: "history-object.jpg",
+      contentType: "image/jpeg",
+      size: 100,
+    });
+    const imageId = parseEntityId("image", imageRecord.id);
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sha256: "b".repeat(64) })
+      .where(eq(image.id, imageRecord.id));
+    const linked = await createImageProcessingJob(ctx.db, {
+      imageId,
+      kind: "describe_image",
+      sourceContentHash: "b".repeat(64),
+      processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+      runId: parent.id,
+    });
+    const standalone = await createImageProcessingJob(ctx.db, {
+      imageId,
+      kind: "subject_lift",
+      sourceContentHash: "b".repeat(64),
+      processorRevision: IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+    });
+    if (!linked || !standalone) throw new Error("Expected image jobs");
+
+    const flat = await listActivity(ctx.db, null, {
+      executor: "all",
+      limit: 100,
+      sort: "newest",
+    });
+    expect(flat.items.filter((row) => row.recordType === "run")).toHaveLength(
+      runPurpose.options.length,
+    );
+    expect(flat.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          recordType: "image_job",
+          parentRunId: parent.shortcode,
+        }),
+        expect.objectContaining({
+          recordType: "image_job",
+          parentRunId: null,
+        }),
+      ]),
+    );
+
+    const grouped = await listActivityGroups(ctx.db, null, {
+      executor: "all",
+      limit: 2,
+      sort: "newest",
+    });
+    expect(grouped.total).toBe(runPurpose.options.length + 1);
+    expect(grouped.totalItems).toBe(runPurpose.options.length + 2);
+    const allGroupIds = new Set(grouped.items.map((item) => item.root.id));
+    let nextCursor = grouped.nextCursor;
+    while (nextCursor) {
+      const next = await listActivityGroups(ctx.db, null, {
+        executor: "all",
+        limit: 2,
+        sort: "newest",
+        cursor: nextCursor,
+      });
+      for (const item of next.items) allGroupIds.add(item.root.id);
+      nextCursor = next.nextCursor;
+    }
+    expect(allGroupIds.size).toBe(grouped.total);
+    const parentGroup = await listActivityGroups(ctx.db, null, {
+      executor: "all",
+      limit: 100,
+      sort: "newest",
+    });
+    expect(
+      parentGroup.items.find((item) => item.root.id === parent.shortcode),
+    ).toMatchObject({ childCount: 1, contextOnly: false });
+    const children = await listActivityGroupChildren(ctx.db, null, {
+      rootId: parent.shortcode,
+      executor: "all",
+      limit: 1,
+      sort: "newest",
+    });
+    expect(children.items).toEqual([
+      expect.objectContaining({ parentRunId: parent.shortcode }),
+    ]);
+    expect(children.nextCursor).toBeNull();
+    const contextual = await listActivityGroups(ctx.db, null, {
+      executor: "all",
+      limit: 10,
+      sort: "newest",
+      kind: "describe_image",
+    });
+    expect(contextual.items).toEqual([
+      expect.objectContaining({
+        contextOnly: true,
+        childCount: 1,
+        root: expect.objectContaining({
+          id: parent.shortcode,
+          recordType: "run",
+        }),
+      }),
+    ]);
+    const standaloneOnly = await listActivity(ctx.db, null, {
+      executor: "all",
+      limit: 10,
+      sort: "newest",
+      recordType: "image_job",
+      kind: "subject_lift",
+    });
+    expect(standaloneOnly.items).toEqual([
+      expect.objectContaining({ parentRunId: null, recordType: "image_job" }),
+    ]);
   });
 });

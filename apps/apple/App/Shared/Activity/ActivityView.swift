@@ -718,22 +718,31 @@ struct ActivityDetailView: View {
 extension ActivityKind {
     var title: String {
         switch self {
-        case .purchaseImport: "Purchase import"
+        case .accountSync: "Account sync"
         case .purchaseValidation: "Purchase validation"
         case .productEnrichment: "Product enrichment"
         case .photoInventory: "Photo inventory"
         case .describeImage: "Image description"
         case .subjectLift: "Image cutout"
+        case .aiSuggest: "AI suggestion"
+        case .aiAction: "AI action"
+        case .background: "Background work"
+        case .fileImport: "File import"
+        case .legacy: "Legacy work"
         }
     }
 
     var symbol: String {
         switch self {
-        case .purchaseImport, .purchaseValidation: "cart"
+        case .accountSync, .purchaseValidation: "cart"
         case .productEnrichment: "sparkles"
         case .photoInventory: "photo.on.rectangle"
         case .describeImage: "text.below.photo"
         case .subjectLift: "person.crop.rectangle"
+        case .aiSuggest, .aiAction: "sparkles"
+        case .background: "arrow.triangle.2.circlepath"
+        case .fileImport: "square.and.arrow.down"
+        case .legacy: "clock.arrow.circlepath"
         }
     }
 }

@@ -61,10 +61,9 @@ describe("purchase agent auth tokens", () => {
     expect(pair.challenge).toMatch(/^[A-Za-z0-9_-]+$/);
   });
 
-  it("redirects to the connections activity with a closed status vocabulary", () => {
+  it("redirects to settings with a closed status vocabulary", () => {
     const url = new URL(purchaseAgentConnectionRedirect("dispatch_failed"));
-    expect(url.pathname).toBe("/activity");
-    expect(url.searchParams.get("tab")).toBe("connections");
+    expect(url.pathname).toBe("/settings");
     expect(url.searchParams.get("purchaseAgent")).toBe("dispatch_failed");
   });
 

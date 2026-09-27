@@ -149,7 +149,7 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
       result.submissionId ? (
         <a
           className="underline"
-          href={`/activity?view=runs&submissionId=${encodeURIComponent(result.submissionId)}`}
+          href={`/runs?submissionId=${encodeURIComponent(result.submissionId)}`}
         >
           Image processing queued — view submission
         </a>
@@ -249,7 +249,7 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
               <h4 className="text-sm font-medium">Recent jobs</h4>
               <a
                 className="text-xs text-primary hover:underline"
-                href={`/activity?view=runs&subjectId=${encodeURIComponent(id)}`}
+                href={`/runs?subjectId=${encodeURIComponent(id)}`}
               >
                 View all
               </a>
@@ -258,7 +258,7 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
               <a
                 key={run.id}
                 className="block border-b border-border py-2 text-sm hover:bg-muted/40"
-                href={`/activity?view=runs&selectedRun=${encodeURIComponent(run.id)}`}
+                href={`/runs?selected=${encodeURIComponent(run.id)}`}
               >
                 {run.kind.replaceAll("_", " ")} · {run.state}
               </a>

@@ -126,7 +126,9 @@ describe("resolveListView", () => {
       for (const declared of views) {
         expect(
           resolveListView(entity, { view: listViewId(declared) }).view,
-        ).toEqual(declared);
+        ).toEqual(
+          entity === "run" && declared === "shelf" ? views[0] : declared,
+        );
       }
       expect(resolveListView(entity, {}).view).toEqual(views[0]);
       expect(resolveListView(entity, { view: "no-such-view" }).view).toEqual(
@@ -349,9 +351,10 @@ describe("GenericEntityList", () => {
   // reference column (`parentProjectId`) had no override; every declared
   // table view must build its columns from the manifest alone.
   it.each(
-    listedEntities.filter((entity) =>
-      entitySummary[entity].list.views.includes("table"),
-    ),
+    listedEntities.filter((entity) => {
+      const views: readonly string[] = entitySummary[entity].list.views;
+      return views.includes("table");
+    }),
   )(
     "table: %s builds its columns and header without an override",
     async (entity) => {

@@ -4,6 +4,14 @@ Cubby records a household's products, inventory, spending, and project history.
 
 ## Language
 
+**Run**:
+A durable record of coordinated work, identified by `RUN-`, with a purpose, trigger, status, and optional targets or operations. It may group image jobs, but its recorded cost can already include their costs. The Runs history presents every purpose together.
+_Avoid_: image processing job, individual attempt
+
+**Image processing job**:
+One image operation, identified by `IPR-`, with its own kind, state, attempts, and diagnostics. It may belong to a Run or stand alone. Its cost is a component of a parent Run total when both are shown, not an additional household expense.
+_Avoid_: Run, merged work record
+
 **Plant**:
 A cultivar or species the household sows or buys as a transplant. Grouped into a crop by its growing guide key; carries the household's verdict (yes, maybe, no) and cultivar days to maturity from its packet. Its Ingredient link, when set, is informational: one plant's harvest can become several ingredients.
 _Avoid_: Crop ingredient, variety text, seed listing

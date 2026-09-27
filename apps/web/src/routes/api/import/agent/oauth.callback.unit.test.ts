@@ -69,8 +69,7 @@ function expectRedirect(response: Response, status: string) {
   if (!locationHeader) throw new Error("OAuth callback did not redirect");
   const location = new URL(locationHeader);
   expect(response.status).toBe(302);
-  expect(location.pathname).toBe("/activity");
-  expect(location.searchParams.get("tab")).toBe("connections");
+  expect(location.pathname).toBe("/settings");
   expect(location.searchParams.get("purchaseAgent")).toBe(status);
   expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
 }

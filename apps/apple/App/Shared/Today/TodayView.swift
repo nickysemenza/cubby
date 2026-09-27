@@ -759,7 +759,7 @@ private func formattedDueDate(_ raw: String) -> String {
             highlights: WorkHighlightsModel(
                 runs: [
                     ActivityRun(
-                        id: "RUN-4K7M", kind: .photoInventory, subjectName: "Photo import",
+                        id: "RUN-4K7M", recordType: .run, kind: .photoInventory, subjectName: "Photo import",
                         state: "running", active: true, createdAt: .now,
                         attempts: 1, executors: [], hasDiagnostics: false, canRetry: false)
                 ],
@@ -863,7 +863,8 @@ private func formattedDueDate(_ raw: String) -> String {
                 highlights: WorkHighlightsModel(
                     runs: [
                         ActivityRun(
-                            id: "RUN-4K7M", kind: .photoInventory, subjectName: "Photo import",
+                            id: "RUN-4K7M", recordType: .run, kind: .photoInventory,
+                            subjectName: "Photo import",
                             state: "running", active: true, createdAt: .now,
                             attempts: 1, executors: [], hasDiagnostics: false, canRetry: false)
                     ]))

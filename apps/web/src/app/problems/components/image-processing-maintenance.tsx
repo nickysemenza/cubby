@@ -32,7 +32,7 @@ export function ImageProcessingMaintenance() {
       result.submissionId ? (
         <a
           className="underline"
-          href={`/activity?view=runs&submissionId=${encodeURIComponent(result.submissionId)}`}
+          href={`/runs?submissionId=${encodeURIComponent(result.submissionId)}`}
         >
           {result.scheduled} image work items scheduled — view submission
         </a>

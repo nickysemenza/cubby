@@ -1,0 +1,642 @@
+import {
+  activityKind,
+  type ActivityRun,
+  type ActivityListInput,
+} from "@cubby/schemas/activity";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { z } from "zod";
+
+import { useTableColumnLayout } from "~/app/_components/data-table/column-layout";
+import RTable from "~/app/_components/data-table/Table";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+  useCubbyTable,
+} from "~/app/_components/data-table/table-features";
+import type { InfiniteScrollControls } from "~/app/_components/hooks/useInfiniteTableList";
+import { ActivityRunDetail } from "~/app/activity/activity-run-detail";
+import { Row, Stack } from "~/components/layout";
+import { usePageCount } from "~/components/page/Page";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { NativeSelect } from "~/components/ui/native-select";
+import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
+import { activity } from "~/lib/activity.functions";
+import { formatCurrency } from "~/lib/utils";
+
+export interface RunHistoryFilters extends Partial<ActivityListInput> {
+  selected?: string;
+  group?: "run";
+}
+type HistoryRow = ActivityRun & {
+  depth?: number;
+  childCount?: number;
+  contextOnly?: boolean;
+  loadingChildren?: boolean;
+};
+const kinds = activityKind.options;
+const label = (value: string) => value.replaceAll("_", " ");
+const moment = (value: string) => new Date(value).toLocaleString();
+const duration = (value: number | null) =>
+  value == null ? "—" : `${(value / 1_000).toFixed(1)} s`;
+const localDateTime = (value?: string) =>
+  value
+    ? new Date(
+        new Date(value).getTime() -
+          new Date(value).getTimezoneOffset() * 60_000,
+      )
+        .toISOString()
+        .slice(0, 16)
+    : "";
+const toIso = (value: string) =>
+  value ? new Date(value).toISOString() : undefined;
+const presentation = () => {
+  if (!globalThis.window) return "mobile";
+  if (window.matchMedia("(min-width: 1280px)").matches) return "dock";
+  return window.matchMedia("(min-width: 768px)").matches ? "sheet" : "mobile";
+};
+const subscribe = (callback: () => void) => {
+  if (!globalThis.window) return () => undefined;
+  const media = [
+    window.matchMedia("(min-width: 1280px)"),
+    window.matchMedia("(min-width: 768px)"),
+  ];
+  for (const item of media) item.addEventListener("change", callback);
+  return () => {
+    for (const item of media) item.removeEventListener("change", callback);
+  };
+};
+
+// oxlint-disable-next-line complexity -- one list owns the flat and grouped queries, expansion, and three inspector presentations.
+export function RunHistory({
+  filters,
+  onFilterChange,
+  onSelect,
+  onGroupChange,
+}: {
+  filters: RunHistoryFilters;
+  onFilterChange: (patch: Partial<RunHistoryFilters>) => void;
+  onSelect: (id: string | undefined) => void;
+  onGroupChange: (grouped: boolean) => void;
+}) {
+  const navigate = useNavigate();
+  const mode = useSyncExternalStore(subscribe, presentation, () => "mobile");
+  useEffect(() => {
+    if (
+      mode !== "mobile" ||
+      !filters.selected ||
+      !window.matchMedia("(max-width: 767px)").matches
+    )
+      return;
+    void navigate({
+      to: filters.selected.startsWith("RUN-")
+        ? `/runs/${filters.selected}`
+        : `/runs/jobs/${filters.selected}`,
+      replace: true,
+    });
+  }, [filters.selected, mode, navigate]);
+  const grouped = filters.group === "run";
+  const [more, setMore] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [children, setChildren] = useState<Record<string, ActivityRun[]>>({});
+  const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [childErrors, setChildErrors] = useState<Record<string, string>>({});
+  const devices = useQuery(activity.devices.queryOptions({}));
+  const input = useMemo<ActivityListInput>(
+    () => ({
+      limit: 20,
+      sort: filters.sort ?? "newest",
+      executor: filters.executor ?? "all",
+      recordType: filters.recordType,
+      kind: filters.kind,
+      state: filters.state,
+      trigger: filters.trigger,
+      vendorAccountId: filters.vendorAccountId,
+      vendorId: filters.vendorId,
+      ledgerPartyId: filters.ledgerPartyId,
+      subjectId: filters.subjectId,
+      submissionId: filters.submissionId,
+      deviceId: filters.deviceId,
+      from: filters.from,
+      to: filters.to,
+    }),
+    [
+      filters.sort,
+      filters.executor,
+      filters.recordType,
+      filters.kind,
+      filters.state,
+      filters.trigger,
+      filters.vendorAccountId,
+      filters.vendorId,
+      filters.ledgerPartyId,
+      filters.subjectId,
+      filters.submissionId,
+      filters.deviceId,
+      filters.from,
+      filters.to,
+    ],
+  );
+  const filterKey = JSON.stringify(input);
+  useEffect(() => {
+    setExpanded({});
+    setChildren({});
+    setChildErrors({});
+  }, [filterKey]);
+  const pages = {
+    pageParamSchema: z.nullable(z.string()),
+    initialPageParam: null,
+    getNextPageParam: (page: { nextCursor: string | null }) =>
+      page.nextCursor ?? undefined,
+    page: (request: Partial<ActivityListInput>, cursor: string | null) =>
+      cursor ? { ...request, cursor } : request,
+  };
+  const flat = useInfiniteQuery({
+    ...activity.list.infiniteQueryOptions(input, pages),
+    enabled: !grouped,
+  });
+  const groups = useInfiniteQuery({
+    ...activity.groups.infiniteQueryOptions(input, pages),
+    enabled: grouped,
+  });
+  const groupRows = useMemo(
+    () => groups.data?.pages.flatMap((page) => page.items) ?? [],
+    [groups.data],
+  );
+  const rows = useMemo<HistoryRow[]>(
+    () =>
+      grouped
+        ? groupRows.flatMap(({ root, childCount, contextOnly }) => [
+            { ...root, childCount, contextOnly },
+            ...(expanded[root.id]
+              ? (children[root.id] ?? []).map((item) => ({ ...item, depth: 1 }))
+              : []),
+          ])
+        : (flat.data?.pages.flatMap((page) => page.items) ?? []),
+    [grouped, groupRows, expanded, children, flat.data],
+  );
+  usePageCount(
+    grouped ? groups.data?.pages[0]?.totalItems : flat.data?.pages[0]?.total,
+  );
+  const query = grouped ? groups : flat;
+  const active = rows.some((row) => row.active);
+  useEffect(() => {
+    if (!active) return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void query.refetch();
+    }, 15_000);
+    return () => window.clearInterval(interval);
+  }, [active, query]);
+  const toggle = useCallback(
+    async (root: HistoryRow) => {
+      if (expanded[root.id]) {
+        setExpanded((value) => ({ ...value, [root.id]: false }));
+        return;
+      }
+      setExpanded((value) => ({ ...value, [root.id]: true }));
+      if (children[root.id] || !root.childCount) return;
+      setLoading((value) => ({ ...value, [root.id]: true }));
+      try {
+        const collected: ActivityRun[] = [];
+        let cursor: string | undefined;
+        do {
+          const page = await activity.groupChildren.call({
+            ...input,
+            rootId: root.id,
+            limit: 100,
+            cursor,
+          });
+          collected.push(...page.items);
+          cursor = page.nextCursor ?? undefined;
+        } while (cursor);
+        setChildren((value) => ({ ...value, [root.id]: collected }));
+        setChildErrors((value) => ({ ...value, [root.id]: "" }));
+      } catch (error) {
+        setChildErrors((value) => ({ ...value, [root.id]: String(error) }));
+      } finally {
+        setLoading((value) => ({ ...value, [root.id]: false }));
+      }
+    },
+    [expanded, children, input],
+  );
+  const select = (row: HistoryRow) => {
+    if (mode === "mobile") {
+      void navigate({
+        to:
+          row.recordType === "run" ? `/runs/${row.id}` : `/runs/jobs/${row.id}`,
+      });
+    } else onSelect(row.id);
+  };
+  const helper = useMemo(() => createCubbyColumnHelper<HistoryRow>(), []);
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<HistoryRow>((add) => {
+        add(
+          helper.accessor("subjectName", {
+            header: "Subject",
+            size: 270,
+            meta: { surplus: true, mobile: { slot: "title", priority: 1 } },
+            cell: ({ row, getValue }) => (
+              <div className={row.original.depth ? "pl-6" : ""}>
+                {grouped &&
+                row.original.recordType === "run" &&
+                (row.original.childCount ?? 0) > 0 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`${expanded[row.original.id] ? "Collapse" : "Expand"} jobs for ${row.original.id}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void toggle(row.original);
+                    }}
+                  >
+                    {expanded[row.original.id] ? "▾" : "▸"}{" "}
+                    {row.original.childCount}
+                  </Button>
+                ) : null}
+                {getValue()}
+                {row.original.contextOnly ? (
+                  <Badge variant="outline" className="ml-2">
+                    Context
+                  </Badge>
+                ) : null}
+                {loading[row.original.id] ? (
+                  <span className="ml-2 text-muted-foreground">
+                    Loading jobs…
+                  </span>
+                ) : null}
+                {childErrors[row.original.id] ? (
+                  <span role="alert" className="ml-2 text-destructive">
+                    {childErrors[row.original.id]}
+                  </span>
+                ) : null}
+              </div>
+            ),
+          }),
+        );
+        add(
+          helper.accessor("recordType", {
+            header: "Type",
+            size: 100,
+            cell: ({ getValue }) =>
+              getValue() === "run" ? "Run" : "Image job",
+          }),
+        );
+        add(
+          helper.accessor("kind", {
+            header: "Work",
+            size: 150,
+            cell: ({ getValue }) => label(getValue()),
+            meta: { mobile: { slot: "meta", priority: 10 } },
+          }),
+        );
+        add(
+          helper.accessor("state", {
+            header: "State",
+            size: 110,
+            cell: ({ getValue }) => (
+              <Badge variant="secondary">{label(getValue())}</Badge>
+            ),
+            meta: { mobile: { slot: "meta", priority: 20 } },
+          }),
+        );
+        add(
+          helper.accessor("executors", {
+            header: "Executor",
+            size: 150,
+            enableSorting: false,
+            cell: ({ getValue }) =>
+              getValue()
+                .map((item) => item.name)
+                .join(", ") || "Unknown",
+          }),
+        );
+        add(
+          helper.accessor("attempts", {
+            header: "Attempts / ops",
+            size: 90,
+            meta: { mono: true, numeric: true },
+          }),
+        );
+        add(
+          helper.accessor("durationMs", {
+            header: "Duration",
+            size: 90,
+            cell: ({ getValue }) => duration(getValue()),
+            meta: { mono: true, numeric: true },
+          }),
+        );
+        add(
+          helper.accessor("estimatedCost", {
+            header: "Cost",
+            size: 90,
+            cell: ({ getValue, row }) => (
+              <span
+                title={
+                  row.original.recordType === "image_job" &&
+                  row.original.parentRunId
+                    ? "Job cost may be included in parent Run total"
+                    : "Recorded cost"
+                }
+              >
+                {getValue() == null ? "—" : formatCurrency(getValue() ?? 0)}
+                {row.original.recordType === "image_job" &&
+                row.original.parentRunId
+                  ? "*"
+                  : ""}
+              </span>
+            ),
+            meta: { mono: true, numeric: true },
+          }),
+        );
+        add(
+          helper.accessor("createdAt", {
+            header: "Submitted",
+            size: 180,
+            cell: ({ getValue }) => moment(getValue()),
+            meta: { mono: true, mobile: { slot: "meta", priority: 40 } },
+          }),
+        );
+      }),
+    [helper, grouped, expanded, toggle, loading, childErrors],
+  );
+  const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
+    columns,
+  });
+  const table = useCubbyTable({
+    data: rows,
+    columns: tableColumns,
+    initialState: {
+      columnOrder: defaultLayout.columnOrder,
+      columnPinning: defaultLayout.columnPinning,
+      columnVisibility: defaultLayout.columnVisibility,
+    },
+    meta: { defaultLayout },
+    getRowId: (row) => row.id,
+    manualFiltering: true,
+    manualPagination: true,
+    enableSorting: false,
+    enableRowSelection: false,
+    enableCellSelection: false,
+  });
+  const infiniteScroll = useMemo<InfiniteScrollControls<HistoryRow>>(
+    () => ({
+      fetchNextPage: () => {
+        void query.fetchNextPage();
+      },
+      hasNextPage: query.hasNextPage,
+      isFetchingNextPage: query.isFetchingNextPage,
+      isTransitioning: false,
+      loadAllPages: async () => rows,
+    }),
+    [query, rows],
+  );
+  const clear = () =>
+    onFilterChange({
+      recordType: undefined,
+      kind: undefined,
+      state: undefined,
+      trigger: undefined,
+      vendorAccountId: undefined,
+      vendorId: undefined,
+      ledgerPartyId: undefined,
+      subjectId: undefined,
+      submissionId: undefined,
+      executor: undefined,
+      deviceId: undefined,
+      from: undefined,
+      to: undefined,
+      sort: undefined,
+    });
+  const selectFilter = (key: keyof RunHistoryFilters, value: string) =>
+    onFilterChange({ [key]: value || undefined });
+  const inspector = filters.selected ? (
+    <ActivityRunDetail
+      id={filters.selected}
+      onClose={() => onSelect(undefined)}
+      variant="inspector"
+    />
+  ) : null;
+  return (
+    <Stack gap="sm">
+      <Row gap="sm" align="center" wrap>
+        <NativeSelect
+          aria-label="Record type"
+          value={filters.recordType ?? ""}
+          onChange={(event) => selectFilter("recordType", event.target.value)}
+        >
+          <option value="">All records</option>
+          <option value="run">Runs</option>
+          <option value="image_job">Image jobs</option>
+        </NativeSelect>
+        <NativeSelect
+          aria-label="Work type"
+          value={filters.kind ?? ""}
+          onChange={(event) => selectFilter("kind", event.target.value)}
+        >
+          <option value="">All work</option>
+          {kinds.map((kind) => (
+            <option key={kind} value={kind}>
+              {label(kind)}
+            </option>
+          ))}
+        </NativeSelect>
+        <NativeSelect
+          aria-label="Run order"
+          value={filters.sort ?? "newest"}
+          onChange={(event) => selectFilter("sort", event.target.value)}
+        >
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+        </NativeSelect>
+        <Button
+          type="button"
+          variant={grouped ? "secondary" : "outline"}
+          size="sm"
+          aria-pressed={grouped}
+          onClick={() => onGroupChange(!grouped)}
+        >
+          Group by run
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-expanded={more}
+          onClick={() => setMore(!more)}
+        >
+          More
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={clear}>
+          Clear
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={query.isFetching}
+          onClick={() => void query.refetch()}
+        >
+          Refresh
+        </Button>
+      </Row>
+      {more ? (
+        <Row gap="sm" wrap>
+          <NativeSelect
+            aria-label="Execution location"
+            value={filters.executor ?? "all"}
+            onChange={(event) => selectFilter("executor", event.target.value)}
+          >
+            <option value="all">All executors</option>
+            <option value="cloud">Cloud</option>
+            <option value="device">Device</option>
+            <option value="unknown">Unknown</option>
+          </NativeSelect>
+          <NativeSelect
+            aria-label="Execution device"
+            value={filters.deviceId ?? ""}
+            onChange={(event) => selectFilter("deviceId", event.target.value)}
+          >
+            <option value="">All devices</option>
+            {devices.data?.items.map((device) =>
+              device.deviceId ? (
+                <option key={device.deviceId} value={device.deviceId}>
+                  {device.name}
+                </option>
+              ) : null,
+            )}
+          </NativeSelect>
+          <Input
+            aria-label="Filter state"
+            placeholder="State"
+            className="w-28"
+            value={filters.state ?? ""}
+            onChange={(event) => selectFilter("state", event.target.value)}
+          />
+          <Input
+            aria-label="Filter subject"
+            placeholder="Subject"
+            className="w-32"
+            value={filters.subjectId ?? ""}
+            onChange={(event) => selectFilter("subjectId", event.target.value)}
+          />
+          <Input
+            aria-label="Filter submission"
+            placeholder="Submission"
+            className="w-32"
+            value={filters.submissionId ?? ""}
+            onChange={(event) =>
+              selectFilter("submissionId", event.target.value)
+            }
+          />
+          <Input
+            aria-label="Filter vendor account"
+            placeholder="Vendor account"
+            className="w-32"
+            value={filters.vendorAccountId ?? ""}
+            onChange={(event) =>
+              selectFilter("vendorAccountId", event.target.value)
+            }
+          />
+          <Input
+            aria-label="Filter vendor"
+            placeholder="Vendor"
+            className="w-32"
+            value={filters.vendorId ?? ""}
+            onChange={(event) => selectFilter("vendorId", event.target.value)}
+          />
+          <Input
+            aria-label="Filter party"
+            placeholder="Party"
+            className="w-32"
+            value={filters.ledgerPartyId ?? ""}
+            onChange={(event) =>
+              selectFilter("ledgerPartyId", event.target.value)
+            }
+          />
+          <NativeSelect
+            aria-label="Trigger"
+            value={filters.trigger ?? ""}
+            onChange={(event) => selectFilter("trigger", event.target.value)}
+          >
+            <option value="">All triggers</option>
+            <option value="foreground">Foreground</option>
+            <option value="discovery">Discovery</option>
+            <option value="manual">Manual</option>
+            <option value="backfill">Backfill</option>
+            <option value="ephemeral">Ephemeral</option>
+          </NativeSelect>
+          <Input
+            type="datetime-local"
+            aria-label="Runs from"
+            className="w-44"
+            value={localDateTime(filters.from)}
+            onChange={(event) =>
+              onFilterChange({ from: toIso(event.target.value) })
+            }
+          />
+          <Input
+            type="datetime-local"
+            aria-label="Runs through"
+            className="w-44"
+            value={localDateTime(filters.to)}
+            onChange={(event) =>
+              onFilterChange({ to: toIso(event.target.value) })
+            }
+          />
+        </Row>
+      ) : null}
+      <RTable
+        table={table}
+        ariaLabel="Runs and image jobs"
+        isLoading={query.isLoading}
+        error={query.error}
+        infiniteScroll={infiniteScroll}
+        emptyState="No work matches these filters."
+        currentRowId={filters.selected}
+        onRowClick={(row) => select(row.original)}
+        getMobileDetailsHref={(row) =>
+          row.recordType === "run" ? `/runs/${row.id}` : `/runs/jobs/${row.id}`
+        }
+        desktopInspector={mode === "dock" ? inspector : null}
+        refreshControls={{
+          onRefresh: async () => {
+            await query.refetch();
+          },
+          isRefreshing: query.isRefetching,
+        }}
+      />
+      {filters.selected && mode === "sheet" ? (
+        <Sheet
+          open
+          onOpenChange={(open) => {
+            if (!open) onSelect(undefined);
+          }}
+        >
+          <SheetContent
+            side="right"
+            showCloseButton={false}
+            className="!w-[25rem] !max-w-[calc(100vw-2rem)] overflow-y-auto p-0"
+          >
+            <SheetTitle className="sr-only">Work detail</SheetTitle>
+            {inspector}
+          </SheetContent>
+        </Sheet>
+      ) : null}
+      <p className="text-xs text-muted-foreground">
+        * A linked image job’s cost may already be included in its parent Run
+        total.
+      </p>
+    </Stack>
+  );
+}
