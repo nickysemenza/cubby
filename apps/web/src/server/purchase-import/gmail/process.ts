@@ -1,6 +1,5 @@
 import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
 import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
-import { generateShortcode } from "@cubby/shared";
 import {
   and,
   eq,
@@ -20,7 +19,6 @@ import {
   expense,
   runFinding,
   importHunt,
-  run as runTable,
   ledgerParty,
   orderMail,
   orderMailAttachment,
@@ -33,7 +31,10 @@ import {
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
+import {
+  findOrCreateWithShortcode,
+  insertWithShortcode,
+} from "~/server/repo/shortcode-utils";
 import { sha256Hex } from "~/server/semantic/hash";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
 
@@ -248,9 +249,8 @@ export async function processOrderMails(
         if (!actorSnapshot?.actorUserId)
           throw new Error("Order mail party has no controlling member");
         const runId = runEntityId.parse(crypto.randomUUID());
-        await database.insert(runTable).values({
+        await insertWithShortcode(db, "run", {
           id: runId,
-          shortcode: generateShortcode("run"),
           ledgerPartyId: mail.ledgerPartyId,
           actorUserId: actorSnapshot.actorUserId,
           actorName: actorSnapshot.actorName,

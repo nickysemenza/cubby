@@ -2,9 +2,17 @@ import { customAlphabet } from "nanoid";
 import { z } from "zod";
 import { mapRecord, recordKeys } from "./record";
 import { capitalize } from "./text-case";
-import { SHORTCODE_BODY_LENGTH, SHORTCODE_CHARS } from "./shortcode-alphabet";
+import {
+  LEGACY_SHORTCODE_BODY_LENGTH,
+  SHORTCODE_BODY_LENGTH,
+  SHORTCODE_CHARS,
+} from "./shortcode-alphabet";
 
-export { SHORTCODE_BODY_LENGTH, SHORTCODE_CHARS } from "./shortcode-alphabet";
+export {
+  LEGACY_SHORTCODE_BODY_LENGTH,
+  SHORTCODE_BODY_LENGTH,
+  SHORTCODE_CHARS,
+} from "./shortcode-alphabet";
 import {
   SHORTCODE_PREFIX,
   type ShortcodeType,
@@ -15,7 +23,7 @@ export {
   type ShortcodeType,
 } from "./generated/shortcode-registry.gen";
 
-const BODY_PATTERN = `[${SHORTCODE_CHARS}]{${SHORTCODE_BODY_LENGTH}}`;
+const BODY_PATTERN = `[${SHORTCODE_CHARS}]{${LEGACY_SHORTCODE_BODY_LENGTH},${SHORTCODE_BODY_LENGTH}}`;
 const BODY_RE = new RegExp(`^${BODY_PATTERN}$`);
 
 /** Every canonical prefix that may legitimately cross an API or MCP boundary. */
@@ -104,9 +112,9 @@ const makeShortcodeSchema = <T extends ShortcodeType, B extends string>(
       // label or an agent copied from an earlier response, so "which code was
       // wrong" is the whole useful content of the failure.
       error: (issue) =>
-        `Invalid ${type} shortcode: ${String(issue.input)} (expected ${SHORTCODE_PREFIX[type]}XXXX)`,
+        `Invalid ${type} shortcode: ${String(issue.input)} (expected ${SHORTCODE_PREFIX[type]}XXXX or ${SHORTCODE_PREFIX[type]}XXXXX)`,
     })
-    .describe(`${type} shortcode, e.g. ${SHORTCODE_PREFIX[type]}4K7M`)
+    .describe(`${type} shortcode, e.g. ${SHORTCODE_PREFIX[type]}4K7MN`)
     .brand<B>(brand);
 
 /** Every shortcode entity, in generated-registry order. */

@@ -1,4 +1,5 @@
 import type { AuditJsonValue } from "@cubby/schemas/audit";
+import { parseShortcode } from "@cubby/shared";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";
@@ -107,7 +108,6 @@ function humanizeChangeField(field: string): string {
   );
 }
 
-const LEDGER_SHORTCODE = /^[A-Z]{2,4}-[A-Z\d]{4}$/u;
 const LEDGER_VALUE_CHARS = 22;
 const LEDGER_MAX_FIELDS = 2;
 
@@ -138,7 +138,7 @@ function formatLedgerValue(
         value.length > LEDGER_VALUE_CHARS
           ? `${value.slice(0, LEDGER_VALUE_CHARS)}\u2026`
           : value,
-      mono: LEDGER_SHORTCODE.test(value),
+      mono: parseShortcode(value) !== null,
     };
   }
   if (Array.isArray(value)) {

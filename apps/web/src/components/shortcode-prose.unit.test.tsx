@@ -22,7 +22,7 @@ describe("shortcodes in prose", () => {
       <p>
         <ShortcodeProse>
           {
-            "Compare IMG-4S9Q, img-r6mw, and P-4K7M; leave XIMG-4S9Q, IMG-4S9QZ, and /IMG-4S9Q alone."
+            "Compare IMG-4S9Q, img-r6mw, IMG-4S9QZ, and P-4K7M; leave XIMG-4S9Q, IMG-4S9QZZ, and /IMG-4S9Q alone."
           }
         </ShortcodeProse>
       </p>,
@@ -41,8 +41,12 @@ describe("shortcodes in prose", () => {
       "href",
       "/products/PRD-4K7M",
     );
-    expect(screen.getAllByRole("link")).toHaveLength(3);
-    expect(screen.getByText(/leave XIMG-4S9Q, IMG-4S9QZ/)).toBeVisible();
+    expect(screen.getByRole("link", { name: "IMG-4S9QZ" })).toHaveAttribute(
+      "href",
+      "/images/IMG-4S9QZ",
+    );
+    expect(screen.getAllByRole("link")).toHaveLength(4);
+    expect(screen.getByText(/leave XIMG-4S9Q, IMG-4S9QZZ/)).toBeVisible();
   });
 
   it("links markdown prose without changing authored links or code", () => {

@@ -25,9 +25,9 @@ test.describe("Recipe Flow", () => {
       timeout: 15000,
     });
 
-    const recipeShortcode = page
-      .url()
-      .match(/\/recipes\/(RCP-[A-Z0-9]{4})/)?.[1];
+    const recipeShortcode = new URL(page.url()).pathname.match(
+      new RegExp(`/recipes/(RCP-${SHORTCODE})$`),
+    )?.[1];
     expect(recipeShortcode).toBeTruthy();
 
     const databaseUrl = process.env.E2E_DATABASE_URL;

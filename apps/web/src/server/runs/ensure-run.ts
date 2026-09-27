@@ -7,12 +7,16 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { RunTrigger } from "@cubby/schemas/purchase-import";
 import { type RunPurpose, runStatus } from "@cubby/schemas/run-fields";
-import { generateShortcode } from "@cubby/shared";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { run as runTable, ledgerParty, user } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import {
+  findOrCreateWithShortcode,
+  insertWithShortcode,
+  type ShortcodeGeneratorPort,
+} from "~/server/repo/shortcode-utils";
 
 /**
  * The actor for work with nobody behind it: crons, retries, scheduled
@@ -57,6 +61,7 @@ export async function ensureRun(
   db: Database,
   actor: ActorContext,
   input: EnsureRunInput,
+  generator?: ShortcodeGeneratorPort,
 ): Promise<RunId> {
   if (actor.runId) return actor.runId;
   const database = getDb(db);
@@ -66,7 +71,6 @@ export async function ensureRun(
   const now = new Date();
   const values = {
     id: runEntityId.parse(crypto.randomUUID()),
-    shortcode: generateShortcode("run"),
     // Only import runs carry a member scope. Ephemeral runs have none, so
     // thousands of Jev passes never block a member's delete or merge
     // (`LEDGER_PARTY_*_EDGE_POLICY`); the actor snapshot still names who
@@ -89,18 +93,22 @@ export async function ensureRun(
     clientKey: input.clientKey ?? null,
     notes: input.notes ?? null,
   };
-  const insert = database.insert(runTable).values(values);
-  const [row] = input.clientKey
-    ? await insert
-        .onConflictDoUpdate({
-          target: runTable.clientKey,
-          targetWhere: sql`${runTable.clientKey} IS NOT NULL`,
-          set: { endedAt: now },
-        })
-        .returning({ id: runTable.id })
-    : await insert.returning({ id: runTable.id });
-  if (!row) throw new Error(`Run for ${input.purpose} was not created`);
-  return row.id;
+  if (!input.clientKey) {
+    return (await insertWithShortcode(db, "run", values, generator)).id;
+  }
+  const result = await findOrCreateWithShortcode(
+    db,
+    "run",
+    { where: eq(runTable.clientKey, input.clientKey), values: () => values },
+    generator,
+  );
+  if (!result.created) {
+    await database
+      .update(runTable)
+      .set({ endedAt: now })
+      .where(eq(runTable.id, result.row.id));
+  }
+  return result.row.id;
 }
 
 /** `actor` with its run set, opening one when nothing encloses the work. */

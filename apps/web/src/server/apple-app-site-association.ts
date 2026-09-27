@@ -1,5 +1,6 @@
 import {
   LEGACY_SHORTCODE_PREFIX,
+  LEGACY_SHORTCODE_BODY_LENGTH,
   SHORTCODE_BODY_LENGTH,
   SHORTCODE_PREFIX,
   SHORTCODE_TYPES,
@@ -15,10 +16,10 @@ import { generatedBrowserRoutes } from "~/entities/generated/entity-routes.gen";
  */
 const APPLE_APP_ID = "Y9A97FXT63.com.nickysemenza.cubby";
 
-// A shortcode body is fixed-length over a closed alphabet (see
-// shortcode-alphabet.ts), so "one `?` per body character" is exact — never a
-// hardcoded 4.
-const BODY_PLACEHOLDER = "?".repeat(SHORTCODE_BODY_LENGTH);
+const BODY_PLACEHOLDERS = [
+  "?".repeat(LEGACY_SHORTCODE_BODY_LENGTH),
+  "?".repeat(SHORTCODE_BODY_LENGTH),
+];
 
 interface AasaComponent {
   "/": string;
@@ -26,34 +27,31 @@ interface AasaComponent {
 }
 
 /**
- * One `/<PREFIX>????` component per canonical shortcode prefix (what a
- * printed label QR code actually encodes, per `getShortcodeUrl`), plus one
- * `/<PREFIX>????` component per legacy single-letter prefix still out on old
- * location/product labels. Deliberately no catch-all `/*` component: every
- * other web URL must keep opening in Safari, not the app.
+ * Both accepted body lengths for each canonical and legacy prefix. Printed
+ * four-character labels and newly minted five-character codes both deep-link.
  */
 function shortcodeComponents(): AasaComponent[] {
-  const canonical = Object.entries(SHORTCODE_PREFIX).map(([type, prefix]) => ({
-    "/": `/${prefix}${BODY_PLACEHOLDER}`,
-    comment: type,
-  }));
+  const canonical = Object.entries(SHORTCODE_PREFIX).flatMap(([type, prefix]) =>
+    BODY_PLACEHOLDERS.map((body) => ({
+      "/": `/${prefix}${body}`,
+      comment: type,
+    })),
+  );
 
-  const legacy = Object.entries(LEGACY_SHORTCODE_PREFIX).map(
-    ([prefix, type]) => ({
-      "/": `/${prefix}${BODY_PLACEHOLDER}`,
-      comment: `${type} (legacy)`,
-    }),
+  const legacy = Object.entries(LEGACY_SHORTCODE_PREFIX).flatMap(
+    ([prefix, type]) =>
+      BODY_PLACEHOLDERS.map((body) => ({
+        "/": `/${prefix}${body}`,
+        comment: `${type} (legacy)`,
+      })),
   );
 
   return [...canonical, ...legacy];
 }
 
 /**
- * One `/<basePath>/<PREFIX>????` component per entity that has a web detail
- * route, so a shortcode a viewer navigated to inside the web app (rather than
- * scanned raw off a label) still deep-links. `generatedBrowserRoutes` is a
- * plain generated lookup keyed by entity name, so this stays a cheap map —
- * no per-entity branching to maintain.
+ * Both body lengths for every routed entity, so old and new detail links open
+ * in the app. `generatedBrowserRoutes` is the generated route lookup.
  */
 function detailRouteComponents(): AasaComponent[] {
   const components: AasaComponent[] = [];
@@ -64,10 +62,12 @@ function detailRouteComponents(): AasaComponent[] {
   for (const type of SHORTCODE_TYPES) {
     const route = generatedBrowserRoutes[type];
     if (!route) continue;
-    components.push({
-      "/": `/${route.basePath}/${SHORTCODE_PREFIX[type]}${BODY_PLACEHOLDER}`,
-      comment: `${type} detail`,
-    });
+    for (const body of BODY_PLACEHOLDERS) {
+      components.push({
+        "/": `/${route.basePath}/${SHORTCODE_PREFIX[type]}${body}`,
+        comment: `${type} detail`,
+      });
+    }
   }
   return components;
 }

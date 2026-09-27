@@ -131,8 +131,9 @@ House  →  Room  →  Shelf  →  Bin
   physical placement has not been recorded yet.
 - InventoryEntries reference leaf-ish locations via `inventoryEntry.locationId`;
   any live location except Home can hold inventory.
-- Each location has a printable QR **shortcode** (`LOC-XXXX`). Legacy `L-XXXX`
-  labels remain accepted on input only, so previously printed labels still resolve.
+- Each location has a printable QR **shortcode** (`LOC-XXXXX` for new codes).
+  Existing four-character codes and legacy `L-XXXX` labels remain accepted on
+  input, so previously printed labels still resolve.
 
 ---
 

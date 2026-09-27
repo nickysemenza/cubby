@@ -1,10 +1,12 @@
 /**
  * Character set: 31 chars — the digits and uppercase letters minus the
- * scan/OCR-confusable ones (0/O, 1/I/L). Four of them give 31^4 = 923,521
- * codes per prefix, against a largest table of ~1,800 rows.
+ * scan/OCR-confusable ones (0/O, 1/I/L). New five-character bodies give
+ * 31^5 = 28,629,151 codes per prefix. Existing four-character codes remain
+ * valid public identifiers.
  *
  * Its own import-free module so the entity generator (a `nodenext` project)
  * can emit it into the Swift catalog without pulling in `shortcode.ts`.
  */
 export const SHORTCODE_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
-export const SHORTCODE_BODY_LENGTH = 4;
+export const LEGACY_SHORTCODE_BODY_LENGTH = 4;
+export const SHORTCODE_BODY_LENGTH = 5;
