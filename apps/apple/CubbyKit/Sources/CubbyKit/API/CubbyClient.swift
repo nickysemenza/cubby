@@ -510,7 +510,10 @@ public actor CubbyClient {
     ) async throws -> ReviewPhotoGroupsOutput {
         try await perform {
             let revisions = try groups.map { group in
-                (groupKey: group.groupKey, updatedAt: try Date(group.updatedAt, strategy: .iso8601))
+                (
+                    groupKey: group.groupKey,
+                    updatedAt: try LenientISO8601DateTranscoder().decode(group.updatedAt)
+                )
             }
             return try await api.photoImport_approveGroups(
                 body: .json(

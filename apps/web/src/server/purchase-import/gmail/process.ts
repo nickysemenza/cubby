@@ -1,8 +1,4 @@
-import {
-  parseEntityId,
-  runEntityId,
-  vendorAccountId,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
 import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { generateShortcode } from "@cubby/shared";
 import {
@@ -37,6 +33,7 @@ import {
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 import { sha256Hex } from "~/server/semantic/hash";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
 
@@ -330,18 +327,20 @@ export async function processOrderMails(
     if (
       classifiedEvents.some((event) => event.orderId && event.event !== "other")
     ) {
-      await database
-        .insert(vendorAccount)
-        .values({
-          id: vendorAccountId.parse(crypto.randomUUID()),
-          shortcode: generateShortcode("vendorAccount"),
+      await findOrCreateWithShortcode(db, "vendorAccount", {
+        where: and(
+          eq(vendorAccount.vendorId, matchedVendor.id),
+          eq(vendorAccount.ledgerPartyId, mail.ledgerPartyId),
+          notDeleted(vendorAccount),
+        ),
+        values: () => ({
           label: `${matchedVendor.name} mail`,
           vendorId: matchedVendor.id,
           ledgerPartyId: mail.ledgerPartyId,
           status: "disabled",
           browserSyncEnabled: false,
-        })
-        .onConflictDoNothing();
+        }),
+      });
     }
     const vendorMembers = await database
       .select({ ledgerPartyId: vendorAccount.ledgerPartyId })

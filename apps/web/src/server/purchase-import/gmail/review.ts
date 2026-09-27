@@ -1,6 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { parseEntityId, vendorAccountId } from "@cubby/schemas/identifiers";
-import { generateShortcode } from "@cubby/shared";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -19,6 +18,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 
 const candidateReason = (
   event: { orderId: string | null; amount: number | null; receivedAt: Date },
@@ -361,7 +361,8 @@ export async function decideOrderMailCandidate(
       throw new Error("Order mail event or Purchase no longer exists");
     if (scope.checksum !== input.evidenceChecksum)
       throw new Error("Order mail changed; review its current evidence first");
-    if (scope.vendorId !== scope.purchaseVendorId)
+    const vendorId = scope.vendorId;
+    if (!vendorId || vendorId !== scope.purchaseVendorId)
       throw new Error("Order mail and Purchase belong to different Vendors");
     if (
       scope.purchaseAccountPartyId &&
@@ -369,31 +370,20 @@ export async function decideOrderMailCandidate(
     )
       throw new Error("Order mail and Purchase belong to different members");
     if (input.decision === "linked") {
-      await tx
-        .insert(vendorAccount)
-        .values({
-          id: vendorAccountId.parse(crypto.randomUUID()),
-          shortcode: generateShortcode("vendorAccount"),
+      await findOrCreateWithShortcode(tx, "vendorAccount", {
+        where: and(
+          eq(vendorAccount.vendorId, vendorId),
+          eq(vendorAccount.ledgerPartyId, scope.ledgerPartyId),
+          notDeleted(vendorAccount),
+        ),
+        values: () => ({
           label: `${scope.vendorName} mail`,
-          vendorId: scope.vendorId,
+          vendorId,
           ledgerPartyId: scope.ledgerPartyId,
           status: "disabled",
           browserSyncEnabled: false,
-        })
-        .onConflictDoNothing();
-      const [account] = await tx
-        .select({ id: vendorAccount.id })
-        .from(vendorAccount)
-        .where(
-          and(
-            eq(vendorAccount.vendorId, scope.vendorId),
-            eq(vendorAccount.ledgerPartyId, scope.ledgerPartyId),
-            notDeleted(vendorAccount),
-          ),
-        )
-        .limit(1);
-      if (!account)
-        throw new Error("Vendor account for order mail was not saved");
+        }),
+      });
       await tx
         .update(orderMailCandidateDecision)
         .set({ decision: "dismissed", updatedAt: new Date() })
