@@ -231,7 +231,7 @@ struct EntityFilterSheet: View {
                         .buttonStyle(.borderless)
                         .accessibilityLabel("Remove \(value)")
                     }
-                    .frame(minHeight: PorcelainTokens.touchTarget)
+                    .frame(minHeight: FieldGuideTokens.touchTarget)
                 }
                 TextField(
                     filter.placeholder,
@@ -257,13 +257,13 @@ struct EntityFilterSheet: View {
                     draft.setMany(values, for: filter)
                 } label: {
                     HStack {
-                        Text(option.label).foregroundStyle(PorcelainTokens.graphite)
+                        Text(option.label).foregroundStyle(FieldGuideTokens.graphite)
                         Spacer()
                         if selected.contains(option.value) {
-                            Image(systemName: "checkmark").foregroundStyle(PorcelainTokens.cobalt)
+                            Image(systemName: "checkmark").foregroundStyle(FieldGuideTokens.interaction)
                         }
                     }
-                    .frame(minHeight: PorcelainTokens.touchTarget)
+                    .frame(minHeight: FieldGuideTokens.touchTarget)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -281,11 +281,11 @@ struct EntityFilterSheet: View {
             } label: {
                 LabeledContent(filter.kind == .idMulti ? "Choose…" : "Choose one…") {
                     Text(ids.isEmpty ? "Any" : ids.joined(separator: ", "))
-                        .font(ids.isEmpty ? .porcelainBody : .porcelainCode)
+                        .font(ids.isEmpty ? .fieldGuideBody : .fieldGuideCode)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
-                .frame(minHeight: PorcelainTokens.touchTarget)
+                .frame(minHeight: FieldGuideTokens.touchTarget)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

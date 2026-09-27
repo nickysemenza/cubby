@@ -14,27 +14,27 @@ struct StraysView: View {
             List {
                 if !session.strays.isEmpty {
                     Eyebrow("\(session.strays.count) stocked elsewhere · swipe a row to skip it")
-                        .listRowBackground(PorcelainTokens.canvas)
+                        .listRowBackground(FieldGuideTokens.canvas)
                         .listRowSeparator(.hidden)
                 }
                 ForEach(session.strays) { stray in
-                    VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-                        HStack(alignment: .firstTextBaseline, spacing: PorcelainTokens.Space.sm) {
+                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                        HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
                             Text(stray.productName)
-                                .font(.porcelainTitle)
-                                .foregroundStyle(PorcelainTokens.graphite)
+                                .font(.fieldGuideTitle)
+                                .foregroundStyle(FieldGuideTokens.graphite)
                                 .lineLimit(2)
-                            Spacer(minLength: PorcelainTokens.Space.sm)
+                            Spacer(minLength: FieldGuideTokens.Space.sm)
                             Text(stray.productID.rawValue)
-                                .font(.porcelainCode)
-                                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                .font(.fieldGuideCode)
+                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         }
                         ForEach(stray.rows) { row in
-                            HStack(spacing: PorcelainTokens.Space.sm) {
+                            HStack(spacing: FieldGuideTokens.Space.sm) {
                                 DomainMark(.location)
                                 Text(row.location.name)
-                                    .font(.porcelainBody)
-                                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                    .font(.fieldGuideBody)
+                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                                     .lineLimit(1)
                                 if row.ambiguousQuantity {
                                     StatusChip(text: "More than one unit", tone: .warning)
@@ -42,21 +42,21 @@ struct StraysView: View {
                             }
                         }
                     }
-                    .padding(.vertical, PorcelainTokens.Space.xs)
-                    .porcelainListRow()
+                    .padding(.vertical, FieldGuideTokens.Space.xs)
+                    .fieldGuideListRow()
                     .swipeActions {
                         Button("Skip", role: .destructive) { session.dismissStray(stray.productID) }
                     }
                 }
                 if let summary {
                     Text(summary)
-                        .font(.porcelainBody)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                        .porcelainListRow()
+                        .font(.fieldGuideBody)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                        .fieldGuideListRow()
                 }
             }
             .listStyle(.plain)
-            .porcelainScreen()
+            .fieldGuideScreen()
             .overlay {
                 if session.strays.isEmpty && summary == nil {
                     ContentUnavailableView(

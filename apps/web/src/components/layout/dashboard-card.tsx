@@ -65,7 +65,7 @@ export function DashboardCard({
   children,
 }: DashboardCardProps) {
   return (
-    <Card className="flex flex-col">
+    <Card className="flex flex-col rounded-2xl border-border bg-card shadow-none">
       <CardHeader className="border-b border-border pb-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">

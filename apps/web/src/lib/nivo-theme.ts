@@ -1,4 +1,4 @@
-// Shared Porcelain Transit chart styling: mono ticks/labels in the graphite
+// Shared Field Guide chart styling: mono ticks/labels in the graphite
 // ladder with a cool hairline grid. Kept dependency-free so
 // lazy-loaded chart chunks (sunburst/treemap) don't pull in unrelated modules.
 //

@@ -10,8 +10,8 @@ struct Panel<Content: View>: View {
     ///   - padding: internal padding; pass `0` when the panel holds full-bleed rows that own theirs.
     ///   - spacing: gap between stacked children.
     init(
-        padding: CGFloat = PorcelainTokens.Space.md,
-        spacing: CGFloat = PorcelainTokens.Space.md,
+        padding: CGFloat = FieldGuideTokens.Space.md,
+        spacing: CGFloat = FieldGuideTokens.Space.md,
         @ViewBuilder content: () -> Content
     ) {
         self.padding = padding
@@ -30,7 +30,7 @@ struct Panel<Content: View>: View {
 
 /// The hairline between two rows inside a zero-padding `Panel`.
 struct PanelDivider: View {
-    var inset: CGFloat = PorcelainTokens.Space.md
+    var inset: CGFloat = FieldGuideTokens.Space.md
 
     var body: some View {
         Divider().padding(.leading, inset)
@@ -44,7 +44,7 @@ struct LabeledRow: View {
     let value: String
     var data = false
     var mono = false
-    var tone: Color = PorcelainTokens.graphite
+    var tone: Color = FieldGuideTokens.graphite
 
     var body: some View {
         LabeledContent(label) {
@@ -53,23 +53,23 @@ struct LabeledRow: View {
                 .foregroundStyle(tone)
                 .textSelection(.enabled)
         }
-        .padding(.horizontal, PorcelainTokens.Space.md)
-        .padding(.vertical, PorcelainTokens.Space.sm)
+        .padding(.horizontal, FieldGuideTokens.Space.md)
+        .padding(.vertical, FieldGuideTokens.Space.sm)
     }
 
     private var valueFont: Font {
-        if mono { return .porcelainCode }
-        return data ? .porcelainData : .porcelainBody
+        if mono { return .fieldGuideCode }
+        return data ? .fieldGuideData : .fieldGuideBody
     }
 }
 
 #Preview("Panel") {
     ScrollView {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
             Panel {
                 Eyebrow("Session")
                 Text("Signed in to cubby.nickysemenza.com")
-                    .font(.porcelainBody)
+                    .font(.fieldGuideBody)
             }
             Panel(padding: 0, spacing: 0) {
                 LabeledRow(label: "Host", value: "cubby.nickysemenza.com")
@@ -79,7 +79,7 @@ struct LabeledRow: View {
                 LabeledRow(label: "Shortcode", value: "PRD-2345", mono: true)
             }
         }
-        .padding(PorcelainTokens.Space.lg)
+        .padding(FieldGuideTokens.Space.lg)
     }
-    .background(PorcelainTokens.canvas)
+    .background(FieldGuideTokens.canvas)
 }

@@ -118,7 +118,7 @@ const isPurchaseMergeRow = (row: MergeDisplayRow): row is PurchaseMergeRow =>
  * page-hero accent bar, table row-hover/selected bars — while the tailwind
  * trio dresses icon tiles and badges.
  *
- * Porcelain Transit: page and row accents resolve through the five domain
+ * Field Guide: page and row accents resolve through the five domain
  * lines, while quieter entities use graphite. Status semantics
  * (`--positive`/`--warning`) stay separate from domain identity. Entities that
  * need a distinct state treatment spell it out rather than joining a generic

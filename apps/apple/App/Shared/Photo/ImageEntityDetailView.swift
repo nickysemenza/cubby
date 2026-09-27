@@ -56,7 +56,7 @@ struct ImageEntityDetailView: View {
                     ImageDiagnosticsCompareView(model: diagnostics)
                 }
             } else if let error {
-                Text(error).foregroundStyle(PorcelainTokens.destructive)
+                Text(error).foregroundStyle(FieldGuideTokens.destructive)
                 Button("Retry") { Task { await load() } }
             } else {
                 ProgressView("Loading image…")
@@ -393,7 +393,7 @@ private struct ImageAnalysisHistoryRow: View {
                 if let revision = analysis.resultSchemaRevision {
                     LabeledContent("Result schema", value: String(revision))
                 }
-                Text(analysis.reason).foregroundStyle(PorcelainTokens.destructive)
+                Text(analysis.reason).foregroundStyle(FieldGuideTokens.destructive)
                 Text(analysis.rawResultJson)
                     .font(.caption.monospaced())
                     .textSelection(.enabled)
@@ -506,7 +506,7 @@ private struct ProvenanceRows: View {
             LabeledContent("Device", value: captureDeviceLabel)
         }
         LabeledContent("Source") {
-            HStack(spacing: PorcelainTokens.Space.xs) {
+            HStack(spacing: FieldGuideTokens.Space.xs) {
                 ProvenanceBadge(text: Self.sourceLabel(detail.source))
                 ProvenanceBadge(text: Self.attributionLabel(detail.captureAttribution))
             }
@@ -551,14 +551,14 @@ private struct ProvenanceBadge: View {
 
     var body: some View {
         Text(text)
-            .font(.porcelainLabel)
-            .padding(.horizontal, PorcelainTokens.Space.sm)
+            .font(.fieldGuideLabel)
+            .padding(.horizontal, FieldGuideTokens.Space.sm)
             .padding(.vertical, 2)
             .background(
-                RoundedRectangle(cornerRadius: PorcelainTokens.radiusChip)
-                    .fill(PorcelainTokens.inset)
+                RoundedRectangle(cornerRadius: FieldGuideTokens.radiusChip)
+                    .fill(FieldGuideTokens.inset)
             )
-            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
     }
 }
 
@@ -582,8 +582,8 @@ private struct ProvenanceMapRow: View {
             Color.clear.contentShape(.rect)
         }
         .frame(height: 110)
-        .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
-        .padding(.horizontal, PorcelainTokens.Space.md)
+        .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
+        .padding(.horizontal, FieldGuideTokens.Space.md)
         .onTapGesture { openInMaps() }
         .accessibilityLabel("Capture location")
         .accessibilityAddTraits(.isButton)

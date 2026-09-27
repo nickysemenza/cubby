@@ -218,11 +218,11 @@ struct MealCalendarListView: View {
                 switch model.phase {
                 case .ready:
                     ScrollView {
-                        VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
                             monthGrid(model)
                             Panel {
                                 Text("\(selectedDay) \(model.month.formatted(.dateTime.month(.wide)))")
-                                    .font(.porcelainTitle)
+                                    .font(.fieldGuideTitle)
                                 let meals = model.items.filter {
                                     contains($0, on: selectedDay, in: model.month)
                                 }
@@ -243,7 +243,7 @@ struct MealCalendarListView: View {
                                 }
                             }
                         }
-                        .padding(PorcelainTokens.Space.lg)
+                        .padding(FieldGuideTokens.Space.lg)
                     }
                 case .loading, .failed:
                     SpecialistFailure(phase: model.phase) { Task { await model.load(filters: filters) } }
@@ -285,12 +285,12 @@ struct MealCalendarListView: View {
                 Button("Previous month", systemImage: "chevron.left") { Task { await model.shift(-1) } }
                     .labelStyle(.iconOnly)
                 Spacer()
-                Text(model.month.formatted(.dateTime.month(.wide).year())).font(.porcelainTitle)
+                Text(model.month.formatted(.dateTime.month(.wide).year())).font(.fieldGuideTitle)
                 Spacer()
                 Button("Next month", systemImage: "chevron.right") { Task { await model.shift(1) } }
                     .labelStyle(.iconOnly)
             }
-            LazyVGrid(columns: columns, spacing: PorcelainTokens.Space.sm) {
+            LazyVGrid(columns: columns, spacing: FieldGuideTokens.Space.sm) {
                 ForEach(0..<7, id: \.self) { offset in
                     Text(calendar.shortStandaloneWeekdaySymbols[(calendar.firstWeekday - 1 + offset) % 7])
                         .font(.caption2).foregroundStyle(.secondary)
@@ -312,7 +312,9 @@ struct MealCalendarListView: View {
                                     .font(.caption2).foregroundStyle(.secondary)
                             }
                             .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(day == selectedDay ? PorcelainTokens.cobalt.opacity(0.15) : .clear)
+                            .background(
+                                day == selectedDay ? FieldGuideTokens.interaction.opacity(0.15) : .clear
+                            )
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                         }
                         .buttonStyle(.plain)

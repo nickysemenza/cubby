@@ -26,7 +26,7 @@ struct EntityRelationshipsSection: View {
                         ForEach(Presentation.allCases) { mode in Text(mode.title).tag(mode) }
                     }
                     .pickerStyle(.segmented)
-                    .frame(minHeight: PorcelainTokens.touchTarget)
+                    .frame(minHeight: FieldGuideTokens.touchTarget)
                     RelationshipDepthPicker(model: model)
                     if model.hasEmptyBranches {
                         Toggle(
@@ -36,7 +36,7 @@ struct EntityRelationshipsSection: View {
                                 set: { model.setShowsEmptyBranches($0) }
                             )
                         )
-                        .frame(minHeight: PorcelainTokens.touchTarget)
+                        .frame(minHeight: FieldGuideTokens.touchTarget)
                     }
 
                     switch presentation {
@@ -101,7 +101,7 @@ struct EntityRelationshipsSection: View {
             if let error = model.acceptError {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.callout)
-                    .foregroundStyle(PorcelainTokens.warning)
+                    .foregroundStyle(FieldGuideTokens.warning)
             }
         }
     }
@@ -110,7 +110,7 @@ struct EntityRelationshipsSection: View {
     private var completion: some View {
         if let graph = model.graph {
             let status = graph.completion.status
-            HStack(spacing: PorcelainTokens.Space.sm) {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
                 Image(systemName: status == .exhausted ? "checkmark.circle" : "info.circle")
                     .accessibilityHidden(true)
                 Text(completionText(graph.completion))
@@ -176,7 +176,7 @@ private struct RelationshipRecommendationGroupView: View {
         status: EmbeddingReadiness,
         current: String?
     ) -> some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             HStack {
                 Text(title).font(.headline)
                 Spacer()
@@ -257,9 +257,9 @@ struct RelationshipRecommendationReviewSheet: View {
                 if let error = model.acceptError {
                     Section("Couldn't save") {
                         Label(error, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(PorcelainTokens.warning)
+                            .foregroundStyle(FieldGuideTokens.warning)
                         Button("Retry", action: accept)
-                            .frame(minHeight: PorcelainTokens.touchTarget)
+                            .frame(minHeight: FieldGuideTokens.touchTarget)
                             .disabled(!canAccept)
                     }
                 }
@@ -283,14 +283,14 @@ struct RelationshipRecommendationReviewSheet: View {
     @ViewBuilder
     private var comparison: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(alignment: .firstTextBaseline, spacing: PorcelainTokens.Space.md) {
+            HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.md) {
                 comparisonValue("Current", value: review.currentTarget ?? "Unassigned")
                 Image(systemName: "arrow.right")
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
                 comparisonValue("Proposed", value: proposedTarget)
             }
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                 comparisonValue("Current", value: review.currentTarget ?? "Unassigned")
                 comparisonValue("Proposed", value: proposedTarget)
             }
@@ -299,12 +299,12 @@ struct RelationshipRecommendationReviewSheet: View {
     }
 
     private func comparisonValue(_ label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.porcelainLabel)
+                .font(.fieldGuideLabel)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -335,9 +335,9 @@ private struct ExpenseProjectProposalView: View {
     let accept: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Label(proposal.target.name, systemImage: "folder")
-                .font(.porcelainTitle)
+                .font(.fieldGuideTitle)
             proposalReasons(proposal.reasons)
             if proposal.sameTradeCount > 0 || proposal.exactProductCount > 0 {
                 Text(
@@ -370,7 +370,7 @@ private struct ExpenseProjectProposalView: View {
                 action: accept
             )
         }
-        .padding(.vertical, PorcelainTokens.Space.xs)
+        .padding(.vertical, FieldGuideTokens.Space.xs)
     }
 
     private var projectPeriod: String {
@@ -390,9 +390,9 @@ private struct InventoryPlacementProposalView: View {
     let accept: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Label(proposal.target.name, systemImage: "location")
-                .font(.porcelainTitle)
+                .font(.fieldGuideTitle)
             proposalReasons(proposal.reasons)
             RelationshipAcceptButton(
                 title: "Move to \(proposal.target.name)",
@@ -401,7 +401,7 @@ private struct InventoryPlacementProposalView: View {
                 action: accept
             )
         }
-        .padding(.vertical, PorcelainTokens.Space.xs)
+        .padding(.vertical, FieldGuideTokens.Space.xs)
     }
 }
 
@@ -414,14 +414,14 @@ private struct ProductRelationshipProposalView: View {
         Button {
             open(EntityRef(entity: .product, id: proposal.target.id.rawValue))
         } label: {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                 HStack {
                     DomainMark(.product)
                     Text(proposal.target.name)
-                        .font(.porcelainTitle)
+                        .font(.fieldGuideTitle)
                     Spacer()
                     Text(proposal.score, format: .number.precision(.fractionLength(2)))
-                        .font(.porcelainData)
+                        .font(.fieldGuideData)
                         .foregroundStyle(.secondary)
                 }
                 ForEach(proposal.evidence, id: \.self) { evidence in
@@ -430,7 +430,7 @@ private struct ProductRelationshipProposalView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .frame(minHeight: PorcelainTokens.touchTarget)
+            .frame(minHeight: FieldGuideTokens.touchTarget)
         }
         .buttonStyle(.plain)
         .accessibilityHint("Opens the related product")
@@ -453,11 +453,11 @@ private struct RelationshipAcceptButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: PorcelainTokens.Space.sm) {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
                 if isAccepting { ProgressView().accessibilityHidden(true) }
                 Text(isAccepting ? "Saving…" : title)
             }
-            .frame(minHeight: PorcelainTokens.touchTarget)
+            .frame(minHeight: FieldGuideTokens.touchTarget)
         }
         .disabled(isDisabled)
     }
@@ -530,15 +530,15 @@ private struct RelationshipBranchList: View {
                         let node =
                             nodesByID[reference.stableKey]
                             ?? EntityGraphNode(reference: reference, label: reference.id)
-                        HStack(spacing: PorcelainTokens.Space.sm) {
+                        HStack(spacing: FieldGuideTokens.Space.sm) {
                             RelationshipRecordButton(node: node)
                             Button {
                                 onInspect(node)
                             } label: {
                                 Label("Show connection", systemImage: "info.circle")
                                     .frame(
-                                        minWidth: PorcelainTokens.touchTarget,
-                                        minHeight: PorcelainTokens.touchTarget
+                                        minWidth: FieldGuideTokens.touchTarget,
+                                        minHeight: FieldGuideTokens.touchTarget
                                     )
                             }
                             .labelStyle(.iconOnly)
@@ -560,7 +560,7 @@ private struct RelationshipBranchList: View {
                             }
                         }
                         .disabled(model.pagingBranchIDs.contains(branch.id))
-                        .frame(minHeight: PorcelainTokens.touchTarget)
+                        .frame(minHeight: FieldGuideTokens.touchTarget)
                     }
                     if let error = model.pageErrors[branch.id] {
                         InlineRelationshipError(message: error) {
@@ -569,7 +569,7 @@ private struct RelationshipBranchList: View {
                     }
                 } label: {
                     HStack {
-                        VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                             Text(branch.label)
                             if branch.root != graph.root {
                                 Text("From \(nodesByID[branch.root.stableKey]?.label ?? branch.root.id)")
@@ -579,7 +579,7 @@ private struct RelationshipBranchList: View {
                         }
                         Spacer()
                         Text(branch.totalCount, format: .number)
-                            .font(.porcelainData)
+                            .font(.fieldGuideData)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -596,24 +596,24 @@ private struct RelationshipRecordButton: View {
 
     var body: some View {
         Button(action: open) {
-            HStack(alignment: .top, spacing: PorcelainTokens.Space.md) {
+            HStack(alignment: .top, spacing: FieldGuideTokens.Space.md) {
                 DomainMark(node.reference.entity)
-                    .padding(.top, PorcelainTokens.Space.xs)
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+                    .padding(.top, FieldGuideTokens.Space.xs)
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                     Text(node.label)
-                        .font(.porcelainTitle)
-                        .foregroundStyle(PorcelainTokens.graphite)
+                        .font(.fieldGuideTitle)
+                        .foregroundStyle(FieldGuideTokens.graphite)
                         .fixedSize(horizontal: false, vertical: true)
                     Text("\(EntityCatalog[node.reference.entity].singular) · \(node.reference.id)")
-                        .font(.porcelainCode)
+                        .font(.fieldGuideCode)
                         .foregroundStyle(.secondary)
                 }
-                Spacer(minLength: PorcelainTokens.Space.sm)
+                Spacer(minLength: FieldGuideTokens.Space.sm)
                 Image(systemName: nativeDestination ? "chevron.right" : "safari")
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
             }
-            .frame(minHeight: PorcelainTokens.touchTarget)
+            .frame(minHeight: FieldGuideTokens.touchTarget)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -639,12 +639,12 @@ private struct InlineRelationshipError: View {
     let retry: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Label(message, systemImage: "exclamationmark.triangle")
                 .font(.callout)
-                .foregroundStyle(PorcelainTokens.warning)
+                .foregroundStyle(FieldGuideTokens.warning)
             Button("Retry", action: retry)
-                .frame(minHeight: PorcelainTokens.touchTarget)
+                .frame(minHeight: FieldGuideTokens.touchTarget)
         }
     }
 }
@@ -704,7 +704,7 @@ private struct RelationshipNodeDetailsSheet: View {
                         requestRelationshipFocus(model: model, on: node.reference) { dismiss() }
                     } label: {
                         Label("Focus graph here", systemImage: "scope")
-                            .frame(maxWidth: .infinity, minHeight: PorcelainTokens.touchTarget)
+                            .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
                     }
                     .disabled(model.graph?.root == node.reference || model.activity != .idle)
                 } footer: {
@@ -742,9 +742,9 @@ private struct RelationshipPathSteps: View {
                 let target =
                     path.nodeRefs.indices.contains(index + 1)
                     ? path.nodeRefs[index + 1] : edge.target
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                     Label(edge.label, systemImage: "arrow.right")
-                        .font(.porcelainLabel)
+                        .font(.fieldGuideLabel)
                     Text("\(labels[source] ?? source.id) → \(labels[target] ?? target.id)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -773,7 +773,7 @@ struct RelationshipGraphNode: View {
 
     var body: some View {
         Button(action: select) {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                 HStack {
                     DomainMark(node.reference.entity)
                     Text(EntityCatalog[node.reference.entity].singular)
@@ -782,28 +782,28 @@ struct RelationshipGraphNode: View {
                     Spacer()
                     if isRoot || isSelected {
                         Image(systemName: isRoot ? "record.circle" : "scope")
-                            .foregroundStyle(PorcelainTokens.cobalt)
+                            .foregroundStyle(FieldGuideTokens.interaction)
                             .accessibilityHidden(true)
                     }
                 }
                 Text(node.label)
-                    .font(.porcelainTitle)
-                    .foregroundStyle(PorcelainTokens.graphite)
+                    .font(.fieldGuideTitle)
+                    .foregroundStyle(FieldGuideTokens.graphite)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(node.reference.id)
-                    .font(.porcelainCode)
+                    .font(.fieldGuideCode)
                     .foregroundStyle(.secondary)
             }
-            .padding(PorcelainTokens.Space.md)
+            .padding(FieldGuideTokens.Space.md)
             .frame(width: cardWidth, height: cardHeight, alignment: .leading)
-            .background(PorcelainTokens.surface)
-            .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
+            .background(FieldGuideTokens.surface)
+            .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
             .overlay(
-                RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
+                RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
                     .strokeBorder(
-                        isSelected || isOnPath ? PorcelainTokens.cobalt : PorcelainTokens.hairline,
-                        lineWidth: isSelected ? 3 : PorcelainTokens.hairlineWidth
+                        isSelected || isOnPath ? FieldGuideTokens.interaction : FieldGuideTokens.hairline,
+                        lineWidth: isSelected ? 3 : FieldGuideTokens.hairlineWidth
                     )
             )
         }

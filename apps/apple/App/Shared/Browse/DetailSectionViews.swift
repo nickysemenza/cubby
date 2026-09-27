@@ -14,7 +14,7 @@ struct EntityHeroView<Actions: View>: View {
 
     @State private var showingPhoto = false
 
-    private let heroMaxHeight: CGFloat = 220
+    private let heroMaxHeight: CGFloat = 280
 
     private var presentation: EntityPresentation { descriptor.presentation }
 
@@ -23,17 +23,18 @@ struct EntityHeroView<Actions: View>: View {
             Button {
                 showingPhoto = true
             } label: {
-                RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                    .fill(PorcelainTokens.inset)
+                RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
+                    .fill(FieldGuideTokens.inset)
                     .aspectRatio(4.0 / 3.0, contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: heroMaxHeight)
                     .overlay {
-                        PhotoAttachmentImage(photo: photo, renderedWidth: PorcelainTokens.readingWidth)
+                        PhotoAttachmentImage(photo: photo, renderedWidth: FieldGuideTokens.readingWidth)
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
+                    .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
                     .overlay(
-                        RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                            .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+                        RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
+                            .strokeBorder(
+                                FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
                     )
             }
             .buttonStyle(.plain)
@@ -42,24 +43,24 @@ struct EntityHeroView<Actions: View>: View {
                 PhotoPreview(photos: [photo], selectedID: photo.id)
             }
         }
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             if let breadcrumb = presentation.heroBreadcrumb, let field = descriptor.field(breadcrumb),
                 let reference = EntityFieldValue.reference(in: row.raw, field: field)
             {
                 NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
-                    HStack(spacing: PorcelainTokens.Space.xs) {
-                        Image(systemName: "chevron.left").font(.porcelainLabel.weight(.semibold))
-                        Text(reference.name ?? reference.id).font(.porcelainLabel)
+                    HStack(spacing: FieldGuideTokens.Space.xs) {
+                        Image(systemName: "chevron.left").font(.fieldGuideLabel.weight(.semibold))
+                        Text(reference.name ?? reference.id).font(.fieldGuideLabel)
                     }
-                    .foregroundStyle(PorcelainTokens.cobalt)
+                    .foregroundStyle(FieldGuideTokens.interaction)
                 }
                 .buttonStyle(.plain)
             }
-            HStack(alignment: .firstTextBaseline, spacing: PorcelainTokens.Space.sm) {
+            HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
                 Text(row.title)
-                    .font(.title.weight(.semibold))
+                    .font(.fieldGuideDisplay)
                     .tracking(-0.4)
-                    .foregroundStyle(PorcelainTokens.graphite)
+                    .foregroundStyle(FieldGuideTokens.graphite)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
                 if let chip = presentation.heroChip, let field = descriptor.field(chip),
@@ -70,33 +71,33 @@ struct EntityHeroView<Actions: View>: View {
             }
             if let subtitle = row.subtitle, !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(.porcelainBody)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .font(.fieldGuideBody)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            HStack(spacing: PorcelainTokens.Space.sm) {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
                 DomainMark(descriptor.key)
                 Text(row.id)
-                    .font(.porcelainCode)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .font(.fieldGuideCode)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     .textSelection(.enabled)
                 Text(descriptor.singular)
-                    .font(.porcelainLabel)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .font(.fieldGuideLabel)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
             }
         }
         let stats = heroStats
         if !stats.isEmpty {
-            HStack(spacing: PorcelainTokens.Space.lg) {
+            HStack(spacing: FieldGuideTokens.Space.lg) {
                 ForEach(stats, id: \.label) { stat in
                     VStack(alignment: .leading, spacing: 2) {
                         FieldExplanationLabel(
                             field: stat.field,
                             subject: EntityRef(entity: descriptor.key, id: row.id)
                         )
-                        .font(.porcelainLabel)
+                        .font(.fieldGuideLabel)
                         .foregroundStyle(.secondary)
-                        Text(stat.value).font(.porcelainData.weight(.semibold))
+                        Text(stat.value).font(.fieldGuideData.weight(.semibold))
                     }
                     .accessibilityElement(children: .combine)
                 }
@@ -201,7 +202,7 @@ struct FieldsSectionView<Inline: View>: View {
         } else if let value = EntityFieldValue.text(row.raw[field.key], field: field) {
             LabeledContent {
                 Text(value)
-                    .font(field.kind == .identifier ? .porcelainCode : .porcelainBody)
+                    .font(field.kind == .identifier ? .fieldGuideCode : .fieldGuideBody)
                     .textSelection(.enabled)
                     .multilineTextAlignment(.trailing)
             } label: {
@@ -251,7 +252,7 @@ struct FieldExplanationLabel: View {
     @State private var loadError: String?
 
     var body: some View {
-        HStack(spacing: PorcelainTokens.Space.xs) {
+        HStack(spacing: FieldGuideTokens.Space.xs) {
             Text(labelOverride ?? field.label)
             if let explanation = field.explanation {
                 Button {
@@ -272,22 +273,22 @@ struct FieldExplanationLabel: View {
     @ViewBuilder
     private func explanationPopover(fallback: String) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                 Text(resolved?.label ?? field.label).font(.headline)
                 Text(resolved?.rule.description ?? fallback)
-                    .font(.porcelainBody)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .font(.fieldGuideBody)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 if let resolved {
                     if !resolved.sources.isEmpty {
                         Divider()
-                        Text("Based on").font(.porcelainLabel.weight(.semibold))
+                        Text("Based on").font(.fieldGuideLabel.weight(.semibold))
                         ForEach(Array(resolved.sources.enumerated()), id: \.offset) { _, source in
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(source.label).font(.porcelainLabel)
+                                Text(source.label).font(.fieldGuideLabel)
                                 if let value = display(source.value), !value.isEmpty {
                                     Text(value)
-                                        .font(.porcelainData)
-                                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                        .font(.fieldGuideData)
+                                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                                 }
                             }
                         }
@@ -295,7 +296,7 @@ struct FieldExplanationLabel: View {
                     if resolved.truncated {
                         Text("Showing the most relevant evidence.")
                             .font(.caption)
-                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     }
                 } else if let loadError {
                     Text(loadError).font(.caption).foregroundStyle(.secondary)
@@ -303,7 +304,7 @@ struct FieldExplanationLabel: View {
                     ProgressView().controlSize(.small)
                 }
             }
-            .padding(PorcelainTokens.Space.md)
+            .padding(FieldGuideTokens.Space.md)
             .frame(idealWidth: 340, alignment: .leading)
         }
         .presentationCompactAdaptation(.popover)
@@ -369,8 +370,8 @@ struct RelationSectionView: View {
                                 .labelStyle(.iconOnly)
                                 .font(.body)
                                 .frame(
-                                    minWidth: PorcelainTokens.touchTarget,
-                                    minHeight: PorcelainTokens.touchTarget)
+                                    minWidth: FieldGuideTokens.touchTarget,
+                                    minHeight: FieldGuideTokens.touchTarget)
                         }
                     }
                 }
@@ -469,7 +470,7 @@ struct EntityJournalSectionView: View {
                 if model.target.key.nativeActions.contains(.create) {
                     Button("Log entry", systemImage: "square.and.pencil", action: onLogEntry)
                         .font(.body)
-                        .frame(minHeight: PorcelainTokens.touchTarget)
+                        .frame(minHeight: FieldGuideTokens.touchTarget)
                         .accessibilityIdentifier("detail.journal.logEntry")
                 }
             }
@@ -496,15 +497,15 @@ struct EntityJournalEntryRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             NavigationLink(value: Route.entityDetail(descriptor.key, id: row.id)) {
-                HStack(alignment: .firstTextBaseline, spacing: PorcelainTokens.Space.sm) {
+                HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(row.title).font(.porcelainBody.weight(.semibold))
+                        Text(row.title).font(.fieldGuideBody.weight(.semibold))
                         if let field = descriptor.field("observedOn"),
                             let day = EntityFieldValue.text(row.raw["observedOn"], field: field)
                         {
-                            Text(day).font(.porcelainLabel).foregroundStyle(.secondary)
+                            Text(day).font(.fieldGuideLabel).foregroundStyle(.secondary)
                         }
                     }
                     Spacer()
@@ -516,14 +517,14 @@ struct EntityJournalEntryRow: View {
                 }
             }
             if let note = row.raw["note"]?.stringValue, !note.isEmpty {
-                Text(note).font(.porcelainBody).fixedSize(horizontal: false, vertical: true)
+                Text(note).font(.fieldGuideBody).fixedSize(horizontal: false, vertical: true)
             }
             if let amount = row.raw["harvestAmount"]?.stringValue, !amount.isEmpty {
-                Text("Harvest: \(amount)").font(.porcelainLabel)
+                Text("Harvest: \(amount)").font(.fieldGuideLabel)
             }
             if !images.isEmpty {
                 ScrollView(.horizontal) {
-                    HStack(spacing: PorcelainTokens.Space.sm) {
+                    HStack(spacing: FieldGuideTokens.Space.sm) {
                         ForEach(images, id: \.self) { url in
                             Thumb(url: url, size: 88)
                         }
@@ -532,7 +533,7 @@ struct EntityJournalEntryRow: View {
                 .scrollIndicators(.hidden)
             }
         }
-        .padding(.vertical, PorcelainTokens.Space.xs)
+        .padding(.vertical, FieldGuideTokens.Space.xs)
     }
 }
 
@@ -545,14 +546,14 @@ struct InlineRelationshipAlternativeView: View {
 
     var body: some View {
         Button(action: review) {
-            HStack(alignment: .top, spacing: PorcelainTokens.Space.sm) {
+            HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
                 Image(systemName: "sparkles")
-                    .foregroundStyle(PorcelainTokens.cobalt)
+                    .foregroundStyle(FieldGuideTokens.interaction)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                     Text("\(hasCurrentTarget ? "Alternative" : "Suggested") \(field): \(targetName)")
-                        .font(.porcelainLabel)
-                        .foregroundStyle(PorcelainTokens.graphite)
+                        .font(.fieldGuideLabel)
+                        .foregroundStyle(FieldGuideTokens.graphite)
                         .fixedSize(horizontal: false, vertical: true)
                     if let reason {
                         Text(reason)
@@ -561,12 +562,12 @@ struct InlineRelationshipAlternativeView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Spacer(minLength: PorcelainTokens.Space.sm)
+                Spacer(minLength: FieldGuideTokens.Space.sm)
                 Image(systemName: "chevron.right")
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
             }
-            .frame(minHeight: PorcelainTokens.touchTarget)
+            .frame(minHeight: FieldGuideTokens.touchTarget)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -605,18 +606,18 @@ struct RawRecordDisclosure: View {
     @State private var showingRaw = false
 
     var body: some View {
-        Panel(padding: PorcelainTokens.Space.md) {
+        Panel(padding: FieldGuideTokens.Space.md) {
             DisclosureGroup(isExpanded: $showingRaw) {
                 Text(prettyJSON)
-                    .font(.porcelainCode)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .font(.fieldGuideCode)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, PorcelainTokens.Space.sm)
+                    .padding(.top, FieldGuideTokens.Space.sm)
             } label: {
                 Eyebrow("Raw record")
             }
-            .tint(PorcelainTokens.graphiteSecondary)
+            .tint(FieldGuideTokens.graphiteSecondary)
         }
     }
 

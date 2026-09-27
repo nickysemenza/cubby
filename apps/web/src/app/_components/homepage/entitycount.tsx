@@ -63,7 +63,7 @@ export default function EntityCount() {
   const isLoading = !isAuthenticated || countsQuery.isLoading;
 
   return (
-    <div className="overflow-hidden border border-[var(--border)] bg-card">
+    <div className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="grid grid-cols-2 divide-x divide-y divide-border/60 sm:grid-cols-4 xl:grid-cols-8">
         {cards.map(({ entity, count }) => {
           const def = entities[entity];

@@ -163,7 +163,7 @@ struct LocationPhotoPassView: View {
                 LoadingIndicator.screen(label: "Loading photo pass")
             }
         }
-        .porcelainScreen()
+        .fieldGuideScreen()
         .navigationTitle("Location photo pass")
         .task(id: taskKey) {
             let pass = LocationPhotoPassModel(
@@ -191,11 +191,11 @@ struct LocationPhotoPassView: View {
             }
         case .ready:
             ScrollView {
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
                     Text(
                         "\(pass.remaining) stops left · \(pass.completed) photographed · \(pass.skipped) skipped"
                     )
-                    .font(.porcelainData)
+                    .font(.fieldGuideData)
                     HStack {
                         TextField(
                             "Scan a location label",
@@ -213,18 +213,18 @@ struct LocationPhotoPassView: View {
                             .frame(height: 180)
                     #endif
                     if let scanError = pass.scanError {
-                        Text(scanError).foregroundStyle(PorcelainTokens.destructive)
+                        Text(scanError).foregroundStyle(FieldGuideTokens.destructive)
                     }
                     if let stop = pass.current {
                         Panel {
                             Eyebrow(pass.scannedStop == nil ? "Next stop" : "Scanned stop")
-                            Text(stop.name).font(.porcelainTitle)
+                            Text(stop.name).font(.fieldGuideTitle)
                             if let tree = pass.tree {
                                 Text(tree.breadcrumb(of: stop.id).map(\.name).joined(separator: " / "))
-                                    .font(.porcelainLabel)
-                                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                    .font(.fieldGuideLabel)
+                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                             }
-                            Text(stop.id.rawValue).font(.porcelainCode)
+                            Text(stop.id.rawValue).font(.fieldGuideCode)
                             NavigationLink(value: Route.entityDetail(.location, id: stop.id.rawValue)) {
                                 Label("Open location", systemImage: "arrow.up.right.square")
                             }
@@ -238,13 +238,13 @@ struct LocationPhotoPassView: View {
                         .buttonStyle(.borderedProminent)
                         Button("Skip this stop") { pass.advance(photoAdded: false) }
                     } else {
-                        Panel { Text("Photo pass complete").font(.porcelainTitle) }
+                        Panel { Text("Photo pass complete").font(.fieldGuideTitle) }
                     }
                     Button("Start this pass over") { Task { await pass.restart() } }
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 }
-                .padding(PorcelainTokens.Space.lg)
-                .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)
+                .padding(FieldGuideTokens.Space.lg)
+                .frame(maxWidth: FieldGuideTokens.readingWidth, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
         }

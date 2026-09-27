@@ -45,14 +45,14 @@ struct DevOverlayText: View {
                     Text(line).lineLimit(1).minimumScaleFactor(0.6)
                 }
             }
-            .font(.porcelainCode)
+            .font(.fieldGuideCode)
             .foregroundStyle(.white)
             .padding(.horizontal, 3)
             .padding(.vertical, 2)
             .background(.black.opacity(0.6), in: .rect(cornerRadius: 5))
         } else {
             Text(text)
-                .font(.porcelainCode)
+                .font(.fieldGuideCode)
                 .foregroundStyle(.secondary)
         }
     }
@@ -98,8 +98,8 @@ struct RequestTraceStrip: View {
 
     var body: some View {
         DevOverlayText("\(entry.operationID) · \(Int(entry.ms))ms · \(entry.status)")
-            .padding(.horizontal, PorcelainTokens.Space.md)
-            .padding(.vertical, PorcelainTokens.Space.sm)
+            .padding(.horizontal, FieldGuideTokens.Space.md)
+            .padding(.vertical, FieldGuideTokens.Space.sm)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.bar)
     }

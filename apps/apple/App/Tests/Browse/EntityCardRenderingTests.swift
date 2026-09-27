@@ -56,7 +56,7 @@ struct EntityCardRenderingTests {
             )
             .frame(width: spec.width)
             .padding(16)
-            .background(PorcelainTokens.canvas)
+            .background(FieldGuideTokens.canvas)
             .environment(\.colorScheme, spec.colorScheme)
             .environment(\.dynamicTypeSize, spec.dynamicTypeSize)
 
@@ -99,7 +99,7 @@ struct EntityCardRenderingTests {
             )
             .frame(width: spec.width)
             .fixedSize(horizontal: false, vertical: true)
-            .background(PorcelainTokens.canvas)
+            .background(FieldGuideTokens.canvas)
             .environment(PreviewFixtures.signedInModel())
             .environment(\.horizontalSizeClass, spec.sizeClass)
             .environment(\.dynamicTypeSize, .large)

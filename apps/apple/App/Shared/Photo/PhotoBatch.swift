@@ -61,8 +61,8 @@ struct PhotoBatch: View {
                     } label: {
                         PhotoAttachmentImage(photo: photo, renderedWidth: 160)
                             .frame(maxWidth: .infinity).frame(height: 110)
-                            .background(PorcelainTokens.inset)
-                            .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
+                            .background(FieldGuideTokens.inset)
+                            .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Preview \(photo.filename)")
@@ -199,5 +199,5 @@ private struct PhotoPreviewItemPresentation<Item: Identifiable, Destination: Vie
 #Preview {
     PhotoBatch(photos: [])
         .padding()
-        .porcelainScreen()
+        .fieldGuideScreen()
 }

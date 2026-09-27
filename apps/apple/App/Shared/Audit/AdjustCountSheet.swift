@@ -27,17 +27,17 @@ struct AdjustCountSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    HStack(spacing: PorcelainTokens.Space.sm) {
+                    HStack(spacing: FieldGuideTokens.Space.sm) {
                         TextField("Count", text: $draft.text)
                             .keyboardDismissBar()
                             #if os(iOS)
                                 .keyboardType(.decimalPad)
                             #endif
-                            .font(.porcelainData)
+                            .font(.fieldGuideData)
                             .accessibilityIdentifier("audit.adjust-count.amount")
                         Text(unit)
-                            .font(.porcelainLabel)
-                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                            .font(.fieldGuideLabel)
+                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     }
                 } header: {
                     Text("New count")

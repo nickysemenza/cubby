@@ -19,7 +19,7 @@ struct EntityFieldControl: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             if model.readOnly(key) {
                 LabeledContent(field.label) {
                     Text(lockedDisplay).foregroundStyle(.secondary)
@@ -32,7 +32,7 @@ struct EntityFieldControl: View {
             if let error = model.fieldErrors[key] {
                 Text(error)
                     .font(.caption)
-                    .foregroundStyle(PorcelainTokens.destructive)
+                    .foregroundStyle(FieldGuideTokens.destructive)
                     .accessibilityLabel("\(field.label) error: \(error)")
             }
         }
@@ -74,8 +74,8 @@ struct EntityFieldControl: View {
                     .labelsHidden()
             }
         case .textarea:
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
-                Text(label).font(.porcelainLabel).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                Text(label).font(.fieldGuideLabel).foregroundStyle(.secondary)
                 TextField(
                     label, text: stringBinding, prompt: Text(field.placeholder ?? "None"), axis: .vertical
                 )
@@ -184,13 +184,13 @@ struct EntityFieldControl: View {
                 LabeledContent(label) {
                     if let id = value.stringValue, !id.isEmpty {
                         Text(pickedTitles[id] ?? id)
-                            .foregroundStyle(PorcelainTokens.graphite)
+                            .foregroundStyle(FieldGuideTokens.graphite)
                             .lineLimit(1)
                     } else {
                         Text("None").foregroundStyle(.secondary)
                     }
                 }
-                .frame(minHeight: PorcelainTokens.touchTarget)
+                .frame(minHeight: FieldGuideTokens.touchTarget)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -219,20 +219,20 @@ struct EntityFieldControl: View {
 
     private func multiReference(_ reference: FieldReference) -> some View {
         let ids = value.arrayValue?.compactMap(\.stringValue) ?? []
-        return VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+        return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             Button {
                 picking = true
             } label: {
                 LabeledContent(label) {
                     Text(ids.isEmpty ? "None" : "\(ids.count) selected").foregroundStyle(.secondary)
                 }
-                .frame(minHeight: PorcelainTokens.touchTarget)
+                .frame(minHeight: FieldGuideTokens.touchTarget)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             ForEach(ids, id: \.self) { id in
                 HStack {
-                    Text(pickedTitles[id] ?? id).font(.porcelainLabel)
+                    Text(pickedTitles[id] ?? id).font(.fieldGuideLabel)
                     Spacer()
                     Button("Remove", systemImage: "xmark.circle.fill") {
                         model.draft[key] = .array(ids.filter { $0 != id }.map(JSONValue.string))
@@ -293,8 +293,8 @@ struct EntityFieldControl: View {
 
     private var tokenControl: some View {
         let tokens = value.arrayValue?.compactMap(\.stringValue) ?? []
-        return VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
-            Text(label).font(.porcelainLabel).foregroundStyle(.secondary)
+        return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            Text(label).font(.fieldGuideLabel).foregroundStyle(.secondary)
             ForEach(tokens, id: \.self) { token in
                 HStack {
                     Text(token)
@@ -307,7 +307,7 @@ struct EntityFieldControl: View {
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Remove \(token)")
                 }
-                .frame(minHeight: PorcelainTokens.touchTarget)
+                .frame(minHeight: FieldGuideTokens.touchTarget)
             }
             TextField("Add \(field.label.lowercased())", text: $newToken)
                 .onSubmit {

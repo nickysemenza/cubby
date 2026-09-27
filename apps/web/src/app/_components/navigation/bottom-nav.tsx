@@ -60,7 +60,7 @@ function BottomNavItem({
   return (
     <Comp
       className={cn(
-        // A quiet Porcelain Transit tab: cobalt identifies the current route;
+        // A quiet Field Guide tab: cobalt identifies the current route;
         // color never substitutes for the visible label or aria-current state.
         "relative flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-1 transition-colors active:bg-muted/60",
         active

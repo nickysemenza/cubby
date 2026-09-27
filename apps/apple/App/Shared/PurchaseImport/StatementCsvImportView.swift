@@ -56,7 +56,7 @@ struct StatementCsvImportView: View {
                         "\(result.evidence) source rows · \(result.transactions) transactions",
                         systemImage: "checkmark.circle.fill"
                     )
-                    .foregroundStyle(PorcelainTokens.positive)
+                    .foregroundStyle(FieldGuideTokens.positive)
                     if result.alreadyPresent > 0 {
                         Text("\(result.alreadyPresent) source rows were already present.")
                             .foregroundStyle(.secondary)
@@ -65,7 +65,7 @@ struct StatementCsvImportView: View {
             }
             if let error {
                 Section("Needs attention") {
-                    Text(error).foregroundStyle(PorcelainTokens.destructive)
+                    Text(error).foregroundStyle(FieldGuideTokens.destructive)
                 }
             }
         }
@@ -143,7 +143,7 @@ struct StatementCsvImportView: View {
                 LabeledContent("Zero-value rows", value: "\(value.zeroValueRows)")
             }
             ForEach(reviewRows, id: \.key) { row in
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                     HStack(alignment: .firstTextBaseline) {
                         Text(row.proposed.merchant ?? row.proposed.rawDescription ?? "Statement row")
                             .font(.subheadline.weight(.medium))
@@ -156,7 +156,8 @@ struct StatementCsvImportView: View {
                     Text(row.status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
                         .font(.caption)
                         .foregroundStyle(
-                            row.status == .readyToCreate ? PorcelainTokens.positive : PorcelainTokens.warning)
+                            row.status == .readyToCreate
+                                ? FieldGuideTokens.positive : FieldGuideTokens.warning)
                     if row.status == .readyToCreate {
                         Toggle(
                             "Record transaction",
@@ -187,7 +188,7 @@ struct StatementCsvImportView: View {
                         }
                     }
                 }
-                .padding(.vertical, PorcelainTokens.Space.xs)
+                .padding(.vertical, FieldGuideTokens.Space.xs)
             }
             if value.hasMore {
                 Button("Review next rows") { Task { await loadMore() } }

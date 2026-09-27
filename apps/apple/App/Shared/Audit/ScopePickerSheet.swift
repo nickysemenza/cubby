@@ -22,7 +22,7 @@ struct ScopePickerSheet: View {
             }
         }
         .listStyle(.plain)
-        .porcelainScreen()
+        .fieldGuideScreen()
         .refreshControl { await session.loadTree() }
         .overlay {
             if candidates.isEmpty {
@@ -36,12 +36,12 @@ struct ScopePickerSheet: View {
     }
 
     private var codeRow: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Eyebrow("Scan or type a location code")
-            HStack(spacing: PorcelainTokens.Space.sm) {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
                 TextField("LOC-….", text: $code)
                     .keyboardDismissBar()
-                    .font(.porcelainCode)
+                    .font(.fieldGuideCode)
                     .textFieldStyle(.plain)
                     .autocorrectionDisabled()
                     #if os(iOS)
@@ -49,31 +49,32 @@ struct ScopePickerSheet: View {
                         .textInputAutocapitalization(.characters)
                     #endif
                     .onSubmit(submitCode)
-                    .padding(.horizontal, PorcelainTokens.Space.md)
-                    .frame(height: PorcelainTokens.touchTarget)
+                    .padding(.horizontal, FieldGuideTokens.Space.md)
+                    .frame(height: FieldGuideTokens.touchTarget)
                     .background(
-                        RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl)
-                            .fill(PorcelainTokens.surface)
+                        RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
+                            .fill(FieldGuideTokens.surface)
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl)
-                            .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+                        RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
+                            .strokeBorder(
+                                FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
                     )
                 Button("Go", action: submitCode)
-                    .font(.porcelainTitle)
+                    .font(.fieldGuideTitle)
                     .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.roundedRectangle(radius: PorcelainTokens.radiusControl))
-                    .tint(PorcelainTokens.cobalt)
-                    .frame(height: PorcelainTokens.touchTarget)
+                    .buttonBorderShape(.roundedRectangle(radius: FieldGuideTokens.radiusControl))
+                    .tint(FieldGuideTokens.interaction)
+                    .frame(height: FieldGuideTokens.touchTarget)
                     .disabled(code.isEmpty)
             }
             if let codeError {
                 Text(codeError)
-                    .font(.porcelainLabel)
-                    .foregroundStyle(PorcelainTokens.destructive)
+                    .font(.fieldGuideLabel)
+                    .foregroundStyle(FieldGuideTokens.destructive)
             }
         }
-        .listRowBackground(PorcelainTokens.canvas)
+        .listRowBackground(FieldGuideTokens.canvas)
         .listRowSeparator(.hidden)
     }
 
@@ -81,27 +82,27 @@ struct ScopePickerSheet: View {
         Button {
             Task { await session.start(scope: node.id) }
         } label: {
-            HStack(alignment: .firstTextBaseline, spacing: PorcelainTokens.Space.md) {
+            HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.md) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(node.name)
-                        .font(.porcelainBody)
-                        .foregroundStyle(PorcelainTokens.graphite)
+                        .font(.fieldGuideBody)
+                        .foregroundStyle(FieldGuideTokens.graphite)
                         .lineLimit(1)
                     if let type = node._type {
                         Eyebrow(type.rawValue)
                     }
                 }
-                Spacer(minLength: PorcelainTokens.Space.sm)
+                Spacer(minLength: FieldGuideTokens.Space.sm)
                 Text("\(node.totalItems)")
-                    .font(.porcelainData)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .font(.fieldGuideData)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
             }
             .padding(.leading, CGFloat(depth) * 14)
-            .frame(minHeight: PorcelainTokens.touchTarget)
+            .frame(minHeight: FieldGuideTokens.touchTarget)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .porcelainListRow()
+        .fieldGuideListRow()
     }
 
     private func submitCode() {

@@ -11,18 +11,18 @@ struct Eyebrow: View {
 
     var body: some View {
         Text(text)
-            .font(.porcelainLabel)
-            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+            .font(.fieldGuideLabel)
+            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
             .textCase(nil)
     }
 }
 
 #Preview("Eyebrow") {
-    VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
         Eyebrow("This sweep")
-        Text("14 added · 3 confirmed").font(.porcelainData)
+        Text("14 added · 3 confirmed").font(.fieldGuideData)
     }
-    .padding(PorcelainTokens.Space.lg)
+    .padding(FieldGuideTokens.Space.lg)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(PorcelainTokens.canvas)
+    .background(FieldGuideTokens.canvas)
 }

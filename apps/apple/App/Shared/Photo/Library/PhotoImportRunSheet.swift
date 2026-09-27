@@ -201,7 +201,7 @@ struct PhotoImportRunSheet: View {
             if let error = flow.prepareError {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(PorcelainTokens.destructive)
+                        .foregroundStyle(FieldGuideTokens.destructive)
                 }
             }
             Section {
@@ -249,11 +249,11 @@ struct PhotoImportRunSheet: View {
     }
 
     private func preparingView(_ completed: Int, _ total: Int) -> some View {
-        VStack(spacing: PorcelainTokens.Space.md) {
+        VStack(spacing: FieldGuideTokens.Space.md) {
             ProgressView(value: Double(completed), total: Double(max(total, 1)))
             Text("Preparing \(completed) of \(total)…")
-                .font(.porcelainBody)
-                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                .font(.fieldGuideBody)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
         }
         .padding()
     }
@@ -287,33 +287,33 @@ private struct RunningView: View {
     let onDone: (RunShortcode) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
             Text(stageTitle)
                 .font(.headline)
             ProgressView(
                 value: Double(session.progress.uploaded), total: Double(max(session.progress.total, 1))
             )
             Text("Uploaded \(session.progress.uploaded) of \(session.progress.total)")
-                .font(.porcelainBody)
+                .font(.fieldGuideBody)
             ProgressView(
                 value: Double(session.progress.analyzed), total: Double(max(session.progress.total, 1))
             )
             Text("Analyzed \(session.progress.analyzed) of \(session.progress.total)")
-                .font(.porcelainLabel)
-                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                .font(.fieldGuideLabel)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
             if !session.progress.failedIDs.isEmpty {
                 Label(
                     "\(session.progress.failedIDs.count) photo\(session.progress.failedIDs.count == 1 ? "" : "s") need a retry",
                     systemImage: "exclamationmark.triangle"
                 )
-                .foregroundStyle(PorcelainTokens.destructive)
+                .foregroundStyle(FieldGuideTokens.destructive)
             }
             if !session.failedAnalysisPhotos.isEmpty {
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                     ForEach(session.failedAnalysisPhotos, id: \.id) { photo in
                         Label(photo.file.filename, systemImage: "photo")
-                            .font(.porcelainLabel)
-                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                            .font(.fieldGuideLabel)
+                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     }
                 }
                 .accessibilityIdentifier("photos.run.failedAnalysis")
@@ -342,15 +342,15 @@ private struct RunningView: View {
         case .complete:
             if let runID = session.runID {
                 Label("Photos uploaded", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(PorcelainTokens.positive)
+                    .foregroundStyle(FieldGuideTokens.positive)
                 if session.progress.analyzed < session.progress.total,
                     session.progress.failedIDs.isEmpty
                 {
                     Label("Photo details are still processing on this device.", systemImage: "sparkles")
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 }
                 Text("The agent will propose item groups for your review before products are created.")
-                    .font(.porcelainBody)
+                    .font(.fieldGuideBody)
                 NavigationLink {
                     RunReviewView(runID: runID)
                 } label: {
@@ -374,7 +374,7 @@ private struct RunningView: View {
                 .accessibilityIdentifier("photos.run.resume")
         case .failed(let message):
             Label(message, systemImage: "exclamationmark.triangle")
-                .foregroundStyle(PorcelainTokens.destructive)
+                .foregroundStyle(FieldGuideTokens.destructive)
             Button("Resume") { onResume() }
                 .buttonStyle(.borderedProminent)
                 .accessibilityIdentifier("photos.run.resume")

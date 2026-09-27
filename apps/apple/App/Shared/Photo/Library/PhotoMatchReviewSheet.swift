@@ -111,7 +111,7 @@ struct PhotoMatchReviewContent: View {
                     .foregroundStyle(.secondary)
                 }
                 if checking { ProgressView(checkStatus) }
-                if let error { Text(error).foregroundStyle(PorcelainTokens.destructive) }
+                if let error { Text(error).foregroundStyle(FieldGuideTokens.destructive) }
                 if appModel.photoMatches.repairFailures > 0 {
                     Text(
                         "\(appModel.photoMatches.repairFailures) images could not be checked. Refresh to retry."
@@ -252,7 +252,7 @@ struct MatchCandidateView: View {
                     Text("\(association.entityName) · \(association.role.rawValue)").font(.caption)
                 }
             } else if let error {
-                Text(error).foregroundStyle(PorcelainTokens.destructive)
+                Text(error).foregroundStyle(FieldGuideTokens.destructive)
             } else {
                 LoadingIndicator(label: "Loading photo details")
             }

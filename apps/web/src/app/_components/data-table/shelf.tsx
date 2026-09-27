@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { Link } from "@tanstack/react-router";
@@ -101,11 +102,49 @@ export function GroupedFlow<T>({
  */
 export const shelfGridClass = (compact = false) =>
   compact
-    ? "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(min(100%,6rem),1fr))]"
-    : "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(min(12rem,calc((100%_-_0.5rem)/2)),1fr))]";
+    ? "grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,6rem),1fr))]"
+    : "grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(14rem,calc((100%_-_0.75rem)/2)),1fr))]";
 
 /** The largest display transform the standard shelf card needs. */
 const SHELF_CARD_DISPLAY_WIDTH = 240;
+
+function ShelfIdentityFallback({
+  entity,
+  compact,
+}: {
+  entity: Entity;
+  compact: boolean;
+}) {
+  return (
+    <div
+      className="relative flex h-full w-full flex-col items-center justify-center gap-3 bg-[var(--brand-paper-alt)] text-foreground"
+      aria-hidden
+    >
+      {!compact && (
+        <span className="absolute top-3 left-3 font-mono text-2xs tracking-[0.16em] text-muted-foreground uppercase">
+          Field guide
+        </span>
+      )}
+      <span
+        className={cn(
+          "flex items-center justify-center border border-border bg-card shadow-sm",
+          compact ? "size-10 rounded-xl" : "size-16 rounded-2xl",
+        )}
+      >
+        <EntityIcon
+          entity={entity}
+          colored
+          className={compact ? "size-5" : "size-8"}
+        />
+      </span>
+      {!compact && (
+        <span className="font-mono text-2xs tracking-[0.16em] text-muted-foreground uppercase">
+          {entitySummary[entity].singular}
+        </span>
+      )}
+    </div>
+  );
+}
 
 /** A single image-led card: square photo (with graceful fallback) + caption. */
 export function ShelfCard({
@@ -145,9 +184,9 @@ export function ShelfCard({
     <div
       data-entity-card
       className={cn(
-        "relative flex min-w-0 flex-col overflow-hidden border bg-card transition-colors duration-150 hover:bg-muted/50",
+        "relative flex min-w-0 flex-col overflow-hidden rounded-[var(--brand-radius-panel)] border bg-card transition-colors duration-150 hover:bg-muted/50",
         selected
-          ? "border-primary ring-1 ring-primary"
+          ? "border-primary ring-2 ring-[var(--brand-signal)]"
           : "border-[var(--border)]",
       )}
       onMouseEnter={onRowHover}
@@ -181,7 +220,10 @@ export function ShelfCard({
               displayWidth={compact ? 128 : SHELF_CARD_DISPLAY_WIDTH}
               className="absolute inset-0 h-full w-full object-cover"
               fallback={
-                <EntityIcon entity={entity} colored className="size-6" />
+                <ShelfIdentityFallback entity={entity} compact={compact} />
+              }
+              loadingFallback={
+                <ShelfIdentityFallback entity={entity} compact={compact} />
               }
             />
           )}
@@ -196,7 +238,7 @@ export function ShelfCard({
             </div>
           )}
         </div>
-        <div className="min-w-0 px-2 py-2">
+        <div className="min-w-0 px-3 pt-3 pb-2">
           <div
             className={cn(
               "line-clamp-2 leading-tight font-medium",
@@ -209,7 +251,7 @@ export function ShelfCard({
         </div>
       </Link>
       {subtitle != null && subtitle !== "" && (
-        <div className="min-w-0 truncate px-2 pb-2 text-xs text-muted-foreground">
+        <div className="min-w-0 truncate px-3 pb-3 text-xs text-muted-foreground">
           {subtitle}
         </div>
       )}
@@ -219,7 +261,7 @@ export function ShelfCard({
           params={params}
           aria-label={`Open detail page for ${title}`}
           title={`Open ${title}`}
-          className="absolute top-1 right-1 flex size-11 items-center justify-center border border-[var(--border)] bg-card/95 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:size-7"
+          className="absolute top-2 right-2 flex size-11 items-center justify-center rounded-full border border-[var(--border)] bg-card/95 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:size-8"
         >
           <ArrowUpRightIcon className="size-4" />
         </Link>
@@ -257,7 +299,10 @@ function ShelfSkeleton({ compact = false }: { compact?: boolean }) {
   return (
     <div className={shelfGridClass(compact)}>
       {Array.from({ length: 12 }, (_, i) => (
-        <div key={i} className="overflow-hidden border border-[var(--border)]">
+        <div
+          key={i}
+          className="overflow-hidden rounded-[var(--brand-radius-panel)] border border-[var(--border)]"
+        >
           <Skeleton className="aspect-square w-full rounded-none" />
           <div className="space-y-2 px-2 py-2">
             <Skeleton className="h-3.5 w-3/4" />

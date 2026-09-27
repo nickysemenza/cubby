@@ -10,35 +10,35 @@ struct ProductMatchesPanel: View {
     let onSelect: (EntityRow) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Eyebrow("\(rows.count) products carry \(code)")
             Panel(padding: 0, spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    if index > 0 { PanelDivider(inset: PorcelainTokens.Space.lg + 56) }
+                    if index > 0 { PanelDivider(inset: FieldGuideTokens.Space.lg + 56) }
                     Button {
                         onSelect(row)
                     } label: {
-                        HStack(spacing: PorcelainTokens.Space.md) {
+                        HStack(spacing: FieldGuideTokens.Space.md) {
                             Thumb(url: row.imageURL, size: 56, symbol: "shippingbox")
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(row.title)
                                     .font(.body.weight(.semibold))
-                                    .foregroundStyle(PorcelainTokens.graphite)
+                                    .foregroundStyle(FieldGuideTokens.graphite)
                                     .lineLimit(2)
                                 if let subtitle = row.subtitle, !subtitle.isEmpty {
                                     Text(subtitle)
-                                        .font(.porcelainBody)
-                                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                        .font(.fieldGuideBody)
+                                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                                         .lineLimit(1)
                                 }
                             }
-                            Spacer(minLength: PorcelainTokens.Space.sm)
+                            Spacer(minLength: FieldGuideTokens.Space.sm)
                             Image(systemName: "chevron.right")
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         }
-                        .padding(.horizontal, PorcelainTokens.Space.md)
-                        .padding(.vertical, PorcelainTokens.Space.md)
+                        .padding(.horizontal, FieldGuideTokens.Space.md)
+                        .padding(.vertical, FieldGuideTokens.Space.md)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -60,35 +60,35 @@ struct UnknownCodePanel: View {
     let onStock: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Eyebrow("No product carries \(code)")
             Panel {
                 if let catalog {
-                    HStack(spacing: PorcelainTokens.Space.md) {
+                    HStack(spacing: FieldGuideTokens.Space.md) {
                         Thumb(url: catalog.imageURL, size: 56, symbol: "shippingbox")
                         VStack(alignment: .leading, spacing: 2) {
                             Text(catalog.name)
                                 .font(.body.weight(.semibold))
-                                .foregroundStyle(PorcelainTokens.graphite)
+                                .foregroundStyle(FieldGuideTokens.graphite)
                                 .lineLimit(2)
                             if let manufacturer = catalog.manufacturerOrBrand {
                                 Text(manufacturer)
-                                    .font(.porcelainBody)
-                                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                    .font(.fieldGuideBody)
+                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                                     .lineLimit(1)
                             }
                         }
-                        Spacer(minLength: PorcelainTokens.Space.sm)
+                        Spacer(minLength: FieldGuideTokens.Space.sm)
                     }
                 } else {
                     Text("Cubby's catalog doesn't recognize this code either.")
-                        .font(.porcelainBody)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .font(.fieldGuideBody)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 }
-                HStack(spacing: PorcelainTokens.Space.sm) {
+                HStack(spacing: FieldGuideTokens.Space.sm) {
                     Button("Create product", action: onCreate)
                         .buttonStyle(.borderedProminent)
-                        .tint(PorcelainTokens.cobalt)
+                        .tint(FieldGuideTokens.interaction)
                         .disabled(creating)
                     Button("Stock it at a location", action: onStock)
                         .buttonStyle(.bordered)
@@ -105,9 +105,9 @@ struct UnknownCodePanel: View {
 #Preview("Product matches") {
     ScrollView {
         ProductMatchesPanel(rows: PreviewFixtures.sampleRows, code: "00012345678905") { _ in }
-            .padding(PorcelainTokens.Space.lg)
+            .padding(FieldGuideTokens.Space.lg)
     }
-    .background(PorcelainTokens.canvas)
+    .background(FieldGuideTokens.canvas)
 }
 
 #Preview("Unknown code") {
@@ -120,15 +120,15 @@ struct UnknownCodePanel: View {
                 description: nil, priceDollars: nil, imageUrl: nil, source: .upcitemdb, cached: false),
             onCreate: {}, onStock: {}
         )
-        .padding(PorcelainTokens.Space.lg)
+        .padding(FieldGuideTokens.Space.lg)
     }
-    .background(PorcelainTokens.canvas)
+    .background(FieldGuideTokens.canvas)
 }
 
 #Preview("Unknown code, no catalog hit") {
     ScrollView {
         UnknownCodePanel(code: "00012345678905", catalog: nil, onCreate: {}, onStock: {})
-            .padding(PorcelainTokens.Space.lg)
+            .padding(FieldGuideTokens.Space.lg)
     }
-    .background(PorcelainTokens.canvas)
+    .background(FieldGuideTokens.canvas)
 }

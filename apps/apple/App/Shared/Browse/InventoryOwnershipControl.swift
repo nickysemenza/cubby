@@ -26,11 +26,11 @@ struct InventoryOwnershipControl: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-            HStack(spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
                 Label(model.summary, systemImage: "person.crop.circle")
-                    .font(.porcelainLabel)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .font(.fieldGuideLabel)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 if model.confirmedMatchesInheritedOwner {
                     StatusChip(text: "Confirmed matches inherited owner", tone: .positive)
                 }
@@ -56,7 +56,7 @@ struct InventoryOwnershipControl: View {
                     LabeledContent("Source", value: model.currentSourceLabel)
                     if model.confirmedMatchesInheritedOwner {
                         Label("Confirmed matches inherited owner", systemImage: "checkmark.seal.fill")
-                            .foregroundStyle(PorcelainTokens.positive)
+                            .foregroundStyle(FieldGuideTokens.positive)
                     }
                 }
 
@@ -71,7 +71,7 @@ struct InventoryOwnershipControl: View {
                             pickingOwner = true
                         } label: {
                             LabeledContent("Person", value: model.selectedOwnerLabel)
-                                .frame(minHeight: PorcelainTokens.touchTarget)
+                                .frame(minHeight: FieldGuideTokens.touchTarget)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -81,17 +81,17 @@ struct InventoryOwnershipControl: View {
                 Section {
                     Toggle("Apply to part of this quantity", isOn: $model.appliesToPartialQuantity)
                     if model.appliesToPartialQuantity {
-                        HStack(spacing: PorcelainTokens.Space.sm) {
+                        HStack(spacing: FieldGuideTokens.Space.sm) {
                             TextField("Quantity", text: $model.quantityText)
                                 .keyboardDismissBar()
                                 #if os(iOS)
                                     .keyboardType(.decimalPad)
                                 #endif
-                                .font(.porcelainData)
+                                .font(.fieldGuideData)
                                 .accessibilityIdentifier("detail.inventory.ownership.quantity")
                             Text(model.unit)
-                                .font(.porcelainLabel)
-                                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                .font(.fieldGuideLabel)
+                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         }
                     }
                 } header: {
@@ -101,7 +101,7 @@ struct InventoryOwnershipControl: View {
                         Text(quantityMessage)
                             .foregroundStyle(
                                 model.hasValidQuantity
-                                    ? PorcelainTokens.graphiteSecondary : PorcelainTokens.destructive)
+                                    ? FieldGuideTokens.graphiteSecondary : FieldGuideTokens.destructive)
                     }
                 }
 
@@ -138,7 +138,7 @@ struct InventoryOwnershipControl: View {
                 if let error = model.errorMessage {
                     Section {
                         Label(error, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(PorcelainTokens.destructive)
+                            .foregroundStyle(FieldGuideTokens.destructive)
                     }
                 }
             }
@@ -398,7 +398,7 @@ final class InventoryOwnershipModel {
         matchesInheritedOwner: false
     )
     InventoryOwnershipControl(previewModel: model)
-        .padding(PorcelainTokens.Space.lg)
-        .background(PorcelainTokens.canvas)
+        .padding(FieldGuideTokens.Space.lg)
+        .background(FieldGuideTokens.canvas)
         .environment(PreviewFixtures.signedInModel())
 }

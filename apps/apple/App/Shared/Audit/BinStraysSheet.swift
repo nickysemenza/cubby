@@ -19,7 +19,7 @@ struct BinStraysSheet: View {
                 summaryRow
             }
             .listStyle(.plain)
-            .porcelainScreen()
+            .fieldGuideScreen()
             .overlay {
                 if session.strays.isEmpty && session.adoptions.isEmpty && summary == nil {
                     ContentUnavailableView(
@@ -47,20 +47,20 @@ struct BinStraysSheet: View {
     private var foundElsewhereSection: some View {
         if !session.strays.isEmpty {
             Eyebrow("Found elsewhere")
-                .listRowBackground(PorcelainTokens.canvas)
+                .listRowBackground(FieldGuideTokens.canvas)
                 .listRowSeparator(.hidden)
             ForEach(session.strays) { stray in
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                     Text(stray.productName)
-                        .font(.porcelainTitle)
-                        .foregroundStyle(PorcelainTokens.graphite)
+                        .font(.fieldGuideTitle)
+                        .foregroundStyle(FieldGuideTokens.graphite)
                         .lineLimit(2)
                     ForEach(stray.rows) { row in
-                        HStack(spacing: PorcelainTokens.Space.sm) {
+                        HStack(spacing: FieldGuideTokens.Space.sm) {
                             DomainMark(.location)
                             Text("in \(row.location.name)")
-                                .font(.porcelainBody)
-                                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                .font(.fieldGuideBody)
+                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                                 .lineLimit(1)
                             if row.ambiguousQuantity {
                                 StatusChip(text: "1 of several units", tone: .warning)
@@ -68,8 +68,8 @@ struct BinStraysSheet: View {
                         }
                     }
                 }
-                .padding(.vertical, PorcelainTokens.Space.xs)
-                .porcelainListRow()
+                .padding(.vertical, FieldGuideTokens.Space.xs)
+                .fieldGuideListRow()
                 .swipeActions {
                     Button("Dismiss", role: .destructive) { session.dismissStray(stray.productID) }
                 }
@@ -81,19 +81,19 @@ struct BinStraysSheet: View {
     private var adoptSection: some View {
         if !session.adoptions.isEmpty {
             Eyebrow("Bins to adopt")
-                .listRowBackground(PorcelainTokens.canvas)
+                .listRowBackground(FieldGuideTokens.canvas)
                 .listRowSeparator(.hidden)
             ForEach(session.adoptions) { bin in
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(bin.name) — now in \(bin.currentParentName)")
-                        .font(.porcelainBody)
-                        .foregroundStyle(PorcelainTokens.graphite)
+                        .font(.fieldGuideBody)
+                        .foregroundStyle(FieldGuideTokens.graphite)
                         .lineLimit(2)
                     Text("Adopted when you press Done.")
-                        .font(.porcelainLabel)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .font(.fieldGuideLabel)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 }
-                .porcelainListRow()
+                .fieldGuideListRow()
                 .swipeActions {
                     Button("Dismiss", role: .destructive) { session.dismissAdoption(bin.id) }
                 }
@@ -105,9 +105,9 @@ struct BinStraysSheet: View {
     private var summaryRow: some View {
         if let summary {
             Text(summary)
-                .font(.porcelainBody)
-                .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                .listRowBackground(PorcelainTokens.canvas)
+                .font(.fieldGuideBody)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                .listRowBackground(FieldGuideTokens.canvas)
                 .listRowSeparator(.hidden)
         }
     }

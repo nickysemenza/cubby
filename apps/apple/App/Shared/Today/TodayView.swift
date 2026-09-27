@@ -131,7 +131,7 @@ struct AuditEntryRow: View {
             Text(entry.createdAt.formatted(.relative(presentation: .named)))
                 .font(.caption).foregroundStyle(.secondary)
         }
-        .frame(minHeight: PorcelainTokens.touchTarget)
+        .frame(minHeight: FieldGuideTokens.touchTarget)
     }
 }
 
@@ -278,6 +278,17 @@ struct TodayContent: View {
     #if os(iOS)
         private var iOSList: some View {
             List {
+                Section {
+                    HStack(spacing: FieldGuideTokens.Space.sm) {
+                        Circle()
+                            .fill(FieldGuideTokens.signal)
+                            .frame(width: 9, height: 9)
+                            .accessibilityHidden(true)
+                        Text("Your household at a glance")
+                            .font(.fieldGuideBody)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 Section("Activity inbox") {
                     NavigationLink(value: Route.activityList) {
                         Label("All activity", systemImage: "clock.arrow.circlepath")
@@ -293,7 +304,7 @@ struct TodayContent: View {
                                 )
                                 .font(.caption).foregroundStyle(.secondary)
                             }
-                            .frame(minHeight: PorcelainTokens.touchTarget, alignment: .leading)
+                            .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
                         }
                         .buttonStyle(.plain)
                     }
@@ -310,7 +321,7 @@ struct TodayContent: View {
                         Label("All changes", systemImage: "clock")
                     }
                     if let error = highlights?.error {
-                        Text(error).font(.caption).foregroundStyle(PorcelainTokens.warning)
+                        Text(error).font(.caption).foregroundStyle(FieldGuideTokens.warning)
                     }
                 }
                 .accessibilityIdentifier("work.auditFeed")
@@ -376,7 +387,7 @@ struct TodayContent: View {
                         Text(
                             "\(counts.total.formatted()) problems · \(counts.coverageTotal.formatted()) coverage gaps"
                         )
-                        .font(.porcelainLabel)
+                        .font(.fieldGuideLabel)
                         .foregroundStyle(.secondary)
                     }
                     if let problemsError {
@@ -410,20 +421,24 @@ struct TodayContent: View {
     #if os(macOS)
         private var macDashboard: some View {
             ScrollView {
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xl) {
-                    Text(dateText)
-                        .font(.porcelainHeadline)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xl) {
+                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                        Text("Today").font(.fieldGuideDisplay)
+                        HStack(spacing: FieldGuideTokens.Space.sm) {
+                            Circle().fill(FieldGuideTokens.signal).frame(width: 9, height: 9)
+                            Text(dateText).font(.fieldGuideLabel).foregroundStyle(.secondary)
+                        }
+                    }
 
                     if dynamicTypeSize.isAccessibilitySize || macDashboardWidth < 760 {
                         macDashboardStack
                     } else {
-                        HStack(alignment: .top, spacing: PorcelainTokens.Space.lg) {
+                        HStack(alignment: .top, spacing: FieldGuideTokens.Space.lg) {
                             macWorkAndActivity
                                 .frame(width: macWorkWidth, alignment: .topLeading)
                             macMealsAndChanges
                                 .frame(
-                                    width: macDashboardWidth - macWorkWidth - PorcelainTokens.Space.lg,
+                                    width: macDashboardWidth - macWorkWidth - FieldGuideTokens.Space.lg,
                                     alignment: .topLeading)
                         }
                     }
@@ -435,34 +450,34 @@ struct TodayContent: View {
                     macDashboardWidth = $0
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
-                .padding(PorcelainTokens.Space.xxl)
+                .padding(FieldGuideTokens.Space.xxl)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .background(PorcelainTokens.canvas)
+            .background(FieldGuideTokens.canvas)
             .refreshControl(onRefresh)
             .accessibilityIdentifier("today.sections")
         }
 
         private var macWorkWidth: CGFloat {
-            max(400, (macDashboardWidth - PorcelainTokens.Space.lg) * 0.55)
+            max(400, (macDashboardWidth - FieldGuideTokens.Space.lg) * 0.55)
         }
 
         private var macWorkAndActivity: some View {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
                 macWorkColumn
                 if let highlights { workActivityPanel(highlights) }
             }
         }
 
         private var macMealsAndChanges: some View {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
                 macMealsColumn
                 if let highlights { workAuditPanel(highlights) }
             }
         }
 
         private var macDashboardStack: some View {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
                 macWorkAndActivity
                 macMealsAndChanges
             }
@@ -484,12 +499,12 @@ struct TodayContent: View {
             dashboardPanel("Recent changes", systemImage: "clock") {
                 ForEach(highlights.entries, id: \.entryKey) { AuditEntryRow(entry: $0) }
                 NavigationLink(value: Route.auditHistory) { Text("All changes") }
-                if let error = highlights.error { Text(error).foregroundStyle(PorcelainTokens.warning) }
+                if let error = highlights.error { Text(error).foregroundStyle(FieldGuideTokens.warning) }
             }
         }
 
         private var macMealsColumn: some View {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
                 dashboardPanel("Meals today", systemImage: "fork.knife") {
                     switch meals {
                     case .loading: LoadingIndicator(label: "Loading meals")
@@ -531,7 +546,7 @@ struct TodayContent: View {
         }
 
         private var macWorkColumn: some View {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
                 dashboardPanel("Next up", systemImage: "checklist") {
                     switch tasks {
                     case .loading: LoadingIndicator(label: "Loading tasks")
@@ -559,7 +574,7 @@ struct TodayContent: View {
                         Text(
                             "\(counts.total.formatted()) problems · \(counts.coverageTotal.formatted()) coverage gaps"
                         )
-                        .font(.porcelainLabel)
+                        .font(.fieldGuideLabel)
                         .foregroundStyle(.secondary)
                     }
                     if let problemsError {
@@ -596,8 +611,8 @@ struct TodayContent: View {
         ) -> some View {
             Panel {
                 Label(title, systemImage: systemImage)
-                    .font(.porcelainHeadline)
-                    .foregroundStyle(PorcelainTokens.graphite)
+                    .font(.fieldGuideHeadline)
+                    .foregroundStyle(FieldGuideTokens.graphite)
                 Divider()
                 content()
             }
@@ -609,7 +624,7 @@ struct TodayContent: View {
     /// first real row replaces it.
     private func loadingRow(_ label: String) -> some View {
         LoadingIndicator(label: label)
-            .frame(minHeight: PorcelainTokens.touchTarget, alignment: .leading)
+            .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
     }
 
     private func failure(_ message: String, isLoading: Bool, retry: @escaping @Sendable () async -> Void)
@@ -650,11 +665,11 @@ struct TodayContent: View {
         }
     }
 
-    /// House style for a section's empty/placeholder line (`.porcelainLabel` + secondary), shared
+    /// House style for a section's empty/placeholder line (`.fieldGuideLabel` + secondary), shared
     /// so every Today section's "nothing here" text reads at the same size instead of some
     /// rendering at the default body size and others at caption size.
     private func emptyStateText(_ text: String) -> some View {
-        Text(text).font(.porcelainLabel).foregroundStyle(.secondary)
+        Text(text).font(.fieldGuideLabel).foregroundStyle(.secondary)
     }
 }
 
@@ -664,24 +679,24 @@ private struct TaskRow: View {
     let task: TaskTodayBriefingItemOut
 
     var body: some View {
-        HStack(alignment: .top, spacing: PorcelainTokens.Space.md) {
+        HStack(alignment: .top, spacing: FieldGuideTokens.Space.md) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.name)
-                    .font(.porcelainTitle)
-                    .foregroundStyle(PorcelainTokens.graphite)
+                    .font(.fieldGuideTitle)
+                    .foregroundStyle(FieldGuideTokens.graphite)
 
                 if let subtitle {
                     Text(subtitle)
-                        .font(.porcelainLabel)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .font(.fieldGuideLabel)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
 
                 }
             }
-            Spacer(minLength: PorcelainTokens.Space.sm)
+            Spacer(minLength: FieldGuideTokens.Space.sm)
             StatusChip(text: statusLabel, tone: statusTone)
         }
         .padding(.vertical, 4)
-        .frame(minHeight: PorcelainTokens.touchTarget)
+        .frame(minHeight: FieldGuideTokens.touchTarget)
     }
 
     private var subtitle: String? {
@@ -703,30 +718,30 @@ private struct MealRow: View {
     let meal: MealListItem
 
     var body: some View {
-        HStack(alignment: .top, spacing: PorcelainTokens.Space.md) {
+        HStack(alignment: .top, spacing: FieldGuideTokens.Space.md) {
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: PorcelainTokens.Space.xs) {
+                HStack(spacing: FieldGuideTokens.Space.xs) {
                     Text(meal.displayName)
-                        .font(.porcelainTitle)
-                        .foregroundStyle(PorcelainTokens.graphite)
+                        .font(.fieldGuideTitle)
+                        .foregroundStyle(FieldGuideTokens.graphite)
 
                     if let mealType = meal.mealType {
                         Text(mealType.rawValue.capitalized)
-                            .font(.porcelainLabel)
-                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                            .font(.fieldGuideLabel)
+                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     }
                 }
                 if !meal.recipeNames.isEmpty {
                     Text(meal.recipeNames.joined(separator: ", "))
-                        .font(.porcelainLabel)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .font(.fieldGuideLabel)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
 
                 }
             }
-            Spacer(minLength: PorcelainTokens.Space.sm)
+            Spacer(minLength: FieldGuideTokens.Space.sm)
         }
         .padding(.vertical, 4)
-        .frame(minHeight: PorcelainTokens.touchTarget)
+        .frame(minHeight: FieldGuideTokens.touchTarget)
     }
 }
 

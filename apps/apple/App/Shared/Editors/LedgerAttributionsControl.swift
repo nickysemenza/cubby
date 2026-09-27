@@ -26,14 +26,14 @@ struct LedgerAttributionsControl: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(field.label)
-                    .font(.porcelainLabel.weight(.semibold))
-                    .foregroundStyle(PorcelainTokens.graphite)
+                    .font(.fieldGuideLabel.weight(.semibold))
+                    .foregroundStyle(FieldGuideTokens.graphite)
                 Text(rolePrompt)
                     .font(.caption)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
             }
 
             ForEach(attributions.indices, id: \.self) { index in
@@ -53,12 +53,12 @@ struct LedgerAttributionsControl: View {
 
             Text("Weights are relative shares. Equal weights split the expense equally.")
                 .font(.caption)
-                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
 
             if let attributionError {
                 Label(attributionError, systemImage: "exclamationmark.circle")
                     .font(.caption)
-                    .foregroundStyle(PorcelainTokens.destructive)
+                    .foregroundStyle(FieldGuideTokens.destructive)
             }
         }
         .sheet(item: $pickerTarget) { target in
@@ -73,13 +73,13 @@ struct LedgerAttributionsControl: View {
     }
 
     private func attributionRow(_ index: Int) -> some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             HStack {
                 Button {
                     pickerTarget = PartyPickerTarget(index: index)
                 } label: {
                     LabeledContent("Ledger party", value: partyLabel(at: index))
-                        .frame(minHeight: PorcelainTokens.touchTarget)
+                        .frame(minHeight: FieldGuideTokens.touchTarget)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -87,13 +87,13 @@ struct LedgerAttributionsControl: View {
                     remove(at: index)
                 }
                 .labelStyle(.iconOnly)
-                .foregroundStyle(PorcelainTokens.destructive)
+                .foregroundStyle(FieldGuideTokens.destructive)
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Remove \(partyLabel(at: index))")
             }
 
             LabeledContent("Share weight") {
-                HStack(spacing: PorcelainTokens.Space.sm) {
+                HStack(spacing: FieldGuideTokens.Space.sm) {
                     TextField("Weight", value: weightBinding(at: index), format: .number)
                         .multilineTextAlignment(.trailing)
                         #if os(iOS)
@@ -107,7 +107,7 @@ struct LedgerAttributionsControl: View {
                 }
             }
         }
-        .padding(.vertical, PorcelainTokens.Space.xs)
+        .padding(.vertical, FieldGuideTokens.Space.xs)
         .accessibilityIdentifier("editor.expense.\(field.key).row.\(index)")
     }
 

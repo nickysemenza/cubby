@@ -20,7 +20,7 @@ import {
 } from "~/lib/nivo-theme";
 import { formatCurrency } from "~/lib/utils";
 
-// Shared building blocks behind Porcelain Transit charts: a horizontal
+// Shared building blocks behind Field Guide charts: a horizontal
 // bar primitive, a "top-N by absolute value, signed color" bar breakdown, a
 // center-labeled donut, and a currency line trend. Each call site keeps only
 // its genuinely custom bits (data prep, tick/label/tooltip renderers);

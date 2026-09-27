@@ -38,13 +38,13 @@ const heroVariants = cva(
   },
 );
 
-const titleVariants = cva("font-heading tracking-tight break-words", {
+const titleVariants = cva("font-display tracking-tight break-words", {
   variants: {
     variant: {
       // Both steps use the compact text-2xl heading; the list variant keeps its
       // identity from the accent bar under the title, not a larger type size.
-      list: "text-2xl font-bold",
-      compact: "text-2xl font-bold",
+      list: "text-2xl font-semibold",
+      compact: "text-2xl font-semibold",
     },
   },
   defaultVariants: { variant: "list" },
@@ -426,11 +426,10 @@ interface DetailPlateProps {
 }
 
 /**
- * Detail record hero: a flat identity surface with a domain left spine,
+ * Detail record hero: a quiet identity surface with a domain breadcrumb,
  * breadcrumb, name, status, added date, compact stats, and page actions.
  *
- * Porcelain Transit: the spine carries route-family wayfinding while status
- * remains a separate semantic signal. The mobile image gallery rides above
+ * Domain identity and status remain separate semantic signals. The mobile image gallery rides above
  * the plate when heroImages are present.
  */
 function DetailPlate({
@@ -449,11 +448,6 @@ function DetailPlate({
   const onFileSince = getOnFileSince(
     parsedRawData.success ? parsedRawData.data : undefined,
   );
-  const domain = wayfinding ? wayfinding.domain : domainForEntity(entity);
-  const domainAccent = domain
-    ? `var(${domainWayfinding(domain).accentToken})`
-    : undefined;
-
   return (
     <>
       {/* Detail media — mobile only; desktop shows it in the section rail. */}
@@ -470,11 +464,7 @@ function DetailPlate({
         )
       )}
 
-      <Card
-        className="border-x-0 border-l-[length:var(--border-spine-card)] md:border-r"
-        style={domainAccent ? { borderLeftColor: domainAccent } : undefined}
-        data-testid="detail-spec-plate"
-      >
+      <Card className="border-x-0 md:border-x" data-testid="detail-spec-plate">
         <CardContent className="px-2 py-1 sm:px-4">
           <div
             className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3 gap-y-1" /* tight */
@@ -485,7 +475,7 @@ function DetailPlate({
                 heroNo={heroNo}
                 wayfinding={wayfinding}
               />
-              <h1 className="font-heading text-xl leading-6 font-bold tracking-tight break-words sm:text-3xl sm:leading-9">
+              <h1 className="font-display text-xl leading-6 font-semibold tracking-tight break-words sm:text-3xl sm:leading-9">
                 {name}
               </h1>
             </div>

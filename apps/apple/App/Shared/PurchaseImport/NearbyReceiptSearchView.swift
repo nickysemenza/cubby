@@ -32,7 +32,7 @@ struct NearbyReceiptSearchView: View {
             searchContent
             manualPicker
             if let error = model.error {
-                Section { Text(error).foregroundStyle(PorcelainTokens.destructive) }
+                Section { Text(error).foregroundStyle(FieldGuideTokens.destructive) }
             }
         }
         .navigationTitle("Receipt photo")
@@ -118,7 +118,7 @@ struct NearbyReceiptSearchView: View {
                         .resizable().scaledToFill()
                         .frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 8))
                     Label("Ready for confirmation", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(PorcelainTokens.positive)
+                        .foregroundStyle(FieldGuideTokens.positive)
                 }
             }
         }
@@ -135,8 +135,8 @@ struct NearbyReceiptSearchView: View {
                 VStack(alignment: .leading) {
                     Text(candidate.capturedAt, format: .dateTime.month().day().hour().minute())
                     Text("Match \(candidate.score.total, format: .percent.precision(.fractionLength(0)))")
-                        .font(.porcelainLabel)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .font(.fieldGuideLabel)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 }
                 Spacer()
                 Image(systemName: model.selectedID == candidate.id ? "checkmark.circle.fill" : "circle")

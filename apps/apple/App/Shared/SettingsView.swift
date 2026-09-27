@@ -47,7 +47,7 @@ struct SettingsView: View {
                 if selectedServer == .custom {
                     TextField("Custom server URL", text: $draftURL)
                         .keyboardDismissBar()
-                        .font(.porcelainCode)
+                        .font(.fieldGuideCode)
                         .autocorrectionDisabled()
                         #if os(iOS)
                             .keyboardType(.URL)
@@ -55,12 +55,12 @@ struct SettingsView: View {
                         #endif
                         .onSubmit(applyCustomServer)
                         .accessibilityIdentifier("settings.customServerURL")
-                        .frame(minHeight: PorcelainTokens.touchTarget - 12)
+                        .frame(minHeight: FieldGuideTokens.touchTarget - 12)
 
                     if let customURLValidationMessage {
                         Text(customURLValidationMessage)
-                            .font(.porcelainLabel)
-                            .foregroundStyle(PorcelainTokens.destructive)
+                            .font(.fieldGuideLabel)
+                            .foregroundStyle(FieldGuideTokens.destructive)
                     }
 
                     if customServerURL != model.baseURL {
@@ -75,20 +75,20 @@ struct SettingsView: View {
                 Text(
                     "Each host keeps its own credential, so switching never sends one server's token to another."
                 )
-                .font(.porcelainLabel)
-                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                .font(.fieldGuideLabel)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
             }
 
             Section {
                 LabeledContent("Host") {
-                    Text(CubbyBaseURL.host(of: model.baseURL)).font(.porcelainCode)
+                    Text(CubbyBaseURL.host(of: model.baseURL)).font(.fieldGuideCode)
                 }
                 .id(model.baseURL)
-                .frame(minHeight: PorcelainTokens.touchTarget - 12)
+                .frame(minHeight: FieldGuideTokens.touchTarget - 12)
                 LabeledContent("Credential") {
-                    Text(model.credentialSummary).font(.porcelainData)
+                    Text(model.credentialSummary).font(.fieldGuideData)
                 }
-                .frame(minHeight: PorcelainTokens.touchTarget - 12)
+                .frame(minHeight: FieldGuideTokens.touchTarget - 12)
                 if model.phase == .signedIn {
                     Button("Sign out", role: .destructive) {
                         Task {
@@ -96,7 +96,7 @@ struct SettingsView: View {
                             dismiss()
                         }
                     }
-                    .frame(minHeight: PorcelainTokens.touchTarget - 12)
+                    .frame(minHeight: FieldGuideTokens.touchTarget - 12)
                 }
             } header: {
                 Eyebrow("Session")
@@ -129,8 +129,10 @@ struct SettingsView: View {
             #endif
         }
         .formStyle(.grouped)
-        .font(.porcelainBody)
-        .porcelainScreen()
+        .scrollContentBackground(.hidden)
+        .background(FieldGuideTokens.canvas)
+        .font(.fieldGuideBody)
+        .fieldGuideScreen()
         .navigationTitle("Settings")
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -211,7 +213,7 @@ struct SettingsView: View {
                 .accessibilityIdentifier("settings.purchaseImport.browser")
                 LabeledContent("Status") {
                     Text(model.browserBridge.statusLabel)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 }
                 Toggle("Enhanced evidence capture", isOn: $enhancedEvidence)
                     .accessibilityIdentifier("settings.purchaseImport.enhancedEvidence")
@@ -248,7 +250,7 @@ struct SettingsView: View {
                             Text(account.statusLabel)
                                 .foregroundStyle(
                                     account.needsAuthentication || account.error != nil
-                                        ? PorcelainTokens.destructive : PorcelainTokens.graphiteSecondary)
+                                        ? FieldGuideTokens.destructive : FieldGuideTokens.graphiteSecondary)
                             if account.needsAuthentication {
                                 Button("Open sign-in") {
                                     model.browserBridge.raiseAuthenticationWindow(accountID: account.id)
@@ -258,15 +260,15 @@ struct SettingsView: View {
                             }
                             if let error = account.error {
                                 Text(error)
-                                    .font(.porcelainLabel)
-                                    .foregroundStyle(PorcelainTokens.destructive)
+                                    .font(.fieldGuideLabel)
+                                    .foregroundStyle(FieldGuideTokens.destructive)
                                     .multilineTextAlignment(.trailing)
                             }
                         }
                     }
                 }
                 if let error = model.browserBridge.error {
-                    Text(error).foregroundStyle(PorcelainTokens.destructive)
+                    Text(error).foregroundStyle(FieldGuideTokens.destructive)
                 }
             } header: {
                 Eyebrow("Purchase imports")
@@ -274,8 +276,8 @@ struct SettingsView: View {
                 Text(
                     "Cubby controls only its own browser window. Page content stays untrusted, and browser sessions never leave this Mac. Enhanced capture falls back to a Cubby-generated PDF when permissions are unavailable."
                 )
-                .font(.porcelainLabel)
-                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                .font(.fieldGuideLabel)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
             }
         }
 
@@ -287,7 +289,7 @@ struct SettingsView: View {
                 if status == .denied {
                     Button(status.label) { MacBrowserPermissionSnapshot.openSettings(pane) }
                 } else {
-                    Text(status.label).foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    Text(status.label).foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 }
             }
         }
@@ -303,12 +305,12 @@ struct SettingsView: View {
                         VStack(alignment: .leading) {
                             Text(hunt.merchant ?? "Unidentified purchase")
                             Text(hunt.transactionDate)
-                                .font(.porcelainLabel)
-                                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                .font(.fieldGuideLabel)
+                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         }
                         Spacer()
                         Text(Double(hunt.amountInCents) / 100, format: .currency(code: "USD"))
-                            .font(.porcelainData)
+                            .font(.fieldGuideData)
                     }
                 }
                 .accessibilityIdentifier("settings.purchaseImport.receipt.\(hunt.id)")
@@ -317,8 +319,8 @@ struct SettingsView: View {
             Eyebrow("Receipts needed")
         } footer: {
             Text("Choose a charge to find a nearby receipt photo. Nothing uploads until you confirm it.")
-                .font(.porcelainLabel)
-                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                .font(.fieldGuideLabel)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
         }
     }
 
@@ -342,7 +344,7 @@ struct SettingsView: View {
                 }
             }
             LabeledContent("Analysed") { Text(photoAnalysisSummaryText) }
-                .frame(minHeight: PorcelainTokens.touchTarget - 12)
+                .frame(minHeight: FieldGuideTokens.touchTarget - 12)
             PhotoStorageRows(summary: photoStorageSummary)
         } header: {
             Eyebrow("Photos")
@@ -350,8 +352,8 @@ struct SettingsView: View {
             Text(
                 "On-device category classification runs quietly while the Photos tab is open. This database is an on-device cache Cubby can rebuild at any time."
             )
-            .font(.porcelainLabel)
-            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+            .font(.fieldGuideLabel)
+            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
         }
     }
 
@@ -427,24 +429,24 @@ private struct PhotoStorageRows: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(url.lastPathComponent)
                     Text(url.path(percentEncoded: false))
-                        .font(.porcelainCode)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .font(.fieldGuideCode)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .textSelection(.enabled)
                 }
             }
-            .frame(minHeight: PorcelainTokens.touchTarget - 12)
+            .frame(minHeight: FieldGuideTokens.touchTarget - 12)
             LabeledContent("Size") {
                 Text(summary.bytesOnDisk, format: .byteCount(style: .file))
             }
-            .frame(minHeight: PorcelainTokens.touchTarget - 12)
+            .frame(minHeight: FieldGuideTokens.touchTarget - 12)
             LabeledContent("Rows") {
                 Text(
                     "\(summary.hashedCount.formatted()) hashed · \(summary.classifiedCount.formatted()) classified · \(summary.syncedSightingCount.formatted()) synced"
                 )
             }
-            .frame(minHeight: PorcelainTokens.touchTarget - 12)
+            .frame(minHeight: FieldGuideTokens.touchTarget - 12)
             #if os(macOS)
                 Button("Show in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -456,7 +458,7 @@ private struct PhotoStorageRows: View {
             #endif
         } else {
             LabeledContent("Database") { Text("…") }
-                .frame(minHeight: PorcelainTokens.touchTarget - 12)
+                .frame(minHeight: FieldGuideTokens.touchTarget - 12)
         }
     }
 }
@@ -574,18 +576,18 @@ private struct DeviceParticipationSection: View {
     var body: some View {
         Section {
             Toggle("Automatic work on this device", isOn: automaticWorkBinding)
-                .frame(minHeight: PorcelainTokens.touchTarget - 12)
+                .frame(minHeight: FieldGuideTokens.touchTarget - 12)
                 .accessibilityIdentifier("settings.device.automaticWork")
             if model.companionImageActivity.remotePaused {
                 LabeledContent("Status") {
                     Text("Paused from the web")
-                        .foregroundStyle(PorcelainTokens.destructive)
+                        .foregroundStyle(FieldGuideTokens.destructive)
                 }
-                .frame(minHeight: PorcelainTokens.touchTarget - 12)
+                .frame(minHeight: FieldGuideTokens.touchTarget - 12)
             }
             if showPauseAnalysis {
                 Toggle("Pause analysis", isOn: $photoAnalysisPaused)
-                    .frame(minHeight: PorcelainTokens.touchTarget - 12)
+                    .frame(minHeight: FieldGuideTokens.touchTarget - 12)
             }
         } header: {
             Eyebrow("This device")
@@ -593,8 +595,8 @@ private struct DeviceParticipationSection: View {
             Text(
                 "Controls companion image jobs, library matching, and background analysis on this device. Explicit photo imports always work, on or off."
             )
-            .font(.porcelainLabel)
-            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+            .font(.fieldGuideLabel)
+            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
         }
     }
 
@@ -629,19 +631,19 @@ struct DeviceParticipationOnboardingSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: PorcelainTokens.Space.lg) {
+            VStack(spacing: FieldGuideTokens.Space.lg) {
                 Spacer()
                 Image(systemName: "photo.on.rectangle.angled")
                     .font(.system(size: 44))
-                    .foregroundStyle(PorcelainTokens.cobalt)
+                    .foregroundStyle(FieldGuideTokens.interaction)
                 Text("Help process photos on this device?")
-                    .font(.porcelainTitle)
+                    .font(.fieldGuideTitle)
                     .multilineTextAlignment(.center)
                 Text(
                     "This device can process companion image jobs, match your photo library against Cubby, and run background photo analysis. You can change this anytime in Settings."
                 )
-                .font(.porcelainBody)
-                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                .font(.fieldGuideBody)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 .multilineTextAlignment(.center)
                 Spacer()
                 Button("Help process photos") {
@@ -657,7 +659,7 @@ struct DeviceParticipationOnboardingSheet: View {
                 }
                 .accessibilityIdentifier("settings.participation.optOut")
             }
-            .padding(PorcelainTokens.Space.lg)
+            .padding(FieldGuideTokens.Space.lg)
             .navigationTitle("This device")
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)

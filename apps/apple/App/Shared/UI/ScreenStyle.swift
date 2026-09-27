@@ -6,7 +6,7 @@ import SwiftUI
 
 extension View {
     /// Screen-level keyboard dismissal without overriding the system's surface or scroll edges.
-    func porcelainScreen() -> some View {
+    func fieldGuideScreen() -> some View {
         scrollDismissesKeyboard(.interactively)
     }
 
@@ -17,7 +17,7 @@ extension View {
     }
 
     /// Compatibility for specialized lists: the system owns row surfaces and separators.
-    func porcelainListRow() -> some View {
+    func fieldGuideListRow() -> some View {
         self
     }
 
@@ -40,16 +40,16 @@ struct LoadingIndicator: View {
 }
 
 #Preview("Loading indicator") {
-    VStack(spacing: PorcelainTokens.Space.lg) {
+    VStack(spacing: FieldGuideTokens.Space.lg) {
         LoadingIndicator(label: "Loading products")
         LoadingIndicator.screen(label: "Loading products")
             .frame(height: 120)
     }
-    .padding(PorcelainTokens.Space.lg)
-    .background(PorcelainTokens.canvas)
+    .padding(FieldGuideTokens.Space.lg)
+    .background(FieldGuideTokens.canvas)
 }
 
-/// A square-ish shortcut: a cobalt glyph over a sentence-case label, sized for a two-column grid.
+/// A square-ish shortcut: a ink glyph over a sentence-case label, sized for a two-column grid.
 /// Used for the Today shortcuts and the Identify photo sources so both read as the same affordance.
 struct ActionTile: View {
     let title: String
@@ -57,51 +57,51 @@ struct ActionTile: View {
     var detail: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Image(systemName: symbol)
                 .font(.system(size: 20, weight: .regular))
-                .foregroundStyle(PorcelainTokens.cobalt)
+                .foregroundStyle(FieldGuideTokens.interaction)
                 .accessibilityHidden(true)
             Text(title)
-                .font(.porcelainTitle)
-                .foregroundStyle(PorcelainTokens.graphite)
+                .font(.fieldGuideTitle)
+                .foregroundStyle(FieldGuideTokens.graphite)
                 .multilineTextAlignment(.leading)
 
             if let detail {
                 Text(detail)
-                    .font(.porcelainLabel)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .font(.fieldGuideLabel)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
 
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(PorcelainTokens.Space.md)
+        .padding(FieldGuideTokens.Space.md)
         .frame(minHeight: 84, maxHeight: .infinity, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel).fill(PorcelainTokens.surface)
+            RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel).fill(FieldGuideTokens.surface)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+            RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
+                .strokeBorder(FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
         )
-        .contentShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
+        .contentShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
     }
 }
 
 /// Two equal columns on the 12pt rhythm — the shape every grid on these screens uses.
-let porcelainTwoColumns = [
-    GridItem(.adaptive(minimum: 160), spacing: PorcelainTokens.Space.md)
+let fieldGuideTwoColumns = [
+    GridItem(.adaptive(minimum: 160), spacing: FieldGuideTokens.Space.md)
 ]
 
 #Preview("Action tiles") {
-    LazyVGrid(columns: porcelainTwoColumns, spacing: PorcelainTokens.Space.md) {
+    LazyVGrid(columns: fieldGuideTwoColumns, spacing: FieldGuideTokens.Space.md) {
         ActionTile(title: "Capture", symbol: "barcode.viewfinder", detail: "Sweep a location")
         ActionTile(title: "Browse products", symbol: "shippingbox")
         ActionTile(title: "Identify", symbol: "camera.metering.center.weighted")
         ActionTile(title: "Dev", symbol: "wrench.and.screwdriver")
     }
-    .padding(PorcelainTokens.Space.lg)
-    .background(PorcelainTokens.canvas)
+    .padding(FieldGuideTokens.Space.lg)
+    .background(FieldGuideTokens.canvas)
 }
 
 /// SwiftUI focus state, not a UIKit `resignFirstResponder` hack: the modifier owns a focus flag
@@ -117,7 +117,7 @@ private struct KeyboardDismissBar: ViewModifier {
                     ToolbarItemGroup(placement: .keyboard) {
                         Spacer()
                         Button("Done") { focused = false }
-                            .font(.porcelainBody.weight(.semibold))
+                            .font(.fieldGuideBody.weight(.semibold))
                     }
                 }
         #else
@@ -190,7 +190,7 @@ private struct NativeSheetPresentation: ViewModifier {
                 content.presentationSizing(.form).presentationDetents([.large])
             case .photoImport:
                 content.presentationSizing(.form)
-                    .presentationBackground(PorcelainTokens.canvas)
+                    .presentationBackground(FieldGuideTokens.canvas)
                     .presentationDetents(
                         textSize.isAccessibilitySize ? [.large] : [.medium, .large],
                         selection: $detent

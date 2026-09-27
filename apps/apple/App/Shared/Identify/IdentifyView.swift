@@ -17,7 +17,7 @@ struct IdentifyView: View {
                 LoadingIndicator.screen(label: "Loading Identify")
             }
         }
-        .porcelainScreen()
+        .fieldGuideScreen()
         .navigationTitle("Identify")
         .task(id: model.host) {
             let identify = IdentifyModel(client: model.client, index: model.featurePrints)
@@ -34,7 +34,7 @@ private struct IdentifyContent: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.xl) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xl) {
                 statusPanel
                 photoSection
                 IdentifyResultsSection(
@@ -43,11 +43,11 @@ private struct IdentifyContent: View {
                     failure: failureMessage
                 )
             }
-            .padding(PorcelainTokens.Space.lg)
-            .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)
+            .padding(FieldGuideTokens.Space.lg)
+            .frame(maxWidth: FieldGuideTokens.readingWidth, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .porcelainScreen()
+        .fieldGuideScreen()
         .toolbar {
             ToolbarItem {
                 Button("Rebuild index") {
@@ -66,17 +66,17 @@ private struct IdentifyContent: View {
     }
 
     private var statusPanel: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Eyebrow("On-device index")
             Panel {
-                HStack(spacing: PorcelainTokens.Space.md) {
+                HStack(spacing: FieldGuideTokens.Space.md) {
                     statusText
-                    Spacer(minLength: PorcelainTokens.Space.sm)
+                    Spacer(minLength: FieldGuideTokens.Space.sm)
                     if case .indexing = identify.phase {
                         LoadingIndicator(label: "Indexing photos").controlSize(.small)
                     }
                 }
-                .frame(minHeight: PorcelainTokens.touchTarget - 20)
+                .frame(minHeight: FieldGuideTokens.touchTarget - 20)
             }
         }
     }
@@ -86,25 +86,25 @@ private struct IdentifyContent: View {
         switch identify.phase {
         case .idle:
             Text("Starting…")
-                .font(.porcelainBody)
-                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                .font(.fieldGuideBody)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
         case .indexing(let done, let total):
             Text("Indexing \(done) of \(total)")
-                .font(.porcelainData)
-                .foregroundStyle(PorcelainTokens.graphite)
+                .font(.fieldGuideData)
+                .foregroundStyle(FieldGuideTokens.graphite)
         case .ready(let count):
             Text("\(count) covers indexed")
-                .font(.porcelainData)
-                .foregroundStyle(PorcelainTokens.graphite)
+                .font(.fieldGuideData)
+                .foregroundStyle(FieldGuideTokens.graphite)
         case .failed:
             Text("Index unavailable")
-                .font(.porcelainBody)
-                .foregroundStyle(PorcelainTokens.destructive)
+                .font(.fieldGuideBody)
+                .foregroundStyle(FieldGuideTokens.destructive)
         }
     }
 
     private var photoSection: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Eyebrow("Photo")
             PhotoSourceButtons { image in
                 Task { await identify.identify(image) }
@@ -124,50 +124,50 @@ struct IdentifyResultsSection: View {
     var failure: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.xl) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xl) {
             if let probe {
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                     Eyebrow("Probe")
                     Image(decorative: probe, scale: 1)
                         .resizable()
                         .scaledToFill()
                         .frame(width: 160, height: 160)
-                        .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
+                        .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
                         .overlay(
-                            RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
+                            RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
                                 .strokeBorder(
-                                    PorcelainTokens.hairline,
-                                    lineWidth: PorcelainTokens.hairlineWidth
+                                    FieldGuideTokens.hairline,
+                                    lineWidth: FieldGuideTokens.hairlineWidth
                                 )
                         )
                 }
             }
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                 Eyebrow("Matches")
                 if let failure {
                     Panel {
                         Text("Couldn't identify this photo")
-                            .font(.porcelainTitle)
-                            .foregroundStyle(PorcelainTokens.graphite)
+                            .font(.fieldGuideTitle)
+                            .foregroundStyle(FieldGuideTokens.graphite)
                         Text(failure)
-                            .font(.porcelainBody)
-                            .foregroundStyle(PorcelainTokens.destructive)
+                            .font(.fieldGuideBody)
+                            .foregroundStyle(FieldGuideTokens.destructive)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 } else if matches.isEmpty {
                     Panel {
                         Text("No matches yet")
-                            .font(.porcelainTitle)
-                            .foregroundStyle(PorcelainTokens.graphite)
+                            .font(.fieldGuideTitle)
+                            .foregroundStyle(FieldGuideTokens.graphite)
                         Text("Choose or take a photo to rank it against your own product covers.")
-                            .font(.porcelainBody)
-                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                            .font(.fieldGuideBody)
+                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 } else {
                     Panel(padding: 0, spacing: 0) {
                         ForEach(Array(matches.enumerated()), id: \.element.id) { position, match in
-                            if position > 0 { PanelDivider(inset: PorcelainTokens.Space.lg + 56) }
+                            if position > 0 { PanelDivider(inset: FieldGuideTokens.Space.lg + 56) }
                             NavigationLink(value: Route.entityDetail(.product, id: match.productID.rawValue))
                             {
                                 CandidateRow(match: match, best: position == 0)
@@ -186,29 +186,29 @@ private struct CandidateRow: View {
     let best: Bool
 
     var body: some View {
-        HStack(spacing: PorcelainTokens.Space.md) {
+        HStack(spacing: FieldGuideTokens.Space.md) {
             Thumb(url: match.imageURL, size: 56, symbol: "shippingbox")
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                 Text(match.name)
                     .font(.body.weight(best ? .semibold : .regular))
-                    .foregroundStyle(PorcelainTokens.graphite)
+                    .foregroundStyle(FieldGuideTokens.graphite)
                     .lineLimit(2)
-                HStack(spacing: PorcelainTokens.Space.sm) {
+                HStack(spacing: FieldGuideTokens.Space.sm) {
                     Text("distance \(String(format: "%.3f", match.distance))")
-                        .font(.porcelainData)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .font(.fieldGuideData)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     if best {
                         StatusChip(text: "Best match")
                     }
                 }
             }
-            Spacer(minLength: PorcelainTokens.Space.sm)
+            Spacer(minLength: FieldGuideTokens.Space.sm)
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
         }
-        .padding(.horizontal, PorcelainTokens.Space.md)
-        .padding(.vertical, PorcelainTokens.Space.md)
+        .padding(.horizontal, FieldGuideTokens.Space.md)
+        .padding(.vertical, FieldGuideTokens.Space.md)
         .contentShape(Rectangle())
     }
 }
@@ -217,9 +217,9 @@ private struct CandidateRow: View {
     NavigationStack {
         ScrollView {
             IdentifyResultsSection(matches: [], probe: nil)
-                .padding(PorcelainTokens.Space.lg)
+                .padding(FieldGuideTokens.Space.lg)
         }
-        .porcelainScreen()
+        .fieldGuideScreen()
         .navigationTitle("Identify")
     }
 }
@@ -231,9 +231,9 @@ private struct CandidateRow: View {
                 matches: PreviewFixtures.sampleCandidates,
                 probe: PreviewFixtures.sampleProbeImage
             )
-            .padding(PorcelainTokens.Space.lg)
+            .padding(FieldGuideTokens.Space.lg)
         }
-        .porcelainScreen()
+        .fieldGuideScreen()
         .navigationTitle("Identify")
     }
 }
@@ -246,9 +246,9 @@ private struct CandidateRow: View {
                 probe: PreviewFixtures.sampleProbeImage,
                 failure: "Vision feature print request failed."
             )
-            .padding(PorcelainTokens.Space.lg)
+            .padding(FieldGuideTokens.Space.lg)
         }
-        .porcelainScreen()
+        .fieldGuideScreen()
         .navigationTitle("Identify")
     }
 }

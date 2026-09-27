@@ -4,18 +4,25 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-const PORCELAIN_CANVAS = "#f7f9fc";
+const tokens = z
+  .object({ colors: z.object({ canvas: z.object({ light: z.string() }) }) })
+  .parse(
+    JSON.parse(
+      readFileSync(resolve("../../packages/design-tokens/tokens.json"), "utf8"),
+    ),
+  );
+const fieldGuideCanvas = tokens.colors.canvas.light.toLowerCase();
 
-describe("PWA Porcelain color metadata", () => {
+describe("PWA Field Guide color metadata", () => {
   it("keeps document and manifest colors synchronized", () => {
     const manifest = z
       .object({ theme_color: z.string(), background_color: z.string() })
       .parse(JSON.parse(readFileSync(resolve("public/manifest.json"), "utf8")));
     const root = readFileSync(resolve("src/routes/__root.tsx"), "utf8");
 
-    expect(manifest.theme_color).toBe(PORCELAIN_CANVAS);
-    expect(manifest.background_color).toBe(PORCELAIN_CANVAS);
-    expect(root).toContain(`content: "${PORCELAIN_CANVAS}"`);
+    expect(manifest.theme_color).toBe(fieldGuideCanvas);
+    expect(manifest.background_color).toBe(fieldGuideCanvas);
+    expect(root).toContain("content: tokens.colors.canvas.light.toLowerCase()");
   });
 });
 

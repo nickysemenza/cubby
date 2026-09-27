@@ -116,7 +116,7 @@ struct EntityListView: View {
                 LoadingIndicator.screen(label: "Loading \(descriptor.plural)")
             }
         }
-        .porcelainScreen()
+        .fieldGuideScreen()
         .navigationTitle(descriptor.plural)
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -431,8 +431,8 @@ struct EntityListView: View {
                     Text("\(meta.totalCount.formatted()) total · \(rows.count.formatted()) shown")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal, PorcelainTokens.Space.md)
-                        .padding(.top, PorcelainTokens.Space.sm)
+                        .padding(.horizontal, FieldGuideTokens.Space.md)
+                        .padding(.top, FieldGuideTokens.Space.sm)
                 }
                 EntityShelfView(
                     descriptor: descriptor, rows: rows, density: cardDensity,
@@ -605,13 +605,13 @@ struct EntityRowView: View {
     }
 
     var body: some View {
-        HStack(spacing: PorcelainTokens.Space.md) {
+        HStack(spacing: FieldGuideTokens.Space.md) {
             if let previewImage {
                 previewImage
                     .resizable()
                     .scaledToFill()
                     .frame(width: thumbnailSize, height: thumbnailSize)
-                    .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl))
+                    .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
                     .accessibilityHidden(true)
             } else if let imageURL = presentation.imageURL {
                 Thumb(url: imageURL, size: thumbnailSize, symbol: entitySymbol(for: key))
@@ -619,24 +619,24 @@ struct EntityRowView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(presentation.title)
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(PorcelainTokens.graphite)
+                    .foregroundStyle(FieldGuideTokens.graphite)
                     .lineLimit(2)
                 if let factLine = presentation.factLine {
                     Text(factLine)
                         .font(.caption)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         .lineLimit(2)
                 }
                 if photoMode {
                     Text(presentation.shortcode)
                         .font(.caption2.monospaced())
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         .lineLimit(1)
                 }
             }
-            Spacer(minLength: PorcelainTokens.Space.sm)
+            Spacer(minLength: FieldGuideTokens.Space.sm)
         }
-        .padding(.vertical, PorcelainTokens.Space.xs)
+        .padding(.vertical, FieldGuideTokens.Space.xs)
         .frame(minHeight: 56, alignment: .center)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
@@ -655,7 +655,7 @@ struct EntityRowView: View {
             previewImage: Image(decorative: PreviewFixtures.sampleProbeImage, scale: 1))
     }
     .listStyle(.plain)
-    .porcelainScreen()
+    .fieldGuideScreen()
 }
 
 #Preview("Rows") {
@@ -665,11 +665,11 @@ struct EntityRowView: View {
                 NavigationLink(value: Route.entityDetail(.product, id: row.id)) {
                     EntityRowView(key: .product, row: row)
                 }
-                .porcelainListRow()
+                .fieldGuideListRow()
             }
         }
         .listStyle(.plain)
-        .porcelainScreen()
+        .fieldGuideScreen()
         .navigationTitle("Products")
     }
 }
@@ -691,7 +691,7 @@ struct EntityRowView: View {
                     ]))
         }
         .listStyle(.plain)
-        .porcelainScreen()
+        .fieldGuideScreen()
         .preferredColorScheme(.dark)
         .environment(\.dynamicTypeSize, .accessibility3)
     }

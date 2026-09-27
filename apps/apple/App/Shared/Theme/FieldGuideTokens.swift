@@ -1,25 +1,18 @@
 import CubbyKit
 import SwiftUI
 
-/// Semantic native appearance. Legacy token names keep specialized workbenches consistent while
-/// their content uses the system's lists, forms, controls, and adaptive surfaces (see ../DESIGN.md).
-enum PorcelainTokens {
-    #if os(macOS)
-        static let canvas = Color(nsColor: .windowBackgroundColor)
-        static let surface = Color(nsColor: .controlBackgroundColor)
-        static let inset = Color(nsColor: .underPageBackgroundColor)
-        static let hairline = Color(nsColor: .separatorColor)
-    #else
-        static let canvas = Color(uiColor: .systemGroupedBackground)
-        static let surface = Color(uiColor: .secondarySystemGroupedBackground)
-        static let inset = Color(uiColor: .tertiarySystemGroupedBackground)
-        static let hairline = Color(uiColor: .separator)
-    #endif
+/// Shared brand decisions on native surfaces. Controls, navigation, and text sizing remain SwiftUI.
+enum FieldGuideTokens {
+    static let canvas = Color("Canvas")
+    static let surface = Color("Surface")
+    static let inset = Color("Inset")
+    static let hairline = Color("Hairline")
     static let graphite = Color.primary
     static let graphiteSecondary = Color.secondary
 
-    // Interaction.
-    static let cobalt = Color("AccentColor")
+    // Interaction and attention are separate roles.
+    static let interaction = Color("AccentColor")
+    static let signal = Color("Signal")
 
     // Condition.
     static let positive = Color("Positive")
@@ -37,20 +30,20 @@ enum PorcelainTokens {
     /// (`PhotoCategoryTint`), never by its key, so a category rename never touches this list.
     static let chartRamp: [Color] = [cookSaffron, pantryGreen, planViolet, houseCyan, financeMagenta]
 
-    // Shapes: controls 6, panels 8, chips 5. Boundaries are 1px; no shadow at rest.
-    static let radiusControl: CGFloat = 6
-    static let radiusPanel: CGFloat = 8
-    static let radiusChip: CGFloat = 5
+    // Geometry comes from the same source as web CSS.
+    static let radiusControl = FieldGuideMetrics.radiusControl
+    static let radiusPanel = FieldGuideMetrics.radiusPanel
+    static let radiusChip = FieldGuideMetrics.radiusChip
     static let hairlineWidth: CGFloat = 1
 
     /// The 4/8/12/16/20/24 rhythm. Phone content is normal density; targets stay >= 44pt.
     enum Space {
-        static let xs: CGFloat = 4
-        static let sm: CGFloat = 8
-        static let md: CGFloat = 12
-        static let lg: CGFloat = 16
-        static let xl: CGFloat = 20
-        static let xxl: CGFloat = 24
+        static let xs = FieldGuideMetrics.space1
+        static let sm = FieldGuideMetrics.space2
+        static let md = FieldGuideMetrics.space3
+        static let lg = FieldGuideMetrics.space4
+        static let xl = FieldGuideMetrics.space5
+        static let xxl = FieldGuideMetrics.space6
     }
 
     /// Minimum interactive height on phone.
@@ -59,10 +52,9 @@ enum PorcelainTokens {
     static let readingWidth: CGFloat = 720
 }
 
-/// The five stable domain lines. Cubby's native shell surfaces four of them as navigation groups;
-/// `pantryGreen` exists as a token for pantry-specific marks the PoC does not draw yet.
+/// The same five manifest domains appear in native and web navigation.
 enum AppDomain: String, CaseIterable, Identifiable {
-    case house, cook, plan, finance
+    case house, cook, pantry, plan, finance
 
     var id: String { rawValue }
 
@@ -70,6 +62,7 @@ enum AppDomain: String, CaseIterable, Identifiable {
         switch self {
         case .house: "House"
         case .cook: "Cook"
+        case .pantry: "Pantry"
         case .plan: "Plan"
         case .finance: "Finance"
         }
@@ -77,10 +70,11 @@ enum AppDomain: String, CaseIterable, Identifiable {
 
     var color: Color {
         switch self {
-        case .house: PorcelainTokens.houseCyan
-        case .cook: PorcelainTokens.cookSaffron
-        case .plan: PorcelainTokens.planViolet
-        case .finance: PorcelainTokens.financeMagenta
+        case .house: FieldGuideTokens.houseCyan
+        case .cook: FieldGuideTokens.cookSaffron
+        case .pantry: FieldGuideTokens.pantryGreen
+        case .plan: FieldGuideTokens.planViolet
+        case .finance: FieldGuideTokens.financeMagenta
         }
     }
 
@@ -90,6 +84,7 @@ enum AppDomain: String, CaseIterable, Identifiable {
         switch self {
         case .house: "house"
         case .cook: "fork.knife"
+        case .pantry: "shippingbox"
         case .plan: "hammer"
         case .finance: "creditcard"
         }
@@ -97,16 +92,14 @@ enum AppDomain: String, CaseIterable, Identifiable {
 }
 
 extension AppDomain {
-    /// The declaration vocabulary has five lines; the native shell draws four. Pantry marks
-    /// exist as a token (`pantryGreen`) but not as a navigation group, so pantry records file
-    /// under House here.
     init(_ domain: WayfindingDomain) {
         self =
             switch domain {
             case .cook: .cook
+            case .pantry: .pantry
             case .plan: .plan
             case .finance: .finance
-            case .house, .pantry: .house
+            case .house: .house
             }
     }
 }
@@ -119,23 +112,22 @@ extension EntityKey {
     }
 }
 
-/// Type roles from DESIGN.md, mapped onto system text styles so Dynamic Type keeps working.
-/// Inter and JetBrains Mono are not bundled yet; the system face carries the same hierarchy.
+/// Editorial headings use a system serif; all reading and controls retain Dynamic Type.
 extension Font {
     /// Detail identity only.
-    static let porcelainDisplay = Font.largeTitle.weight(.semibold)
+    static let fieldGuideDisplay = Font.system(.largeTitle, design: .serif).weight(.semibold)
     /// Page identity and major regions.
-    static let porcelainHeadline = Font.title2.weight(.semibold)
+    static let fieldGuideHeadline = Font.system(.title2, design: .serif).weight(.semibold)
     /// Panels, rows, and section titles.
-    static let porcelainTitle = Font.subheadline.weight(.semibold)
+    static let fieldGuideTitle = Font.subheadline.weight(.semibold)
     /// Explanations and continuous reading.
-    static let porcelainBody = Font.body
+    static let fieldGuideBody = Font.body
     /// Quantities, money, dates, and aligned comparison values.
-    static let porcelainData = Font.body.monospacedDigit()
+    static let fieldGuideData = Font.body.monospacedDigit()
     /// Compact metadata, sentence case.
-    static let porcelainLabel = Font.caption.weight(.medium)
+    static let fieldGuideLabel = Font.caption.weight(.medium)
     /// Shortcodes and raw payloads: the second voice, and only ever for codes.
-    static let porcelainCode = Font.footnote.monospaced()
+    static let fieldGuideCode = Font.footnote.monospaced()
 }
 
 extension Color {

@@ -30,7 +30,7 @@ struct AuditRootView: View {
                 LoadingIndicator.screen(label: "Loading walk the shelf")
             }
         }
-        .porcelainScreen()
+        .fieldGuideScreen()
         .navigationTitle("Walk the shelf")
         .task(id: "\(persistenceNamespace).\(locationID?.rawValue ?? "all")") {
             let session = RecountSession(
@@ -76,22 +76,22 @@ private struct AuditFailedPanel: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
                 Panel {
                     Text(message)
-                        .font(.porcelainBody)
-                        .foregroundStyle(PorcelainTokens.destructive)
+                        .font(.fieldGuideBody)
+                        .foregroundStyle(FieldGuideTokens.destructive)
                         .fixedSize(horizontal: false, vertical: true)
                     Button("Retry", action: retry)
                         .buttonStyle(.borderedProminent)
-                        .tint(PorcelainTokens.cobalt)
+                        .tint(FieldGuideTokens.interaction)
                 }
             }
-            .padding(PorcelainTokens.Space.lg)
-            .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)
+            .padding(FieldGuideTokens.Space.lg)
+            .frame(maxWidth: FieldGuideTokens.readingWidth, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .porcelainScreen()
+        .fieldGuideScreen()
     }
 }
 

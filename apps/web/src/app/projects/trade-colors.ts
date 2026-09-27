@@ -1,5 +1,5 @@
 /**
- * Trade -> build-phase colour for task board columns. Porcelain Transit keeps ordinary
+ * Trade -> build-phase colour for task board columns. Field Guide keeps ordinary
  * data surfaces neutral, so 20 trades cannot each get a distinct hue without
  * turning the chart into a rainbow that fights the five domain lines. The
  * trades instead fold into **six muted build-phase families** — enough colour

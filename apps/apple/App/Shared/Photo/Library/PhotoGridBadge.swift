@@ -152,7 +152,7 @@ enum PhotoCategoryTint {
         guard
             let index = PhotoImportCatalog.categories.firstIndex(where: { categories.contains($0.key) })
         else { return nil }
-        return PorcelainTokens.chartRamp[index % PorcelainTokens.chartRamp.count]
+        return FieldGuideTokens.chartRamp[index % FieldGuideTokens.chartRamp.count]
     }
 }
 

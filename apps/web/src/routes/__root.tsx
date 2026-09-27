@@ -1,7 +1,8 @@
 // Fontsource variable fonts - loaded via bundler for better performance.
-// Porcelain Transit type system: Inter carries headings and UI prose while
+// Field Guide type system: Inter carries headings and UI prose while
 // JetBrains Mono is reserved for aligned data, measures, dates, and codes.
 import "../fonts.css";
+import tokens from "@cubby/design-tokens/tokens.json";
 import { IconContext } from "@phosphor-icons/react/dist/lib/context";
 import type { QueryClient } from "@tanstack/react-query";
 import {
@@ -113,9 +114,9 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
           "A private household workspace for inventory, purchases, projects, recipes, and meal planning.",
       },
       {
-        // Keep browser and installed-PWA chrome on the Porcelain canvas.
+        // Browser and installed-PWA chrome share the generated canvas role.
         name: "theme-color",
-        content: "#f7f9fc",
+        content: tokens.colors.canvas.light.toLowerCase(),
       },
       {
         name: "apple-mobile-web-app-title",
