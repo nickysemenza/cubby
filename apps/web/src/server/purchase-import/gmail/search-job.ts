@@ -3,6 +3,10 @@ import { runEntityId } from "@cubby/schemas/identifiers";
 import { vendorSearchMailOut } from "@cubby/schemas/order-mail-review";
 import { and, desc, eq, inArray } from "drizzle-orm";
 
+import {
+  describeErrorCauses,
+  scrubErrorMessage,
+} from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import {
   run as runTable,
@@ -18,6 +22,17 @@ import { vendorSearchTerms } from "./vendor-identity";
 const activeStatuses = ["queued", "running"];
 
 type SearchJob = typeof vendorMailSearchJob.$inferSelect;
+
+const jobErrorText = (error: Error | string) => {
+  const causes = describeErrorCauses(error).causes;
+  if (causes.length === 0) return scrubErrorMessage(String(error));
+  return causes
+    .reverse()
+    .map((cause) =>
+      cause.code ? `${cause.code}: ${cause.message}` : cause.message,
+    )
+    .join("\nCaused by: ");
+};
 
 const displayJob = (job: SearchJob, runShortcode: string) => ({
   runShortcode,
@@ -127,7 +142,9 @@ export async function startVendorMailSearchJob(
       { source: "vendor-mail.search" },
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = jobErrorText(
+      error instanceof Error ? error : String(error),
+    );
     const finishedAt = new Date();
     await database.transaction(async (tx) => {
       await tx
@@ -221,7 +238,9 @@ export async function runVendorMailSearchJob(
     });
     return "succeeded" as const;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = jobErrorText(
+      error instanceof Error ? error : String(error),
+    );
     const finishedAt = new Date();
     await database.transaction(async (tx) => {
       await tx

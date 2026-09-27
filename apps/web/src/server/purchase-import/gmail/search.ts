@@ -82,7 +82,6 @@ export async function searchVendorOrderMail(
       { cause: error },
     );
   }
-  let reviewable = 0;
   if (page.messages.length > 0) {
     const persisted = await persistGmailSyncResult(db, {
       ledgerPartyId: target.memberId,
@@ -103,13 +102,16 @@ export async function searchVendorOrderMail(
       undefined,
       actor.runId ?? undefined,
     );
+  }
+  let reviewable = 0;
+  if (page.messageIds.length > 0) {
     const pageWorklist = await listVendorOrderMail(
       db,
       {
         vendorId: input.vendorId,
         ledgerPartyId: target.memberShortcode,
       },
-      { mailIds: [...persisted.messageIds] },
+      { messageIds: page.messageIds },
     );
     reviewable = pageWorklist.items.length;
   }

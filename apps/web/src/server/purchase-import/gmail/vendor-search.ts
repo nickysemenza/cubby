@@ -25,6 +25,7 @@ export async function loadVendorMailPage(
   attachments: GmailOrderMailAttachment[];
   searched: number;
   skipped: number;
+  messageIds: string[];
   nextPageToken: string | null;
 }> {
   const terms = vendorSearchTerms(input.identity);
@@ -71,6 +72,7 @@ export async function loadVendorMailPage(
     attachments,
     searched: refs.length,
     skipped: refs.filter((ref) => known.has(ref.id)).length,
+    messageIds: refs.map((ref) => ref.id),
     nextPageToken: page.nextPageToken ?? null,
   };
 }

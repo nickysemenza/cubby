@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 import { taxonomyShortcode } from "../../tooling/product-category-fixtures";
 import { generateShortcode } from "@cubby/shared";
+import { buildActorContext } from "@cubby/schemas/context";
 
 import { upsertCookbook } from "~/server/repo/cookbook";
 import {
@@ -49,6 +50,10 @@ import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
+import {
+  runVendorMailSearchJob,
+  startVendorMailSearchJob,
+} from "~/server/purchase-import/gmail/search-job";
 import {
   buildKernelContext,
   createFixtureWithContext,
@@ -777,6 +782,47 @@ export async function seedVendorMailReviewPrerequisite(
     sourceKey: "classified:synthetic-mail-checksum:0",
   });
   return { vendor, purchase };
+}
+
+/** A failed Gmail search with its diagnostic stored only on the job row. */
+export async function seedFailedVendorMailSearchRun(page: Page, name: string) {
+  const db = getFixtureDb();
+  const userId = await fixtureUserId(page);
+  const member = await getDb(db).query.ledgerParty.findFirst({
+    where: and(
+      eq(schema.ledgerParty.userId, userId),
+      eq(schema.ledgerParty.kind, "member"),
+      isNull(schema.ledgerParty.deletedAt),
+    ),
+  });
+  if (!member)
+    await insertWithShortcode(db, "ledgerParty", {
+      name: `${name} member`,
+      kind: "member",
+      userId,
+    });
+  const vendor = await insertWithShortcode(db, "vendor", {
+    name,
+    website: "https://example.test",
+  });
+  const started = await startVendorMailSearchJob(
+    db,
+    { vendorId: vendor.shortcode },
+    buildActorContext(userId),
+    { publish: async () => ({ transport: "queue", count: 1 }) },
+  );
+  const [savedRun] = await getDb(db)
+    .select({ id: schema.run.id })
+    .from(schema.run)
+    .where(eq(schema.run.shortcode, started.runShortcode))
+    .limit(1);
+  if (!savedRun) throw new Error("Synthetic Gmail search Run was not saved");
+  await runVendorMailSearchJob(db, savedRun.id, {
+    search: async () => {
+      throw new Error("Synthetic review count failure");
+    },
+  });
+  return { vendor, runShortcode: started.runShortcode };
 }
 
 /** Two Purchases sharing one unallocated synthetic statement charge. */

@@ -6,6 +6,7 @@ import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 
 import {
   seedVendorDisplayPrerequisite,
+  seedFailedVendorMailSearchRun,
   seedVendorMailReviewPrerequisite,
 } from "./e2e-fixtures";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
@@ -139,4 +140,22 @@ test("queues a local synthetic Gmail search, shows progress, and continues to ol
   );
   await page.getByRole("button", { name: "Search Gmail now" }).click();
   expect(starts).toHaveLength(3);
+});
+
+test("shows a failed Gmail search's saved reason on its Run page", async ({
+  page,
+}) => {
+  const seed = await seedFailedVendorMailSearchRun(
+    page,
+    `Synthetic failed search ${Date.now()}`,
+  );
+  await gotoAuthenticatedPage(
+    page,
+    `/vendors/${seed.vendor.shortcode}`,
+    page.getByRole("link", { name: "View run" }),
+  );
+  await page.getByRole("link", { name: "View run" }).click();
+  await expect(page).toHaveURL(new RegExp(`/runs/${seed.runShortcode}$`, "u"));
+  await expect(page.getByText("Failure details")).toBeVisible();
+  await expect(page.getByText("Synthetic review count failure")).toBeVisible();
 });

@@ -62,7 +62,12 @@ const candidateReason = (
 export async function listVendorOrderMail(
   db: Database,
   input: { vendorId: string; ledgerPartyId?: string | null },
-  options: { mailIds?: string[] } = {},
+  options: {
+    /** Gmail provider ids returned by the sync pipeline. */
+    messageIds?: string[];
+    /** OrderMail UUIDs selected by Purchase relationships. */
+    orderMailIds?: string[];
+  } = {},
 ) {
   const vendorId = await resolveOrThrow(db, "vendor", input.vendorId);
   const ledgerPartyId = input.ledgerPartyId
@@ -111,11 +116,23 @@ export async function listVendorOrderMail(
             ),
         ),
         ledgerPartyId ? eq(orderMail.ledgerPartyId, ledgerPartyId) : undefined,
-        options.mailIds ? inArray(orderMail.id, options.mailIds) : undefined,
+        options.messageIds
+          ? inArray(orderMail.messageId, options.messageIds)
+          : undefined,
+        options.orderMailIds
+          ? inArray(orderMail.id, options.orderMailIds)
+          : undefined,
       ),
     )
     .orderBy(desc(orderMail.receivedAt))
-    .limit(options.mailIds ? Math.max(options.mailIds.length, 1) : 100);
+    .limit(
+      options.messageIds || options.orderMailIds
+        ? Math.max(
+            options.messageIds?.length ?? options.orderMailIds?.length ?? 0,
+            1,
+          )
+        : 100,
+    );
   if (mails.length === 0) return { members, items: [] };
   const events = await database
     .select()
@@ -312,7 +329,7 @@ export async function listPurchaseOrderMail(
   const worklist = await listVendorOrderMail(
     db,
     { vendorId: target.vendorShortcode },
-    { mailIds },
+    { orderMailIds: mailIds },
   );
   return {
     members: worklist.members,

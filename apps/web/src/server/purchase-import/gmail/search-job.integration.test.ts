@@ -146,5 +146,20 @@ describe("Vendor Gmail search jobs", () => {
     );
     expect(retried.status).toBe("queued");
     expect(publish).toHaveBeenCalledTimes(3);
+    const retriedTask = published[2]?.[0];
+    if (!retriedTask || retriedTask.kind !== "vendor-mail.search")
+      throw new Error("test setup: missing retried Gmail search task");
+    await runVendorMailSearchJob(ctx.db, retriedTask.jobId, {
+      search: async () => {
+        const cause = Object.assign(new Error("invalid UUID input"), {
+          code: "22P02",
+        });
+        throw new Error("Failed query: synthetic", { cause });
+      },
+    });
+    expect(
+      (await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor))
+        ?.error,
+    ).toMatch(/^22P02: invalid UUID input/u);
   });
 });
