@@ -77,6 +77,8 @@ import {
   mealRecipePortion,
   orderMail,
   orderMailAttachment,
+  orderMailCandidateDecision,
+  orderMailEvent,
   photoGroupProposal,
   productMatchCandidate,
   runFinding,
@@ -877,6 +879,20 @@ async function seedOrderMailAttachment(db: Database, ids: StagingIds) {
     rawChecksum: "delete-policy-checksum",
   }).catch(() => undefined);
   if (!mail) return;
+  if (ids.purchaseId) {
+    const event = await insertAndReturn(db, orderMailEvent, {
+      orderMailId: mail.id,
+      event: "ordered",
+      sourceKey: "delete-policy-event-1",
+    });
+    await insertAndReturn(db, orderMailCandidateDecision, {
+      eventId: event.id,
+      purchaseId: ids.purchaseId,
+      decision: "dismissed",
+      evidenceChecksum: "delete-policy-checksum",
+      decidedByUserId: "delete-policy-fixture",
+    });
+  }
   await insertAndReturn(db, orderMailAttachment, {
     orderMailId: mail.id,
     providerAttachmentId: "delete-policy-attachment-1",

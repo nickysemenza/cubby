@@ -241,7 +241,14 @@ test("suggests an existing variant and previews every merge decision for a creat
   });
   await expect(group.getByText("Product comparison")).toBeVisible();
   await expect(group.getByText(candidateName)).toBeVisible();
-  await expect(group.getByText("Gray in both sources")).toBeVisible();
+  await expect(
+    group
+      .getByRole("region", { name: "Product comparison" })
+      .getByRole("article")
+      .filter({ has: page.getByRole("link", { name: candidateName }) })
+      .getByText("Gray in both sources")
+      .first(),
+  ).toBeVisible();
   await group.getByRole("button", { name: "Approve item" }).click();
   await expect(
     page.getByRole("link", { name: "Gray crew t-shirt — M" }),

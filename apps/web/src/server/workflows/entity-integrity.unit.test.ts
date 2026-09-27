@@ -42,7 +42,7 @@ describe("integrity catalog", () => {
     expect(catalog.coverage.auditedEdges + catalog.coverage.exemptEdges).toBe(
       edges.length,
     );
-    expect(catalog.coverage.exemptEdges).toBe(7);
+    expect(catalog.coverage.exemptEdges).toBe(8);
     expect(
       edges
         .filter(
@@ -51,6 +51,7 @@ describe("integrity catalog", () => {
         .map((edge) => edge.edgeKey),
     ).toEqual([
       "Ingredient.recipeId",
+      "OrderMailCandidateDecision.purchaseId",
       "RunTarget.purchaseId",
       "AuditLog.runId",
       "AiUsage.runId",

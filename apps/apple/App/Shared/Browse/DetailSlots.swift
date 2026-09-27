@@ -18,8 +18,10 @@ enum DetailSlotRegistry {
             return AnyView(OrderMailDetailSlot(scope: .vendor(row.id, nil)))
         case (.vendorAccount, .vendorAccountOrderMail):
             guard let vendorID = row.raw["vendorId"]?.stringValue else { return nil }
-            return AnyView(OrderMailDetailSlot(scope: .vendor(
-                vendorID, row.raw["ledgerPartyId"]?.stringValue)))
+            return AnyView(
+                OrderMailDetailSlot(
+                    scope: .vendor(
+                        vendorID, row.raw["ledgerPartyId"]?.stringValue)))
         case (.purchase, .purchaseOrderMail):
             return AnyView(OrderMailDetailSlot(scope: .purchase(row.id)))
         case (.run, .runImportWorkflow)

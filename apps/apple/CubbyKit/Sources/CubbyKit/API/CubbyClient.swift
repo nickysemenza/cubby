@@ -469,10 +469,13 @@ public actor CubbyClient {
         evidenceChecksum: String
     ) async throws {
         _ = try await perform {
-            try await api.vendor_decideOrderMail(body: .json(.init(
-                eventId: eventID, purchaseId: purchaseID, decision: link ? .linked : .dismissed,
-                evidenceChecksum: evidenceChecksum
-            ))).ok.body.json
+            try await api.vendor_decideOrderMail(
+                body: .json(
+                    .init(
+                        eventId: eventID, purchaseId: purchaseID, decision: link ? .linked : .dismissed,
+                        evidenceChecksum: evidenceChecksum
+                    ))
+            ).ok.body.json
         }
     }
 
@@ -509,12 +512,17 @@ public actor CubbyClient {
             let revisions = try groups.map { group in
                 (groupKey: group.groupKey, updatedAt: try Date(group.updatedAt, strategy: .iso8601))
             }
-            return try await api.photoImport_approveGroups(body: .json(.init(
-                runId: runID,
-                groupKeys: groups.map(\.groupKey),
-                expectedRevisions: revisions.map { .init(groupKey: $0.groupKey, updatedAt: $0.updatedAt) }
-            )))
-                .ok.body.json
+            return try await api.photoImport_approveGroups(
+                body: .json(
+                    .init(
+                        runId: runID,
+                        groupKeys: groups.map(\.groupKey),
+                        expectedRevisions: revisions.map {
+                            .init(groupKey: $0.groupKey, updatedAt: $0.updatedAt)
+                        }
+                    ))
+            )
+            .ok.body.json
         }
     }
 

@@ -41,7 +41,8 @@ struct PhotoImportFlowTests {
         let ready = PhotoGroupProposal(
             groupKey: "shirt", state: .proposed,
             images: [.init(id: readyImage.id, purpose: .item)], skip: [],
-            product: .create(.init(kind: .create, create: .init(name: "Canvas shirt", manufacturer: "ForgeWear"))),
+            product: .create(
+                .init(kind: .create, create: .init(name: "Canvas shirt", manufacturer: "ForgeWear"))),
             missingImageCount: 0, updatedAt: "2026-09-25T12:00:00Z")
         var blocked = ready
         blocked.groupKey = "blocked"
@@ -49,10 +50,11 @@ struct PhotoImportFlowTests {
         var settled = ready
         settled.groupKey = "settled"
         settled.state = .committed
-        #expect(PhotoReviewPolicy.approvableSelection(
-            selected: ["shirt", "blocked", "settled"],
-            groups: [ready, blocked, settled], images: [readyImage], runStatus: .running
-        ) == ["shirt"])
+        #expect(
+            PhotoReviewPolicy.approvableSelection(
+                selected: ["shirt", "blocked", "settled"],
+                groups: [ready, blocked, settled], images: [readyImage], runStatus: .running
+            ) == ["shirt"])
     }
 
     // Regression for issue #9 (import run detail screen): the "ready to group" copy and the

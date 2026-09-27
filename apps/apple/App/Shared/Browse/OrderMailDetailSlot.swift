@@ -46,15 +46,17 @@ struct OrderMailDetailSlot: View {
                                             }
                                             if candidate.decision != .linked {
                                                 Button("Link") {
-                                                    decide(eventID: event.id, purchaseID: candidate.purchaseId,
-                                                           checksum: event.evidenceChecksum, link: true)
+                                                    decide(
+                                                        eventID: event.id, purchaseID: candidate.purchaseId,
+                                                        checksum: event.evidenceChecksum, link: true)
                                                 }
                                                 .disabled(busyEventID != nil)
                                             }
                                             if candidate.decision != .dismissed {
                                                 Button("Dismiss") {
-                                                    decide(eventID: event.id, purchaseID: candidate.purchaseId,
-                                                           checksum: event.evidenceChecksum, link: false)
+                                                    decide(
+                                                        eventID: event.id, purchaseID: candidate.purchaseId,
+                                                        checksum: event.evidenceChecksum, link: false)
                                                 }
                                                 .disabled(busyEventID != nil)
                                             }
@@ -65,7 +67,8 @@ struct OrderMailDetailSlot: View {
                                 .padding(.top, PorcelainTokens.Space.xs)
                             }
                             if let threadID = mail.threadId,
-                               let url = URL(string: "https://mail.google.com/mail/u/0/#all/\(threadID)") {
+                                let url = URL(string: "https://mail.google.com/mail/u/0/#all/\(threadID)")
+                            {
                                 Link("Open Gmail conversation", destination: url)
                                     .font(.caption)
                             }
