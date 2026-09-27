@@ -11,6 +11,11 @@ import {
 
 export const vendorHandlers = implementOperationDomain(vendorContract, {
   orderMail: (context, input) => listVendorOrderMail(context.db, input),
+  searchOrderMail: async (context, input) => {
+    const { searchVendorOrderMail } =
+      await import("~/server/purchase-import/gmail/search");
+    return searchVendorOrderMail(context.db, input, context.actorContext);
+  },
   decideOrderMail: (context, input) =>
     decideOrderMailCandidate(context.db, input, context.actorContext),
   merge: (context, input) => mergeVendorsWorkflow(context, input),

@@ -40,15 +40,12 @@ import { attachFileToEntity } from "~/server/services/image-storage.service";
 import { refundTally } from "../findings";
 import { orderAmountsInHuntWindow, uniqueOrderSubsetIds } from "./match";
 import type { GmailOrderMailAttachment } from "./types";
+import {
+  matchesConfiguredVendorSender,
+  matchesVendorSender,
+} from "./vendor-identity";
 
 const cents = (value: number) => Math.round(value * 100);
-
-const senderAddress = (header: string) => {
-  const trimmed = header.trim();
-  const bracketed = /<([^<>\s@]+@[^<>\s@]+)>$/u.exec(trimmed);
-  if (bracketed) return bracketed[1]?.toLowerCase() ?? null;
-  return /^[^<>\s@]+@[^<>\s@]+$/u.test(trimmed) ? trimmed.toLowerCase() : null;
-};
 
 export type AttachOrderMailFile = typeof attachFileToEntity;
 
@@ -191,6 +188,7 @@ export async function processOrderMails(
         id: vendor.id,
         name: vendor.name,
         senders: vendor.orderEmailSenders,
+        website: vendor.website,
         returnWindowDays: vendor.returnWindowDays,
       })
       .from(vendor)
@@ -198,10 +196,20 @@ export async function processOrderMails(
   ]);
   let processed = 0;
   for (const mail of mails) {
-    const sender = senderAddress(mail.sender);
-    const matchedVendors = vendors.filter((candidate) =>
-      candidate.senders.some((value) => sender === value.toLowerCase()),
+    const exactVendors = vendors.filter((candidate) =>
+      matchesConfiguredVendorSender(mail.sender, {
+        website: candidate.website,
+        orderEmailSenders: candidate.senders,
+      }),
     );
+    const matchedVendors = exactVendors.length
+      ? exactVendors
+      : vendors.filter((candidate) =>
+          matchesVendorSender(mail.sender, {
+            website: candidate.website,
+            orderEmailSenders: candidate.senders,
+          }),
+        );
     if (matchedVendors.length !== 1) {
       const fingerprint = await sha256Hex(
         `unknown-sender:${mail.sender.toLowerCase()}`,

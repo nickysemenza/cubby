@@ -3,6 +3,8 @@ import {
   orderMailDecisionOut,
   purchaseOrderMailOut,
   vendorOrderMailInput,
+  vendorSearchMailInput,
+  vendorSearchMailOut,
 } from "@cubby/schemas/order-mail-review";
 import {
   fetchVendorLogoInput,
@@ -19,6 +21,10 @@ export const vendorContract = defineContract("vendor", {
       "Review member-scoped order email on Vendor and Vendor account detail",
     input: vendorOrderMailInput,
     output: purchaseOrderMailOut,
+  }),
+  searchOrderMail: mutation({
+    input: vendorSearchMailInput,
+    output: vendorSearchMailOut,
   }),
   decideOrderMail: mutation({
     native: "Confirm or dismiss an order email Purchase match in Apple apps",

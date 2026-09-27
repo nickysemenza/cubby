@@ -2,7 +2,10 @@ import {
   ledgerPartyShortcode,
   vendorShortcode,
 } from "@cubby/schemas/identifiers";
-import type { VendorOrderMailOut } from "@cubby/schemas/order-mail-review";
+import type {
+  VendorOrderMailOut,
+  VendorSearchMailOut,
+} from "@cubby/schemas/order-mail-review";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -110,11 +113,18 @@ function OrderMailEvent({ event }: { event: MailEvent }) {
 function OrderMailWorklist({
   vendorId,
   ledgerPartyId,
+  canSearch = false,
+  hasSearchTerms = false,
 }: {
   vendorId: string;
   ledgerPartyId?: string;
+  canSearch?: boolean;
+  hasSearchTerms?: boolean;
 }) {
   const [memberFilter, setMemberFilter] = useState(ledgerPartyId ?? "");
+  const [searchPage, setSearchPage] = useState<VendorSearchMailOut | null>(
+    null,
+  );
   const worklist = useQuery(
     vendor.orderMail.queryOptions({
       vendorId: vendorShortcode.parse(vendorId),
@@ -123,11 +133,61 @@ function OrderMailWorklist({
         : null,
     }),
   );
+  const search = useActionMutation({
+    mutationFn: vendor.searchOrderMail.mutationOptions,
+    error: "Gmail search failed",
+    onSuccess: (result) => {
+      setSearchPage(result);
+      void worklist.refetch();
+    },
+  });
   if (worklist.isPending) return <StatusText>Loading order email…</StatusText>;
   if (worklist.isError)
     return <StatusText tone="destructive">{worklist.error.message}</StatusText>;
   return (
     <Stack gap="md">
+      {canSearch ? (
+        <Stack gap="sm">
+          <Row align="center" gap="sm" className="flex-wrap">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={search.isPending || !hasSearchTerms}
+              onClick={() => {
+                const vendorCode = vendorShortcode.parse(vendorId);
+                if (searchPage?.nextPageToken) {
+                  search.mutate({
+                    vendorId: vendorCode,
+                    after: searchPage.after,
+                    pageToken: searchPage.nextPageToken,
+                  });
+                } else {
+                  search.mutate({ vendorId: vendorCode });
+                }
+              }}
+            >
+              {search.isPending
+                ? "Searching Gmail…"
+                : searchPage?.nextPageToken
+                  ? "Search older email"
+                  : "Search Gmail now"}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {hasSearchTerms
+                ? "Saved matches appear below. Search the past year using this Vendor’s website and known senders."
+                : "Add a website to this Vendor to search Gmail."}
+            </span>
+          </Row>
+          {searchPage ? (
+            <StatusText>
+              Searched {searchPage.searched} messages; {searchPage.reviewable}{" "}
+              order email{searchPage.reviewable === 1 ? "" : "s"} in this
+              worklist.
+            </StatusText>
+          ) : null}
+        </Stack>
+      ) : null}
       {!ledgerPartyId && worklist.data.members.length > 1 ? (
         <NativeSelect
           aria-label="Filter order email by member"
@@ -187,7 +247,11 @@ function OrderMailWorklist({
 }
 
 export const VendorOrderMail: DetailSlotComponent<"vendor"> = ({ record }) => (
-  <OrderMailWorklist vendorId={record.id} />
+  <OrderMailWorklist
+    vendorId={record.id}
+    canSearch
+    hasSearchTerms={Boolean(record.website || record.orderEmailSenders.length)}
+  />
 );
 
 export const VendorAccountOrderMail: DetailSlotComponent<"vendorAccount"> = ({

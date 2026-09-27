@@ -37,6 +37,7 @@ import {
   orderMail,
   orderMailAttachment,
   orderMailEvent,
+  vendor,
   vendorAccount,
   user,
 } from "~/server/db/schema";
@@ -243,6 +244,45 @@ describe("Gmail order mail processing", () => {
       .from(orderMail)
       .where(eq(orderMail.messageId, "spoofed-display"));
     expect(mail?.vendorId).toBeNull();
+  });
+
+  it("matches a website-domain sender when no receipt address was configured", async () => {
+    const seed = await seedForgeWear();
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({ orderEmailSenders: [] })
+      .where(eq(vendor.id, seed.vendor.id));
+    await receiveMail(
+      seed,
+      "website-domain-sender",
+      "2026-09-12T12:00:00Z",
+      placed("FW-SYN-3101", 25, "2026-09-12T12:00:00Z"),
+      { sender: "Updates <receipt@notify.forgewear.example>" },
+    );
+    const [mail] = await getDb(ctx.db)
+      .select({ vendorId: orderMail.vendorId })
+      .from(orderMail)
+      .where(eq(orderMail.messageId, "website-domain-sender"));
+    expect(mail?.vendorId).toBe(seed.vendor.id);
+  });
+
+  it("prefers an exact configured sender over another Vendor on the same website domain", async () => {
+    const seed = await seedForgeWear();
+    await insertWithShortcode(ctx.db, "vendor", {
+      name: "ForgeWear Outlet",
+      website: "https://outlet.forgewear.example",
+    });
+    await receiveMail(
+      seed,
+      "shared-domain-exact-sender",
+      "2026-09-12T12:00:00Z",
+      placed("FW-SYN-3102", 25, "2026-09-12T12:00:00Z"),
+    );
+    const [mail] = await getDb(ctx.db)
+      .select({ vendorId: orderMail.vendorId })
+      .from(orderMail)
+      .where(eq(orderMail.messageId, "shared-domain-exact-sender"));
+    expect(mail?.vendorId).toBe(seed.vendor.id);
   });
 
   it("leaves an unscoped Purchase for review when more than one member has this Vendor", async () => {

@@ -11,6 +11,23 @@ export const vendorOrderMailInput = z.object({
   ledgerPartyId: ledgerPartyShortcode.nullable().optional(),
 });
 
+export const vendorSearchMailInput = z.object({
+  vendorId: vendorShortcode,
+  after: z
+    .string()
+    .regex(/^\d{4}\/\d{2}\/\d{2}$/u)
+    .optional(),
+  pageToken: z.string().min(1).max(2_000).optional(),
+});
+
+export const vendorSearchMailOut = z.object({
+  searched: z.number().int().nonnegative(),
+  reviewable: z.number().int().nonnegative(),
+  after: z.string(),
+  nextPageToken: z.string().nullable(),
+});
+export type VendorSearchMailOut = z.infer<typeof vendorSearchMailOut>;
+
 export const orderMailDecisionInput = z.object({
   eventId: z.uuid(),
   purchaseId: purchaseShortcode,

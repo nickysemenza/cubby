@@ -4,6 +4,7 @@ import { defineOperationDomain } from "~/integrations/tanstack-query/operation-c
 
 export const vendor = defineOperationDomain(vendorContract, {
   orderMail: { tags: [["vendor"]] },
+  searchOrderMail: { invalidates: ripple.vendor },
   decideOrderMail: { invalidates: ripple.vendor },
   merge: { invalidates: ripple.vendorMerge },
   fetchLogo: { invalidates: ripple.vendorLogo },
