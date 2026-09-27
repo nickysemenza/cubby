@@ -13802,6 +13802,190 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.VendorMailSearchJob": {
+      "name": "VendorMailSearchJob",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "vendorId": {
+          "name": "vendorId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ledgerPartyId": {
+          "name": "ledgerPartyId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "after": {
+          "name": "after",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pageToken": {
+          "name": "pageToken",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'queued'"
+        },
+        "searched": {
+          "name": "searched",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "skipped": {
+          "name": "skipped",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "reviewable": {
+          "name": "reviewable",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "nextPageToken": {
+          "name": "nextPageToken",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "startedAt": {
+          "name": "startedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finishedAt": {
+          "name": "finishedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "VendorMailSearchJob_party_vendor_created_idx": {
+          "name": "VendorMailSearchJob_party_vendor_created_idx",
+          "columns": [
+            {
+              "expression": "ledgerPartyId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "vendorId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "createdAt",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "VendorMailSearchJob_vendorId_Vendor_id_fk": {
+          "name": "VendorMailSearchJob_vendorId_Vendor_id_fk",
+          "tableFrom": "VendorMailSearchJob",
+          "tableTo": "Vendor",
+          "columnsFrom": [
+            "vendorId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "VendorMailSearchJob_ledgerPartyId_LedgerParty_id_fk": {
+          "name": "VendorMailSearchJob_ledgerPartyId_LedgerParty_id_fk",
+          "tableFrom": "VendorMailSearchJob",
+          "tableTo": "LedgerParty",
+          "columnsFrom": [
+            "ledgerPartyId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "VendorMailSearchJob_userId_user_id_fk": {
+          "name": "VendorMailSearchJob_userId_user_id_fk",
+          "tableFrom": "VendorMailSearchJob",
+          "tableTo": "user",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.OrderMail": {
       "name": "OrderMail",
       "schema": "",
@@ -13866,6 +14050,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "classifiedChecksum": {
+          "name": "classifiedChecksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "content": {
           "name": "content",

@@ -283,14 +283,22 @@ export async function processOrderMails(
       .set({ vendorId: matchedVendor.id, updatedAt: new Date() })
       .where(eq(orderMail.id, mail.id));
 
-    const classification = await ports.classify({
-      db,
-      messageId: mail.messageId,
-      sender: mail.sender,
-      subject: mail.subject,
-      receivedAt: mail.receivedAt.toISOString(),
-      content: mail.content,
-    });
+    let classification: Awaited<ReturnType<typeof ports.classify>>;
+    try {
+      classification = await ports.classify({
+        db,
+        messageId: mail.messageId,
+        sender: mail.sender,
+        subject: mail.subject,
+        receivedAt: mail.receivedAt.toISOString(),
+        content: mail.content,
+      });
+    } catch (error) {
+      throw new Error(
+        `Order email classification failed: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    }
     const classifiedEvents = [...classification.events].sort((left, right) =>
       JSON.stringify(left).localeCompare(JSON.stringify(right)),
     );
@@ -298,28 +306,28 @@ export async function processOrderMails(
       (_, index) => `classified:${mail.rawChecksum}:${index}`,
     );
     const firstSourceKey = sourceKeys[0];
-    if (!firstSourceKey)
-      throw new Error("Order mail classification has no events");
-    const [currentFirst] = await database
-      .select({ id: orderMailEvent.id })
-      .from(orderMailEvent)
-      .where(
-        and(
-          eq(orderMailEvent.orderMailId, mail.id),
-          eq(orderMailEvent.sourceKey, firstSourceKey),
-        ),
-      )
-      .limit(1);
-    if (!currentFirst) {
-      await database
-        .update(orderMailEvent)
-        .set({ sourceKey: firstSourceKey })
+    if (firstSourceKey) {
+      const [currentFirst] = await database
+        .select({ id: orderMailEvent.id })
+        .from(orderMailEvent)
         .where(
           and(
             eq(orderMailEvent.orderMailId, mail.id),
-            eq(orderMailEvent.sourceKey, `classified:${mail.rawChecksum}`),
+            eq(orderMailEvent.sourceKey, firstSourceKey),
           ),
-        );
+        )
+        .limit(1);
+      if (!currentFirst) {
+        await database
+          .update(orderMailEvent)
+          .set({ sourceKey: firstSourceKey })
+          .where(
+            and(
+              eq(orderMailEvent.orderMailId, mail.id),
+              eq(orderMailEvent.sourceKey, `classified:${mail.rawChecksum}`),
+            ),
+          );
+      }
     }
     await database
       .update(orderMailEvent)
@@ -328,7 +336,9 @@ export async function processOrderMails(
         and(
           eq(orderMailEvent.orderMailId, mail.id),
           like(orderMailEvent.sourceKey, "classified:%"),
-          notInArray(orderMailEvent.sourceKey, sourceKeys),
+          sourceKeys.length
+            ? notInArray(orderMailEvent.sourceKey, sourceKeys)
+            : undefined,
           isNull(orderMailEvent.supersededAt),
         ),
       );
@@ -644,6 +654,10 @@ export async function processOrderMails(
         }
       }
     }
+    await database
+      .update(orderMail)
+      .set({ classifiedChecksum: mail.rawChecksum, updatedAt: new Date() })
+      .where(eq(orderMail.id, mail.id));
     processed += 1;
   }
   return processed;

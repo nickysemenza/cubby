@@ -60,7 +60,7 @@ import {
   purchasesForOrder,
 } from "../order-import.fixtures";
 import { type OrderMailPorts, processOrderMails } from "./process";
-import { decideOrderMailCandidate } from "./review";
+import { decideOrderMailCandidate, listVendorOrderMail } from "./review";
 
 const classifications = new Map<string, OrderMailMessageClassification>();
 const uploadedKeys: string[] = [];
@@ -128,6 +128,41 @@ describe("Gmail order mail processing", () => {
     });
     return { party, vendor, account, card };
   }
+
+  it("keeps a non-order message id without placing the message in the review worklist", async () => {
+    const seed = await seedForgeWear();
+    await receiveMail(
+      seed,
+      "synthetic-newsletter",
+      "2026-09-10T15:00:00.000Z",
+      {
+        events: [],
+      },
+    );
+    const saved = await getDb(ctx.db)
+      .select({
+        id: orderMail.id,
+        rawChecksum: orderMail.rawChecksum,
+        classifiedChecksum: orderMail.classifiedChecksum,
+      })
+      .from(orderMail)
+      .where(eq(orderMail.messageId, "synthetic-newsletter"));
+    expect(saved).toHaveLength(1);
+    const savedMail = saved[0];
+    if (!savedMail) throw new Error("test setup: missing saved newsletter");
+    expect(savedMail.classifiedChecksum).toBe(savedMail.rawChecksum);
+    await getDb(ctx.db).insert(orderMailEvent).values({
+      orderMailId: savedMail.id,
+      event: "other",
+      orderId: null,
+      amount: null,
+      sourceKey: "classified:legacy-newsletter:0",
+    });
+    expect(
+      (await listVendorOrderMail(ctx.db, { vendorId: seed.vendor.shortcode }))
+        .items,
+    ).toEqual([]);
+  });
 
   type Seed = Awaited<ReturnType<typeof seedForgeWear>>;
 

@@ -18,11 +18,13 @@ export async function loadVendorMailPage(
     identity: VendorMailIdentity;
     after: string;
     pageToken: string | null;
+    knownMessageIds?: (ids: string[]) => Promise<ReadonlySet<string>>;
   },
 ): Promise<{
   messages: GmailOrderMail[];
   attachments: GmailOrderMailAttachment[];
   searched: number;
+  skipped: number;
   nextPageToken: string | null;
 }> {
   const terms = vendorSearchTerms(input.identity);
@@ -39,7 +41,11 @@ export async function loadVendorMailPage(
   const messages: GmailOrderMail[] = [];
   const attachments: GmailOrderMailAttachment[] = [];
   const refs = (page.messages ?? []).slice(0, PAGE_SIZE);
+  const known = input.knownMessageIds
+    ? await input.knownMessageIds(refs.map((ref) => ref.id))
+    : new Set<string>();
   for (const ref of refs) {
+    if (known.has(ref.id)) continue;
     const normalized = normalizeMessage(
       "me",
       await provider.getMessage(ref.id),
@@ -64,6 +70,7 @@ export async function loadVendorMailPage(
     messages,
     attachments,
     searched: refs.length,
+    skipped: refs.filter((ref) => known.has(ref.id)).length,
     nextPageToken: page.nextPageToken ?? null,
   };
 }

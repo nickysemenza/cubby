@@ -297,7 +297,7 @@ export const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
   maxTokens: 1_000,
   effort: "low",
   cache: true,
-  promptVersion: "2026-09-24.1",
+  promptVersion: "2026-09-27.1",
   schema: orderMailMessageClassification,
 }) satisfies AiStructuredFeature<OrderMailMessageClassification>;
 

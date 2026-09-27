@@ -7,7 +7,7 @@ import type {
   VendorSearchMailOut,
 } from "@cubby/schemas/order-mail-review";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -110,6 +110,7 @@ function OrderMailEvent({ event }: { event: MailEvent }) {
   );
 }
 
+// oxlint-disable-next-line eslint/complexity -- The worklist renders independent search, review, and empty states in one detail section.
 function OrderMailWorklist({
   vendorId,
   ledgerPartyId,
@@ -133,14 +134,37 @@ function OrderMailWorklist({
         : null,
     }),
   );
+  const { refetch: refetchWorklist } = worklist;
+  const jobStatus = useQuery({
+    ...vendor.orderMailSearchStatus.queryOptions({
+      vendorId: vendorShortcode.parse(vendorId),
+    }),
+    enabled: canSearch,
+    refetchInterval: (query) =>
+      query.state.data?.status === "queued" ||
+      query.state.data?.status === "running"
+        ? 2_000
+        : false,
+  });
   const search = useActionMutation({
     mutationFn: vendor.searchOrderMail.mutationOptions,
     error: "Gmail search failed",
     onSuccess: (result) => {
       setSearchPage(result);
-      void worklist.refetch();
+      void jobStatus.refetch();
     },
   });
+  const savedJob = jobStatus.data;
+  const currentJob =
+    savedJob && (!searchPage || savedJob.createdAt >= searchPage.createdAt)
+      ? savedJob
+      : searchPage;
+  const jobActive =
+    currentJob?.status === "queued" || currentJob?.status === "running";
+  const completedPage = currentJob?.status === "completed" ? currentJob : null;
+  useEffect(() => {
+    if (jobStatus.data?.status === "completed") void refetchWorklist();
+  }, [jobStatus.data?.createdAt, jobStatus.data?.status, refetchWorklist]);
   if (worklist.isPending) return <StatusText>Loading order email…</StatusText>;
   if (worklist.isError)
     return <StatusText tone="destructive">{worklist.error.message}</StatusText>;
@@ -153,38 +177,56 @@ function OrderMailWorklist({
               type="button"
               size="sm"
               variant="outline"
-              disabled={search.isPending || !hasSearchTerms}
+              disabled={search.isPending || jobActive || !hasSearchTerms}
               onClick={() => {
-                const vendorCode = vendorShortcode.parse(vendorId);
-                if (searchPage?.nextPageToken) {
-                  search.mutate({
-                    vendorId: vendorCode,
-                    after: searchPage.after,
-                    pageToken: searchPage.nextPageToken,
-                  });
-                } else {
-                  search.mutate({ vendorId: vendorCode });
-                }
+                search.mutate({ vendorId: vendorShortcode.parse(vendorId) });
               }}
             >
-              {search.isPending
+              {search.isPending || jobActive
                 ? "Searching Gmail…"
-                : searchPage?.nextPageToken
-                  ? "Search older email"
-                  : "Search Gmail now"}
+                : "Search Gmail now"}
             </Button>
+            {completedPage?.nextPageToken ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={search.isPending}
+                onClick={() =>
+                  search.mutate({
+                    vendorId: vendorShortcode.parse(vendorId),
+                    after: completedPage.after,
+                    pageToken: completedPage.nextPageToken ?? undefined,
+                  })
+                }
+              >
+                Search older email
+              </Button>
+            ) : null}
             <span className="text-xs text-muted-foreground">
               {hasSearchTerms
-                ? "Saved matches appear below. Search the past year using this Vendor’s website and known senders."
+                ? "Search this Vendor’s website domain and known senders. Saved order evidence appears below."
                 : "Add a website to this Vendor to search Gmail."}
             </span>
           </Row>
-          {searchPage ? (
-            <StatusText>
-              Searched {searchPage.searched} messages; {searchPage.reviewable}{" "}
-              order email{searchPage.reviewable === 1 ? "" : "s"} in this
-              worklist.
-            </StatusText>
+          {currentJob ? (
+            <div aria-live="polite" className="text-xs text-muted-foreground">
+              {jobActive
+                ? "Gmail search is running. You can leave this page and return."
+                : null}
+              {currentJob.status === "completed" ? (
+                <span>
+                  Checked {currentJob.searched} messages; {currentJob.skipped}{" "}
+                  already saved. {currentJob.reviewable} order email
+                  {currentJob.reviewable === 1 ? "" : "s"} to review.
+                </span>
+              ) : null}
+              {currentJob.status === "failed" ? (
+                <span role="alert" className="text-destructive">
+                  Search stopped: {currentJob.error}. Search Gmail now to retry.
+                </span>
+              ) : null}
+            </div>
           ) : null}
         </Stack>
       ) : null}
@@ -204,7 +246,11 @@ function OrderMailWorklist({
         </NativeSelect>
       ) : null}
       {worklist.data.items.length === 0 ? (
-        <StatusText>No order email has been matched to this Vendor.</StatusText>
+        <StatusText>
+          {jobActive
+            ? "Searching for order email. Matches will appear when the job finishes."
+            : "No order email has been matched to this Vendor."}
+        </StatusText>
       ) : (
         worklist.data.items.map((mail) => (
           <article

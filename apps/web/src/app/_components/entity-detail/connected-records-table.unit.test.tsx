@@ -65,6 +65,8 @@ describe("record connection evidence", () => {
     expect(
       screen.getAllByRole("link", { name: "Example seeds" })[0],
     ).toHaveAttribute("href", "/products/PRD-SEED");
+    expect(screen.queryByText("Example order")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Product").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByText("1 other path"));
     expect(
       screen.getByRole("link", { name: "Example expense" }),
