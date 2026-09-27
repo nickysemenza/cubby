@@ -1,5 +1,5 @@
 import { purchaseId } from "@cubby/schemas/identifiers";
-import { generateShortcode } from "@cubby/shared";
+import { purchaseShortcode, SHORTCODE_CHARS } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 /**
  * Mail matching failure modes: an exact order can be dismissed, the dismissal
@@ -141,17 +141,30 @@ describe("Vendor order mail review", () => {
       orderId: "TS-OLDER-1001",
       date: "2024-01-01",
     });
+    const shortcodes = Array.from({ length: 502 }, (_, index) => {
+      let value = index;
+      let body = "";
+      for (let digit = 0; digit < 4; digit++) {
+        body = SHORTCODE_CHARS.charAt(value % SHORTCODE_CHARS.length) + body;
+        value = Math.floor(value / SHORTCODE_CHARS.length);
+      }
+      return purchaseShortcode.parse(`PUR-${body}`);
+    }).filter((shortcode) => shortcode !== older.shortcode);
     for (let offset = 0; offset < 501; offset += 100) {
       await getDb(ctx.db)
         .insert(purchaseTable)
         .values(
-          Array.from({ length: Math.min(100, 501 - offset) }, (_, index) => ({
-            id: purchaseId.parse(crypto.randomUUID()),
-            shortcode: generateShortcode("purchase"),
-            vendorId: vendor.id,
-            orderId: `TS-NEWER-${offset + index}`,
-            date: "2026-09-10",
-          })),
+          Array.from({ length: Math.min(100, 501 - offset) }, (_, index) => {
+            const shortcode = shortcodes[offset + index];
+            if (!shortcode) throw new Error("test setup: shortcode missing");
+            return {
+              id: purchaseId.parse(crypto.randomUUID()),
+              shortcode,
+              vendorId: vendor.id,
+              orderId: `TS-NEWER-${offset + index}`,
+              date: "2026-09-10",
+            };
+          }),
         );
     }
     const [mail] = await getDb(ctx.db)
