@@ -71,18 +71,18 @@ export function RunAiUsage({ record }: { record: RunOut }) {
       </div>
       {usage.records.length ? (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[72rem] text-left text-sm">
+          <table className="w-max min-w-full table-auto text-left text-[13px] leading-5 whitespace-nowrap tabular-nums [&_td]:px-2 [&_td]:py-1 [&_th]:px-2 [&_th]:py-1 [&_tr]:h-8">
             <thead className="border-b border-border text-xs text-muted-foreground">
               <tr>
-                <th className="p-2">Time</th>
-                <th className="p-2">Operation</th>
-                <th className="p-2">Model</th>
-                <th className="p-2">Attempt</th>
-                <th className="p-2">Tokens</th>
-                <th className="p-2">Cache</th>
-                <th className="p-2">Duration</th>
-                <th className="p-2">Cost</th>
-                <th className="p-2">Status</th>
+                <th scope="col">Time</th>
+                <th scope="col">Operation</th>
+                <th scope="col">Model</th>
+                <th scope="col">Attempt</th>
+                <th scope="col">Tokens</th>
+                <th scope="col">Cache</th>
+                <th scope="col">Duration</th>
+                <th scope="col">Cost</th>
+                <th scope="col">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -91,46 +91,43 @@ export function RunAiUsage({ record }: { record: RunOut }) {
                   key={call.id}
                   className="border-b border-border last:border-0"
                 >
-                  <td className="p-2 font-mono text-xs">
+                  <td className="font-mono">
                     {call.createdAt.toLocaleString()}
                   </td>
-                  <td className="p-2">
-                    <span>{call.operation}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {call.feature} · {call.provider}
+                  <td>
+                    {call.operation}
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · {call.feature} · {call.provider}
                     </span>
                   </td>
-                  <td className="p-2 font-mono text-xs">{call.model}</td>
-                  <td className="p-2 font-mono text-xs tabular-nums">
-                    {call.attempt}
-                  </td>
-                  <td className="p-2 font-mono text-xs tabular-nums">
+                  <td className="font-mono">{call.model}</td>
+                  <td className="font-mono">{call.attempt}</td>
+                  <td className="font-mono">
                     {call.inputTokens ?? "—"} in / {call.outputTokens ?? "—"}{" "}
                     out
                   </td>
-                  <td className="p-2 font-mono text-xs tabular-nums">
-                    <span className="block">
-                      {call.applicationCacheStatus === "hit"
-                        ? "Application hit · no model call"
-                        : `Application ${call.applicationCacheStatus ?? "—"}`}
-                    </span>
-                    <span className="block">
-                      Gateway {call.cacheStatus ?? "—"}
-                    </span>
-                    <span className="block text-muted-foreground">
+                  <td className="font-mono">
+                    {call.applicationCacheStatus === "hit"
+                      ? "Application hit · no model call"
+                      : `Application ${call.applicationCacheStatus ?? "—"}`}
+                    {" · Gateway "}
+                    {call.cacheStatus ?? "—"}
+                    <span className="text-muted-foreground">
+                      {" · "}
                       {call.cacheReadTokens ?? "—"} read /{" "}
                       {call.cacheWriteTokens ?? "—"} write
                     </span>
                   </td>
-                  <td className="p-2 font-mono text-xs tabular-nums">
+                  <td className="font-mono">
                     {formatDuration(call.durationMs)}
                   </td>
-                  <td className="p-2 font-mono text-xs tabular-nums">
+                  <td className="font-mono">
                     {call.estimatedCost == null
                       ? "unpriced"
                       : formatCurrency(call.estimatedCost, 6)}
                   </td>
-                  <td className="p-2">
+                  <td>
                     <Badge
                       variant={
                         call.status === "succeeded" ? "positive" : "destructive"
@@ -139,8 +136,8 @@ export function RunAiUsage({ record }: { record: RunOut }) {
                       {call.status}
                     </Badge>
                     {call.gatewayLogId ? (
-                      <span className="mt-1 block font-mono text-xs text-muted-foreground">
-                        {call.gatewayLogId}
+                      <span className="ml-1 font-mono text-muted-foreground">
+                        · {call.gatewayLogId}
                       </span>
                     ) : null}
                   </td>
