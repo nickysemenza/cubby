@@ -217,6 +217,31 @@ describe("Gmail API client", () => {
       message: "History id is too old",
     });
   });
+
+  it("retries a transient Gmail 429 and honors Retry-After", async () => {
+    let calls = 0;
+    const waits: number[] = [];
+    const client = createGmailApiClient({
+      accessToken: "token-placeholder",
+      sleep: async (ms) => {
+        waits.push(ms);
+      },
+      fetcher: async () => {
+        calls += 1;
+        return calls === 1
+          ? new Response("{}", {
+              status: 429,
+              headers: { "Retry-After": "2" },
+            })
+          : Response.json({ messages: [] });
+      },
+    });
+    await expect(
+      client.listMessages({ query: "from:example.test" }),
+    ).resolves.toEqual({ messages: [] });
+    expect(calls).toBe(2);
+    expect(waits).toEqual([2_000]);
+  });
 });
 
 describe("Gmail synchronization", () => {

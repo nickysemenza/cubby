@@ -1,4 +1,4 @@
-import { runEntityId } from "@cubby/schemas/identifiers";
+import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import {
   browserCapture,
   type BrowserCapture,
@@ -368,6 +368,7 @@ export const orderMailRequest = (args: {
 
 export const classifyOrderMail = async (args: {
   db: Database;
+  runId?: RunId;
   messageId: string;
   sender: string;
   subject: string;
@@ -376,9 +377,9 @@ export const classifyOrderMail = async (args: {
 }) => {
   // No purchase-import run exists yet at this point — an inbound mail poll
   // has no user behind it, so this books under the system actor.
-  const runId = await ensureRun(args.db, systemActor(), {
-    purpose: "background",
-  });
+  const runId =
+    args.runId ??
+    (await ensureRun(args.db, systemActor(), { purpose: "background" }));
   return runStructuredFeature(
     PURCHASE_IMPORT_MAIL_FEATURE,
     orderMailRequest(args),

@@ -22,6 +22,18 @@ export type GmailApiClientOptions = {
   accessToken: string;
   baseUrl?: string;
   fetcher?: GmailFetcher;
+  sleep?: (ms: number) => Promise<void>;
+};
+
+const retryDelay = (response: Response, attempt: number): number => {
+  const header = response.headers.get("Retry-After");
+  const seconds = header ? Number(header) : Number.NaN;
+  if (Number.isFinite(seconds) && seconds >= 0)
+    return Math.min(seconds * 1_000, 10_000);
+  const date = header ? Date.parse(header) : Number.NaN;
+  if (Number.isFinite(date))
+    return Math.min(Math.max(date - Date.now(), 0), 10_000);
+  return 500 * 2 ** attempt;
 };
 
 const gmailErrorBody = z
@@ -67,6 +79,7 @@ export const createGmailApiClient = ({
   accessToken,
   baseUrl = DEFAULT_BASE_URL,
   fetcher = fetch,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 }: GmailApiClientOptions): GmailProvider => {
   if (!accessToken.trim()) throw new Error("Gmail access token is required");
 
@@ -74,16 +87,25 @@ export const createGmailApiClient = ({
     path: string,
     params?: URLSearchParams,
   ): Promise<T> => {
-    const response = await fetcher(pathFor(baseUrl, path, params), {
-      headers: {
-        accept: "application/json",
-        authorization: `Bearer ${accessToken}`,
-      },
-    });
-    if (!response.ok) throw await parseError(response);
-    // SAFETY: Each caller supplies the Gmail endpoint's owned response type;
-    // normalization validates all fields before they cross into persistence.
-    return (await response.json()) as T;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const response = await fetcher(pathFor(baseUrl, path, params), {
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${accessToken}`,
+        },
+      });
+      if (response.ok) {
+        // SAFETY: Each caller supplies the Gmail endpoint's owned response type;
+        // normalization validates all fields before they cross into persistence.
+        return (await response.json()) as T;
+      }
+      if ((response.status === 429 || response.status >= 500) && attempt < 2) {
+        await sleep(retryDelay(response, attempt));
+        continue;
+      }
+      throw await parseError(response);
+    }
+    throw new Error("Gmail retry loop exhausted");
   };
 
   return {

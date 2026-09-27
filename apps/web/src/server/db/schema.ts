@@ -2234,6 +2234,24 @@ export const mailboxCursor = pgTable(
   ],
 );
 
+export const vendorMailSearchJob = pgTable("VendorMailSearchJob", {
+  runId: uuid("runId")
+    .primaryKey()
+    .$type<RunId>()
+    .references(() => run.id),
+  after: text("after").notNull(),
+  pageToken: text("pageToken"),
+  status: text("status").notNull().default("queued"),
+  searched: integer("searched").notNull().default(0),
+  skipped: integer("skipped").notNull().default(0),
+  reviewable: integer("reviewable").notNull().default(0),
+  nextPageToken: text("nextPageToken"),
+  error: text("error"),
+  startedAt: timestamp("startedAt", { mode: "date" }),
+  finishedAt: timestamp("finishedAt", { mode: "date" }),
+  ...baseTimestamps(),
+});
+
 export const orderMail = pgTable(
   "OrderMail",
   {
@@ -2252,6 +2270,7 @@ export const orderMail = pgTable(
     subject: text("subject").notNull(),
     receivedAt: timestamp("receivedAt", { mode: "date" }).notNull(),
     rawChecksum: text("rawChecksum").notNull(),
+    classifiedChecksum: text("classifiedChecksum"),
     content: jsonb("content")
       .$type<{
         snippet: string | null;

@@ -1,6 +1,18 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { and, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  exists,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -79,6 +91,25 @@ export async function listVendorOrderMail(
     .where(
       and(
         eq(orderMail.vendorId, vendorId),
+        exists(
+          database
+            .select({ id: orderMailEvent.id })
+            .from(orderMailEvent)
+            .where(
+              and(
+                eq(orderMailEvent.orderMailId, orderMail.id),
+                isNull(orderMailEvent.supersededAt),
+                or(
+                  eq(orderMailEvent.event, "placed"),
+                  eq(orderMailEvent.event, "shipped"),
+                  eq(orderMailEvent.event, "delivered"),
+                  eq(orderMailEvent.event, "refunded"),
+                  isNotNull(orderMailEvent.orderId),
+                  isNotNull(orderMailEvent.amount),
+                ),
+              ),
+            ),
+        ),
         ledgerPartyId ? eq(orderMail.ledgerPartyId, ledgerPartyId) : undefined,
         options.mailIds ? inArray(orderMail.id, options.mailIds) : undefined,
       ),

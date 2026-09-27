@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   ledgerPartyShortcode,
   purchaseShortcode,
+  runShortcode,
   vendorShortcode,
 } from "./identifier-fields.js";
 
@@ -21,12 +22,21 @@ export const vendorSearchMailInput = z.object({
 });
 
 export const vendorSearchMailOut = z.object({
+  runShortcode,
+  status: z.enum(["queued", "running", "completed", "failed"]),
   searched: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
   reviewable: z.number().int().nonnegative(),
   after: z.string(),
   nextPageToken: z.string().nullable(),
+  error: z.string().nullable(),
+  createdAt: z.iso.datetime(),
 });
 export type VendorSearchMailOut = z.infer<typeof vendorSearchMailOut>;
+
+export const vendorSearchMailStatusInput = z.object({
+  vendorId: vendorShortcode,
+});
 
 export const orderMailDecisionInput = z.object({
   eventId: z.uuid(),

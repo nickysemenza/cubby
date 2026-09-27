@@ -45,6 +45,14 @@ was bought. A delivered email and a card charge do not receive inventory.
 
 ### What works today and what still needs work
 
+Vendor Gmail search now runs as a queued page job linked to a Run. The Vendor page shows its
+status and retry state, searches older pages deliberately, and keeps the
+background mailbox cursor separate. `OrderMail` records the message id and a
+classification checksum; repeat searches skip classified messages but retry
+incomplete ones. A message without an order event stays saved as evidence and
+does not appear in the review worklist. Gmail `429` and transient server errors
+receive bounded retries before a page job fails visibly.
+
 | Part        | Current path                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Next product step                                                           |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | Gmail       | Google connection in Settings grants read-only Gmail; one message can yield several order events. Vendor detail can search Gmail on demand by website domain or optional known sender, ten messages per page, without advancing background sync. App-open catch-up and a daily backstop also discover mail. Vendor and Purchase detail show thread evidence and reviewable candidate links. Mail-only Vendor accounts record the member relationship without enabling browser sync. | Add a Google connect-to-order approval browser journey.                     |

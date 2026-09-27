@@ -1,7 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { getGmailOAuthCredentials } from "~/server/cf-env";
 import type { Database } from "~/server/db";
+import { orderMail } from "~/server/db/schema";
+import { getDb } from "~/server/repo/database-helpers";
 
 import {
   createBetterAuthGmailAccountStore,
@@ -41,11 +44,45 @@ export async function searchVendorOrderMail(
       .toISOString()
       .slice(0, 10)
       .replaceAll("-", "/");
-  const page = await loadVendorMailPage(provider, {
-    identity: target.identity,
-    after,
-    pageToken: input.pageToken ?? null,
-  });
+  let page: Awaited<ReturnType<typeof loadVendorMailPage>>;
+  try {
+    page = await loadVendorMailPage(provider, {
+      identity: target.identity,
+      after,
+      pageToken: input.pageToken ?? null,
+      knownMessageIds: async (ids) => {
+        if (ids.length === 0) return new Set();
+        const saved = await getDb(db)
+          .select({
+            messageId: orderMail.messageId,
+            rawChecksum: orderMail.rawChecksum,
+            classifiedChecksum: orderMail.classifiedChecksum,
+          })
+          .from(orderMail)
+          .where(
+            and(
+              eq(orderMail.ledgerPartyId, target.memberId),
+              inArray(orderMail.messageId, ids),
+            ),
+          );
+        return new Set(
+          saved
+            .filter(
+              (row) =>
+                row.classifiedChecksum !== null &&
+                row.classifiedChecksum === row.rawChecksum,
+            )
+            .map((row) => row.messageId),
+        );
+      },
+    });
+  } catch (error) {
+    throw new Error(
+      `Gmail page retrieval failed: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+  let reviewable = 0;
   if (page.messages.length > 0) {
     const persisted = await persistGmailSyncResult(db, {
       ledgerPartyId: target.memberId,
@@ -59,15 +96,27 @@ export async function searchVendorOrderMail(
         attachments: page.attachments,
       },
     });
-    await processOrderMails(db, persisted.messageIds, page.attachments);
+    await processOrderMails(
+      db,
+      persisted.messageIds,
+      page.attachments,
+      undefined,
+      actor.runId ?? undefined,
+    );
+    const pageWorklist = await listVendorOrderMail(
+      db,
+      {
+        vendorId: input.vendorId,
+        ledgerPartyId: target.memberShortcode,
+      },
+      { mailIds: [...persisted.messageIds] },
+    );
+    reviewable = pageWorklist.items.length;
   }
-  const worklist = await listVendorOrderMail(db, {
-    vendorId: input.vendorId,
-    ledgerPartyId: target.memberShortcode,
-  });
   return {
     searched: page.searched,
-    reviewable: worklist.items.length,
+    skipped: page.skipped,
+    reviewable,
     after,
     nextPageToken: page.nextPageToken,
   };

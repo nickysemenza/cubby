@@ -23,6 +23,7 @@ export const backgroundTaskKinds = [
   "image-metadata.extract",
   "maintenance.recover",
   "maintenance.purchase-discovery",
+  "vendor-mail.search",
 ] as const;
 
 export const backgroundTaskKindSchema = z.enum(backgroundTaskKinds);
@@ -120,6 +121,12 @@ export const maintenancePurchaseDiscoveryTaskSchema = z.object({
   ...taskEnvelopeFields,
 });
 
+export const vendorMailSearchTaskSchema = z.object({
+  kind: z.literal("vendor-mail.search"),
+  ...taskEnvelopeFields,
+  jobId: z.uuid(),
+});
+
 export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   recipeTotalsRecomputeTaskSchema,
   entityEmbeddingRefreshTaskSchema,
@@ -130,6 +137,7 @@ export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   imageMetadataExtractTaskSchema,
   maintenanceRecoverTaskSchema,
   maintenancePurchaseDiscoveryTaskSchema,
+  vendorMailSearchTaskSchema,
 ]);
 
 /** The parsed (branded) task a handler receives. */

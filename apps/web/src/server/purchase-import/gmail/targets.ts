@@ -31,6 +31,7 @@ export async function resolveVendorMailSearchTarget(
   if (!member)
     throw new Error("Link your login to a member before searching Gmail.");
   return {
+    vendorId,
     identity: identity[0],
     memberId: member.id,
     memberShortcode: member.shortcode,

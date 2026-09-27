@@ -42,7 +42,7 @@ describe("integrity catalog", () => {
     expect(catalog.coverage.auditedEdges + catalog.coverage.exemptEdges).toBe(
       edges.length,
     );
-    expect(catalog.coverage.exemptEdges).toBe(8);
+    expect(catalog.coverage.exemptEdges).toBe(9);
     expect(
       edges
         .filter(
@@ -56,6 +56,7 @@ describe("integrity catalog", () => {
       "AuditLog.runId",
       "AiUsage.runId",
       "ImageProcessingJob.runId",
+      "VendorMailSearchJob.runId",
       "AuditLog.deviceId",
       "RunTarget.deviceWorkDeviceId",
     ]);

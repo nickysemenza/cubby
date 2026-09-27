@@ -47,4 +47,28 @@ describe("on-demand Vendor Gmail search", () => {
     expect(result.nextPageToken).toBe("next-page");
     expect(result.searched).toBe(2);
   });
+
+  it("skips previously saved Gmail ids before fetching message bodies", async () => {
+    const getMessage = vi.fn(async (id: string) =>
+      message(id, "Orders <orders@example.test>"),
+    );
+    const provider: GmailProvider = {
+      getProfile: async () => ({ historyId: "100" }),
+      listMessages: async () => ({
+        messages: [{ id: "saved" }, { id: "new" }],
+      }),
+      getMessage,
+      listHistory: async () => ({ history: [] }),
+      getAttachment: async () => ({ data: "" }),
+    };
+    const result = await loadVendorMailPage(provider, {
+      identity: { website: "https://example.test", orderEmailSenders: [] },
+      after: "2025/09/01",
+      pageToken: null,
+      knownMessageIds: async () => new Set(["saved"]),
+    });
+    expect(getMessage).toHaveBeenCalledTimes(1);
+    expect(getMessage).toHaveBeenCalledWith("new");
+    expect(result.skipped).toBe(1);
+  });
 });

@@ -427,7 +427,9 @@ const EvidenceContext = createContext<Map<
 function ConnectionEvidenceCell({ id }: { id: string }) {
   const evidence = useContext(EvidenceContext)?.get(id);
   return evidence ? (
-    <RecordPaths paths={evidence.paths} />
+    <div className="max-w-full min-w-0 overflow-hidden">
+      <RecordPaths paths={evidence.paths} compact />
+    </div>
   ) : (
     <span className="text-muted-foreground">—</span>
   );
@@ -488,6 +490,9 @@ export function EntityRelationTable({
           helper.display({
             id: "connection",
             header: "Connected through",
+            size: 280,
+            minSize: 220,
+            maxSize: 380,
             cell: ({ row }) => <ConnectionEvidenceCell id={row.original.id} />,
           }),
         );

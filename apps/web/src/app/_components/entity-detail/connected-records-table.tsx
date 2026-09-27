@@ -47,33 +47,76 @@ export function HopRange({ range }: { range: { min: number; max: number } }) {
 
 export function RecordPaths({
   paths,
+  compact = false,
 }: {
   paths: ConnectedRecordsOutput["items"][number]["paths"];
+  compact?: boolean;
 }) {
   const [first, ...other] = paths;
   if (!first) return null;
-  const renderPath = (path: ConnectedPathNode[]) => (
-    <span className="inline-flex flex-wrap items-center gap-1">
-      {path.slice(1).map((node, index) => (
-        <span
-          key={path
-            .slice(0, index + 2)
-            .map((part) => `${part.entityType}:${part.entityId}`)
-            .join("|")}
-        >
-          {index > 0 ? (
-            <span className="text-muted-foreground"> → </span>
-          ) : null}
-          <RecordPathLink node={node} />
-        </span>
-      ))}
-    </span>
-  );
+  const renderPath = (path: ConnectedPathNode[]) => {
+    const middle = path.slice(1, -1);
+    if (middle.length === 0)
+      return <span className="text-muted-foreground">Direct connection</span>;
+    if (compact)
+      return (
+        <ol className="min-w-0 space-y-0.5">
+          {middle.map((node, index) => (
+            <li
+              key={path
+                .slice(0, index + 2)
+                .map((part) => `${part.entityType}:${part.entityId}`)
+                .join("|")}
+              className="flex max-w-full min-w-0 items-baseline gap-1 overflow-hidden whitespace-nowrap"
+              title={`${node.entityType}: ${node.label}`}
+            >
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {isBrowserRoutedEntity(node.entityType)
+                  ? entities[node.entityType].label
+                  : node.entityType}
+              </span>
+              <span className="min-w-0 truncate">
+                <RecordPathLink node={node} />
+              </span>
+            </li>
+          ))}
+        </ol>
+      );
+    return (
+      <ol className="inline-flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-1 align-middle">
+        {middle.map((node, index) => (
+          <li
+            key={path
+              .slice(0, index + 2)
+              .map((part) => `${part.entityType}:${part.entityId}`)
+              .join("|")}
+            className="inline-flex max-w-full min-w-0 items-center gap-1.5"
+          >
+            {index > 0 ? (
+              <span aria-hidden="true" className="text-muted-foreground">
+                →
+              </span>
+            ) : null}
+            <span className="max-w-full min-w-0 rounded border border-border bg-muted/30 px-1.5 py-0.5">
+              <span className="me-1 text-xs text-muted-foreground">
+                {isBrowserRoutedEntity(node.entityType)
+                  ? entities[node.entityType].label
+                  : node.entityType}
+              </span>
+              <RecordPathLink node={node} />
+            </span>
+          </li>
+        ))}
+      </ol>
+    );
+  };
   return (
-    <div className="text-sm">
-      <div>
-        <span className="font-mono text-xs text-muted-foreground">
-          {first.length - 1} {first.length === 2 ? "hop" : "hops"} ·{" "}
+    <div className="max-w-full min-w-0 text-sm">
+      <div
+        className={compact ? "min-w-0" : "flex flex-wrap items-center gap-2"}
+      >
+        <span className="shrink-0 font-mono text-xs text-muted-foreground">
+          {first.length - 1} {first.length === 2 ? "hop" : "hops"}
         </span>
         {renderPath(first)}
       </div>
