@@ -39,6 +39,7 @@ import type {
   GatewayCallOptions,
   GatewayMetadata,
 } from "~/server/clients/ai-gateway";
+import { wrapAiGatewayError } from "~/server/clients/ai-gateway-error";
 import {
   type AiGatewayUsageContext,
   aiGatewayUsageMiddleware,
@@ -241,52 +242,63 @@ export async function runStructuredFeature<T>(
     };
     const { streaming } = plan;
 
-    switch (spec.tier) {
-      case "fast":
-        // SAFETY: `chat()`'s return type is a conditional on its own schema
-        // and stream generics; with `T` still a type parameter that
-        // conditional cannot resolve and widens to include the streaming
-        // branches. This call passes a concrete `outputSchema` and no
-        // `stream`, so the structured branch always runs and the result is
-        // `T`.
-        return (await ports.chat({
-          ...common,
-          adapter: surfaceStructuredOutputRunErrors(fastAdapter(plan.call), {
-            streaming,
-          }),
-          modelOptions: openaiOptions({
-            maxTokens: spec.maxTokens,
-            effort: spec.effort,
-          }),
-        })) as T;
-      case "visionBatch":
-        // SAFETY: see the `fast` branch above — same conditional-return
-        // widening, same reason the cast is sound here.
-        return (await ports.chat({
-          ...common,
-          adapter: surfaceStructuredOutputRunErrors(
-            visionBatchAdapter(plan.call),
-            { streaming },
-          ),
-          modelOptions: compatOptions({
-            maxTokens: spec.maxTokens,
-            reasoningEffort: spec.effort,
-          }),
-        })) as T;
-      case "reasoning":
-        // SAFETY: see the `fast` branch above — same conditional-return
-        // widening, same reason the cast is sound here.
-        return (await ports.chat({
-          ...common,
-          adapter: surfaceStructuredOutputRunErrors(
-            reasoningAdapter(plan.call),
-            { streaming },
-          ),
-          modelOptions: openaiOptions({
-            maxTokens: spec.maxTokens,
-            effort: spec.effort,
-          }),
-        })) as T;
+    try {
+      switch (spec.tier) {
+        case "fast":
+          // SAFETY: `chat()`'s return type is a conditional on its own schema
+          // and stream generics; with `T` still a type parameter that
+          // conditional cannot resolve and widens to include the streaming
+          // branches. This call passes a concrete `outputSchema` and no
+          // `stream`, so the structured branch always runs and the result is
+          // `T`.
+          return (await ports.chat({
+            ...common,
+            adapter: surfaceStructuredOutputRunErrors(fastAdapter(plan.call), {
+              streaming,
+            }),
+            modelOptions: openaiOptions({
+              maxTokens: spec.maxTokens,
+              effort: spec.effort,
+            }),
+          })) as T;
+        case "visionBatch":
+          // SAFETY: see the `fast` branch above — same conditional-return
+          // widening, same reason the cast is sound here.
+          return (await ports.chat({
+            ...common,
+            adapter: surfaceStructuredOutputRunErrors(
+              visionBatchAdapter(plan.call),
+              { streaming },
+            ),
+            modelOptions: compatOptions({
+              maxTokens: spec.maxTokens,
+              reasoningEffort: spec.effort,
+            }),
+          })) as T;
+        case "reasoning":
+          // SAFETY: see the `fast` branch above — same conditional-return
+          // widening, same reason the cast is sound here.
+          return (await ports.chat({
+            ...common,
+            adapter: surfaceStructuredOutputRunErrors(
+              reasoningAdapter(plan.call),
+              { streaming },
+            ),
+            modelOptions: openaiOptions({
+              maxTokens: spec.maxTokens,
+              effort: spec.effort,
+            }),
+          })) as T;
+      }
+    } catch (error) {
+      const model = getChatModelConfig(plan.model);
+      throw wrapAiGatewayError(error, {
+        model: plan.model,
+        provider: model.provider,
+        route: model.route,
+        feature: spec.feature,
+        operation: ctx.operation,
+      });
     }
   };
 

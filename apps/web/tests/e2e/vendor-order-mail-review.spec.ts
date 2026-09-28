@@ -170,7 +170,11 @@ test("shows a failed Gmail search's saved reason on its Run page", async ({
   await page.getByRole("link", { name: "View run" }).click();
   await expect(page).toHaveURL(new RegExp(`/runs/${seed.runShortcode}$`, "u"));
   await expect(page.getByText("Failure details")).toBeVisible();
-  await expect(page.getByText("Synthetic review count failure")).toBeVisible();
+  await expect(page.getByText(/model: synthetic-model/u).first()).toBeVisible();
+  await page.getByText("Technical details").click();
+  await expect(
+    page.locator("pre").filter({ hasText: "synthetic-provider.ts:12:3" }),
+  ).toBeVisible();
 });
 
 test("updates a Run's progress live and retains its completed search summary", async ({

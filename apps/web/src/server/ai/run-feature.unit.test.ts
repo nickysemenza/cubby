@@ -179,6 +179,30 @@ describe("planStructuredRun", () => {
   });
 });
 
+it("keeps the model, gateway route, operation, and provider cause on a failed call", async () => {
+  const providerError = Object.assign(new Error("Wholesale Rate limited"), {
+    status: 429,
+    code: 2018,
+  });
+  const ports = {
+    // SAFETY: the fake always rejects before any conditional chat result is used.
+    chat: (async () => {
+      throw providerError;
+    }) as StructuredRunPorts["chat"],
+  };
+  await expect(
+    runStructuredFeature(
+      PURCHASE_IMPORT_REPAIR_FEATURE,
+      request,
+      { runId, operation: "purchaseImport.repair" },
+      ports,
+    ),
+  ).rejects.toMatchObject({
+    message: expect.stringContaining(PURCHASE_IMPORT_REPAIR_FEATURE.model),
+    cause: providerError,
+  });
+});
+
 describe("runStructuredFeature", () => {
   it("maps the fast tier to OpenAI Responses options and the spec's schema", async () => {
     const { calls, ports } = fakeChat([UNUSED_RESPONSE]);

@@ -7,6 +7,7 @@ import {
   describeErrorCauses,
   scrubErrorMessage,
 } from "~/lib/error-diagnostics";
+import { isAiGatewayRateLimit } from "~/server/clients/ai-gateway-error";
 import type { Database } from "~/server/db";
 import {
   run as runTable,
@@ -25,14 +26,19 @@ const activeStatuses = ["queued", "running"];
 type SearchJob = typeof vendorMailSearchJob.$inferSelect;
 
 const jobErrorText = (error: Error | string) => {
-  const causes = describeErrorCauses(error).causes;
+  const causes = describeErrorCauses(error, { includeStacks: true }).causes;
   if (causes.length === 0) return scrubErrorMessage(String(error));
-  return causes
-    .reverse()
-    .map((cause) =>
-      cause.code ? `${cause.code}: ${cause.message}` : cause.message,
-    )
-    .join("\nCaused by: ");
+  const chain = causes
+    .map((cause, index) => {
+      const status = cause.status ? `HTTP ${cause.status} ` : "";
+      const code = cause.code ? `${cause.code}: ` : "";
+      return `${index ? "Caused by: " : ""}${status}${code}${cause.message}`;
+    })
+    .join("\n");
+  const stacks = causes.flatMap((cause) => (cause.stack ? [cause.stack] : []));
+  return stacks.length
+    ? `${chain}\n\nStack traces:\n${stacks.join("\n\n")}`
+    : chain;
 };
 
 const displayJob = (job: SearchJob, runShortcode: string) => ({
@@ -137,7 +143,9 @@ export async function retryStalledVendorMailSearchJob(
       runId: claimed.runId,
       eventId: crypto.randomUUID(),
       phase: "retry_failed",
-      detail: jobErrorText(error instanceof Error ? error : String(error)),
+      detail: jobErrorText(
+        error instanceof Error ? error : String(error),
+      ).split("\n", 1)[0],
     });
     throw error;
   }
@@ -255,7 +263,7 @@ export async function startVendorMailSearchJob(
         runId: job.runId,
         eventId: crypto.randomUUID(),
         phase: "failed",
-        detail: message,
+        detail: message.split("\n", 1)[0],
       });
     });
     throw error;
@@ -268,6 +276,7 @@ export async function startVendorMailSearchJob(
   return displayJob(current ?? job, runRecord.shortcode);
 }
 
+// eslint-disable-next-line complexity -- A page's checkpoint, rate-limit retry, terminal failure, and next-page handoff share this claim boundary.
 export async function runVendorMailSearchJob(
   db: Database,
   jobId: string,
@@ -409,13 +418,34 @@ export async function runVendorMailSearchJob(
     const message = jobErrorText(
       error instanceof Error ? error : String(error),
     );
-    const finishedAt = new Date();
     const [current] = await database
       .select({ pagesScanned: vendorMailSearchJob.pagesScanned })
       .from(vendorMailSearchJob)
       .where(eq(vendorMailSearchJob.runId, job.runId))
       .limit(1);
     const checkpointSaved = (current?.pagesScanned ?? page) > page;
+    if (isAiGatewayRateLimit(error) && !checkpointSaved) {
+      await database.transaction(async (tx) => {
+        await tx
+          .update(vendorMailSearchJob)
+          .set({
+            status: "queued",
+            error: message,
+            searched: job.searched,
+            skipped: job.skipped,
+          })
+          .where(eq(vendorMailSearchJob.runId, job.runId));
+        await tx.insert(runProgress).values({
+          runId: job.runId,
+          eventId: crypto.randomUUID(),
+          phase: "rate_limited",
+          detail:
+            "AI Gateway rate limited this page. Retrying in about two minutes.",
+        });
+      });
+      throw error;
+    }
+    const finishedAt = new Date();
     await database.transaction(async (tx) => {
       await tx
         .update(vendorMailSearchJob)
@@ -445,7 +475,7 @@ export async function runVendorMailSearchJob(
         runId: job.runId,
         eventId: crypto.randomUUID(),
         phase: "failed",
-        detail: message,
+        detail: message.split("\n", 1)[0],
       });
     });
     // The Gmail client has already made its bounded retry attempts. Ack this

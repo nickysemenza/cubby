@@ -18,6 +18,7 @@ import {
   gatewayBaseURL,
   gatewayFetch,
 } from "~/server/clients/ai-gateway";
+import { wrapAiGatewayError } from "~/server/clients/ai-gateway-error";
 
 /** Jev's 32k context, applied to the request body's UTF-8 byte length. */
 const JEV_CONTEXT_BYTE_LIMIT = 32_000;
@@ -141,6 +142,7 @@ function parseJevResponse(response: unknown): JevChoiceResponse {
   throw new Error("Jev returned an invalid choice response.");
 }
 
+// eslint-disable-next-line complexity -- The one deadline and retry loop also preserves provider context on every failure.
 async function requestJev(
   input: JevChoiceInput,
   ctx: AiRunContext,
@@ -190,14 +192,26 @@ async function requestJev(
           await waitForRetry(delayMs, controller.signal);
           continue;
         }
-        throw new Error(
-          `Jev request failed (${response.status}): ${body.slice(0, 200)}`,
+        throw Object.assign(
+          new Error(
+            `Jev request failed (${response.status}): ${body.slice(0, 200)}`,
+          ),
+          { status: response.status },
         );
       }
       parsed = parseJevResponse(await response.json().catch(() => undefined));
       return parsed;
     }
     throw new Error("Jev exhausted its request attempts.");
+  } catch (error) {
+    throw wrapAiGatewayError(error, {
+      model: feature.model,
+      provider: "typesafe",
+      route: "workers-ai",
+      feature: feature.feature,
+      operation: ctx.operation,
+      gatewayLogId,
+    });
   } finally {
     clearTimeout(deadline);
     if (ctx.db) {

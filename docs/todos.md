@@ -596,7 +596,16 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   `expense-inheritance.ts`, `task/lookup.ts`, and `image.ts`.
 
 - **Evaluate Cloudflare Workflows across durable background work.** Compare
-  image description/eligibility/companion processing, purchase import and
+  vendor Gmail discovery first: one durable instance per Run, bounded Gmail
+  pages, a persisted cursor and counts after each page, and a timed wait for
+  AI Gateway 429s that resumes without replaying saved mail. Define how a
+  Run exposes the Workflow instance, current step, next retry time, attempt
+  count, inputs, progress events, and final failure chain through the same
+  generic detail view used by queue and Flue work. Test deployment/version
+  changes, cancellation, duplicate delivery, and terminal exhaustion before
+  migration; keep the existing queue path until the Workflow can recover a
+  paused Run. Also compare image description/eligibility/companion processing,
+  purchase import and
   targeted validation/enrichment, and bounded backfills/maintenance against
   their existing queue, lease, and Flue orchestration; use search-index repair's
   existing Workflow as a concrete reference. Include cookbook imports only if

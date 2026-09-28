@@ -109,7 +109,7 @@ describe("runJevChoice", () => {
       vi.stubGlobal("fetch", fetch);
       await Promise.all([
         expect(request({ ...base, choices: ["one"] })).rejects.toThrow(
-          `Jev request failed (${status})`,
+          FIELD_SUGGESTION_FEATURE.model,
         ),
         vi.runAllTimersAsync(),
       ]);

@@ -819,7 +819,15 @@ export async function seedFailedVendorMailSearchRun(page: Page, name: string) {
   if (!savedRun) throw new Error("Synthetic Gmail search Run was not saved");
   await runVendorMailSearchJob(db, savedRun.id, {
     search: async () => {
-      throw new Error("Synthetic review count failure");
+      const provider = Object.assign(new Error("Synthetic upstream failure"), {
+        status: 503,
+      });
+      provider.stack =
+        "Error: Synthetic upstream failure\n    at provider (synthetic-provider.ts:12:3)";
+      throw new Error(
+        "AI Gateway request failed (model: synthetic-model, provider: synthetic-provider, route: openai-responses, feature: mail-classification, operation: classify): Synthetic upstream failure",
+        { cause: provider },
+      );
     },
   });
   return { vendor, runShortcode: started.runShortcode };

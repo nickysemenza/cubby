@@ -6,6 +6,7 @@ import {
 } from "@tanstack/ai-openai";
 import { LRUCache } from "lru-cache";
 
+import type { UnparsedError } from "~/lib/error-utils";
 import { recordAiUsage } from "~/server/ai-usage";
 import { SEMANTIC_QUERY_FEATURE } from "~/server/ai/features";
 import { cachedCall } from "~/server/clients/ai-adapters";
@@ -15,6 +16,7 @@ import {
   gatewayFetch,
   type GatewayMetadata,
 } from "~/server/clients/ai-gateway";
+import { wrapAiGatewayError } from "~/server/clients/ai-gateway-error";
 import type { Database } from "~/server/db";
 import { ensureRun, systemActor } from "~/server/runs/ensure-run";
 import { TraceNames, withTrace } from "~/server/tracing";
@@ -138,6 +140,14 @@ export async function embedTexts(
       adapter: ports.adapter(config, metadata),
       input: texts,
       dimensions: config.dimensions,
+    }).catch((error: UnparsedError) => {
+      throw wrapAiGatewayError(error, {
+        model: config.model,
+        provider: config.provider,
+        route: "openai",
+        feature,
+        operation,
+      });
     });
 
     if (opts?.db) {

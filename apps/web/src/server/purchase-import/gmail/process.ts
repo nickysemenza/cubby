@@ -17,6 +17,7 @@ import {
 } from "drizzle-orm";
 
 import { classifyOrderMail } from "~/server/agents/purchase-import/extract";
+import { AiGatewayRequestError } from "~/server/clients/ai-gateway-error";
 import type { Database } from "~/server/db";
 import {
   financialTransaction,
@@ -300,10 +301,8 @@ export async function processOrderMails(
         content: mail.content,
       });
     } catch (error) {
-      throw new Error(
-        `Order email classification failed: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error },
-      );
+      if (error instanceof AiGatewayRequestError) throw error;
+      throw new Error("Order email classification failed", { cause: error });
     }
     const classifiedEvents = [...classification.events].sort((left, right) =>
       JSON.stringify(left).localeCompare(JSON.stringify(right)),
