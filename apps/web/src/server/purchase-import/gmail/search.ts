@@ -16,6 +16,12 @@ import { resolveVendorMailSearchTarget } from "./targets";
 import { createGmailProviderFactory } from "./tokens";
 import { loadVendorMailPage } from "./vendor-search";
 
+export type VendorMailSearchProgress = (
+  phase: string,
+  detail: string,
+  counts?: { searched?: number; skipped?: number },
+) => Promise<void>;
+
 export async function searchVendorOrderMail(
   db: Database,
   input: {
@@ -24,7 +30,9 @@ export async function searchVendorOrderMail(
     pageToken?: string;
   },
   actor: ActorContext,
+  onProgress: VendorMailSearchProgress = async () => undefined,
 ) {
+  await onProgress("gmail_connect", "Connecting to Gmail");
   const target = await resolveVendorMailSearchTarget(db, input.vendorId, actor);
   const worker = getGmailOAuthCredentials();
   const environment = worker ? null : (await import("~/env")).env;
@@ -50,6 +58,7 @@ export async function searchVendorOrderMail(
       identity: target.identity,
       after,
       pageToken: input.pageToken ?? null,
+      onProgress,
       knownMessageIds: async (ids) => {
         if (ids.length === 0) return new Set();
         const saved = await getDb(db)
@@ -83,6 +92,10 @@ export async function searchVendorOrderMail(
     );
   }
   if (page.messages.length > 0) {
+    await onProgress("mail_save", `Saving ${page.messages.length} messages`, {
+      searched: page.searched,
+      skipped: page.skipped,
+    });
     const persisted = await persistGmailSyncResult(db, {
       ledgerPartyId: target.memberId,
       advanceCursor: false,
@@ -95,6 +108,10 @@ export async function searchVendorOrderMail(
         attachments: page.attachments,
       },
     });
+    await onProgress(
+      "mail_classify",
+      `Classifying ${persisted.messageIds.length} messages`,
+    );
     await processOrderMails(
       db,
       persisted.messageIds,
@@ -104,6 +121,7 @@ export async function searchVendorOrderMail(
     );
   }
   let reviewable = 0;
+  await onProgress("mail_review", "Checking order emails for review");
   if (page.messageIds.length > 0) {
     const pageWorklist = await listVendorOrderMail(
       db,

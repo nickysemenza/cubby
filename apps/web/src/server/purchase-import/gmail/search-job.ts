@@ -10,6 +10,7 @@ import {
 import type { Database } from "~/server/db";
 import {
   run as runTable,
+  runProgress,
   vendor,
   vendorMailSearchJob,
 } from "~/server/db/schema";
@@ -119,10 +120,17 @@ export async function startVendorMailSearchJob(
       .update(runTable)
       .set({ vendorId: target.vendorId })
       .where(eq(runTable.id, runId));
-    return tx
+    const jobs = await tx
       .insert(vendorMailSearchJob)
       .values({ runId, after, pageToken: input.pageToken ?? null })
       .returning();
+    await tx.insert(runProgress).values({
+      runId,
+      eventId: crypto.randomUUID(),
+      phase: "queued",
+      detail: "Waiting to search Gmail",
+    });
+    return jobs;
   });
   if (!job) throw new Error("Gmail search job was not created");
   try {
@@ -160,6 +168,12 @@ export async function startVendorMailSearchJob(
           dispatchError: message,
         })
         .where(eq(runTable.id, job.runId));
+      await tx.insert(runProgress).values({
+        runId: job.runId,
+        eventId: crypto.randomUUID(),
+        phase: "failed",
+        detail: message,
+      });
     });
     throw error;
   }
@@ -190,10 +204,30 @@ export async function runVendorMailSearchJob(
   )
     return "skipped" as const;
   const job = record.job;
+  const recordProgress = async (
+    phase: string,
+    detail: string,
+    counts?: { searched?: number; skipped?: number },
+  ) => {
+    await database.transaction(async (tx) => {
+      if (counts)
+        await tx
+          .update(vendorMailSearchJob)
+          .set(counts)
+          .where(eq(vendorMailSearchJob.runId, job.runId));
+      await tx.insert(runProgress).values({
+        runId: job.runId,
+        eventId: crypto.randomUUID(),
+        phase,
+        detail,
+      });
+    });
+  };
   await database
     .update(vendorMailSearchJob)
     .set({ status: "running", error: null, startedAt: new Date() })
     .where(eq(vendorMailSearchJob.runId, job.runId));
+  await recordProgress("running", "Starting Gmail search");
   try {
     const search =
       options.search ?? (await import("./search")).searchVendorOrderMail;
@@ -217,6 +251,7 @@ export async function runVendorMailSearchJob(
       buildActorContext(record.owner.actorUserId, "system", {
         runId: job.runId,
       }),
+      recordProgress,
     );
     const finishedAt = new Date();
     await database.transaction(async (tx) => {
@@ -235,6 +270,12 @@ export async function runVendorMailSearchJob(
         .update(runTable)
         .set({ status: "completed", endedAt: finishedAt })
         .where(eq(runTable.id, job.runId));
+      await tx.insert(runProgress).values({
+        runId: job.runId,
+        eventId: crypto.randomUUID(),
+        phase: "completed",
+        detail: `Checked ${result.searched} messages; ${result.skipped} already saved; ${result.reviewable} order emails to review`,
+      });
     });
     return "succeeded" as const;
   } catch (error) {
@@ -255,6 +296,12 @@ export async function runVendorMailSearchJob(
           failureCode: "vendor_mail_search_failed",
         })
         .where(eq(runTable.id, job.runId));
+      await tx.insert(runProgress).values({
+        runId: job.runId,
+        eventId: crypto.randomUUID(),
+        phase: "failed",
+        detail: message,
+      });
     });
     // The Gmail client has already made its bounded retry attempts. Ack this
     // delivery so a manual retry cannot race a delayed queue replay.

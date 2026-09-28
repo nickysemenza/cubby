@@ -1930,7 +1930,7 @@ export const photoGroupProposal = pgTable(
   ],
 );
 
-/** Idempotent progress events mirrored from the private Flue coordinator. */
+/** Durable progress events for Flue and other background Runs. */
 export const runProgress = pgTable(
   "RunProgress",
   {

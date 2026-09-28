@@ -59,6 +59,10 @@ export const runHandlers = implementOperationDomain(runContract, {
     return { items: result.items, meta: result.meta };
   },
   detail: (context, input) => getRunByShortcode(context.db, input.shortcode),
+  liveProgress: async (context, input) => {
+    const { getRunLiveProgress } = await import("~/server/repo/run-progress");
+    return getRunLiveProgress(context.db, input.shortcode);
+  },
   workSnapshot: async (context, input) => {
     const run = await loadRunDetail(context.db, input.runId);
     return {

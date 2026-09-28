@@ -13,6 +13,7 @@ const RUN_WRITE = { invalidates: ripple.runOnly } as const;
 export const run = defineOperationDomain(runContract, {
   list: { ...RUN_TAGS, cache: "browse" },
   detail: RUN_TAGS,
+  liveProgress: RUN_TAGS,
   work: RUN_TAGS,
   logs: RUN_TAGS,
   history: RUN_TAGS,

@@ -825,6 +825,76 @@ export async function seedFailedVendorMailSearchRun(page: Page, name: string) {
   return { vendor, runShortcode: started.runShortcode };
 }
 
+/** A synthetic Run whose progress changes after the browser has opened it. */
+export async function seedLiveVendorMailSearchRun(page: Page, name: string) {
+  const db = getFixtureDb();
+  const userId = await fixtureUserId(page);
+  const member = await getDb(db).query.ledgerParty.findFirst({
+    where: and(
+      eq(schema.ledgerParty.userId, userId),
+      eq(schema.ledgerParty.kind, "member"),
+      isNull(schema.ledgerParty.deletedAt),
+    ),
+  });
+  if (!member)
+    await insertWithShortcode(db, "ledgerParty", {
+      name: `${name} member`,
+      kind: "member",
+      userId,
+    });
+  const vendor = await insertWithShortcode(db, "vendor", {
+    name,
+    website: "https://example.test",
+  });
+  const started = await startVendorMailSearchJob(
+    db,
+    { vendorId: vendor.shortcode },
+    buildActorContext(userId),
+    { publish: async () => ({ transport: "queue", count: 1 }) },
+  );
+  const [saved] = await getDb(db)
+    .select({ id: schema.run.id })
+    .from(schema.run)
+    .where(eq(schema.run.shortcode, started.runShortcode));
+  if (!saved) throw new Error("Synthetic Run was not saved");
+  return {
+    runShortcode: started.runShortcode,
+    async advance() {
+      await getDb(db).transaction(async (tx) => {
+        await tx
+          .update(schema.vendorMailSearchJob)
+          .set({ status: "running", searched: 6, skipped: 2 })
+          .where(eq(schema.vendorMailSearchJob.runId, saved.id));
+        await tx.insert(schema.runProgress).values({
+          runId: saved.id,
+          eventId: crypto.randomUUID(),
+          phase: "gmail_fetch",
+          detail: "Checked 4 of 6 messages",
+        });
+      });
+    },
+    async complete() {
+      await getDb(db).transaction(async (tx) => {
+        await tx
+          .update(schema.vendorMailSearchJob)
+          .set({ status: "completed", searched: 6, skipped: 2, reviewable: 1 })
+          .where(eq(schema.vendorMailSearchJob.runId, saved.id));
+        await tx
+          .update(schema.run)
+          .set({ status: "completed" })
+          .where(eq(schema.run.id, saved.id));
+        await tx.insert(schema.runProgress).values({
+          runId: saved.id,
+          eventId: crypto.randomUUID(),
+          phase: "completed",
+          detail:
+            "Checked 6 messages; 2 already saved; 1 order email to review",
+        });
+      });
+    },
+  };
+}
+
 /** Two Purchases sharing one unallocated synthetic statement charge. */
 export async function seedSplitSettlementPrerequisite(
   page: Page,
