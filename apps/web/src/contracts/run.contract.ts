@@ -311,6 +311,31 @@ export const runContract = defineContract("run", {
     input: z.object({ shortcode: z.string() }),
     output: runOut.nullable(),
   }),
+  liveProgress: query({
+    input: z.object({ shortcode: runShortcode }),
+    output: z
+      .object({
+        status: runStatus,
+        progress: z.array(
+          z.object({
+            id: z.string(),
+            phase: z.string(),
+            detail: z.string().nullable(),
+            createdAt: z.iso.datetime(),
+          }),
+        ),
+        gmail: z
+          .object({
+            searched: z.number().int().nonnegative(),
+            skipped: z.number().int().nonnegative(),
+            reviewable: z.number().int().nonnegative(),
+            hasOlderPage: z.boolean(),
+            error: z.string().nullable(),
+          })
+          .nullable(),
+      })
+      .nullable(),
+  }),
   workSnapshot: query({
     native: "Show durable live import progress in Apple apps",
     input: z.object({ runId: runShortcode }),

@@ -155,6 +155,7 @@ public enum EntityDetailSlotID: String, CaseIterable, Codable, Sendable {
     case runAiUsage = "run.ai-usage"
     case runChanges = "run.changes"
     case runImportWorkflow = "run.import-workflow"
+    case runLiveProgress = "run.live-progress"
     case runPhotoBatch = "run.photo-batch"
     case vendorOrderMail = "vendor.order-mail"
     case vendorAccountOrderMail = "vendorAccount.order-mail"

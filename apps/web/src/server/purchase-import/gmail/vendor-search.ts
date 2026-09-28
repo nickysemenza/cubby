@@ -1,4 +1,5 @@
 import { mergeAttachmentPayload, normalizeMessage } from "./normalize";
+import type { VendorMailSearchProgress } from "./search";
 import type {
   GmailOrderMail,
   GmailOrderMailAttachment,
@@ -19,6 +20,7 @@ export async function loadVendorMailPage(
     after: string;
     pageToken: string | null;
     knownMessageIds?: (ids: string[]) => Promise<ReadonlySet<string>>;
+    onProgress?: VendorMailSearchProgress;
   },
 ): Promise<{
   messages: GmailOrderMail[];
@@ -45,16 +47,30 @@ export async function loadVendorMailPage(
   const known = input.knownMessageIds
     ? await input.knownMessageIds(refs.map((ref) => ref.id))
     : new Set<string>();
+  await input.onProgress?.("gmail_list", `Found ${refs.length} messages`, {
+    searched: refs.length,
+    skipped: known.size,
+  });
+  let handled = 0;
   for (const ref of refs) {
-    if (known.has(ref.id)) continue;
+    if (known.has(ref.id)) {
+      handled += 1;
+      continue;
+    }
     const normalized = normalizeMessage(
       "me",
       await provider.getMessage(ref.id),
     );
     if (
       !matchesVendorSender(normalized.mail.headers.from ?? "", input.identity)
-    )
+    ) {
+      handled += 1;
+      await input.onProgress?.(
+        "gmail_fetch",
+        `Checked ${handled} of ${refs.length} messages`,
+      );
       continue;
+    }
     messages.push(normalized.mail);
     for (const attachment of normalized.attachments) {
       attachments.push(
@@ -66,6 +82,11 @@ export async function loadVendorMailPage(
           : attachment,
       );
     }
+    handled += 1;
+    await input.onProgress?.(
+      "gmail_fetch",
+      `Checked ${handled} of ${refs.length} messages`,
+    );
   }
   return {
     messages,

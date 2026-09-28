@@ -7,6 +7,7 @@ import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import {
   seedVendorDisplayPrerequisite,
   seedFailedVendorMailSearchRun,
+  seedLiveVendorMailSearchRun,
   seedVendorMailReviewPrerequisite,
 } from "./e2e-fixtures";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
@@ -158,4 +159,33 @@ test("shows a failed Gmail search's saved reason on its Run page", async ({
   await expect(page).toHaveURL(new RegExp(`/runs/${seed.runShortcode}$`, "u"));
   await expect(page.getByText("Failure details")).toBeVisible();
   await expect(page.getByText("Synthetic review count failure")).toBeVisible();
+});
+
+test("updates a Run's progress live and retains its completed search summary", async ({
+  page,
+}) => {
+  const seed = await seedLiveVendorMailSearchRun(
+    page,
+    `Synthetic live search ${Date.now()}`,
+  );
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runShortcode}`,
+    page.getByText("Waiting to search Gmail").last(),
+  );
+  await seed.advance();
+  await expect(page.getByText("Checked 4 of 6 messages").last()).toBeVisible();
+  await expect(page.getByText("6 messages found")).toBeVisible();
+  await seed.complete();
+  await expect(page.getByText("Run completed")).toBeVisible();
+  await expect(
+    page.getByText("1 order email to review", { exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("Run completed")).toBeVisible();
+  await expect(
+    page.getByText(
+      "Checked 6 messages; 2 already saved; 1 order email to review",
+    ),
+  ).toBeVisible();
 });

@@ -1,7 +1,11 @@
 import type { aiRunUsageInput } from "@cubby/schemas/ai";
 import type { RunOut } from "@cubby/schemas/run";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import type { z } from "zod";
 
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
@@ -9,8 +13,106 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { StatusText } from "~/components/ui/status-text";
 import { run } from "~/entities/run.functions";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatDuration } from "~/lib/format-duration";
 import { formatCurrency } from "~/lib/utils";
+
+const phaseLabel = (phase: string) =>
+  phase.replaceAll("_", " ").replace(/^./u, (letter) => letter.toUpperCase());
+
+/** Durable progress for every Run, including work completed outside this tab. */
+export function RunLiveProgress({ record }: { record: RunOut }) {
+  const client = useQueryClient();
+  const progressQuery = useQuery({
+    ...run.liveProgress.queryOptions({ shortcode: record.id }),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status ?? record.status;
+      return status === "running" ? 1_000 : false;
+    },
+  });
+  const progress = progressQuery.data;
+  useEffect(() => {
+    if (progress && progress.status !== record.status)
+      void invalidateOperationTags(client, ripple.runOnly);
+  }, [client, progress, record.id, record.status]);
+  if (progressQuery.isLoading)
+    return <StatusText>Loading Run progress…</StatusText>;
+  if (progressQuery.isError)
+    return (
+      <StatusText tone="destructive">{progressQuery.error.message}</StatusText>
+    );
+  if (!progress) return <StatusText>Run progress is unavailable.</StatusText>;
+  const active = progress.status === "running";
+  const last = progress.progress.at(-1);
+
+  return (
+    <div className="grid gap-3" aria-live="polite" aria-atomic="false">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+        <strong className="font-medium">
+          {active
+            ? (last?.detail ?? "Working…")
+            : progress.status === "completed"
+              ? "Run completed"
+              : progress.status === "failed"
+                ? "Run failed"
+                : phaseLabel(progress.status)}
+        </strong>
+        {active ? (
+          <span className="text-muted-foreground">Updating live</span>
+        ) : null}
+      </div>
+      {progress.gmail ? (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums">
+          <span>
+            {progress.gmail.searched} messages{" "}
+            {progress.status === "completed" ? "checked" : "found"}
+          </span>
+          <span>{progress.gmail.skipped} already saved</span>
+          <span>
+            {progress.gmail.reviewable} order{" "}
+            {progress.gmail.reviewable === 1 ? "email" : "emails"} to review
+          </span>
+          {progress.gmail.hasOlderPage ? (
+            <span>Older messages available</span>
+          ) : null}
+        </div>
+      ) : null}
+      {progress.gmail?.error ? (
+        <StatusText tone="destructive">{progress.gmail.error}</StatusText>
+      ) : null}
+      {progress.progress.length > 0 ? (
+        <ol className="grid gap-0 border-t border-border text-sm">
+          {progress.progress.map((event) => (
+            <li
+              key={event.id}
+              className="flex flex-wrap gap-x-3 gap-y-1 border-b border-border py-2"
+            >
+              <time
+                className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums"
+                dateTime={event.createdAt}
+              >
+                {new Date(event.createdAt).toLocaleTimeString()}
+              </time>
+              <span className="font-medium">{phaseLabel(event.phase)}</span>
+              {event.detail ? (
+                <span className="min-w-0 break-words text-muted-foreground">
+                  {event.detail}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <StatusText>
+          {active
+            ? "Waiting for the first progress update…"
+            : "No progress updates were recorded for this Run."}
+        </StatusText>
+      )}
+    </div>
+  );
+}
 
 /** Run detail slot: every AI call the run grouped, for any run purpose. */
 export function RunAiUsage({ record }: { record: RunOut }) {

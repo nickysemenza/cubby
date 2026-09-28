@@ -67,6 +67,7 @@ export default defineEntity({
         breadcrumb: "vendorAccountId",
       },
       additionalSectionOverrides: [
+        { kind: "slot", id: "live-progress", title: "Progress" },
         { kind: "slot", id: "import-workflow", title: "Import" },
         { kind: "slot", id: "photo-batch", title: "Photos", placement: "full" },
         { kind: "slot", id: "ai-usage", title: "AI usage" },

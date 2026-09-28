@@ -5,9 +5,11 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { publishBackgroundTasks } from "~/server/background-tasks/publish";
-import { run, vendorMailSearchJob } from "~/server/db/schema";
+import { run, runProgress, vendorMailSearchJob } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { getRunLiveProgress } from "~/server/repo/run-progress";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { ensureRun } from "~/server/runs/ensure-run";
 
 import {
   latestVendorMailSearchJob,
@@ -17,6 +19,39 @@ import {
 
 describe("Vendor Gmail search jobs", () => {
   const ctx = withTestDb();
+
+  it("reads durable progress for a Run without a Gmail job", async () => {
+    const runId = await ensureRun(
+      ctx.db,
+      { ...ctx.actor, runId: null },
+      {
+        purpose: "background",
+        trigger: "manual",
+        notes: "Synthetic background work",
+      },
+    );
+    const [record] = await getDb(ctx.db)
+      .select({ shortcode: run.shortcode })
+      .from(run)
+      .where(eq(run.id, runId));
+    if (!record) throw new Error("Synthetic Run was not saved");
+    await getDb(ctx.db).insert(runProgress).values({
+      runId,
+      eventId: crypto.randomUUID(),
+      phase: "work_started",
+      detail: "Processing synthetic task",
+    });
+    expect(await getRunLiveProgress(ctx.db, record.shortcode)).toMatchObject({
+      status: "running",
+      gmail: null,
+      progress: [
+        expect.objectContaining({
+          phase: "work_started",
+          detail: "Processing synthetic task",
+        }),
+      ],
+    });
+  });
 
   it("queues once, exposes progress, and safely skips a replayed delivery", async () => {
     const member = await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -64,13 +99,27 @@ describe("Vendor Gmail search jobs", () => {
     const task = published[0]?.[0];
     if (!task || task.kind !== "vendor-mail.search")
       throw new Error("test setup: missing Gmail search task");
-    const search = vi.fn(async () => ({
-      searched: 10,
-      skipped: 7,
-      reviewable: 2,
-      after: "2025/09/27",
-      nextPageToken: "older-page",
-    }));
+    const search = vi.fn(async (_db, _input, _actor, onProgress) => {
+      await onProgress("gmail_list", "Found 10 messages", {
+        searched: 10,
+      });
+      expect(
+        await getRunLiveProgress(ctx.db, first.runShortcode),
+      ).toMatchObject({
+        status: "running",
+        gmail: expect.objectContaining({ searched: 10 }),
+        progress: expect.arrayContaining([
+          expect.objectContaining({ phase: "gmail_list" }),
+        ]),
+      });
+      return {
+        searched: 10,
+        skipped: 7,
+        reviewable: 2,
+        after: "2025/09/27",
+        nextPageToken: "older-page",
+      };
+    });
     await expect(
       runVendorMailSearchJob(ctx.db, task.jobId, { search }),
     ).resolves.toBe("succeeded");
@@ -82,6 +131,7 @@ describe("Vendor Gmail search jobs", () => {
       ctx.db,
       expect.objectContaining({ vendorId: vendor.shortcode }),
       expect.objectContaining({ runId: task.jobId }),
+      expect.any(Function),
     );
     const [completedRun] = await getDb(ctx.db)
       .select({ status: run.status, endedAt: run.endedAt })
@@ -100,6 +150,17 @@ describe("Vendor Gmail search jobs", () => {
       skipped: 7,
       reviewable: 2,
       nextPageToken: "older-page",
+    });
+    expect(await getRunLiveProgress(ctx.db, first.runShortcode)).toMatchObject({
+      status: "completed",
+      gmail: expect.objectContaining({
+        searched: 10,
+        skipped: 7,
+        reviewable: 2,
+      }),
+      progress: expect.arrayContaining([
+        expect.objectContaining({ phase: "completed" }),
+      ]),
     });
 
     const older = await startVendorMailSearchJob(

@@ -221,6 +221,11 @@ export const detailSlots = {
     ),
   },
   run: {
+    "live-progress": slot(() =>
+      import("~/app/runs/slots").then((m) => ({
+        default: m.RunLiveProgress,
+      })),
+    ),
     "import-workflow": slot(
       () =>
         import("~/app/purchases/purchase-import-run-detail").then((m) => ({
