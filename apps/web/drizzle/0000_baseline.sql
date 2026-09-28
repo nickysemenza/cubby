@@ -1949,7 +1949,7 @@ CREATE INDEX "AiUsage_model_createdAt_idx" ON "AiUsage" USING btree ("model","cr
 CREATE INDEX "AiUsage_entity_idx" ON "AiUsage" USING btree ("entityKind","entityId");--> statement-breakpoint
 CREATE INDEX "AiUsage_job_idx" ON "AiUsage" USING btree ("jobKind","jobId");--> statement-breakpoint
 CREATE INDEX "AiUsage_run_idx" ON "AiUsage" USING btree ("runId");--> statement-breakpoint
-CREATE INDEX "AuditLog_createdAt_id_idx" ON "AuditLog" USING btree ("createdAt" DESC NULLS FIRST,"id" DESC NULLS FIRST);--> statement-breakpoint
+CREATE INDEX "AuditLog_createdAt_id_idx" ON "AuditLog" USING btree ("createdAt" DESC NULLS LAST,"id" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "AuditLog_runId_idx" ON "AuditLog" USING btree ("runId") WHERE "AuditLog"."runId" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "AuditLog_entityType_entityId_createdAt_idx" ON "AuditLog" USING btree ("entityType","entityId","createdAt" DESC NULLS LAST);--> statement-breakpoint
 CREATE UNIQUE INDEX "Cookbook_shortcode_unique" ON "Cookbook" USING btree ("shortcode");--> statement-breakpoint

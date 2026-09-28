@@ -1,8 +1,8 @@
--- Production drift from the db:push era, absorbed so production's catalog
--- equals a database built from 0000_baseline (compared with
+-- Production drift from the db:push era, absorbed so production and a
+-- database built from 0000_baseline both end at schema.ts (compared with
 -- tooling/db-catalog.ts against a schema-only restore of production).
--- Idempotent: on a database built from 0000 every statement is a no-op or
--- recreates an identical object. Immutable once merged.
+-- Idempotent: every statement is guarded, or recreates an identical object.
+-- Immutable once merged.
 
 -- Constraint names left behind by table renames and hand-written DDL.
 DO $$
@@ -26,6 +26,17 @@ END $$;--> statement-breakpoint
 
 -- The column default production kept from an earlier model default.
 ALTER TABLE "Run" ALTER COLUMN "coordinatorModel" SET DEFAULT 'gpt-6-sol';--> statement-breakpoint
+
+-- schema.ts declares this index NULLS FIRST (Postgres's DESC default): what the
+-- feed's ORDER BY "createdAt" DESC, id DESC scans and what production already
+-- has. Rebuild it only where the baseline's NULLS LAST shape exists.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'AuditLog_createdAt_id_idx' AND indexdef LIKE '%NULLS LAST%') THEN
+    DROP INDEX "AuditLog_createdAt_id_idx";
+    CREATE INDEX "AuditLog_createdAt_id_idx" ON "AuditLog" USING btree ("createdAt" DESC NULLS FIRST, "id" DESC NULLS FIRST);
+  END IF;
+END $$;--> statement-breakpoint
 
 -- db:push never diffs CHECK expressions: two are equivalent but reordered in
 -- production, and two lack values the model has allowed since (widening only).
