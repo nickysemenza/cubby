@@ -494,7 +494,6 @@ export const mealFoodEntry = pgTable(
 export {
   entityIdentity,
   entityIdentityRelations,
-  installEntityIdentityTriggers,
 } from "./entity-identity-schema";
 export { productCategory } from "./product-category-schema";
 
@@ -3675,9 +3674,13 @@ export const auditLog = pgTable(
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
+    // NULLS FIRST is Postgres's own `DESC` default: it matches the feed's
+    // `ORDER BY "createdAt" DESC, id DESC` and the index production carries.
+    // Drizzle's bare `.desc()` would declare NULLS LAST, which that ORDER BY
+    // cannot scan.
     index("AuditLog_createdAt_id_idx").on(
-      table.createdAt.desc(),
-      table.id.desc(),
+      table.createdAt.desc().nullsFirst(),
+      table.id.desc().nullsFirst(),
     ),
     // Real identity FK (ADR 0006): the row names an entity that exists, of
     // the kind it claims. History keeps the identity that received the event.

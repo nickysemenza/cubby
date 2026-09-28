@@ -26,7 +26,17 @@ export const DEV_DB_NAME = "cubby_dev";
 export const DEV_DB_USER = "postgres";
 // Synthetic, local-only credential — never used outside this dev container.
 export const DEV_DB_PASSWORD = "password";
-export const DEV_DATABASE_URL = `postgresql://${DEV_DB_USER}:${DEV_DB_PASSWORD}@${DEV_DB_HOST}:${DEV_DB_PORT}/${DEV_DB_NAME}`;
+/**
+ * The database this invocation targets. Worktrees share `cubby_dev`; a branch
+ * whose migrations are ahead of main sets CUBBY_DEV_DB_NAME=cubby_dev_<name>
+ * to get its own database in the same container, so it never migrates the
+ * shared one. apps/web/tooling/dev-db-guard.ts accepts the same pattern.
+ */
+const devDatabaseName = process.env.CUBBY_DEV_DB_NAME ?? DEV_DB_NAME;
+if (!/^cubby_dev(?:_[a-z0-9_]+)?$/u.test(devDatabaseName))
+  throw new Error("CUBBY_DEV_DB_NAME must be cubby_dev or cubby_dev_<a-z0-9_>");
+const ownDatabase = devDatabaseName !== DEV_DB_NAME;
+export const DEV_DATABASE_URL = `postgresql://${DEV_DB_USER}:${DEV_DB_PASSWORD}@${DEV_DB_HOST}:${DEV_DB_PORT}/${devDatabaseName}`;
 
 const postgresImage = "docker.io/pgvector/pgvector:pg17";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -136,7 +146,7 @@ async function assertRunningOwnedContainer(): Promise<void> {
   }
 }
 
-/** `push` and `seed` need apps/web's own deps (drizzle-kit, pg, faker, the entity kernel). */
+/** `migrate` and `seed` need apps/web's own deps (drizzle-orm, pg, faker, the entity kernel). */
 function runInWebWorkspace(
   script: string,
   args: string[] = [],
@@ -168,14 +178,40 @@ function runWebCommand(args: string[]): Promise<number> {
   });
 }
 
+function psql(sql: string): Promise<string> {
+  return containerCli([
+    "exec",
+    DEV_DB_CONTAINER,
+    "psql",
+    "-U",
+    DEV_DB_USER,
+    "-d",
+    "postgres",
+    "-tAc",
+    sql,
+  ]);
+}
+
+/** A branch database (CUBBY_DEV_DB_NAME) is created on first use. */
+async function ensureDatabase(): Promise<void> {
+  if (!ownDatabase) return;
+  const exists = await psql(
+    `SELECT 1 FROM pg_database WHERE datname = '${devDatabaseName}'`,
+  );
+  if (exists.trim() === "1") return;
+  await psql(`CREATE DATABASE "${devDatabaseName}"`);
+  console.log(`[dev-db] Created ${devDatabaseName}`);
+}
+
 async function ready(): Promise<number> {
   await up();
-  const pushed = await runInWebWorkspace("dev-db-push.ts");
-  if (pushed !== 0) {
+  await ensureDatabase();
+  const migrated = await runInWebWorkspace("db-migrate.ts", ["--target=dev"]);
+  if (migrated !== 0) {
     console.error(
-      "[dev-db] Schema push needs a rename choice. Run `pnpm db:dev:push` interactively, or `pnpm db:dev:reset` to discard this synthetic local database.",
+      "[dev-db] Migration failed. `pnpm db:dev:reset` discards this synthetic local database and rebuilds it from the migrations.",
     );
-    return pushed;
+    return migrated;
   }
   if (!existsSync(path.join(webRoot, "dist/server/wrangler.json"))) {
     const built = await runWebCommand(["run", "build:cf"]);
@@ -186,6 +222,11 @@ async function ready(): Promise<number> {
 
 async function reset(): Promise<number> {
   await assertRunningOwnedContainer();
+  if (ownDatabase) {
+    // Only this branch's database; the shared volume stays.
+    await psql(`DROP DATABASE IF EXISTS "${devDatabaseName}" WITH (FORCE)`);
+    return ready();
+  }
   await stopAndRemove(DEV_DB_CONTAINER);
   await containerCli(["volume", "rm", DEV_DB_VOLUME]);
   return ready();
@@ -200,9 +241,10 @@ async function main(): Promise<number> {
     case "down":
       await down();
       return 0;
-    case "push":
+    case "migrate":
       await assertRunningOwnedContainer();
-      return runInWebWorkspace("dev-db-push.ts");
+      await ensureDatabase();
+      return runInWebWorkspace("db-migrate.ts", ["--target=dev"]);
     case "seed":
       await assertRunningOwnedContainer();
       return runInWebWorkspace("dev-db-seed.ts");
@@ -212,7 +254,7 @@ async function main(): Promise<number> {
       return reset();
     default:
       console.error(
-        "Usage: node scripts/dev-db.ts <up|push|seed|ready|reset|down>",
+        "Usage: node scripts/dev-db.ts <up|migrate|seed|ready|reset|down>",
       );
       return 1;
   }
