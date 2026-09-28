@@ -184,7 +184,7 @@ export async function createDevice(
       productId,
     });
     await logAuditEntry(tx, actor, {
-      entityType: "device",
+      entityKind: "device",
       entityId: row.id,
       action: "create",
     });

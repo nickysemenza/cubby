@@ -182,7 +182,7 @@ const dbProjectToAPI = ({
   const reference = (shortcode: string | null) =>
     shortcode
       ? {
-          entityType: "project" as const,
+          entityKind: "project" as const,
           entityId: shortcode,
           name:
             allRows.find((item) => item.shortcode === shortcode)?.name ?? null,

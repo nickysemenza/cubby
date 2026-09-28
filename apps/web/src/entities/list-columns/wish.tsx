@@ -72,7 +72,7 @@ const WISH_TREE_CONFIG = {
 } as const;
 
 const wishMobileDetailsHref = (row: WishRow) =>
-  `/${entities[row.entityType].basePath}/${row.previewId}`;
+  `/${entities[row.entityKind].basePath}/${row.previewId}`;
 
 const WISH_PREVIEW = {
   entity: null,

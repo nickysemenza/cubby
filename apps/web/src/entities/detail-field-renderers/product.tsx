@@ -26,14 +26,14 @@ function ProductIngredientLink({
   ingredient: { id: string; name: string };
 }) {
   const displayImages = useEntityDisplayImages([
-    { entityType: "ingredient", entityId: ingredient.id },
+    { entityKind: "ingredient", entityId: ingredient.id },
   ]);
   return (
     <EntityInlineLink
       displayImage={
         displayImages[
           entityDisplayImageKey({
-            entityType: "ingredient",
+            entityKind: "ingredient",
             entityId: ingredient.id,
           })
         ] ?? null

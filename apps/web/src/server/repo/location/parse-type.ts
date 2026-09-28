@@ -29,6 +29,6 @@ export const parseLocationType = (
   value === null
     ? null
     : parseWithContext(locationType, value, {
-        entityType: "Location",
+        entityKind: "Location",
         identifier,
       });

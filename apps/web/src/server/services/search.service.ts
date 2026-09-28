@@ -17,7 +17,11 @@ import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { findSemanticEntityCandidates } from "~/server/repo/entity-embedding-search";
 import { loadLocationAncestors } from "~/server/repo/location/tree";
 import { executeSearchDocumentSql } from "~/server/repo/search-document";
-import { buildPrefixTsQuery, searchTerms } from "~/server/repo/search-lexical";
+import {
+  buildPrefixTsQuery,
+  exactCodeMatch,
+  searchTerms,
+} from "~/server/repo/search-lexical";
 import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/semantic/constants";
 import {
   embedQuery,
@@ -59,8 +63,8 @@ const productionRelatedSearchPort: RelatedSearchPort = {
 
 export { buildPrefixTsQuery, searchTerms } from "~/server/repo/search-lexical";
 
-const scopes = (entityTypes?: SearchableEntity[]) =>
-  entityTypes?.length ? entityTypes : [...searchableEntities];
+const scopes = (entityKinds?: SearchableEntity[]) =>
+  entityKinds?.length ? entityKinds : [...searchableEntities];
 
 const textArray = (values: string[]): SQL =>
   values.length === 0
@@ -72,13 +76,13 @@ const textArray = (values: string[]): SQL =>
 
 async function hydrateThumbnails(
   db: Database,
-  refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
+  refs: ReadonlyArray<{ entityKind: SearchableEntity; entityId: string }>,
 ): Promise<Map<string, string | null>> {
   const images = await resolveEntityDisplayImages(db, refs);
   return new Map(
     refs.map((ref) => [
-      entityRefKey(ref.entityType, ref.entityId),
-      images.get(entityRefKey(ref.entityType, ref.entityId))?.url ?? null,
+      entityRefKey(ref.entityKind, ref.entityId),
+      images.get(entityRefKey(ref.entityKind, ref.entityId))?.url ?? null,
     ]),
   );
 }
@@ -91,13 +95,13 @@ const withThumbnails = async (
   const paths = await loadLocationAncestors(
     db,
     candidates
-      .filter((candidate) => candidate.entityType === "location")
+      .filter((candidate) => candidate.entityKind === "location")
       .map((candidate) => parseEntityId("location", candidate.entityId)),
   );
   return candidates.map(({ entityId, ...candidate }) => ({
     ...candidate,
-    imageUrl: images.get(entityRefKey(candidate.entityType, entityId)) ?? null,
-    ...(candidate.entityType === "location" && {
+    imageUrl: images.get(entityRefKey(candidate.entityKind, entityId)) ?? null,
+    ...(candidate.entityKind === "location" && {
       locationPath:
         paths
           .get(parseEntityId("location", entityId))
@@ -116,7 +120,7 @@ export async function findLexicalSearchCandidates(
   const tsQuery = buildPrefixTsQuery(input.query);
   if (!normalized || !tsQuery) return [];
   const limit = Math.min(Math.max(input.limit ?? 5, 1), maxLimit);
-  const entityTypes = scopes(input.entityTypes);
+  const entityKinds = scopes(input.entityKinds);
   const matchTerms = textArray(searchTerms(input.query));
   const rows = await withTrace(
     TraceNames.service("search", "lexicalCandidates"),
@@ -131,8 +135,8 @@ export async function findLexicalSearchCandidates(
       FROM "SearchDocument" sd
       WHERE sd."deletedAt" IS NULL
         AND char_length(${normalized}) >= 3
-        AND sd."entityType" IN (${sql.join(
-          entityTypes.map((type) => sql`${type}`),
+        AND sd."entityKind" IN (${sql.join(
+          entityKinds.map((type) => sql`${type}`),
           sql`, `,
         )})
         AND sd."normalizedText" % ${normalized}
@@ -143,12 +147,12 @@ export async function findLexicalSearchCandidates(
       SELECT sd.id
       FROM "SearchDocument" sd CROSS JOIN q
       WHERE sd."deletedAt" IS NULL
-        AND sd."entityType" IN (${sql.join(
-          entityTypes.map((type) => sql`${type}`),
+        AND sd."entityKind" IN (${sql.join(
+          entityKinds.map((type) => sql`${type}`),
           sql`, `,
         )})
         AND (
-          lower(sd."shortcode") = ${normalized}
+          ${exactCodeMatch(normalized)}
           OR lower(sd.title) = ${normalized}
           OR lower(sd.title) LIKE ${`${normalized}%`}
           OR EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) = ${normalized} OR lower(term) LIKE ${`${normalized}%`})
@@ -157,16 +161,16 @@ export async function findLexicalSearchCandidates(
       UNION
       SELECT id FROM fuzzy
     )
-    SELECT sd."entityId"::text AS "entityId", sd."shortcode" AS id, sd."entityType", sd.title, sd.subtitle, sd."typeHint",
+    SELECT sd."entityId"::text AS "entityId", e."shortcode" AS id, sd."entityKind", sd.title, sd.subtitle, sd."typeHint",
       CASE
-        WHEN lower(sd."shortcode") = ${normalized} OR lower(sd.title) = ${normalized}
+        WHEN ${exactCodeMatch(normalized)} OR lower(sd.title) = ${normalized}
           OR EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) = ${normalized}) THEN 'exact'
         WHEN lower(sd.title) LIKE ${`${normalized}%`} OR EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) LIKE ${`${normalized}%`}) THEN 'prefix'
         WHEN sd."searchVector" @@ q.query THEN 'text'
         ELSE 'fuzzy'
       END AS "matchKind",
       CASE
-        WHEN lower(sd."shortcode") = ${normalized} THEN 'shortcode'
+        WHEN ${exactCodeMatch(normalized)} THEN 'shortcode'
         WHEN lower(sd.title) = ${normalized} OR lower(sd.title) LIKE ${`${normalized}%`} THEN 'title'
         WHEN EXISTS (SELECT 1 FROM unnest(sd.aliases) term WHERE lower(term) = ${normalized} OR lower(term) LIKE ${`${normalized}%`}) THEN 'alias'
         WHEN EXISTS (SELECT 1 FROM unnest(sd.keywords) term WHERE lower(term) = ${normalized} OR lower(term) LIKE ${`${normalized}%`}) THEN 'keyword'
@@ -177,7 +181,7 @@ export async function findLexicalSearchCandidates(
         ELSE 'title'
       END AS "matchField",
       CASE
-        WHEN lower(sd."shortcode") = ${normalized} THEN 'Exact shortcode match'
+        WHEN ${exactCodeMatch(normalized)} THEN 'Exact shortcode match'
         WHEN lower(sd.title) = ${normalized} THEN 'Exact title match'
         WHEN EXISTS (SELECT 1 FROM unnest(sd.aliases) term WHERE lower(term) = ${normalized}) THEN 'Exact alias match'
         WHEN EXISTS (SELECT 1 FROM unnest(sd.keywords) term WHERE lower(term) = ${normalized}) THEN 'Exact identifier match'
@@ -193,22 +197,23 @@ export async function findLexicalSearchCandidates(
       ${matchTerms} AS "matchTerms"
     FROM candidates
     JOIN "SearchDocument" sd ON sd.id = candidates.id
+    JOIN "Entity" e ON e."id" = sd."entityId"
     CROSS JOIN q
     ORDER BY
-      CASE WHEN lower(sd."shortcode") = ${normalized} THEN 0
+      CASE WHEN ${exactCodeMatch(normalized)} THEN 0
            WHEN lower(sd.title) = ${normalized} THEN 1
            WHEN EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) = ${normalized}) THEN 2
            WHEN lower(sd.title) LIKE ${`${normalized}%`} OR EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) LIKE ${`${normalized}%`}) THEN 3
            WHEN sd."searchVector" @@ q.query THEN 4 ELSE 5 END,
       ts_rank_cd(sd."searchVector", q.query) DESC,
       similarity(sd."normalizedText", ${normalized}) DESC,
-      sd."updatedAt" DESC, sd."shortcode" ASC
+      sd."updatedAt" DESC, e."shortcode" ASC
     LIMIT ${limit}
   `,
       );
       span.setAttributes({
         "search.query_length": normalized.length,
-        "search.scope_count": entityTypes.length,
+        "search.scope_count": entityKinds.length,
         "search.limit": limit,
         "search.candidate_count": candidates.length,
       });
@@ -242,22 +247,22 @@ export async function findRelatedSearchCandidates(
     const embedding = await port.embed(input.query, { db });
     if (!embedding) return { status: "unavailable", results: [] };
     const limit = Math.min(Math.max(input.limit ?? 5, 1), maxLimit);
-    const entityTypes = scopes(input.entityTypes);
+    const entityKinds = scopes(input.entityKinds);
     const matchTerms = searchTerms(input.query);
     const refs = await findSemanticEntityCandidates(
       port.vectorStore,
       embedding,
-      { entityTypes, limit },
+      { entityKinds, limit },
     );
     // Ghosts (a stale vector for a deleted/never-indexed entity) drop out
     // here: hydration only returns rows with a live SearchDocument, so the
     // result can legitimately be shorter than `refs`/`limit`.
     const hits = await hydrateSearchHitRefs(db, refs);
     const hitByRef = new Map(
-      hits.map((hit) => [`${hit.entityType}:${hit.entityId}`, hit] as const),
+      hits.map((hit) => [`${hit.entityKind}:${hit.entityId}`, hit] as const),
     );
     const results: InternalSearchCandidate[] = refs.flatMap((ref) => {
-      const hit = hitByRef.get(`${ref.entityType}:${ref.entityId}`);
+      const hit = hitByRef.get(`${ref.entityKind}:${ref.entityId}`);
       if (!hit) return [];
       const { imageUrl: _imageUrl, ...candidate } = hit;
       return [
@@ -301,7 +306,7 @@ export async function findRelatedSearchHits(
 export async function hydrateSearchHitRefs(
   db: Database,
   refs: ReadonlyArray<{
-    entityType: SearchableEntity;
+    entityKind: SearchableEntity;
     entityId: string;
   }>,
 ): Promise<InternalSearchHit[]> {
@@ -309,7 +314,7 @@ export async function hydrateSearchHitRefs(
   const values = sql.join(
     refs.map(
       (ref, index) =>
-        sql`(${ref.entityType}::text, ${ref.entityId}::uuid, ${index}::integer)`,
+        sql`(${ref.entityKind}::text, ${ref.entityId}::uuid, ${index}::integer)`,
     ),
     sql`, `,
   );
@@ -317,22 +322,23 @@ export async function hydrateSearchHitRefs(
     db,
     candidateSchema,
     sql`
-      WITH refs("entityType", "entityId", ordinal) AS (VALUES ${values})
-      SELECT sd."entityId"::text AS "entityId", sd."shortcode" AS id,
-        sd."entityType", sd.title, sd.subtitle, sd."typeHint",
+      WITH refs("entityKind", "entityId", ordinal) AS (VALUES ${values})
+      SELECT sd."entityId"::text AS "entityId", e."shortcode" AS id,
+        sd."entityKind", sd.title, sd.subtitle, sd."typeHint",
         'semantic' AS "matchKind", 'embedding' AS "matchField",
         'Related meaning match' AS "matchReason", ARRAY[]::text[] AS "matchTerms"
       FROM refs
       JOIN "SearchDocument" sd
-        ON sd."entityType" = refs."entityType"
+        ON sd."entityKind" = refs."entityKind"
         AND sd."entityId" = refs."entityId"
         AND sd."deletedAt" IS NULL
+      JOIN "Entity" e ON e."id" = sd."entityId"
       ORDER BY refs.ordinal
     `,
   );
   const images = await hydrateThumbnails(db, rows);
   return rows.map((row) => ({
     ...row,
-    imageUrl: images.get(`${row.entityType}:${row.entityId}`) ?? null,
+    imageUrl: images.get(`${row.entityKind}:${row.entityId}`) ?? null,
   }));
 }

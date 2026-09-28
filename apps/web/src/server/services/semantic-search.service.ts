@@ -24,7 +24,7 @@ async function semanticSearchCandidates(
   db: Database,
   query: string,
   limit: number,
-  entityTypes: SearchableEntity[],
+  entityKinds: SearchableEntity[],
   runId?: RunId,
 ): Promise<SemanticProductCandidate[]> {
   if (query.trim().length < SEMANTIC_MIN_QUERY_LENGTH) return [];
@@ -41,16 +41,16 @@ async function semanticSearchCandidates(
     TraceNames.service("semanticSearch", "vectorLookup"),
     () =>
       findSemanticEntityCandidates(productionVectorStore, embedding, {
-        entityTypes,
+        entityKinds,
         limit,
       }),
   );
   const hits = await hydrateSearchHitRefs(db, refs);
   const hitByRef = new Map(
-    hits.map((hit) => [`${hit.entityType}:${hit.entityId}`, hit] as const),
+    hits.map((hit) => [`${hit.entityKind}:${hit.entityId}`, hit] as const),
   );
   return refs.flatMap((ref) => {
-    const hit = hitByRef.get(`${ref.entityType}:${ref.entityId}`);
+    const hit = hitByRef.get(`${ref.entityKind}:${ref.entityId}`);
     return hit
       ? [
           {

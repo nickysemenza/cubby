@@ -61,6 +61,7 @@ import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   aiUsage,
   entityAttachment,
+  entityIdentity,
   financialTransaction,
   financialTransactionAllocation,
   image,
@@ -136,23 +137,18 @@ function selectRestartTargets(
 ) {
   return client
     .select({
-      purchaseId: runTarget.purchaseId,
-      productId: runTarget.productId,
-      imageId: runTarget.imageId,
+      entityId: runTarget.entityId,
+      entityKind: runTarget.entityKind,
       position: runTarget.position,
       vendorAccountId: runTarget.vendorAccountId,
       sourceKind: runTarget.sourceKind,
       sourceExternalKey: runTarget.sourceExternalKey,
       targetFingerprint: runTarget.targetFingerprint,
-      purchaseCode: purchase.shortcode,
-      productCode: product.shortcode,
-      imageCode: image.shortcode,
+      entityCode: entityIdentity.shortcode,
       vendorAccountCode: vendorAccount.shortcode,
     })
     .from(runTarget)
-    .leftJoin(purchase, eq(purchase.id, runTarget.purchaseId))
-    .leftJoin(product, eq(product.id, runTarget.productId))
-    .leftJoin(image, eq(image.id, runTarget.imageId))
+    .leftJoin(entityIdentity, eq(entityIdentity.id, runTarget.entityId))
     .leftJoin(vendorAccount, eq(vendorAccount.id, runTarget.vendorAccountId))
     .where(eq(runTarget.runId, runId))
     .orderBy(asc(runTarget.position), asc(runTarget.createdAt));
@@ -549,12 +545,11 @@ export async function startTargetedRun(
     await tx.insert(runTarget).values(
       input.targets.map((target) => ({
         runId: id,
-        purchaseId:
+        entityKind: target.kind,
+        entityId:
           target.kind === "purchase"
             ? purchaseId.parse(target.purchaseId)
-            : null,
-        productId:
-          target.kind === "product" ? productId.parse(target.productId) : null,
+            : productId.parse(target.productId),
         vendorAccountId: target.vendorAccountId
           ? vendorAccountId.parse(target.vendorAccountId)
           : (input.vendorAccountId ?? null),
@@ -683,7 +678,7 @@ export async function startPhotoInventoryCoordinator(
         eq(runTable.purpose, "photo_inventory"),
         eq(runTable.status, "running"),
         isNull(runTable.dispatchEventId),
-        sql`EXISTS (SELECT 1 FROM ${runTarget} WHERE ${runTarget.runId} = ${runTable.id} AND ${runTarget.imageId} IS NOT NULL AND ${runTarget.state} = 'pending')`,
+        sql`EXISTS (SELECT 1 FROM ${runTarget} WHERE ${runTarget.runId} = ${runTable.id} AND ${runTarget.entityKind} = 'image' AND ${runTarget.state} = 'pending')`,
       ),
     )
     .returning({ id: runTable.id, publicId: runTable.shortcode });
@@ -933,22 +928,21 @@ export async function finalizePhotoRun(
             const detail = detailByShortcode.get(entry.row.shortcode);
             return {
               runId: scope.public.runId,
-              imageId: imageId.parse(entry.row.id),
+              entityKind: "image" as const,
+              entityId: imageId.parse(entry.row.id),
               position: detail?.position ?? 0,
               state: runTargetState.enum.pending,
               targetFingerprint: detail?.sha256 ?? entry.integrity.sha256,
             };
           }),
         )
-        // Conflicts land on the partial `(runId, imageId)` unique index — a
+        // Conflicts land on the `(runId, entityId)` unique index — a
         // retried chunk re-selecting an already-targeted image is a no-op,
         // not a failure. The bare form matches every constraint on the
         // table, same as `persistLocalImageAnalysis`'s idempotent upsert.
         .onConflictDoNothing()
-        .returning({ imageId: runTarget.imageId });
-      // SAFETY: widening the branded ImageId to plain string so this set can
-      // be probed with ImportImageRow.id (unbranded) below.
-      const insertedIds = new Set(inserted.map((row) => row.imageId as string));
+        .returning({ entityId: runTarget.entityId });
+      const insertedIds = new Set(inserted.map((row) => row.entityId));
 
       await finalizeImportedImages(transactionDb, {
         pending: lockedStaged.map(({ row, integrity }) => ({
@@ -1392,7 +1386,7 @@ export async function claimNextImportWork(
       .from(runTarget)
       .innerJoin(
         purchase,
-        and(eq(purchase.id, runTarget.purchaseId), notDeleted(purchase)),
+        and(eq(purchase.id, runTarget.entityId), notDeleted(purchase)),
       )
       .where(
         and(
@@ -1434,7 +1428,7 @@ export async function claimNextImportWork(
       .from(runTarget)
       .innerJoin(
         product,
-        and(eq(product.id, runTarget.productId), notDeleted(product)),
+        and(eq(product.id, runTarget.entityId), notDeleted(product)),
       )
       .where(
         and(
@@ -1477,7 +1471,7 @@ export async function claimNextImportWork(
       .where(
         and(
           eq(runTarget.runId, scope.public.runId),
-          isNotNull(runTarget.imageId),
+          eq(runTarget.entityKind, "image"),
           eq(runTarget.state, "pending"),
         ),
       );
@@ -1557,7 +1551,7 @@ export async function claimNextImportWork(
     .leftJoin(
       entityAttachment,
       and(
-        eq(entityAttachment.subjectEntityId, product.id),
+        eq(entityAttachment.entityId, product.id),
         notDeleted(entityAttachment),
       ),
     )
@@ -2351,8 +2345,8 @@ export async function auditImportBatch(
       .values({
         runId: runId,
         ledgerPartyId: scope.ledgerPartyId,
-        targetKind: relinkExpenseId ? "expense" : "purchase",
-        targetId: relinkExpenseId ?? finding.targetPurchaseId,
+        entityKind: relinkExpenseId ? "expense" : "purchase",
+        entityId: relinkExpenseId ?? finding.targetPurchaseId,
         kind: finding.kind,
         summary: finding.summary,
         proposedFix: finding.proposedFix,
@@ -2451,8 +2445,8 @@ export async function stopRunForReview(
       .values({
         runId: runId,
         ledgerPartyId: scope.ledgerPartyId,
-        targetKind: "run",
-        targetId: runId,
+        entityKind: "run",
+        entityId: runId,
         kind,
         summary,
         evidenceFingerprint: fingerprint,
@@ -2467,8 +2461,8 @@ export async function stopRunForReview(
           .where(
             and(
               eq(runFinding.runId, runId),
-              eq(runFinding.targetKind, "run"),
-              eq(runFinding.targetId, runId),
+              eq(runFinding.entityKind, "run"),
+              eq(runFinding.entityId, runId),
               eq(runFinding.kind, kind),
               eq(runFinding.evidenceFingerprint, fingerprint),
               eq(runFinding.status, "open"),
@@ -2916,8 +2910,8 @@ export async function loadRunDetail(
     database
       .select({
         id: runTarget.id,
-        purchaseId: purchase.shortcode,
-        productId: product.shortcode,
+        entityKind: runTarget.entityKind,
+        entityCode: entityIdentity.shortcode,
         vendorAccountId: vendorAccount.shortcode,
         sourceKind: runTarget.sourceKind,
         sourceExternalKey: runTarget.sourceExternalKey,
@@ -2929,8 +2923,7 @@ export async function loadRunDetail(
         completedAt: runTarget.completedAt,
       })
       .from(runTarget)
-      .leftJoin(purchase, eq(purchase.id, runTarget.purchaseId))
-      .leftJoin(product, eq(product.id, runTarget.productId))
+      .leftJoin(entityIdentity, eq(entityIdentity.id, runTarget.entityId))
       .leftJoin(vendorAccount, eq(vendorAccount.id, runTarget.vendorAccountId))
       .where(eq(runTarget.runId, run.id))
       .orderBy(asc(runTarget.createdAt)),
@@ -3021,9 +3014,10 @@ export async function loadRunDetail(
           runtimeRevision: header.runtimeRevision,
           targets: restartTargets.map((target) => ({
             position: target.position,
-            image: target.imageCode,
-            purchase: target.purchaseCode,
-            product: target.productCode,
+            image: target.entityKind === "image" ? target.entityCode : null,
+            purchase:
+              target.entityKind === "purchase" ? target.entityCode : null,
+            product: target.entityKind === "product" ? target.entityCode : null,
             vendorAccount: target.vendorAccountCode,
             sourceKind: target.sourceKind,
             sourceExternalKey: target.sourceExternalKey,
@@ -3046,14 +3040,9 @@ export async function loadRunDetail(
     })),
     targets: targets.map((target) => ({
       id: target.id,
-      // A photo-inventory run's targets are always images — it never creates a
-      // purchase or product target row, so the run's purpose alone disambiguates.
-      targetType: target.purchaseId
-        ? "purchase"
-        : header.purpose === "photo_inventory"
-          ? "image"
-          : "product",
-      targetShortcode: target.purchaseId ?? target.productId,
+      targetType: target.entityKind,
+      // Image targets have never carried a public code in the run detail.
+      targetShortcode: target.entityKind === "image" ? null : target.entityCode,
       targetName: null,
       sourceId: null,
       sourceLabel: target.sourceKind
@@ -3438,9 +3427,8 @@ export async function controlRun(
         const sourceTargets = (
           await selectRestartTargets(tx, scope.public.runId)
         ).map((target) => ({
-          purchaseId: target.purchaseId,
-          productId: target.productId,
-          imageId: target.imageId,
+          entityId: target.entityId,
+          entityKind: target.entityKind,
           position: target.position,
           vendorAccountId: target.vendorAccountId,
           sourceKind: target.sourceKind,
@@ -3451,7 +3439,7 @@ export async function controlRun(
           throw new Error("This run has no inputs to start again");
         if (
           locked.purpose === "photo_inventory" &&
-          sourceTargets.some((target) => !target.imageId)
+          sourceTargets.some((target) => target.entityKind !== "image")
         )
           throw new Error("Photo run inputs are incomplete");
         if (locked.purpose === "account_sync" && !locked.vendorAccountId)
@@ -3562,7 +3550,8 @@ export async function controlRun(
           );
         const sourceTargets = await tx
           .select({
-            purchaseId: runTarget.purchaseId,
+            entityId: runTarget.entityId,
+            entityKind: runTarget.entityKind,
             vendorAccountId: runTarget.vendorAccountId,
             sourceKind: runTarget.sourceKind,
             sourceExternalKey: runTarget.sourceExternalKey,
@@ -3573,7 +3562,7 @@ export async function controlRun(
           .where(eq(runTarget.runId, scope.public.runId));
         if (sourceTargets.length === 0)
           throw new Error("Purchase validation run has no explicit target");
-        if (sourceTargets.some((target) => !target.purchaseId))
+        if (sourceTargets.some((target) => target.entityKind !== "purchase"))
           throw new Error("Purchase validation runs require Purchase targets");
 
         const successorId = runEntityId.parse(crypto.randomUUID());
@@ -3613,8 +3602,8 @@ export async function controlRun(
           await Promise.all(
             sourceTargets.map(async (target) => ({
               runId: successorId,
-              purchaseId: target.purchaseId,
-              productId: null,
+              entityId: target.entityId,
+              entityKind: target.entityKind,
               vendorAccountId: target.vendorAccountId,
               sourceKind: target.sourceKind,
               sourceExternalKey: target.sourceExternalKey,
@@ -3707,8 +3696,8 @@ export async function controlRun(
         if (locked.purpose !== "account_sync") {
           const unresolvedTargets = await tx
             .select({
-              purchaseId: runTarget.purchaseId,
-              productId: runTarget.productId,
+              entityId: runTarget.entityId,
+              entityKind: runTarget.entityKind,
               vendorAccountId: runTarget.vendorAccountId,
               sourceKind: runTarget.sourceKind,
               sourceExternalKey: runTarget.sourceExternalKey,

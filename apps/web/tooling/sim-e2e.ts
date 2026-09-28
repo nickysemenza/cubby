@@ -205,7 +205,7 @@ async function assertNativePhotoImport(
       `SELECT i.shortcode AS id, i.key, i.size
        FROM "RunTarget" t
        JOIN "Run" r ON r.id = t."runId"
-       JOIN "Image" i ON i.id = t."imageId"
+       JOIN "Image" i ON i.id = t."entityId"
        WHERE r.shortcode = $1 AND r.purpose = 'photo_inventory'
          AND t.state = 'pending'
        ORDER BY t.position`,
@@ -231,7 +231,7 @@ async function assertNativePhotoImport(
       `SELECT i.shortcode AS "imageId", j.kind
        FROM "ImageProcessingJob" j
        JOIN "Image" i ON i.id = j."imageId"
-       JOIN "RunTarget" t ON t."imageId" = i.id
+       JOIN "RunTarget" t ON t."entityId" = i.id
        JOIN "Run" r ON r.id = t."runId"
        WHERE r.shortcode = $1`,
       [runID],

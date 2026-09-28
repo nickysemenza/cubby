@@ -351,7 +351,7 @@ export async function createLedgerParty(
     }
     const created = await insertWithShortcode(tx, "ledgerParty", data);
     await logAuditEntry(tx, actor, {
-      entityType: "ledgerParty",
+      entityKind: "ledgerParty",
       entityId: created.id,
       action: "create",
     });
@@ -416,7 +416,7 @@ export async function updateLedgerParty(
     ]);
     if (changes)
       await logAuditEntry(tx, actor, {
-        entityType: "ledgerParty",
+        entityKind: "ledgerParty",
         entityId: id,
         action: "update",
         changes,

@@ -86,7 +86,7 @@ export const createIngredient = async (
 
   // Log audit entry
   await logAuditEntry(db, actor, {
-    entityType: "ingredient",
+    entityKind: "ingredient",
     entityId: newIngredient.id,
     action: "create",
   });

@@ -291,9 +291,9 @@ export function CookbookPreviewContent({
 const imageAssociationCrossLink = (
   association: ImageAssociation,
 ): CrossLink => ({
-  to: entities[association.entityType].routes.detail,
+  to: entities[association.entityKind].routes.detail,
   params: entityDetailParams(association.entityId),
-  icon: <EntityIcon entity={association.entityType} size={12} colored />,
+  icon: <EntityIcon entity={association.entityKind} size={12} colored />,
   label: `${association.entityName} · ${association.role}`,
 });
 

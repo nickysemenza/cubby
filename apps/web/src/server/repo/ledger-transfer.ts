@@ -357,7 +357,7 @@ export async function createLedgerTransfer(
       evidence,
     );
     await logAuditEntry(tx, actor, {
-      entityType: "ledgerTransfer",
+      entityKind: "ledgerTransfer",
       entityId: created.id,
       action: "create",
     });
@@ -455,7 +455,7 @@ export async function updateLedgerTransfer(
     ]);
     if (changes)
       await logAuditEntry(tx, actor, {
-        entityType: "ledgerTransfer",
+        entityKind: "ledgerTransfer",
         entityId: id,
         action: "update",
         changes,

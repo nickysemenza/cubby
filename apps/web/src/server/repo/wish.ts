@@ -393,7 +393,7 @@ export const createWish = async (
         );
     }
     await logAuditEntry(tx, actor, {
-      entityType: "wish",
+      entityKind: "wish",
       entityId: created.id,
       action: "create",
     });
@@ -498,7 +498,7 @@ export const updateWish = async (
     );
     if (changes)
       await logAuditEntry(tx, actor, {
-        entityType: "wish",
+        entityKind: "wish",
         entityId: id,
         action: "update",
         changes,

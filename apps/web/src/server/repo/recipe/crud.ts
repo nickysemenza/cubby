@@ -103,7 +103,7 @@ export const RECIPE_DELETE_EDGE_POLICY = {
     description:
       "Meal-plan associations are soft-deleted with the recipe; the meals themselves are not.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -165,10 +165,7 @@ export const getRecipeCoverImageUrlsByShortcodes = async (
   const rows = await getDb(db)
     .select({ shortcode: recipe.shortcode, key: image.key })
     .from(recipe)
-    .innerJoin(
-      entityAttachment,
-      eq(entityAttachment.subjectEntityId, recipe.id),
-    )
+    .innerJoin(entityAttachment, eq(entityAttachment.entityId, recipe.id))
     .innerJoin(image, eq(image.id, entityAttachment.imageId))
     .where(
       and(
@@ -208,7 +205,7 @@ export const getRecipesByIDs = async (
     span.setAttribute("db.result_count", rows.length);
     const displayImages = await resolveEntityDisplayImages(
       db,
-      rows.map((row) => ({ entityType: "recipe", entityId: row.id })),
+      rows.map((row) => ({ entityKind: "recipe", entityId: row.id })),
     );
     return rows.map((row) => ({
       ...dbRecipeToAPIGraph(row),
@@ -416,7 +413,7 @@ export const buildRecipeWhere = async (
 
   // PDFs are documents, not displayable recipe images.
   const recipeIdsWithImages = dbClient
-    .select({ recipeId: entityAttachment.subjectEntityId })
+    .select({ recipeId: entityAttachment.entityId })
     .from(entityAttachment)
     .innerJoin(
       image,
@@ -626,7 +623,7 @@ const createRecipeReturningId = async (
     }
 
     await logAuditEntry(tx, actor, {
-      entityType: "recipe",
+      entityKind: "recipe",
       entityId: createdRecipe.id,
       action: "create",
     });
@@ -782,7 +779,8 @@ export const duplicateRecipe = async (
         );
         await tx.insert(entityAttachment).values(
           imageIds.map((imageId, i) => ({
-            subjectEntityId: createdRecipeId,
+            entityId: createdRecipeId,
+            entityKind: "recipe" as const,
             role: "attachment" as const,
             imageId,
             sortOrder: i,
@@ -994,7 +992,7 @@ export const updateRecipe = async (
     ]);
     if (changes) {
       await logAuditEntry(tx, actor, {
-        entityType: "recipe",
+        entityKind: "recipe",
         entityId: id,
         action: "update",
         changes,

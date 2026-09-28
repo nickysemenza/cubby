@@ -33,7 +33,7 @@ export function EntityGraphPicker({
       (results.data ?? []).map((hit) => ({
         id: hit.id,
         name: hit.title,
-        secondary: entityLabel(hit.entityType),
+        secondary: entityLabel(hit.entityKind),
         detail: hit.subtitle ?? undefined,
       })),
     [results.data],
@@ -49,7 +49,7 @@ export function EntityGraphPicker({
       error={results.isError ? getAppErrorDetails(results.error).message : null}
       setValue={(item) => {
         const hit = results.data?.find((result) => result.id === item?.id);
-        if (hit) onSelect({ entity: hit.entityType, id: hit.id });
+        if (hit) onSelect({ entity: hit.entityKind, id: hit.id });
       }}
     />
   );

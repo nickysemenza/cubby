@@ -400,7 +400,7 @@ async function matchDetectedItems(
             runId,
           );
           const semanticShortcode =
-            semanticMatch?.item.entityType === "product"
+            semanticMatch?.item.entityKind === "product"
               ? parseShortcodeFor("product", semanticMatch.item.id)
               : null;
           const semanticEntityId = semanticShortcode
@@ -410,7 +410,7 @@ async function matchDetectedItems(
             semanticMatch &&
             semanticEntityId &&
             semanticMatch.similarity >= SEMANTIC_PRODUCT_MATCH_THRESHOLD &&
-            semanticMatch.item.entityType === "product" &&
+            semanticMatch.item.entityKind === "product" &&
             semanticShortcode != null &&
             !existingProductIds.has(semanticShortcode)
           ) {

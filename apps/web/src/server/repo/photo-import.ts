@@ -94,7 +94,10 @@ export async function findReusableImagesBySha256(
     const targeted = await getDb(db)
       .select({ shortcode: image.shortcode, sha256: image.sha256 })
       .from(runTarget)
-      .innerJoin(image, and(eq(image.id, runTarget.imageId), notDeleted(image)))
+      .innerJoin(
+        image,
+        and(eq(image.id, runTarget.entityId), notDeleted(image)),
+      )
       .where(
         and(eq(runTarget.runId, runId), inArray(image.sha256, uniqueHashes)),
       );

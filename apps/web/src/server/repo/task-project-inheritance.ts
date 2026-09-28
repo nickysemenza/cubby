@@ -281,7 +281,7 @@ function tradeResolution(
           ? parent
           : projectCode
             ? {
-                entityType: "project",
+                entityKind: "project",
                 entityId: projectCode,
                 name: projectName,
               }
@@ -302,7 +302,7 @@ function assignmentResolutions(
     id ? (refs.products.get(id)?.shortcode ?? null) : null;
   const parent = extra.parentShortcode
     ? {
-        entityType: "task" as const,
+        entityKind: "task" as const,
         entityId: extra.parentShortcode,
         name: extra.parentName,
       }

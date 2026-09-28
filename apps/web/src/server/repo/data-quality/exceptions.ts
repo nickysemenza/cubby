@@ -96,11 +96,11 @@ const mutateException = async (
       `${input.entityId} cannot record data exceptions.`,
     );
   }
-  const entityType: DataExceptionEntity = parsed.data;
-  if (dataCheckEntity[input.check] !== entityType) {
+  const entityKind: DataExceptionEntity = parsed.data;
+  if (dataCheckEntity[input.check] !== entityKind) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      `${input.check} does not apply to ${entityType} data quality.`,
+      `${input.check} does not apply to ${entityKind} data quality.`,
     );
   }
   if ("reason" in input && !reasonsFor(input.check).includes(input.reason)) {
@@ -109,16 +109,16 @@ const mutateException = async (
       `${input.reason} is not allowed for ${input.check}.`,
     );
   }
-  const id = await resolveOrThrow(db, entityType, input.entityId);
-  const table = entryFor(entityType).table;
+  const id = await resolveOrThrow(db, entityKind, input.entityId);
+  const table = entryFor(entityKind).table;
 
   await withTransaction(db, async (tx) => {
     // `execute`, not the select builder: a single-table select renders its
     // selected columns unqualified, and the check's correlated subqueries
     // would then self-join (docs/agents/domain-rules.md).
     const probe = await tx.execute(sql`SELECT
-  ${fingerprintSql(entityType, input.check, table)} AS "fingerprint",
-  ${gapCondition(entityType, input.check, table)} AS "applies"
+  ${fingerprintSql(entityKind, input.check, table)} AS "fingerprint",
+  ${gapCondition(entityKind, input.check, table)} AS "applies"
 FROM ${table}
 WHERE ${table.id} = ${id} AND ${notDeleted(table)}
 LIMIT 1
@@ -126,8 +126,8 @@ FOR UPDATE`);
     const currentRow = probeRow.safeParse(probe.rows[0]);
     if (!currentRow.success) {
       throw createAppError(
-        ENTITY_NOT_FOUND_REASON[entityType],
-        `${entityType} not found: ${input.entityId}`,
+        ENTITY_NOT_FOUND_REASON[entityKind],
+        `${entityKind} not found: ${input.entityId}`,
       );
     }
     const current = (
@@ -146,7 +146,7 @@ FOR UPDATE`);
       if (!currentlyActive && !currentRow.data.applies) {
         throw createAppError(
           "CONSTRAINT_VIOLATION",
-          `${input.check} is not an active ${entityType} data gap.`,
+          `${input.check} is not an active ${entityKind} data gap.`,
         );
       }
     }
@@ -160,7 +160,7 @@ FOR UPDATE`);
         .insert(dataExceptionRecord)
         .values({
           entityId: id,
-          entityKind: entityType,
+          entityKind: entityKind,
           check: input.check,
           reason: input.reason,
           note,
@@ -205,9 +205,9 @@ FOR UPDATE`);
       { dataExceptions: next },
       ["dataExceptions"],
     );
-    if (changes && isAuditableEntity(entityType)) {
+    if (changes && isAuditableEntity(entityKind)) {
       await logAuditEntry(tx, actor, {
-        entityType,
+        entityKind,
         entityId: id,
         action: "update",
         changes,
@@ -215,7 +215,7 @@ FOR UPDATE`);
     }
   });
 
-  const quality = (await loadDataQualities(db, entityType, [id])).get(id);
+  const quality = (await loadDataQualities(db, entityKind, [id])).get(id);
   if (!quality) {
     throw new Error(`Data quality was not loaded for ${input.entityId}`);
   }

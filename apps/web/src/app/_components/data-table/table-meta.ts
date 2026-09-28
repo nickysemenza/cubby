@@ -47,7 +47,7 @@ export type EntityColumnRole =
   | "action";
 
 export type ColumnExplanation = {
-  entity: EntityRef["entityType"];
+  entity: EntityRef["entityKind"];
   field: string;
   label: string;
 };

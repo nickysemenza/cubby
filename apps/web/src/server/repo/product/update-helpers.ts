@@ -509,7 +509,7 @@ export async function syncProductImages(
       .from(entityAttachment)
       .where(
         and(
-          eq(entityAttachment.subjectEntityId, productId),
+          eq(entityAttachment.entityId, productId),
           inArray(entityAttachment.imageId, resolvedPendingImageIds),
           isNotNull(entityAttachment.deletedAt),
           isNotNull(entityAttachment.purpose),
@@ -540,7 +540,7 @@ export async function syncProductImages(
         .set({ purpose })
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, productId),
+            eq(entityAttachment.entityId, productId),
             eq(entityAttachment.imageId, imageId),
             notDeleted(entityAttachment),
             // An explicit caller purpose is a correction; a restored role only

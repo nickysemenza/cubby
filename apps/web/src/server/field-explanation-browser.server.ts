@@ -137,18 +137,18 @@ const entityReferenceFromValue = (value: Json): Source["entity"] => {
   if (stringValue.success) {
     const parsed = parseShortcode(stringValue.data);
     return parsed
-      ? { entityType: parsed.type, entityId: parsed.shortcode }
+      ? { entityKind: parsed.type, entityId: parsed.shortcode }
       : null;
   }
   const record = jsonRecord.safeParse(value);
   if (!record.success) return null;
   const explicit = z
-    .object({ entityType: z.string(), entityId: z.string() })
+    .object({ entityKind: z.string(), entityId: z.string() })
     .safeParse(record.data);
   if (explicit.success) {
     const parsed = parseShortcode(explicit.data.entityId);
-    if (parsed?.type === explicit.data.entityType)
-      return { entityType: parsed.type, entityId: parsed.shortcode };
+    if (parsed?.type === explicit.data.entityKind)
+      return { entityKind: parsed.type, entityId: parsed.shortcode };
   }
   for (const key of [
     "id",
@@ -178,7 +178,7 @@ const entityReferenceFromValue = (value: Json): Source["entity"] => {
     const candidate = jsonString.safeParse(record.data[key]);
     if (!candidate.success) continue;
     const parsed = parseShortcode(candidate.data);
-    if (parsed) return { entityType: parsed.type, entityId: parsed.shortcode };
+    if (parsed) return { entityKind: parsed.type, entityId: parsed.shortcode };
   }
   return null;
 };
@@ -319,7 +319,7 @@ export function explainProjectionSources(
         return {
           label: allocation.projectId ? "Project share" : "Unassigned share",
           entity: allocation.projectId
-            ? { entityType: "project", entityId: allocation.projectId }
+            ? { entityKind: "project", entityId: allocation.projectId }
             : null,
           value,
         };
@@ -336,7 +336,7 @@ export function explainProjectionSources(
           ? "Attributed ledger party"
           : "Unresolved attribution",
         entity: parsed.partyId
-          ? { entityType: "ledgerParty" as const, entityId: parsed.partyId }
+          ? { entityKind: "ledgerParty" as const, entityId: parsed.partyId }
           : null,
         value: { weight: parsed.weight },
       };
@@ -552,7 +552,7 @@ function ownershipTrace(
       label: ownership.basis ?? ownership.source,
       entity: ownership.evidence?.purchaseId
         ? {
-            entityType: "purchase",
+            entityKind: "purchase",
             entityId: ownership.evidence.purchaseId,
           }
         : null,
@@ -562,7 +562,7 @@ function ownershipTrace(
   for (const id of ownership.evidence?.expenseIds.slice(0, 25) ?? []) {
     sources.push({
       label: "Acquisition expense",
-      entity: { entityType: "expense", entityId: id },
+      entity: { entityKind: "expense", entityId: id },
       value: id,
     });
   }
@@ -590,7 +590,7 @@ export async function explainField(
   context: EntityKernelContext,
   input: ExplainFieldInput,
 ) {
-  const entity = input.entityType;
+  const entity = input.entityKind;
   const field = entityFieldModels[entity].fields.find(
     (candidate) => candidate.key === input.field,
   );
@@ -610,7 +610,7 @@ export async function explainField(
   if (!resolved.found)
     throw new Error(`Explanation projection does not expose ${path}`);
   const value = resolved.value;
-  const subject = { entityType: entity, entityId: input.entityId };
+  const subject = { entityKind: entity, entityId: input.entityId };
   const resolutionPath = readExplanationPath(
     projection,
     `fieldResolutions.${field.key}`,

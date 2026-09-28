@@ -849,7 +849,7 @@ export async function attachProjectResources(
 
     if (inserted.length > 0) {
       await logAuditEntry(tx, actor, {
-        entityType: "project",
+        entityKind: "project",
         entityId: projectId,
         action: "update",
         changes: { usedResourceIds: { from: before, to: after } },
@@ -924,7 +924,7 @@ export async function detachProjectResources(
 
     if (removed.length > 0) {
       await logAuditEntry(tx, actor, {
-        entityType: "project",
+        entityKind: "project",
         entityId: projectId,
         action: "update",
         changes: { usedResourceIds: { from: before, to: after } },
@@ -995,7 +995,7 @@ export async function repointProjectUses(
     // the half-story the detach-without-attach failure told.
     for (const entityId of [fromProductId, toProductId]) {
       await logAuditEntry(tx, actor, {
-        entityType: "product",
+        entityKind: "product",
         entityId,
         action: "update",
         changes: {
@@ -1171,7 +1171,7 @@ export async function setProjectToolUsage(
 
     if (changed) {
       await logAuditEntry(tx, actor, {
-        entityType: "project",
+        entityKind: "project",
         entityId: projectId,
         action: "update",
         changes: {
@@ -1266,7 +1266,7 @@ export async function setProductProjectUses(
     const changed = additions.length + removals.length;
     if (changed > 0) {
       await logAuditEntry(tx, actor, {
-        entityType: "product",
+        entityKind: "product",
         entityId: productId,
         action: "update",
         changes: {

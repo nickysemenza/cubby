@@ -83,7 +83,7 @@ function PendingPhotoPreview({
 }
 
 interface PendingImageUploadProps {
-  entityType: EntityImage;
+  entityKind: EntityImage;
   onImagesChange?: (images: PendingImage[]) => void;
   existingImages?: PendingImage[];
   onExistingImagesRemove?: (removedImageIds: string[]) => void;
@@ -103,7 +103,7 @@ interface PendingImageUploadProps {
 }
 
 export function PendingImageUpload({
-  entityType,
+  entityKind,
   onImagesChange,
   existingImages = EMPTY_IMAGES,
   onExistingImagesRemove,
@@ -214,7 +214,7 @@ export function PendingImageUpload({
       try {
         const result = await importFromUrlMutation.mutateAsync({
           url: trimmed,
-          entityType,
+          entityKind,
         });
 
         const newImage: PendingImage = {
@@ -222,7 +222,7 @@ export function PendingImageUpload({
           url: result.url,
           filename: result.filename,
           key: result.key,
-          purpose: entityType === "PRODUCT" ? purpose : undefined,
+          purpose: entityKind === "PRODUCT" ? purpose : undefined,
         };
 
         replacePendingImages((current) => [...current, newImage]);
@@ -234,7 +234,7 @@ export function PendingImageUpload({
         setImporting(false);
       }
     },
-    [entityType, importFromUrlMutation, purpose, replacePendingImages],
+    [entityKind, importFromUrlMutation, purpose, replacePendingImages],
   );
 
   const handleImportFromUrl = useCallback(
@@ -269,7 +269,7 @@ export function PendingImageUpload({
         filename: file.name,
         contentType: contentType.data,
         size: file.size,
-        entityType,
+        entityKind,
         source,
       });
 
@@ -280,10 +280,10 @@ export function PendingImageUpload({
         url: initResult.url,
         filename: file.name,
         key: initResult.key,
-        purpose: entityType === "PRODUCT" ? purpose : undefined,
+        purpose: entityKind === "PRODUCT" ? purpose : undefined,
       };
     },
-    [entityType, purpose, source, uploadImageMutation],
+    [entityKind, purpose, source, uploadImageMutation],
   );
 
   const runUpload = useCallback(
@@ -543,7 +543,7 @@ export function PendingImageUpload({
           <option value="catalog">Catalog image</option>
           <option value="unknown">Unknown</option>
         </NativeSelect>
-        {entityType === "PRODUCT" && (
+        {entityKind === "PRODUCT" && (
           <NativeSelect
             aria-label="Attach as"
             className="w-auto"
@@ -667,7 +667,7 @@ export function PendingImageUpload({
                     Cover
                   </span>
                 )}
-                {entityType === "PRODUCT" && (
+                {entityKind === "PRODUCT" && (
                   <select
                     aria-label={`Attachment role for ${image.filename}`}
                     className="absolute inset-x-1 bottom-1 z-20 h-7 rounded-sm border border-input bg-background/90 px-1 text-xs"

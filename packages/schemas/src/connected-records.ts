@@ -15,7 +15,7 @@ export const connectedRecordsInputSchema = z.object({
 export type ConnectedRecordsInput = z.input<typeof connectedRecordsInputSchema>;
 
 export const connectedPathNodeSchema = z.object({
-  entityType: entitySchema,
+  entityKind: entitySchema,
   entityId: z.string(),
   label: z.string(),
 });

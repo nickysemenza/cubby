@@ -128,7 +128,7 @@ function setErrorForRefs<TError>(
 ): void {
   const throttled = isThrottleError(error);
   for (const ref of refs) {
-    results.set(entityRefKey(ref.entityType, ref.entityId), {
+    results.set(entityRefKey(ref.entityKind, ref.entityId), {
       error,
       throttled,
     });
@@ -152,7 +152,7 @@ const dedupeRefs = (
   const uniqueRefs: SearchableEntityRef[] = [];
   const seenRefs = new Set<string>();
   for (const ref of refs) {
-    const key = entityRefKey(ref.entityType, ref.entityId);
+    const key = entityRefKey(ref.entityKind, ref.entityId);
     if (seenRefs.has(key)) continue;
     seenRefs.add(key);
     uniqueRefs.push(ref);
@@ -174,19 +174,19 @@ async function projectEmbeddableRefs(
   const projections = await refreshSearchDocuments(db, refs);
   const projectionByKey = new Map(
     projections.map((projection) => [
-      entityRefKey(projection.entityType, projection.entityId),
+      entityRefKey(projection.entityKind, projection.entityId),
       projection,
     ]),
   );
   const embeddable: SearchableEntityRef[] = [];
   for (const ref of refs) {
-    const key = entityRefKey(ref.entityType, ref.entityId);
+    const key = entityRefKey(ref.entityKind, ref.entityId);
     const projection = projectionByKey.get(key);
     if (!projection || projection.status !== "upserted") {
       results.set(key, { outcome: "missing" });
       continue;
     }
-    if (!isEmbeddableEntity(ref.entityType)) {
+    if (!isEmbeddableEntity(ref.entityKind)) {
       results.set(key, { outcome: "notEmbeddable" });
       continue;
     }
@@ -205,18 +205,18 @@ async function hashPendingTexts(
 ): Promise<PendingEmbedding[]> {
   const texts = await getSearchDocumentEmbeddingTexts(db, refs);
   const textByKey = new Map(
-    texts.map((text) => [entityRefKey(text.entityType, text.entityId), text]),
+    texts.map((text) => [entityRefKey(text.entityKind, text.entityId), text]),
   );
   const hashed: PendingEmbedding[] = [];
   for (const ref of refs) {
-    const key = entityRefKey(ref.entityType, ref.entityId);
+    const key = entityRefKey(ref.entityKind, ref.entityId);
     const text = textByKey.get(key);
     if (!text) {
       results.set(key, { outcome: "missing" });
       continue;
     }
     const embeddingHash = await embeddingTextHash({
-      entityType: text.entityType,
+      entityKind: text.entityKind,
       provider: config.provider,
       model: config.model,
       dimensions: config.dimensions,
@@ -242,7 +242,7 @@ async function filterFreshEmbeddings(
   );
   const pending: PendingEmbedding[] = [];
   for (const entry of hashed) {
-    const key = entityRefKey(entry.ref.entityType, entry.ref.entityId);
+    const key = entityRefKey(entry.ref.entityKind, entry.ref.entityId);
     if (storedHashes.get(key) === entry.embeddingHash) {
       results.set(key, { outcome: "fresh" });
       continue;
@@ -310,7 +310,7 @@ async function writeEmbeddingsBatch(
   results: Map<string, EmbeddingRefreshResult>,
 ): Promise<EmbeddedPending[]> {
   const vectors = embedded.map(({ entry, embedding }) => ({
-    entityType: entry.ref.entityType,
+    entityKind: entry.ref.entityKind,
     entityId: entry.ref.entityId,
     values: embedding,
   }));
@@ -329,7 +329,7 @@ async function writeEmbeddingsBatch(
     written = await upsertEntityEmbeddingsIfCurrent(
       db,
       embedded.map(({ entry }) => ({
-        entityType: entry.ref.entityType,
+        entityKind: entry.ref.entityKind,
         entityId: entry.ref.entityId,
         embeddingText: entry.text.embeddingText,
         embeddingHash: entry.embeddingHash,
@@ -348,7 +348,7 @@ async function writeEmbeddingsBatch(
   const obsolete: EmbeddedPending[] = [];
   for (const item of embedded) {
     const key = entityRefKey(
-      item.entry.ref.entityType,
+      item.entry.ref.entityKind,
       item.entry.ref.entityId,
     );
     if (written.has(key)) {
@@ -379,13 +379,13 @@ async function rehashForRepair(
   const refs = obsolete.map(({ entry }) => entry.ref);
   const texts = await getSearchDocumentEmbeddingTexts(db, refs);
   const textByKey = new Map(
-    texts.map((text) => [entityRefKey(text.entityType, text.entityId), text]),
+    texts.map((text) => [entityRefKey(text.entityKind, text.entityId), text]),
   );
 
   const gone: SearchableEntityRef[] = [];
   const rehashed: PendingEmbedding[] = [];
   for (const { entry } of obsolete) {
-    const key = entityRefKey(entry.ref.entityType, entry.ref.entityId);
+    const key = entityRefKey(entry.ref.entityKind, entry.ref.entityId);
     const text = textByKey.get(key);
     if (!text) {
       gone.push(entry.ref);
@@ -393,7 +393,7 @@ async function rehashForRepair(
       continue;
     }
     const embeddingHash = await embeddingTextHash({
-      entityType: text.entityType,
+      entityKind: text.entityKind,
       provider: config.provider,
       model: config.model,
       dimensions: config.dimensions,
@@ -444,7 +444,7 @@ export async function refreshEntityEmbeddings(
 
   if (!port.configured()) {
     for (const entry of pending) {
-      results.set(entityRefKey(entry.ref.entityType, entry.ref.entityId), {
+      results.set(entityRefKey(entry.ref.entityKind, entry.ref.entityId), {
         outcome: "unconfigured",
       });
     }
@@ -467,7 +467,7 @@ export async function refreshEntityEmbeddings(
     const rehashed = await rehashForRepair(db, port, obsolete, config, results);
     if (rehashed.length === 0 || attempt === MAX_EMBED_ATTEMPTS) {
       for (const entry of rehashed) {
-        results.set(entityRefKey(entry.ref.entityType, entry.ref.entityId), {
+        results.set(entityRefKey(entry.ref.entityKind, entry.ref.entityId), {
           outcome: "obsolete",
         });
       }

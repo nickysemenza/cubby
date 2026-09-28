@@ -188,7 +188,7 @@ const insertPlant = async (
     ingredientId,
   });
   await logAuditEntry(tx, actor, {
-    entityType: "plant",
+    entityKind: "plant",
     entityId: row.id,
     action: "create",
   });

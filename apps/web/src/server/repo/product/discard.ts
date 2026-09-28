@@ -127,7 +127,7 @@ const writeDiscardLine = async (
     purchaseId: null,
   });
   await logAuditEntry(tx, actor, {
-    entityType: "expense",
+    entityKind: "expense",
     entityId: created.id,
     action: "create",
   });
@@ -188,7 +188,7 @@ const writeDiscardLine = async (
         })
         .where(eq(inventoryEntry.id, entry.id));
       await logAuditEntry(tx, actor, {
-        entityType: "inventory",
+        entityKind: "inventory",
         entityId: entry.id,
         action: "update",
       });

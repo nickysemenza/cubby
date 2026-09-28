@@ -68,7 +68,7 @@ export const ingredientEntityAdapter = defineEntityAdapter({
       );
       await ctx.services.recipeCosting.recomputeForIngredient(entityId, {
         source: "ingredient.update",
-        entity: { entityType: "ingredient", entityId },
+        entity: { entityKind: "ingredient", entityId },
       });
       return { output, entityId };
     },
@@ -124,7 +124,7 @@ export const ingredientEntityAdapter = defineEntityAdapter({
         summary.affectedRecipeIds,
         {
           source: "ingredient.merge",
-          entity: { entityType: "ingredient", entityId },
+          entity: { entityKind: "ingredient", entityId },
         },
       );
       await runMutationSideEffectsForEntities(

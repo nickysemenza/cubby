@@ -113,7 +113,7 @@ export function InventoryEntriesCell<
   const renderRelatedEntity = (related: InventoryRelatedEntity["data"]) => {
     const displayImage =
       displayImages[
-        entityDisplayImageKey({ entityType: entity, entityId: related.id })
+        entityDisplayImageKey({ entityKind: entity, entityId: related.id })
       ] ?? null;
     if (entity === "location" && isLocationRelatedEntity(related)) {
       return (
@@ -224,7 +224,7 @@ export function InventoryEntriesCell<
                     displayImage={
                       displayImages[
                         entityDisplayImageKey({
-                          entityType: "location",
+                          entityKind: "location",
                           entityId: linkData.id,
                         })
                       ] ?? null

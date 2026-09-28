@@ -139,16 +139,16 @@ async function refundStillUnbooked(
 
 const assertFixTargetsFinding = (
   finding: {
-    targetKind: string;
-    targetId: string;
+    entityKind: string;
+    entityId: string;
   },
   fix: ProposedImportFix,
 ) => {
   const targetMatches =
     fix.kind === "relink_product"
-      ? finding.targetKind === "expense" && finding.targetId === fix.expenseId
-      : finding.targetKind === "purchase" &&
-        finding.targetId === fix.purchaseId;
+      ? finding.entityKind === "expense" && finding.entityId === fix.expenseId
+      : finding.entityKind === "purchase" &&
+        finding.entityId === fix.purchaseId;
   if (!targetMatches) {
     throw new Error(
       "The proposed fix no longer targets the finding's original record.",
@@ -160,8 +160,8 @@ const assertRunProvenance = async (
   tx: DrizzleTransaction,
   finding: {
     runId: string | null;
-    targetKind: string;
-    targetId: string;
+    entityKind: string;
+    entityId: string;
   },
 ) => {
   if (!finding.runId) return;
@@ -174,8 +174,8 @@ const assertRunProvenance = async (
     .where(
       and(
         eq(runMutation.runId, finding.runId),
-        eq(runMutation.targetKind, finding.targetKind),
-        eq(runMutation.targetId, finding.targetId),
+        eq(runMutation.targetKind, finding.entityKind),
+        eq(runMutation.targetId, finding.entityId),
       ),
     )
     .limit(1);
@@ -184,14 +184,14 @@ const assertRunProvenance = async (
       "The import run did not write this finding's target; refusing a stale automated fix.",
     );
   }
-  const auditEntity = auditEntitySchema.parse(finding.targetKind);
+  const auditEntity = auditEntitySchema.parse(finding.entityKind);
   const [laterHumanWrite] = await tx
     .select({ id: auditLog.id })
     .from(auditLog)
     .where(
       and(
-        eq(auditLog.entityType, auditEntity),
-        eq(auditLog.entityId, finding.targetId),
+        eq(auditLog.entityKind, auditEntity),
+        eq(auditLog.entityId, finding.entityId),
         gt(auditLog.createdAt, mutation.createdAt),
       ),
     )
@@ -238,7 +238,7 @@ async function applyFix(
     if (!updated) throw new Error("The proposed Expense no longer exists.");
     await logAuditEntries(tx, actor, [
       {
-        entityType: "expense",
+        entityKind: "expense",
         entityId: expenseId,
         action: "update",
         changes: { productId: { from: null, to: productId } },
@@ -282,7 +282,7 @@ async function applyFix(
     });
     await validateExpenseInheritance(tx, row);
     await logAuditEntries(tx, actor, [
-      { entityType: "expense", entityId: row.id, action: "create" },
+      { entityKind: "expense", entityId: row.id, action: "create" },
     ]);
     return;
   }
@@ -325,7 +325,7 @@ async function applyFix(
     });
     await validateExpenseInheritance(tx, row);
     audit.push({
-      entityType: "expense" as const,
+      entityKind: "expense" as const,
       entityId: row.id,
       action: "create" as const,
     });
@@ -356,8 +356,8 @@ export async function resolveRunFinding(
         proposedFix: runFinding.proposedFix,
         runId: runFinding.runId,
         ledgerPartyId: runFinding.ledgerPartyId,
-        targetKind: runFinding.targetKind,
-        targetId: runFinding.targetId,
+        entityKind: runFinding.entityKind,
+        entityId: runFinding.entityId,
       })
       .from(runFinding)
       .innerJoin(
@@ -456,8 +456,8 @@ export async function resolveArrivedFindingsForPurchase(
       )
       .where(
         and(
-          eq(runFinding.targetKind, "purchase"),
-          eq(runFinding.targetId, input.purchaseId),
+          eq(runFinding.entityKind, "purchase"),
+          eq(runFinding.entityId, input.purchaseId),
           eq(runFinding.kind, "arrived"),
           eq(runFinding.status, "open"),
         ),

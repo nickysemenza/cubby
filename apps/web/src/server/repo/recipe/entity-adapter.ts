@@ -56,7 +56,7 @@ export const recipeEntityAdapter = defineEntityAdapter({
       const entityId = await recipeShortcodes.one(ctx.db, output.id);
       await ctx.services.recipeCosting.dispatchRecompute([entityId], {
         source: "recipe.create",
-        entity: { entityType: "recipe", entityId },
+        entity: { entityKind: "recipe", entityId },
       });
       return { output, entityId };
     },
@@ -70,7 +70,7 @@ export const recipeEntityAdapter = defineEntityAdapter({
       );
       await ctx.services.recipeCosting.dispatchRecompute([entityId], {
         source: "recipe.update",
-        entity: { entityType: "recipe", entityId },
+        entity: { entityKind: "recipe", entityId },
       });
       return { output, entityId, detachedImageKeys };
     },

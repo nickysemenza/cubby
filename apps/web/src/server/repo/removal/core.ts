@@ -85,7 +85,7 @@ const removalWitness = Symbol("RemovalAuditEntry");
 
 /** Delete audit entry minted only after this module completes its cascade. */
 export type RemovalAuditEntry = {
-  entityType: RemovableEntity;
+  entityKind: RemovableEntity;
   entityId: string;
   action: "delete";
   changes?: Record<string, { from: unknown; to: unknown }>;
@@ -113,7 +113,7 @@ const isRunFindingTarget = (
  * has already run the embedding cascade by the time it calls this.
  */
 const buildCascadeAuditEntries = (
-  entityType: RemovableEntity,
+  entityKind: RemovableEntity,
   ids: readonly string[],
   cascades: CascadeCounts,
 ): RemovalAuditEntry[] =>
@@ -124,7 +124,7 @@ const buildCascadeAuditEntries = (
       if (count > 0) changes[key] = { from: count, to: 0 };
     }
     return {
-      entityType,
+      entityKind,
       entityId: id,
       action: "delete",
       changes: Object.keys(changes).length > 0 ? changes : undefined,
@@ -184,8 +184,8 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
       .delete(runFinding)
       .where(
         and(
-          eq(runFinding.targetKind, entity),
-          inArray(runFinding.targetId, [...ids]),
+          eq(runFinding.entityKind, entity),
+          inArray(runFinding.entityId, [...ids]),
         ),
       );
   }

@@ -115,7 +115,7 @@ export function GraphExplorer({
   );
   const matches = displayed.nodes.filter(
     (node) =>
-      (!kind || node.entityType === kind) &&
+      (!kind || node.entityKind === kind) &&
       `${node.label} ${node.entityId}`
         .toLocaleLowerCase()
         .includes(query.trim().toLocaleLowerCase()),
@@ -235,7 +235,7 @@ export function GraphExplorer({
           }}
         >
           <option value="">All types</option>
-          {[...new Set(displayed.nodes.map((node) => node.entityType))]
+          {[...new Set(displayed.nodes.map((node) => node.entityKind))]
             .sort()
             .map((type) => (
               <option value={type} key={type}>
@@ -256,7 +256,7 @@ export function GraphExplorer({
             <Link
               to="/graph"
               search={{
-                entity: root.entityType,
+                entity: root.entityKind,
                 root: root.entityId,
                 selected: model.selected,
               }}
@@ -347,7 +347,7 @@ export function GraphExplorer({
                     >
                       {node.label}
                       <span className="ml-auto text-xs text-muted-foreground">
-                        {entityLabel(node.entityType)}
+                        {entityLabel(node.entityKind)}
                       </span>
                     </Button>
                   </li>
@@ -411,14 +411,14 @@ function GraphRecordInspector({
       graphRefKey(branch.root) === model.selected && branch.totalCount > 0,
   );
   const recordLink = (node: EntityGraphNode) =>
-    isBrowserRoutedEntity(node.entityType)
-      ? node.entityType === "usda-food"
+    isBrowserRoutedEntity(node.entityKind)
+      ? node.entityKind === "usda-food"
         ? router.buildLocation({
             to: "/usda/$id",
             params: { id: node.entityId },
           }).href
         : router.buildLocation({
-            to: entities[node.entityType].routes.detail,
+            to: entities[node.entityKind].routes.detail,
             params: entityDetailParams(node.entityId),
           }).href
       : undefined;
@@ -428,7 +428,7 @@ function GraphRecordInspector({
         <>
           <Stack gap="sm">
             <span className="text-xs text-muted-foreground">
-              {entityLabel(selected.entityType)} · {selected.entityId}
+              {entityLabel(selected.entityKind)} · {selected.entityId}
             </span>
             <h2 className="text-base font-semibold break-words">
               {selected.label}
@@ -665,7 +665,7 @@ function GraphPathInspector({
           placeholder="Find a destination record…"
           onSelect={(value) => {
             setPathStart(parseGraphRecord(selected) ?? root);
-            setDestination({ entityType: value.entity, entityId: value.id });
+            setDestination({ entityKind: value.entity, entityId: value.id });
             setPathIndex(0);
           }}
         />

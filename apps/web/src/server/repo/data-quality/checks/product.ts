@@ -48,7 +48,7 @@ const inScope = (t: Product) => sql`(${hasExpenses(t)} OR ${hasInventory(t)})`;
 const hasDisplayableImage = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "EntityAttachment" dq_pimg
   JOIN "Image" dq_img ON dq_img."id" = dq_pimg."imageId" AND dq_img."deletedAt" IS NULL
-  WHERE dq_pimg."subjectEntityId" = ${t.id}
+  WHERE dq_pimg."entityId" = ${t.id}
     AND dq_pimg."deletedAt" IS NULL AND dq_pimg."purpose" IS DISTINCT FROM 'label'
     AND ${sql.raw(displayableImageRawSql("dq_img"))}
 )`;

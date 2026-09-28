@@ -325,7 +325,7 @@ export const attachExistingImageToEntity = async (
         .set({ purpose: input.purpose })
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, entity.id),
+            eq(entityAttachment.entityId, entity.id),
             eq(entityAttachment.imageId, imageId),
             notDeleted(entityAttachment),
           ),
@@ -335,7 +335,7 @@ export const attachExistingImageToEntity = async (
     if (!reused || purposeChanged) {
       await touchAttachableEntity(tx, entity, now);
       await logAuditEntry(tx, actor, {
-        entityType: entity.entity,
+        entityKind: entity.entity,
         entityId: entity.id,
         action: "update",
         changes: {
@@ -816,13 +816,13 @@ const attachmentAssociation = (
   const live = <T extends { deletedAt: Date | null }>(subject: T | null) =>
     subject !== null && isNotDeleted(subject) ? subject : null;
   const named = (
-    entityType: ImageAssociation["entityType"],
+    entityKind: ImageAssociation["entityKind"],
     subject: NamedSubject | null,
   ): ImageAssociation | null => {
     const found = live(subject);
     return found
       ? {
-          entityType,
+          entityKind,
           entityId: found.shortcode,
           entityName: found.name,
           role,
@@ -832,7 +832,7 @@ const attachmentAssociation = (
   const purchase = live(attachment.purchase);
   if (purchase)
     return {
-      entityType: "purchase",
+      entityKind: "purchase",
       entityId: purchase.shortcode,
       // Best-effort echo of `displayName` (`purchaseLabel(...)` in
       // `~/lib/purchase-label`): this join carries no vendor name or date,
@@ -851,7 +851,7 @@ const attachmentAssociation = (
   const gardenEntry = live(attachment.gardenEntry);
   if (gardenEntry)
     return {
-      entityType: "gardenEntry",
+      entityKind: "gardenEntry",
       entityId: gardenEntry.shortcode,
       // `displayName`'s rule ("<Kind> · <date> · <location>"), computed
       // inline rather than imported: `gardenEntryDisplayName` in
@@ -862,7 +862,7 @@ const attachmentAssociation = (
   const meal = live(attachment.meal);
   if (meal)
     return {
-      entityType: "meal",
+      entityKind: "meal",
       entityId: meal.shortcode,
       // Matches `displayName` exactly (`name?.trim() || date`).
       entityName: meal.name?.trim() || meal.date,
@@ -895,10 +895,10 @@ const imageWithRelationsToAPI = (
     },
   );
   const legacyAssociation = associations.find(
-    ({ entityType }) => entityType !== "cookbook" && entityType !== "vendor",
+    ({ entityKind }) => entityKind !== "cookbook" && entityKind !== "vendor",
   );
-  const legacyEntityType = legacyAssociation
-    ? match(legacyAssociation.entityType)
+  const legacyEntityKind = legacyAssociation
+    ? match(legacyAssociation.entityKind)
         .with("product", () => "PRODUCT" as const)
         .with("location", () => "LOCATION" as const)
         .with("recipe", () => "RECIPE" as const)
@@ -937,15 +937,15 @@ const imageWithRelationsToAPI = (
     provenanceEvidence: imageData.provenanceEvidence,
     createdAt: imageData.createdAt,
     updatedAt: imageData.updatedAt,
-    entityType: legacyEntityType,
+    entityKind: legacyEntityKind,
     entityId:
-      legacyEntityType && legacyAssociation
+      legacyEntityKind && legacyAssociation
         ? attachableImageEntityId.parse(legacyAssociation.entityId)
         : null,
     entityName: legacyAssociation?.entityName ?? null,
     associations: associations.sort(
       (a, b) =>
-        a.entityType.localeCompare(b.entityType) ||
+        a.entityKind.localeCompare(b.entityKind) ||
         a.entityName.localeCompare(b.entityName) ||
         a.entityId.localeCompare(b.entityId),
     ),
@@ -1022,7 +1022,7 @@ const imageReferenceCondition = (
     "ImageDerivative.imageId": sql`FALSE`,
     "ImageDescriptionCorrection.imageId": sql`FALSE`,
     // A run worklist row records history, never ownership of the image.
-    "RunTarget.imageId": sql`FALSE`,
+    "RunTarget.entityId": sql`FALSE`,
     // A sighting is reported evidence, not user ownership — same reasoning
     // as the processing children above.
     "ImageSighting.imageId": sql`FALSE`,
@@ -1156,7 +1156,7 @@ export const buildImageWhere = async (
             .from(runTarget)
             .where(
               and(
-                eq(runTarget.imageId, listImage.id),
+                eq(runTarget.entityId, listImage.id),
                 eqAnyRequested(runTarget.runId, runIds),
                 eqAny(runTarget.state, filters.targetState),
               ),
@@ -1182,7 +1182,7 @@ export const buildImageWhere = async (
 /**
  * Each image's current import-run target row, batched by the public `IMG-`
  * shortcode (matching every other batched loader `imageList`/`getImageById`
- * call). `RunTarget_run_image_key` keeps a live target unique per (run,
+ * call). `RunTarget_run_entity_key` keeps a live target unique per (run,
  * image), but a row's own history is never deleted, so this takes the newest
  * by `createdAt` when more than one run has ever targeted the same image.
  */
@@ -1202,7 +1202,7 @@ const loadImportTargets = async (
     })
     .from(runTarget)
     .innerJoin(runTable, eq(runTable.id, runTarget.runId))
-    .innerJoin(image, eq(image.id, runTarget.imageId))
+    .innerJoin(image, eq(image.id, runTarget.entityId))
     .where(inArray(image.shortcode, shortcodes))
     .orderBy(desc(runTarget.createdAt));
   const byImage = new Map<string, ImportTargetSummary>();
@@ -1238,7 +1238,7 @@ export const imageList = async (
       ? [
           sql`(
             SELECT "position" FROM "RunTarget"
-            WHERE "RunTarget"."imageId" = ${listImage.id}
+            WHERE "RunTarget"."entityId" = ${listImage.id}
               AND "RunTarget"."runId" = ANY(${uuidArrayParam(runIdsForOrder)})
           ) asc nulls last`,
           asc(listImage.createdAt),
@@ -1572,11 +1572,11 @@ export const cullPendingImages = async (
  *   null it so the parent row survives, just without a cover.
  */
 export const IMAGE_HARD_DELETE = {
-  "RunTarget.imageId": {
+  "RunTarget.entityId": {
     code: "deleteRow",
     effect: "hard-delete",
     description:
-      "A photo-inventory worklist row cannot outlive its image: the three-way target check forbids clearing the link.",
+      "A photo-inventory worklist row cannot outlive its image: a target always names an entity, so the link is never cleared.",
   },
   "ImageProcessingJob.imageId": {
     code: "deleteRow",
@@ -1646,7 +1646,7 @@ type ImageEdgeOperation = {
 
 /** Edges that record processing of an image, never who owns it. */
 const PROCESSING_EDGES: ReadonlySet<string> = new Set([
-  "RunTarget.imageId",
+  "RunTarget.entityId",
   "ImageProcessingJob.imageId",
   "ImageDerivative.imageId",
   "ImageDescriptionCorrection.imageId",
@@ -1840,7 +1840,7 @@ const deleteImagesTx = async (
   for (const id of ids) {
     const refs = await findDirectImageSearchOwnerRefs(tx, id);
     affectedOwnerSearchRefs.push(
-      ...refs.filter((ref) => ref.entityType !== "image"),
+      ...refs.filter((ref) => ref.entityKind !== "image"),
     );
   }
   const derivatives = await tx
@@ -1879,7 +1879,7 @@ const deleteImagesTx = async (
   const affectedPurchases = await tx
     .selectDistinct({ purchaseId: purchase.id })
     .from(entityAttachment)
-    .innerJoin(purchase, eq(purchase.id, entityAttachment.subjectEntityId))
+    .innerJoin(purchase, eq(purchase.id, entityAttachment.entityId))
     .where(
       and(inArray(entityAttachment.imageId, ids), notDeleted(entityAttachment)),
     );
@@ -1940,7 +1940,7 @@ export const detachImagesFromEntity = async (
         .set({ deletedAt: new Date(), updatedAt: new Date() })
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             inArray(entityAttachment.imageId, imageIds),
             notDeleted(entityAttachment),
           ),
@@ -1951,7 +1951,7 @@ export const detachImagesFromEntity = async (
         .delete(entityAttachment)
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             inArray(entityAttachment.imageId, imageIds),
           ),
         ),
@@ -1961,7 +1961,7 @@ export const detachImagesFromEntity = async (
         .delete(entityAttachment)
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             inArray(entityAttachment.imageId, imageIds),
           ),
         ),
@@ -1971,7 +1971,7 @@ export const detachImagesFromEntity = async (
         .delete(entityAttachment)
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             inArray(entityAttachment.imageId, imageIds),
           ),
         ),
@@ -1981,7 +1981,7 @@ export const detachImagesFromEntity = async (
         .delete(entityAttachment)
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             inArray(entityAttachment.imageId, imageIds),
           ),
         ),
@@ -1991,7 +1991,7 @@ export const detachImagesFromEntity = async (
         .delete(entityAttachment)
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             inArray(entityAttachment.imageId, imageIds),
           ),
         ),
@@ -2001,7 +2001,7 @@ export const detachImagesFromEntity = async (
         .delete(entityAttachment)
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             inArray(entityAttachment.imageId, imageIds),
           ),
         ),
@@ -2011,7 +2011,7 @@ export const detachImagesFromEntity = async (
         .delete(entityAttachment)
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             inArray(entityAttachment.imageId, imageIds),
           ),
         ),
@@ -2136,7 +2136,7 @@ export const recipeHasImages = async (
     )
     .where(
       and(
-        eq(entityAttachment.subjectEntityId, recipeId),
+        eq(entityAttachment.entityId, recipeId),
         notDeleted(entityAttachment),
       ),
     )
@@ -2210,7 +2210,7 @@ export const findAttachmentByIdempotencyKey = async (
     .innerJoin(image, eq(image.id, entityAttachment.imageId))
     .where(
       and(
-        eq(entityAttachment.subjectEntityId, entity.id),
+        eq(entityAttachment.entityId, entity.id),
         eq(entityAttachment.idempotencyKey, idempotencyKey),
         notDeleted(entityAttachment),
         notDeleted(image),
@@ -2233,7 +2233,7 @@ export const getImagesAttachedToEntity = async (
         .innerJoin(image, eq(entityAttachment.imageId, image.id))
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             notDeleted(entityAttachment),
             notDeleted(image),
           ),
@@ -2247,7 +2247,7 @@ export const getImagesAttachedToEntity = async (
         .innerJoin(image, eq(entityAttachment.imageId, image.id))
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             notDeleted(entityAttachment),
             notDeleted(image),
           ),
@@ -2261,7 +2261,7 @@ export const getImagesAttachedToEntity = async (
         .innerJoin(image, eq(entityAttachment.imageId, image.id))
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             notDeleted(entityAttachment),
             notDeleted(image),
           ),
@@ -2275,7 +2275,7 @@ export const getImagesAttachedToEntity = async (
         .innerJoin(image, eq(entityAttachment.imageId, image.id))
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             notDeleted(entityAttachment),
             notDeleted(image),
           ),
@@ -2289,7 +2289,7 @@ export const getImagesAttachedToEntity = async (
         .innerJoin(image, eq(entityAttachment.imageId, image.id))
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             notDeleted(entityAttachment),
             notDeleted(image),
           ),
@@ -2303,7 +2303,7 @@ export const getImagesAttachedToEntity = async (
         .innerJoin(image, eq(entityAttachment.imageId, image.id))
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             notDeleted(entityAttachment),
             notDeleted(image),
           ),
@@ -2317,7 +2317,7 @@ export const getImagesAttachedToEntity = async (
         .innerJoin(image, eq(entityAttachment.imageId, image.id))
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             notDeleted(entityAttachment),
             notDeleted(image),
           ),
@@ -2331,7 +2331,7 @@ export const getImagesAttachedToEntity = async (
         .innerJoin(image, eq(entityAttachment.imageId, image.id))
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             notDeleted(entityAttachment),
             notDeleted(image),
           ),
@@ -2587,7 +2587,7 @@ const countAttachmentPreconditionImages = async (
         .innerJoin(image, eq(entityAttachment.imageId, image.id))
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             notDeleted(entityAttachment),
             notDeleted(image),
           ),
@@ -2600,7 +2600,7 @@ const countAttachmentPreconditionImages = async (
         .innerJoin(image, eq(entityAttachment.imageId, image.id))
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             notDeleted(entityAttachment),
             whereImage,
           ),
@@ -2613,7 +2613,7 @@ const countAttachmentPreconditionImages = async (
         .innerJoin(image, eq(entityAttachment.imageId, image.id))
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             notDeleted(entityAttachment),
             whereImage,
           ),
@@ -2626,7 +2626,7 @@ const countAttachmentPreconditionImages = async (
         .innerJoin(image, eq(entityAttachment.imageId, image.id))
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             notDeleted(entityAttachment),
             whereImage,
           ),
@@ -2639,7 +2639,7 @@ const countAttachmentPreconditionImages = async (
         .innerJoin(image, eq(entityAttachment.imageId, image.id))
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             notDeleted(entityAttachment),
             whereImage,
           ),
@@ -2652,7 +2652,7 @@ const countAttachmentPreconditionImages = async (
         .innerJoin(image, eq(entityAttachment.imageId, image.id))
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             notDeleted(entityAttachment),
             whereImage,
           ),
@@ -2665,7 +2665,7 @@ const countAttachmentPreconditionImages = async (
         .innerJoin(image, eq(entityAttachment.imageId, image.id))
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             notDeleted(entityAttachment),
             whereImage,
           ),
@@ -2678,7 +2678,7 @@ const countAttachmentPreconditionImages = async (
         .innerJoin(image, eq(entityAttachment.imageId, image.id))
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, id),
+            eq(entityAttachment.entityId, id),
             notDeleted(entityAttachment),
             whereImage,
           ),
@@ -2710,7 +2710,8 @@ const associateImageWithEntity = async (
         id,
       );
       await dbc.insert(entityAttachment).values({
-        subjectEntityId: id,
+        entityId: id,
+        entityKind: "product",
         role: "attachment",
         imageId,
         sortOrder,
@@ -2733,7 +2734,8 @@ const associateImageWithEntity = async (
         id,
       );
       await dbc.insert(entityAttachment).values({
-        subjectEntityId: id,
+        entityId: id,
+        entityKind: "purchase",
         role: "attachment",
         imageId,
         sortOrder,
@@ -2820,7 +2822,7 @@ export const createOrReuseAttachedImage = async (
         .set({ idempotencyKey })
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, entity.id),
+            eq(entityAttachment.entityId, entity.id),
             eq(entityAttachment.imageId, imageId),
             notDeleted(entityAttachment),
           ),
@@ -2839,7 +2841,7 @@ export const getImagesByProjectIds = async (
 
   const rows = await getDb(db)
     .select({
-      projectId: entityAttachment.subjectEntityId,
+      projectId: entityAttachment.entityId,
       shortcode: image.shortcode,
       key: image.key,
       filename: image.filename,
@@ -2848,7 +2850,7 @@ export const getImagesByProjectIds = async (
     .innerJoin(image, eq(entityAttachment.imageId, image.id))
     .where(
       and(
-        inArray(entityAttachment.subjectEntityId, projectIds),
+        inArray(entityAttachment.entityId, projectIds),
         notDeleted(entityAttachment),
         notDeleted(image),
         displayableImageWhere,

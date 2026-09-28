@@ -142,7 +142,7 @@ export async function attachPendingOrderMailEvidence(
     )
       continue;
     const stored = await attachFile(db, {
-      entityType: "purchase",
+      entityKind: "purchase",
       entityId: input.purchaseShortcode,
       data: row.data,
       contentType: "application/pdf",
@@ -272,8 +272,8 @@ export async function processOrderMails(
         await database.insert(runFinding).values({
           runId: runId,
           ledgerPartyId: mail.ledgerPartyId,
-          targetKind: "run",
-          targetId: runId,
+          entityKind: "run",
+          entityId: runId,
           kind: "unclassified_vendor",
           summary: `Purchase mail from ${mail.sender} does not match a known vendor. Create or update the vendor's order-email sender list.`,
           evidenceFingerprint: fingerprint,
@@ -599,8 +599,8 @@ export async function processOrderMails(
           .insert(runFinding)
           .values({
             ledgerPartyId: mail.ledgerPartyId,
-            targetKind: "purchase",
-            targetId: target.id,
+            entityKind: "purchase",
+            entityId: target.id,
             kind,
             summary:
               event.event === "delivered"
@@ -640,8 +640,8 @@ export async function processOrderMails(
               .insert(runFinding)
               .values({
                 ledgerPartyId: mail.ledgerPartyId,
-                targetKind: "purchase",
-                targetId: target.id,
+                entityKind: "purchase",
+                entityId: target.id,
                 kind: "return_window",
                 summary: `${costlyLines.length} line${costlyLines.length === 1 ? "" : "s"} worth at least $50 can be returned until ${expiresAt.toLocaleDateString("en-US", { timeZone: "UTC" })}.`,
                 evidenceFingerprint: await sha256Hex(

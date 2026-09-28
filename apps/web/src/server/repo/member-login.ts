@@ -181,7 +181,7 @@ export async function setMemberLoginParty(
           ),
         );
       await logAuditEntry(tx, actor, {
-        entityType: "ledgerParty",
+        entityKind: "ledgerParty",
         entityId: party.id,
         action: "update",
         changes: { userId: { from: targetUserId, to: null } },
@@ -194,7 +194,7 @@ export async function setMemberLoginParty(
         .set({ userId: targetUserId, updatedAt: now })
         .where(eq(ledgerParty.id, target.id));
       await logAuditEntry(tx, actor, {
-        entityType: "ledgerParty",
+        entityKind: "ledgerParty",
         entityId: target.id,
         action: "update",
         changes: { userId: { from: target.userId, to: targetUserId } },

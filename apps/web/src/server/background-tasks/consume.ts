@@ -187,7 +187,7 @@ async function runEmbeddingRefreshGroup(
         const message = messages[index];
         const ref = refs[position];
         if (!message || !ref) continue;
-        const key = entityRefKey(ref.entityType, ref.entityId);
+        const key = entityRefKey(ref.entityKind, ref.entityId);
         const result = results.get(key);
         if (!result) {
           // Every input ref is contracted to get exactly one entry; a missing
@@ -276,7 +276,7 @@ export async function handleBackgroundQueueBatch(
     if (task.kind === "entity-embedding.refresh") {
       embeddingIndices.push(index);
       embeddingRefs.push({
-        entityType: task.entityType,
+        entityKind: task.entityKind,
         entityId: task.entityId,
       });
       embeddingRequestedAts.push(task.requestedAt);

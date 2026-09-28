@@ -98,7 +98,7 @@ async function semanticSignals(
           seed,
           neighbours: await findSimilarEntities(
             deps.vectorStore,
-            { entityType: "product", entityId: seed },
+            { entityKind: "product", entityId: seed },
             { targetType: "product", limit: SEMANTIC_NEIGHBOURS },
           ),
         })),

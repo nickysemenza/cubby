@@ -128,7 +128,7 @@ export async function applyAllocationChanges(
       continue;
     changedTransactionIds.push(id);
     await logAuditEntry(tx, opts.actor, {
-      entityType: "financialTransaction",
+      entityKind: "financialTransaction",
       entityId: id,
       action: "update",
       changes: { allocations: { from, to } },

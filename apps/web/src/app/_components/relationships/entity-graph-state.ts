@@ -10,7 +10,7 @@ export const GRAPH_BRANCH_PAGE_SIZE = 12;
 export const GRAPH_NEIGHBOR_LIMIT = 60;
 export const GRAPH_VISIT_LIMIT = 32;
 export const graphRefKey = (ref: EntityRef) =>
-  entityRefKey(ref.entityType, ref.entityId);
+  entityRefKey(ref.entityKind, ref.entityId);
 export const graphBranchKey = (root: EntityRef, relationshipKey: string) =>
   `${graphRefKey(root)}:${relationshipKey}`;
 
@@ -139,7 +139,7 @@ export function nextGraphFrontier(
 ): EntityRef[] {
   return data.nodes
     .filter((node) => !expanded.has(graphRefKey(node)))
-    .map(({ entityType, entityId }) => ({ entityType, entityId }));
+    .map(({ entityKind, entityId }) => ({ entityKind, entityId }));
 }
 
 /** Advance through already-loaded paths to the next unexpanded frontier. */

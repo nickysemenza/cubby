@@ -28,7 +28,7 @@ function GraphPage() {
   const root = useMemo(
     () =>
       entityGraphRootSchema.safeParse({
-        entityType: search.entity,
+        entityKind: search.entity,
         entityId: search.root,
       }).data,
     [search.entity, search.root],
@@ -46,14 +46,14 @@ function GraphPage() {
         {root ? (
           <GraphExplorer
             fill
-            key={`${root.entityType}:${root.entityId}`}
+            key={`${root.entityKind}:${root.entityId}`}
             root={root}
             initialSelected={search.selected}
             initialDestination={search.destination}
             initialPathStart={search.start}
             onRootChange={(value) =>
               void navigate({
-                search: { entity: value.entityType, root: value.entityId },
+                search: { entity: value.entityKind, root: value.entityId },
               })
             }
             onNavigationChange={(state) =>

@@ -1603,7 +1603,7 @@ const projectAttentionItemFields = {
    * how the two builders drifted apart in the first place.
    */
   description: z.string(),
-  entityType: z.enum(["project", "task", "expense"]),
+  entityKind: z.enum(["project", "task", "expense"]),
   entityId: anyShortcodeSchema(["project", "task", "expense"] satisfies [
     ShortcodeEntity,
     ...ShortcodeEntity[],

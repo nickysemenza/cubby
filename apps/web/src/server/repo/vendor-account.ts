@@ -184,7 +184,7 @@ export async function createVendorAccount(
       inventoryOwnerDefaultEnabled: data.inventoryOwnerDefaultEnabled,
     });
     await logAuditEntry(tx, actor, {
-      entityType: "vendorAccount",
+      entityKind: "vendorAccount",
       entityId: row.id,
       action: "create",
     });

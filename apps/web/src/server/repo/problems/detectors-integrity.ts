@@ -265,7 +265,7 @@ export const findReferentialLivenessViolations = async (
   db: Database,
 ): Promise<ReferentialLivenessViolation[]> => {
   const specs = buildEdgeAuditSpecs();
-  // `EntityAttachment.subjectEntityId` is one column audited against every
+  // `EntityAttachment.entityId` is one column audited against every
   // attachable entity, so an edge key alone does not name a spec.
   const specKey = (row: { edgeKey: string; targetEntity: string }) =>
     `${row.targetEntity}:${row.edgeKey}`;

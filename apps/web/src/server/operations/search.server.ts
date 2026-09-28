@@ -63,8 +63,8 @@ type RefreshInput = z.output<typeof requestEmbeddingRefreshInputSchema>;
 export const requestEmbeddingRefreshWorkflow = bindWorkflow(
   workflow<Database, RefreshInput>("search.embeddingRefresh")
     .call("resolve", async ({ context }, { input }) => ({
-      entityType: input.entityType,
-      entityId: await resolveOrThrow(context, input.entityType, input.entityId),
+      entityKind: input.entityKind,
+      entityId: await resolveOrThrow(context, input.entityKind, input.entityId),
     }))
     // Awaited, unlike a mutation's after-commit publication: this IS the
     // user's action, so its acknowledgment must mean the queue accepted it.
@@ -75,7 +75,7 @@ export const requestEmbeddingRefreshWorkflow = bindWorkflow(
           {
             kind: "entity-embedding.refresh",
             requestedAt: new Date().toISOString(),
-            entityType: resolve.entityType,
+            entityKind: resolve.entityKind,
             entityId: resolve.entityId,
           },
         ],

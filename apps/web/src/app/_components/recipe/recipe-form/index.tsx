@@ -468,7 +468,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 Photos
               </h3>
               <PendingImageUpload
-                entityType="RECIPE"
+                entityKind="RECIPE"
                 onImagesChange={handlePendingImagesChange}
                 existingImages={
                   mode === "edit" && recipe?.images ? recipe.images : []

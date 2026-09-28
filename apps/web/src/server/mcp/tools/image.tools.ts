@@ -25,9 +25,9 @@ import {
   WRITE_CLOSED,
 } from "./_shared";
 
-// `entityType` is derived from the shortcode's prefix, so it is not asked for.
+// `entityKind` is derived from the shortcode's prefix, so it is not asked for.
 const {
-  entityType: _entityType,
+  entityKind: _entityKind,
   data: _data,
   ...attachFileEntityless
 } = attachFileFields;
@@ -87,7 +87,7 @@ export const IMAGE_TOOL_NAMES = {
 /**
  * Attach one file, deriving the target entity from its shortcode prefix.
  *
- * Kept separate from the batch adapter so the prefix check and `entityType`
+ * Kept separate from the batch adapter so the prefix check and `entityKind`
  * derivation remain one per-item operation with an indexed runtime outcome.
  */
 async function attachOne(params: AttachFileItem, extra: ToolExtra) {
@@ -100,7 +100,7 @@ async function attachOne(params: AttachFileItem, extra: ToolExtra) {
   }
   return await attachFileWorkflow(getRequestContext(extra).db, {
     ...params,
-    entityType: attachable.data,
+    entityKind: attachable.data,
   });
 }
 

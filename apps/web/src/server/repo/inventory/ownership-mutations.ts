@@ -181,7 +181,7 @@ export const applyInventoryOwnershipInTransaction = async (
     );
     const changes = computeChanges(target, updatedTarget, ["amount"]);
     const targetAudit: AuditEntryInput = {
-      entityType: "inventory",
+      entityKind: "inventory",
       entityId: target.id,
       action: "update",
     };
@@ -200,7 +200,7 @@ export const applyInventoryOwnershipInTransaction = async (
       "ownerLedgerPartyId",
     ]);
     const ownershipAudit: AuditEntryInput = {
-      entityType: "inventory",
+      entityKind: "inventory",
       entityId: source.id,
       action: "update",
     };
@@ -217,7 +217,7 @@ export const applyInventoryOwnershipInTransaction = async (
       valuation: computeInventoryValuation(movedAmount, graph),
     });
     audit.push({
-      entityType: "inventory",
+      entityKind: "inventory",
       entityId: created.id,
       action: "create",
     });
@@ -247,7 +247,7 @@ export const applyInventoryOwnershipInTransaction = async (
     );
     const changes = computeChanges(source, updatedSource, ["amount"]);
     const sourceAudit: AuditEntryInput = {
-      entityType: "inventory",
+      entityKind: "inventory",
       entityId: source.id,
       action: "update",
     };
@@ -395,7 +395,7 @@ export const confirmInventoryExpenseBeneficiary = async (
     const changes = computeChanges(before, after, ["beneficiaries"]);
     if (changes) {
       await logAuditEntry(tx, actor, {
-        entityType: "expense",
+        entityKind: "expense",
         entityId: expenseId,
         action: "update",
         changes,

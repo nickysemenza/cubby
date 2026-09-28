@@ -98,7 +98,7 @@ export function listRuns(
                   .where(
                     and(
                       eq(runTarget.runId, runTable.id),
-                      eq(runTarget.purchaseId, purchaseId),
+                      eq(runTarget.entityId, purchaseId),
                     ),
                   ),
               ),
@@ -160,7 +160,7 @@ export function listProductRuns(
                 .where(
                   and(
                     eq(runTarget.runId, runTable.id),
-                    eq(runTarget.productId, productId),
+                    eq(runTarget.entityId, productId),
                   ),
                 ),
             )
@@ -198,7 +198,7 @@ export async function reportRunTargetDeviceWork(
         deviceWorkAttempts: runTarget.deviceWorkAttempts,
       })
       .from(runTarget)
-      .where(and(eq(runTarget.runId, runId), eq(runTarget.imageId, imageId)))
+      .where(and(eq(runTarget.runId, runId), eq(runTarget.entityId, imageId)))
       .for("update");
     if (!target)
       throw new Error("This run has no photo target for that image.");

@@ -43,7 +43,7 @@ const executeSearch = async (
   const entity = searchableEntitySchema.parse(command.entity);
   const input = {
     query: command.query,
-    entityTypes: [entity],
+    entityKinds: [entity],
     limit: command.limit,
   };
   const [lexical, semantic] = await Promise.all([

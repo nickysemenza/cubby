@@ -81,7 +81,7 @@ async function targetSnapshot(db: Database, args: PurchaseAgentArguments) {
             .from(auditLog)
             .where(
               and(
-                eq(auditLog.entityType, auditable.data),
+                eq(auditLog.entityKind, auditable.data),
                 eq(auditLog.entityId, id),
               ),
             )

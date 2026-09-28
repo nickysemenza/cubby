@@ -232,7 +232,7 @@ const detach = async (
       tx,
       actor,
       detached.map((row) => ({
-        entityType: source,
+        entityKind: source,
         entityId: String(row.id),
         action: "update" as const,
         changes: { [edge.property]: { from: row.from, to: null } },

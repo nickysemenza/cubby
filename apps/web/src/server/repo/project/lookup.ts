@@ -219,7 +219,7 @@ export const buildProjectListQuery = async (
   // `displayableImageWhere` gate, and Image is separately soft-deletable from
   // ProjectImage.
   const projectIdsWithImages = getDb(db)
-    .select({ projectId: entityAttachment.subjectEntityId })
+    .select({ projectId: entityAttachment.entityId })
     .from(entityAttachment)
     .innerJoin(
       image,

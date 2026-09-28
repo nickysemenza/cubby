@@ -24,10 +24,10 @@ import {
 const PAGE_SIZE = 20;
 
 function RecordPathLink({ node }: { node: ConnectedPathNode }) {
-  if (!isBrowserRoutedEntity(node.entityType)) return <span>{node.label}</span>;
+  if (!isBrowserRoutedEntity(node.entityKind)) return <span>{node.label}</span>;
   return (
     <Link
-      to={entities[node.entityType].routes.detail}
+      to={entities[node.entityKind].routes.detail}
       params={entityDetailParams(node.entityId)}
       className="text-link hover:underline"
     >
@@ -65,15 +65,15 @@ export function RecordPaths({
             <li
               key={path
                 .slice(0, index + 2)
-                .map((part) => `${part.entityType}:${part.entityId}`)
+                .map((part) => `${part.entityKind}:${part.entityId}`)
                 .join("|")}
               className="flex max-w-full min-w-0 items-baseline gap-1 overflow-hidden whitespace-nowrap"
-              title={`${node.entityType}: ${node.label}`}
+              title={`${node.entityKind}: ${node.label}`}
             >
               <span className="shrink-0 text-xs text-muted-foreground">
-                {isBrowserRoutedEntity(node.entityType)
-                  ? entities[node.entityType].label
-                  : node.entityType}
+                {isBrowserRoutedEntity(node.entityKind)
+                  ? entities[node.entityKind].label
+                  : node.entityKind}
               </span>
               <span className="min-w-0 truncate">
                 <RecordPathLink node={node} />
@@ -88,7 +88,7 @@ export function RecordPaths({
           <li
             key={path
               .slice(0, index + 2)
-              .map((part) => `${part.entityType}:${part.entityId}`)
+              .map((part) => `${part.entityKind}:${part.entityId}`)
               .join("|")}
             className="inline-flex max-w-full min-w-0 items-center gap-1.5"
           >
@@ -99,9 +99,9 @@ export function RecordPaths({
             ) : null}
             <span className="max-w-full min-w-0 rounded border border-border bg-muted/30 px-1.5 py-0.5">
               <span className="me-1 text-xs text-muted-foreground">
-                {isBrowserRoutedEntity(node.entityType)
-                  ? entities[node.entityType].label
-                  : node.entityType}
+                {isBrowserRoutedEntity(node.entityKind)
+                  ? entities[node.entityKind].label
+                  : node.entityKind}
               </span>
               <RecordPathLink node={node} />
             </span>
@@ -129,7 +129,7 @@ export function RecordPaths({
             {other.map((path) => (
               <li
                 key={path
-                  .map((node) => `${node.entityType}:${node.entityId}`)
+                  .map((node) => `${node.entityKind}:${node.entityId}`)
                   .join("|")}
               >
                 {renderPath(path)}
@@ -201,7 +201,7 @@ export function ConnectedRecordsTable({
   const [page, setPage] = useState(0);
   const query = useQuery(
     entityGraph.connectedRecords.queryOptions({
-      source: { entityType: source, entityId: sourceId },
+      source: { entityKind: source, entityId: sourceId },
       viewKey,
       offset: openAll ? page * PAGE_SIZE : 0,
       limit: PAGE_SIZE,

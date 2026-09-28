@@ -14,7 +14,7 @@ import { searchEntityGraphPaths } from "./entity-graph-path-search";
 
 const uniqueRefs = (refs: readonly EntityRef[]): EntityRef[] => [
   ...new Map(
-    refs.map((ref) => [entityRefKey(ref.entityType, ref.entityId), ref]),
+    refs.map((ref) => [entityRefKey(ref.entityKind, ref.entityId), ref]),
   ).values(),
 ];
 
@@ -46,8 +46,8 @@ const isStatementTimeout = (error: UnparsedDatabaseError): boolean => {
 
 const edgePairKey = (left: EntityRef, right: EntityRef): string =>
   [
-    entityRefKey(left.entityType, left.entityId),
-    entityRefKey(right.entityType, right.entityId),
+    entityRefKey(left.entityKind, left.entityId),
+    entityRefKey(right.entityKind, right.entityId),
   ]
     .sort()
     .join("|");
@@ -125,11 +125,11 @@ export async function getEntityGraphPaths(
       }
       const hydrated = hydratedPages.flatMap((page) => page.nodes);
       const liveKeys = new Set(
-        hydrated.map((node) => entityRefKey(node.entityType, node.entityId)),
+        hydrated.map((node) => entityRefKey(node.entityKind, node.entityId)),
       );
       const paths = result.paths.filter((path) =>
         path.nodeRefs.every((ref) =>
-          liveKeys.has(entityRefKey(ref.entityType, ref.entityId)),
+          liveKeys.has(entityRefKey(ref.entityKind, ref.entityId)),
         ),
       );
       const pairs = new Set(

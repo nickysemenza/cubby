@@ -154,7 +154,7 @@ export const insertImportWorkflow = bindWorkflow(
         [imported.id],
         {
           source: "recipe.import",
-          entity: { entityType: "recipe", entityId: imported.id },
+          entity: { entityKind: "recipe", entityId: imported.id },
         },
       ),
     )
@@ -297,7 +297,7 @@ export const attachCookbookRecipePhotoWorkflow = bindWorkflow(
               (byte) => byte.toString(16).padStart(2, "0"),
             ).join("");
             return {
-              entityType: "recipe" as const,
+              entityKind: "recipe" as const,
               entityId: input.recipeId,
               data: input.data,
               contentType: source.mime,

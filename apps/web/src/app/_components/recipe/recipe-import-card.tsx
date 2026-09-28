@@ -137,7 +137,7 @@ function RecipeImportCardImpl({
   const existingRecipeRefs = useMemo(
     () =>
       existingId
-        ? [{ entityType: "recipe" as const, entityId: existingId }]
+        ? [{ entityKind: "recipe" as const, entityId: existingId }]
         : [],
     [existingId],
   );
@@ -212,7 +212,7 @@ function RecipeImportCardImpl({
                   existingId
                     ? (existingRecipeImages[
                         entityDisplayImageKey({
-                          entityType: "recipe",
+                          entityKind: "recipe",
                           entityId: existingId,
                         })
                       ] ?? null)

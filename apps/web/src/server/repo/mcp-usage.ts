@@ -152,13 +152,13 @@ export async function getMcpUsageAggregateData(
     // under one toolName) say WHAT it acted on.
     drizzle
       .select({
-        key: sql<string>`coalesce(${mcpToolCall.entity}, 'unknown')`,
-        label: sql<string>`coalesce(${mcpToolCall.entity}, 'Unattributed')`,
+        key: sql<string>`coalesce(${mcpToolCall.entityKind}, 'unknown')`,
+        label: sql<string>`coalesce(${mcpToolCall.entityKind}, 'Unattributed')`,
         count: countInt(),
       })
       .from(mcpToolCall)
       .where(periodWhere)
-      .groupBy(mcpToolCall.entity)
+      .groupBy(mcpToolCall.entityKind)
       .orderBy(desc(countInt())),
   ]);
 
@@ -234,7 +234,7 @@ export async function listMcpUsageActivity(
   const since = mcpUsageSince(input.window);
   if (since) conditions.push(gte(mcpToolCall.occurredAt, since));
   if (input.toolName) conditions.push(eq(mcpToolCall.toolName, input.toolName));
-  if (input.entity) conditions.push(eq(mcpToolCall.entity, input.entity));
+  if (input.entity) conditions.push(eq(mcpToolCall.entityKind, input.entity));
   if (input.userId) {
     conditions.push(eq(mcpToolCall.userId, userId.parse(input.userId)));
   }
@@ -267,7 +267,7 @@ export async function listMcpUsageActivity(
       outcome: mcpToolCall.outcome,
       registeredAtCall: mcpToolCall.registeredAtCall,
       surface: mcpToolCall.surface,
-      entity: mcpToolCall.entity,
+      entity: mcpToolCall.entityKind,
       release: mcpToolCall.release,
       occurredAt: mcpToolCall.occurredAt,
       ingestedAt: mcpToolCall.ingestedAt,

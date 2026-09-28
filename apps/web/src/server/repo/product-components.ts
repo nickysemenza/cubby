@@ -661,7 +661,7 @@ export async function attachProductComponents(
     if (inserted.length > 0) {
       await markProductConversionCoverageInputStale(tx, [parentProductId]);
       await logAuditEntry(tx, actor, {
-        entityType: "product",
+        entityKind: "product",
         entityId: parentProductId,
         action: "update",
         changes: { componentProductIds: { from: before, to: after } },
@@ -703,7 +703,7 @@ export async function detachProductComponents(
     if (removed.length > 0) {
       await markProductConversionCoverageInputStale(tx, [parentProductId]);
       await logAuditEntry(tx, actor, {
-        entityType: "product",
+        entityKind: "product",
         entityId: parentProductId,
         action: "update",
         changes: { componentProductIds: { from: before, to: after } },

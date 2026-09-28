@@ -298,7 +298,7 @@ const applyAddedInventoryItem = async (
     );
     const changes = computeChanges(existing, updated, ["amount"]);
     const audit: AuditEntryInput = {
-      entityType: "inventory",
+      entityKind: "inventory",
       entityId: existing.id,
       action: "update",
     };
@@ -329,7 +329,7 @@ const applyAddedInventoryItem = async (
     id: created.id,
     action: "create",
     audit: {
-      entityType: "inventory",
+      entityKind: "inventory",
       entityId: created.id,
       action: "create",
     },
@@ -654,7 +654,7 @@ const persistInventoryMovePlan = async (
         idBySlot.set(key, created.id);
         occupantBySlot.set(key, created.id);
         auditEntries.push({
-          entityType: "inventory",
+          entityKind: "inventory",
           entityId: created.id,
           action: "create",
         });
@@ -682,7 +682,7 @@ const persistInventoryMovePlan = async (
       ]);
       if (changes) {
         auditEntries.push({
-          entityType: "inventory",
+          entityKind: "inventory",
           entityId: row.id,
           action: "update",
           changes,
@@ -1042,7 +1042,7 @@ export const reconcileLocationSession = async (
               .where(eq(inventoryEntry.id, before.id));
             resultIds.push(before.id);
             auditEntries.push({
-              entityType: "inventory",
+              entityKind: "inventory",
               entityId: before.id,
               action: "update",
             });
@@ -1062,7 +1062,7 @@ export const reconcileLocationSession = async (
             resultIds.push(updated.id);
             const changes = computeChanges(before, updated, ["amount"]);
             const auditEntry: AuditEntryInput = {
-              entityType: "inventory",
+              entityKind: "inventory",
               entityId: before.id,
               action: "update",
             };
@@ -1118,7 +1118,7 @@ export const reconcileLocationSession = async (
                 "amount",
               ]);
               const auditEntry: AuditEntryInput = {
-                entityType: "inventory",
+                entityKind: "inventory",
                 entityId: target.id,
                 action: "update",
               };
@@ -1147,7 +1147,7 @@ export const reconcileLocationSession = async (
               );
               const changes = computeChanges(before, updated, ["locationId"]);
               const auditEntry: AuditEntryInput = {
-                entityType: "inventory",
+                entityKind: "inventory",
                 entityId: before.id,
                 action: "update",
               };

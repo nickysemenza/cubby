@@ -18,14 +18,14 @@ import { oneOrMany } from "./pagination";
  * manifest (kept in sync by entity-manifest.unit.test.ts).
  */
 export const auditEntitySchema = entitySchema.extract([...auditableEntities]);
-export type AuditEntityType = z.infer<typeof auditEntitySchema>;
+export type AuditEntityKind = z.infer<typeof auditEntitySchema>;
 
 const auditableEntityIdSchema = anyShortcodeSchema(
   nonEmptyTuple<ShortcodeEntity>(auditableEntities),
 );
 
 export const auditLogListInput = z.object({
-  entityType: auditEntitySchema.optional(),
+  entityKind: auditEntitySchema.optional(),
   entityId: auditableEntityIdSchema.optional(),
   channel: oneOrMany(auditChannelSchema).optional(),
   /** An OAuth client id (not a Cubby entity), e.g. the one Claude registered. */
@@ -100,7 +100,7 @@ export const auditLogUserOut = z
 
 export const auditLogEntryOut = z.object({
   entryKey: z.string(),
-  entityType: auditEntitySchema,
+  entityKind: auditEntitySchema,
   entityId: auditableEntityIdSchema.nullable(),
   /**
    * The survivor's code when the audited entity was later merged away. The

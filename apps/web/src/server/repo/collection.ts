@@ -689,7 +689,7 @@ export const setCollectionAssignment = async (
       { tags: setCollectionTag(row.tags, input.collection, input.assigned) },
       actor,
     );
-    return { entityType: "product" as const, entityId: id };
+    return { entityKind: "product" as const, entityId: id };
   }
 
   const id = await resolveOrThrow(db, "location", input.id);
@@ -710,5 +710,5 @@ export const setCollectionAssignment = async (
     { tags: setCollectionTag(row.tags, input.collection, input.assigned) },
     actor,
   );
-  return { entityType: "location" as const, entityId: id };
+  return { entityKind: "location" as const, entityId: id };
 };

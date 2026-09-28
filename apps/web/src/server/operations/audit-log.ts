@@ -22,8 +22,8 @@ const auditLogWorkflow = workflow<Database, AuditInput>("auditLog.list")
       !(
         (subject.data.entityId &&
           (!subject.resolved ||
-            (subject.data.entityType &&
-              subject.resolved.entity !== subject.data.entityType))) ||
+            (subject.data.entityKind &&
+              subject.resolved.entity !== subject.data.entityKind))) ||
         (subject.data.deviceId && !subject.device) ||
         (subject.data.runId && !subject.run)
       ),
@@ -31,7 +31,7 @@ const auditLogWorkflow = workflow<Database, AuditInput>("auditLog.list")
       branch
         .call("entries", async ({ context: db }, { input: { subject } }) =>
           getAuditLog(db, {
-            entityType: subject.data.entityType,
+            entityKind: subject.data.entityKind,
             entityId: subject.resolved?.id,
             channel: subject.data.channel,
             oauthClientId: subject.data.oauthClient,

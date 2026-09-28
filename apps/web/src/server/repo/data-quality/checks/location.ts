@@ -10,7 +10,7 @@ type Location = typeof location;
 const hasDisplayableImage = (t: Location) => sql`EXISTS (
   SELECT 1 FROM "EntityAttachment" dq_loc_img
   JOIN "Image" dq_loc_i ON dq_loc_i."id" = dq_loc_img."imageId" AND dq_loc_i."deletedAt" IS NULL
-  WHERE dq_loc_img."subjectEntityId" = ${t.id} AND dq_loc_img."deletedAt" IS NULL
+  WHERE dq_loc_img."entityId" = ${t.id} AND dq_loc_img."deletedAt" IS NULL
     AND ${sql.raw(displayableImageRawSql("dq_loc_i"))}
 )`;
 

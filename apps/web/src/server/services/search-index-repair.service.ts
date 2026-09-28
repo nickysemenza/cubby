@@ -29,7 +29,7 @@ import { WorkflowCancelledError } from "~/server/workflow-runtime";
 
 /** Workflow results persist at most one repair page of these refs. */
 export type SearchIndexRepairRef = {
-  entityType: (typeof searchableEntities)[number];
+  entityKind: (typeof searchableEntities)[number];
   entityId: string;
 };
 
@@ -172,7 +172,7 @@ export async function publishSearchIndexRepairSourcePage(
     refs.map((ref) => ({
       kind: "entity-embedding.refresh" as const,
       requestedAt,
-      entityType: ref.entityType,
+      entityKind: ref.entityKind,
       entityId: ref.entityId,
     })),
     { source: "maintenance.repair-search-index" },

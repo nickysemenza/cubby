@@ -134,7 +134,7 @@ export function IngredientPreviewTable({
     () =>
       ingredientsWithMatch.flatMap((item) =>
         item.match
-          ? [{ entityType: "ingredient" as const, entityId: item.match.id }]
+          ? [{ entityKind: "ingredient" as const, entityId: item.match.id }]
           : [],
       ),
     [ingredientsWithMatch],
@@ -208,7 +208,7 @@ export function IngredientPreviewTable({
                 item.match
                   ? (displayImages[
                       entityDisplayImageKey({
-                        entityType: "ingredient",
+                        entityKind: "ingredient",
                         entityId: item.match.id,
                       })
                     ] ?? null)

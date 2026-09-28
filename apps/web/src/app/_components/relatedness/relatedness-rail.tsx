@@ -133,7 +133,7 @@ export function RelatednessRail({
 
   const relatednessQuery = useQuery({
     ...operations.recommendations.queryOptions({
-      entityType: "product",
+      entityKind: "product",
       entityId: product.id,
     }),
     refetchInterval,
@@ -173,7 +173,7 @@ export function RelatednessRail({
         indexing={indexing}
         refreshing={refresh.isPending}
         onRefresh={() =>
-          refresh.mutate({ entityType: "product", entityId: product.id })
+          refresh.mutate({ entityKind: "product", entityId: product.id })
         }
       />
 
@@ -191,7 +191,7 @@ export function RelatednessRail({
 
       <EntityDisplayImagesProvider
         refs={relatedProductIds.map((entityId) => ({
-          entityType: "product",
+          entityKind: "product",
           entityId,
         }))}
         seeded={seededDisplayImages}
@@ -221,7 +221,7 @@ function RelatedProductRowWithCanonicalImage({
   item: ProductRecommendationGroup["proposals"][number];
 }) {
   const displayImage = useEntityDisplayImage({
-    entityType: "product",
+    entityKind: "product",
     entityId: item.target.id,
   });
 

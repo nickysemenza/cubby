@@ -18,7 +18,7 @@ interface EdgeSpec {
   sourceTable: string;
   sourceColumn: string;
   /**
-   * One table for an ordinary FK. `EntityAttachment.subjectEntityId` names any
+   * One table for an ordinary FK. `EntityAttachment.entityId` names any
    * attachable entity, so it lists each; entity ids are unique across tables,
    * which keeps the join exact without a kind filter.
    */

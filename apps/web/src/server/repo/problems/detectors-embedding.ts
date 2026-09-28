@@ -227,7 +227,7 @@ const sourceEntries = embeddableEntities.map(
  */
 const missingEmbeddingWhere = (
   client: DbClient,
-  entityType: EmbeddableEntity,
+  entityKind: EmbeddableEntity,
   source: EmbeddingSource,
   config: SemanticEmbeddingConfig,
 ) =>
@@ -240,7 +240,7 @@ const missingEmbeddingWhere = (
         .from(entityEmbedding)
         .where(
           and(
-            eq(entityEmbedding.entityType, entityType),
+            eq(entityEmbedding.entityKind, entityKind),
             eq(entityEmbedding.entityId, source.idColumn),
             eq(entityEmbedding.provider, config.provider),
             eq(entityEmbedding.model, config.model),
@@ -263,19 +263,19 @@ export const findEntitiesMissingEmbeddingsPage = async (
   const client = getDb(db);
   const union = sql.join(
     sourceEntries.map(
-      ([entityType, source], sourceOrder) => sql`
+      ([entityKind, source], sourceOrder) => sql`
       SELECT
-        ${entityType}::text AS "entityType",
+        ${entityKind}::text AS "entityKind",
         ${source.shortcodeColumn}::text AS "entityId",
         ${sourceOrder}::int AS "sourceOrder"
       FROM ${source.table}
-      WHERE ${missingEmbeddingWhere(client, entityType, source, config)}
+      WHERE ${missingEmbeddingWhere(client, entityKind, source, config)}
     `,
     ),
     sql` UNION ALL `,
   );
   const result = await client.execute<{
-    entityType: EmbeddableEntity;
+    entityKind: EmbeddableEntity;
     entityId: string;
     totalCount: number;
   }>(sql`
@@ -283,15 +283,15 @@ export const findEntitiesMissingEmbeddingsPage = async (
       SELECT *, count(*) OVER ()::int AS "totalCount"
       FROM missing
     )
-    SELECT "entityType", "entityId", "totalCount"
+    SELECT "entityKind", "entityId", "totalCount"
     FROM ranked
     ORDER BY "sourceOrder", "entityId"
     LIMIT ${limit}
   `);
 
   return {
-    items: result.rows.map(({ entityType, entityId }) => ({
-      entityType,
+    items: result.rows.map(({ entityKind, entityId }) => ({
+      entityKind,
       entityId,
     })),
     count: Number(result.rows[0]?.totalCount ?? 0),

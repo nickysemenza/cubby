@@ -351,7 +351,7 @@ export function useEntitySearchRows<
   const { data: searchHits, isLoading: isSearchLoading } = useQuery({
     ...search.find.queryOptions({
       query: searchQuery || entity,
-      entityTypes: [globalSearchEntity],
+      entityKinds: [globalSearchEntity],
       limit: 20,
     }),
     enabled:

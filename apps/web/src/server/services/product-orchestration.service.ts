@@ -135,7 +135,7 @@ export async function createProductWithSideEffects(
       await resolveIngredientEntityId(services.db, ingredientId),
       {
         source: "product.create",
-        entity: { entityType: "product", entityId },
+        entity: { entityKind: "product", entityId },
       },
     );
   }
@@ -181,7 +181,7 @@ export async function updateProductWithSideEffects(
       ),
       {
         source: "product.update",
-        entity: { entityType: "product", entityId: id },
+        entity: { entityKind: "product", entityId: id },
       },
     );
   }
@@ -252,7 +252,7 @@ export async function applyUpcDataWithSideEffects(
       await resolveIngredientEntityId(services.db, ingredientId),
       {
         source: "product.applyUpcData",
-        entity: { entityType: "product", entityId: input.id },
+        entity: { entityKind: "product", entityId: input.id },
       },
     );
   }

@@ -20,7 +20,7 @@ import { useHydrated } from "~/hooks/useHydrated";
 import { ai } from "~/lib/ai.functions";
 import { formatCount, formatCurrency } from "~/lib/utils";
 
-const supportedEntityTypes = [
+const supportedEntityKinds = [
   "product",
   "location",
   "recipe",
@@ -28,7 +28,7 @@ const supportedEntityTypes = [
   "inventory",
 ] as const;
 
-type SupportedEntityType = (typeof supportedEntityTypes)[number];
+type SupportedEntityKind = (typeof supportedEntityKinds)[number];
 
 interface UsageTotals {
   calls: number;
@@ -39,10 +39,10 @@ interface UsageTotals {
   durationMs: number;
 }
 
-function isSupportedEntityType(
+function isSupportedEntityKind(
   value: string | null,
-): value is SupportedEntityType {
-  return supportedEntityTypes.some((entityType) => entityType === value);
+): value is SupportedEntityKind {
+  return supportedEntityKinds.some((entityKind) => entityKind === value);
 }
 
 function formatTokens(value: number | null | undefined): string {
@@ -152,7 +152,7 @@ export function UsageEntityLink({
   if (!row.entityKind || !row.entityId) {
     return <span className="text-muted-foreground">-</span>;
   }
-  if (!isSupportedEntityType(row.entityKind)) {
+  if (!isSupportedEntityKind(row.entityKind)) {
     return <span className="text-muted-foreground">{row.entityKind}</span>;
   }
 
@@ -169,7 +169,7 @@ export function UsageEntityLink({
 
   return (
     <EntityInlineLinkById
-      entityType={row.entityKind}
+      entityKind={row.entityKind}
       entityId={row.entityId}
       compact
     />

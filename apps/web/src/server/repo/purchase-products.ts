@@ -458,7 +458,7 @@ export async function attachPurchaseProducts(
 
     if (inserted.length > 0) {
       await logAuditEntry(tx, actor, {
-        entityType: "purchase",
+        entityKind: "purchase",
         entityId: purchaseId,
         action: "update",
         changes: { linkedProductIds: { from: before, to: after } },
@@ -499,7 +499,7 @@ export async function detachPurchaseProducts(
 
     if (removed.length > 0) {
       await logAuditEntry(tx, actor, {
-        entityType: "purchase",
+        entityKind: "purchase",
         entityId: purchaseId,
         action: "update",
         changes: { linkedProductIds: { from: before, to: after } },

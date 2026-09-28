@@ -382,7 +382,7 @@ function ProductRelatednessRecommendation({
   const productRefs = useMemo(
     () =>
       items.map((item) => ({
-        entityType: "product" as const,
+        entityKind: "product" as const,
         entityId: item.shortcode,
       })),
     [items],
@@ -470,7 +470,7 @@ function WorkbenchRelatedProductRow({
   onDismiss: () => void;
 }) {
   const displayImage = useEntityDisplayImage({
-    entityType: "product",
+    entityKind: "product",
     entityId: item.shortcode,
   });
   return (

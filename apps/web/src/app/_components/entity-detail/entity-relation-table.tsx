@@ -528,7 +528,7 @@ export function EntityRelationTable({
     .slice(0, 50);
   const evidenceQuery = useQuery(
     entityGraph.connectedRecords.queryOptions({
-      source: { entityType: plan.source, entityId: recordId },
+      source: { entityKind: plan.source, entityId: recordId },
       viewKey: `relation:${plan.relation}`,
       targetIds: visibleIds,
       limit: 50,

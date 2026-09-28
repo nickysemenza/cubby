@@ -86,7 +86,7 @@ function blockedByLabel(task: TaskOut, taskById: Record<string, TaskOut>) {
 }
 
 const taskProjectRef = (task: TaskOut) => ({
-  entityType: "project" as const,
+  entityKind: "project" as const,
   entityId: task.projectId ?? "",
 });
 

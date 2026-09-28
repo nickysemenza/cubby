@@ -71,8 +71,8 @@ export const getDuplicateProductRecommendationWorkflow = bindWorkflow(
         input.sourceId,
       );
       const dismissals = await getActiveSuggestionDismissalKeys(context, {
-        sourceEntityType: "product",
-        sourceEntityId,
+        entityKind: "product",
+        entityId: sourceEntityId,
         suggestionKind: "product.duplicate",
       });
       const candidateKey = await suggestionCandidateKey(
@@ -109,8 +109,8 @@ export const dismissDuplicateProductRecommendationWorkflow = bindWorkflow(
           "Duplicate recommendation is no longer current",
         );
       return {
-        sourceEntityType: "product",
-        sourceEntityId,
+        entityKind: "product",
+        entityId: sourceEntityId,
         suggestionKind: "product.duplicate",
         candidateKey: await suggestionCandidateKey(
           "product.duplicate",
@@ -121,7 +121,7 @@ export const dismissDuplicateProductRecommendationWorkflow = bindWorkflow(
     .commit("dismiss", async ({ context }, { validate }) => {
       await dismissSuggestion(context, {
         ...validate,
-        sourceEntityType: "product",
+        entityKind: "product",
       });
       return { ok: true as const };
     })
@@ -155,8 +155,8 @@ export const dismissTagPropagationWorkflow = bindWorkflow(
           "Tag recommendation is no longer current",
         );
       await dismissSuggestion(context, {
-        sourceEntityType: "product",
-        sourceEntityId,
+        entityKind: "product",
+        entityId: sourceEntityId,
         suggestionKind: "product.tag-propagation",
         candidateKey: await suggestionCandidateKey("product.tag-propagation", [
           input.tag,
@@ -187,8 +187,8 @@ export const dismissProductRecommendationWorkflow = bindWorkflow(
           "Recommendation is no longer current",
         );
       await dismissSuggestion(context, {
-        sourceEntityType: "product",
-        sourceEntityId,
+        entityKind: "product",
+        entityId: sourceEntityId,
         suggestionKind: "product.related",
         candidateKey: await suggestionCandidateKey("product.related", [
           input.targetId,

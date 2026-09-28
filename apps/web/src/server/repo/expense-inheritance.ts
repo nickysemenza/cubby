@@ -219,14 +219,14 @@ const draftProjectResolution = (
 ): FieldResolution => {
   const purchaseRef = draft.purchaseId
     ? {
-        entityType: "purchase" as const,
+        entityKind: "purchase" as const,
         entityId: draft.purchaseId,
         name: row.purchaseName,
       }
     : null;
   const projectRef = row.effectiveProjectShortcode
     ? {
-        entityType: "project" as const,
+        entityKind: "project" as const,
         entityId: row.effectiveProjectShortcode,
         name: row.effectiveProjectName,
       }
@@ -267,14 +267,14 @@ const draftTradeResolution = (
 ): FieldResolution => {
   const purchaseRef = draft.purchaseId
     ? {
-        entityType: "purchase" as const,
+        entityKind: "purchase" as const,
         entityId: draft.purchaseId,
         name: row.purchaseName,
       }
     : null;
   const projectRef = row.effectiveProjectShortcode
     ? {
-        entityType: "project" as const,
+        entityKind: "project" as const,
         entityId: row.effectiveProjectShortcode,
         name: row.effectiveProjectName,
       }

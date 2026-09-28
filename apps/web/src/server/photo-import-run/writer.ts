@@ -80,7 +80,7 @@ type RunScope = Awaited<ReturnType<typeof loadRunScopeByShortcode>>;
 
 type LockedTarget = {
   id: string;
-  imageId: ImageId | null;
+  imageId: string;
   state: string;
   outcome: string | null;
   diff: unknown;
@@ -151,17 +151,17 @@ async function findProductNameConflicts(
 /** Best-effort link from an `RunMutation` row to the audit trail that carries the actor. */
 async function latestAuditLogId(
   db: Database,
-  entityType: string,
+  entityKind: string,
   entityId: string,
 ): Promise<string | null> {
-  const parsedType = auditEntitySchema.safeParse(entityType);
+  const parsedType = auditEntitySchema.safeParse(entityKind);
   if (!parsedType.success) return null;
   const [row] = await getDb(db)
     .select({ id: auditLog.id })
     .from(auditLog)
     .where(
       and(
-        eq(auditLog.entityType, parsedType.data),
+        eq(auditLog.entityKind, parsedType.data),
         eq(auditLog.entityId, entityId),
       ),
     )
@@ -217,7 +217,7 @@ async function resolveSkips(
 }
 
 type LockedTargets = {
-  targetByImageId: Map<ImageId | null, LockedTarget>;
+  targetByImageId: Map<string, LockedTarget>;
   allReplayed: boolean;
 };
 
@@ -241,7 +241,7 @@ async function lockTargets(
   const lockedTargets: LockedTarget[] = await getDb(txDb)
     .select({
       id: runTarget.id,
-      imageId: runTarget.imageId,
+      imageId: runTarget.entityId,
       state: runTarget.state,
       outcome: runTarget.outcome,
       diff: runTarget.diff,
@@ -250,7 +250,7 @@ async function lockTargets(
     .where(
       and(
         eq(runTarget.runId, scope.public.runId),
-        inArray(runTarget.imageId, imageIds),
+        inArray(runTarget.entityId, imageIds),
       ),
     )
     .for("update");
@@ -291,7 +291,7 @@ function buildReplayOutput(
   input: CommitPhotoGroupInput,
   attaches: ResolvedAttach[],
   skips: ResolvedSkip[],
-  targetByImageId: Map<ImageId | null, LockedTarget>,
+  targetByImageId: Map<string, LockedTarget>,
 ): CommitPhotoGroupOutput {
   let productShortcodeStr: string | undefined;
   let inventoryShortcodeStr: string | undefined;
@@ -527,7 +527,7 @@ async function markTargets(
   groupKey: string,
   attaches: ResolvedAttach[],
   skips: ResolvedSkip[],
-  targetByImageId: Map<ImageId | null, LockedTarget>,
+  targetByImageId: Map<string, LockedTarget>,
   productShortcodeStr: string | undefined,
   inventoryShortcodeStr: string | undefined,
   now: Date,

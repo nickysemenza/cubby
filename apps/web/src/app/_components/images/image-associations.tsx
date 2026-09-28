@@ -29,12 +29,12 @@ function ImageAssociationLink({
   const displayImage =
     displayImages[
       entityDisplayImageKey({
-        entityType: association.entityType,
+        entityKind: association.entityKind,
         entityId: association.entityId,
       })
     ] ?? null;
   const link = match(association)
-    .with({ entityType: "product" }, ({ entityId, entityName }) => (
+    .with({ entityKind: "product" }, ({ entityId, entityName }) => (
       <EntityInlineLink
         displayImage={displayImage}
         entity="product"
@@ -42,7 +42,7 @@ function ImageAssociationLink({
         compact={compact}
       />
     ))
-    .with({ entityType: "location" }, ({ entityId, entityName }) => (
+    .with({ entityKind: "location" }, ({ entityId, entityName }) => (
       <EntityInlineLink
         displayImage={displayImage}
         entity="location"
@@ -50,7 +50,7 @@ function ImageAssociationLink({
         compact={compact}
       />
     ))
-    .with({ entityType: "recipe" }, ({ entityId, entityName }) => (
+    .with({ entityKind: "recipe" }, ({ entityId, entityName }) => (
       <EntityInlineLink
         displayImage={displayImage}
         entity="recipe"
@@ -58,7 +58,7 @@ function ImageAssociationLink({
         compact={compact}
       />
     ))
-    .with({ entityType: "cookbook" }, ({ entityId, entityName }) => (
+    .with({ entityKind: "cookbook" }, ({ entityId, entityName }) => (
       <EntityInlineLink
         displayImage={displayImage}
         entity="cookbook"
@@ -66,7 +66,7 @@ function ImageAssociationLink({
         compact={compact}
       />
     ))
-    .with({ entityType: "project" }, ({ entityId, entityName }) => (
+    .with({ entityKind: "project" }, ({ entityId, entityName }) => (
       <EntityInlineLink
         displayImage={displayImage}
         entity="project"
@@ -74,7 +74,7 @@ function ImageAssociationLink({
         compact={compact}
       />
     ))
-    .with({ entityType: "purchase" }, ({ entityId, entityName }) => (
+    .with({ entityKind: "purchase" }, ({ entityId, entityName }) => (
       <EntityInlineLink
         displayImage={displayImage}
         entity="purchase"
@@ -82,7 +82,7 @@ function ImageAssociationLink({
         compact={compact}
       />
     ))
-    .with({ entityType: "vendor" }, ({ entityId, entityName }) => (
+    .with({ entityKind: "vendor" }, ({ entityId, entityName }) => (
       <EntityInlineLink
         displayImage={displayImage}
         entity="vendor"
@@ -90,7 +90,7 @@ function ImageAssociationLink({
         compact={compact}
       />
     ))
-    .with({ entityType: "meal" }, ({ entityId, entityName }) => (
+    .with({ entityKind: "meal" }, ({ entityId, entityName }) => (
       <EntityInlineLink
         displayImage={displayImage}
         entity="meal"
@@ -98,7 +98,7 @@ function ImageAssociationLink({
         compact={compact}
       />
     ))
-    .with({ entityType: "task" }, ({ entityId, entityName }) => (
+    .with({ entityKind: "task" }, ({ entityId, entityName }) => (
       <EntityInlineLink
         displayImage={displayImage}
         entity="task"
@@ -106,7 +106,7 @@ function ImageAssociationLink({
         compact={compact}
       />
     ))
-    .with({ entityType: "gardenEntry" }, ({ entityId, entityName }) => (
+    .with({ entityKind: "gardenEntry" }, ({ entityId, entityName }) => (
       <EntityInlineLink
         displayImage={displayImage}
         entity="gardenEntry"
@@ -137,8 +137,8 @@ export function ImageAssociationLinks({
   compact?: boolean;
   showRole?: boolean;
 }) {
-  const refs = associations.map(({ entityType, entityId }) => ({
-    entityType,
+  const refs = associations.map(({ entityKind, entityId }) => ({
+    entityKind,
     entityId,
   }));
   const displayImages = useEntityDisplayImages(refs);
@@ -149,7 +149,7 @@ export function ImageAssociationLinks({
     <Stack gap="xs" className="min-w-0">
       {associations.map((association) => (
         <ImageAssociationLink
-          key={`${association.entityType}:${association.entityId}:${association.role}`}
+          key={`${association.entityKind}:${association.entityId}:${association.role}`}
           association={association}
           compact={compact}
           showRole={showRole}

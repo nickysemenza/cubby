@@ -72,10 +72,10 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
   const imageRefs = useMemo(
     () => [
       ...(data?.purchase
-        ? [{ entityType: "purchase" as const, entityId: data.purchase.id }]
+        ? [{ entityKind: "purchase" as const, entityId: data.purchase.id }]
         : []),
       ...others.map((line) => ({
-        entityType: "expense" as const,
+        entityKind: "expense" as const,
         entityId: line.id,
       })),
     ],
@@ -132,7 +132,7 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
           displayImage={
             displayImages[
               entityDisplayImageKey({
-                entityType: "purchase",
+                entityKind: "purchase",
                 entityId: data.purchase.id,
               })
             ] ?? null
@@ -164,7 +164,7 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
                 displayImage={
                   displayImages[
                     entityDisplayImageKey({
-                      entityType: "expense",
+                      entityKind: "expense",
                       entityId: line.id,
                     })
                   ] ?? null

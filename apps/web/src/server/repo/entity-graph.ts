@@ -158,7 +158,7 @@ const canonicalEdge = (
   const source = descriptor.reversed ? target : root;
   const destination = descriptor.reversed ? root : target;
   return {
-    id: `${entityRefKey(source.entityType, source.entityId)}|${entityRefKey(destination.entityType, destination.entityId)}|${pathKey(descriptor.path)}`,
+    id: `${entityRefKey(source.entityKind, source.entityId)}|${entityRefKey(destination.entityKind, destination.entityId)}|${pathKey(descriptor.path)}`,
     source,
     target: destination,
     relationshipKey: descriptor.relationshipKey,
@@ -349,7 +349,7 @@ export async function readEntityGraph(
   const imageRefs = new Map<string, EntityRef>();
   const edges = new Map<string, EntityGraphEdge>();
   const branches: EntityGraphOutput["branches"] = [];
-  const rootsByEntity = groupBy(input.roots, (root) => root.entityType);
+  const rootsByEntity = groupBy(input.roots, (root) => root.entityKind);
   for (const rootEntity of allEntities) {
     const requestedRoots = rootsByEntity[rootEntity];
     if (!requestedRoots) continue;
@@ -376,14 +376,14 @@ export async function readEntityGraph(
       .array()
       .parse(rootRows.rows)
       .map((row) => ({
-        ref: { entityType: rootEntity, entityId: row.id },
+        ref: { entityKind: rootEntity, entityId: row.id },
         dbId: row.dbId,
         label: row.label,
         metadata: row.metadata,
       }));
     for (const root of liveRoots) {
       imageRefs.set(entityRefKey(rootEntity, root.ref.entityId), {
-        entityType: rootEntity,
+        entityKind: rootEntity,
         entityId: root.dbId,
       });
       nodes.set(entityRefKey(rootEntity, root.ref.entityId), {
@@ -398,7 +398,7 @@ export async function readEntityGraph(
       (relationship) =>
         (!input.relationshipKeys ||
           input.relationshipKeys.includes(relationship.key)) &&
-        (!input.entityTypes || input.entityTypes.includes(relationship.target)),
+        (!input.entityKinds || input.entityKinds.includes(relationship.target)),
     );
     const relationSources = relationships.flatMap((relationship) =>
       relationship.sources.flatMap((source) =>
@@ -504,7 +504,7 @@ export async function readEntityGraph(
           totalCount,
           nextOffset,
           items: branchRows.map((row) => ({
-            entityType: relationship.target,
+            entityKind: relationship.target,
             entityId: row.targetShortcode,
           })),
           edgeIds: branchRows
@@ -517,7 +517,7 @@ export async function readEntityGraph(
                   ? canonicalEdge(
                       root.ref,
                       {
-                        entityType: relationship.target,
+                        entityKind: relationship.target,
                         entityId: row.targetShortcode,
                       },
                       source.provenance,
@@ -529,16 +529,16 @@ export async function readEntityGraph(
         });
         for (const row of branchRows) {
           const target = {
-            entityType: relationship.target,
+            entityKind: relationship.target,
             entityId: row.targetShortcode,
           };
-          nodes.set(entityRefKey(target.entityType, target.entityId), {
+          nodes.set(entityRefKey(target.entityKind, target.entityId), {
             ...target,
             label: row.label,
             metadata: row.metadata,
           });
-          imageRefs.set(entityRefKey(target.entityType, target.entityId), {
-            entityType: target.entityType,
+          imageRefs.set(entityRefKey(target.entityKind, target.entityId), {
+            entityKind: target.entityKind,
             entityId: row.targetId,
           });
           for (const sourceKey of row.sourceKeys) {
@@ -554,28 +554,28 @@ export async function readEntityGraph(
     }
   }
   const requestedKeys = new Set(
-    input.roots.map((root) => entityRefKey(root.entityType, root.entityId)),
+    input.roots.map((root) => entityRefKey(root.entityKind, root.entityId)),
   );
   const outputNodes = [...nodes.values()]
     .sort(
       (left, right) =>
         Number(
-          requestedKeys.has(entityRefKey(right.entityType, right.entityId)),
+          requestedKeys.has(entityRefKey(right.entityKind, right.entityId)),
         ) -
-        Number(requestedKeys.has(entityRefKey(left.entityType, left.entityId))),
+        Number(requestedKeys.has(entityRefKey(left.entityKind, left.entityId))),
     )
     .slice(0, MAX_GRAPH_NODES);
   const nodeKeys = new Set(
-    outputNodes.map((node) => entityRefKey(node.entityType, node.entityId)),
+    outputNodes.map((node) => entityRefKey(node.entityKind, node.entityId)),
   );
   const outputEdges = [...edges.values()]
     .filter(
       (edge) =>
         nodeKeys.has(
-          entityRefKey(edge.source.entityType, edge.source.entityId),
+          entityRefKey(edge.source.entityKind, edge.source.entityId),
         ) &&
         nodeKeys.has(
-          entityRefKey(edge.target.entityType, edge.target.entityId),
+          entityRefKey(edge.target.entityKind, edge.target.entityId),
         ),
     )
     .slice(0, MAX_GRAPH_EDGES);
@@ -583,7 +583,7 @@ export async function readEntityGraph(
   const outputBranches = branches.map((branch) => {
     const firstOmitted = branch.items.findIndex(
       (item) =>
-        !nodeKeys.has(entityRefKey(item.entityType, item.entityId)) ||
+        !nodeKeys.has(entityRefKey(item.entityKind, item.entityId)) ||
         branch.edgeIds.some((id) => {
           const edge = edges.get(id);
           return (
@@ -591,7 +591,7 @@ export async function readEntityGraph(
             !retainedEdges.has(id) &&
             [edge.source, edge.target].some(
               (ref) =>
-                ref.entityType === item.entityType &&
+                ref.entityKind === item.entityKind &&
                 ref.entityId === item.entityId,
             )
           );
@@ -610,7 +610,7 @@ export async function readEntityGraph(
           items.some((item) =>
             [edge.source, edge.target].some(
               (ref) =>
-                ref.entityType === item.entityType &&
+                ref.entityKind === item.entityKind &&
                 ref.entityId === item.entityId,
             ),
           )
@@ -628,7 +628,7 @@ export async function readEntityGraph(
         db,
         outputNodes.flatMap((node) => {
           const ref = imageRefs.get(
-            entityRefKey(node.entityType, node.entityId),
+            entityRefKey(node.entityKind, node.entityId),
           );
           return ref ? [ref] : [];
         }),
@@ -639,9 +639,9 @@ export async function readEntityGraph(
   }
   return {
     nodes: outputNodes.map((node) => {
-      const ref = imageRefs.get(entityRefKey(node.entityType, node.entityId));
+      const ref = imageRefs.get(entityRefKey(node.entityKind, node.entityId));
       const image =
-        ref && images.get(entityRefKey(ref.entityType, ref.entityId));
+        ref && images.get(entityRefKey(ref.entityKind, ref.entityId));
       return image ? { ...node, image } : node;
     }),
     edges: outputEdges,

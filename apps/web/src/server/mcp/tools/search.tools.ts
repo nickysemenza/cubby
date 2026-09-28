@@ -23,7 +23,7 @@ export function registerSearchTools(server: McpServer) {
   registerRouterTool(server, {
     name: "global_search",
     description:
-      "Fast name, alias, identifier, and shortcode search across Cubby entities. Pass entityTypes to restrict results. Every hit carries its public shortcode in id, ready for get_*/update_* tools. This lexical lookup never calls an embedding provider. Set includeRelated to true only when useful; semantic results are returned separately and never replace direct matches. For entity-to-entity matching use find_similar_entities instead.",
+      "Fast name, alias, identifier, and shortcode search across Cubby entities. Pass entityKinds to restrict results. Every hit carries its public shortcode in id, ready for get_*/update_* tools. This lexical lookup never calls an embedding provider. Set includeRelated to true only when useful; semantic results are returned separately and never replace direct matches. For entity-to-entity matching use find_similar_entities instead.",
     inputSchema: globalSearchMcpInputSchema,
     outputSchema: globalSearchMcpOut,
     annotations: READ_ONLY_CLOSED,
@@ -44,12 +44,12 @@ export function registerSearchTools(server: McpServer) {
         query,
       );
       const primaryKeys = new Set(
-        results.map((result) => `${result.entityType}:${result.id}`),
+        results.map((result) => `${result.entityKind}:${result.id}`),
       );
       return {
         results,
         related: relatedResult.results.filter(
-          (result) => !primaryKeys.has(`${result.entityType}:${result.id}`),
+          (result) => !primaryKeys.has(`${result.entityKind}:${result.id}`),
         ),
         relatedStatus: relatedResult.status,
       };

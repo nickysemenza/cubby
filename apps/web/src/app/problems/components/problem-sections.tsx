@@ -584,7 +584,7 @@ function renderTrackerItem(item: ProjectAttentionItem): RenderedProblemItem {
         : [],
     details: missingBudgetDetail(item),
     route: { href: item.href },
-    editLabel: `Open ${item.entityType}`,
+    editLabel: `Open ${item.entityKind}`,
   };
 }
 
@@ -1316,16 +1316,16 @@ const DECLARED_SECTIONS = [
     icon: WrenchIcon,
     headerAction: <MissingEmbeddingsBackfillAction />,
     renderItem: (entity) => ({
-      key: `${entity.entityType}:${entity.entityId}`,
+      key: `${entity.entityKind}:${entity.entityId}`,
       // The WHOLE shortcode. This was `.slice(0, 8)`, copied from the orphaned
       // sibling — where the id really is a uuid and truncating it is right. Here
       // it is a public shortcode, so slicing only risked cutting a real code in
       // half for no gain.
       title: entity.entityId,
-      subtitle: `${entities[entity.entityType].label} · not in the search index`,
+      subtitle: `${entities[entity.entityKind].label} · not in the search index`,
       // Live entity ⇒ always resolvable to a real page, unlike the orphaned
       // side of this pair — see the note on `entityMissingEmbeddingSchema`.
-      route: entityDetailLink(entity.entityType, entity.entityId),
+      route: entityDetailLink(entity.entityKind, entity.entityId),
     }),
   }),
   section({

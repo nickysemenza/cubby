@@ -106,7 +106,7 @@ export async function patchEntityRows<T extends PatchTable>(
       changes
         .filter(({ row }) => written.has(row.id))
         .map(({ row, audit }) => ({
-          entityType: definition.entity,
+          entityKind: definition.entity,
           entityId: row.id,
           action: "update",
           changes: audit,
@@ -206,7 +206,7 @@ export async function bulkPatchEntities<
         return changes
           ? [
               {
-                entityType: spec.entity,
+                entityKind: spec.entity,
                 entityId: row.id,
                 action: "update" as const,
                 changes,

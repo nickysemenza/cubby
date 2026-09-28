@@ -121,7 +121,7 @@ export function LinkExpensesDialog({
     () =>
       candidates.flatMap((row) =>
         row.projectId
-          ? [{ entityType: "project" as const, entityId: row.projectId }]
+          ? [{ entityKind: "project" as const, entityId: row.projectId }]
           : [],
       ),
     [candidates],
@@ -215,7 +215,7 @@ export function LinkExpensesDialog({
                   displayImage={
                     projectImages[
                       entityDisplayImageKey({
-                        entityType: "project",
+                        entityKind: "project",
                         entityId: row.projectId,
                       })
                     ] ?? null

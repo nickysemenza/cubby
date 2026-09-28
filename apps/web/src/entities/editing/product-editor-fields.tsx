@@ -645,7 +645,7 @@ function ProductManualsField({
   };
   return (
     <PendingDocumentUpload
-      entityType="PRODUCT"
+      entityKind="PRODUCT"
       folder={documentFolder}
       existingDocuments={existingDocuments}
       onDocumentsChange={(documents) =>

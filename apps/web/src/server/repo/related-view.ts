@@ -414,7 +414,7 @@ export async function loadRelatedPreviews(
     loaded.flatMap(({ relationKey, rows }) => {
       const targetEntity = sqlRelatedView(relationKey).targetEntity;
       return rows.map((row) => ({
-        entityType: targetEntity,
+        entityKind: targetEntity,
         entityId: row.targetEntityId,
       }));
     }),
@@ -478,7 +478,7 @@ export async function loadRelatedBranch(
   const displayImages = await resolveEntityDisplayImages(
     db,
     rows.map((row) => ({
-      entityType: view.targetEntity,
+      entityKind: view.targetEntity,
       entityId: row.targetEntityId,
     })),
   );
@@ -746,7 +746,7 @@ export async function loadRelatedSummary(
         SELECT i."id", i."key", i."filename", i."contentType"
         FROM "EntityAttachment" ti
         JOIN "Image" i ON i."id" = ti."imageId" AND i."deletedAt" IS NULL
-        WHERE ti."subjectEntityId" = t."id"
+        WHERE ti."entityId" = t."id"
           AND ti."deletedAt" IS NULL
           AND i."contentType" <> 'application/pdf'
           AND (i."renderStatus" IS NULL OR i."renderStatus" <> 'failed')

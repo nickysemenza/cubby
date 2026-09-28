@@ -245,7 +245,7 @@ export const dbProductToTopLevelAPI = (
   const result = mapDbProductToTopLevel(productData);
 
   return parseWithContext(productTopLevelOut, result, {
-    entityType: "Product",
+    entityKind: "Product",
     identifier: { id: productData.id, name: productData.name },
   });
 };
@@ -287,7 +287,7 @@ export const dbProductToPickerItemAPI = (
   const result = mapDbProductToPickerItem(productData);
 
   return parseWithContext(productPickerItemOut, result, {
-    entityType: "Product",
+    entityKind: "Product",
     identifier: { id: productData.id, name: productData.name },
   });
 };
@@ -474,7 +474,7 @@ export const dbProductToListAPI = (
   };
 
   return parseWithContext(productListItemOut, result, {
-    entityType: "Product",
+    entityKind: "Product",
     identifier: { id: productData.id, name: productData.name },
   });
 };
@@ -614,7 +614,7 @@ export const dbProductToAPI = (
     productWithIngredientAndInventoryAndMappingsOut,
     result,
     {
-      entityType: "Product",
+      entityKind: "Product",
       identifier: { id: productData.id, name: productData.name },
     },
   );

@@ -340,9 +340,9 @@ function referenceMediaRefs<TRecord extends object>(
   field: DisplayField,
 ): EntityRef[] {
   const reference = readReferenceField(record, field);
-  const entityType = reference && referenceMediaEntity(reference.entity);
-  if (!reference || entityType === null) return [];
-  return reference.items.map((item) => ({ entityType, entityId: item.id }));
+  const entityKind = reference && referenceMediaEntity(reference.entity);
+  if (!reference || entityKind === null) return [];
+  return reference.items.map((item) => ({ entityKind, entityId: item.id }));
 }
 
 function referenceLink(entity: string, item: ReferenceItem): ReactNode {

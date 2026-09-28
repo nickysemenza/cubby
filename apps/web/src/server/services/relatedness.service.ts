@@ -94,8 +94,8 @@ export const productRelatednessWorkflowDefinition = workflow<
       context.dependencies.getProductsSharingTags(context.db, source),
     dismissals: ({ context }, { source }) =>
       context.dependencies.getActiveDismissalKeys(context.db, {
-        sourceEntityType: "product",
-        sourceEntityId: source,
+        entityKind: "product",
+        entityId: source,
         suggestionKind: "product.related",
       }),
   })
@@ -182,8 +182,8 @@ export const productTagPropagationWorkflowDefinition = workflow<
       ]),
     dismissals: ({ context }, { source }) =>
       context.dependencies.getActiveDismissalKeys(context.db, {
-        sourceEntityType: "product",
-        sourceEntityId: source.id,
+        entityKind: "product",
+        entityId: source.id,
         suggestionKind: "product.tag-propagation",
       }),
   })

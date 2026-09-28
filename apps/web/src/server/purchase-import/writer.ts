@@ -240,7 +240,8 @@ async function attachEvidence(
     await tx
       .insert(entityAttachment)
       .values({
-        subjectEntityId: purchaseId,
+        entityId: purchaseId,
+        entityKind: "purchase",
         role: "attachment",
         imageId: attachment.imageId,
         documentKind: attachment.documentKind,
@@ -283,7 +284,8 @@ async function attachPendingMailEvidence(
     await tx
       .insert(entityAttachment)
       .values({
-        subjectEntityId: purchaseId,
+        entityId: purchaseId,
+        entityKind: "purchase",
         role: "attachment",
         imageId: attachment.imageId,
         documentKind: attachment.filename.toLowerCase().includes("receipt")
@@ -726,8 +728,8 @@ async function fileFinding(
     .values({
       runId: input.runId,
       ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
-      targetKind: "purchase",
-      targetId: purchaseId,
+      entityKind: "purchase",
+      entityId: purchaseId,
       kind,
       summary,
       proposedFix,
@@ -742,7 +744,7 @@ async function fileFinding(
         runFinding.ledgerPartyId,
         parseEntityId("ledgerParty", input.ledgerPartyId),
       ),
-      eq(runFinding.targetId, purchaseId),
+      eq(runFinding.entityId, purchaseId),
       eq(runFinding.kind, kind),
       eq(runFinding.evidenceFingerprint, evidenceFingerprint),
       eq(runFinding.status, "open"),

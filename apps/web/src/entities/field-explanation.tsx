@@ -123,7 +123,7 @@ export function ReadableExplanationValue({
 const explanationSourceKey = (source: ExplanationSource): string =>
   [
     source.label,
-    source.entity?.entityType ?? "value",
+    source.entity?.entityKind ?? "value",
     source.entity?.entityId ?? JSON.stringify(source.value),
   ].join(":");
 
@@ -135,7 +135,7 @@ function visibleSources(data: FieldExplanationOutput) {
   return data.sources.filter(
     (source) =>
       source.value !== null ||
-      source.entity?.entityType !== named.entityType ||
+      source.entity?.entityKind !== named.entityKind ||
       source.entity.entityId !== named.entityId,
   );
 }
@@ -149,7 +149,7 @@ export function ExplanationEntityLink({
 }) {
   const auditable = auditEntitySchema.safeParse(entity);
   return auditable.success ? (
-    <EntityInlineLinkById entityType={auditable.data} entityId={id} />
+    <EntityInlineLinkById entityKind={auditable.data} entityId={id} />
   ) : (
     <span className="font-mono text-xs">{id}</span>
   );
@@ -179,7 +179,7 @@ export function FieldExplanation({
   });
   const result = useQuery({
     ...fieldExplanation.explain.queryOptions({
-      entityType: entity,
+      entityKind: entity,
       entityId: id,
       field,
       surface,
@@ -254,7 +254,7 @@ export function FieldExplanation({
                   <span className="text-muted-foreground">{source.label}</span>
                   {source.entity ? (
                     <ExplanationEntityLink
-                      entity={source.entity.entityType}
+                      entity={source.entity.entityKind}
                       id={source.entity.entityId}
                     />
                   ) : null}
@@ -272,7 +272,7 @@ export function FieldExplanation({
               ) : null}
               {result.data.actions.map((action) => {
                 const inventoryAction =
-                  action.target.entityType === "inventory";
+                  action.target.entityKind === "inventory";
                 if (action.kind === "inheritOwner" && inventoryAction) {
                   return (
                     <Button
@@ -325,7 +325,7 @@ export function FieldExplanation({
                   >
                     <span>{action.label}</span>
                     <ExplanationEntityLink
-                      entity={action.target.entityType}
+                      entity={action.target.entityKind}
                       id={action.target.entityId}
                     />
                   </div>

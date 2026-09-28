@@ -417,7 +417,7 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
     () =>
       tasks.flatMap((task) =>
         task.projectId
-          ? [{ entityType: "project" as const, entityId: task.projectId }]
+          ? [{ entityKind: "project" as const, entityId: task.projectId }]
           : [],
       ),
     [tasks],
@@ -447,7 +447,7 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
                   displayImage={
                     projectImages[
                       entityDisplayImageKey({
-                        entityType: "project",
+                        entityKind: "project",
                         entityId: task.projectId,
                       })
                     ] ?? null

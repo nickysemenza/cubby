@@ -177,7 +177,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
           // and fetch every location's images.
           ...relations.location.withImages.with.images,
           where: and(
-            inArray(entityAttachment.subjectEntityId, locationIds),
+            inArray(entityAttachment.entityId, locationIds),
             notDeleted(entityAttachment),
           ),
         })
@@ -200,7 +200,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
     Array<{ image: typeof image.$inferSelect }>
   >();
   for (const locImg of allLocationImages) {
-    const locationId = parseEntityId("location", locImg.subjectEntityId);
+    const locationId = parseEntityId("location", locImg.entityId);
     const existing = imagesByLocationId.get(locationId) ?? [];
     existing.push(locImg);
     imagesByLocationId.set(locationId, existing);

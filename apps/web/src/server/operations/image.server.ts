@@ -132,7 +132,7 @@ export const importImageFromUrlWorkflow = bindWorkflow(
     .commit("importImage", async ({ context }, { input }) => {
       const request = {
         sourceUrl: input.url,
-        filenamePrefix: `${input.entityType ?? "image"}-url-import`,
+        filenamePrefix: `${input.entityKind ?? "image"}-url-import`,
       };
       const result = await importImageFromUrl(context, request);
       if (!result) throw new Error("Failed to fetch image from URL");

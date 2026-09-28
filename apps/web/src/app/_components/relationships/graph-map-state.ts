@@ -13,7 +13,7 @@ import {
 export const parseGraphRecord = (key?: string) => {
   const separator = key?.indexOf(":") ?? -1;
   return entityGraphRootSchema.safeParse({
-    entityType: key?.slice(0, separator),
+    entityKind: key?.slice(0, separator),
     entityId: key?.slice(separator + 1),
   }).data;
 };

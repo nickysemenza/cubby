@@ -47,7 +47,7 @@ function InventoryProductLink({
   product: InventoryListItem["product"];
 }) {
   const displayImage = useEntityDisplayImage({
-    entityType: "product",
+    entityKind: "product",
     entityId: product.id,
   });
   return (
@@ -273,8 +273,8 @@ export const inventoryListOverride = defineListOverride<
       wrap: (children, { data }) => (
         <EntityDisplayImagesProvider
           refs={data.flatMap((row) => [
-            { entityType: "product" as const, entityId: row.product.id },
-            { entityType: "location" as const, entityId: row.location.id },
+            { entityKind: "product" as const, entityId: row.product.id },
+            { entityKind: "location" as const, entityId: row.location.id },
           ])}
         >
           {children}

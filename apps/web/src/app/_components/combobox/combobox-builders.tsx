@@ -131,7 +131,7 @@ export function buildSearchHitComboboxItem<E extends SearchableEntity>(
       : undefined;
 
   return {
-    // The server applies the entityTypes scope; narrowing it here preserves the
+    // The server applies the entityKinds scope; narrowing it here preserves the
     // branded value each picker writes without ever exposing a private UUID.
     id: shortcode,
     shortcode,

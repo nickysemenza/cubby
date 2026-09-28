@@ -426,7 +426,7 @@ export async function createFinancialTransaction(
       ...foreign,
     });
     await logAuditEntry(tx, actor, {
-      entityType: "financialTransaction",
+      entityKind: "financialTransaction",
       entityId: created.id,
       action: "create",
     });
@@ -692,7 +692,7 @@ export async function updateFinancialTransaction(
     ]);
     if (changes)
       await logAuditEntry(tx, actor, {
-        entityType: "financialTransaction",
+        entityKind: "financialTransaction",
         entityId: id,
         action: "update",
         changes,

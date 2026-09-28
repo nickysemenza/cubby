@@ -139,7 +139,7 @@ export type ProductDeleteDisposition =
   | (OperationDisposition & { effect: "detach" });
 
 export const PRODUCT_DELETE_EDGE_POLICY = {
-  "RunTarget.productId": {
+  "RunTarget.entityId": {
     code: "block-targeted-import-history",
     effect: "block",
     description:
@@ -230,7 +230,7 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     reason: "PRODUCT_HAS_COOKBOOKS",
     label: "cookbooks",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
