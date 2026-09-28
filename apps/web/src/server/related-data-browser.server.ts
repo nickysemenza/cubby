@@ -11,12 +11,9 @@ export const relatedDataHandlers = implementOperationDomain(
   relatedDataContract,
   {
     previews: (context, input) =>
-      loadRelatedPreviewsWorkflow(context.readDb, input),
-    branch: (context, input) =>
-      loadRelatedBranchWorkflow(context.readDb, input),
-    options: (context, input) =>
-      loadRelatedOptionsWorkflow(context.readDb, input),
-    summary: (context, input) =>
-      loadRelatedSummaryWorkflow(context.readDb, input),
+      loadRelatedPreviewsWorkflow(context.db, input),
+    branch: (context, input) => loadRelatedBranchWorkflow(context.db, input),
+    options: (context, input) => loadRelatedOptionsWorkflow(context.db, input),
+    summary: (context, input) => loadRelatedSummaryWorkflow(context.db, input),
   },
 );

@@ -217,7 +217,7 @@ export function registerPurchaseTools(server: McpServer) {
     outputSchema: vendorCoverageOut,
     annotations: READ_ONLY_CLOSED,
     handler: (params, extra) =>
-      getVendorCoverage(getEntityKernelContext(extra).readDb, params),
+      getVendorCoverage(getEntityKernelContext(extra).db, params),
   });
 
   registerRouterTool(server, {

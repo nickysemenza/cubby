@@ -444,7 +444,6 @@ describe("propose_product_match tool", () => {
   const call = (args: Parameters<typeof callMcpTool>[2]) =>
     callMcpTool(createMcpServer(), "propose_product_match", args, {
       db: ctx.db,
-      readDb: ctx.db,
     });
 
   const twoProducts = async () =>

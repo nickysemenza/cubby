@@ -768,7 +768,7 @@ export const productTimeline: EntityTimelineImplementation<"product"> = async (
   input,
 ) =>
   toEntityTimeline(
-    await getProductMovementTimeline(context.readDb, {
+    await getProductMovementTimeline(context.db, {
       filters: input.filters,
       ids: input.window.ids,
       from: input.window.from,

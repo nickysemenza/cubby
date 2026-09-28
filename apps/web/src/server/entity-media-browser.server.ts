@@ -6,6 +6,6 @@ export const entityMediaHandlers = implementOperationDomain(
   entityMediaContract,
   {
     displayImages: (context, input) =>
-      getEntityDisplayImages(context.readDb, input.refs),
+      getEntityDisplayImages(context.db, input.refs),
   },
 );

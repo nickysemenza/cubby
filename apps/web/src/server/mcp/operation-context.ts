@@ -20,7 +20,6 @@ export class McpOperationContext {
       requestContext: selected,
       entityKernel: {
         db: selected.db,
-        readDb: selected.readDb,
         actorContext: selected.actorContext,
         usdaClient: selected.usdaClient,
         usdaService: selected.usdaService,
@@ -47,7 +46,6 @@ export class McpOperationContext {
         this.prepared({
           ...selected,
           db: transactionDb,
-          readDb: transactionDb,
         }),
       );
     });

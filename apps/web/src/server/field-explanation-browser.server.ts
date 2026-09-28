@@ -514,7 +514,6 @@ async function loadExplanationSnapshot(
     const snapshotContext: EntityKernelContext = {
       ...context,
       db: snapshotDb,
-      readDb: snapshotDb,
       services: {
         ...context.services,
         recipeCosting: new RecipeCostingService(snapshotDb, context.usdaClient),

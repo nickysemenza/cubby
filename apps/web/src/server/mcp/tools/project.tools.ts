@@ -191,7 +191,7 @@ export function registerProjectTools(server: McpServer) {
     // today: `ne(status,'done')` (the old default) is equivalent to
     // `inArray(LIVE_PROJECT_STATUSES)` given exactly 4 statuses.
     call: (context, params) =>
-      projectDashboardSummaryWorkflow(context.readDb, {
+      projectDashboardSummaryWorkflow(context.db, {
         statusScope: [...LIVE_PROJECT_STATUSES],
         ...params,
       }),
@@ -206,7 +206,7 @@ export function registerProjectTools(server: McpServer) {
     annotations: READ_ONLY_CLOSED,
     call: async (context, params) => {
       const analytics = await projectPortfolioAnalyticsWorkflow(
-        context.readDb,
+        context.db,
         params,
       );
       const projects = analytics.costVsEstimate
@@ -263,7 +263,7 @@ export function registerProjectTools(server: McpServer) {
     inputSchema: z.object({}),
     outputSchema: actionableTasksOut,
     annotations: READ_ONLY_CLOSED,
-    call: (context) => taskListActionableWorkflow(context.readDb, undefined),
+    call: (context) => taskListActionableWorkflow(context.db, undefined),
   });
 
   registerRouterTool(server, {
@@ -273,7 +273,7 @@ export function registerProjectTools(server: McpServer) {
     inputSchema: z.object({}),
     outputSchema: taskSummaryOut,
     annotations: READ_ONLY_CLOSED,
-    call: (context) => taskSummaryWorkflow(context.readDb),
+    call: (context) => taskSummaryWorkflow(context.db),
   });
 
   registerRouterTool(server, {
@@ -290,7 +290,7 @@ export function registerProjectTools(server: McpServer) {
     ),
     outputSchema: expenseAnalyticsOut,
     annotations: READ_ONLY_CLOSED,
-    call: (context, params) => expenseAnalyticsWorkflow(context.readDb, params),
+    call: (context, params) => expenseAnalyticsWorkflow(context.db, params),
   });
 
   registerRouterTool(server, {
@@ -307,6 +307,6 @@ export function registerProjectTools(server: McpServer) {
     inputSchema: expenseMatchInput,
     outputSchema: expenseMatchMcpOut,
     annotations: READ_ONLY_CLOSED,
-    call: (context, params) => expenseMatchWorkflow(context.readDb, params),
+    call: (context, params) => expenseMatchWorkflow(context.db, params),
   });
 }

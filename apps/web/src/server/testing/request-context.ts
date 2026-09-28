@@ -18,7 +18,6 @@ export const createTestRequestContext = (
   opts: {
     headers?: Headers;
     auth?: { userId: UserId };
-    readDb?: Database;
   } = {},
 ) => {
   const usdaFetcher: typeof fetch = async (input) => {
@@ -36,7 +35,6 @@ export const createTestRequestContext = (
   const requestOrigin: RequestOrigin = "ui";
   return {
     ...crudServices,
-    readDb: opts.readDb ?? db,
     readConsistency: {
       consistency: "strong" as const,
       reason: "single-database" as const,

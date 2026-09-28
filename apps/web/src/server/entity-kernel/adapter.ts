@@ -34,10 +34,11 @@ import {
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import type { USDAService } from "~/server/services/usda.service";
 export interface EntityKernelContext {
-  /** Authoritative adapter for strong reads, mutations, and side effects. */
+  /**
+   * The operation's single database adapter: authoritative for strong
+   * operations, the request-selected one for eligible bounded-stale reads.
+   */
   db: Database;
-  /** Request-selected adapter for eligible bounded-stale entity reads. */
-  readDb: Database;
   actorContext: ActorContext;
   usdaClient: USDAClient;
   /** Optional service facade for specialized MCP reads outside the kernel. */
@@ -54,7 +55,6 @@ const isEntityKernelContext = (value: unknown): value is EntityKernelContext =>
   typeof value === "object" &&
   value !== null &&
   "db" in value &&
-  "readDb" in value &&
   "actorContext" in value &&
   "usdaClient" in value &&
   "upcLookupClient" in value &&

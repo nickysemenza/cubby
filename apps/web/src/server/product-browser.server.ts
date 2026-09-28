@@ -43,7 +43,7 @@ const productShortcodes = bindShortcodeResolver("product");
 export const productHandlers = implementOperationDomain(productContract, {
   search: searchProductsWorkflow,
   resolveNames: (context, input) =>
-    resolveProductNames(context.readDb, input.names),
+    resolveProductNames(context.db, input.names),
   summaries: getProductSummariesWorkflow,
   quantitySummaries: getProductQuantitySummariesWorkflow,
   inventoryEntriesByIds: getProductInventoryEntriesWorkflow,
@@ -66,13 +66,12 @@ export const productHandlers = implementOperationDomain(productContract, {
       input,
       context.actorContext,
     ),
-  categoryDistribution: (context) => getCategoryDistribution(context.readDb),
-  manufacturerOptions: (context) =>
-    getProductManufacturerOptions(context.readDb),
+  categoryDistribution: (context) => getCategoryDistribution(context.db),
+  manufacturerOptions: (context) => getProductManufacturerOptions(context.db),
   externalIdSourceOptions: (context) =>
-    getProductExternalIdSourceOptions(context.readDb),
+    getProductExternalIdSourceOptions(context.db),
   getByShortcodes: (context, input) =>
-    getProductsByShortcodes(context.readDb, input.shortcodes),
+    getProductsByShortcodes(context.db, input.shortcodes),
   mergePreview: async (context, input) => {
     const [keepId, mergeId] = await Promise.all([
       productShortcodes.one(context.db, input.keepId),
@@ -82,25 +81,25 @@ export const productHandlers = implementOperationDomain(productContract, {
   },
   projectUses: async (context, input) =>
     listProductProjectUses(
-      context.readDb,
-      await productShortcodes.one(context.readDb, input.productId),
+      context.db,
+      await productShortcodes.one(context.db, input.productId),
     ),
   purchases: async (context, input) =>
     listProductPurchases(
-      context.readDb,
-      await productShortcodes.one(context.readDb, input.productId),
+      context.db,
+      await productShortcodes.one(context.db, input.productId),
     ),
   components: listProductComponentsWorkflow,
   kitComponentRows: async (context, input) =>
     listKitComponentRows(
-      context.readDb,
-      await productShortcodes.all(context.readDb, input.parentProductIds),
+      context.db,
+      await productShortcodes.all(context.db, input.parentProductIds),
       context.usdaClient,
     ),
   kitMembership: async (context, input) =>
     listKitMembership(
-      context.readDb,
-      await productShortcodes.one(context.readDb, input.productId),
+      context.db,
+      await productShortcodes.one(context.db, input.productId),
     ),
   setProjectUses: setProductProjectUsesWorkflow,
   discard: discardProductWorkflow,

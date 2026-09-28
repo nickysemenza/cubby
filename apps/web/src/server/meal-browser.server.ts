@@ -5,7 +5,7 @@ import * as workflow from "~/server/workflows/meal.server";
 export const mealHandlers = implementOperationDomain(mealContract, {
   getNutrition: (context, input) =>
     workflow.getMealNutritionWorkflow(
-      context.readDb,
+      context.db,
       input,
       context.usdaClient,
       context.services.recipeCosting,
@@ -20,7 +20,7 @@ export const mealHandlers = implementOperationDomain(mealContract, {
     workflow.getUpcomingMealSummaryWorkflow(context.db, input),
   getPreparations: (context, input) =>
     workflow.getMealPreparationsWorkflow(
-      context.readDb,
+      context.db,
       input,
       context.services.recipeCosting,
     ),

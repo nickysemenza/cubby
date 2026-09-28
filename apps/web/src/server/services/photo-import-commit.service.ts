@@ -494,7 +494,6 @@ export async function commitPhotoImport(
       const transactionContext = {
         ...context,
         db: transactionDb,
-        readDb: transactionDb,
         services: {
           ...context.services,
           recipeCosting: context.services.recipeCosting.bindTo(

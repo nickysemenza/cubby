@@ -85,7 +85,7 @@ export const searchProductsWorkflow = bindWorkflow(
     .call("read", async ({ context }, { input }) => {
       const { filters, pagination } = input;
       const lexical = await productSearch(
-        context.readDb,
+        context.db,
         {
           nameFilter: filters.nameFilter,
           manufacturerFilter: filters.manufacturerFilter,
@@ -110,7 +110,7 @@ export const searchProductsWorkflow = bindWorkflow(
         return buildPaginatedResponse(pagination, lexical.data, lexical.count);
       }
       const semantic = await semanticProductCandidates(
-        context.readDb,
+        context.db,
         nameQuery,
         5,
       );
@@ -118,7 +118,7 @@ export const searchProductsWorkflow = bindWorkflow(
         .filter((candidate) => candidate.similarity >= 0.75)
         .map((candidate) => parseEntityId("product", candidate.item.entityId));
       const semanticItems = (
-        await getProductPickerItemsByIds(context.readDb, semanticIds)
+        await getProductPickerItemsByIds(context.db, semanticIds)
       ).filter(
         (item) =>
           !lexical.data.some((lexicalItem) => lexicalItem.id === item.id),
@@ -173,7 +173,7 @@ export const getProductSummariesWorkflow = defineWorkflowOperation(
     input: z.output<typeof productSummariesInput>,
   ) =>
     getProductSummaries(
-      context.readDb,
+      context.db,
       context.usdaClient,
       input.ids,
       input.include,
@@ -186,10 +186,10 @@ export const getProductQuantitySummariesWorkflow = bindWorkflow(
     z.output<typeof productQuantitySummaryBatchInput>
   >("product.quantitySummaries")
     .call("ids", async ({ context }, { input }) =>
-      productShortcodes.all(context.readDb, input.ids),
+      productShortcodes.all(context.db, input.ids),
     )
     .call("summaries", async ({ context }, { input, ids }) => {
-      const byId = await loadProductQuantitySummaries(context.readDb, ids);
+      const byId = await loadProductQuantitySummaries(context.db, ids);
       const summaries: Record<string, ProductQuantitySummaryOut> = {};
       for (const [index, shortcode] of input.ids.entries())
         summaries[shortcode] = byId.get(ids[index]!)!;
@@ -209,8 +209,8 @@ export const getProductInventoryEntriesWorkflow = bindWorkflow(
   >("product.inventoryEntriesByIds")
     .call("entries", async ({ context }, { input }) => {
       if (input.ids.length === 0) return {};
-      const ids = await productShortcodes.all(context.readDb, input.ids);
-      const byId = await loadProductInventoryEntries(context.readDb, ids);
+      const ids = await productShortcodes.all(context.db, input.ids);
+      const byId = await loadProductInventoryEntries(context.db, ids);
       const entries: Record<string, ProductListInventoryEntryOut[]> = {};
       for (const [index, shortcode] of input.ids.entries())
         entries[shortcode] = byId.get(ids[index]!) ?? [];
@@ -269,10 +269,10 @@ export const listProductComponentsWorkflow = bindWorkflow(
     "product.components",
   )
     .call("productId", async ({ context }, { input }) =>
-      productShortcodes.one(context.readDb, input.parentProductId),
+      productShortcodes.one(context.db, input.parentProductId),
     )
     .call("components", async ({ context }, { productId }) =>
-      listProductComponents(context.readDb, productId),
+      listProductComponents(context.db, productId),
     )
     .output(({ components }) => components),
   (

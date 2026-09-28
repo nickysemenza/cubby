@@ -1547,7 +1547,7 @@ export async function runWardrobeConvergenceScenario({
         evidence: matchEvidence,
         sourceUrls: ["https://shop.example.test/products/crew-tee"],
       },
-      { db, readDb: db },
+      { db },
       { entityKernel: kernel },
     );
     if (

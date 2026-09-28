@@ -118,7 +118,7 @@ export const entityTimelineHandlers = implementOperationDomain(
 export const entityFilterOptionsHandlers = implementOperationDomain(
   entityFilterOptionsContract,
   {
-    filterOptions: (context, input) => getFilterOptions(context.readDb, input),
+    filterOptions: (context, input) => getFilterOptions(context.db, input),
   },
 );
 
@@ -126,12 +126,11 @@ export const entityGraphHandlers = implementOperationDomain(
   entityGraphContract,
   {
     connectedRecords: (context, input) =>
-      getConnectedRecords(context.readDb, input),
-    explore: (context, input) => getEntityGraphExplore(context.readDb, input),
-    graph: (context, input) => getEntityGraph(context.readDb, input),
-    graphPaths: (context, input) => getEntityGraphPaths(context.readDb, input),
-    connections: (context, input) =>
-      getEntityConnections(context.readDb, input),
+      getConnectedRecords(context.db, input),
+    explore: (context, input) => getEntityGraphExplore(context.db, input),
+    graph: (context, input) => getEntityGraph(context.db, input),
+    graphPaths: (context, input) => getEntityGraphPaths(context.db, input),
+    connections: (context, input) => getEntityConnections(context.db, input),
     relation: async (context, input) => {
       const result = await executeEntity(
         context,

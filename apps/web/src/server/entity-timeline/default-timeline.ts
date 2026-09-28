@@ -158,7 +158,7 @@ const loadAudit = async (
     params.createdAtTo = new Date(
       householdDateTime(window.to, 24 * 60).getTime() - 1,
     ).toISOString();
-  return getAuditLog(context.readDb, params);
+  return getAuditLog(context.db, params);
 };
 
 const auditEvents = (
@@ -359,7 +359,7 @@ export async function defaultTimelinePage(
   const notes: string[] = [];
 
   const uuidByCode = await resolveLiveShortcodes(
-    context.readDb,
+    context.db,
     records.map((record) => record.id),
     entity,
   );

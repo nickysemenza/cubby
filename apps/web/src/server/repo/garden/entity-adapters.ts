@@ -170,7 +170,7 @@ export const plantingEntityAdapter = defineEntityAdapter({
     get: async (ctx, shortcode) =>
       getPlanting(ctx.db, await plantings.one(ctx.db, shortcode)),
     list: (ctx, filters, sorts, pagination) =>
-      plantingList(ctx.readDb, filters, pagination, sorts),
+      plantingList(ctx.db, filters, pagination, sorts),
     create: async (ctx, data) => {
       const output = await createPlanting(ctx.db, data, ctx.actorContext);
       return { output, entityId: await plantings.one(ctx.db, output.id) };
@@ -232,7 +232,7 @@ export const gardenEntryEntityAdapter = defineEntityAdapter({
     get: async (ctx, shortcode) =>
       getGardenEntry(ctx.db, await entries.one(ctx.db, shortcode)),
     list: (ctx, filters, sorts, pagination) =>
-      gardenEntryList(ctx.readDb, filters, pagination, sorts),
+      gardenEntryList(ctx.db, filters, pagination, sorts),
     create: async (ctx, data) => {
       const output = await createGardenEntry(ctx.db, data, ctx.actorContext);
       return { output, entityId: await entries.one(ctx.db, output.id) };

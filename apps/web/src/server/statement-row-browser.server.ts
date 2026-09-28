@@ -15,7 +15,7 @@ export const statementRowHandlers = implementOperationDomain(
   statementRowContract,
   {
     previewCsv: (context, input) =>
-      previewStatementCsv(context.readDb, context.actorContext, input),
+      previewStatementCsv(context.db, context.actorContext, input),
     commitCsv: (context, input) =>
       commitStatementCsv(context.db, context.actorContext, input),
     record: (context, input) =>

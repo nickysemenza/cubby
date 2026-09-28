@@ -8,8 +8,7 @@ import {
 export const householdContributionHandlers = implementOperationDomain(
   householdContributionContract,
   {
-    ledger: (context, input) =>
-      householdContributionLedger(context.readDb, input),
-    project: (context, input) => projectContribution(context.readDb, input),
+    ledger: (context, input) => householdContributionLedger(context.db, input),
+    project: (context, input) => projectContribution(context.db, input),
   },
 );

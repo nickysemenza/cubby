@@ -41,7 +41,7 @@ export function registerFinancialTools(server: McpServer) {
     inputSchema: findStatementRowDriftInput,
     outputSchema: findStatementRowDriftOut,
     annotations: READ_ONLY_CLOSED,
-    call: (context, params) => findStatementRowDrift(context.readDb, params),
+    call: (context, params) => findStatementRowDrift(context.db, params),
   });
 
   registerRouterTool(server, {

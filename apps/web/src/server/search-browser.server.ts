@@ -25,13 +25,11 @@ import {
  * embedding refresh stay authoritative through the central browser read policy.
  */
 export const searchHandlers = implementOperationDomain(searchContract, {
-  find: (context, input) => findSearchHitsWorkflow(context.readDb, input),
-  grouped: (context, input) =>
-    findGroupedSearchHitsWorkflow(context.readDb, input),
-  related: (context, input) =>
-    findRelatedSearchHitsWorkflow(context.readDb, input),
+  find: (context, input) => findSearchHitsWorkflow(context.db, input),
+  grouped: (context, input) => findGroupedSearchHitsWorkflow(context.db, input),
+  related: (context, input) => findRelatedSearchHitsWorkflow(context.db, input),
   relatedGrouped: (context, input) =>
-    findRelatedSearchGroupsWorkflow(context.readDb, input),
+    findRelatedSearchGroupsWorkflow(context.db, input),
   debug: (context, input) => inspectSearchDebugWorkflow(context.db, input),
   requestEmbeddingRefresh: (context, input) =>
     requestEmbeddingRefreshWorkflow(context.db, input),

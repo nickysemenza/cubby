@@ -250,7 +250,7 @@ export function registerMealTools(server: McpServer) {
     call: async (context, params) =>
       dailyIntake(
         await getMealNutritionWorkflow(
-          context.readDb,
+          context.db,
           { date: params.date },
           context.usdaClient,
           context.services.recipeCosting,
@@ -268,7 +268,7 @@ export function registerMealTools(server: McpServer) {
     call: async (context, params) =>
       mealPreparations(
         await getMealPreparationsWorkflow(
-          context.readDb,
+          context.db,
           { mealId: params.mealId },
           context.services.recipeCosting,
         ),

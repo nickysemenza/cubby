@@ -284,7 +284,7 @@ export function registerRecipeTools(server: McpServer) {
     annotations: READ_ONLY_CLOSED,
     call: async (context, params) => {
       const { recipes } = await getMakeableWorkflow(
-        context.readDb,
+        context.db,
         { minCoverage: params.minCoverage, limit: params.limit },
         context.services.availability,
       );
@@ -303,7 +303,7 @@ export function registerRecipeTools(server: McpServer) {
     outputSchema: recipesUsingIngredientOut,
     annotations: READ_ONLY_CLOSED,
     call: async (context, params) => {
-      const usages = await recipeUsagesWorkflow(context.readDb, {
+      const usages = await recipeUsagesWorkflow(context.db, {
         id: params.id,
       });
       const recipes = Object.values(groupBy(usages, (u) => u.recipe.id)).map(
@@ -380,7 +380,7 @@ export function registerRecipeTools(server: McpServer) {
     annotations: READ_ONLY_CLOSED,
     handler: async (_params, extra) => {
       const context = getEntityKernelContext(extra);
-      const result = await listCookbooks(context.readDb);
+      const result = await listCookbooks(context.db);
       return { items: result };
     },
   });
@@ -392,7 +392,7 @@ export function registerRecipeTools(server: McpServer) {
     outputSchema: recipeTagsListOut,
     annotations: READ_ONLY_CLOSED,
     call: async (context) => ({
-      items: await getAllTags(context.readDb),
+      items: await getAllTags(context.db),
     }),
   });
 
@@ -409,7 +409,7 @@ export function registerRecipeTools(server: McpServer) {
     readPolicy: () => "strong",
     call: async (context, params) => {
       const explain = await explainCostingWorkflow(
-        context.readDb,
+        context.db,
         { id: params.id },
         context.services.recipeCosting,
       );

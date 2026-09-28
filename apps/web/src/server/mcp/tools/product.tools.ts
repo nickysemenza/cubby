@@ -70,7 +70,7 @@ export function registerProductTools(server: McpServer) {
     annotations: READ_ONLY_CLOSED,
     call: async (context, params) =>
       productExternalIdCollisionsOut.parse(
-        await findProductExternalIdCollisions(context.readDb, params),
+        await findProductExternalIdCollisions(context.db, params),
       ),
   });
 
@@ -130,7 +130,7 @@ export function registerProductTools(server: McpServer) {
     annotations: READ_ONLY_OPEN,
     call: async (context, params) => {
       const result = await lookupUPC(
-        context.readDb,
+        context.db,
         context.usdaClient,
         context.upcLookupClient,
         params.upc,
@@ -188,7 +188,7 @@ export function registerProductTools(server: McpServer) {
     outputSchema: productResolveNamesMcpOut,
     annotations: READ_ONLY_CLOSED,
     call: async (context, params) => ({
-      results: await resolveProductNames(context.readDb, params.names),
+      results: await resolveProductNames(context.db, params.names),
     }),
   });
 }

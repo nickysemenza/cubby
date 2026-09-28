@@ -24,7 +24,7 @@ export function registerEntityIntegrityTools(server: McpServer) {
     readPolicy: () => "strong",
     call: (context, params) =>
       previewOperation(
-        context.readDb,
+        context.db,
         generatedMcpEntityRelationCommandSchema.parse(params),
         new Date(),
       ),

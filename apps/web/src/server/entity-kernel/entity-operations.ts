@@ -279,19 +279,18 @@ export const defineEntityOperations = <
         parseSchema<S["id"], string>(binding.schemas.id, input.id),
       )
       .call("found", async ({ context }, { input, id }) => {
-        const readContext = { ...context, db: context.readDb };
-        const item = await binding.repository.get(readContext, id);
+        const item = await binding.repository.get(context, id);
         if (item !== null)
           return { item, redirectedFrom: null, missingMessage: null };
         // A merged-away code reads as its survivor (ADR 0006). Mutations never
         // follow this redirect; they refuse with the survivor's code instead.
-        const identity = await resolveEntityIdentity(context.readDb, input.id);
+        const identity = await resolveEntityIdentity(context.db, input.id);
         const canonical =
           identity.state === "redirected" &&
           identity.kind === binding.entity &&
           identity.canonicalDeletedAt === null
             ? await binding.repository.get(
-                readContext,
+                context,
                 parseSchema<S["id"], string>(
                   binding.schemas.id,
                   identity.canonicalShortcode,
@@ -309,7 +308,7 @@ export const defineEntityOperations = <
           redirectedFrom: null,
           missingMessage: isShortcodeEntity(binding.entity)
             ? await describeUnresolvableCode(
-                context.readDb,
+                context.db,
                 binding.entity,
                 input.id,
               )
@@ -322,7 +321,7 @@ export const defineEntityOperations = <
           : {
               ...(
                 await withUniversalEntityMedia(
-                  context.readDb,
+                  context.db,
                   binding.entity,
                   [found.item],
                   true,
@@ -379,14 +378,10 @@ export const defineEntityOperations = <
         };
       })
       .call("page", async ({ context }, { validated }) => {
-        const readContext =
-          context.readDb === context.db
-            ? context
-            : { ...context, db: context.readDb };
         return validated.ids
           ? listRestrictedToIds(
               binding,
-              readContext,
+              context,
               validated.filters,
               validated.sorts,
               validated.groupBy,
@@ -394,7 +389,7 @@ export const defineEntityOperations = <
               validated.ids,
             )
           : binding.repository.list(
-              readContext,
+              context,
               validated.filters,
               validated.sorts,
               validated.pagination,
@@ -403,11 +398,7 @@ export const defineEntityOperations = <
       })
       .call("mediaPage", async ({ context }, { page }) => ({
         ...page,
-        data: await withListEntityMedia(
-          context.readDb,
-          binding.entity,
-          page.data,
-        ),
+        data: await withListEntityMedia(context.db, binding.entity, page.data),
       }))
       .output(({ validated, mediaPage }) =>
         entityQueryResultSchema.parse({

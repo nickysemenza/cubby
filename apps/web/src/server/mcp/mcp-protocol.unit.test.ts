@@ -108,7 +108,6 @@ describe("MCP protocol smoke", () => {
     // is exercised, not a database-backed operation.
     const entityKernel = {
       db: null,
-      readDb: null,
       actorContext: null,
       usdaClient: null,
       upcLookupClient: null,
@@ -246,7 +245,6 @@ describe("MCP protocol smoke", () => {
       {
         entityKernel: {
           db: null,
-          readDb: null,
           actorContext: null,
           usdaClient: null,
           upcLookupClient: null,
@@ -296,7 +294,6 @@ describe("MCP protocol smoke", () => {
     const extra = {
       entityKernel: {
         db: null,
-        readDb: null,
         actorContext: null,
         usdaClient: null,
         upcLookupClient: null,
@@ -371,7 +368,6 @@ describe("MCP protocol smoke", () => {
       {
         entityKernel: {
           db: null,
-          readDb: null,
           actorContext: null,
           usdaClient: null,
           upcLookupClient: null,
@@ -401,7 +397,6 @@ describe("MCP protocol smoke", () => {
   const nullKernel = {
     entityKernel: {
       db: null,
-      readDb: null,
       actorContext: null,
       usdaClient: null,
       upcLookupClient: null,

@@ -40,7 +40,6 @@ describe("MCP response policies", () => {
         {
           entityKernel: {
             db: null,
-            readDb: null,
             actorContext: null,
             usdaClient: null,
             upcLookupClient: null,

@@ -33,10 +33,10 @@ export const financialTransactionHandlers = implementOperationDomain(
   financialTransactionContract,
   {
     previewStatementImport: (context, input) =>
-      previewFinancialStatementImport(context.readDb, input),
+      previewFinancialStatementImport(context.db, input),
     sourceOptions: (context) =>
-      financialTransactionSourceOptionsWorkflow(context.readDb),
+      financialTransactionSourceOptionsWorkflow(context.db),
     vendorInference: (context, input) =>
-      merchantVendorInferenceWorkflow(context.readDb, input),
+      merchantVendorInferenceWorkflow(context.db, input),
   },
 );

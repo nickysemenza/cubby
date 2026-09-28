@@ -29,7 +29,7 @@ export function registerSearchTools(server: McpServer) {
     annotations: READ_ONLY_CLOSED,
     call: async (context, params) => {
       const { includeRelated, ...query } = params;
-      const results = await findSearchHitsWorkflow(context.readDb, query);
+      const results = await findSearchHitsWorkflow(context.db, query);
 
       if (!includeRelated) {
         return {
@@ -40,7 +40,7 @@ export function registerSearchTools(server: McpServer) {
       }
 
       const relatedResult = await findRelatedSearchHitsWorkflow(
-        context.readDb,
+        context.db,
         query,
       );
       const primaryKeys = new Set(
@@ -63,7 +63,6 @@ export function registerSearchTools(server: McpServer) {
     inputSchema: similarEntitiesInputSchema,
     outputSchema: similarEntitiesMcpOut,
     annotations: READ_ONLY_CLOSED,
-    call: (context, params) =>
-      findSimilarEntitiesWorkflow(context.readDb, params),
+    call: (context, params) => findSimilarEntitiesWorkflow(context.db, params),
   });
 }

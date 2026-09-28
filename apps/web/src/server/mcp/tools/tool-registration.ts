@@ -240,7 +240,6 @@ function formatToolError({ code, reason, message }: ToolErrorDetail): string {
 const present = z.custom((value) => value !== undefined);
 const authenticatedRequestFields = z.looseObject({
   db: present,
-  readDb: present,
   actorContext: present,
 });
 const requestContextSchema = z.custom<McpRequestContext>(

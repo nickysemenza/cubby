@@ -3,7 +3,7 @@ import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getCookbookSummary, listCookbooks } from "~/server/repo/cookbook";
 
 export const cookbookHandlers = implementOperationDomain(cookbookContract, {
-  list: (context) => listCookbooks(context.readDb),
+  list: (context) => listCookbooks(context.db),
   detail: {
     run: (context, input) => getCookbookSummary(context.db, input.shortcode),
   },

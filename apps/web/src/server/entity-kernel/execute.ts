@@ -47,9 +47,9 @@ const executeSearch = async (
     limit: command.limit,
   };
   const [lexical, semantic] = await Promise.all([
-    findSearchHits(ctx.readDb, input),
+    findSearchHits(ctx.db, input),
     command.semantic
-      ? findRelatedSearchHits(ctx.readDb, input)
+      ? findRelatedSearchHits(ctx.db, input)
       : Promise.resolve({ status: "unavailable" as const, results: [] }),
   ]);
   return { action: command.action, entity, lexical, semantic } as const;

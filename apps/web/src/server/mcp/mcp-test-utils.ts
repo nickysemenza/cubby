@@ -55,7 +55,6 @@ export async function callMcpTool(
         extra: {
           requestContext: {
             db: null,
-            readDb: null,
             actorContext: null,
             ...requestContext,
           },

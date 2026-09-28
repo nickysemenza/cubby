@@ -18,6 +18,6 @@ export function registerLedgerTools(server: McpServer) {
     outputSchema: financialTransferPairSuggestionsOut,
     annotations: READ_ONLY_CLOSED,
     call: (context, params) =>
-      suggestFinancialTransferPairs(context.readDb, params),
+      suggestFinancialTransferPairs(context.db, params),
   });
 }

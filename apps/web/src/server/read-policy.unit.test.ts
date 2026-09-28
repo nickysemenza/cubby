@@ -1,17 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { Database } from "~/server/db";
-
-import {
-  applyReadPolicy,
-  mutationChangesHouseholdData,
-  readPolicyFor,
-} from "./read-policy";
-
-const database = (label: string) =>
-  new Database(() => {
-    throw new Error(`${label} must not resolve during policy tests`);
-  });
+import { mutationChangesHouseholdData, readPolicyFor } from "./read-policy";
 
 describe("shared read policy", () => {
   it("uses bounded-stale context for representative display reads", () => {
@@ -59,20 +48,5 @@ describe("shared read policy", () => {
       false,
     );
     expect(mutationChangesHouseholdData("entity.mutate")).toBe(true);
-  });
-
-  it("exposes only the selected database to an operation", () => {
-    const strong = database("strong");
-    const cached = database("cached");
-    const context = { db: strong, readDb: cached, requestId: "request-1" };
-
-    const ordinary = applyReadPolicy(context, "context");
-    expect(ordinary).toMatchObject({ requestId: "request-1" });
-    expect(ordinary.db).toBe(cached);
-    expect(ordinary.readDb).toBe(cached);
-
-    const authoritative = applyReadPolicy(context, "strong");
-    expect(authoritative.db).toBe(strong);
-    expect(authoritative.readDb).toBe(strong);
   });
 });

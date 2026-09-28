@@ -100,7 +100,7 @@ export const purchaseProductsWorkflow = bindWorkflow(
       resolveOrThrow(context.db, "purchase", input.purchaseId),
     )
     .call("products", async ({ context }, { purchaseId }) =>
-      listPurchaseProducts(context.readDb, purchaseId),
+      listPurchaseProducts(context.db, purchaseId),
     )
     .output(({ products }) => products),
   (ctx: EntityKernelContext, input: typeof purchaseProductsInput._output) => ({
