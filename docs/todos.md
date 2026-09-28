@@ -9,8 +9,9 @@ based on the work that fits the moment.
 changes. **Requires database changes** is reserved for work that needs schema,
 migration, or compatibility planning. **Requires thought or evidence** holds
 unresolved decisions, investigations, external triggers, and long-term
-directions. **Next pass** holds the follow-ups deferred from the last
-large refactor. **Deferred: deploy surface** holds work that changes what gets
+directions. **Dormant schema** lists tables and columns that exist but hold
+little or no data, kept on purpose for a later decision. **Next pass** holds the
+follow-ups deferred from the last large refactor. **Deferred: deploy surface** holds work that changes what gets
 deployed. **Operational passes** are household data work, not software
 projects.
 
@@ -507,6 +508,19 @@ example vegetable` must not resolve to the weight of an entire linked bag
   an intermediate list response.
 
 ### Needs a decision or investigation
+
+- **Diagnose the image-processing retry storm.** Production averages about 190
+  `ImageProcessingAttempt` rows and 380 `ImageProcessingEvent` rows per job (the
+  worst job has 756 attempts). Find why jobs re-lease that often before adding
+  any retention to those tables.
+
+- **GardenEntry as a dated journal.** Almost every `GardenEntry` is a note, with
+  a handful of harvests. Decide whether it becomes a generic dated journal on
+  Location and Planting or stays garden-specific.
+
+- **Project locations as Locations.** `Project.locations` is free text with three
+  distinct values (street addresses) that match no Location. Decide whether
+  properties become Locations with a project-site link, or stay free-form.
 
 - **Make narrow web layouts device agnostic.** `useIsMobile` already follows
   viewport width, but the compact shell still uses phone-style tabs and
@@ -1327,9 +1341,66 @@ productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
 
 ---
 
+## Dormant schema — revisit
+
+Built but barely used. Each stays until someone decides to use or remove it;
+counts are production rows at the 2026-09 consolidation.
+
+- **Contribution ledger.** `LedgerTransfer` (0), `ExpenseAttribution` (0),
+  `LedgerSourceClaim` (2), `InventoryEntry.ownerLedgerPartyId` (always null) and
+  `InventoryEntry.ownershipMode` (one value). `LedgerParty` itself is in use.
+  Decide whether per-person attribution is still wanted under tenet 4.
+- **Run and import machinery.** `RunApproval`, `RunControlEvent`, `RunEvidence`,
+  `RunOrderCandidate`, `ImportHunt` (all 0); `ImportPreparedOrder` /
+  `ImportPreparedLine` (1 / 5).
+- **Review queues.** `SuggestionDismissal`, `ProductMatchCandidate`,
+  `ImageDescriptionCorrection`, `OrderMailCandidateDecision`,
+  `MerchantVendorRule`, `MailboxCursor` (all 0).
+- **Always-null columns.** `Plant.daysFrom*` and `Plant.breeding`,
+  `Planting.outcome`, `Vendor.returnWindowDays` and `Vendor.orderEvidence`,
+  `Image` capture and source columns (`captureDeviceLabel`, `capturePlaceName`,
+  `capturedAtOffsetMinutes`, `sourcePageUrl`, `sourceAssetUrl`, `sourceName`),
+  `Run.historyCursorUrl` / `dispatchError` / `deviceId`, `Task.sortOrder`,
+  `Meal.sortOrder`, `Wish.acquiredAt`, `Device.productId`, `Cookbook.report`.
+
+---
+
 ## Next pass
 
-Deferred from the 2026-09 manifest-rendering and deletion/parity PRs; unordered.
+Deferred from the 2026-09 manifest-rendering, deletion/parity, and consolidation
+PRs; unordered.
+
+- **Web `src/` layout.** UI code lives in `components/`, `app/_components/`,
+  `hooks/`, `app/_components/hooks/`, `lib/`, `misc/` and `server-functions/`.
+  Move to `ui/` (primitives), `features/<domain>/`, `entity/` (generic shells)
+  and `lib/` (pure utilities) with one codemod commit and nothing else in flight.
+- **Merge `@cubby/usda-contract` and `@cubby/usda-schemas` into `@cubby/usda`.**
+  Always consumed together by web and usda-api; move the `upc` schema out first.
+- **One Cargo workspace for `recipebridge` and `cubby-ffi`.** They keep separate
+  `Cargo.lock` files and only recipebridge runs clippy/tests in CI.
+- **Drop mermaid.** Only `docs/_components/MermaidDiagram.tsx` uses it and it
+  forces the `lodash-es` override; pre-render the docs diagrams.
+- **purchase-agent schemas.** Declare the context-breakdown shape once in
+  `@cubby/schemas/purchase-import` (today also in `purchase-agent/src/context-breakdown.ts`)
+  and replace valibot with zod if Flue accepts Standard Schema.
+- **Script and CI leftovers.** Delete `scripts/neon` and
+  `.github/workflows/docs.yaml` (its link check duplicates `ci.yaml`); collapse the
+  `test:e2e:*` / `dev:sim:watch` aliases into one script with arguments.
+- **One owning doc per topic.** Validation guidance is split across
+  `docs/ci.md`, `local-check-performance.md`, `docs/agents/validation*.md` and the
+  README; fold `docs/visualization-audit.md` decisions into `apps/web/DESIGN.md`;
+  refresh `apps/usda-api/README.md`, `apps/web/PRODUCT.md`.
+- **One data-quality framework.** `repo/problems/detectors-*` and the declared
+  checks in `repo/data-quality/` are two systems for "this record is wrong";
+  make detectors declared checks and have Problems read their results.
+- **Retire the hand-written merges onto link dispositions.** Product, purchase,
+  vendor, ledger-party, plant and ingredient merges each repoint their own
+  relationships; move the remaining per-entity parts onto the generic
+  `EntityLink` merge path.
+- **Declare non-entity child tables in the manifest (`children:`)** so their
+  DDL is generated like entity tables.
+- **Gate or remove Apple photo diagnostics** (`PhotoDiagnosticsView`,
+  `PhotoMatchDiagnostics`, `PhotoMatchInspection*`, about 1.5k lines).
 
 - **Profile test cost before another pruning pass.** [PR #1273](https://github.com/nickysemenza/cubby/pull/1273) reduced literal
   test declarations but did not show an overall CI speed gain: web node and
@@ -1363,11 +1434,13 @@ Deferred from the 2026-09 manifest-rendering and deletion/parity PRs; unordered.
   R2 simulation](https://developers.cloudflare.com/workers/local-development/bindings-per-env/),
   but a binding alone does not implement the current presigned-URL contract.
 
-- **Fold `apps/upc-lookup` and `apps/usda-api` into the main worker.** Two
-  separate Workers with three contract packages (`packages/upc-contract`,
-  `packages/usda-contract`, `packages/usda-schemas`) exist for what are two
-  route groups; folding them removes two deploys and the cross-worker contract
-  layer. Touches `wrangler` config and the USDA data source binding.
+- **Fold `apps/upc-lookup` into the main worker.** Web already caches UPC
+  lookups in Postgres (`UpcLookupCache`), so the Worker's D1 store, admin UI and
+  MCP server duplicate it. Export D1's hand-entered (`manual`) products and miss
+  rows into `UpcLookupCache` first, move the upcitemdb adapter into
+  `server/services/upc/`, then delete the Worker and `packages/upc-contract`.
+  `apps/usda-api` stays separate: it owns the FoodData Central dataset (D1 search
+  index plus R2 bundles) behind the `USDA_API` service binding.
 
 ## Operational passes
 
