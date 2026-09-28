@@ -1,8 +1,8 @@
 import type {
-  AiAnalysisEntityType,
+  AiAnalysisEntityKind,
   AiAnalysisRuntime,
 } from "@cubby/schemas/ai";
-import type { AuditEntityType } from "@cubby/schemas/audit";
+import type { AuditEntityKind } from "@cubby/schemas/audit";
 import type { Amount } from "@cubby/schemas/codec";
 import type { AuditChannel } from "@cubby/schemas/context";
 import {
@@ -50,6 +50,7 @@ import type {
   McpToolCallOutcome,
   McpToolCallSurface,
 } from "@cubby/schemas/telemetry";
+import type { ShortcodeType } from "@cubby/shared";
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -177,6 +178,58 @@ const pkUuid = <T extends string = string>() =>
     .primaryKey()
     .default(sql`gen_random_uuid()`)
     .$type<T>();
+
+const entityIdColumn = () => uuid("entityId");
+const entityKindColumn = <K extends string>() => text("entityKind").$type<K>();
+
+interface EntityRefOptions<K extends string> {
+  nullable: boolean;
+  /** Type-level narrowing of `entityKind`; the table's own CHECK enforces it. */
+  kinds?: readonly K[];
+}
+interface RequiredEntityRef<K extends string> {
+  entityId: ReturnType<ReturnType<typeof entityIdColumn>["notNull"]>;
+  entityKind: ReturnType<ReturnType<typeof entityKindColumn<K>>["notNull"]>;
+}
+interface NullableEntityRef<K extends string> {
+  entityId: ReturnType<typeof entityIdColumn>;
+  entityKind: ReturnType<typeof entityKindColumn<K>>;
+}
+
+/**
+ * The one shape of "a column that points at any entity": `entityId`
+ * (`Entity.id`) plus the `entityKind` stored beside it. Every such table binds
+ * the pair to `Entity(id, kind)` with `entityRefFk`, so a row cannot name an
+ * entity of a kind it is not. A nullable ref (an AI call with no subject)
+ * passes the composite FK by MATCH SIMPLE while either half is null.
+ */
+function entityRef<K extends string = ShortcodeType>(
+  options: EntityRefOptions<K> & { nullable: false },
+): RequiredEntityRef<K>;
+function entityRef<K extends string = ShortcodeType>(
+  options: EntityRefOptions<K> & { nullable: true },
+): NullableEntityRef<K>;
+function entityRef<K extends string>(
+  options: EntityRefOptions<K>,
+): RequiredEntityRef<K> | NullableEntityRef<K> {
+  return options.nullable
+    ? { entityId: entityIdColumn(), entityKind: entityKindColumn<K>() }
+    : {
+        entityId: entityIdColumn().notNull(),
+        entityKind: entityKindColumn<K>().notNull(),
+      };
+}
+
+/** The composite-FK half of `entityRef`; each table keeps its own name. */
+const entityRefFk = (
+  name: string,
+  table: { entityId: AnyPgColumn; entityKind: AnyPgColumn },
+) =>
+  foreignKey({
+    name,
+    columns: [table.entityId, table.entityKind],
+    foreignColumns: [entityIdentity.id, entityIdentity.kind],
+  });
 
 /**
  * The entity's public id (`PRD-4K7M`) — what URLs, QR labels, and MCP expose.
@@ -715,8 +768,7 @@ export const entityEmbedding = pgTable(
   "EntityEmbedding",
   {
     id: pkUuid(),
-    entityType: text("entityType").notNull().$type<SearchableEntity>(),
-    entityId: uuid("entityId").notNull(),
+    ...entityRef<SearchableEntity>({ nullable: false }),
     embeddingText: text("embeddingText").notNull(),
     embeddingHash: text("embeddingHash").notNull(),
     provider: text("provider").notNull(),
@@ -727,21 +779,17 @@ export const entityEmbedding = pgTable(
   },
   (table) => [
     // A rebuildable projection of one live identity (ADR 0006).
-    foreignKey({
-      name: "EntityEmbedding_entity_fk",
-      columns: [table.entityId, table.entityType],
-      foreignColumns: [entityIdentity.id, entityIdentity.kind],
-    }),
+    entityRefFk("EntityEmbedding_entity_fk", table),
     uniqueIndex("EntityEmbedding_entity_model_key")
       .on(
-        table.entityType,
+        table.entityKind,
         table.entityId,
         table.provider,
         table.model,
         table.dimensions,
       )
       .where(sql`${table.deletedAt} IS NULL`),
-    index("EntityEmbedding_entity_idx").on(table.entityType, table.entityId),
+    index("EntityEmbedding_entity_idx").on(table.entityKind, table.entityId),
     index("EntityEmbedding_model_idx").on(
       table.provider,
       table.model,
@@ -759,9 +807,7 @@ export const searchDocument = pgTable(
   "SearchDocument",
   {
     id: pkUuid(),
-    entityType: text("entityType").notNull().$type<SearchableEntity>(),
-    entityId: uuid("entityId").notNull(),
-    shortcode: text("shortcode").notNull(),
+    ...entityRef<SearchableEntity>({ nullable: false }),
     title: text("title").notNull(),
     subtitle: text("subtitle"),
     typeHint: text("typeHint"),
@@ -783,16 +829,9 @@ export const searchDocument = pgTable(
   },
   (table) => [
     // A rebuildable projection of one live identity (ADR 0006).
-    foreignKey({
-      name: "SearchDocument_entity_fk",
-      columns: [table.entityId, table.entityType],
-      foreignColumns: [entityIdentity.id, entityIdentity.kind],
-    }),
+    entityRefFk("SearchDocument_entity_fk", table),
     uniqueIndex("SearchDocument_live_entity_key")
-      .on(table.entityType, table.entityId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("SearchDocument_shortcode_active_idx")
-      .using("btree", sql`lower(${table.shortcode})`)
+      .on(table.entityKind, table.entityId)
       .where(sql`${table.deletedAt} IS NULL`),
     index("SearchDocument_title_active_idx")
       .using("btree", sql`lower(${table.title}) text_pattern_ops`)
@@ -810,10 +849,7 @@ export const suggestionDismissal = pgTable(
   "SuggestionDismissal",
   {
     id: pkUuid(),
-    sourceEntityType: text("sourceEntityType")
-      .notNull()
-      .$type<SearchableEntity>(),
-    sourceEntityId: uuid("sourceEntityId").notNull(),
+    ...entityRef<SearchableEntity>({ nullable: false }),
     suggestionKind: text("suggestionKind").notNull(),
     candidateKey: text("candidateKey").notNull(),
     ...baseTimestamps(),
@@ -822,16 +858,17 @@ export const suggestionDismissal = pgTable(
   (table) => [
     uniqueIndex("SuggestionDismissal_active_key")
       .on(
-        table.sourceEntityType,
-        table.sourceEntityId,
+        table.entityKind,
+        table.entityId,
         table.suggestionKind,
         table.candidateKey,
       )
       .where(sql`${table.deletedAt} IS NULL`),
     index("SuggestionDismissal_source_idx").on(
-      table.sourceEntityType,
-      table.sourceEntityId,
+      table.entityKind,
+      table.entityId,
     ),
+    entityRefFk("SuggestionDismissal_entity_fk", table),
   ],
 );
 
@@ -986,8 +1023,7 @@ export const dataExceptionRecord = pgTable(
   "DataException",
   {
     id: pkUuid(),
-    entityId: uuid("entityId").notNull(),
-    entityKind: text("entityKind").notNull(),
+    ...entityRef<string>({ nullable: false }),
     check: text("check").notNull(),
     reason: text("reason").notNull(),
     note: text("note").notNull(),
@@ -999,11 +1035,7 @@ export const dataExceptionRecord = pgTable(
       table.entityId,
       table.check,
     ),
-    foreignKey({
-      name: "DataException_entity_fk",
-      columns: [table.entityId, table.entityKind],
-      foreignColumns: [entityIdentity.id, entityIdentity.kind],
-    }),
+    entityRefFk("DataException_entity_fk", table),
   ],
 );
 
@@ -1013,8 +1045,8 @@ export const dataExceptionRecord = pgTable(
  *
  * `role` follows the subject kind's declared image storage: gallery entities
  * hold `attachment` rows, a cookbook one `cover`, a vendor one `logo`.
- * `purpose` is Product-only and `documentKind` Purchase-only; the attach
- * helpers enforce both because a CHECK cannot see the subject's kind.
+ * `purpose` is Product-only and `documentKind` Purchase-only, enforced by
+ * CHECKs on the stored `entityKind`.
  *
  * Detach soft-deletes. Upload idempotency lives here rather than on `Image`,
  * so a key reuses a file only while that exact association is active.
@@ -1023,9 +1055,7 @@ export const entityAttachment = pgTable(
   "EntityAttachment",
   {
     id: pkUuid(),
-    subjectEntityId: uuid("subjectEntityId")
-      .notNull()
-      .references(() => entityIdentity.id),
+    ...entityRef({ nullable: false }),
     imageId: uuid("imageId")
       .notNull()
       .references(() => image.id),
@@ -1045,21 +1075,22 @@ export const entityAttachment = pgTable(
     ...softDeletedAt(),
   },
   (table) => [
-    uniqueIndex("EntityAttachment_subject_image_key")
-      .on(table.subjectEntityId, table.imageId)
+    entityRefFk("EntityAttachment_entity_fk", table),
+    uniqueIndex("EntityAttachment_entity_image_key")
+      .on(table.entityId, table.imageId)
       .where(sql`${table.deletedAt} IS NULL`),
-    uniqueIndex("EntityAttachment_subject_singular_role_key")
-      .on(table.subjectEntityId, table.role)
+    uniqueIndex("EntityAttachment_entity_singular_role_key")
+      .on(table.entityId, table.role)
       .where(
         sql`${table.role} IN ('cover', 'logo') AND ${table.deletedAt} IS NULL`,
       ),
-    uniqueIndex("EntityAttachment_subject_idempotency_key")
-      .on(table.subjectEntityId, table.idempotencyKey)
+    uniqueIndex("EntityAttachment_entity_idempotency_key")
+      .on(table.entityId, table.idempotencyKey)
       .where(
         sql`${table.idempotencyKey} IS NOT NULL AND ${table.deletedAt} IS NULL`,
       ),
-    index("EntityAttachment_subject_order_idx").on(
-      table.subjectEntityId,
+    index("EntityAttachment_entity_order_idx").on(
+      table.entityId,
       table.sortOrder,
     ),
     index("EntityAttachment_imageId_idx").on(table.imageId),
@@ -1070,6 +1101,14 @@ export const entityAttachment = pgTable(
     check(
       "EntityAttachment_purpose_check",
       sql`${table.purpose} IS NULL OR ${table.purpose} IN ('item', 'label')`,
+    ),
+    check(
+      "EntityAttachment_purpose_kind_check",
+      sql`${table.purpose} IS NULL OR ${table.entityKind} = 'product'`,
+    ),
+    check(
+      "EntityAttachment_documentKind_kind_check",
+      sql`${table.documentKind} IS NULL OR ${table.entityKind} = 'purchase'`,
     ),
   ],
 );
@@ -1585,7 +1624,14 @@ export const run = pgTable(
   ],
 );
 
-/** Explicit no-op-validation/enrichment targets; RunMutation remains writes-only. */
+const runTargetKinds = ["purchase", "product", "image"] as const;
+
+/**
+ * Explicit no-op-validation/enrichment targets; RunMutation remains
+ * writes-only. A target names a purchase, product or image by `entityRef`;
+ * the composite FK targets `Entity`, whose rows outlive a hard delete, so a
+ * target keeps its tombstone the way the old Purchase FK's policy asked.
+ */
 export const runTarget = pgTable(
   "RunTarget",
   {
@@ -1593,15 +1639,7 @@ export const runTarget = pgTable(
     runId: uuid("runId")
       .notNull()
       .references(() => run.id),
-    purchaseId: uuid("purchaseId")
-      .$type<PurchaseId>()
-      .references(() => purchase.id),
-    productId: uuid("productId")
-      .$type<ProductId>()
-      .references(() => product.id),
-    imageId: uuid("imageId")
-      .$type<ImageId>()
-      .references(() => image.id),
+    ...entityRef({ nullable: false, kinds: runTargetKinds }),
     /** Picker order within a photo-inventory run; the tiebreak when capture times collide. */
     position: integer("position"),
     vendorAccountId: uuid("vendorAccountId").references(() => vendorAccount.id),
@@ -1634,24 +1672,19 @@ export const runTarget = pgTable(
   },
   (table) => [
     index("RunTarget_run_idx").on(table.runId),
-    index("RunTarget_purchase_idx").on(table.purchaseId),
-    index("RunTarget_product_idx").on(table.productId),
-    index("RunTarget_image_idx").on(table.imageId),
+    // The target's own lookups (product/purchase/image merge and delete).
+    index("RunTarget_entity_idx").on(table.entityId),
+    entityRefFk("RunTarget_entity_fk", table),
     index("RunTarget_deviceWorkDeviceId_idx")
       .on(table.deviceWorkDeviceId)
       .where(sql`${table.deviceWorkDeviceId} IS NOT NULL`),
-    uniqueIndex("RunTarget_run_purchase_key")
-      .on(table.runId, table.purchaseId)
-      .where(sql`${table.purchaseId} IS NOT NULL`),
-    uniqueIndex("RunTarget_run_product_key")
-      .on(table.runId, table.productId)
-      .where(sql`${table.productId} IS NOT NULL`),
-    uniqueIndex("RunTarget_run_image_key")
-      .on(table.runId, table.imageId)
-      .where(sql`${table.imageId} IS NOT NULL`),
+    uniqueIndex("RunTarget_run_entity_key").on(table.runId, table.entityId),
     check(
-      "RunTarget_exactly_one_target_check",
-      sql`((${table.purchaseId} IS NOT NULL)::int + (${table.productId} IS NOT NULL)::int + (${table.imageId} IS NOT NULL)::int) = 1`,
+      "RunTarget_entityKind_check",
+      sql`${table.entityKind} IN (${sql.join(
+        runTargetKinds.map((kind) => sql.raw(`'${kind}'`)),
+        sql`, `,
+      )})`,
     ),
     check(
       "RunTarget_state_check",
@@ -2094,6 +2127,8 @@ export const runApproval = pgTable(
   ],
 );
 
+const runFindingKinds = ["purchase", "expense", "product", "run"] as const;
+
 export const runFinding = pgTable(
   "RunFinding",
   {
@@ -2103,8 +2138,7 @@ export const runFinding = pgTable(
       .notNull()
       .$type<LedgerPartyId>()
       .references(() => ledgerParty.id),
-    targetKind: text("targetKind").notNull(),
-    targetId: uuid("targetId").notNull(),
+    ...entityRef({ nullable: false, kinds: runFindingKinds }),
     kind: text("kind").notNull(),
     summary: text("summary").notNull(),
     proposedFix: jsonb("proposedFix"),
@@ -2121,8 +2155,8 @@ export const runFinding = pgTable(
     uniqueIndex("RunFinding_open_evidence_key")
       .on(
         table.ledgerPartyId,
-        table.targetKind,
-        table.targetId,
+        table.entityKind,
+        table.entityId,
         table.kind,
         table.evidenceFingerprint,
       )
@@ -2133,16 +2167,12 @@ export const runFinding = pgTable(
       sql`${table.status} IN ('open', 'applied', 'dismissed')`,
     ),
     check(
-      "RunFinding_target_check",
-      sql`${table.targetKind} IN ('purchase', 'expense', 'product', 'run')`,
+      "RunFinding_entityKind_check",
+      sql`${table.entityKind} IN ('purchase', 'expense', 'product', 'run')`,
     ),
     // Findings stay live pointers (ADR 0006): a merge repoints them and a
     // removal deletes them, so the FK always names a live identity.
-    foreignKey({
-      name: "RunFinding_target_fk",
-      columns: [table.targetId, table.targetKind],
-      foreignColumns: [entityIdentity.id, entityIdentity.kind],
-    }),
+    entityRefFk("RunFinding_entity_fk", table),
   ],
 );
 
@@ -3180,7 +3210,7 @@ export const imageRelations = relations(image, ({ many }) => ({
 
 /**
  * One relation per subject kind; ids are unique across entity tables, so a
- * join on `subjectEntityId` needs no kind filter.
+ * join on `entityId` needs no kind filter.
  */
 export const entityAttachmentRelations = relations(
   entityAttachment,
@@ -3190,43 +3220,43 @@ export const entityAttachmentRelations = relations(
       references: [image.id],
     }),
     product: one(product, {
-      fields: [entityAttachment.subjectEntityId],
+      fields: [entityAttachment.entityId],
       references: [product.id],
     }),
     location: one(location, {
-      fields: [entityAttachment.subjectEntityId],
+      fields: [entityAttachment.entityId],
       references: [location.id],
     }),
     gardenEntry: one(gardenEntry, {
-      fields: [entityAttachment.subjectEntityId],
+      fields: [entityAttachment.entityId],
       references: [gardenEntry.id],
     }),
     recipe: one(recipe, {
-      fields: [entityAttachment.subjectEntityId],
+      fields: [entityAttachment.entityId],
       references: [recipe.id],
     }),
     meal: one(meal, {
-      fields: [entityAttachment.subjectEntityId],
+      fields: [entityAttachment.entityId],
       references: [meal.id],
     }),
     task: one(task, {
-      fields: [entityAttachment.subjectEntityId],
+      fields: [entityAttachment.entityId],
       references: [task.id],
     }),
     purchase: one(purchase, {
-      fields: [entityAttachment.subjectEntityId],
+      fields: [entityAttachment.entityId],
       references: [purchase.id],
     }),
     project: one(project, {
-      fields: [entityAttachment.subjectEntityId],
+      fields: [entityAttachment.entityId],
       references: [project.id],
     }),
     cookbook: one(cookbook, {
-      fields: [entityAttachment.subjectEntityId],
+      fields: [entityAttachment.entityId],
       references: [cookbook.id],
     }),
     vendor: one(vendor, {
-      fields: [entityAttachment.subjectEntityId],
+      fields: [entityAttachment.entityId],
       references: [vendor.id],
     }),
   }),
@@ -3494,7 +3524,7 @@ export const aiAnalysis = pgTable(
   "AiAnalysis",
   {
     id: pkUuid(),
-    entityKind: text("entityKind").notNull().$type<AiAnalysisEntityType>(),
+    entityKind: text("entityKind").notNull().$type<AiAnalysisEntityKind>(),
     entityId: uuid("entityId"),
     feature: text("feature").notNull(),
     provider: text("provider"),
@@ -3573,8 +3603,7 @@ export const aiUsage = pgTable(
     applicationCacheStatus: text("applicationCacheStatus").$type<
       "hit" | "miss" | "none"
     >(),
-    entityKind: text("entityKind"),
-    entityId: uuid("entityId"),
+    ...entityRef<string>({ nullable: true }),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     ...softDeletedAt(),
   },
@@ -3592,11 +3621,7 @@ export const aiUsage = pgTable(
     index("AiUsage_run_idx").on(table.runId),
     // Both columns are nullable (a call may have no subject entity); MATCH
     // SIMPLE skips the FK check whenever either is null (ADR 0006).
-    foreignKey({
-      name: "AiUsage_entity_fk",
-      columns: [table.entityId, table.entityKind],
-      foreignColumns: [entityIdentity.id, entityIdentity.kind],
-    }),
+    entityRefFk("AiUsage_entity_fk", table),
   ],
 );
 
@@ -3613,7 +3638,7 @@ export const mcpToolCall = pgTable(
     // Nullable: some tools span entities or have no entity at all, and old
     // payload-free events remain unattributable when the tool name alone is
     // ambiguous. Preserve null rather than guessing historical ownership.
-    entity: text("entity").$type<Entity>(),
+    entityKind: text("entityKind").$type<Entity>(),
     release: text("release").notNull(),
     occurredAt: timestamp("occurredAt", { mode: "date" }).notNull(),
     ingestedAt: timestamp("ingestedAt", { mode: "date" })
@@ -3643,7 +3668,7 @@ export const mcpToolCall = pgTable(
     index("McpToolCall_outcome_idx").on(table.outcome),
     index("McpToolCall_release_idx").on(table.release),
     index("McpToolCall_entity_occurredAt_idx").on(
-      table.entity,
+      table.entityKind,
       table.occurredAt.desc(),
     ),
   ],
@@ -3653,8 +3678,7 @@ export const auditLog = pgTable(
   "AuditLog",
   {
     id: pkUuid(),
-    entityType: text("entityType").notNull().$type<AuditEntityType>(),
-    entityId: uuid("entityId").notNull(),
+    ...entityRef<AuditEntityKind>({ nullable: false }),
     action: text("action").notNull(), // 'create', 'update', 'delete'
     changes:
       jsonb("changes").$type<Record<string, { from: unknown; to: unknown }>>(),
@@ -3681,11 +3705,7 @@ export const auditLog = pgTable(
     ),
     // Real identity FK (ADR 0006): the row names an entity that exists, of
     // the kind it claims. History keeps the identity that received the event.
-    foreignKey({
-      name: "AuditLog_entity_fk",
-      columns: [table.entityId, table.entityType],
-      foreignColumns: [entityIdentity.id, entityIdentity.kind],
-    }),
+    entityRefFk("AuditLog_entity_fk", table),
     index("AuditLog_runId_idx")
       .on(table.runId)
       .where(sql`${table.runId} IS NOT NULL`),
@@ -3693,8 +3713,8 @@ export const auditLog = pgTable(
       "AuditLog_channel_check",
       sql`${table.channel} IN ('web', 'api', 'mcp', 'caldav', 'system')`,
     ),
-    index("AuditLog_entityType_entityId_createdAt_idx").on(
-      table.entityType,
+    index("AuditLog_entityKind_entityId_createdAt_idx").on(
+      table.entityKind,
       table.entityId,
       table.createdAt.desc(),
     ),
