@@ -62,7 +62,7 @@ struct LibrarySightingBuilderTests {
         #expect(fields.camera?.make == "Apple")
         #expect(fields.camera?.model == "iPhone 17 Pro")
         // The commit path never carries match evidence — that only exists for a library-scan
-        // match built via `createInput`.
+        // match built via `recordItem`.
         #expect(fields.hashDistance == nil)
         #expect(fields.aspectGate == nil)
     }
@@ -74,9 +74,9 @@ struct LibrarySightingBuilderTests {
         #expect(fields.camera == nil)
     }
 
-    @Test func createInputSetsMatchKindToLibraryMatchWithItsEvidence() {
+    @Test func recordItemSetsMatchKindToLibraryMatchWithItsEvidence() {
         let metadata = LibrarySightingBuilder.metadata(from: FixtureFacts(), cloudIdentifier: "cloud-1")
-        let input = LibrarySightingBuilder.createInput(
+        let input = LibrarySightingBuilder.recordItem(
             imageId: ImageCode("IMG-0001"), deviceId: "DEV-0001", metadata: metadata,
             installationID: "device-1", hashDistance: 4, aspectGate: true)
 
