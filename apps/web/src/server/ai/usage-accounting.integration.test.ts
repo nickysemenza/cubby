@@ -7,6 +7,8 @@
  * only at the socket — so a second writer (a middleware plus a hand-written
  * record, say) shows up as a second row.
  */
+import type { ChatMiddleware } from "@tanstack/ai";
+import { fromAny, fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -19,6 +21,7 @@ import { providerFor } from "~/server/ai/models";
 import {
   recordApplicationCacheHit,
   recordFeatureUsage,
+  runStructuredFeature,
 } from "~/server/ai/run-feature";
 import { aiUsage } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -82,6 +85,41 @@ describe("AiUsage accounting", () => {
       runId,
       inputTokens: 4,
       cacheStatus: "none",
+    });
+  });
+
+  it("records one row for one location vision model call", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_action" });
+    // The fake `chat` fires the runner's usage middleware as the real engine
+    // does on finish, so the row count reflects every writer the runner
+    // attaches to a call: a second one would show up as a second row.
+    const fakeChat = async (args: { middleware?: ChatMiddleware[] }) => {
+      for (const middleware of args.middleware ?? []) {
+        await middleware.onFinish?.(
+          fromPartial({}),
+          fromPartial({
+            usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+            duration: 12,
+          }),
+        );
+      }
+      return { description: "Synthetic shelf of bins.", confidence: "high" };
+    };
+
+    await runStructuredFeature(
+      LOCATION_DESCRIPTION_FEATURE,
+      { systemPrompts: ["frame"], messages: [{ role: "user", content: "x" }] },
+      { db: ctx.db, runId, operation: "locationDescription" },
+      { chat: fromAny(fakeChat) },
+    );
+
+    const rows = await usageRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      feature: "location-description",
+      operation: "locationDescription",
+      inputTokens: 10,
+      outputTokens: 5,
     });
   });
 
