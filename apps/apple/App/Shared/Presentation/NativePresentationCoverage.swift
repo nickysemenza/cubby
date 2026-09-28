@@ -145,6 +145,7 @@ enum NativePresentationCoverage {
             .expenseSettlement,
             .imageAssociations,
             .runAiUsage,
+            .runLiveProgress,
             .runChanges:
             .unsupported("This detail is available on web.")
         }
