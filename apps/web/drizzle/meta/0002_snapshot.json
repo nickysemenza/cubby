@@ -10168,8 +10168,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "pendingDataBase64Url": {
-          "name": "pendingDataBase64Url",
+        "pendingObjectKey": {
+          "name": "pendingObjectKey",
           "type": "text",
           "primaryKey": false,
           "notNull": false
