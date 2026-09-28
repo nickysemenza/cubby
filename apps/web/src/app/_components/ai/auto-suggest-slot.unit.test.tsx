@@ -4,7 +4,7 @@ import { fireEvent } from "@testing-library/react";
 import { FormProvider, useForm, type FieldValues } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { ai } from "~/lib/ai.functions";
+import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { AutoSuggestSlot } from "./auto-suggest-slot";

@@ -18,7 +18,7 @@ import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { shortcodeHead } from "~/lib/page-title";
 

@@ -33,10 +33,10 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import type { InventoryDialogItem } from "~/app/_components/inventory/dialog-item";
-import { inventory } from "~/app/inventory/inventory.functions";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Stack } from "~/components/layout";
 import { QuantityInput } from "~/components/ui/quantity-input";
+import { inventory } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
 

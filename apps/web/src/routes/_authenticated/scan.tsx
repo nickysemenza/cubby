@@ -3,9 +3,9 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 
 import { useProductLookupInvalidation } from "~/app/_components/inventory/hooks/useInventoryMutation";
-import { product } from "~/app/products/product.functions";
 import { ScanWorkbench } from "~/app/scan/ScanWorkbench";
 import { Page } from "~/components/page/Page";
+import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
 import type { ResolvedScanCode } from "~/lib/scan-code";

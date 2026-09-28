@@ -2,7 +2,7 @@ import type { EntityTimelineOut } from "@cubby/schemas/entity-timeline";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { entityTimeline } from "~/entities/entity-timeline.functions";
+import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityTimeline } from "./entity-timeline";

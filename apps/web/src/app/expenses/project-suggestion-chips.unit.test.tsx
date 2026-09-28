@@ -4,7 +4,7 @@ import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { recommendations } from "~/lib/recommendations.functions";
+import { recommendations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { ProjectSuggestionChips } from "./project-suggestion-chips";

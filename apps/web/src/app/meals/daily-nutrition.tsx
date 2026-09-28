@@ -24,12 +24,12 @@ import { Input } from "~/components/ui/input";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useHouseholdToday } from "~/hooks/use-household-today";
+import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import { AddFoodDialog } from "./add-food-dialog";
 import { NutritionSummary } from "./meal-nutrition-summary";
 import { RecipeFoodDialog } from "./meal-preparation/recipe-food-dialog";
-import { meal } from "./meal.functions";
 
 export function DailyNutrition({
   date,

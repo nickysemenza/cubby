@@ -14,9 +14,9 @@ import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { z } from "zod";
 
-import { task } from "~/app/tasks/task.functions";
 import { showErrorToast } from "~/components/feedback/error-details";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import type { TaskBoardPatch } from "./board-types";
 

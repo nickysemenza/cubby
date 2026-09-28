@@ -15,9 +15,11 @@ import {
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { inventory } from "~/app/inventory/inventory.functions";
-import { entityGraph } from "~/entities/entity-graph.functions";
-import { recommendations } from "~/lib/recommendations.functions";
+import {
+  inventory,
+  entityGraph,
+  recommendations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 

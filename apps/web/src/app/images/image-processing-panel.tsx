@@ -17,9 +17,11 @@ import {
 } from "~/components/ui/dialog";
 import { Image } from "~/components/ui/image";
 import { Textarea } from "~/components/ui/textarea";
-import { image as imageOperations } from "~/entities/image.functions";
-import { activity } from "~/lib/activity.functions";
-import { imageProcessing } from "~/lib/image-processing.functions";
+import {
+  image as imageOperations,
+  activity,
+  imageProcessing,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 
 function ImageAnalysisHistory({
   id,

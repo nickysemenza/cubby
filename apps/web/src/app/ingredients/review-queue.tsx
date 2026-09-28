@@ -12,11 +12,11 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyActions, EmptyDescription } from "~/components/ui/empty";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { ingredient } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 import type { EnrichmentEditorHandle } from "./enrichment-editor";
-import { ingredient } from "./ingredient.functions";
 import { type MergeOption, ReviewCard } from "./review-card";
 import { useProposalCache } from "./use-proposal-cache";
 import { hasUsdaLink } from "./workbench-editor-core";

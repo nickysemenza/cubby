@@ -9,7 +9,6 @@ import {
   type ImpactPreviewOperations,
   MergeImpactPreview,
 } from "~/app/_components/actions/entity-operation-impact-preview";
-import { product } from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -26,6 +25,7 @@ import {
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { entities } from "~/entities/entities";
 import type { MergeDisplayRow, MergeableConfig } from "~/entities/types";
+import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 /** Display text comes from `mergeable.rowLabel`/`rowStat`, not a hardcoded
  * `name` field — a row shape like `PurchaseOut` (no `name`) works here too. */

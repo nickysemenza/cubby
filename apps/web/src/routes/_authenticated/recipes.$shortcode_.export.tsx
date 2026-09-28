@@ -40,7 +40,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { scaleNutrition } from "~/lib/nutrition-estimates";
 import { pageTitle } from "~/lib/page-title";

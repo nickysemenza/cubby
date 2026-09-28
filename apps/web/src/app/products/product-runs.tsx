@@ -8,8 +8,8 @@ import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail
 import { Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
 import type { RunSummary } from "~/contracts/run.contract";
-import { entityListFor } from "~/entities/entity-list.functions";
-import { run as runOperations } from "~/entities/run.functions";
+import { entityListFor } from "~/entities/entity-list";
+import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { purchaseLabel } from "~/lib/purchase-label";
 
 import { runHref } from "../purchases/purchase-import-links";

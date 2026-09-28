@@ -35,7 +35,6 @@ import type { ReactNode } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { mealDateLabel } from "~/app/meals/meal-format";
-import { product as productOperations } from "~/app/products/product.functions";
 import { attentionEvidence } from "~/app/projects/attention-presentation";
 import { formatDateWithYear } from "~/app/projects/project-formatting";
 import {
@@ -56,9 +55,12 @@ import {
 import { humanize } from "~/entities/filters";
 import type { ProblemQuery } from "~/entities/problem-query";
 import { problemQuery } from "~/entities/problem-registry";
-import { maintenance } from "~/lib/maintenance.functions";
+import {
+  product as productOperations,
+  maintenance,
+  problems as problemOperations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { countLabel } from "~/lib/pluralize";
-import { problems as problemOperations } from "~/lib/problems.functions";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
 

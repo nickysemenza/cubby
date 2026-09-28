@@ -9,8 +9,8 @@ import { useMutation } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
 
-import { product } from "~/app/products/product.functions";
 import { showErrorToast } from "~/components/feedback/error-details";
+import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
 

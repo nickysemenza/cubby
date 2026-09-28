@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { search } from "~/lib/search.functions";
+import { search } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { getSearchResultRoute } from "./search-utils";
 

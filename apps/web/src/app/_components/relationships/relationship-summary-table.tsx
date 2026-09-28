@@ -21,7 +21,7 @@ import { VendorMark } from "~/components/entity/vendor-cell";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
-import { relatedData } from "~/lib/related-data.functions";
+import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 
 import { useTableColumnLayout } from "../data-table/column-layout";

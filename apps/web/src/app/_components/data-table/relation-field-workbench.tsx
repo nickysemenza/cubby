@@ -12,11 +12,11 @@ import {
   isBrowserRoutedEntity,
   type EntityDetailRoute,
 } from "~/entities/entities";
-import { entityGraph } from "~/entities/entity-graph.functions";
 import {
   formatFieldProvenance,
   isInspectableFieldProvenance,
 } from "~/entities/field-provenance";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { TableLink } from "../table/TableLink";
 import { TableCellWorkbench } from "./table-cell-workbench";

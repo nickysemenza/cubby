@@ -9,15 +9,17 @@ import { DailyPasses } from "~/app/_components/home/QuickActionsCard";
 import { RecentActivityFeed } from "~/app/_components/home/RecentActivityFeed";
 import { RecordedSpendCard } from "~/app/_components/home/RecordedSpendCard";
 import { ProblemsBanner } from "~/app/_components/homepage/problems-banner";
-import { expense } from "~/app/expenses/expense.functions";
-import { location } from "~/app/locations/location.functions";
 import { TodayNutrition } from "~/app/meals/daily-nutrition";
-import { meal } from "~/app/meals/meal.functions";
-import { task } from "~/app/tasks/task.functions";
 import { CollapsibleSection, Grid, Section } from "~/components/layout";
 import { Page } from "~/components/page/Page";
+import {
+  expense,
+  location,
+  meal,
+  task,
+  problems,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
-import { problems } from "~/lib/problems.functions";
 
 const HomeInsights = lazy(async () => {
   const module = await import("~/app/_components/home/HomeInsights");

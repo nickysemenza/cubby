@@ -33,7 +33,7 @@ import { CoverageChips } from "~/app/problems/components/unit-coverage-fix";
 import {
   createManyProductsStream,
   markProductsUsdaUnavailableStream,
-} from "~/app/products/product.functions";
+} from "~/app/products/product-streams";
 import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -44,10 +44,13 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import { useHydrated } from "~/hooks/useHydrated";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { ai } from "~/lib/ai.functions";
+import {
+  ai,
+  ingredient,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
@@ -56,7 +59,6 @@ import {
   type EquivalenceDraft,
   enrichmentWorkbenchQueryInput,
 } from "./equivalence-workbench-link";
-import { ingredient } from "./ingredient.functions";
 import { ReviewQueue } from "./review-queue";
 import { SuggestionReviewTray } from "./suggestion-review-tray";
 import {

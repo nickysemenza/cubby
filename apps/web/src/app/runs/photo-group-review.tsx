@@ -61,8 +61,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { photoImport } from "~/entities/run.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { photoImport } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import {
   RUN_TARGET_STATE_LABEL,

@@ -21,7 +21,7 @@ import {
   isBrowserRoutedEntity,
 } from "~/entities/entities";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
-import { relatedData } from "~/lib/related-data.functions";
+import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn } from "~/lib/utils";
 
 import { TableLink } from "../table/TableLink";

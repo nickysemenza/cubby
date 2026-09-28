@@ -9,12 +9,12 @@ import { useState } from "react";
 import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
-import { recipeStreams } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { recipeStreams } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 
 import { CookbookRunReportPanel } from "./cookbook-run-report";

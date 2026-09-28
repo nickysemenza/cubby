@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/run";
 
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
-import { run } from "~/entities/run.functions";
+import { run } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { defineListOverride } from "./types";
 

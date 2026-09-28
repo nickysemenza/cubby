@@ -831,7 +831,7 @@ between the web app and the iframes.
 - **Contract:** `@cubby/usda-contract` defines endpoints with Zod schemas (ts-rest).
 - **Schemas:** `@cubby/usda-schemas` for shared entity types.
 - **Client:** [apps/web/src/server/clients/usda.ts](apps/web/src/server/clients/usda.ts) wraps the ts-rest client.
-- **Browser adapter:** [apps/web/src/entities/usda.functions.ts](apps/web/src/entities/usda.functions.ts).
+- **Browser adapter:** [apps/web/src/contracts/usda.contract.ts](apps/web/src/contracts/usda.contract.ts) (cache tags and freshness live on its members; the generated `catalog.gen.ts` resolves them).
 - Service layer processes USDA portion data through WASM for conversions.
 
 ```ts

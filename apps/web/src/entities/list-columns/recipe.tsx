@@ -30,7 +30,6 @@ import {
 } from "~/app/_components/recipe/recipe-utils";
 import { TruncatedList } from "~/app/_components/TruncatedList";
 import { totalsLookStuck } from "~/app/recipes/recipe-totals-staleness";
-import { recipe as recipeOperations } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
@@ -38,10 +37,13 @@ import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
 import type { EntityListParamsByEntity } from "~/entities/generated/entity-lists.gen";
+import {
+  recipe as recipeOperations,
+  relatedData,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { scaleEstimate } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { countLabel } from "~/lib/pluralize";
-import { relatedData } from "~/lib/related-data.functions";
 import { formatCurrency } from "~/lib/utils";
 
 import { defineListOverride } from "./types";

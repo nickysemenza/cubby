@@ -3,10 +3,10 @@ import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
-import { search } from "~/lib/search.functions";
+import { search } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import type { ComboboxItem } from "./combobox-types";
 

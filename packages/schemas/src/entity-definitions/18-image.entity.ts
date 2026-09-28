@@ -39,7 +39,7 @@ export default defineEntity({
     listOverride: null,
     detailOverride: {
       query: {
-        module: "~/entities/image.functions",
+        module: "~/entities/image-queries",
         export: "imageDetailQuery",
       },
     },

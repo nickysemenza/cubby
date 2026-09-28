@@ -169,9 +169,7 @@
     },
     {
       "files": [
-        "apps/web/src/app/**/*.functions.ts",
-        "apps/web/src/entities/**/*.functions.ts",
-        "apps/web/src/lib/**/*.functions.ts"
+        "apps/web/src/integrations/tanstack-query/operation-overrides.ts"
       ],
       "rules": {
         "no-restricted-imports": [
@@ -181,19 +179,19 @@
               {
                 "name": "@tanstack/react-start",
                 "allowTypeImports": true,
-                "message": "Client operation modules (*.functions.ts) must stay free of eager server/runtime imports. Import types only, and dispatch through ~/server-functions/start-operation-dispatch.functions."
+                "message": "The client operation overrides (loaded by the browser catalog) must stay free of eager server/runtime imports. Import types only, and dispatch through ~/server-functions/start-operation-dispatch.functions."
               },
               {
                 "name": "@cubby/db",
                 "allowTypeImports": true,
-                "message": "Client operation modules (*.functions.ts) must stay free of eager server/runtime imports. Import types only, and dispatch through ~/server-functions/start-operation-dispatch.functions."
+                "message": "The client operation overrides (loaded by the browser catalog) must stay free of eager server/runtime imports. Import types only, and dispatch through ~/server-functions/start-operation-dispatch.functions."
               }
             ],
             "patterns": [
               {
                 "group": ["~/server/**"],
                 "allowTypeImports": true,
-                "message": "Client operation modules (*.functions.ts) must stay free of eager server/runtime imports. Import types only, and dispatch through ~/server-functions/start-operation-dispatch.functions."
+                "message": "The client operation overrides (loaded by the browser catalog) must stay free of eager server/runtime imports. Import types only, and dispatch through ~/server-functions/start-operation-dispatch.functions."
               },
               {
                 "group": [
@@ -201,7 +199,7 @@
                   "!~/server-functions/start-operation-dispatch.functions"
                 ],
                 "allowTypeImports": true,
-                "message": "Client operation modules (*.functions.ts) must stay free of eager server/runtime imports. Import types only, and dispatch through ~/server-functions/start-operation-dispatch.functions."
+                "message": "The client operation overrides (loaded by the browser catalog) must stay free of eager server/runtime imports. Import types only, and dispatch through ~/server-functions/start-operation-dispatch.functions."
               }
             ]
           }

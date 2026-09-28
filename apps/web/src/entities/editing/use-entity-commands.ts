@@ -3,14 +3,14 @@ import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
 import {
+  countPrimaryDeletedReferences,
+  parseEntityWriteResult,
+} from "~/entities/entity-mutation";
+import {
   executeEntityMutationCommand,
   type EntityMutationTransport,
 } from "~/entities/entity-mutation-command";
-import {
-  countPrimaryDeletedReferences,
-  entityMutation,
-  parseEntityWriteResult,
-} from "~/entities/entity-mutation.functions";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getAppErrorDetails } from "~/lib/error-utils";
 
 import type { StandardEntity } from "../entity-contracts";

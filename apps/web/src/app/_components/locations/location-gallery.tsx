@@ -14,13 +14,13 @@ import {
   useState,
 } from "react";
 
-import { location } from "~/app/locations/location.functions";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { useIsMobile } from "~/hooks/useMobile";
+import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { ProductImageSummariesProvider } from "../products/product-image-summaries";
 import { type EmptyFilter, GalleryHeader } from "./gallery-header";

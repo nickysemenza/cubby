@@ -19,8 +19,8 @@ import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
-import { cookbook } from "~/entities/cookbook.functions";
 import { relationshipFieldProvenance } from "~/entities/field-provenance";
+import { cookbook } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { defineListOverride } from "./types";
 

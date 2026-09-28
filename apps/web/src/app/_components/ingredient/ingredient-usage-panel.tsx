@@ -3,7 +3,6 @@ import type { IngredientUsageRow } from "@cubby/schemas/ingredient-usage";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
-import { recipe } from "~/app/recipes/recipe.functions";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import {
@@ -14,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getAppErrorDetails } from "~/lib/error-utils";
 
 import { VisualizationPlaceholder } from "../visualizations/visualization-placeholder";

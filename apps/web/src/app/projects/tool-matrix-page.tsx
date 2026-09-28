@@ -64,12 +64,12 @@ import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { toolTimelineConflict } from "~/lib/tool-timeline";
 import { cn, formatCurrency } from "~/lib/utils";
 
 import { PROJECT_STATUS_LABELS } from "./project-formatting";
-import { project } from "./project.functions";
 
 /**
  * How long a cell waits before it commits. A click-and-revert inside this

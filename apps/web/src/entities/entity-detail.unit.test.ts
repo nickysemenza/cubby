@@ -1,7 +1,7 @@
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
-import { EntityDetailError, entityDetailFor } from "./entity-detail.functions";
+import { EntityDetailError, entityDetailFor } from "~/entities/entity-detail";
 
 describe("entity detail transport contract", () => {
   it("uses the normalized operation detail query key", () => {

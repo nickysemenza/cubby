@@ -11,13 +11,15 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 
-import { entityMutation } from "~/entities/entity-mutation.functions";
-import { ai } from "~/lib/ai.functions";
+import {
+  entityMutation,
+  ai,
+  meal,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 
 import { type AddToMealOperations, AddToMeal } from "./add-to-meal";
-import { meal } from "./meal.functions";
 
 const recipeId = testShortcode("recipe", "RCP-4K7M");
 const createdMeals: MealCreateInput[] = [];

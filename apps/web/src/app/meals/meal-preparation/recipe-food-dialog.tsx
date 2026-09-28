@@ -9,8 +9,8 @@ import { toast } from "sonner";
 import { showErrorToast } from "~/components/feedback/error-details";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
+import { meal as mealOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 
-import { meal as mealOperations } from "../meal.functions";
 import { useInvalidateMeals } from "../use-meal-mutations";
 import { PortionSheet } from "./portion-sheet";
 import { useMealPreparationController } from "./use-meal-preparation-controller";

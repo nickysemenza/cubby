@@ -36,7 +36,7 @@ import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import type { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { entityListFor } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list";
 import { purchaseLabel } from "~/lib/purchase-label";
 
 import {

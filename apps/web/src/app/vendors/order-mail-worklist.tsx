@@ -18,9 +18,8 @@ import { Button } from "~/components/ui/button";
 import { NativeSelect } from "~/components/ui/native-select";
 import { StatusText } from "~/components/ui/status-text";
 import { TechnicalError } from "~/components/ui/technical-error";
+import { vendor } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
-
-import { vendor } from "./vendor.functions";
 
 type MailEvent = VendorOrderMailOut["items"][number]["events"][number];
 type MailCandidate = MailEvent["candidates"][number];

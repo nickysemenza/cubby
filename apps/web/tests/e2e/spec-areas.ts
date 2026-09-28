@@ -147,7 +147,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/server/repo/recipe/**`,
       `${WEB}/src/server/repo/image.ts`,
       `${WEB}/src/server/repo/import-recipe-convert.ts`,
-      `${WEB}/src/entities/cookbook.functions.ts`,
+      `${WEB}/src/contracts/cookbook.contract.ts`,
     ],
   },
   {
@@ -399,7 +399,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/server/repo/product/**`,
       `${WEB}/src/server/repo/image.ts`,
       `${WEB}/src/server/services/image-storage.service.ts`,
-      `${WEB}/src/lib/image.functions.ts`,
+      `${WEB}/src/contracts/image-upload.contract.ts`,
     ],
   },
   {

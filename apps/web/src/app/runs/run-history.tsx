@@ -30,7 +30,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
-import { activity } from "~/lib/activity.functions";
+import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 
 export interface RunHistoryFilters extends Partial<ActivityListInput> {

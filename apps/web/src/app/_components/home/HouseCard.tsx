@@ -13,9 +13,9 @@ import {
 } from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { formatDateRange } from "~/app/projects/project-formatting";
-import { task } from "~/app/tasks/task.functions";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
+import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 
 export const TODAY_ENTITY_LINK_CLASS = "min-h-11 items-center sm:min-h-0";

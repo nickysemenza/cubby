@@ -41,6 +41,7 @@ import { createPopoverHandle, PopoverTrigger } from "~/components/ui/popover";
 import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
 import { ChoiceSwitcher } from "~/components/ui/view-switcher";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
+import { calendar } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
@@ -64,7 +65,6 @@ import {
 } from "./calendar-period";
 import { CalendarSchedule } from "./calendar-schedule";
 import { EMPTY_DAY_SUMMARY, WeekSummaryGrid } from "./calendar-week-summary";
-import { calendar } from "./calendar.functions";
 
 const CALENDAR_ACTIVATION = {
   touchDelayMs: 350,

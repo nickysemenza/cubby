@@ -34,12 +34,15 @@ import {
   entities,
 } from "~/entities/entities";
 import { createEntityDisplayColumns } from "~/entities/entity-display";
-import { entityGraph } from "~/entities/entity-graph.functions";
-import { entityList, entityListFor } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list";
 import {
   listEntities,
   type ListEntity,
 } from "~/entities/generated/entity-lists.gen";
+import {
+  entityGraph,
+  entityList,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import {
   useSectionCollapsed,

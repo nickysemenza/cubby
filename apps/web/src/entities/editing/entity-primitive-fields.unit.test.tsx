@@ -10,7 +10,7 @@ import { z } from "zod";
 import type { EntitySuggestionsOperations } from "~/app/_components/ai/field-suggestion";
 import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
 import { isReferencePickerEntity } from "~/app/_components/combobox/reference-entity-search";
-import { ai } from "~/lib/ai.functions";
+import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {

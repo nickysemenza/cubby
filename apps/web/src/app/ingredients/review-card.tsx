@@ -16,7 +16,7 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import { Spinner } from "~/components/ui/spinner";
-import { usdaFood } from "~/entities/usda.functions";
+import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
 import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
 

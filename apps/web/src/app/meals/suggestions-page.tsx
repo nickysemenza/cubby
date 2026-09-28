@@ -2,7 +2,6 @@ import type { RecipeAvailability } from "@cubby/schemas/availability";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
-import { suggestions } from "~/app/recipes/recipe.functions";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Grid, Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -10,6 +9,7 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { StatusText } from "~/components/ui/status-text";
 import { entityDetailLink } from "~/entities/entities";
+import { suggestions } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { AddToMeal } from "./add-to-meal";
 import {

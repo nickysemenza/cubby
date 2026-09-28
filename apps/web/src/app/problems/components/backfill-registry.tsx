@@ -1,6 +1,6 @@
-import { backfillProductUpcImagesStream } from "~/app/products/product.functions";
+import { backfillProductUpcImagesStream } from "~/app/products/product-streams";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { backfillLocationDescriptionsStream } from "~/lib/ai.functions";
+import { backfillLocationDescriptionsStream } from "~/lib/ai-streams";
 import { countLabel } from "~/lib/pluralize";
 
 import type { BackfillButtonProps } from "./problem-backfill-action";

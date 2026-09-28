@@ -10,10 +10,12 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { NativeSelect } from "~/components/ui/native-select";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { image as imageOperations } from "~/entities/image.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import {
+  image as imageOperations,
+  search,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { search } from "~/lib/search.functions";
 
 export function AttachExistingImageDialog({
   image,

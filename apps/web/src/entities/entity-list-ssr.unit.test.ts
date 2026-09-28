@@ -1,10 +1,10 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { compileEntityListInput, entityListFor } from "~/entities/entity-list";
 import { infiniteOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
 
 import { ensureEntityListSsr, entityListDefaultSort } from "./entity-list-ssr";
-import { compileEntityListInput, entityListFor } from "./entity-list.functions";
 
 afterEach(() => vi.restoreAllMocks());
 

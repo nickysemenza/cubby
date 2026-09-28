@@ -21,10 +21,12 @@ import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { entityMedia } from "~/entities/entity-media.functions";
 import { useHydratedLoading } from "~/hooks/useHydrated";
+import {
+  entityMedia,
+  recommendations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
-import { recommendations } from "~/lib/recommendations.functions";
 
 type ExpenseGroup = Extract<
   EntityRecommendationGroup,
