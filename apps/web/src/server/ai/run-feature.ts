@@ -38,6 +38,7 @@ import {
 import type {
   GatewayCallOptions,
   GatewayMetadata,
+  GatewayResponseFailure,
 } from "~/server/clients/ai-gateway";
 import { wrapAiGatewayError } from "~/server/clients/ai-gateway-error";
 import {
@@ -234,6 +235,13 @@ export async function runStructuredFeature<T>(
     callRequest: AiChatRequest,
     plan: StructuredRunPlan,
   ): Promise<T> => {
+    let responseFailure: GatewayResponseFailure | undefined;
+    const call: GatewayCallOptions = {
+      ...plan.call,
+      onErrorResponse: (failure) => {
+        responseFailure = failure;
+      },
+    };
     const common = {
       systemPrompts: callRequest.systemPrompts,
       messages: callRequest.messages,
@@ -253,7 +261,7 @@ export async function runStructuredFeature<T>(
           // `T`.
           return (await ports.chat({
             ...common,
-            adapter: surfaceStructuredOutputRunErrors(fastAdapter(plan.call), {
+            adapter: surfaceStructuredOutputRunErrors(fastAdapter(call), {
               streaming,
             }),
             modelOptions: openaiOptions({
@@ -267,7 +275,7 @@ export async function runStructuredFeature<T>(
           return (await ports.chat({
             ...common,
             adapter: surfaceStructuredOutputRunErrors(
-              visionBatchAdapter(plan.call),
+              visionBatchAdapter(call),
               { streaming },
             ),
             modelOptions: compatOptions({
@@ -280,10 +288,9 @@ export async function runStructuredFeature<T>(
           // widening, same reason the cast is sound here.
           return (await ports.chat({
             ...common,
-            adapter: surfaceStructuredOutputRunErrors(
-              reasoningAdapter(plan.call),
-              { streaming },
-            ),
+            adapter: surfaceStructuredOutputRunErrors(reasoningAdapter(call), {
+              streaming,
+            }),
             modelOptions: openaiOptions({
               maxTokens: spec.maxTokens,
               effort: spec.effort,
@@ -292,13 +299,17 @@ export async function runStructuredFeature<T>(
       }
     } catch (error) {
       const model = getChatModelConfig(plan.model);
-      throw wrapAiGatewayError(error, {
-        model: plan.model,
-        provider: model.provider,
-        route: model.route,
-        feature: spec.feature,
-        operation: ctx.operation,
-      });
+      throw wrapAiGatewayError(
+        error,
+        {
+          model: plan.model,
+          provider: model.provider,
+          route: model.route,
+          feature: spec.feature,
+          operation: ctx.operation,
+        },
+        responseFailure,
+      );
     }
   };
 

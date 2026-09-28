@@ -759,6 +759,18 @@ export async function seedVendorMailReviewPrerequisite(
     date: "2026-09-10",
     statedTotal: 48,
   });
+  await insertWithShortcode(db, "purchase", {
+    vendorId: vendor.id,
+    orderId: "SYN-OTHER-2002",
+    date: "2026-09-09",
+    statedTotal: 19,
+  });
+  await insertWithShortcode(db, "purchase", {
+    vendorId: vendor.id,
+    orderId: "SYN-OTHER-3003",
+    date: "2026-09-08",
+    statedTotal: 48,
+  });
   const [mail] = await getDb(db)
     .insert(schema.orderMail)
     .values({
@@ -818,6 +830,7 @@ export async function seedFailedVendorMailSearchRun(page: Page, name: string) {
     .limit(1);
   if (!savedRun) throw new Error("Synthetic Gmail search Run was not saved");
   await runVendorMailSearchJob(db, savedRun.id, {
+    reportError: () => "ffffffffffffffffffffffffffffffff",
     search: async () => {
       const provider = Object.assign(new Error("Synthetic upstream failure"), {
         status: 503,

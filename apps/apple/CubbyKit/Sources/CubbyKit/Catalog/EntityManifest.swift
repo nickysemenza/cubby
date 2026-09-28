@@ -109,6 +109,7 @@ public enum DetailRendererID: String, CaseIterable, Codable, Sendable {
     case recipeSource = "recipe-source"
     case recipeTotals = "recipe-totals"
     case recipeYield = "recipe-yield"
+    case runFailureDetails = "run-failure-details"
     case vendorAgentHints = "vendor-agent-hints"
     case wishCandidates = "wish-candidates"
 }

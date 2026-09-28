@@ -1,3 +1,5 @@
+import { savedSentryEventId, sentryEventUrl } from "~/lib/error-diagnostics";
+
 export function TechnicalError({
   error,
   prefix,
@@ -8,7 +10,11 @@ export function TechnicalError({
   tone?: "destructive" | "muted";
 }) {
   const [summary] = error.split("\n", 1);
-  const hasDetails = error.includes("\n");
+  const sentryEventId = savedSentryEventId(error);
+  const details = sentryEventId
+    ? error.replace(`\nSentry event: ${sentryEventId}`, "")
+    : error;
+  const hasDetails = details.includes("\n");
   return (
     <div className="min-w-0 text-sm">
       <p
@@ -17,13 +23,23 @@ export function TechnicalError({
       >
         {prefix}{summary}
       </p>
+      {sentryEventId ? (
+        <a
+          className="mt-1 inline-block text-primary hover:underline"
+          href={sentryEventUrl(sentryEventId)}
+          target="_blank"
+          rel="noreferrer"
+        >
+          View in Sentry
+        </a>
+      ) : null}
       {hasDetails ? (
         <details className="mt-1 text-muted-foreground">
           <summary className="w-fit cursor-pointer font-medium hover:text-foreground">
             Technical details
           </summary>
           <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-xs text-foreground">
-            {error}
+            {details}
           </pre>
         </details>
       ) : null}

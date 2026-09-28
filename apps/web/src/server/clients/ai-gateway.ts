@@ -14,6 +14,13 @@ import {
  */
 export type GatewayMetadata = Record<string, string | number | boolean>;
 
+export interface GatewayResponseFailure {
+  status: number;
+  statusText: string;
+  body: string;
+  retryAfter: string | null;
+}
+
 /** The gateway keeps at most five metadata entries; the rest are dropped. */
 const MAX_METADATA_ENTRIES = 5;
 
@@ -59,6 +66,41 @@ export interface GatewayCallOptions {
    */
   cacheTtlSeconds?: number;
   requestTimeoutMs?: number;
+  /** Preserve a failed HTTP response even if the provider SDK replaces it. */
+  onErrorResponse?: (failure: GatewayResponseFailure) => void;
+}
+
+async function captureFailure(response: Response, opts: GatewayCallOptions) {
+  if (response.ok || !opts.onErrorResponse) return response;
+  const reader = response.clone().body?.getReader();
+  const decoder = new TextDecoder();
+  let body = "";
+  let remaining = 4_096;
+  if (reader) {
+    try {
+      while (remaining > 0) {
+        const part = await reader.read();
+        if (part.done) break;
+        const bytes = part.value.subarray(0, remaining);
+        body += decoder.decode(bytes, { stream: true });
+        remaining -= bytes.length;
+      }
+      body += decoder.decode();
+    } catch (error) {
+      body += `[Gateway error body read failed: ${String(error)}]`;
+    } finally {
+      void reader.cancel().catch(() => {
+        // SILENT: clone cleanup must not replace the original HTTP failure.
+      });
+    }
+  }
+  opts.onErrorResponse({
+    status: response.status,
+    statusText: response.statusText,
+    body,
+    retryAfter: response.headers.get("retry-after"),
+  });
+  return response;
 }
 
 function validatedCacheTtlSeconds(ttl: number | undefined): number | undefined {
@@ -167,22 +209,25 @@ export function gatewayFetch(
 
     const gateway = getAiGateway();
     if (gateway) {
-      return await gateway.run(
-        {
-          provider,
-          endpoint,
-          headers: headerRecord(headers),
-          query: await gatewayQuery(init?.body),
-        },
-        {
-          gateway: {
-            skipCache: opts.skipCache,
-            cacheTtl: cacheTtlSeconds,
-            metadata,
-            requestTimeoutMs: opts.requestTimeoutMs,
+      return captureFailure(
+        await gateway.run(
+          {
+            provider,
+            endpoint,
+            headers: headerRecord(headers),
+            query: await gatewayQuery(init?.body),
           },
-          signal,
-        },
+          {
+            gateway: {
+              skipCache: opts.skipCache,
+              cacheTtl: cacheTtlSeconds,
+              metadata,
+              requestTimeoutMs: opts.requestTimeoutMs,
+            },
+            signal,
+          },
+        ),
+        opts,
       );
     }
 
@@ -200,9 +245,12 @@ export function gatewayFetch(
     if (opts.requestTimeoutMs !== undefined) {
       headers.set("cf-aig-request-timeout", String(opts.requestTimeoutMs));
     }
-    return await fetch(
-      `${GATEWAY_REST_BASE}/${CF_ACCOUNT_ID}/${CF_AIG_GATEWAY_ID}/${provider}/${endpoint}`,
-      { ...init, headers, signal },
+    return captureFailure(
+      await fetch(
+        `${GATEWAY_REST_BASE}/${CF_ACCOUNT_ID}/${CF_AIG_GATEWAY_ID}/${provider}/${endpoint}`,
+        { ...init, headers, signal },
+      ),
+      opts,
     );
   };
 }

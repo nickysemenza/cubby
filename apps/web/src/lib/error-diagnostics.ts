@@ -35,6 +35,9 @@ export type ErrorDiagnostics = z.infer<typeof errorDiagnosticsSchema>;
 export const sentryEventUrl = (eventId: string): string =>
   `https://nicky-semenza.sentry.io/issues/?query=${encodeURIComponent(eventId)}`;
 
+export const savedSentryEventId = (message: string): string | null =>
+  /(?:^|\n)Sentry event: ([a-f\d]{32})(?:\n|$)/iu.exec(message)?.[1] ?? null;
+
 export const CLOUDFLARE_OBSERVABILITY_URL =
   "https://dash.cloudflare.com/?to=/:account/workers-and-pages/observability";
 

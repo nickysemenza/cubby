@@ -148,6 +148,34 @@ describe("gatewayFetch on the Worker binding", () => {
     expect(await response.text()).toBe("event: delta\n");
   });
 
+  it("captures a failed response before an adapter replaces it with a generic error", async () => {
+    const failure = new Response(
+      '{"error":{"message":"Synthetic quota reached"}}',
+      {
+        status: 429,
+        headers: { "retry-after": "30" },
+      },
+    );
+    fakeBinding(failure);
+    const observed: unknown[] = [];
+    const response = await gatewayFetch("openai", {
+      metadata,
+      onErrorResponse: (details) => observed.push(details),
+    })(`${gatewayBaseURL("openai")}/responses`, {
+      method: "POST",
+      body: "{}",
+    });
+
+    expect(response).toBe(failure);
+    expect(observed).toEqual([
+      expect.objectContaining({
+        status: 429,
+        body: '{"error":{"message":"Synthetic quota reached"}}',
+        retryAfter: "30",
+      }),
+    ]);
+  });
+
   it("needs no local credential when the binding is present", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "");
     fakeBinding(new Response("{}"));

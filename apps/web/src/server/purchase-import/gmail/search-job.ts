@@ -15,6 +15,7 @@ import {
   vendor,
   vendorMailSearchJob,
 } from "~/server/db/schema";
+import { reportServerError } from "~/server/errors/report-error";
 import { getDb } from "~/server/repo/database-helpers";
 import { ensureRun } from "~/server/runs/ensure-run";
 
@@ -25,20 +26,22 @@ const activeStatuses = ["queued", "running"];
 
 type SearchJob = typeof vendorMailSearchJob.$inferSelect;
 
-const jobErrorText = (error: Error | string) => {
-  const causes = describeErrorCauses(error, { includeStacks: true }).causes;
-  if (causes.length === 0) return scrubErrorMessage(String(error));
-  const chain = causes
-    .map((cause, index) => {
-      const status = cause.status ? `HTTP ${cause.status} ` : "";
-      const code = cause.code ? `${cause.code}: ` : "";
-      return `${index ? "Caused by: " : ""}${status}${code}${cause.message}`;
-    })
-    .join("\n");
-  const stacks = causes.flatMap((cause) => (cause.stack ? [cause.stack] : []));
-  return stacks.length
-    ? `${chain}\n\nStack traces:\n${stacks.join("\n\n")}`
-    : chain;
+const jobErrorText = (error: Error | string, sentryEventId?: string) => {
+  const causes = describeErrorCauses(error).causes;
+  const status = causes.find((cause) => cause.status)?.status;
+  const first = causes[0]?.message ?? scrubErrorMessage(String(error));
+  const summary = first.split("\n", 1)[0]?.slice(0, 600) ?? "Operation failed";
+  const labelled =
+    status && !summary.includes(`HTTP ${status}`)
+      ? `HTTP ${status}: ${summary}`
+      : summary;
+  const coded = causes.find(
+    (cause) => cause.code && !labelled.includes(cause.code),
+  );
+  const concise = coded
+    ? `${labelled} · ${coded.code}: ${coded.message.slice(0, 120)}`
+    : labelled;
+  return sentryEventId ? `${concise}\nSentry event: ${sentryEventId}` : concise;
 };
 
 const displayJob = (job: SearchJob, runShortcode: string) => ({
@@ -284,6 +287,7 @@ export async function runVendorMailSearchJob(
     page?: number;
     search?: typeof import("./search").searchVendorOrderMail;
     publish?: typeof import("~/server/background-tasks/publish").publishBackgroundTasks;
+    reportError?: typeof reportServerError;
   } = {},
 ) {
   const database = getDb(db);
@@ -445,16 +449,24 @@ export async function runVendorMailSearchJob(
       });
       throw error;
     }
+    const eventId = (options.reportError ?? reportServerError)(error, {
+      operation: "vendor-mail.search",
+      stage: "run",
+    });
+    const failureMessage = jobErrorText(
+      error instanceof Error ? error : String(error),
+      eventId,
+    );
     const finishedAt = new Date();
     await database.transaction(async (tx) => {
       await tx
         .update(vendorMailSearchJob)
         .set(
           checkpointSaved
-            ? { status: "failed", error: message, finishedAt }
+            ? { status: "failed", error: failureMessage, finishedAt }
             : {
                 status: "failed",
-                error: message,
+                error: failureMessage,
                 finishedAt,
                 searched: job.searched,
                 skipped: job.skipped,
@@ -475,7 +487,7 @@ export async function runVendorMailSearchJob(
         runId: job.runId,
         eventId: crypto.randomUUID(),
         phase: "failed",
-        detail: message.split("\n", 1)[0],
+        detail: failureMessage.split("\n", 1)[0],
       });
     });
     // The Gmail client has already made its bounded retry attempts. Ack this
