@@ -1252,14 +1252,14 @@ productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
   operations, approvals, progress) stay internal rows with no life outside a
   run. A finding is the one child with its own lifecycle (open → applied /
   dismissed) and a Purchase relation, so it is the natural next promotion —
-  it costs a prefix, a backfill, an `AuditEntityType`, and the delete/resolve
+  it costs a prefix, a backfill, an `AuditEntityKind`, and the delete/resolve
   disposition decision the StatementRow item below also waits on.
 
 - **StatementRow and StatementImport as manifest entities** — Promote once the
   `supersededByRowId` disposition is decided (block, detach, or cascade for a live
   predecessor pointing at a deleted row); "add an edge policy" is not the decision.
   Unblocks the audit gap `deleteStatementRows` currently only documents: StatementRow
-  has no `AuditEntityType`, so no truthful `logAuditEntry` call exists and all three
+  has no `AuditEntityKind`, so no truthful `logAuditEntry` call exists and all three
   statement-row mutation paths write no audit trail. Also routes that delete through
   `removeEntity` for cascade and locking. Costs shortcode prefixes, a batched backfill
   of the whole `StatementRow` table, a detail route, and entries in roughly ten
@@ -1411,7 +1411,7 @@ PRs; unordered.
 
 - **Put `deleteStatementRows` on policy-driven removal.** It is the last
   hand-written cascade (`apps/web/src/server/repo/statement-row.ts`); it takes a
-  filter rather than ids and StatementRow has no `AuditEntityType`, so it waits
+  filter rather than ids and StatementRow has no `AuditEntityKind`, so it waits
   on "StatementRow and StatementImport as manifest entities". The image hard
   delete stays on its own `IMAGE_HARD_DELETE` path on purpose: images are not
   auditable, and `removeEntity` must not run for them

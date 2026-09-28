@@ -295,7 +295,7 @@ async function lexicalProductCandidates(
   if (trimmed.length < MIN_SEARCH_TEXT_LENGTH) return [];
   return findLexicalSearchCandidates(
     db,
-    { query: trimmed, entityTypes: ["product"], limit: REFERENCE_ROSTER_CAP },
+    { query: trimmed, entityKinds: ["product"], limit: REFERENCE_ROSTER_CAP },
     REFERENCE_ROSTER_CAP,
   );
 }

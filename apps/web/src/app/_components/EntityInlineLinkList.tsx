@@ -142,7 +142,7 @@ export const EntityInlineLinkList: React.FC<EntityInlineLinkListProps> = (
         ? []
         : (items ?? []).flatMap((item) =>
             "id" in item
-              ? [{ entityType: props.entity, entityId: item.id }]
+              ? [{ entityKind: props.entity, entityId: item.id }]
               : [],
           ),
     [items, props.entity],
@@ -187,7 +187,7 @@ export const EntityInlineLinkList: React.FC<EntityInlineLinkListProps> = (
         item,
         compact,
         images[
-          entityDisplayImageKey({ entityType: "location", entityId: item.id })
+          entityDisplayImageKey({ entityKind: "location", entityId: item.id })
         ] ?? null,
       );
     else if (props.entity === "product" && "manufacturer" in item)
@@ -196,7 +196,7 @@ export const EntityInlineLinkList: React.FC<EntityInlineLinkListProps> = (
         item,
         compact,
         images[
-          entityDisplayImageKey({ entityType: "product", entityId: item.id })
+          entityDisplayImageKey({ entityKind: "product", entityId: item.id })
         ] ?? null,
       );
     else if (
@@ -208,7 +208,7 @@ export const EntityInlineLinkList: React.FC<EntityInlineLinkListProps> = (
         item,
         compact,
         images[
-          entityDisplayImageKey({ entityType: props.entity, entityId: item.id })
+          entityDisplayImageKey({ entityKind: props.entity, entityId: item.id })
         ] ?? null,
       );
     else throw new Error(`Unexpected ${props.entity} inline-link item shape`);

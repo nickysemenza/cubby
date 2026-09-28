@@ -50,7 +50,7 @@ function seedProjectImages(
 ): EntityDisplayImageMap {
   return Object.fromEntries(
     projects.map((project) => [
-      entityDisplayImageKey({ entityType: "project", entityId: project.id }),
+      entityDisplayImageKey({ entityKind: "project", entityId: project.id }),
       project.displayImages[0] ?? null,
     ]),
   );
@@ -170,7 +170,7 @@ function ProjectScheduleSurface({
   const selected = selectedId ? byId.get(selectedId) : undefined;
   const window = useMemo(() => projectScheduleWindow(allRows), [allRows]);
   const refs = useMemo<EntityRef[]>(
-    () => allRows.map((row) => ({ entityType: row.entity, entityId: row.id })),
+    () => allRows.map((row) => ({ entityKind: row.entity, entityId: row.id })),
     [allRows],
   );
   const images = useEntityDisplayImages(refs, seededImages);
@@ -187,7 +187,7 @@ function ProjectScheduleSurface({
             displayImage={
               images[
                 entityDisplayImageKey({
-                  entityType: entry.entity,
+                  entityKind: entry.entity,
                   entityId: entry.id,
                 })
               ] ?? null

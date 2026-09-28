@@ -191,7 +191,7 @@ export const productEntityAdapter = defineEntityAdapter({
         ]),
         ctx.services.recipeCosting.recomputeForIngredients(ingredientIds, {
           source: "product.merge",
-          entity: { entityType: "product", entityId: summary.keepEntityId },
+          entity: { entityKind: "product", entityId: summary.keepEntityId },
         }),
       ]);
       const product = await getProductByShortcode(ctx.db, input.keepId);

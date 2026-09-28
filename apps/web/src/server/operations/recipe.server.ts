@@ -85,7 +85,7 @@ export const duplicateWorkflow = bindWorkflow(
     .effect("costing", async ({ context }, { entityId }) => {
       await context.services.recipeCosting.dispatchRecompute([entityId], {
         source: "recipe.duplicate",
-        entity: { entityType: "recipe", entityId },
+        entity: { entityKind: "recipe", entityId },
       });
     })
     .effect("background", async ({ context }, { entityId }) =>

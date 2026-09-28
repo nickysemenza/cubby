@@ -52,14 +52,14 @@ export function useShortcodeLookups(shortcodes: string[]) {
     const locs = locationData.map((d) => ({
       shortcode: d.id,
       name: d.name,
-      entityType: "location" as const,
+      entityKind: "location" as const,
       locationType: d.type ?? undefined,
       parentName: d.parentName,
     }));
     const prods = productData.map((d) => ({
       shortcode: d.id,
       name: d.name,
-      entityType: "product" as const,
+      entityKind: "product" as const,
       productCategory: d.category,
     }));
     return [...locs, ...prods];

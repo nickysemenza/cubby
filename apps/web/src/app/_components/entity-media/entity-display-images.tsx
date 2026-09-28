@@ -17,7 +17,7 @@ const EntityDisplayImagesContext =
   createContext<EntityDisplayImageMap>(EMPTY_IMAGES);
 
 export const entityDisplayImageKey = (ref: EntityRef): string =>
-  entityRefKey(ref.entityType, ref.entityId);
+  entityRefKey(ref.entityKind, ref.entityId);
 
 const stableRefs = (refs: readonly EntityRef[]) =>
   [

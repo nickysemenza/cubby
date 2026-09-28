@@ -48,8 +48,8 @@ const GraphRecord = memo(function GraphRecord({
         />
       ))}
       <Row gap="sm" align="center" className="text-xs text-muted-foreground">
-        <EntityIcon entity={data.record.entityType} className="size-3.5" />
-        <span>{entityLabel(data.record.entityType)}</span>
+        <EntityIcon entity={data.record.entityKind} className="size-3.5" />
+        <span>{entityLabel(data.record.entityKind)}</span>
       </Row>
       <Row gap="sm" align="start">
         {data.record.image && (

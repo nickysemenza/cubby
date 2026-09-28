@@ -77,7 +77,7 @@ export function InventoryPlacementSuggestion({
   return (
     <div className="mt-3">
       <EntityRecommendations
-        source={{ entityType: "inventory", entityId: inventoryitem.id }}
+        source={{ entityKind: "inventory", entityId: inventoryitem.id }}
         operations={recommendationOperations}
         compact
         pending={placement.isPending}

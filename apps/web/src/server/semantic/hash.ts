@@ -13,7 +13,7 @@ export async function sha256Hex(value: string | Uint8Array): Promise<string> {
 }
 
 export async function embeddingTextHash(opts: {
-  entityType: string;
+  entityKind: string;
   provider: string;
   model: string;
   dimensions: number;
@@ -21,7 +21,7 @@ export async function embeddingTextHash(opts: {
 }): Promise<string> {
   return sha256Hex(
     JSON.stringify({
-      entityType: opts.entityType,
+      entityKind: opts.entityKind,
       provider: opts.provider,
       model: opts.model,
       dimensions: opts.dimensions,

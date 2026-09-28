@@ -515,7 +515,7 @@ export class RecipeCostingService {
   async recomputeForIngredient(
     ingredientId: IngredientId,
     metadata: RecipeRecomputeDispatchMetadata = {
-      entity: { entityType: "ingredient", entityId: ingredientId },
+      entity: { entityKind: "ingredient", entityId: ingredientId },
     },
   ): Promise<number> {
     return this.recomputeForIngredients([ingredientId], metadata);

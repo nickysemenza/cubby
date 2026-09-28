@@ -5,7 +5,7 @@ import { auditLogListOptions } from "~/lib/audit-log.functions";
 describe("audit log Start query options", () => {
   it("starts cursor paging from the unbounded first page", () => {
     const options = auditLogListOptions({
-      entityType: undefined,
+      entityKind: undefined,
       entityId: undefined,
       channel: undefined,
       limit: 20,

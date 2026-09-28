@@ -158,7 +158,7 @@ function IngredientDuplicateNameHint({ form }: EntityEditorFieldsProps) {
   const matchRefs = useMemo(
     () =>
       matches.map((match) => ({
-        entityType: "ingredient" as const,
+        entityKind: "ingredient" as const,
         entityId: match.id,
       })),
     [matches],
@@ -186,7 +186,7 @@ function IngredientDuplicateNameHint({ form }: EntityEditorFieldsProps) {
             displayImage={
               displayImages[
                 entityDisplayImageKey({
-                  entityType: "ingredient",
+                  entityKind: "ingredient",
                   entityId: m.id,
                 })
               ] ?? null

@@ -79,11 +79,11 @@ export function TaskBriefingEvidenceLine({
 
 function TodayTaskRow({ task: item }: { task: TaskTodayBriefingItemOut }) {
   const taskImage = useEntityDisplayImage({
-    entityType: "task",
+    entityKind: "task",
     entityId: item.id,
   });
   const projectImage = useEntityDisplayImage({
-    entityType: "project",
+    entityKind: "project",
     entityId: item.projectId ?? "",
   });
   return (
@@ -131,9 +131,9 @@ export function TodayAttention() {
   const imageRefs = useMemo(
     () =>
       (briefing.data?.next ?? []).flatMap((item) => [
-        { entityType: "task" as const, entityId: item.id },
+        { entityKind: "task" as const, entityId: item.id },
         ...(item.projectId
-          ? [{ entityType: "project" as const, entityId: item.projectId }]
+          ? [{ entityKind: "project" as const, entityId: item.projectId }]
           : []),
       ]),
     [briefing.data?.next],

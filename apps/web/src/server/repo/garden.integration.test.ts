@@ -348,7 +348,7 @@ describe("garden workflows", () => {
       TEST_ACTOR,
     );
     const unchangedAudit = await getAuditLog(ctx.db, {
-      entityType: "gardenEntry",
+      entityKind: "gardenEntry",
       entityIds: [entryId!],
       limit: 10,
     });
@@ -365,7 +365,7 @@ describe("garden workflows", () => {
       TEST_ACTOR,
     );
     const changedAudit = await getAuditLog(ctx.db, {
-      entityType: "gardenEntry",
+      entityKind: "gardenEntry",
       entityIds: [entryId!],
       limit: 10,
     });
@@ -441,7 +441,7 @@ describe("garden workflows", () => {
     expect(row).toMatchObject({ deletedAt: null });
 
     const audit = await getAuditLog(ctx.db, {
-      entityType: "gardenEntry",
+      entityKind: "gardenEntry",
       entityIds: [entryId!],
       limit: 10,
     });
@@ -513,7 +513,7 @@ describe("garden workflows", () => {
     expect(row).toMatchObject({ taskId: null, deletedAt: null });
 
     const audit = await getAuditLog(ctx.db, {
-      entityType: "planting",
+      entityKind: "planting",
       entityIds: [plantedId!],
       limit: 10,
     });
@@ -551,7 +551,7 @@ describe("garden workflows", () => {
     );
 
     const audit = await getAuditLog(ctx.db, {
-      entityType: "planting",
+      entityKind: "planting",
       entityIds: [plantedId!],
       limit: 10,
     });

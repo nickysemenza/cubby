@@ -57,7 +57,7 @@ function observedToolName(request: CallToolRequest): string | undefined {
 }
 
 /**
- * Which entity a call acted on, for `McpToolCall.entity`.
+ * Which entity a call acted on, for `McpToolCall.entityKind`.
  *
  * The extractor belongs to the tool's typed registration. Its result is
  * validated against the public entity discriminant, so telemetry never needs

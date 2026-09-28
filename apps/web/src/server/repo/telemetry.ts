@@ -59,7 +59,7 @@ export async function persistTelemetryMessages(
             // (see the `.optional()` note on mcpToolCallTelemetrySchema) —
             // those replay as null, same as a tool the extractor can't
             // attribute.
-            entity: event.entity ?? null,
+            entityKind: event.entity ?? null,
             release: event.release,
             occurredAt: new Date(event.occurredAt),
             userId: userId.parse(event.userId),

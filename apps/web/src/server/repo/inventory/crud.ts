@@ -697,7 +697,7 @@ export const updateInventoryEntry = async (
     ]);
     if (changes) {
       await logAuditEntry(db, actor, {
-        entityType: "inventory",
+        entityKind: "inventory",
         entityId: id,
         action: "update",
         changes,
@@ -805,7 +805,7 @@ export const createInventoryEntry = async (
   const created = await insertWithShortcode(db, "inventory", values);
 
   await logAuditEntry(db, actor, {
-    entityType: "inventory",
+    entityKind: "inventory",
     entityId: created.id,
     action: "create",
   });

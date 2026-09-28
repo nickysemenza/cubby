@@ -72,7 +72,7 @@ import {
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 export const COOKBOOK_DELETE_EDGE_POLICY = {
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "cascade-delete-attachment",
     effect: "soft-delete",
     description:
@@ -162,7 +162,7 @@ export const upsertCookbook = async (
       }
 
       await logAuditEntry(tx, actor, {
-        entityType: "cookbook",
+        entityKind: "cookbook",
         entityId: id,
         action: existingId ? "update" : "create",
       });
@@ -258,7 +258,7 @@ const readCookbookSummaries = async (
     .leftJoin(
       entityAttachment,
       and(
-        eq(entityAttachment.subjectEntityId, cookbook.id),
+        eq(entityAttachment.entityId, cookbook.id),
         eq(entityAttachment.role, "cover"),
         notDeleted(entityAttachment),
       ),
@@ -350,7 +350,7 @@ export const setCookbookProduct = async (
       and(eq(cookbook.id, id), notDeleted(cookbook)),
     );
     await logAuditEntry(tx, actor, {
-      entityType: "cookbook",
+      entityKind: "cookbook",
       entityId: id,
       action: "update",
       changes: { productId: { from: before.productId, to: productId } },

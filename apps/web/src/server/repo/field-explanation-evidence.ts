@@ -48,7 +48,7 @@ type FieldExplanationEvidenceValue = z.infer<typeof evidenceJson>;
 
 type FieldCountEvidenceSource = {
   label: string;
-  entity: { entityType: Entity; entityId: string } | null;
+  entity: { entityKind: Entity; entityId: string } | null;
   value: FieldExplanationEvidenceValue;
 };
 
@@ -112,7 +112,7 @@ async function loadProductComponentEvidence(
   return sourcesFromRows(rows, (row) => ({
     label: "Component relationship",
     entity: {
-      entityType: "product",
+      entityKind: "product",
       entityId: parseShortcodeFor("product", row.shortcode),
     },
     value: {
@@ -134,7 +134,7 @@ const expenseSource = (row: {
 }): FieldCountEvidenceSource => ({
   label: "Expense line",
   entity: {
-    entityType: "expense",
+    entityKind: "expense",
     entityId: parseShortcodeFor("expense", row.shortcode),
   },
   value: {
@@ -203,7 +203,7 @@ async function loadRecipeMealEvidence(
   return sourcesFromRows(rows, (row) => ({
     label: "Meal-recipe relationship",
     entity: {
-      entityType: "meal",
+      entityKind: "meal",
       entityId: parseShortcodeFor("meal", row.shortcode),
     },
     value: {
@@ -245,7 +245,7 @@ async function loadIngredientRecipeEvidence(
   return sourcesFromRows(rows, (row) => ({
     label: "Recipe using ingredient",
     entity: {
-      entityType: "recipe",
+      entityKind: "recipe",
       entityId: parseShortcodeFor("recipe", row.shortcode),
     },
     value: { name: row.name },
@@ -272,7 +272,7 @@ async function loadCookbookRecipeEvidence(
   return sourcesFromRows(rows, (row) => ({
     label: "Imported live recipe",
     entity: {
-      entityType: "recipe",
+      entityKind: "recipe",
       entityId: parseShortcodeFor("recipe", row.shortcode),
     },
     value: { name: row.name },
@@ -335,7 +335,7 @@ async function loadCookbookSourceRecipeEvidence(
       {
         label: "Stored cookbook import",
         entity: {
-          entityType: "cookbook",
+          entityKind: "cookbook",
           entityId: parseShortcodeFor("cookbook", row.shortcode),
         },
         value: {
@@ -377,7 +377,7 @@ async function loadVendorPurchaseEvidence(
   return sourcesFromRows(rows, (row) => ({
     label: "Purchase",
     entity: {
-      entityType: "purchase",
+      entityKind: "purchase",
       entityId: parseShortcodeFor("purchase", row.shortcode),
     },
     value: {
@@ -427,7 +427,7 @@ async function loadPurchaseDocumentEvidence(
       documentKind: entityAttachment.documentKind,
     })
     .from(entityAttachment)
-    .innerJoin(purchase, eq(purchase.id, entityAttachment.subjectEntityId))
+    .innerJoin(purchase, eq(purchase.id, entityAttachment.entityId))
     .innerJoin(image, eq(image.id, entityAttachment.imageId))
     .where(
       and(
@@ -442,7 +442,7 @@ async function loadPurchaseDocumentEvidence(
   return sourcesFromRows(rows, (row) => ({
     label: "Purchase document",
     entity: {
-      entityType: "image",
+      entityKind: "image",
       entityId: parseShortcodeFor("image", row.shortcode),
     },
     value: { filename: row.filename, documentKind: row.documentKind },
@@ -482,7 +482,7 @@ async function loadFinancialAccountTransactionEvidence(
   return sourcesFromRows(rows, (row) => ({
     label: "Financial transaction",
     entity: {
-      entityType: "financialTransaction",
+      entityKind: "financialTransaction",
       entityId: parseShortcodeFor("financialTransaction", row.shortcode),
     },
     value: {
@@ -515,10 +515,10 @@ const evidenceLoaders = new Map<string, EvidenceLoader>([
 /** Concrete, linked inputs for count fields whose public projections only carry a scalar. */
 export async function loadFieldCountEvidence(
   db: EvidenceDatabase,
-  entityType: Entity,
+  entityKind: Entity,
   shortcode: string,
   field: string,
 ): Promise<FieldCountEvidence | null> {
-  const loader = evidenceLoaders.get(`${entityType}:${field}`);
+  const loader = evidenceLoaders.get(`${entityKind}:${field}`);
   return loader ? loader(db, shortcode) : null;
 }

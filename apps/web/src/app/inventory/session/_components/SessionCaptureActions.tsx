@@ -271,7 +271,7 @@ export function SessionCaptureActions({
         filename: file.name,
         contentType: contentType.data,
         size: file.size,
-        entityType: "PRODUCT",
+        entityKind: "PRODUCT",
       });
       try {
         await putPresignedObject(init.uploadUrl, file, contentType.data);

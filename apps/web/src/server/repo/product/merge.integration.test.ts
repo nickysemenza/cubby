@@ -39,6 +39,7 @@ import {
   createPlantFixture,
   makeLocationInput,
   makeProductInput,
+  insertEntityAttachments,
 } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
@@ -107,8 +108,8 @@ describe("mergeProducts", () => {
         contentType: "image/jpeg",
         size: 100,
       });
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: item.id,
+      await insertEntityAttachments(ctx.db, {
+        entityId: item.id,
         imageId: photo.id,
       });
     }
@@ -459,12 +460,10 @@ describe("mergeProducts", () => {
       size: 100,
       sha256,
     });
-    await getDb(ctx.db)
-      .insert(entityAttachment)
-      .values([
-        { subjectEntityId: keeper.id, imageId: keeperImage.id },
-        { subjectEntityId: loser.id, imageId: loserImage.id },
-      ]);
+    await insertEntityAttachments(ctx.db, [
+      { entityId: keeper.id, imageId: keeperImage.id },
+      { entityId: loser.id, imageId: loserImage.id },
+    ]);
 
     await mergeProducts(
       ctx.db,
@@ -474,7 +473,7 @@ describe("mergeProducts", () => {
 
     const liveImages = await getDb(ctx.db).query.entityAttachment.findMany({
       where: and(
-        eq(entityAttachment.subjectEntityId, keeper.id),
+        eq(entityAttachment.entityId, keeper.id),
         notDeleted(entityAttachment),
       ),
       columns: { imageId: true },
@@ -491,12 +490,10 @@ describe("mergeProducts", () => {
       contentType: "image/jpeg",
       size: 100,
     });
-    await getDb(ctx.db)
-      .insert(entityAttachment)
-      .values([
-        { subjectEntityId: keeper.id, imageId: image.id, purpose: null },
-        { subjectEntityId: loser.id, imageId: image.id, purpose: "label" },
-      ]);
+    await insertEntityAttachments(ctx.db, [
+      { entityId: keeper.id, imageId: image.id, purpose: null },
+      { entityId: loser.id, imageId: image.id, purpose: "label" },
+    ]);
 
     await mergeProducts(
       ctx.db,
@@ -506,7 +503,7 @@ describe("mergeProducts", () => {
 
     const [surviving] = await getDb(ctx.db).query.entityAttachment.findMany({
       where: and(
-        eq(entityAttachment.subjectEntityId, keeper.id),
+        eq(entityAttachment.entityId, keeper.id),
         eq(entityAttachment.imageId, image.id),
         notDeleted(entityAttachment),
       ),

@@ -522,7 +522,7 @@ describe("ingredient", () => {
     await getDb(ctx.db)
       .insert(entityEmbedding)
       .values({
-        entityType: "ingredient",
+        entityKind: "ingredient",
         entityId: alias.id,
         embeddingText: `ingredient ${alias.id}`,
         embeddingHash: `hash-${alias.id}`,
@@ -694,7 +694,7 @@ describe("ingredient repository — transactional update", () => {
     expect((await getIngredientByID(ctx.db, createdId)).name).toBe(original);
 
     const audit = await getAuditLog(ctx.db, {
-      entityType: "ingredient",
+      entityKind: "ingredient",
       entityId: createdId,
       limit: 20,
     });

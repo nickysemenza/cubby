@@ -227,7 +227,7 @@ export async function recordImageAnalysis(
     .set({ deviceWorkState: "completed", deviceWorkUpdatedAt: new Date() })
     .where(
       and(
-        eq(runTarget.imageId, imageId.parse(row.id)),
+        eq(runTarget.entityId, imageId.parse(row.id)),
         or(
           isNull(runTarget.deviceWorkState),
           ne(runTarget.deviceWorkState, "completed"),

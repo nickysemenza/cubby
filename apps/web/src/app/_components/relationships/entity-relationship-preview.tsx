@@ -22,7 +22,7 @@ export function EntityRelationshipPreview({
 }) {
   const query = useQuery(
     operations.graph.queryOptions({
-      roots: [{ entityType: entity, entityId: sourceId }],
+      roots: [{ entityKind: entity, entityId: sourceId }],
       limit: 12,
     }),
   );

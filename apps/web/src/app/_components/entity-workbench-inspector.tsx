@@ -161,7 +161,7 @@ function EntityWorkbenchInspectorContent({
         hasActivity ? (
           <div className="px-3 py-3">
             <AuditLogList
-              entityType={entity}
+              entityKind={entity}
               entityId={id}
               showEntityLink={false}
             />

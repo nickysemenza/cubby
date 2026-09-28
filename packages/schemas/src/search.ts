@@ -27,18 +27,18 @@ export type SearchableEntity = z.infer<typeof searchableEntitySchema>;
 
 export const embeddableEntitySchema = z.enum(embeddableEntities);
 export const isEmbeddableEntity = (
-  entityType: SearchableEntity,
-): entityType is EmbeddableEntity =>
-  embeddableEntitySchema.safeParse(entityType).success;
+  entityKind: SearchableEntity,
+): entityKind is EmbeddableEntity =>
+  embeddableEntitySchema.safeParse(entityKind).success;
 
-const searchableEntityTypes =
+const searchableEntityKinds =
   nonEmptyTuple<ShortcodeEntity>(searchableEntities);
 export const searchableEntityIdSchema = anyShortcodeSchema(
-  searchableEntityTypes,
+  searchableEntityKinds,
 );
 
 export const searchableEntityRefFields = {
-  entityType: searchableEntitySchema,
+  entityKind: searchableEntitySchema,
   entityId: searchableEntityIdSchema,
 };
 
@@ -55,7 +55,7 @@ export type SearchType = z.infer<typeof searchTypeSchema>;
  */
 export const searchQueryInputFields = {
   query: z.string().trim().min(1).max(100),
-  entityTypes: z
+  entityKinds: z
     .array(searchableEntitySchema)
     .min(1)
     .max(searchableEntities.length)
@@ -86,7 +86,7 @@ export const similarEntitiesInputSchema = z.object({
 export type SimilarEntitiesInput = z.infer<typeof similarEntitiesInputSchema>;
 
 export const requestEmbeddingRefreshInputSchema = z.object({
-  entityType: searchableEntitySchema,
+  entityKind: searchableEntitySchema,
   entityId: searchableEntityIdSchema,
 });
 export type RequestEmbeddingRefreshInput = z.infer<
@@ -132,12 +132,12 @@ export type SearchMatchField = z.infer<typeof searchMatchFieldSchema>;
  * silently dropping out of global search therefore lives with the projections,
  * not here — see the `satisfies Record<SearchableEntity, SQL>` branch map in
  * `apps/web/src/server/repo/search-document.ts` and `searchDocumentBuilders`
- * beside it, plus `entityTypeMap` in `search/search-utils.tsx` for the client
+ * beside it, plus `entityKindMap` in `search/search-utils.tsx` for the client
  * route/icon side.
  */
 export const searchHitSchema = z.object({
   id: searchableEntityIdSchema,
-  entityType: searchableEntitySchema,
+  entityKind: searchableEntitySchema,
   title: z.string(),
   subtitle: z.string().nullable(),
   typeHint: z.string().nullable(),
@@ -157,7 +157,7 @@ export const searchHitsOut = z.array(searchHitSchema);
 /** A routable entity projection without a claim that it matched the query. */
 export const searchDestinationSchema = searchHitSchema.pick({
   id: true,
-  entityType: true,
+  entityKind: true,
   title: true,
   subtitle: true,
   typeHint: true,

@@ -80,14 +80,14 @@ describe("semantic search text builders", () => {
 describe("semantic hash", () => {
   it("is stable for equivalent normalized text", async () => {
     const a = await embeddingTextHash({
-      entityType: "product",
+      entityKind: "product",
       provider: "openai",
       model: "text-embedding-3-small",
       dimensions: 1536,
       text: normalizeSearchText(" Blue   Tarp "),
     });
     const b = await embeddingTextHash({
-      entityType: "product",
+      entityKind: "product",
       provider: "openai",
       model: "text-embedding-3-small",
       dimensions: 1536,
@@ -99,7 +99,7 @@ describe("semantic hash", () => {
 
   it("changes when provider changes", async () => {
     const base = {
-      entityType: "product",
+      entityKind: "product",
       model: "text-embedding-3-small",
       dimensions: 1536,
       text: "blue tarp",

@@ -16,7 +16,7 @@ export const productClassificationEvidenceSql = (
     FROM "EntityAttachment" pi JOIN "Image" i ON i."id" = pi."imageId" AND i."deletedAt" IS NULL
     LEFT JOIN LATERAL (SELECT c."description" FROM "ImageDescriptionCorrection" c WHERE c."imageId" = i."id" AND c."deletedAt" IS NULL ORDER BY c."confirmedAt" DESC LIMIT 1) correction ON true
     LEFT JOIN LATERAL (SELECT a."result" FROM "AiAnalysis" a WHERE a."entityKind" = 'image' AND a."entityId" = i."id" AND a."feature" = 'image-description' AND a."deletedAt" IS NULL ORDER BY a."createdAt" DESC LIMIT 1) analysis ON true
-    WHERE pi."subjectEntityId" = ${productId} AND pi."deletedAt" IS NULL
+    WHERE pi."entityId" = ${productId} AND pi."deletedAt" IS NULL
   ), '')
 )`;
 

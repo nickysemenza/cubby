@@ -450,7 +450,7 @@ export async function loadProductImageOrderFacts(
     )
     .where(
       and(
-        eq(entityAttachment.subjectEntityId, productId),
+        eq(entityAttachment.entityId, productId),
         notDeleted(entityAttachment),
       ),
     )

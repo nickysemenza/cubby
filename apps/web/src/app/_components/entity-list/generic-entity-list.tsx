@@ -470,7 +470,7 @@ function ServerListBody({
                         entity === "wish"
                           ? {
                               ...record,
-                              entityType: entity,
+                              entityKind: entity,
                               previewId: record.id,
                             }
                           : record,
@@ -483,7 +483,7 @@ function ServerListBody({
                         entity === "wish"
                           ? {
                               ...record,
-                              entityType: entity,
+                              entityKind: entity,
                               previewId: record.id,
                             }
                           : record,

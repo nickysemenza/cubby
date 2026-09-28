@@ -285,6 +285,7 @@ const defineImageJoinBinding = <
 ) => binding;
 
 const galleryBinding = (
+  entityKind: GalleryEntity,
   extraColumns: Pick<
     InferInsertModel<typeof entityAttachment>,
     "documentKind"
@@ -292,9 +293,10 @@ const galleryBinding = (
 ) =>
   defineImageJoinBinding({
     table: entityAttachment,
-    parentIdColumn: entityAttachment.subjectEntityId,
-    insertRow: (subjectEntityId, imageId, sortOrder) => ({
-      subjectEntityId,
+    parentIdColumn: entityAttachment.entityId,
+    insertRow: (entityId, imageId, sortOrder) => ({
+      entityId,
+      entityKind,
       imageId,
       sortOrder,
       role: "attachment" as const,
@@ -310,14 +312,14 @@ const galleryBinding = (
  * entity has no binding, and Purchase keeps its default document kind.
  */
 export const imageJoinBindings = {
-  product: galleryBinding(),
-  location: galleryBinding(),
-  recipe: galleryBinding(),
-  project: galleryBinding(),
-  purchase: galleryBinding({ documentKind: "other" }),
-  gardenEntry: galleryBinding(),
-  meal: galleryBinding(),
-  task: galleryBinding(),
+  product: galleryBinding("product"),
+  location: galleryBinding("location"),
+  recipe: galleryBinding("recipe"),
+  project: galleryBinding("project"),
+  purchase: galleryBinding("purchase", { documentKind: "other" }),
+  gardenEntry: galleryBinding("gardenEntry"),
+  meal: galleryBinding("meal"),
+  task: galleryBinding("task"),
 } as const satisfies Record<GalleryEntity, { table: ImageJoinTable }>;
 
 export async function associatePendingImages<

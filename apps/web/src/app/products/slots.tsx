@@ -134,7 +134,7 @@ export const ProductCookbooks: DetailSlotComponent<"product"> = ({
   const refs = useMemo(
     () =>
       product.cookbooks.map((cookbook) => ({
-        entityType: "cookbook" as const,
+        entityKind: "cookbook" as const,
         entityId: cookbook.id,
       })),
     [product.cookbooks],
@@ -152,7 +152,7 @@ export const ProductCookbooks: DetailSlotComponent<"product"> = ({
 
 function CookbookLinkRow({ cookbook }: { cookbook: ProductCookbooksProps }) {
   const displayImage = useEntityDisplayImage({
-    entityType: "cookbook",
+    entityKind: "cookbook",
     entityId: cookbook.id,
   });
   return (

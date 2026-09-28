@@ -88,7 +88,7 @@ describe("field explanation projection", () => {
 
     expect(bounded.truncated).toBe(true);
     expect(bounded.sources[1]?.entity).toEqual({
-      entityType: "product",
+      entityKind: "product",
       entityId: candidates[0]!.id,
     });
     const boundedCandidates = z
@@ -126,8 +126,8 @@ describe("field explanation projection", () => {
 
     expect(sources.map((source) => source.entity)).toEqual([
       null,
-      { entityType: "image", entityId: first },
-      { entityType: "image", entityId: second },
+      { entityKind: "image", entityId: first },
+      { entityKind: "image", entityId: second },
     ]);
   });
 

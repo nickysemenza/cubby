@@ -91,12 +91,12 @@ export function EquivalencesReport() {
     () =>
       groups.flatMap((group) => [
         ...group.map((candidate) => ({
-          entityType: "ingredient" as const,
+          entityKind: "ingredient" as const,
           entityId: candidate.ingredientId,
         })),
         ...group.flatMap((candidate) =>
           candidate.examples.map((example) => ({
-            entityType: "recipe" as const,
+            entityKind: "recipe" as const,
             entityId: example.recipeId,
           })),
         ),
@@ -180,7 +180,7 @@ export function EquivalencesReport() {
                         displayImage={
                           displayImages[
                             entityDisplayImageKey({
-                              entityType: "ingredient",
+                              entityKind: "ingredient",
                               entityId: c.ingredientId,
                             })
                           ] ?? null
@@ -231,7 +231,7 @@ export function EquivalencesReport() {
                             displayImage={
                               displayImages[
                                 entityDisplayImageKey({
-                                  entityType: "recipe",
+                                  entityKind: "recipe",
                                   entityId: ex.recipeId,
                                 })
                               ] ?? null

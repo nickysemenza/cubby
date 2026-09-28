@@ -72,12 +72,12 @@ describe("buildWishRows", () => {
 
     expect(row).toMatchObject({
       id: wishId("WSH-0001"),
-      entityType: "wish",
+      entityKind: "wish",
       previewId: wishId("WSH-0001"),
     });
     expect(child).toMatchObject({
       id: `${wishId("WSH-0001")}:PRD-BBBB`,
-      entityType: "product",
+      entityKind: "product",
       previewId: "PRD-BBBB",
     });
   });

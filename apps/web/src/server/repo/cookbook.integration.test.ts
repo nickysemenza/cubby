@@ -377,15 +377,15 @@ describe("cookbook repository", () => {
     // Seed a live search-embedding bookkeeping row for both the cookbook and
     // its recipe (the vector itself lives in Vectorize, not Postgres).
     const seedEmbedding = (
-      entityType: "cookbook" | "recipe",
+      entityKind: "cookbook" | "recipe",
       entityId: string,
     ) =>
       getDb(ctx.db)
         .insert(entityEmbedding)
         .values({
-          entityType,
+          entityKind,
           entityId,
-          embeddingText: `${entityType} ${entityId}`,
+          embeddingText: `${entityKind} ${entityId}`,
           embeddingHash: `hash-${entityId}`,
           provider: "test",
           model: "test",
@@ -425,7 +425,7 @@ describe("cookbook repository", () => {
       ctx.db,
     ).query.entityEmbedding.findFirst({
       where: and(
-        eq(entityEmbedding.entityType, "cookbook"),
+        eq(entityEmbedding.entityKind, "cookbook"),
         eq(entityEmbedding.entityId, cookbookId),
       ),
     });
@@ -434,7 +434,7 @@ describe("cookbook repository", () => {
     const recipeEmbedding = await getDb(ctx.db).query.entityEmbedding.findFirst(
       {
         where: and(
-          eq(entityEmbedding.entityType, "recipe"),
+          eq(entityEmbedding.entityKind, "recipe"),
           eq(entityEmbedding.entityId, recipeId),
         ),
       },

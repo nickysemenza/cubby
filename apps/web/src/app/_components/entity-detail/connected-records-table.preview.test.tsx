@@ -26,24 +26,24 @@ it("contains long connection evidence inside a narrow relation column", async ()
         paths={[
           [
             {
-              entityType: "vendor",
+              entityKind: "vendor",
               entityId: "VEN-TEST",
               label: "Example vendor",
             },
             {
-              entityType: "purchase",
+              entityKind: "purchase",
               entityId: "PUR-TEST",
               label:
                 "A very long synthetic purchase name that exceeds its column width by a lot",
             },
             {
-              entityType: "product",
+              entityKind: "product",
               entityId: "PRD-TEST",
               label:
                 "A very long synthetic product name that exceeds its column width by a lot",
             },
             {
-              entityType: "inventory",
+              entityKind: "inventory",
               entityId: "INV-TEST",
               label: "Example item",
             },

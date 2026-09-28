@@ -219,7 +219,7 @@ export const MAX_IMAGE_UPLOAD_BYTES = 50 * 1024 * 1024;
 const initiateUploadFields = {
   filename: z.string(),
   size: z.int().positive().max(MAX_IMAGE_UPLOAD_BYTES),
-  entityType: entityImage.optional(),
+  entityKind: entityImage.optional(),
   source: generatedImageFieldSchemas.update.source,
   sourcePageUrl: generatedImageFieldSchemas.update.sourcePageUrl,
   sourceAssetUrl: generatedImageFieldSchemas.update.sourceAssetUrl,
@@ -302,7 +302,7 @@ export type ImageListFilters = z.infer<typeof imageListFiltersSchema>;
 
 export const importImageFromUrlSchema = z.object({
   url: z.url(),
-  entityType: entityImage.optional(),
+  entityKind: entityImage.optional(),
 });
 
 // The image-bearing entities exposed as attach targets — every entity the
@@ -364,7 +364,7 @@ export type ImageAttachExistingOutput = z.infer<
 // cross-field "exactly one of url/data/uploadId" rule — which JSON Schema can't
 // express — lives in `mcpAttachFileInput`'s refine at the workflow boundary.
 export const attachFileFields = {
-  entityType: attachableImageEntity.describe(
+  entityKind: attachableImageEntity.describe(
     "Target entity type to attach the file to",
   ),
   entityId: attachableImageEntityId.describe("Shortcode of the target entity"),
@@ -437,14 +437,14 @@ export const mcpAttachFileInput = z
         message: "Provide exactly one of `url`, `data`, or `uploadId`",
       });
     }
-    if (value.entityType === "purchase" && value.documentKind === undefined) {
+    if (value.entityKind === "purchase" && value.documentKind === undefined) {
       ctx.addIssue({
         code: "custom",
         path: ["documentKind"],
         message: "documentKind is required for Purchase attachments",
       });
     }
-    if (value.purpose !== undefined && value.entityType !== "product") {
+    if (value.purpose !== undefined && value.entityKind !== "product") {
       ctx.addIssue({
         code: "custom",
         path: ["purpose"],
@@ -462,7 +462,7 @@ export const attachFileResponse = z.object({
   filename: z.string(),
   contentType: z.string(),
   kind: z.enum(["image", "document"]),
-  entityType: attachableImageEntity,
+  entityKind: attachableImageEntity,
   entityId: attachableImageEntityId,
   idempotencyKey: z.string().nullable().optional(),
   /**
@@ -593,7 +593,7 @@ export const imageAssociationEntity = z.enum(
 );
 export const imageAssociationRole = z.enum(["attachment", "cover", "logo"]);
 export const imageAssociationSchema = z.object({
-  entityType: imageAssociationEntity,
+  entityKind: imageAssociationEntity,
   entityId: z.string().min(1),
   entityName: z.string().min(1),
   role: imageAssociationRole,
@@ -627,7 +627,7 @@ export const imageWithEntitySchema = z
     // (`imageList`, `getImageById`, `getImagesByShortcodes`) merges in the
     // batch-loaded score.
     dataQuality: generatedImageFieldSchemas.read.dataQuality.optional(),
-    entityType: entityImage.nullable(),
+    entityKind: entityImage.nullable(),
     entityId: attachableImageEntityId.nullable(),
     entityName: z.string().nullable(),
     associations: z.array(imageAssociationSchema),

@@ -352,7 +352,7 @@ describe("expense repository — CRUD", () => {
     );
     expect(changedKind.lineKind).toBe("fee");
     const audit = await getAuditLog(ctx.db, {
-      entityType: "expense",
+      entityKind: "expense",
       entityId: inferredTaxId,
       limit: 20,
     });
@@ -591,7 +591,7 @@ describe("expense repository — bulk trade / cost-type writes", () => {
   const updateEntries = async (id: ExpenseId) =>
     (
       await getAuditLog(ctx.db, {
-        entityType: "expense",
+        entityKind: "expense",
         entityId: id,
         limit: 50,
       })
@@ -1147,7 +1147,7 @@ describe("expense repository — charge resolution on update", () => {
     // And no audit entry for a write that never landed. `getAuditLog`'s
     // `entityId` matches the internal uuid, not the shortcode.
     const audit = await getAuditLog(ctx.db, {
-      entityType: "expense",
+      entityKind: "expense",
       entityId: doomedId,
       limit: 20,
     });

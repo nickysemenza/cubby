@@ -104,7 +104,7 @@ const refreshOne = (
   port: EmbeddingRefreshPort,
 ): Promise<EmbeddingRefreshResult | undefined> =>
   refreshEntityEmbeddings(db, [ref], port).then((results) =>
-    results.get(entityRefKey(ref.entityType, ref.entityId)),
+    results.get(entityRefKey(ref.entityKind, ref.entityId)),
   );
 
 describe("semantic search background tasks", () => {
@@ -130,7 +130,7 @@ describe("semantic search background tasks", () => {
       },
     );
     expect(result.source).toEqual({
-      entityType: "product",
+      entityKind: "product",
       entityId: source.id,
     });
     expect(result.status).not.toBe("ready");
@@ -158,7 +158,7 @@ describe("semantic search background tasks", () => {
       }),
     );
     const result = await requestEmbeddingRefreshWorkflow(ctx.db, {
-      entityType: "product",
+      entityKind: "product",
       entityId: product.id,
     });
     expect(result).toEqual({ accepted: true });
@@ -168,7 +168,7 @@ describe("semantic search background tasks", () => {
         queueType: "background",
         task: expect.objectContaining({
           kind: "entity-embedding.refresh",
-          entityType: "product",
+          entityKind: "product",
           entityId: product.entityId,
         }),
       }),
@@ -216,8 +216,8 @@ describe("semantic search background tasks", () => {
       }),
     ).toBeNull();
     const keys = await getActiveSuggestionDismissalKeys(ctx.db, {
-      sourceEntityType: "product",
-      sourceEntityId: source.entityId,
+      entityKind: "product",
+      entityId: source.entityId,
       suggestionKind: "product.duplicate",
     });
     expect(keys.size).toBe(1);
@@ -257,8 +257,8 @@ describe("semantic search background tasks", () => {
       "product.related",
     ]) {
       const keys = await getActiveSuggestionDismissalKeys(ctx.db, {
-        sourceEntityType: "product",
-        sourceEntityId: source.entityId,
+        entityKind: "product",
+        entityId: source.entityId,
         suggestionKind,
       });
       expect(keys.size).toBe(0);
@@ -273,7 +273,7 @@ describe("semantic search background tasks", () => {
     );
     const calls: string[][] = [];
     const port = fakeEmbeddingPort(calls);
-    const ref = { entityType: "product" as const, entityId: product.entityId };
+    const ref = { entityKind: "product" as const, entityId: product.entityId };
 
     await expect(refreshOne(ctx.db, ref, port)).resolves.toEqual({
       outcome: "written",
@@ -297,7 +297,7 @@ describe("semantic search background tasks", () => {
       makeProductInput({ name: "Embedding before concurrent change" }),
       ctx.actor,
     );
-    const ref = { entityType: "product" as const, entityId: product.entityId };
+    const ref = { entityKind: "product" as const, entityId: product.entityId };
     const config = getSemanticEmbeddingConfig();
     const vectorFor = (marker: number) =>
       Array.from({ length: config.dimensions }, () => marker);
@@ -376,7 +376,7 @@ describe("semantic search background tasks", () => {
       makeProductInput({ name: "Vector store outage" }),
       ctx.actor,
     );
-    const ref = { entityType: "product" as const, entityId: product.entityId };
+    const ref = { entityKind: "product" as const, entityId: product.entityId };
     const config = getSemanticEmbeddingConfig();
     const throwingVectorStore: VectorStorePort = {
       configured: () => true,
@@ -408,7 +408,7 @@ describe("semantic search background tasks", () => {
 
     const stored = await getStoredEmbeddingHashes(ctx.db, [ref], config);
     expect(
-      stored.get(entityRefKey(ref.entityType, ref.entityId)),
+      stored.get(entityRefKey(ref.entityKind, ref.entityId)),
     ).toBeUndefined();
   });
 
@@ -427,7 +427,7 @@ describe("semantic search background tasks", () => {
       ),
     );
     const refs: SearchableEntityRef[] = products.map((product) => ({
-      entityType: "product",
+      entityKind: "product",
       entityId: product.entityId,
     }));
     const [duplicateRef] = refs;
@@ -460,7 +460,7 @@ describe("semantic search background tasks", () => {
     expect(upsertCalls[0]).toHaveLength(10);
     expect(results.size).toBe(10);
     for (const ref of refs) {
-      expect(results.get(entityRefKey(ref.entityType, ref.entityId))).toEqual({
+      expect(results.get(entityRefKey(ref.entityKind, ref.entityId))).toEqual({
         outcome: "written",
       });
     }
@@ -492,7 +492,7 @@ describe("semantic search background tasks", () => {
     // A financial entity with no EntityEmbedding row: searchable but not
     // embeddable, so `countAwaitingWork`/`settleAwaitingWork` must never
     // count or publish a refresh for it (see `unembeddedDocumentsSql`'s
-    // `embeddableEntityTypesSql` filter).
+    // `embeddableEntityKindsSql` filter).
     await createExpense(
       ctx.db,
       expenseCreateInput.parse(

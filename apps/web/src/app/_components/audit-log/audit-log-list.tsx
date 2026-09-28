@@ -1,4 +1,4 @@
-import type { AuditEntityType } from "@cubby/schemas/audit";
+import type { AuditEntityKind } from "@cubby/schemas/audit";
 import type { AuditChannel } from "@cubby/schemas/context";
 import { PulseIcon } from "@phosphor-icons/react/dist/csr/Pulse";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
@@ -38,7 +38,7 @@ const productionOperations: AuditLogListOperations = {
 };
 
 interface AuditLogListProps {
-  entityType?: AuditEntityType;
+  entityKind?: AuditEntityKind;
   entityId?: string;
   /** Everything one Run wrote (a RUN- shortcode). */
   runId?: string;
@@ -55,7 +55,7 @@ interface AuditLogListProps {
 }
 
 export function AuditLogList({
-  entityType,
+  entityKind,
   entityId,
   runId,
   channel,
@@ -87,7 +87,7 @@ export function AuditLogList({
   } = useInfiniteQuery({
     ...auditLogListOptions(
       {
-        entityType,
+        entityKind,
         entityId,
         runId,
         channel,

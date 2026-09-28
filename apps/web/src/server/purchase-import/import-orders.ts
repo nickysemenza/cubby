@@ -933,7 +933,8 @@ export async function validatePurchaseImport(
         const [target] = await database
           .select({
             id: runTarget.id,
-            purchaseId: runTarget.purchaseId,
+            entityId: runTarget.entityId,
+            entityKind: runTarget.entityKind,
             evidenceFingerprint: runTarget.evidenceFingerprint,
           })
           .from(runTarget)
@@ -944,15 +945,16 @@ export async function validatePurchaseImport(
             ),
           )
           .limit(1);
-        if (!target?.purchaseId)
+        if (target?.entityKind !== "purchase")
           throw new Error("Prepared validation order has no Purchase target");
+        const targetPurchaseId = parseEntityId("purchase", target.entityId);
         const [livePurchase] = await database
           .select({
             orderId: purchase.orderId,
             statedTotal: purchase.statedTotal,
           })
           .from(purchase)
-          .where(eq(purchase.id, target.purchaseId))
+          .where(eq(purchase.id, targetPurchaseId))
           .limit(1);
         const liveLines = await database
           .select({
@@ -968,7 +970,7 @@ export async function validatePurchaseImport(
             and(eq(product.id, expense.productId), notDeleted(product)),
           )
           .where(
-            and(eq(expense.purchaseId, target.purchaseId), notDeleted(expense)),
+            and(eq(expense.purchaseId, targetPurchaseId), notDeleted(expense)),
           );
         const expected = canonical(
           lines.map((line) => {
@@ -1131,7 +1133,7 @@ export async function commitProductEnrichment(
     .where(
       and(
         eq(runTarget.runId, scope.public.runId),
-        eq(runTarget.productId, productId),
+        eq(runTarget.entityId, productId),
       ),
     )
     .limit(1);
@@ -1222,7 +1224,7 @@ export async function commitProductEnrichment(
           .where(
             and(
               eq(runTarget.runId, scope.public.runId),
-              eq(runTarget.productId, productId),
+              eq(runTarget.entityId, productId),
             ),
           )
           .limit(1)
@@ -1313,7 +1315,7 @@ export async function commitProductEnrichment(
         if (importedImageId) {
           const existingAttachment = await tx.query.entityAttachment.findFirst({
             where: and(
-              eq(entityAttachment.subjectEntityId, productId),
+              eq(entityAttachment.entityId, productId),
               eq(entityAttachment.imageId, importedImageId),
               notDeleted(entityAttachment),
             ),
@@ -1346,7 +1348,7 @@ export async function commitProductEnrichment(
             .set({ sortOrder: sql`${entityAttachment.sortOrder} + 1` })
             .where(
               and(
-                eq(entityAttachment.subjectEntityId, productId),
+                eq(entityAttachment.entityId, productId),
                 notDeleted(entityAttachment),
               ),
             );
@@ -1361,7 +1363,8 @@ export async function commitProductEnrichment(
               .where(eq(entityAttachment.id, existingAttachment.id));
           } else {
             await tx.insert(entityAttachment).values({
-              subjectEntityId: productId,
+              entityId: productId,
+              entityKind: "product",
               role: "attachment",
               imageId: importedImageId,
               sortOrder: 0,
@@ -1465,7 +1468,7 @@ export async function overwriteProductEnrichment(
       .where(
         and(
           eq(runTarget.runId, scope.public.runId),
-          eq(runTarget.productId, resolvedProductId),
+          eq(runTarget.entityId, resolvedProductId),
         ),
       )
       .limit(1);
@@ -1541,7 +1544,7 @@ export async function overwriteProductEnrichment(
       .where(
         and(
           eq(runTarget.runId, scope.public.runId),
-          eq(runTarget.productId, resolvedProductId),
+          eq(runTarget.entityId, resolvedProductId),
         ),
       );
     return overwriteProductEnrichmentOut.parse({

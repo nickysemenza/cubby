@@ -64,7 +64,7 @@ function ProductPillsCell({ products }: { products: IngredientProduct[] }) {
 function ProductPillWithFood({ product }: { product: IngredientProduct }) {
   const food = useHydratedProductFood(product);
   const displayImage = useEntityDisplayImage({
-    entityType: "product",
+    entityKind: "product",
     entityId: product.id,
   });
   return (
@@ -175,7 +175,7 @@ export const ingredientListOverride = defineListOverride<
                 mobile: { slot: "meta", priority: 30 },
                 entityRefs: (row) =>
                   row.appearsInRecipes.map((recipe) => ({
-                    entityType: "recipe",
+                    entityKind: "recipe",
                     entityId: recipe.id,
                   })),
               }),
@@ -247,7 +247,7 @@ function IngredientFoodHydration({
     <ProductFoodSummariesProvider productIds={productIds} summaries={summaries}>
       <EntityDisplayImagesProvider
         refs={productIds.map((entityId) => ({
-          entityType: "product" as const,
+          entityKind: "product" as const,
           entityId,
         }))}
       >

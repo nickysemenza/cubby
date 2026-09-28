@@ -39,7 +39,7 @@ export function EntityReferenceLink({
 }) {
   const label = name ?? id;
   const providedImage = useEntityDisplayImage({
-    entityType: entity,
+    entityKind: entity,
     entityId: id,
   });
   const image = displayImage ?? providedImage;

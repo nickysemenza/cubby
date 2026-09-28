@@ -67,7 +67,7 @@ const WORKFLOW =
   "Workflow evidence about entities, not a relationship between them.";
 
 export const ENTITY_EDGE_OWNERS = {
-  EntityAttachment: { ownerIdentity: entityAttachment.subjectEntityId },
+  EntityAttachment: { ownerIdentity: entityAttachment.entityId },
   ExpenseAttribution: { owner: expenseAttribution.expenseId },
   FinancialTransactionAllocation: {
     owner: financialTransactionAllocation.transactionId,

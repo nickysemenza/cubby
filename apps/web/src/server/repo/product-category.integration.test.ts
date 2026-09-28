@@ -92,7 +92,7 @@ describe("product category hierarchy", () => {
       mode: "inherit",
       value: "tools",
       sourceEntity: {
-        entityType: "productCategory",
+        entityKind: "productCategory",
         entityId: taxonomyShortcode("tools"),
       },
     });

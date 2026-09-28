@@ -227,7 +227,8 @@ describe("photo coordinator model eval", () => {
             .insert(runTarget)
             .values({
               runId: runEntityId.parse(run.id),
-              imageId: parseEntityId("image", fixture.id),
+              entityKind: "image",
+              entityId: parseEntityId("image", fixture.id),
               position,
               state: "pending",
               targetFingerprint: `eval-${crypto.randomUUID()}`,

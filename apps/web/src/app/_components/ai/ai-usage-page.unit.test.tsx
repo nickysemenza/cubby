@@ -60,7 +60,7 @@ describe("UsageEntityLink", () => {
     ).toHaveAttribute("href", "/products/PRD-4K7M");
   });
 
-  it("renders the fallback when the shortcode's type does not match entityType", () => {
+  it("renders the fallback when the shortcode's type does not match entityKind", () => {
     render(
       <UsageEntityLink row={{ entityKind: "product", entityId: "LOC-4K7M" }} />,
       { wrapper: harness.wrapper },

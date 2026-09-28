@@ -24,7 +24,7 @@ import { defineListOverride } from "./types";
 // Image association types use uppercase storage labels; the list preview is
 // keyed by the page's known "image" entity, so that storage-only field is not
 // part of its browser row contract.
-type ImageListRow = Omit<ImageWithEntity, "entityType">;
+type ImageListRow = Omit<ImageWithEntity, "entityKind">;
 
 const columnHelper = createCubbyColumnHelper<ImageListRow>();
 

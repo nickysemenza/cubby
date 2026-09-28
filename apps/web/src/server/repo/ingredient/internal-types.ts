@@ -165,7 +165,7 @@ export const dbIngredientToListAPI = (
   };
 
   return parseWithContext(ingredientListItemOut, result, {
-    entityType: "Ingredient",
+    entityKind: "Ingredient",
     identifier: { id: ingredientData.id, name: ingredientData.name },
   });
 };

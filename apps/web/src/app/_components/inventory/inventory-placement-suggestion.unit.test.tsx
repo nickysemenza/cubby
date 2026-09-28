@@ -73,7 +73,7 @@ const inventoryitem = inventoryWithLocationAndProductOut.parse({
   dataQuality: testCompleteDataQuality(),
 });
 const recommendation = entityRecommendationsOut.parse({
-  source: { entityType: "inventory", entityId: INVENTORY_ID },
+  source: { entityKind: "inventory", entityId: INVENTORY_ID },
   basisKey: "parked-at-unknown",
   groups: [
     {

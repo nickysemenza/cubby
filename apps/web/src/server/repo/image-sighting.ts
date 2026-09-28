@@ -306,7 +306,7 @@ export async function upsertImageSightingInTransaction(
       .where(eq(imageSighting.id, row.id));
   }
   await logAuditEntry(tx, actor, {
-    entityType: "imageSighting",
+    entityKind: "imageSighting",
     entityId: row.id,
     action: created ? "create" : "update",
   });

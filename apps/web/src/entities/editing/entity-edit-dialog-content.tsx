@@ -213,7 +213,7 @@ export function EntityEditorImages<E extends EditableEntity>({
         // SAFETY: the shell mounts this block only when the resolved intent's
         // field roster carries `pendingImageIds`, which only an image-bearing
         // entity declares.
-        entityType={entityImageOf(entity as ImageEntity)}
+        entityKind={entityImageOf(entity as ImageEntity)}
         existingImages={existingImages}
         onImagesChange={(images) => {
           setPendingImages(images);

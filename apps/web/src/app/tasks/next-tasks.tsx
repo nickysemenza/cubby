@@ -58,7 +58,7 @@ function ChainNodeLink({
 }) {
   const displayImage =
     displayImages[
-      entityDisplayImageKey({ entityType: node.type, entityId: node.id })
+      entityDisplayImageKey({ entityKind: node.type, entityId: node.id })
     ] ?? null;
   return match(node.type)
     .with("task", () => (
@@ -136,7 +136,7 @@ function TaskRows({
                   displayImage={
                     displayImages[
                       entityDisplayImageKey({
-                        entityType: "task",
+                        entityKind: "task",
                         entityId: t.id,
                       })
                     ] ?? null
@@ -161,7 +161,7 @@ function TaskRows({
                   displayImage={
                     displayImages[
                       entityDisplayImageKey({
-                        entityType: "project",
+                        entityKind: "project",
                         entityId: t.projectId,
                       })
                     ] ?? null
@@ -219,29 +219,29 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
   const imageRefs = useMemo(
     () => [
       ...data.next.map((task) => ({
-        entityType: "task" as const,
+        entityKind: "task" as const,
         entityId: task.id,
       })),
       ...data.later.map((task) => ({
-        entityType: "task" as const,
+        entityKind: "task" as const,
         entityId: task.id,
       })),
       ...data.next.flatMap((task) =>
         task.projectId
-          ? [{ entityType: "project" as const, entityId: task.projectId }]
+          ? [{ entityKind: "project" as const, entityId: task.projectId }]
           : [],
       ),
       ...data.later.flatMap((task) =>
         task.projectId
-          ? [{ entityType: "project" as const, entityId: task.projectId }]
+          ? [{ entityKind: "project" as const, entityId: task.projectId }]
           : [],
       ),
       ...data.blocked.flatMap((blocked) => [
-        { entityType: "task" as const, entityId: blocked.task.id },
+        { entityKind: "task" as const, entityId: blocked.task.id },
         ...blocked.reasons.flatMap((reason) =>
           reason.kind !== "manual"
             ? reason.chain.map((node) => ({
-                entityType: node.type,
+                entityKind: node.type,
                 entityId: node.id,
               }))
             : [],
@@ -295,7 +295,7 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
                     displayImage={
                       displayImages[
                         entityDisplayImageKey({
-                          entityType: "task",
+                          entityKind: "task",
                           entityId: bt.task.id,
                         })
                       ] ?? null

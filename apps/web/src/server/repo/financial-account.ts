@@ -365,7 +365,7 @@ export async function createFinancialAccount(
       providerVendorId: resolvedProviderVendorId,
     });
     await logAuditEntry(tx, actor, {
-      entityType: "financialAccount",
+      entityKind: "financialAccount",
       entityId: created.id,
       action: "create",
     });
@@ -484,7 +484,7 @@ export async function updateFinancialAccount(
     ]);
     if (changes)
       await logAuditEntry(tx, actor, {
-        entityType: "financialAccount",
+        entityKind: "financialAccount",
         entityId: accountId,
         action: "update",
         changes,

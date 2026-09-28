@@ -24,7 +24,7 @@ export function ProjectSuggestionChips({
   if (expense.date === null) return null;
   return (
     <EntityRecommendations
-      source={{ entityType: "expense", entityId: expense.id }}
+      source={{ entityKind: "expense", entityId: expense.id }}
       operations={operations}
       compact
       pending={isPending}

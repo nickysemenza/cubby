@@ -100,12 +100,12 @@ type ProductWithUpcGapCandidate = {
 
 /** Orphan suggestions are not a saved predicate: delete eligibility must use the canonical incoming-edge policy. */
 const PRODUCT_RETAINING_NOT_EXISTS = {
-  "RunTarget.productId": (dbClient) =>
+  "RunTarget.entityId": (dbClient) =>
     notExists(
       dbClient
         .select({ id: sql`1` })
         .from(runTarget)
-        .where(eq(runTarget.productId, product.id)),
+        .where(eq(runTarget.entityId, product.id)),
     ),
   "Planting.sourceProductId": (dbClient) =>
     notExists(
@@ -685,7 +685,7 @@ export const findProductsWithUpcGaps = async (
           )
           .where(
             and(
-              eq(entityAttachment.subjectEntityId, product.id),
+              eq(entityAttachment.entityId, product.id),
               notDeleted(entityAttachment),
               displayableImageWhere,
             ),

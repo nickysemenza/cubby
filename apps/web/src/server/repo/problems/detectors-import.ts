@@ -28,7 +28,7 @@ export async function findOpenRunFindings(db: Database) {
       createdAt: runFinding.createdAt,
     })
     .from(runFinding)
-    .leftJoin(purchase, eq(runFinding.targetId, purchase.id))
+    .leftJoin(purchase, eq(runFinding.entityId, purchase.id))
     .where(eq(runFinding.status, "open"))
     .orderBy(runFinding.createdAt);
   const findings = rows.map((row) => ({

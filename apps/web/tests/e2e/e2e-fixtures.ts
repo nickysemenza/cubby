@@ -1106,7 +1106,8 @@ export async function seedPurchaseHeicAttachment(page: Page, name: string) {
     size: 100,
   });
   await db.insert(schema.entityAttachment).values({
-    subjectEntityId: owner.id,
+    entityId: owner.id,
+    entityKind: "purchase",
     role: "attachment",
     imageId: attached.id,
     documentKind: "other",
@@ -1444,7 +1445,8 @@ export async function seedPhotoGroupReviewRun(
     .values(
       [itemImage, labelImage, soloImage].map((image, index) => ({
         runId: run.id,
-        imageId: image.uuid,
+        entityKind: "image" as const,
+        entityId: image.uuid,
         position: index,
         state: "pending" as const,
         targetFingerprint: `e2e-${name}-${index}`,

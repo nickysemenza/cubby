@@ -215,8 +215,8 @@ function listPredicate(input: ActivityListInput): SQL {
       OR internal_id IN (
         SELECT t."runId"
         FROM "RunTarget" t
-        LEFT JOIN "Product" product ON product.id = t."productId" AND product."deletedAt" IS NULL
-        LEFT JOIN "Purchase" purchase ON purchase.id = t."purchaseId" AND purchase."deletedAt" IS NULL
+        LEFT JOIN "Product" product ON product.id = t."entityId" AND product."deletedAt" IS NULL
+        LEFT JOIN "Purchase" purchase ON purchase.id = t."entityId" AND purchase."deletedAt" IS NULL
         WHERE product.shortcode = ${input.subjectId} OR purchase.shortcode = ${input.subjectId}
       )
     )`);

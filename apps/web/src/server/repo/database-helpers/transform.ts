@@ -218,7 +218,7 @@ export const parseInventoryAmount = (
   entryId: string,
 ): z.infer<typeof amount> => {
   return parseWithContext(amount, rawAmount, {
-    entityType: "InventoryEntry",
+    entityKind: "InventoryEntry",
     identifier: { id: entryId },
   });
 };

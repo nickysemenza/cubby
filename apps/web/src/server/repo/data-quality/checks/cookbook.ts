@@ -23,7 +23,7 @@ const hasFewerLiveRecipesThanSource = (
 const hasDisplayableCover = (t: Cookbook) => sql`EXISTS (
   SELECT 1 FROM "EntityAttachment" dq_ckb_att
   JOIN "Image" dq_ckb_img ON dq_ckb_img."id" = dq_ckb_att."imageId"
-  WHERE dq_ckb_att."subjectEntityId" = ${t.id} AND dq_ckb_att."role" = 'cover'
+  WHERE dq_ckb_att."entityId" = ${t.id} AND dq_ckb_att."role" = 'cover'
     AND dq_ckb_att."deletedAt" IS NULL AND dq_ckb_img."deletedAt" IS NULL
     AND ${sql.raw(displayableImageRawSql("dq_ckb_img"))}
 )`;

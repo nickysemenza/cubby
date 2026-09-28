@@ -22,7 +22,7 @@ export const findSimilarEntitiesWorkflow = bindWorkflow(
       return pair;
     })
     .call("source", async ({ context }, { input, pair }) => ({
-      entityType: pair.source,
+      entityKind: pair.source,
       entityId: await resolveOrThrow(context, pair.source, input.sourceId),
     }))
     .call("readiness", ({ context }, { source }) =>
@@ -44,12 +44,12 @@ export const findSimilarEntitiesWorkflow = bindWorkflow(
           .output(({ candidates, hits }): SimilarEntitiesOut["results"] => {
             const hitByRef = new Map(
               hits.map(
-                (hit) => [`${hit.entityType}:${hit.entityId}`, hit] as const,
+                (hit) => [`${hit.entityKind}:${hit.entityId}`, hit] as const,
               ),
             );
             return candidates.flatMap((candidate) => {
               const hit = hitByRef.get(
-                `${candidate.entityType}:${candidate.entityId}`,
+                `${candidate.entityKind}:${candidate.entityId}`,
               );
               if (!hit) return [];
               const { entityId: _privateEntityId, ...entity } = hit;
@@ -60,7 +60,7 @@ export const findSimilarEntitiesWorkflow = bindWorkflow(
         branch.output((): SimilarEntitiesOut["results"] => []),
     })
     .output(({ input, pair, readiness, matches }): SimilarEntitiesOut => ({
-      source: { entityType: pair.source, entityId: input.sourceId },
+      source: { entityKind: pair.source, entityId: input.sourceId },
       status: readiness,
       results: matches,
     })),

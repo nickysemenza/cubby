@@ -1,4 +1,4 @@
-import type { AuditEntityType } from "@cubby/schemas/audit";
+import type { AuditEntityKind } from "@cubby/schemas/audit";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { Link } from "@tanstack/react-router";
 
@@ -26,22 +26,22 @@ import { cn } from "~/lib/utils";
  * type-plus-code shape survives as that fallback rather than being replaced.
  */
 export function AuditEntityLink({
-  entityType,
+  entityKind,
   entityId,
   name,
   displayImage,
   compact,
 }: {
-  entityType: AuditEntityType;
+  entityKind: AuditEntityKind;
   entityId: string;
   name?: string | null;
   displayImage: ImageUrlSummary | null;
   compact?: boolean;
 }) {
-  const label = entityLabel(entityType);
+  const label = entityLabel(entityKind);
   const content = (
     <>
-      <EntityIdentityMark entity={entityType} displayImage={displayImage} />
+      <EntityIdentityMark entity={entityKind} displayImage={displayImage} />
       {name ? (
         <>
           <span className={cn(compact && "truncate")}>{name}</span>
@@ -64,7 +64,7 @@ export function AuditEntityLink({
     compact && "max-w-48 sm:max-w-72",
   );
 
-  if (!isBrowserRoutedEntity(entityType)) {
+  if (!isBrowserRoutedEntity(entityKind)) {
     return (
       <span
         className={className}
@@ -75,7 +75,7 @@ export function AuditEntityLink({
     );
   }
 
-  const entity = entities[entityType];
+  const entity = entities[entityKind];
 
   return (
     <Link

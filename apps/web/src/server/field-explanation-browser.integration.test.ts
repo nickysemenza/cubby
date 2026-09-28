@@ -51,7 +51,7 @@ describe("derived field explanations against canonical records", () => {
     });
 
     const price = await explainField(requestContext, {
-      entityType: "product",
+      entityKind: "product",
       entityId: product.id,
       field: "price",
       surface: "detail",
@@ -65,7 +65,7 @@ describe("derived field explanations against canonical records", () => {
     );
 
     const count = await explainField(requestContext, {
-      entityType: "product",
+      entityKind: "product",
       entityId: product.id,
       field: "expenseCount",
       surface: "list",
@@ -74,7 +74,7 @@ describe("derived field explanations against canonical records", () => {
     expect(count.sources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          entity: { entityType: "expense", entityId: expense.output.id },
+          entity: { entityKind: "expense", entityId: expense.output.id },
         }),
       ]),
     );
@@ -116,7 +116,7 @@ describe("derived field explanations against canonical records", () => {
     });
     if (record.action !== "get") throw new Error("Expected inventory detail");
     const explanation = await explainField(requestContext, {
-      entityType: "inventory",
+      entityKind: "inventory",
       entityId: entry.id,
       field: "effectiveOwnership",
       surface: "detail",
@@ -159,13 +159,13 @@ describe("derived field explanations against canonical records", () => {
       });
     }
     const result = await explainField(context(), {
-      entityType: "product",
+      entityKind: "product",
       entityId: product.id,
       field: "expenseCount",
       surface: "list",
     });
     const linkedExpenses = result.sources.filter(
-      (source) => source.entity?.entityType === "expense",
+      (source) => source.entity?.entityKind === "expense",
     );
     expect(result.value).toBe(31);
     expect(linkedExpenses.length).toBeGreaterThan(0);
@@ -180,7 +180,7 @@ describe("derived field explanations against canonical records", () => {
       ctx.actor,
     );
     const explanation = await explainField(context(), {
-      entityType: "expense",
+      entityKind: "expense",
       entityId: expense.output.id,
       field: "trade",
       surface: "detail",
@@ -204,7 +204,7 @@ describe("derived field explanations against canonical records", () => {
       defaultTrade: null,
     });
     const explanation = await explainField(context(), {
-      entityType: "project",
+      entityKind: "project",
       entityId: child.shortcode,
       field: "defaultTrade",
       surface: "detail",
@@ -213,7 +213,7 @@ describe("derived field explanations against canonical records", () => {
       mode: "inherit",
       storedValue: null,
       value: "building",
-      sourceEntity: { entityType: "project", entityId: parent.shortcode },
+      sourceEntity: { entityKind: "project", entityId: parent.shortcode },
     });
     expect(explanation.sources).toEqual([]);
   });

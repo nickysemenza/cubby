@@ -19,7 +19,7 @@ const hasLivePurchase = (t: Vendor) => sql`EXISTS (
 const hasDisplayableLogo = (t: Vendor) => sql`EXISTS (
   SELECT 1 FROM "EntityAttachment" dq_ven_att
   JOIN "Image" dq_ven_img ON dq_ven_img."id" = dq_ven_att."imageId"
-  WHERE dq_ven_att."subjectEntityId" = ${t.id} AND dq_ven_att."role" = 'logo'
+  WHERE dq_ven_att."entityId" = ${t.id} AND dq_ven_att."role" = 'logo'
     AND dq_ven_att."deletedAt" IS NULL AND dq_ven_img."deletedAt" IS NULL
     AND ${sql.raw(displayableImageRawSql("dq_ven_img"))}
 )`;

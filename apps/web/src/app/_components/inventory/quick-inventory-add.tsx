@@ -450,7 +450,7 @@ export function QuickInventoryAdd({
                   own roster, and `useImageState` already owns the create
                   form's pending-image lifecycle. */}
               <PendingImageUpload
-                entityType="PRODUCT"
+                entityKind="PRODUCT"
                 onImagesChange={imageState.handlePendingImagesChange}
               />
               <IdentifyProductButton

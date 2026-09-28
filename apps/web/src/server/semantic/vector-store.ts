@@ -47,7 +47,7 @@ interface StoredVector extends SearchableEntityRef {
 }
 
 interface VectorQueryOptions {
-  entityTypes?: SearchableEntity[];
+  entityKinds?: SearchableEntity[];
   topK: number;
 }
 
@@ -76,14 +76,14 @@ export interface VectorStorePort {
  * bytes, under Vectorize's 64-byte id limit.
  */
 export const vectorId = (ref: SearchableEntityRef): string =>
-  `${ref.entityType}:${ref.entityId}`;
+  `${ref.entityKind}:${ref.entityId}`;
 
 const parseVectorId = (id: string): SearchableEntityRef | undefined => {
   const separator = id.indexOf(":");
   if (separator === -1) return undefined;
-  const entityType = searchableEntitySchema.safeParse(id.slice(0, separator));
-  if (!entityType.success) return undefined;
-  return { entityType: entityType.data, entityId: id.slice(separator + 1) };
+  const entityKind = searchableEntitySchema.safeParse(id.slice(0, separator));
+  if (!entityKind.success) return undefined;
+  return { entityKind: entityKind.data, entityId: id.slice(separator + 1) };
 };
 
 /** Vectorize caps a single Worker `upsert`/`deleteByIds` at 1000 vectors. */
@@ -102,9 +102,11 @@ const queryOptions = (opts: VectorQueryOptions): VectorizeQueryOptions => {
     returnMetadata: "none",
   };
   // Filter runs before topK, so the caller gets up to `topK` matching rows.
-  // `entityType` is the only metadata index (low cardinality by design).
-  if (opts.entityTypes && opts.entityTypes.length > 0) {
-    options.filter = { entityType: { $in: opts.entityTypes } };
+  // The Vectorize metadata property stays `entityType`: the index is created
+  // out of band per property name and renaming it would orphan stored vectors.
+  // It is the only metadata index (low cardinality by design).
+  if (opts.entityKinds && opts.entityKinds.length > 0) {
+    options.filter = { entityType: { $in: opts.entityKinds } };
   }
   return options;
 };
@@ -133,7 +135,7 @@ export const productionVectorStore: VectorStorePort = {
         batch.map((vector) => ({
           id: vectorId(vector),
           values: vector.values,
-          metadata: { entityType: vector.entityType },
+          metadata: { entityType: vector.entityKind },
         })),
       );
     }
@@ -168,15 +170,15 @@ const cosine = (a: number[], b: number[]): number => {
 };
 
 /** The only filter shape the production store emits (see `queryOptions`). */
-const entityTypeFilterSchema = z.object({
+const entityKindFilterSchema = z.object({
   entityType: z.object({ $in: z.array(searchableEntitySchema) }),
 });
 const storedMetadataSchema = z.object({ entityType: searchableEntitySchema });
 
-const filterEntityTypes = (
+const filterEntityKinds = (
   options: VectorizeQueryOptions | undefined,
 ): Set<SearchableEntity> | undefined => {
-  const parsed = entityTypeFilterSchema.safeParse(options?.filter);
+  const parsed = entityKindFilterSchema.safeParse(options?.filter);
   return parsed.success ? new Set(parsed.data.entityType.$in) : undefined;
 };
 
@@ -193,7 +195,7 @@ export function createInMemoryVectorizeIndex(): VectorizeIndexBinding & {
     vector: number[],
     options: VectorizeQueryOptions | undefined,
   ): VectorizeMatches => {
-    const allowed = filterEntityTypes(options);
+    const allowed = filterEntityKinds(options);
     const matches = [...vectors.values()]
       .filter((stored) => {
         if (!allowed) return true;

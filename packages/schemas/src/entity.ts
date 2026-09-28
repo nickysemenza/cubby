@@ -5,7 +5,7 @@ import { nonEmptyTuple } from "./identifiers";
 
 export { entitySchema, type Entity } from "./entity-core";
 
-// The polymorphic image `entityType` column values. These UPPERCASE storage
+// The polymorphic image `entityKind` column values. These UPPERCASE storage
 // keys are the image-bearing entities. `entity-manifest.ts` imports `Entity`
 // above as a type only, so deriving this runtime roster has no module cycle.
 type EntityImageValue = Uppercase<(typeof imageEntities)[number]>;
@@ -26,7 +26,7 @@ export type EntityImage = z.infer<typeof entityImage>;
 export type ImageEntity = (typeof imageEntities)[number];
 
 /**
- * The polymorphic image `entityType` value for `entity`. Every `ImageEntity`
+ * The polymorphic image `entityKind` value for `entity`. Every `ImageEntity`
  * slug uppercases losslessly (`location` → `LOCATION`, `gardenEntry` →
  * `GARDENENTRY`) into a member of `entityImage`, so this is a total,
  * cast-free replacement for a caller's own `entity.toUpperCase() as EntityImage`.
@@ -38,7 +38,7 @@ export const entityRefKey = (entity: Entity, id: string): string =>
   `${entity}:${id}`;
 
 export const entityRefFields = {
-  entityType: entitySchema,
+  entityKind: entitySchema,
   entityId: z.string(),
 };
 

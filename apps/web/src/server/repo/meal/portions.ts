@@ -405,7 +405,7 @@ export const saveMealRecipePreparation = async (
     ]);
     for (const mealId of affectedIds)
       await logAuditEntry(tx, actor, {
-        entityType: "meal",
+        entityKind: "meal",
         entityId: mealId,
         action: "update",
       });

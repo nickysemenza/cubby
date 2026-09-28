@@ -98,7 +98,7 @@ export const TASK_DELETE_EDGE_POLICY = {
     description:
       "Blocks/blocked-by dependency rows naming the task (or a cascaded subtask) are removed outright.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -438,7 +438,7 @@ export const createTask = async (
       );
     }
     await logAuditEntry(tx, actor, {
-      entityType: "task",
+      entityKind: "task",
       entityId: created.id,
       action: "create",
     });
@@ -627,7 +627,7 @@ export const updateTask = async (
     }
     if (Object.keys(changes).length > 0) {
       await logAuditEntry(tx, actor, {
-        entityType: "task",
+        entityKind: "task",
         entityId: id,
         action: "update",
         changes,
@@ -801,7 +801,7 @@ export const reorderTasks = async (
           : undefined;
         if (changes) {
           await logAuditEntry(tx, actor, {
-            entityType: "task",
+            entityKind: "task",
             entityId: moveId,
             action: "update",
             changes,

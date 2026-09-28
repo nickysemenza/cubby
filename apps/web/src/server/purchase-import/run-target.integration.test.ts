@@ -2,7 +2,7 @@ import {
   imageId as parseImageId,
   runEntityId,
 } from "@cubby/schemas/identifiers";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -101,6 +101,35 @@ describe("purchase import run target resolution", () => {
   });
 });
 
+describe("run target entity reference", () => {
+  const ctx = withTestDb();
+
+  // A target names one purchase, product or image; the kind CHECK is the only
+  // thing keeping a run worklist from pointing at any other entity.
+  it("refuses an entityKind outside purchase, product and image", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Run target kind test member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const run = await startPhotoInventoryRun(ctx.db, {
+      ledgerPartyId: party.id,
+      actorUserId: ctx.actor.userId,
+    });
+    const recipe = await insertWithShortcode(ctx.db, "recipe", {
+      name: "Run target kind recipe",
+    });
+    await expect(
+      getDb(ctx.db).execute(
+        sql`INSERT INTO "RunTarget" ("runId", "entityId", "entityKind", "targetFingerprint")
+            VALUES (${run.id}, ${recipe.id}, 'recipe', 'kind-test-fingerprint')`,
+      ),
+    ).rejects.toMatchObject({
+      cause: { constraint: "RunTarget_entityKind_check" },
+    });
+  });
+});
+
 describe("run.reportDeviceWork", () => {
   const ctx = withTestDb();
 
@@ -129,7 +158,8 @@ describe("run.reportDeviceWork", () => {
       .insert(runTarget)
       .values({
         runId: runEntityId.parse(run.id),
-        imageId: parseImageId.parse(image.id),
+        entityKind: "image",
+        entityId: parseImageId.parse(image.id),
         targetFingerprint: "device-work-test-fingerprint",
       });
     return { runShortcode: runRow!.shortcode, imageShortcode: image.shortcode };

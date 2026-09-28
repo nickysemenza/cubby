@@ -756,7 +756,7 @@ describe("suggestFields", () => {
         fallbackValue: "plumbing",
         source: "Project default",
         sourceEntity: {
-          entityType: "project" as const,
+          entityKind: "project" as const,
           entityId: "PRJ-AAAA",
           name: null,
         },
@@ -798,7 +798,7 @@ describe("suggestFields", () => {
         fallbackValue: "PRJ-AAAA",
         source: "Parent task",
         sourceEntity: {
-          entityType: "task" as const,
+          entityKind: "task" as const,
           entityId: "TSK-PARENT",
           name: null,
         },

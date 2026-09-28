@@ -86,7 +86,7 @@ export function RecipeUsagesTable({
   const imageRefs = useMemo(
     () =>
       rows.map((row) => ({
-        entityType: "recipe" as const,
+        entityKind: "recipe" as const,
         entityId: row.recipe.id,
       })),
     [rows],
@@ -114,7 +114,7 @@ export function RecipeUsagesTable({
                 displayImage={
                   displayImages[
                     entityDisplayImageKey({
-                      entityType: "recipe",
+                      entityKind: "recipe",
                       entityId: row.recipe.id,
                     })
                   ] ?? null

@@ -42,7 +42,7 @@ import { buildIntegrityCatalog } from "~/server/services/entity-integrity.servic
 import { throwIfStartOperationAborted } from "~/server/start-operation.server";
 
 const searchDocumentCountRowSchema = z.object({
-  entityType: searchableEntitySchema,
+  entityKind: searchableEntitySchema,
   documents: z.number().int().nonnegative(),
   embeddings: z.number().int().nonnegative(),
 });
@@ -175,16 +175,16 @@ export const entityInspectorHealthHandlers = implementOperationDomain(
             searchDocumentCountRowSchema,
             drizzle.sql`
               SELECT
-                sd."entityType" AS "entityType",
+                sd."entityKind" AS "entityKind",
                 count(DISTINCT sd."entityId")::int AS documents,
                 count(DISTINCT ee."entityId")::int AS embeddings
               FROM "SearchDocument" sd
               LEFT JOIN "EntityEmbedding" ee
-                ON ee."entityType" = sd."entityType"
+                ON ee."entityKind" = sd."entityKind"
                 AND ee."entityId" = sd."entityId"
                 AND ee."deletedAt" IS NULL
               WHERE sd."deletedAt" IS NULL
-              GROUP BY sd."entityType"
+              GROUP BY sd."entityKind"
             `,
           ),
         ]);
@@ -193,7 +193,7 @@ export const entityInspectorHealthHandlers = implementOperationDomain(
           counts,
           search: Object.fromEntries(
             rows.map((row) => [
-              row.entityType,
+              row.entityKind,
               { documents: row.documents, embeddings: row.embeddings },
             ]),
           ),

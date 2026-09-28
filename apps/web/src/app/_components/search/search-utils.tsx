@@ -19,7 +19,7 @@ import {
 
 export type { SearchHit } from "@cubby/schemas/search";
 
-export const entityTypeMap = {
+export const entityKindMap = {
   product: "product",
   recipe: "recipe",
   ingredient: "ingredient",
@@ -42,7 +42,7 @@ export const entityTypeMap = {
 } satisfies Record<SearchableEntity, BrowserRoutedEntity>;
 
 function getSearchResultEntity(item: SearchDestination): BrowserRoutedEntity {
-  return entityTypeMap[item.entityType];
+  return entityKindMap[item.entityKind];
 }
 
 export function getSearchResultRoute(item: SearchDestination) {
@@ -87,11 +87,11 @@ function SearchHitIcon({
   item: SearchDestination;
   className?: string;
 }) {
-  const entity = entityTypeMap[item.entityType];
-  if (item.entityType === "project")
+  const entity = entityKindMap[item.entityKind];
+  if (item.entityKind === "project")
     return <ProjectMark icon={item.typeHint} className={className} />;
   const locationType =
-    item.entityType === "location" ? asLocationType(item.typeHint) : undefined;
+    item.entityKind === "location" ? asLocationType(item.typeHint) : undefined;
   if (locationType) {
     const Icon = getLocationIcon(locationType);
     return (

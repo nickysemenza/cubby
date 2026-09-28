@@ -51,7 +51,7 @@ import { hydrateImageReadProjection } from "./image-read-projection";
 
 /** A private database identity used only while hydrating public read models. */
 export interface EntityDisplayImageRef {
-  entityType: Entity;
+  entityKind: Entity;
   entityId: string;
 }
 
@@ -187,7 +187,7 @@ const directStorageBranch = (entity: Entity): SQL | null => {
                ${sortOrder} AS "sortOrder", ${createdAt} AS "createdAt", i.id AS "imageId"
         FROM ${sql.raw(`"${traversal.rootTable}"`)} s
         ${traversal.joins}
-        WHERE refs."entityType" = ${entity}
+        WHERE refs."entityKind" = ${entity}
           AND s.id = refs."entityId"
           AND ${rootLiveCondition(entity, "s")}
           AND ${displayAttachmentCondition(entity, attachmentHop?.alias ?? "")}
@@ -243,7 +243,7 @@ const displaySourceBranch = (
                ${sortOrder} AS "sortOrder", ${createdAt} AS "createdAt", i.id AS "imageId"
         FROM ${sql.raw(`"${traversal.rootTable}"`)} s
         ${traversal.joins}
-        WHERE refs."entityType" = ${source.entity}
+        WHERE refs."entityKind" = ${source.entity}
           AND s.id = refs."entityId"
           AND ${rootLiveCondition(source.entity, "s")}
           AND ${displayAttachmentCondition(source.target, attachmentHop?.alias ?? "")}
@@ -265,7 +265,7 @@ const DISPLAY_BRANCHES: readonly DisplayBranch[] = [
 ];
 
 const displayImageRowSchema = z.object({
-  entityType: entitySchema,
+  entityKind: entitySchema,
   entityId: z.string(),
   refKey: z.string(),
   images: z.array(
@@ -317,19 +317,19 @@ async function resolveDisplayImageListsFromSqlRefs(
           AND e."productId" IS NOT NULL
           AND (
             e."projectId" IN (
-              SELECT r."entityId" FROM refs r WHERE r."entityType" = 'project'
+              SELECT r."entityId" FROM refs r WHERE r."entityKind" = 'project'
             )
             OR e."purchaseId" IN (
               SELECT purchase.id
               FROM "Purchase" purchase
               JOIN refs r ON r."entityId" = purchase."defaultProjectId"
-              WHERE r."entityType" = 'project'
+              WHERE r."entityKind" = 'project'
                 AND purchase."deletedAt" IS NULL
             )
             OR EXISTS (
               SELECT 1
               FROM refs r JOIN "Project" household ON household.id = r."entityId"
-              WHERE r."entityType" = 'project'
+              WHERE r."entityKind" = 'project'
                 AND household."shortcode" = ${HOUSEHOLD_PROJECT_SHORTCODE}
                 AND household."deletedAt" IS NULL
             )
@@ -342,7 +342,7 @@ async function resolveDisplayImageListsFromSqlRefs(
   const result = await unwrapDb(db).execute(sql`
     WITH ${refsSql}
     ${expenseProjectRelation}
-    SELECT refs."entityType", refs."entityId"::text AS "entityId", refs."refKey", (
+    SELECT refs."entityKind", refs."entityId"::text AS "entityId", refs."refKey", (
       SELECT COALESCE(
         json_agg(
           json_build_object(
@@ -361,7 +361,7 @@ async function resolveDisplayImageListsFromSqlRefs(
         FROM (
         SELECT i.key, i.shortcode, 0 AS priority, NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId", 0 AS "sortOrder", i."createdAt", i.id AS "imageId"
         FROM "Image" i
-        WHERE refs."entityType" = 'image' AND i.id = refs."entityId"
+        WHERE refs."entityKind" = 'image' AND i.id = refs."entityId"
           AND i."deletedAt" IS NULL AND ${displayableImageSql("i")}
         ${borrowedImages}
         ) raw_candidates
@@ -415,22 +415,22 @@ async function resolveUniversalEntityDisplayImageLists(
   const supported = [
     ...new Map(
       refs
-        .filter((ref) => DISPLAY_IMAGE_ENTITIES.has(ref.entityType))
-        .map((ref) => [entityRefKey(ref.entityType, ref.entityId), ref]),
+        .filter((ref) => DISPLAY_IMAGE_ENTITIES.has(ref.entityKind))
+        .map((ref) => [entityRefKey(ref.entityKind, ref.entityId), ref]),
     ).values(),
   ];
   if (supported.length === 0) return new Map();
   const values = sql.join(
     supported.map(
       (ref) =>
-        sql`(${ref.entityType}::text, ${ref.entityId}::uuid, ${entityRefKey(ref.entityType, ref.entityId)}::text)`,
+        sql`(${ref.entityKind}::text, ${ref.entityId}::uuid, ${entityRefKey(ref.entityKind, ref.entityId)}::text)`,
     ),
     sql`, `,
   );
   return resolveDisplayImageListsFromSqlRefs(
     db,
-    sql`refs("entityType", "entityId", "refKey") AS (VALUES ${values})`,
-    new Set(supported.map((ref) => ref.entityType)),
+    sql`refs("entityKind", "entityId", "refKey") AS (VALUES ${values})`,
+    new Set(supported.map((ref) => ref.entityKind)),
   );
 }
 
@@ -442,11 +442,11 @@ export async function resolvePublicEntityDisplayImages(
   const supported = [
     ...new Map(
       refs.flatMap((ref) => {
-        if (!shortcodeEntities.some((entity) => entity === ref.entityType))
+        if (!shortcodeEntities.some((entity) => entity === ref.entityKind))
           return [];
         const parsed = parseShortcode(ref.entityId);
-        if (!parsed || parsed.type !== ref.entityType) return [];
-        const refKey = entityRefKey(ref.entityType, ref.entityId);
+        if (!parsed || parsed.type !== ref.entityKind) return [];
+        const refKey = entityRefKey(ref.entityKind, ref.entityId);
         return [
           [refKey, { ...ref, shortcode: parsed.shortcode, refKey }] as const,
         ];
@@ -457,22 +457,22 @@ export async function resolvePublicEntityDisplayImages(
   const values = sql.join(
     supported.map(
       (ref) =>
-        sql`(${ref.entityType}::text, ${ref.shortcode}::text, ${ref.refKey}::text)`,
+        sql`(${ref.entityKind}::text, ${ref.shortcode}::text, ${ref.refKey}::text)`,
     ),
     sql`, `,
   );
   const lists = await resolveDisplayImageListsFromSqlRefs(
     db,
-    sql`input_refs("entityType", "shortcode", "refKey") AS (VALUES ${values}),
-        refs("entityType", "entityId", "refKey") AS (
-          SELECT input_refs."entityType", identity.id, input_refs."refKey"
+    sql`input_refs("entityKind", "shortcode", "refKey") AS (VALUES ${values}),
+        refs("entityKind", "entityId", "refKey") AS (
+          SELECT input_refs."entityKind", identity.id, input_refs."refKey"
           FROM input_refs
           JOIN "Entity" identity ON identity.shortcode = input_refs.shortcode
-            AND identity.kind = input_refs."entityType"
+            AND identity.kind = input_refs."entityKind"
             AND identity."deletedAt" IS NULL
             AND identity."mergedIntoId" IS NULL
         )`,
-    new Set(supported.map((ref) => ref.entityType)),
+    new Set(supported.map((ref) => ref.entityKind)),
   );
   return new Map(
     [...lists].flatMap(([key, images]) =>
@@ -510,7 +510,7 @@ const directAttachments = async (
   if (entityIds.length === 0) return new Map();
   const rows = await unwrapDb(db)
     .select({
-      entityId: entityAttachment.subjectEntityId,
+      entityId: entityAttachment.entityId,
       attachmentRole: entityAttachment.role,
       ...getTableColumns(image),
     })
@@ -518,13 +518,13 @@ const directAttachments = async (
     .innerJoin(image, eq(image.id, entityAttachment.imageId))
     .where(
       and(
-        inArray(entityAttachment.subjectEntityId, [...entityIds]),
+        inArray(entityAttachment.entityId, [...entityIds]),
         notDeleted(entityAttachment),
         notDeleted(image),
       ),
     )
     .orderBy(
-      asc(entityAttachment.subjectEntityId),
+      asc(entityAttachment.entityId),
       asc(entityAttachment.sortOrder),
       asc(entityAttachment.createdAt),
       asc(image.id),
@@ -552,10 +552,10 @@ const directAttachments = async (
 /** Resolve directly owned files from the storage declared by the manifest. */
 export const resolveEntityAttachments = async (
   db: Database | DrizzleTransaction,
-  entityType: Entity,
+  entityKind: Entity,
   entityIds: readonly string[],
 ): Promise<Map<string, EntityAttachmentRead[]>> =>
-  entityManifest[entityType].imageStorage === false
+  entityManifest[entityKind].imageStorage === false
     ? new Map()
     : directAttachments(db, entityIds);
 
@@ -564,7 +564,7 @@ export async function withUniversalEntityMedia<
   E extends Exclude<Entity, "usda-food">,
 >(
   db: Database | DrizzleTransaction,
-  entityType: E,
+  entityKind: E,
   rows: readonly unknown[],
   detail: boolean,
 ): Promise<
@@ -581,17 +581,17 @@ export async function withUniversalEntityMedia<
   const resolved = await resolveLiveShortcodes(
     db,
     publicRows.map((row) => row.id),
-    entityType,
+    entityKind,
   );
   const refs = publicRows.flatMap((row) => {
     const entityId = resolved.get(row.id);
-    return entityId === undefined ? [] : [{ entityType, entityId }];
+    return entityId === undefined ? [] : [{ entityKind, entityId }];
   });
   const entityIds = refs.map((ref) => ref.entityId);
   const [lists, attachments, previousShortcodes] = await Promise.all([
     resolveEntityDisplayImageLists(db, refs),
     detail
-      ? resolveEntityAttachments(db, entityType, entityIds)
+      ? resolveEntityAttachments(db, entityKind, entityIds)
       : Promise.resolve(new Map<string, EntityAttachmentRead[]>()),
     detail
       ? previousShortcodesFor(db, entityIds)
@@ -602,7 +602,7 @@ export async function withUniversalEntityMedia<
     publicRows.map((row) => {
       const entityId = resolved.get(row.id);
       const displayImages = entityId
-        ? (lists.get(entityRefKey(entityType, entityId)) ?? [])
+        ? (lists.get(entityRefKey(entityKind, entityId)) ?? [])
         : [];
       if (!detail) return { ...row, displayImages };
       const projected = {
@@ -618,8 +618,8 @@ export async function withUniversalEntityMedia<
       // Purchase documents and Product item/label galleries retain attachment
       // metadata in their specialized projections. Generic attachments still
       // expose every file without replacing those domain-shaped galleries.
-      return entityType !== "purchase" &&
-        entityType !== "product" &&
+      return entityKind !== "purchase" &&
+        entityKind !== "product" &&
         "images" in row
         ? { ...projected, images: projected.attachments }
         : projected;
@@ -634,13 +634,13 @@ export async function withListEntityMedia<
   Row,
 >(
   db: Database | DrizzleTransaction,
-  entityType: E,
+  entityKind: E,
   rows: Row[],
 ): Promise<Row[] | Awaited<ReturnType<typeof withUniversalEntityMedia>>> {
   if (rows.every((row) => resolvedListMediaSchema.safeParse(row).success)) {
     return rows;
   }
-  return withUniversalEntityMedia(db, entityType, rows, false);
+  return withUniversalEntityMedia(db, entityKind, rows, false);
 }
 
 /**
@@ -678,7 +678,7 @@ export async function resolveEntityDisplayImages(
  */
 export async function withDisplayImages<Row extends { id: string }, Out>(
   db: Database | DrizzleTransaction,
-  entityType: Entity,
+  entityKind: Entity,
   rows: readonly Row[],
   // Mappers that parse their row against the list schema take the images as
   // an argument so the parse sees them; the spread below covers the rest.
@@ -686,12 +686,12 @@ export async function withDisplayImages<Row extends { id: string }, Out>(
 ): Promise<Array<Out & { displayImages: DisplayImageSummary[] }>> {
   const lists = await resolveEntityDisplayImageLists(
     db,
-    rows.map((row) => ({ entityType, entityId: row.id })),
+    rows.map((row) => ({ entityKind, entityId: row.id })),
   );
   return hydrateImageReadProjection(
     db,
     rows.map((row) => {
-      const displayImages = lists.get(entityRefKey(entityType, row.id)) ?? [];
+      const displayImages = lists.get(entityRefKey(entityKind, row.id)) ?? [];
       return { ...toOut(row, displayImages), displayImages };
     }),
   );

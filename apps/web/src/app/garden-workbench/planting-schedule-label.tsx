@@ -19,7 +19,7 @@ export function usePlantingScheduleLabel(
       Object.fromEntries(
         plantings.map((planting) => [
           entityDisplayImageKey({
-            entityType: "planting",
+            entityKind: "planting",
             entityId: planting.id,
           }),
           planting.displayImages[0] ?? null,
@@ -31,7 +31,7 @@ export function usePlantingScheduleLabel(
     () =>
       rows.flatMap((row) =>
         row.id.startsWith("location:") && row.id !== "location:unplaced"
-          ? [{ entityType: "location", entityId: row.id.slice(9) }]
+          ? [{ entityKind: "location", entityId: row.id.slice(9) }]
           : [],
       ),
     [rows],
@@ -64,7 +64,7 @@ export function usePlantingScheduleLabel(
             data={{ id, name: row.name }}
             displayImage={
               images[
-                entityDisplayImageKey({ entityType: "planting", entityId: id })
+                entityDisplayImageKey({ entityKind: "planting", entityId: id })
               ] ?? null
             }
             truncate
@@ -79,7 +79,7 @@ export function usePlantingScheduleLabel(
             data={{ id, name: row.name }}
             displayImage={
               images[
-                entityDisplayImageKey({ entityType: "location", entityId: id })
+                entityDisplayImageKey({ entityKind: "location", entityId: id })
               ] ?? null
             }
             truncate

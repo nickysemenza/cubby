@@ -89,7 +89,7 @@ import { markProductConversionCoverageInputStale } from "./conversion-coverage";
 import { ensureSlotPrimaries } from "./update-helpers";
 
 export const PRODUCT_MERGE_EDGE_POLICY = {
-  "RunTarget.productId": {
+  "RunTarget.entityId": {
     code: "repoint-targeted-import-history",
     effect: "repoint",
     description: "Targeted enrichment history follows the surviving Product.",
@@ -112,7 +112,7 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     description:
       "A merged product's stock moves onto the survivor; entries in a location the survivor already stocks are summed into the survivor's entry and the absorbed one is soft-deleted.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "move-dedupe-shared-image",
     effect: "move-dedupe",
     description:
@@ -871,12 +871,12 @@ async function buildProductMergePlan(
   const imageRows = (
     await db.query.entityAttachment.findMany({
       where: and(
-        inArray(entityAttachment.subjectEntityId, ids),
+        inArray(entityAttachment.entityId, ids),
         notDeleted(entityAttachment),
       ),
       columns: {
         id: true,
-        subjectEntityId: true,
+        entityId: true,
         imageId: true,
         purpose: true,
         sortOrder: true,
@@ -888,9 +888,9 @@ async function buildProductMergePlan(
         asc(entityAttachment.createdAt),
       ],
     })
-  ).map(({ subjectEntityId, ...row }): ProductImageAssociationRow => ({
+  ).map(({ entityId, ...row }): ProductImageAssociationRow => ({
     ...row,
-    productId: parseEntityId("product", subjectEntityId),
+    productId: parseEntityId("product", entityId),
     sha256: row.image.sha256,
   }));
   const projectUseRows = (
@@ -1405,7 +1405,7 @@ export const mergeProducts = async (
         .where(inArray(inventoryEntry.id, absorbedIds));
       const entries: AuditEntryInput[] = [
         {
-          entityType: "inventory",
+          entityKind: "inventory",
           entityId: into.id,
           action: "update",
           changes: { amount: { from: into.amount, to } },
@@ -1451,8 +1451,8 @@ export const mergeProducts = async (
       table: entityAttachment,
       // A retry key was scoped to the loser; it must not become reusable
       // against the survivor (ADR 0006).
-      repointValues: (subjectEntityId) => ({
-        subjectEntityId,
+      repointValues: (entityId) => ({
+        entityId,
         idempotencyKey: null,
       }),
       softDeleteValues: (deletedAt) => ({ deletedAt }),
@@ -1466,7 +1466,7 @@ export const mergeProducts = async (
       const survivorFirst = new Set(survivorImagesBefore.map((row) => row.id));
       const afterFold = await tx.query.entityAttachment.findMany({
         where: and(
-          eq(entityAttachment.subjectEntityId, keepId),
+          eq(entityAttachment.entityId, keepId),
           notDeleted(entityAttachment),
         ),
         columns: { id: true },
@@ -1679,12 +1679,12 @@ export const mergeProducts = async (
       .returning({ id: expense.id });
     summary.expensesMoved = movedExpenses.length;
     // Preserve the keeper's target when both Products were inspected in the
-    // same run; re-pointing all rows at once would violate the partial unique
-    // `(runId, productId)` index.
+    // same run; re-pointing all rows at once would violate the unique
+    // `(runId, entityId)` index.
     const targetedRuns = await tx
       .select({ id: runTarget.id, runId: runTarget.runId })
       .from(runTarget)
-      .where(inArray(runTarget.productId, plan.loserIds));
+      .where(inArray(runTarget.entityId, plan.loserIds));
     for (const target of targetedRuns) {
       const [existing] = await tx
         .select({ id: runTarget.id })
@@ -1692,7 +1692,7 @@ export const mergeProducts = async (
         .where(
           and(
             eq(runTarget.runId, target.runId),
-            eq(runTarget.productId, keepId),
+            eq(runTarget.entityId, keepId),
           ),
         )
         .limit(1);
@@ -1705,7 +1705,7 @@ export const mergeProducts = async (
       } else {
         await tx
           .update(runTarget)
-          .set({ productId: keepId, updatedAt: new Date() })
+          .set({ entityId: keepId, updatedAt: new Date() })
           .where(eq(runTarget.id, target.id));
       }
     }
@@ -1713,7 +1713,7 @@ export const mergeProducts = async (
       tx,
       actor,
       movedExpenses.map(({ id }) => ({
-        entityType: "expense" as const,
+        entityKind: "expense" as const,
         entityId: id,
         action: "update" as const,
         changes: { productId: { from: null, to: keepId } },
@@ -2125,9 +2125,8 @@ const previewMergeProductsFromPlan = async (
       ),
     }),
     impact({
-      disposition:
-        PRODUCT_MERGE_EDGE_POLICY["EntityAttachment.subjectEntityId"],
-      edgeKey: "EntityAttachment.subjectEntityId",
+      disposition: PRODUCT_MERGE_EDGE_POLICY["EntityAttachment.entityId"],
+      edgeKey: "EntityAttachment.entityId",
       label: "image associations moved",
       byTargetId: byProduct(plan.images.collision.repoint),
     }),
@@ -2138,7 +2137,7 @@ const previewMergeProductsFromPlan = async (
         description:
           "The survivor already has this image, so the duplicate association is soft-deleted and the survivor's existing image order wins.",
       },
-      edgeKey: "EntityAttachment.subjectEntityId",
+      edgeKey: "EntityAttachment.entityId",
       label: "duplicate image associations dropped",
       byTargetId: byProduct(
         plan.images.collision.absorb.flatMap(({ rows }) => rows),

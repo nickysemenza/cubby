@@ -95,7 +95,7 @@ export const PROJECT_DELETE_EDGE_POLICY = {
     description:
       "A project with live expenses can't be deleted — delete or reassign them first.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -212,7 +212,7 @@ export const createProject = async (
     });
     await validateLiveEffectiveTrades(tx);
     await logAuditEntry(tx, actor, {
-      entityType: "project",
+      entityKind: "project",
       entityId: created.id,
       action: "create",
     });
@@ -377,7 +377,7 @@ export const updateProject = async (
     }
     if (Object.keys(changes).length > 0) {
       await logAuditEntry(tx, actor, {
-        entityType: "project",
+        entityKind: "project",
         entityId: id,
         action: "update",
         changes,

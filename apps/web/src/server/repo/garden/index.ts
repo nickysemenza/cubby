@@ -431,7 +431,7 @@ export const createPlanting = async (
       finishedOn: data.finishedOn ?? null,
     });
     await logAuditEntry(tx, actor, {
-      entityType: "planting",
+      entityKind: "planting",
       entityId: row.id,
       action: "create",
     });
@@ -476,7 +476,7 @@ export const createGardenEntry = async (
       );
     }
     await logAuditEntry(tx, actor, {
-      entityType: "gardenEntry",
+      entityKind: "gardenEntry",
       entityId: row.id,
       action: "create",
     });
@@ -550,7 +550,7 @@ export const updatePlanting = async (
     ]);
     if (changes) {
       await logAuditEntry(tx, actor, {
-        entityType: "planting",
+        entityKind: "planting",
         entityId: id,
         action: "update",
         changes,
@@ -672,7 +672,7 @@ export const updateGardenEntry = async (
       : changes;
     if (allChanges) {
       await logAuditEntry(tx, actor, {
-        entityType: "gardenEntry",
+        entityKind: "gardenEntry",
         entityId: id,
         action: "update",
         changes: allChanges,

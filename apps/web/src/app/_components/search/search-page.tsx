@@ -39,7 +39,7 @@ import {
   useEntityPreview,
 } from "../hooks/useEntityPreview";
 import {
-  entityTypeMap,
+  entityKindMap,
   getSearchMatchText,
   getSearchResultHref,
   getSearchResultRoute,
@@ -59,9 +59,9 @@ type SearchPreviewHandler = (row: SearchPreviewRow) => void;
 
 const filterOptions: Array<{ value: SearchType; label: string }> = [
   { value: "all", label: "All" },
-  ...searchableEntities.map((entityType) => ({
-    value: entityType,
-    label: entities[entityTypeMap[entityType]].label,
+  ...searchableEntities.map((entityKind) => ({
+    value: entityKind,
+    label: entities[entityKindMap[entityKind]].label,
   })),
 ];
 
@@ -84,7 +84,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   }, []);
   const [debouncedDraft] = useDebouncedValue(draft, { wait: 150 });
   const [relatedDraft] = useDebouncedValue(draft, { wait: 450 });
-  const entityTypes = type === "all" ? undefined : [type];
+  const entityKinds = type === "all" ? undefined : [type];
   const primaryShouldSearch = debouncedDraft.trim().length > 0;
   const relatedShouldSearch =
     relatedDraft.trim().length > 0 && relatedDraft === draft;
@@ -106,7 +106,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
     ...search.grouped.queryOptions({
       // Disabled queries still construct and validate their options.
       query: primaryShouldSearch ? debouncedDraft : "inactive-search",
-      entityTypes,
+      entityKinds,
       limit: 50,
     }),
     enabled: primaryShouldSearch,
@@ -115,7 +115,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   const related = useQuery({
     ...search.relatedGrouped.queryOptions({
       query: relatedShouldSearch ? relatedDraft : "inactive-search",
-      entityTypes,
+      entityKinds,
       limit: 12,
     }),
     enabled: relatedShouldSearch,
@@ -401,7 +401,7 @@ function SearchRow({
       </button>
       <div className="hidden max-w-44 shrink-0 text-right sm:block">
         <span className="block truncate font-mono text-2xs text-muted-foreground uppercase">
-          {entities[entityTypeMap[item.entityType]].label}
+          {entities[entityKindMap[item.entityKind]].label}
         </span>
         <span className="block truncate font-mono text-2xs text-foreground tabular-nums">
           {item.id}
@@ -427,7 +427,7 @@ const placementSearchDestination = (
   placement: SearchInventoryPlacement,
 ): SearchDestination => ({
   id: placement.id,
-  entityType: "inventory",
+  entityKind: "inventory",
   title: group.primary.title,
   subtitle: placement.locationPath,
   typeHint: group.primary.typeHint,
@@ -439,7 +439,7 @@ const componentPlacementSearchDestination = (
 ): SearchDestination => ({
   ...componentPlacement.component,
   id: componentPlacement.placement.id,
-  entityType: "inventory",
+  entityKind: "inventory",
   subtitle: componentPlacement.placement.locationPath,
 });
 
@@ -613,7 +613,7 @@ function ProductSearchRow({
           })}
           {group.matchedActivity.map((item) => (
             <Link
-              key={`${item.entityType}:${item.id}`}
+              key={`${item.entityKind}:${item.id}`}
               {...getSearchResultRoute(item)}
               className="flex min-h-11 items-center gap-3 px-5 py-1.5 hover:bg-muted/60"
             >
@@ -623,7 +623,7 @@ function ProductSearchRow({
                   {item.title}
                 </span>
                 <span className="block truncate text-2xs text-muted-foreground">
-                  {entities[entityTypeMap[item.entityType]].label} · {item.id} ·
+                  {entities[entityKindMap[item.entityKind]].label} · {item.id} ·
                   Linked to {group.primary.title}
                 </span>
               </span>
@@ -799,7 +799,7 @@ function MobileSearchResults({
                   })}
                   {group.matchedActivity.map((item) => (
                     <Link
-                      key={`${item.entityType}:${item.id}`}
+                      key={`${item.entityKind}:${item.id}`}
                       {...getSearchResultRoute(item)}
                       className="flex min-h-11 items-center gap-3 px-3 py-1.5 hover:bg-muted/60"
                     >
@@ -809,7 +809,7 @@ function MobileSearchResults({
                           {item.title}
                         </span>
                         <span className="block truncate text-2xs text-muted-foreground">
-                          {entities[entityTypeMap[item.entityType]].label} ·{" "}
+                          {entities[entityKindMap[item.entityKind]].label} ·{" "}
                           {item.id} · Linked to {group.primary.title}
                         </span>
                       </span>
@@ -836,7 +836,7 @@ function MobileSearchResults({
             imageSlot={<SearchResultMedia item={item} variant="mobile" />}
             rightValues={[
               item.id,
-              entities[entityTypeMap[item.entityType]].label,
+              entities[entityKindMap[item.entityKind]].label,
             ]}
             detailsHref={getSearchResultHref(item)}
             onClick={() => navigate(getSearchResultRoute(item))}

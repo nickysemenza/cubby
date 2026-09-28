@@ -97,7 +97,7 @@ describe("moveInventoryEntries", () => {
   const auditFor = (entityId: InventoryId) =>
     getDb(ctx.db).query.auditLog.findMany({
       where: and(
-        eq(auditLog.entityType, "inventory"),
+        eq(auditLog.entityKind, "inventory"),
         eq(auditLog.entityId, entityId),
       ),
       columns: { action: true },

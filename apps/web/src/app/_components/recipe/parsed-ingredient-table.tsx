@@ -91,7 +91,7 @@ export function ParsedIngredientTable({
           ? matchMap.get(row.parsed.name.toLowerCase())
           : null;
         return matched
-          ? [{ entityType: "ingredient" as const, entityId: matched.id }]
+          ? [{ entityKind: "ingredient" as const, entityId: matched.id }]
           : [];
       }),
     [matchMap, rows],
@@ -123,7 +123,7 @@ export function ParsedIngredientTable({
                         displayImage={
                           displayImages[
                             entityDisplayImageKey({
-                              entityType: "ingredient",
+                              entityKind: "ingredient",
                               entityId: match.id,
                             })
                           ] ?? null

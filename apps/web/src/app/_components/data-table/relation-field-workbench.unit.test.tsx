@@ -21,7 +21,7 @@ describe("RelationFieldWorkbench", () => {
     const graph = vi.fn(async () => ({
       nodes: [
         {
-          entityType: "financialTransaction" as const,
+          entityKind: "financialTransaction" as const,
           entityId: "FTX-2345",
           label: "Neighborhood Market",
           metadata: {},
@@ -30,7 +30,7 @@ describe("RelationFieldWorkbench", () => {
       edges: [],
       branches: [
         {
-          root: { entityType: "purchase" as const, entityId: "PUR-2345" },
+          root: { entityKind: "purchase" as const, entityId: "PUR-2345" },
           relationshipKey: "financial-transactions",
           label: "Financial transactions",
           target: "financialTransaction" as const,
@@ -38,7 +38,7 @@ describe("RelationFieldWorkbench", () => {
           nextOffset: null,
           items: [
             {
-              entityType: "financialTransaction" as const,
+              entityKind: "financialTransaction" as const,
               entityId: "FTX-2345",
             },
           ],

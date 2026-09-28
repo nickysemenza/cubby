@@ -122,7 +122,7 @@ export type IncomingEdgePolicy<E extends Entity, Disposition> = IncomingEdgeMap<
  * entity that FK column points at, restricted to targets that carry a public
  * shortcode (the only kind a raw id could usefully be re-rendered as). Derived
  * from INCOMING_EDGES rather than hand-kept a second time — a hand-kept
- * `(entityType, fieldName) -> target` table would be exactly the drift trap
+ * `(entityKind, fieldName) -> target` table would be exactly the drift trap
  * this file exists to prevent (see the module doc comment above).
  *
  * Built for `getAuditLog` (repo/audit-log.ts): a `changes` diff records the raw

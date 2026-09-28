@@ -986,7 +986,7 @@ describe("shared purchase-import prepare and commit", () => {
     const findings = await getDb(ctx.db)
       .select({ kind: runFinding.kind })
       .from(runFinding)
-      .where(eq(runFinding.targetId, manualPurchase.id));
+      .where(eq(runFinding.entityId, manualPurchase.id));
     expect(findings.some((row) => row.kind === "duplicate_lines")).toBe(true);
   });
 });

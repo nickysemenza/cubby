@@ -149,7 +149,7 @@ describe("useEntityList", () => {
 
     await waitFor(() =>
       expect(result.current.inspection.preview).toEqual({
-        entityType: "product",
+        entityKind: "product",
         id: "PRD-TWO",
         rowKey: "PRD-TWO",
       }),

@@ -82,7 +82,7 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
                   mobile: { slot: "meta", priority: 20 },
                   entityRefs: (row) =>
                     row.recipes.map((recipe) => ({
-                      entityType: "recipe",
+                      entityKind: "recipe",
                       entityId: recipe.recipeId,
                     })),
                 }),

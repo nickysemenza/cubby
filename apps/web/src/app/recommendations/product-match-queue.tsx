@@ -68,8 +68,8 @@ export function ProductMatchQueue({
   const refs = useMemo(
     () =>
       items.flatMap((item) => [
-        { entityType: "product" as const, entityId: item.keeper.id },
-        { entityType: "product" as const, entityId: item.other.id },
+        { entityKind: "product" as const, entityId: item.keeper.id },
+        { entityKind: "product" as const, entityId: item.other.id },
       ]),
     [items],
   );
@@ -249,7 +249,7 @@ function MatchSide({
   caption: string;
 }) {
   const displayImage = useEntityDisplayImage({
-    entityType: "product",
+    entityKind: "product",
     entityId: side.id,
   });
   const details = [

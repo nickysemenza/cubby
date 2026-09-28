@@ -156,7 +156,7 @@ async function loadRunImages(db: Database, runId: RunId) {
       diff: runTarget.diff,
     })
     .from(runTarget)
-    .innerJoin(image, eq(image.id, runTarget.imageId))
+    .innerJoin(image, eq(image.id, runTarget.entityId))
     .where(eq(runTarget.runId, runId))
     .orderBy(runTarget.position)
     .limit(RUN_IMAGE_LIMIT);
@@ -1144,7 +1144,7 @@ export async function listPhotoRunImages(
       deviceWorkAttempts: runTarget.deviceWorkAttempts,
     })
     .from(runTarget)
-    .innerJoin(image, eq(image.id, runTarget.imageId))
+    .innerJoin(image, eq(image.id, runTarget.entityId))
     .where(eq(runTarget.runId, run.id))
     .orderBy(runTarget.position, image.shortcode)
     .limit(RUN_IMAGE_LIMIT);

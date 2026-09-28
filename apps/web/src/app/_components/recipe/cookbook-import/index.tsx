@@ -217,7 +217,7 @@ export function CookbookImport({
         filename,
         contentType: mime,
         size: bytes.byteLength,
-        entityType: "COOKBOOK",
+        entityKind: "COOKBOOK",
       });
       // Copy into a fresh ArrayBuffer-backed buffer (a valid BodyInit, and sidesteps
       // the Uint8Array<ArrayBufferLike> vs ArrayBuffer lib-type mismatch).

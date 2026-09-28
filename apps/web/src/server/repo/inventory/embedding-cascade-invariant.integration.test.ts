@@ -82,13 +82,13 @@ const embeddingProbes = (ctx: TestDbContext) => {
   return {
     resolveId,
 
-    seedEmbedding: (entityType: SearchableEntity, entityId: string) =>
+    seedEmbedding: (entityKind: SearchableEntity, entityId: string) =>
       getDb(ctx.db)
         .insert(entityEmbedding)
         .values({
-          entityType,
+          entityKind,
           entityId,
-          embeddingText: `${entityType} ${entityId}`,
+          embeddingText: `${entityKind} ${entityId}`,
           embeddingHash: `hash-${entityId}`,
           provider: "test",
           model: "test",
@@ -96,13 +96,13 @@ const embeddingProbes = (ctx: TestDbContext) => {
         }),
 
     embeddingDeletedAt: async (
-      entityType: SearchableEntity,
+      entityKind: SearchableEntity,
       entityId: string,
     ) =>
       (
         await getDb(ctx.db).query.entityEmbedding.findFirst({
           where: and(
-            eq(entityEmbedding.entityType, entityType),
+            eq(entityEmbedding.entityKind, entityKind),
             eq(entityEmbedding.entityId, entityId),
           ),
           columns: { deletedAt: true },

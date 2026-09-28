@@ -148,7 +148,7 @@ const loadAudit = async (
 ): Promise<AuditLogListOut> => {
   if (uuids.length === 0) return { entries: [] };
   const params: Parameters<typeof getAuditLog>[1] = {
-    entityType: entity,
+    entityKind: entity,
     entityIds: uuids,
     limit: TIMELINE_AUDIT_CAP,
   };

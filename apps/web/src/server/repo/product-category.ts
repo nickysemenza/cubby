@@ -220,7 +220,7 @@ const inheritedFeatureResolution = (
       fallbackValue: feature,
       source: source.name,
       sourceEntity: {
-        entityType: "productCategory",
+        entityKind: "productCategory",
         entityId: source.id,
         name: source.name,
       },
@@ -411,7 +411,7 @@ export async function createProductCategory(
       feature: data.feature,
     });
     await logAuditEntry(tx, actor, {
-      entityType: "productCategory",
+      entityKind: "productCategory",
       entityId: row.id,
       action: "create",
     });
@@ -472,7 +472,7 @@ export async function updateProductCategory(
       await assertAffectedProductsRemainAdmissible(tx, id);
     }
     await logAuditEntry(tx, actor, {
-      entityType: "productCategory",
+      entityKind: "productCategory",
       entityId: id,
       action: "update",
     });

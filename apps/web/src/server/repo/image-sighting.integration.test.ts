@@ -102,7 +102,7 @@ describe("image-sighting", () => {
     });
     expect(detail[0]?.displayImages).toEqual(list[0]?.displayImages);
     const compact = await resolveEntityDisplayImages(ctx.db, [
-      { entityType: "imageSighting", entityId: sighting.entityId },
+      { entityKind: "imageSighting", entityId: sighting.entityId },
     ]);
     expect(
       compact.get(entityRefKey("imageSighting", sighting.entityId))?.url,

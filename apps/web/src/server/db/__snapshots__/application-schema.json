@@ -5035,15 +5035,15 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "entityType": {
-          "name": "entityType",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "entityId": {
           "name": "entityId",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entityKind": {
+          "name": "entityKind",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -5103,7 +5103,7 @@
           "name": "EntityEmbedding_entity_model_key",
           "columns": [
             {
-              "expression": "entityType",
+              "expression": "entityKind",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5143,7 +5143,7 @@
           "name": "EntityEmbedding_entity_idx",
           "columns": [
             {
-              "expression": "entityType",
+              "expression": "entityKind",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5195,7 +5195,7 @@
           "tableTo": "Entity",
           "columnsFrom": [
             "entityId",
-            "entityType"
+            "entityKind"
           ],
           "columnsTo": [
             "id",
@@ -5222,20 +5222,14 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "entityType": {
-          "name": "entityType",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "entityId": {
           "name": "entityId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "shortcode": {
-          "name": "shortcode",
+        "entityKind": {
+          "name": "entityKind",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -5328,7 +5322,7 @@
           "name": "SearchDocument_live_entity_key",
           "columns": [
             {
-              "expression": "entityType",
+              "expression": "entityKind",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5341,22 +5335,6 @@
             }
           ],
           "isUnique": true,
-          "where": "\"SearchDocument\".\"deletedAt\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "SearchDocument_shortcode_active_idx": {
-          "name": "SearchDocument_shortcode_active_idx",
-          "columns": [
-            {
-              "expression": "lower(\"shortcode\")",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
           "where": "\"SearchDocument\".\"deletedAt\" IS NULL",
           "concurrently": false,
           "method": "btree",
@@ -5418,7 +5396,7 @@
           "tableTo": "Entity",
           "columnsFrom": [
             "entityId",
-            "entityType"
+            "entityKind"
           ],
           "columnsTo": [
             "id",
@@ -5445,15 +5423,15 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "sourceEntityType": {
-          "name": "sourceEntityType",
-          "type": "text",
+        "entityId": {
+          "name": "entityId",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "sourceEntityId": {
-          "name": "sourceEntityId",
-          "type": "uuid",
+        "entityKind": {
+          "name": "entityKind",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -5495,13 +5473,13 @@
           "name": "SuggestionDismissal_active_key",
           "columns": [
             {
-              "expression": "sourceEntityType",
+              "expression": "entityKind",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "sourceEntityId",
+              "expression": "entityId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5529,13 +5507,13 @@
           "name": "SuggestionDismissal_source_idx",
           "columns": [
             {
-              "expression": "sourceEntityType",
+              "expression": "entityKind",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "sourceEntityId",
+              "expression": "entityId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5547,7 +5525,23 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "SuggestionDismissal_entity_fk": {
+          "name": "SuggestionDismissal_entity_fk",
+          "tableFrom": "SuggestionDismissal",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "entityId",
+            "entityKind"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -6603,9 +6597,15 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "subjectEntityId": {
-          "name": "subjectEntityId",
+        "entityId": {
+          "name": "entityId",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entityKind": {
+          "name": "entityKind",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -6669,11 +6669,11 @@
         }
       },
       "indexes": {
-        "EntityAttachment_subject_image_key": {
-          "name": "EntityAttachment_subject_image_key",
+        "EntityAttachment_entity_image_key": {
+          "name": "EntityAttachment_entity_image_key",
           "columns": [
             {
-              "expression": "subjectEntityId",
+              "expression": "entityId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -6691,11 +6691,11 @@
           "method": "btree",
           "with": {}
         },
-        "EntityAttachment_subject_singular_role_key": {
-          "name": "EntityAttachment_subject_singular_role_key",
+        "EntityAttachment_entity_singular_role_key": {
+          "name": "EntityAttachment_entity_singular_role_key",
           "columns": [
             {
-              "expression": "subjectEntityId",
+              "expression": "entityId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -6713,11 +6713,11 @@
           "method": "btree",
           "with": {}
         },
-        "EntityAttachment_subject_idempotency_key": {
-          "name": "EntityAttachment_subject_idempotency_key",
+        "EntityAttachment_entity_idempotency_key": {
+          "name": "EntityAttachment_entity_idempotency_key",
           "columns": [
             {
-              "expression": "subjectEntityId",
+              "expression": "entityId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -6735,11 +6735,11 @@
           "method": "btree",
           "with": {}
         },
-        "EntityAttachment_subject_order_idx": {
-          "name": "EntityAttachment_subject_order_idx",
+        "EntityAttachment_entity_order_idx": {
+          "name": "EntityAttachment_entity_order_idx",
           "columns": [
             {
-              "expression": "subjectEntityId",
+              "expression": "entityId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -6773,19 +6773,6 @@
         }
       },
       "foreignKeys": {
-        "EntityAttachment_subjectEntityId_Entity_id_fk": {
-          "name": "EntityAttachment_subjectEntityId_Entity_id_fk",
-          "tableFrom": "EntityAttachment",
-          "tableTo": "Entity",
-          "columnsFrom": [
-            "subjectEntityId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "EntityAttachment_imageId_Image_id_fk": {
           "name": "EntityAttachment_imageId_Image_id_fk",
           "tableFrom": "EntityAttachment",
@@ -6795,6 +6782,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "EntityAttachment_entity_fk": {
+          "name": "EntityAttachment_entity_fk",
+          "tableFrom": "EntityAttachment",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "entityId",
+            "entityKind"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -6811,6 +6813,14 @@
         "EntityAttachment_purpose_check": {
           "name": "EntityAttachment_purpose_check",
           "value": "\"EntityAttachment\".\"purpose\" IS NULL OR \"EntityAttachment\".\"purpose\" IN ('item', 'label')"
+        },
+        "EntityAttachment_purpose_kind_check": {
+          "name": "EntityAttachment_purpose_kind_check",
+          "value": "\"EntityAttachment\".\"purpose\" IS NULL OR \"EntityAttachment\".\"entityKind\" = 'product'"
+        },
+        "EntityAttachment_documentKind_kind_check": {
+          "name": "EntityAttachment_documentKind_kind_check",
+          "value": "\"EntityAttachment\".\"documentKind\" IS NULL OR \"EntityAttachment\".\"entityKind\" = 'purchase'"
         }
       },
       "isRLSEnabled": false
@@ -10896,23 +10906,17 @@
           "primaryKey": false,
           "notNull": true
         },
-        "purchaseId": {
-          "name": "purchaseId",
+        "entityId": {
+          "name": "entityId",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "productId": {
-          "name": "productId",
-          "type": "uuid",
+        "entityKind": {
+          "name": "entityKind",
+          "type": "text",
           "primaryKey": false,
-          "notNull": false
-        },
-        "imageId": {
-          "name": "imageId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "position": {
           "name": "position",
@@ -11049,41 +11053,11 @@
           "method": "btree",
           "with": {}
         },
-        "RunTarget_purchase_idx": {
-          "name": "RunTarget_purchase_idx",
+        "RunTarget_entity_idx": {
+          "name": "RunTarget_entity_idx",
           "columns": [
             {
-              "expression": "purchaseId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "RunTarget_product_idx": {
-          "name": "RunTarget_product_idx",
-          "columns": [
-            {
-              "expression": "productId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "RunTarget_image_idx": {
-          "name": "RunTarget_image_idx",
-          "columns": [
-            {
-              "expression": "imageId",
+              "expression": "entityId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -11110,8 +11084,8 @@
           "method": "btree",
           "with": {}
         },
-        "RunTarget_run_purchase_key": {
-          "name": "RunTarget_run_purchase_key",
+        "RunTarget_run_entity_key": {
+          "name": "RunTarget_run_entity_key",
           "columns": [
             {
               "expression": "runId",
@@ -11120,58 +11094,13 @@
               "nulls": "last"
             },
             {
-              "expression": "purchaseId",
+              "expression": "entityId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             }
           ],
           "isUnique": true,
-          "where": "\"RunTarget\".\"purchaseId\" IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "RunTarget_run_product_key": {
-          "name": "RunTarget_run_product_key",
-          "columns": [
-            {
-              "expression": "runId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "productId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"RunTarget\".\"productId\" IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "RunTarget_run_image_key": {
-          "name": "RunTarget_run_image_key",
-          "columns": [
-            {
-              "expression": "runId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"RunTarget\".\"imageId\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -11184,45 +11113,6 @@
           "tableTo": "Run",
           "columnsFrom": [
             "runId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "RunTarget_purchaseId_Purchase_id_fk": {
-          "name": "RunTarget_purchaseId_Purchase_id_fk",
-          "tableFrom": "RunTarget",
-          "tableTo": "Purchase",
-          "columnsFrom": [
-            "purchaseId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "RunTarget_productId_Product_id_fk": {
-          "name": "RunTarget_productId_Product_id_fk",
-          "tableFrom": "RunTarget",
-          "tableTo": "Product",
-          "columnsFrom": [
-            "productId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "RunTarget_imageId_Image_id_fk": {
-          "name": "RunTarget_imageId_Image_id_fk",
-          "tableFrom": "RunTarget",
-          "tableTo": "Image",
-          "columnsFrom": [
-            "imageId"
           ],
           "columnsTo": [
             "id"
@@ -11255,15 +11145,30 @@
           ],
           "onDelete": "set null",
           "onUpdate": "no action"
+        },
+        "RunTarget_entity_fk": {
+          "name": "RunTarget_entity_fk",
+          "tableFrom": "RunTarget",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "entityId",
+            "entityKind"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "RunTarget_exactly_one_target_check": {
-          "name": "RunTarget_exactly_one_target_check",
-          "value": "((\"RunTarget\".\"purchaseId\" IS NOT NULL)::int + (\"RunTarget\".\"productId\" IS NOT NULL)::int + (\"RunTarget\".\"imageId\" IS NOT NULL)::int) = 1"
+        "RunTarget_entityKind_check": {
+          "name": "RunTarget_entityKind_check",
+          "value": "\"RunTarget\".\"entityKind\" IN ('purchase', 'product', 'image')"
         },
         "RunTarget_state_check": {
           "name": "RunTarget_state_check",
@@ -13096,15 +13001,15 @@
           "primaryKey": false,
           "notNull": true
         },
-        "targetKind": {
-          "name": "targetKind",
-          "type": "text",
+        "entityId": {
+          "name": "entityId",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "targetId": {
-          "name": "targetId",
-          "type": "uuid",
+        "entityKind": {
+          "name": "entityKind",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -13196,13 +13101,13 @@
               "nulls": "last"
             },
             {
-              "expression": "targetKind",
+              "expression": "entityKind",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "targetId",
+              "expression": "entityId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -13288,13 +13193,13 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "RunFinding_target_fk": {
-          "name": "RunFinding_target_fk",
+        "RunFinding_entity_fk": {
+          "name": "RunFinding_entity_fk",
           "tableFrom": "RunFinding",
           "tableTo": "Entity",
           "columnsFrom": [
-            "targetId",
-            "targetKind"
+            "entityId",
+            "entityKind"
           ],
           "columnsTo": [
             "id",
@@ -13312,9 +13217,9 @@
           "name": "RunFinding_status_check",
           "value": "\"RunFinding\".\"status\" IN ('open', 'applied', 'dismissed')"
         },
-        "RunFinding_target_check": {
-          "name": "RunFinding_target_check",
-          "value": "\"RunFinding\".\"targetKind\" IN ('purchase', 'expense', 'product', 'run')"
+        "RunFinding_entityKind_check": {
+          "name": "RunFinding_entityKind_check",
+          "value": "\"RunFinding\".\"entityKind\" IN ('purchase', 'expense', 'product', 'run')"
         }
       },
       "isRLSEnabled": false
@@ -17210,8 +17115,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "entity": {
-          "name": "entity",
+        "entityKind": {
+          "name": "entityKind",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -17346,7 +17251,7 @@
           "name": "McpToolCall_entity_occurredAt_idx",
           "columns": [
             {
-              "expression": "entity",
+              "expression": "entityKind",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -17396,15 +17301,15 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "entityType": {
-          "name": "entityType",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "entityId": {
           "name": "entityId",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entityKind": {
+          "name": "entityKind",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -17497,11 +17402,11 @@
           "method": "btree",
           "with": {}
         },
-        "AuditLog_entityType_entityId_createdAt_idx": {
-          "name": "AuditLog_entityType_entityId_createdAt_idx",
+        "AuditLog_entityKind_entityId_createdAt_idx": {
+          "name": "AuditLog_entityKind_entityId_createdAt_idx",
           "columns": [
             {
-              "expression": "entityType",
+              "expression": "entityKind",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -17571,7 +17476,7 @@
           "tableTo": "Entity",
           "columnsFrom": [
             "entityId",
-            "entityType"
+            "entityKind"
           ],
           "columnsTo": [
             "id",

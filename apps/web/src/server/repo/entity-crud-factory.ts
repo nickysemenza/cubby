@@ -234,7 +234,7 @@ export function createEntityCrud<
       ]);
       if (changes) {
         await logAuditEntry(tx, actor, {
-          entityType: config.entity,
+          entityKind: config.entity,
           entityId: id,
           action: "update",
           changes,

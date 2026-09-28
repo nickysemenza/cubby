@@ -31,15 +31,18 @@ detail reads list `previousShortcodes`. Writes never follow a redirect: they
 refuse with the survivor's code. A deleted identity reads as a tombstone
 refusal that names the deletion.
 
-`EntityAttachment(subjectEntityId → Entity, imageId, role, sortOrder, purpose,
+`EntityAttachment(entityId, entityKind, imageId, role, sortOrder, purpose,
 documentKind, idempotencyKey)` replaces every per-entity join and the cover and
-logo columns. `role` follows the subject's declared image storage (`attachment`
-for galleries, `cover`, `logo`); detach soft-deletes; upload idempotency is
-scoped to the active association. `DataException(entityId, entityKind, check,
+logo columns; `(entityId, entityKind)` is a composite FK to `Entity(id, kind)`,
+and CHECKs keep `purpose` Product-only and `documentKind` Purchase-only. `role`
+follows the subject's declared image storage (`attachment` for galleries,
+`cover`, `logo`); detach soft-deletes; upload idempotency is scoped to the
+active association. `DataException(entityId, entityKind, check,
 ...)` replaces the jsonb columns for any entity whose declaration enables
 exceptions. `AuditLog`, `SearchDocument`, `EntityEmbedding`, `DataException`,
-`RunFinding` (`targetId`/`targetKind`), `RunMutation` (`targetId`/`targetKind`),
-`AiUsage` (`entityId`/`entityKind`), and `AiAnalysis` (`entityId`/`entityKind`)
+`RunFinding` (`entityId`/`entityKind`), `RunMutation` (`targetId`/`targetKind`),
+`RunTarget` (`entityId`/`entityKind`, kinds purchase, product and image),
+`SuggestionDismissal`, `AiUsage`, and `AiAnalysis` (`entityId`/`entityKind`)
 reference `Entity(id, kind)` with a composite FK; history keeps the identity
 that received each event and exposes the survivor only as a read-time
 `canonicalEntityId`. `AiUsage` and `AiAnalysis` both allow a null `entityId`
@@ -78,6 +81,6 @@ tables. Composite FKs into `Entity(id, kind)` show as drift to an interactive
 
 ADR 0001 still holds: physical edges remain typed FKs and joins, lifecycle
 remains per-operation policy, and there is no generic edge table.
-`EntityAttachment.subjectEntityId` is the one edge key that targets several
-entities; the relatedness traversal resolves its outgoing direction from the
+`EntityAttachment.entityId` and `RunTarget.entityId` are the edge keys that
+target several entities; the relatedness traversal resolves its outgoing direction from the
 path's destination.

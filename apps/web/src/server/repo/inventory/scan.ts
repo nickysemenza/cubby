@@ -94,7 +94,7 @@ export const markInventoryEntryVerified = async (
     .where(and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)));
 
   await logAuditEntry(db, actor, {
-    entityType: "inventory",
+    entityKind: "inventory",
     entityId: id,
     action: "update",
   });

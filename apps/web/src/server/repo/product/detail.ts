@@ -56,7 +56,7 @@ const hydrateProductLocationBreadcrumbs = async (
       ...[...ancestorsById.values()].flatMap((chain) =>
         chain.map((rung) => rung.locationId),
       ),
-    ]).map((entityId) => ({ entityType: "location" as const, entityId })),
+    ]).map((entityId) => ({ entityKind: "location" as const, entityId })),
   );
   const displayImageOf = (id: LocationId) =>
     displayImages.get(entityRefKey("location", id)) ?? null;

@@ -2,7 +2,7 @@
  * The one `cover` or `logo` attachment a cookbook or vendor may hold
  * (ADR 0006). These replaced the `Cookbook.coverImageId` and
  * `Vendor.logoImageId` columns; the partial unique index on
- * `(subjectEntityId, role)` keeps at most one live row per subject.
+ * `(entityId, role)` keeps at most one live row per subject.
  */
 
 import { and, eq, inArray } from "drizzle-orm";
@@ -13,9 +13,12 @@ import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 
 export type SingularRole = "cover" | "logo";
 
-const liveSingular = (subjectEntityId: string, role: SingularRole) =>
+/** The one kind whose declaration stores each singular role. */
+const SINGULAR_ROLE_KIND = { cover: "cookbook", logo: "vendor" } as const;
+
+const liveSingular = (entityId: string, role: SingularRole) =>
   and(
-    eq(entityAttachment.subjectEntityId, subjectEntityId),
+    eq(entityAttachment.entityId, entityId),
     eq(entityAttachment.role, role),
     notDeleted(entityAttachment),
   );
@@ -23,25 +26,25 @@ const liveSingular = (subjectEntityId: string, role: SingularRole) =>
 /** The live singular image id per subject. */
 export async function singularAttachmentImageIds(
   db: Database | DrizzleClient | DrizzleTransaction,
-  subjectEntityIds: readonly string[],
+  entityIds: readonly string[],
   role: SingularRole,
 ): Promise<Map<string, string>> {
-  if (subjectEntityIds.length === 0) return new Map();
+  if (entityIds.length === 0) return new Map();
   const dbc = "select" in db ? db : unwrapDb(db);
   const rows = await dbc
     .select({
-      subjectEntityId: entityAttachment.subjectEntityId,
+      entityId: entityAttachment.entityId,
       imageId: entityAttachment.imageId,
     })
     .from(entityAttachment)
     .where(
       and(
-        inArray(entityAttachment.subjectEntityId, [...subjectEntityIds]),
+        inArray(entityAttachment.entityId, [...entityIds]),
         eq(entityAttachment.role, role),
         notDeleted(entityAttachment),
       ),
     );
-  return new Map(rows.map((row) => [row.subjectEntityId, row.imageId]));
+  return new Map(rows.map((row) => [row.entityId, row.imageId]));
 }
 
 /**
@@ -51,14 +54,14 @@ export async function singularAttachmentImageIds(
  */
 export async function replaceSingularAttachment(
   tx: DrizzleTransaction,
-  subjectEntityId: string,
+  entityId: string,
   role: SingularRole,
   imageId: string | null,
 ): Promise<{ previousImageId: string | null }> {
   const [previous] = await tx
     .select({ id: entityAttachment.id, imageId: entityAttachment.imageId })
     .from(entityAttachment)
-    .where(liveSingular(subjectEntityId, role));
+    .where(liveSingular(entityId, role));
   if (previous?.imageId === imageId) return { previousImageId: null };
   if (previous) {
     await tx
@@ -67,9 +70,13 @@ export async function replaceSingularAttachment(
       .where(eq(entityAttachment.id, previous.id));
   }
   if (imageId !== null) {
-    await tx
-      .insert(entityAttachment)
-      .values({ subjectEntityId, imageId, role, sortOrder: 0 });
+    await tx.insert(entityAttachment).values({
+      entityId,
+      entityKind: SINGULAR_ROLE_KIND[role],
+      imageId,
+      role,
+      sortOrder: 0,
+    });
   }
   return { previousImageId: previous?.imageId ?? null };
 }

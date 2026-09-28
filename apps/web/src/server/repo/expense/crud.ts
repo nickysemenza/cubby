@@ -672,7 +672,7 @@ export const updateExpense = async (
     ]);
     if (changes) {
       await logAuditEntry(tx, actor, {
-        entityType: "expense",
+        entityKind: "expense",
         entityId: state.id,
         action: "update",
         changes,
@@ -955,7 +955,7 @@ export const createExpense = async (
       data.sourceClaims ?? [],
     );
     await logAuditEntry(tx, actor, {
-      entityType: "expense",
+      entityKind: "expense",
       entityId: created.id,
       action: "create",
     });

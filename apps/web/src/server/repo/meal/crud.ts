@@ -89,7 +89,7 @@ export const MEAL_DELETE_EDGE_POLICY = {
     description:
       "Deleting a meal soft-deletes portions served at it; their source preparations are untouched.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -342,7 +342,7 @@ export const createMealWithEntityId = async (
       );
     }
     await logAuditEntry(tx, actor, {
-      entityType: "meal",
+      entityKind: "meal",
       entityId: created.id,
       action: "create",
     });
@@ -383,7 +383,7 @@ export const updateMeal = async (
       data,
     ));
     await logAuditEntry(tx, actor, {
-      entityType: "meal",
+      entityKind: "meal",
       entityId: id,
       action: "update",
     });
@@ -451,7 +451,7 @@ export const addRecipeToMeal = async (
       sortOrder: input.sortOrder ?? null,
     });
     await logAuditEntry(tx, actor, {
-      entityType: "meal",
+      entityKind: "meal",
       entityId: mealId,
       action: "update",
     });
@@ -491,7 +491,7 @@ const updateMealRecipe = async (
     if (data.sortOrder !== undefined) recipePatch.sortOrder = data.sortOrder;
     await updateAndReturn(tx, mealRecipe, recipePatch, eq(mealRecipe.id, id));
     await logAuditEntry(tx, actor, {
-      entityType: "meal",
+      entityKind: "meal",
       entityId: mealId,
       action: "update",
     });
@@ -551,7 +551,7 @@ const removeMealRecipe = async (
       .set({ deletedAt: now })
       .where(and(eq(mealRecipe.id, id), notDeleted(mealRecipe)));
     await logAuditEntry(tx, actor, {
-      entityType: "meal",
+      entityKind: "meal",
       entityId: mealId,
       action: "update",
     });

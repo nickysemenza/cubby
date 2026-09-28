@@ -99,9 +99,9 @@ export async function getEntityRecommendations(
   db: Database,
   source: EntityRef,
 ): Promise<EntityRecommendationsOut> {
-  if (source.entityType === "expense")
+  if (source.entityKind === "expense")
     return expenseRecommendations(db, source);
-  if (source.entityType === "inventory") {
+  if (source.entityKind === "inventory") {
     const id = parseShortcodeFor("inventory", source.entityId);
     const [row, proposal] = await Promise.all([
       getInventoryEntryByShortcode(db, id),
@@ -141,7 +141,7 @@ export async function getEntityRecommendations(
       ],
     };
   }
-  if (source.entityType === "product") {
+  if (source.entityKind === "product") {
     const related = await getProductRelatedness(
       db,
       parseShortcodeFor("product", source.entityId),

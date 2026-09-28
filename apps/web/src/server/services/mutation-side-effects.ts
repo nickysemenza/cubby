@@ -143,7 +143,7 @@ const productionMutationSideEffectPorts: MutationSideEffectPorts = {
 };
 
 export { productionMutationSideEffectPorts };
-type MutationEntityType = MutationSideEffectEvent["entity"]["entity"];
+type MutationEntityKind = MutationSideEffectEvent["entity"]["entity"];
 type MutationAction = MutationSideEffectEvent["action"];
 
 /** Post-commit handlers publish, so they always hold the request Database. */
@@ -162,7 +162,7 @@ interface CollectorContext {
 
 type MutationSideEffectHandler = (ctx: HandlerContext) => Promise<void>;
 type MutationSideEffectManifest = Record<
-  MutationEntityType,
+  MutationEntityKind,
   {
     onCreate: MutationSideEffectHandler[];
     onUpdate: MutationSideEffectHandler[];
@@ -171,15 +171,15 @@ type MutationSideEffectManifest = Record<
 >;
 
 const isSearchableEntity = (
-  entityType: MutationEntityType,
-): entityType is SearchableEntity => entityType !== "image";
+  entityKind: MutationEntityKind,
+): entityKind is SearchableEntity => entityKind !== "image";
 
 const ownEmbeddingRef = (
   event: MutationSideEffectEvent,
 ): SearchableEntityRef | null =>
   isSearchableEntity(event.entity.entity)
     ? {
-        entityType: event.entity.entity,
+        entityKind: event.entity.entity,
         entityId: event.entity.id,
       }
     : null;
@@ -204,7 +204,7 @@ async function collectProjectionRefs(
     const collector = embeddingRefCollectorByHandler.get(handler);
     if (collector) refs.push(...(await collector({ db, event, ports })));
   }
-  return uniqBy(refs, (ref) => `${ref.entityType}:${ref.entityId}`);
+  return uniqBy(refs, (ref) => `${ref.entityKind}:${ref.entityId}`);
 }
 
 /** Refresh every projection {@link collectProjectionRefs} names, on `db`. */
@@ -228,11 +228,11 @@ async function publishEmbeddingRefreshes(
   // (see `entity-manifest.ts` `embeddableEntities`): never queue a vector
   // refresh for them, even though they can appear in a collected ref set.
   const embeddableRefs = refs.filter((ref) =>
-    isEmbeddableEntity(ref.entityType),
+    isEmbeddableEntity(ref.entityKind),
   );
   const uniqueRefs = uniqBy(
     embeddableRefs,
-    (ref) => `${ref.entityType}:${ref.entityId}`,
+    (ref) => `${ref.entityKind}:${ref.entityId}`,
   );
   if (uniqueRefs.length === 0) return;
   const requestedAt = new Date().toISOString();
@@ -241,7 +241,7 @@ async function publishEmbeddingRefreshes(
     uniqueRefs.map((ref) => ({
       kind: "entity-embedding.refresh" as const,
       requestedAt,
-      entityType: ref.entityType,
+      entityKind: ref.entityKind,
       entityId: ref.entityId,
     })),
     {
@@ -261,7 +261,7 @@ export async function refreshDerivedSearchRefs(
   source: string,
   ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
 ): Promise<void> {
-  const uniqueRefs = uniqBy(refs, (ref) => `${ref.entityType}:${ref.entityId}`);
+  const uniqueRefs = uniqBy(refs, (ref) => `${ref.entityKind}:${ref.entityId}`);
   if (uniqueRefs.length === 0) return;
   await ports.refreshSearchDocuments(db, uniqueRefs);
   await publishEmbeddingRefreshes(db, uniqueRefs, { source }, ports);
@@ -854,7 +854,7 @@ export async function runMutationSideEffectsForEntities(
           events.map((event) => collectProjectionRefs(db, event, ports)),
         )
       ).flat(),
-      (ref) => `${ref.entityType}:${ref.entityId}`,
+      (ref) => `${ref.entityKind}:${ref.entityId}`,
     );
     if (refs.length > 0) await ports.refreshSearchDocuments(db, refs);
   }

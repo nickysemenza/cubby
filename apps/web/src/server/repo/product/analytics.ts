@@ -94,7 +94,7 @@ export const findProductsWithNoImages = async (
     .leftJoin(
       entityAttachment,
       and(
-        eq(entityAttachment.subjectEntityId, product.id),
+        eq(entityAttachment.entityId, product.id),
         notDeleted(entityAttachment),
         sql`${entityAttachment.purpose} IS DISTINCT FROM 'label'`,
       ),
@@ -144,7 +144,7 @@ export const countProductsWithNoImagesWithGtin = async (
             .innerJoin(image, eq(image.id, entityAttachment.imageId))
             .where(
               and(
-                eq(entityAttachment.subjectEntityId, product.id),
+                eq(entityAttachment.entityId, product.id),
                 notDeleted(entityAttachment),
                 sql`${entityAttachment.purpose} IS DISTINCT FROM 'label'`,
                 displayableImageWhere,

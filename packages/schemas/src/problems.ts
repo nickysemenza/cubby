@@ -280,7 +280,7 @@ export const entityMissingEmbeddingSchema = z.object({
   ...searchableEntityRefFields,
   // Deliberately NOT hoisted onto `searchableEntityRefFields` itself: this row
   // always points at a LIVE entity, so it can always be resolved and is safe
-  // to link. Plain string, not a branded schema: `entityType` is one of ten
+  // to link. Plain string, not a branded schema: `entityKind` is one of ten
   // different entities, so no single branded type could be right for all of
   // them — mirrors why `entityId` above is also a plain string.
   entityId: publicEntityIdSchema,

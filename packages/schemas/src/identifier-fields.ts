@@ -141,7 +141,7 @@ export function parseEntityId(
 
 /**
  * An internal private-UUID reference. This is separate from the public/general
- * `{ entityType, entityId }` wire shape in `entity.ts`, whose string value may
+ * `{ entityKind, entityId }` wire shape in `entity.ts`, whose string value may
  * be a shortcode or a non-local identifier such as `usda-food`.
  */
 export type EntityRef<E extends ShortcodeEntity = ShortcodeEntity> = {

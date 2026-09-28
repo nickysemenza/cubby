@@ -194,8 +194,8 @@ function edges<T extends Record<string, EntityEdge>>(t: T & WellKeyed<T>): T {
 
 export const ENTITY_EDGES = {
   cookbook: edges({
-    "EntityAttachment.subjectEntityId": {
-      column: entityAttachment.subjectEntityId,
+    "EntityAttachment.entityId": {
+      column: entityAttachment.entityId,
       role: "media",
       label: "cookbook covers",
       description:
@@ -220,8 +220,8 @@ export const ENTITY_EDGES = {
         "A file attached to an entity: a gallery photo, a document, a cookbook cover, or a vendor logo. Says nothing about ownership.",
       liveness: { kind: "must-target-live" },
     },
-    "RunTarget.imageId": {
-      column: runTarget.imageId,
+    "RunTarget.entityId": {
+      column: runTarget.entityId,
       role: "history",
       label: "photo import runs",
       description:
@@ -324,8 +324,8 @@ export const ENTITY_EDGES = {
         "A join row placing this recipe on the meal calendar; the meal and the recipe each exist independently of the pairing.",
       liveness: { kind: "must-target-live" },
     },
-    "EntityAttachment.subjectEntityId": {
-      column: entityAttachment.subjectEntityId,
+    "EntityAttachment.entityId": {
+      column: entityAttachment.entityId,
       role: "media",
       label: "recipe photos",
       description: "A photo attached to this recipe.",
@@ -399,8 +399,8 @@ export const ENTITY_EDGES = {
         "A recorded portion from a recipe preparation assigned for consumption at this meal, including portions from an earlier leftovers source.",
       liveness: { kind: "must-target-live" },
     },
-    "EntityAttachment.subjectEntityId": {
-      column: entityAttachment.subjectEntityId,
+    "EntityAttachment.entityId": {
+      column: entityAttachment.entityId,
       role: "media",
       label: "meal photos",
       description: "A photo attached to this meal.",
@@ -551,8 +551,8 @@ export const ENTITY_EDGES = {
     },
   }),
   product: edges({
-    "RunTarget.productId": {
-      column: runTarget.productId,
+    "RunTarget.entityId": {
+      column: runTarget.entityId,
       role: "history",
       label: "targeted import runs",
       description:
@@ -591,8 +591,8 @@ export const ENTITY_EDGES = {
         "A shelf or bin count of this product currently on hand — proof it was actually acquired, not just cataloged.",
       liveness: { kind: "must-target-live" },
     },
-    "EntityAttachment.subjectEntityId": {
-      column: entityAttachment.subjectEntityId,
+    "EntityAttachment.entityId": {
+      column: entityAttachment.entityId,
       role: "media",
       label: "product photos",
       description:
@@ -753,8 +753,8 @@ export const ENTITY_EDGES = {
       description: "A product physically held at this location right now.",
       liveness: { kind: "must-target-live" },
     },
-    "EntityAttachment.subjectEntityId": {
-      column: entityAttachment.subjectEntityId,
+    "EntityAttachment.entityId": {
+      column: entityAttachment.entityId,
       role: "media",
       label: "location photos",
       description: "A photo attached to this location.",
@@ -842,8 +842,8 @@ export const ENTITY_EDGES = {
         "A spend-ledger line rolled up under this project — all money lives on Expense, so this is the source of the project's cost total.",
       liveness: { kind: "must-target-live" },
     },
-    "EntityAttachment.subjectEntityId": {
-      column: entityAttachment.subjectEntityId,
+    "EntityAttachment.entityId": {
+      column: entityAttachment.entityId,
       role: "media",
       label: "project photos",
       description: "A photo or document attached to this project.",
@@ -882,8 +882,8 @@ export const ENTITY_EDGES = {
         "A dependency edge naming this task as the blocker another task is waiting on.",
       liveness: { kind: "must-target-live" },
     },
-    "EntityAttachment.subjectEntityId": {
-      column: entityAttachment.subjectEntityId,
+    "EntityAttachment.entityId": {
+      column: entityAttachment.entityId,
       role: "media",
       label: "task photos",
       description: "A photo attached to this task.",
@@ -898,8 +898,8 @@ export const ENTITY_EDGES = {
     },
   }),
   vendor: edges({
-    "EntityAttachment.subjectEntityId": {
-      column: entityAttachment.subjectEntityId,
+    "EntityAttachment.entityId": {
+      column: entityAttachment.entityId,
       role: "media",
       label: "vendor logos",
       description:
@@ -972,8 +972,8 @@ export const ENTITY_EDGES = {
           "Purchase deletion retains reviewed mail history against its tombstone.",
       },
     },
-    "RunTarget.purchaseId": {
-      column: runTarget.purchaseId,
+    "RunTarget.entityId": {
+      column: runTarget.entityId,
       role: "history",
       label: "targeted import runs",
       description:
@@ -1007,8 +1007,8 @@ export const ENTITY_EDGES = {
         "A categorized line of spend booked against this purchase. All money lives on Expense.cost; the purchase's own statedTotal is a soft reconciliation cue and is never summed into spend.",
       liveness: { kind: "must-target-live" },
     },
-    "EntityAttachment.subjectEntityId": {
-      column: entityAttachment.subjectEntityId,
+    "EntityAttachment.entityId": {
+      column: entityAttachment.entityId,
       role: "media",
       label: "purchase documents",
       description:
@@ -1147,8 +1147,8 @@ export const ENTITY_EDGES = {
         "A live association records which growing attempts a garden entry describes.",
       liveness: { kind: "must-target-live" },
     },
-    "EntityAttachment.subjectEntityId": {
-      column: entityAttachment.subjectEntityId,
+    "EntityAttachment.entityId": {
+      column: entityAttachment.entityId,
       role: "media",
       label: "garden journal photos",
       description: "A photo attached to this garden journal entry.",

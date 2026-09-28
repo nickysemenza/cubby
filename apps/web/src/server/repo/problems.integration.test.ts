@@ -261,7 +261,7 @@ describe("problems — missing embeddings", () => {
       { limit: 1_000 },
     );
     const ingredientIds = missing
-      .filter((row) => row.entityType === "ingredient")
+      .filter((row) => row.entityKind === "ingredient")
       .map((row) => row.entityId);
 
     expect(ingredientIds).toContain(realIngredient.id);
@@ -297,7 +297,7 @@ describe("problems — missing embeddings", () => {
       { limit: 1_000 },
     );
 
-    expect(missing.some((row) => row.entityType === "expense")).toBe(false);
+    expect(missing.some((row) => row.entityKind === "expense")).toBe(false);
     expect(missing.some((row) => row.entityId === expense.id)).toBe(false);
   });
 });

@@ -93,7 +93,7 @@ function isGardenEntryKindLabel(
 }
 
 export interface SearchableEntityText {
-  entityType: SearchableEntity;
+  entityKind: SearchableEntity;
   entityId: string;
   embeddingText: string;
 }
@@ -116,7 +116,7 @@ const withOptionalLimit = <const TConfig extends object>(
 /**
  * One query for a whole refresh wave (or a single ref, from
  * {@link getEntityEmbeddingReadiness}) instead of one per ref, keyed
- * `${entityType}:${entityId}` so a caller can compare against a locally
+ * `${entityKind}:${entityId}` so a caller can compare against a locally
  * computed hash without a second lookup.
  *
  * Exposed so callers can decide BEFORE paying for an embedding.
@@ -139,20 +139,20 @@ export async function getStoredEmbeddingHashes(
   // A JS array interpolates as a row constructor, not a Postgres list — build
   // the VALUES rows with `sql.join`, mirroring `getSearchDocumentEmbeddingTexts`.
   const values = sql.join(
-    refs.map((ref) => sql`(${ref.entityType}::text, ${ref.entityId}::uuid)`),
+    refs.map((ref) => sql`(${ref.entityKind}::text, ${ref.entityId}::uuid)`),
     sql`, `,
   );
   const result = await unwrapDb(db).execute<{
-    entityType: SearchableEntity;
+    entityKind: SearchableEntity;
     entityId: string;
     embeddingHash: string;
   }>(sql`
-    WITH refs("entityType", "entityId") AS (VALUES ${values})
-    SELECT ee."entityType", ee."entityId"::text AS "entityId",
+    WITH refs("entityKind", "entityId") AS (VALUES ${values})
+    SELECT ee."entityKind", ee."entityId"::text AS "entityId",
       ee."embeddingHash"
     FROM refs
     JOIN "EntityEmbedding" ee
-      ON ee."entityType" = refs."entityType"
+      ON ee."entityKind" = refs."entityKind"
       AND ee."entityId" = refs."entityId"
       AND ee.provider = ${config.provider}::text
       AND ee.model = ${config.model}::text
@@ -161,7 +161,7 @@ export async function getStoredEmbeddingHashes(
   `);
   return new Map(
     result.rows.map((row) => [
-      `${row.entityType}:${row.entityId}`,
+      `${row.entityKind}:${row.entityId}`,
       row.embeddingHash,
     ]),
   );
@@ -201,39 +201,39 @@ export async function upsertEntityEmbeddingsIfCurrent(
   const values = sql.join(
     inputs.map(
       (input) =>
-        sql`(${input.entityType}::text, ${input.entityId}::uuid, ${input.embeddingText}::text, ${input.embeddingHash}::text, ${input.config.provider}::text, ${input.config.model}::text, ${input.config.dimensions}::int)`,
+        sql`(${input.entityKind}::text, ${input.entityId}::uuid, ${input.embeddingText}::text, ${input.embeddingHash}::text, ${input.config.provider}::text, ${input.config.model}::text, ${input.config.dimensions}::int)`,
     ),
     sql`, `,
   );
   const result = await unwrapDb(db).execute<{
-    entityType: SearchableEntity;
+    entityKind: SearchableEntity;
     entityId: string;
   }>(sql`
     INSERT INTO "EntityEmbedding" (
-      "entityType", "entityId", "embeddingText", "embeddingHash",
+      "entityKind", "entityId", "embeddingText", "embeddingHash",
       provider, model, dimensions, "updatedAt"
     )
-    SELECT sd."entityType", sd."entityId", sd."semanticText",
+    SELECT sd."entityKind", sd."entityId", sd."semanticText",
       v."embeddingHash", v.provider, v.model, v.dimensions, now()
     FROM (VALUES ${values}) AS v(
-      "entityType", "entityId", "embeddingText", "embeddingHash",
+      "entityKind", "entityId", "embeddingText", "embeddingHash",
       provider, model, dimensions
     )
     JOIN "SearchDocument" sd
-      ON sd."entityType" = v."entityType"
+      ON sd."entityKind" = v."entityKind"
       AND sd."entityId" = v."entityId"
       AND sd."deletedAt" IS NULL
       AND sd."semanticText" = v."embeddingText"
-    ON CONFLICT ("entityType", "entityId", provider, model, dimensions)
+    ON CONFLICT ("entityKind", "entityId", provider, model, dimensions)
       WHERE "deletedAt" IS NULL
     DO UPDATE SET
       "embeddingText" = EXCLUDED."embeddingText",
       "embeddingHash" = EXCLUDED."embeddingHash",
       "updatedAt" = now()
-    RETURNING "entityType", "entityId"::text AS "entityId"
+    RETURNING "entityKind", "entityId"::text AS "entityId"
   `);
   return new Set(
-    result.rows.map((row) => entityRefKey(row.entityType, row.entityId)),
+    result.rows.map((row) => entityRefKey(row.entityKind, row.entityId)),
   );
 }
 
@@ -254,7 +254,7 @@ export async function seedEntityEmbedding(
   },
 ): Promise<void> {
   const embeddingHash = await embeddingTextHash({
-    entityType: input.entityType,
+    entityKind: input.entityKind,
     provider: input.config.provider,
     model: input.config.model,
     dimensions: input.config.dimensions,
@@ -263,7 +263,7 @@ export async function seedEntityEmbedding(
 
   await upsertEntityEmbeddingsIfCurrent(db, [
     {
-      entityType: input.entityType,
+      entityKind: input.entityKind,
       entityId: input.entityId,
       embeddingText: input.embeddingText,
       embeddingHash,
@@ -312,7 +312,7 @@ async function getProductEmbeddingTexts(
     rows.map((row) => row.id),
   );
   return rows.map((row) => ({
-    entityType: "product",
+    entityKind: "product",
     entityId: row.id,
     embeddingText: buildProductEmbeddingText({
       ...row,
@@ -343,7 +343,7 @@ async function getImageEmbeddingTexts(
   );
   const rows = await unwrapDb(db).query.image.findMany(queryConfig);
   return rows.map((row) => ({
-    entityType: "image",
+    entityKind: "image",
     entityId: row.id,
     embeddingText: row.filename,
   }));
@@ -380,7 +380,7 @@ async function getWishEmbeddingTexts(
   );
   const rows = await unwrapDb(db).query.wish.findMany(queryConfig);
   return rows.map((row) => ({
-    entityType: "wish",
+    entityKind: "wish",
     entityId: row.id,
     embeddingText: buildWishEmbeddingText({
       name: row.name,
@@ -425,7 +425,7 @@ async function getLocationEmbeddingTexts(
   );
   const rows = await unwrapDb(db).query.location.findMany(queryConfig);
   return rows.map((row) => ({
-    entityType: "location",
+    entityKind: "location",
     entityId: row.id,
     embeddingText: buildLocationEmbeddingText(row),
   }));
@@ -457,7 +457,7 @@ async function getIngredientEmbeddingTexts(
   );
   const rows = await unwrapDb(db).query.ingredient.findMany(queryConfig);
   return rows.map((row) => ({
-    entityType: "ingredient",
+    entityKind: "ingredient",
     entityId: row.id,
     embeddingText: buildIngredientEmbeddingText(row),
   }));
@@ -505,7 +505,7 @@ async function getRecipeEmbeddingTexts(
     options.limit == null ? await query : await query.limit(options.limit);
 
   return rows.map((row) => ({
-    entityType: "recipe",
+    entityKind: "recipe",
     entityId: row.id,
     embeddingText: buildRecipeEmbeddingText(row),
   }));
@@ -538,7 +538,7 @@ async function getCookbookEmbeddingTexts(
   );
   const rows = await unwrapDb(db).query.cookbook.findMany(queryConfig);
   return rows.map((row) => ({
-    entityType: "cookbook",
+    entityKind: "cookbook",
     entityId: row.id,
     embeddingText: buildCookbookEmbeddingText(row),
   }));
@@ -589,7 +589,7 @@ async function getMealEmbeddingTexts(
     options.limit == null ? await query : await query.limit(options.limit);
 
   return rows.map((row) => ({
-    entityType: "meal",
+    entityKind: "meal",
     entityId: row.id,
     embeddingText: buildMealEmbeddingText(row),
   }));
@@ -638,7 +638,7 @@ async function getInventoryEmbeddingTexts(
   );
 
   return rows.map((row) => ({
-    entityType: "inventory",
+    entityKind: "inventory",
     entityId: row.id,
     embeddingText: buildInventoryEmbeddingText({
       productText: buildProductEmbeddingText({
@@ -689,7 +689,7 @@ async function getProjectEmbeddingTexts(
   );
   const rows = await unwrapDb(db).query.project.findMany(queryConfig);
   return rows.map((row) => ({
-    entityType: "project",
+    entityKind: "project",
     entityId: row.id,
     embeddingText: buildProjectEmbeddingText({
       ...row,
@@ -728,7 +728,7 @@ async function getTaskEmbeddingTexts(
   const rows =
     options.limit == null ? await query : await query.limit(options.limit);
   return rows.map((row) => ({
-    entityType: "task",
+    entityKind: "task",
     entityId: row.id,
     embeddingText: buildTaskEmbeddingText(row),
   }));
@@ -770,7 +770,7 @@ async function getExpenseEmbeddingTexts(
   const rows =
     options.limit == null ? await query : await query.limit(options.limit);
   return rows.map((row) => ({
-    entityType: "expense",
+    entityKind: "expense",
     entityId: row.id,
     embeddingText: buildExpenseEmbeddingText(row),
   }));
@@ -797,7 +797,7 @@ async function getVendorEmbeddingTexts(
   );
   const rows = await unwrapDb(db).query.vendor.findMany(queryConfig);
   return rows.map((row) => ({
-    entityType: "vendor",
+    entityKind: "vendor",
     entityId: row.id,
     embeddingText: buildVendorEmbeddingText(row),
   }));
@@ -835,7 +835,7 @@ async function getPurchaseEmbeddingTexts(
   const rows =
     options.limit == null ? await query : await query.limit(options.limit);
   return rows.map((row) => ({
-    entityType: "purchase",
+    entityKind: "purchase",
     entityId: row.id,
     embeddingText: buildPurchaseEmbeddingText(row),
   }));
@@ -909,7 +909,7 @@ async function getFinancialAccountEmbeddingTexts(
   );
   const rows = await unwrapDb(db).query.financialAccount.findMany(queryConfig);
   return rows.map((row) => ({
-    entityType: "financialAccount",
+    entityKind: "financialAccount",
     entityId: row.id,
     embeddingText: buildFinancialAccountEmbeddingText({
       name: row.name,
@@ -979,7 +979,7 @@ async function getFinancialTransactionEmbeddingTexts(
   const rows =
     options.limit == null ? await query : await query.limit(options.limit);
   return rows.map((row) => ({
-    entityType: "financialTransaction",
+    entityKind: "financialTransaction",
     entityId: row.id,
     embeddingText: buildFinancialTransactionEmbeddingText({
       ...row,
@@ -1019,7 +1019,7 @@ async function getPlantEmbeddingTexts(
   );
   const rows = await unwrapDb(db).query.plant.findMany(queryConfig);
   return rows.map((row) => ({
-    entityType: "plant",
+    entityKind: "plant",
     entityId: row.id,
     embeddingText: buildPlantEmbeddingText({
       displayName: plantDisplayName(row.name, row.gardenGuideKey),
@@ -1055,7 +1055,7 @@ async function getPlantingEmbeddingTexts(
   );
   const rows = await unwrapDb(db).query.planting.findMany(queryConfig);
   return rows.map((row) => ({
-    entityType: "planting",
+    entityKind: "planting",
     entityId: row.id,
     embeddingText: buildPlantingEmbeddingText({
       plantName: plantingDisplayName(row.plant),
@@ -1107,7 +1107,7 @@ async function getGardenEntryEmbeddingTexts(
   );
   const rows = await unwrapDb(db).query.gardenEntry.findMany(queryConfig);
   return rows.map((row) => ({
-    entityType: "gardenEntry",
+    entityKind: "gardenEntry",
     entityId: row.id,
     embeddingText: buildGardenEntryEmbeddingText({
       kindLabel: isGardenEntryKindLabel(row.kind)
@@ -1159,10 +1159,10 @@ export async function getEmbeddingTextsForRefs(
   idsByType: ReadonlyMap<SearchableEntity, string[]>,
 ): Promise<SearchableEntityText[]> {
   const chunks = await Promise.all(
-    [...idsByType].map(([entityType, ids]) =>
+    [...idsByType].map(([entityKind, ids]) =>
       ids.length === 0
         ? Promise.resolve<SearchableEntityText[]>([])
-        : embeddingTextLoaders[entityType](db, { ids }),
+        : embeddingTextLoaders[entityKind](db, { ids }),
     ),
   );
   return chunks.flat();

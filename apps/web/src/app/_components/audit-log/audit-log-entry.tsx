@@ -263,7 +263,7 @@ function LedgerAuditEntry({
   showEntityLink,
   step,
 }: Omit<AuditLogEntryProps, "variant">) {
-  const fallbackEntityLabel = entityLabel(entry.entityType);
+  const fallbackEntityLabel = entityLabel(entry.entityKind);
   const action = getStatusBadgeProps("audit", entry.action);
   const summary =
     entry.action === "update" ? summarizeChanges(entry.changes) : null;
@@ -281,7 +281,7 @@ function LedgerAuditEntry({
           <Row align="center" gap="sm" className="min-w-0">
             {showEntityLink && entry.entityId ? (
               <AuditEntityLink
-                entityType={entry.entityType}
+                entityKind={entry.entityKind}
                 entityId={entry.entityId}
                 name={entry.entityName}
                 displayImage={entry.displayImage}
@@ -290,7 +290,7 @@ function LedgerAuditEntry({
             ) : (
               <>
                 <EntityIcon
-                  entity={entry.entityType}
+                  entity={entry.entityKind}
                   colored
                   className="size-4 flex-shrink-0"
                 />
@@ -364,7 +364,7 @@ export function AuditLogEntryComponent({
   const changes = entry.changes;
   const hasChanges = changes !== null && Object.keys(changes).length > 0;
 
-  const fallbackEntityLabel = entityLabel(entry.entityType);
+  const fallbackEntityLabel = entityLabel(entry.entityKind);
   const action = getStatusBadgeProps("audit", entry.action);
 
   if (variant === "ledger") {
@@ -407,7 +407,7 @@ export function AuditLogEntryComponent({
               <Row align="center" gap="sm" wrap>
                 {showEntityLink && entry.entityId ? (
                   <AuditEntityLink
-                    entityType={entry.entityType}
+                    entityKind={entry.entityKind}
                     entityId={entry.entityId}
                     name={entry.entityName}
                     displayImage={entry.displayImage}
@@ -416,7 +416,7 @@ export function AuditLogEntryComponent({
                 ) : (
                   <>
                     <EntityIcon
-                      entity={entry.entityType}
+                      entity={entry.entityKind}
                       colored
                       className="size-4 flex-shrink-0"
                     />

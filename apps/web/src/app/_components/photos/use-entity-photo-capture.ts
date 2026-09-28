@@ -122,7 +122,7 @@ export function useEntityPhotoCapture<E extends GalleryEntity>(
   const updateEntity = useMutation(
     entityMutationOptionsFactory(entity, "update", transport)(),
   );
-  const entityType = entityImageOf(entity);
+  const entityKind = entityImageOf(entity);
 
   const invalidate = useCallback(() => {
     void invalidateOperationTags(queryClient, ripple[entity]);
@@ -165,7 +165,7 @@ export function useEntityPhotoCapture<E extends GalleryEntity>(
         filename: file.name,
         contentType,
         size: file.size,
-        entityType,
+        entityKind,
       });
 
       try {
@@ -218,7 +218,7 @@ export function useEntityPhotoCapture<E extends GalleryEntity>(
       invalidate();
       return newCode;
     },
-    [entityType, uploadImage, updateEntity, invalidate],
+    [entityKind, uploadImage, updateEntity, invalidate],
   );
 
   /**

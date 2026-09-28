@@ -445,7 +445,7 @@ const hydrateProductLocationBreadcrumbs = async (
       ...[...ancestorsById.values()].flatMap((chain) =>
         chain.map((rung) => rung.locationId),
       ),
-    ]).map((entityId) => ({ entityType: "location" as const, entityId })),
+    ]).map((entityId) => ({ entityKind: "location" as const, entityId })),
   );
   const displayImageOf = (id: LocationId) =>
     displayImages.get(entityRefKey("location", id)) ?? null;
@@ -529,14 +529,14 @@ export const getProductImagesByProductIds = async (
 
   const rows = await getDb(db)
     .select({
-      productId: entityAttachment.subjectEntityId,
+      productId: entityAttachment.entityId,
       image,
     })
     .from(entityAttachment)
     .innerJoin(image, eq(entityAttachment.imageId, image.id))
     .where(
       and(
-        inArray(entityAttachment.subjectEntityId, uniqueIds),
+        inArray(entityAttachment.entityId, uniqueIds),
         notDeleted(entityAttachment),
         sql`${entityAttachment.purpose} IS DISTINCT FROM 'label'`,
         notDeleted(image),
@@ -730,7 +730,7 @@ export const buildProductWhere = async (
   // Joins Image so this matches what the thumbnail cell actually renders — it
   // drops PDF manuals, and Image is separately soft-deletable from ProductImage.
   const productIdsWithImages = dbClient
-    .select({ productId: entityAttachment.subjectEntityId })
+    .select({ productId: entityAttachment.entityId })
     .from(entityAttachment)
     .innerJoin(
       image,
@@ -1219,7 +1219,7 @@ const loadProductListRelations = async (
     await Promise.all([
       getDb(db).query.entityAttachment.findMany({
         where: and(
-          inArray(entityAttachment.subjectEntityId, uniqueIds),
+          inArray(entityAttachment.entityId, uniqueIds),
           notDeleted(entityAttachment),
         ),
         orderBy: [
@@ -1251,7 +1251,7 @@ const loadProductListRelations = async (
     ]);
 
   for (const row of images) {
-    result.get(parseEntityId("product", row.subjectEntityId))?.images.push(row);
+    result.get(parseEntityId("product", row.entityId))?.images.push(row);
   }
   for (const row of externalIds) {
     result.get(row.productId)?.externalIds.push(row);
@@ -1278,7 +1278,7 @@ export const getProductCoverImageUrlsByProductIds = async (
 ): Promise<Map<ProductId, string>> => {
   const covers = await resolveEntityDisplayImages(
     db,
-    ids.map((entityId) => ({ entityType: "product", entityId })),
+    ids.map((entityId) => ({ entityKind: "product", entityId })),
   );
   return new Map(
     ids.flatMap((id) => {
@@ -1697,7 +1697,7 @@ export const createProduct = async (
               .set({ purpose })
               .where(
                 and(
-                  eq(entityAttachment.subjectEntityId, newProduct.id),
+                  eq(entityAttachment.entityId, newProduct.id),
                   eq(entityAttachment.imageId, imageId),
                   notDeleted(entityAttachment),
                 ),
@@ -1712,7 +1712,7 @@ export const createProduct = async (
       }
 
       await logAuditEntry(tx, actor, {
-        entityType: "product",
+        entityKind: "product",
         entityId: newProduct.id,
         action: "create",
       });
@@ -1956,7 +1956,7 @@ export const updateProduct = async (
       // reappear in the response) in display order.
       const productImages = await tx.query.entityAttachment.findMany({
         where: and(
-          eq(entityAttachment.subjectEntityId, updated.id),
+          eq(entityAttachment.entityId, updated.id),
           notDeleted(entityAttachment),
         ),
         with: {
@@ -1983,7 +1983,7 @@ export const updateProduct = async (
 
       if (changes) {
         await logAuditEntry(tx, actor, {
-          entityType: "product",
+          entityKind: "product",
           entityId: updated.id,
           action: "update",
           changes,
@@ -2239,7 +2239,7 @@ export const patchProductExternalIds = async (
         .set({ updatedAt })
         .where(and(eq(product.id, id), notDeleted(product)));
       await logAuditEntry(tx, actor, {
-        entityType: "product",
+        entityKind: "product",
         entityId: id,
         action: "update",
         changes,
@@ -2338,7 +2338,7 @@ export const quickCreateProduct = async (
     }
 
     await logAuditEntry(tx, actor, {
-      entityType: "product",
+      entityKind: "product",
       entityId: inserted.id,
       action: "create",
     });
@@ -2384,11 +2384,15 @@ type ProductDependentFetcher = (
 ) => Promise<Array<{ productId: ProductId | null }>>;
 
 const PRODUCT_RETAINING_DEPENDENTS = {
-  "RunTarget.productId": (tx, ids) =>
-    tx.query.runTarget.findMany({
-      where: inArray(runTarget.productId, ids),
-      columns: { productId: true },
-    }),
+  "RunTarget.entityId": async (tx, ids) => {
+    const rows = await tx.query.runTarget.findMany({
+      where: inArray(runTarget.entityId, ids),
+      columns: { entityId: true },
+    });
+    return rows.map(({ entityId }) => ({
+      productId: parseEntityId("product", entityId),
+    }));
+  },
   "Planting.sourceProductId": async (tx, ids) => {
     const rows = await tx.query.planting.findMany({
       where: and(inArray(planting.sourceProductId, ids), notDeleted(planting)),

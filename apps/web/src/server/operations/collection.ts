@@ -84,11 +84,11 @@ const runCollectionEffects = async (
     {
       action: "updated",
       entity: parseEntityRef<"product" | "location">(
-        entity.entityType,
+        entity.entityKind,
         entity.entityId,
       ),
       source:
-        entity.entityType === "product" ? "product.update" : "location.update",
+        entity.entityKind === "product" ? "product.update" : "location.update",
     },
   ]);
 

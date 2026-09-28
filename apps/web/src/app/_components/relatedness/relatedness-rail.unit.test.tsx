@@ -65,7 +65,7 @@ function result(
 ): EntityRecommendationsOut {
   return {
     source: {
-      entityType: "product",
+      entityKind: "product",
       entityId: testShortcode("product", "PRD-SOURCE"),
     },
     basisKey: `basis-${status}`,
@@ -184,7 +184,7 @@ describe("RelatednessRail", () => {
         operations={adapter.operations}
         seededDisplayImages={{
           [entityDisplayImageKey({
-            entityType: "product",
+            entityKind: "product",
             entityId: pictured,
           })]: { url: "https://images.example/cover.jpg" },
         }}

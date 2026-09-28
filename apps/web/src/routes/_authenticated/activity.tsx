@@ -9,7 +9,7 @@ import { auditLogListOptions } from "~/lib/audit-log.functions";
 import { pageTitle } from "~/lib/page-title";
 
 const searchSchema = z.object({
-  entityType: auditEntitySchema.optional().catch(undefined),
+  entityKind: auditEntitySchema.optional().catch(undefined),
   channel: auditChannelSchema.optional().catch(undefined),
 });
 
@@ -22,13 +22,13 @@ const ActivityPage = listChromePage({
 export const Route = createFileRoute("/_authenticated/activity")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => ({
-    entityType: search.entityType,
+    entityKind: search.entityKind,
     channel: search.channel,
   }),
   loader: async ({ context, deps }) => {
     void context.queryClient.prefetchInfiniteQuery(
       auditLogListOptions(
-        { limit: 20, entityType: deps.entityType, channel: deps.channel },
+        { limit: 20, entityKind: deps.entityKind, channel: deps.channel },
         { getNextPageParam: (lastPage) => lastPage.nextCursor },
       ),
     );
@@ -42,10 +42,10 @@ function ActivityBody() {
   const navigate = Route.useNavigate();
   return (
     <ActivityChanges
-      entityType={search.entityType}
+      entityKind={search.entityKind}
       channel={search.channel}
-      onEntityTypeChange={(entityType) =>
-        navigate({ search: (previous) => ({ ...previous, entityType }) })
+      onEntityKindChange={(entityKind) =>
+        navigate({ search: (previous) => ({ ...previous, entityKind }) })
       }
       onChannelChange={(channel) =>
         navigate({ search: (previous) => ({ ...previous, channel }) })
@@ -54,7 +54,7 @@ function ActivityBody() {
         navigate({
           search: (previous) => ({
             ...previous,
-            entityType: undefined,
+            entityKind: undefined,
             channel: undefined,
           }),
         })

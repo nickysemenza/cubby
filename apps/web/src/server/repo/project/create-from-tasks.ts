@@ -75,7 +75,7 @@ export async function createProjectFromTasks(
       notionPageUrl: input.project.notionPageUrl,
     });
     await logAuditEntry(tx, actor, {
-      entityType: "project",
+      entityKind: "project",
       entityId: created.id,
       action: "create",
     });
@@ -100,7 +100,7 @@ export async function createProjectFromTasks(
         );
         if (changes) {
           auditEntries.push({
-            entityType: "task",
+            entityKind: "task",
             entityId: row.id,
             action: "update",
             changes,

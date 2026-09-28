@@ -139,10 +139,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records the device that last reported on-device processing",
   },
-  "RunTarget.purchaseId": {
-    classification: "metadata",
-    reason: "records the Purchase a targeted validation examined",
-  },
   "PhotoGroupProposal.runId": {
     classification: "ownership",
     reason: "a photo-inventory run's proposed item groupings",
@@ -162,14 +158,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
   "PhotoGroupProposal.productCreateCategoryId": {
     classification: "metadata",
     reason: "the category a proposed photo group's new Product is filed under",
-  },
-  "RunTarget.productId": {
-    classification: "metadata",
-    reason: "records the Product a targeted enrichment examined",
-  },
-  "RunTarget.imageId": {
-    classification: "metadata",
-    reason: "records the Image a photo-inventory run grouped into a Product",
   },
   "RunTarget.vendorAccountId": {
     classification: "metadata",

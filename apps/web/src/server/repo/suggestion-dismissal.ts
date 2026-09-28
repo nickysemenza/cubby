@@ -28,8 +28,8 @@ export async function suggestionCandidateKey(
 export async function dismissSuggestion(
   db: Database,
   input: {
-    sourceEntityType: SearchableEntity;
-    sourceEntityId: string;
+    entityKind: SearchableEntity;
+    entityId: string;
     suggestionKind: string;
     candidateKey: string;
   },
@@ -40,8 +40,8 @@ export async function dismissSuggestion(
     .values({ ...input, updatedAt: now })
     .onConflictDoUpdate({
       target: [
-        suggestionDismissal.sourceEntityType,
-        suggestionDismissal.sourceEntityId,
+        suggestionDismissal.entityKind,
+        suggestionDismissal.entityId,
         suggestionDismissal.suggestionKind,
         suggestionDismissal.candidateKey,
       ],
@@ -53,8 +53,8 @@ export async function dismissSuggestion(
 export async function getActiveSuggestionDismissalKeys(
   db: Database,
   input: {
-    sourceEntityType: SearchableEntity;
-    sourceEntityId: string;
+    entityKind: SearchableEntity;
+    entityId: string;
     suggestionKind: string;
   },
 ): Promise<Set<string>> {
@@ -63,8 +63,8 @@ export async function getActiveSuggestionDismissalKeys(
     .from(suggestionDismissal)
     .where(
       and(
-        eq(suggestionDismissal.sourceEntityType, input.sourceEntityType),
-        eq(suggestionDismissal.sourceEntityId, input.sourceEntityId),
+        eq(suggestionDismissal.entityKind, input.entityKind),
+        eq(suggestionDismissal.entityId, input.entityId),
         eq(suggestionDismissal.suggestionKind, input.suggestionKind),
         notDeleted(suggestionDismissal),
       ),
@@ -74,17 +74,17 @@ export async function getActiveSuggestionDismissalKeys(
 
 export async function softDeleteSuggestionDismissalsTx(
   tx: DrizzleTransaction,
-  sourceEntityType: SearchableEntity,
-  sourceEntityIds: readonly string[],
+  entityKind: SearchableEntity,
+  entityIds: readonly string[],
 ): Promise<void> {
-  if (sourceEntityIds.length === 0) return;
+  if (entityIds.length === 0) return;
   await tx
     .update(suggestionDismissal)
     .set({ deletedAt: new Date() })
     .where(
       and(
-        eq(suggestionDismissal.sourceEntityType, sourceEntityType),
-        inArray(suggestionDismissal.sourceEntityId, [...sourceEntityIds]),
+        eq(suggestionDismissal.entityKind, entityKind),
+        inArray(suggestionDismissal.entityId, [...entityIds]),
         notDeleted(suggestionDismissal),
       ),
     );

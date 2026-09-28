@@ -6,12 +6,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   aiAnalysis,
-  entityAttachment,
   image,
   imageDescriptionCorrection,
   imageProcessingJob,
   productCategory,
 } from "~/server/db/schema";
+import { insertEntityAttachments } from "~/server/repo/repo.fixtures";
 
 import { getDb } from "../database-helpers";
 import { createUploadedImageRecord } from "../image";
@@ -43,12 +43,10 @@ describe("retained classification evidence", () => {
         .update(image)
         .set({ sha256: "a".repeat(64) })
         .where(eq(image.id, source.id));
-    await getDb(ctx.db)
-      .insert(entityAttachment)
-      .values([
-        { subjectEntityId: product.id, imageId: item.id, purpose: "item" },
-        { subjectEntityId: product.id, imageId: label.id, purpose: "label" },
-      ]);
+    await insertEntityAttachments(ctx.db, [
+      { entityId: product.id, imageId: item.id, purpose: "item" },
+      { entityId: product.id, imageId: label.id, purpose: "label" },
+    ]);
     const itemJobs = await persistImageProcessingSubmission(ctx.db, {
       id: item.shortcode,
       kinds: ["subject_lift"],
@@ -77,8 +75,8 @@ describe("retained classification evidence", () => {
       name: "Shared original item",
       manufacturer: "Example",
     });
-    await getDb(ctx.db).insert(entityAttachment).values({
-      subjectEntityId: secondProduct.id,
+    await insertEntityAttachments(ctx.db, {
+      entityId: secondProduct.id,
       imageId: label.id,
       purpose: "item",
     });
@@ -108,22 +106,20 @@ describe("retained classification evidence", () => {
       contentType: "image/jpeg",
       size: 64,
     });
-    await getDb(ctx.db)
-      .insert(entityAttachment)
-      .values([
-        {
-          subjectEntityId: product.id,
-          imageId: photo.id,
-          purpose: "item",
-          sortOrder: 0,
-        },
-        {
-          subjectEntityId: product.id,
-          imageId: label.id,
-          purpose: "label",
-          sortOrder: 1,
-        },
-      ]);
+    await insertEntityAttachments(ctx.db, [
+      {
+        entityId: product.id,
+        imageId: photo.id,
+        purpose: "item",
+        sortOrder: 0,
+      },
+      {
+        entityId: product.id,
+        imageId: label.id,
+        purpose: "label",
+        sortOrder: 1,
+      },
+    ]);
     await getDb(ctx.db)
       .insert(aiAnalysis)
       .values([

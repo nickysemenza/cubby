@@ -193,7 +193,7 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
     () =>
       block.kind === "products"
         ? block.products.slice(0, 4).map((product) => ({
-            entityType: "product" as const,
+            entityKind: "product" as const,
             entityId: product.id,
           }))
         : [],
@@ -239,7 +239,7 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
               displayImage={
                 displayImages[
                   entityDisplayImageKey({
-                    entityType: "product",
+                    entityKind: "product",
                     entityId: p.id,
                   })
                 ] ?? null

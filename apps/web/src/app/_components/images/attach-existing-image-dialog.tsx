@@ -29,7 +29,7 @@ export function AttachExistingImageDialog({
   const targetSearch = useQuery({
     ...search.find.queryOptions({
       query: targetId.trim() || "_",
-      entityTypes: [...galleryEntities],
+      entityKinds: [...galleryEntities],
       limit: 10,
     }),
     enabled: targetId.trim().length > 0,
@@ -109,13 +109,13 @@ export function AttachExistingImageDialog({
               .map((result) => (
                 <button
                   className="flex w-full flex-col items-start px-2 py-1.5 text-left hover:bg-muted"
-                  key={`${result.entityType}:${result.id}`}
+                  key={`${result.entityKind}:${result.id}`}
                   type="button"
                   onClick={() => setTargetId(result.id)}
                 >
                   <span className="font-medium">{result.title}</span>
                   <span className="text-2xs text-muted-foreground">
-                    {result.id} · {result.entityType}
+                    {result.id} · {result.entityKind}
                     {result.subtitle ? ` · ${result.subtitle}` : ""}
                   </span>
                 </button>

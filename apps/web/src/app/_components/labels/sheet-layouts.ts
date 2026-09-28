@@ -55,7 +55,7 @@ export function isSheetFormat(format: string): format is SheetFormat {
 export interface LabelItem {
   shortcode: string;
   name: string;
-  entityType: "location" | "product";
+  entityKind: "location" | "product";
   locationType?: LocationType;
   productCategory?: ProductCategory | null;
   parentName?: string | null;

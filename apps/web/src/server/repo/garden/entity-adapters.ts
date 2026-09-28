@@ -47,7 +47,7 @@ const PLANTING_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"planting", OperationDisposition>;
 
 const GARDEN_ENTRY_DELETE_EDGE_POLICY = {
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description: "Garden entry image associations are removed with the entry.",
@@ -152,7 +152,7 @@ const auditEntryPlantingSets = async (
       return changes
         ? [
             {
-              entityType: "gardenEntry" as const,
+              entityKind: "gardenEntry" as const,
               entityId: gardenEntryId,
               action: "update" as const,
               changes: { plantingIds: changes },
@@ -202,7 +202,7 @@ export const plantingEntityAdapter = defineEntityAdapter({
       await refreshDerivedSearchRefs(
         ctx.db,
         affectedEntryIds.map((entityId) => ({
-          entityType: "gardenEntry" as const,
+          entityKind: "gardenEntry" as const,
           entityId,
         })),
         "planting.delete.detachGardenEntries",

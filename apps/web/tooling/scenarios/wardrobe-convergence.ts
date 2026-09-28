@@ -187,12 +187,12 @@ async function readConvergenceFacts(
       ),
       pool.query<{
         imageId: string;
-        subjectEntityId: string;
+        entityId: string;
         purpose: string | null;
       }>(
-        `SELECT i.shortcode AS "imageId", a."subjectEntityId", a.purpose
+        `SELECT i.shortcode AS "imageId", a."entityId", a.purpose
        FROM "EntityAttachment" a JOIN "Image" i ON i.id = a."imageId"
-       WHERE a."subjectEntityId" IN (SELECT id FROM "Product" WHERE shortcode = ANY($1::text[]))
+       WHERE a."entityId" IN (SELECT id FROM "Product" WHERE shortcode = ANY($1::text[]))
          AND a."deletedAt" IS NULL`,
         [[photoProductId, purchaseProductId]],
       ),
@@ -273,7 +273,7 @@ function assertAfterMerge(
 ): void {
   const live = facts.products.filter((item) => item.deletedAt === null);
   const ownPhotos = facts.attachments.filter(
-    (item) => item.subjectEntityId === purchaseProduct.id,
+    (item) => item.entityId === purchaseProduct.id,
   );
   if (
     live.length !== 1 ||
@@ -1254,7 +1254,7 @@ async function runForgeWearTraps(
   );
   const duplicateFinding = await pool.query<{ count: string }>(
     `SELECT count(*)::text AS count FROM "RunFinding"
-     WHERE "targetKind" = 'purchase' AND "targetId" = $1 AND kind = 'duplicate_lines'`,
+     WHERE "entityKind" = 'purchase' AND "entityId" = $1 AND kind = 'duplicate_lines'`,
     [facts.purchases[0]?.id ?? null],
   );
   const decoyAllocations = await pool.query<{ count: string }>(

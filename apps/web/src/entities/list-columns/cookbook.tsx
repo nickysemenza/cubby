@@ -43,7 +43,7 @@ function CookbookProductLink({
   product: NonNullable<CookbookSummary["product"]>;
 }) {
   const displayImage = useEntityDisplayImage({
-    entityType: "product",
+    entityKind: "product",
     entityId: product.id,
   });
   return (
@@ -167,7 +167,7 @@ export const cookbookListOverride = defineListOverride<CookbookSummary, object>(
           <EntityDisplayImagesProvider
             refs={data.flatMap((row) =>
               row.product
-                ? [{ entityType: "product" as const, entityId: row.product.id }]
+                ? [{ entityKind: "product" as const, entityId: row.product.id }]
                 : [],
             )}
           >

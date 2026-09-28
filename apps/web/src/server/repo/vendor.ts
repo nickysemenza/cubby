@@ -120,7 +120,7 @@ export const VENDOR_DELETE_EDGE_POLICY = {
     description:
       "A vendor with purchases still pointing at it can't be deleted — those purchases are load-bearing history.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "cascade-delete-attachment",
     effect: "soft-delete",
     description:
@@ -168,7 +168,7 @@ export const VENDOR_MERGE_EDGE_POLICY = {
     description:
       "A merged vendor's purchases re-point onto the surviving vendor; purchases that collide on the same order id are folded into one instead.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "carry-logo",
     effect: "repoint",
     description:
@@ -250,7 +250,7 @@ export async function getVendorCoverage(
 const vendorHasDisplayableLogo = sql<boolean>`EXISTS (
   SELECT 1 FROM "EntityAttachment" logo_att
   JOIN "Image" logo ON logo."id" = logo_att."imageId"
-  WHERE logo_att."subjectEntityId" = ${sql.raw('"Vendor"."id"')}
+  WHERE logo_att."entityId" = ${sql.raw('"Vendor"."id"')}
     AND logo_att."role" = 'logo'
     AND logo_att."deletedAt" IS NULL
     AND logo."deletedAt" IS NULL
@@ -259,7 +259,7 @@ const vendorHasDisplayableLogo = sql<boolean>`EXISTS (
 
 /** The vendor's live logo attachment, for a left join ahead of `image`. */
 const vendorLogoAttachment = and(
-  eq(entityAttachment.subjectEntityId, vendor.id),
+  eq(entityAttachment.entityId, vendor.id),
   eq(entityAttachment.role, "logo"),
   notDeleted(entityAttachment),
 );
@@ -621,7 +621,7 @@ export const createVendor = async (
       notes: data.notes,
     });
     await logAuditEntry(tx, actor, {
-      entityType: "vendor",
+      entityKind: "vendor",
       entityId: created.id,
       action: "create",
     });
@@ -700,7 +700,7 @@ export const replaceVendorLogo = async (
         created.id,
       );
       await logAuditEntry(tx, actor, {
-        entityType: "vendor",
+        entityKind: "vendor",
         entityId,
         action: "update",
         changes: {
@@ -880,7 +880,7 @@ export const mergeVendors = async (
         // Detach every loser logo before tombstoning, then give the survivor
         // the carried one, so a logo that was not carried is eligible for the
         // same shared-reference reap as an ordinary vendor delete.
-        "EntityAttachment.subjectEntityId": async () => {
+        "EntityAttachment.entityId": async () => {
           for (const loserId of losers) {
             const { previousImageId } = await replaceSingularAttachment(
               tx,

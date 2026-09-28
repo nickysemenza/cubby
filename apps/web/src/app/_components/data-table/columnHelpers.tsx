@@ -625,7 +625,7 @@ function entityInlineItemRefs(
         return z.array(locationInlineSchema).parse(value);
     }
   })();
-  return items.map((item) => ({ entityType: entity, entityId: item.id }));
+  return items.map((item) => ({ entityKind: entity, entityId: item.id }));
 }
 
 export function createEntityInlineLinkColumn<
@@ -783,7 +783,7 @@ export function createInventoryEntriesColumn<
       entityRefs: (row) =>
         row[accessor].flatMap((entry) => {
           const related = getRelatedEntity(entry);
-          return related ? [{ entityType: entity, entityId: related.id }] : [];
+          return related ? [{ entityKind: entity, entityId: related.id }] : [];
         }),
     }),
     cell: (info) => (
@@ -1219,7 +1219,7 @@ function CanonicalSingleEntityLink({
   data,
 }: CanonicalSingleEntityLinkProps) {
   const displayImage = useEntityDisplayImage({
-    entityType: entity,
+    entityKind: entity,
     entityId: "id" in data ? data.id : "",
   });
   if (entity === "usda-food") {
@@ -1505,7 +1505,7 @@ export function createSingleEntityInlineLinkColumn<
         const item = valueFor(row);
         return entity === "usda-food" || !item || !("id" in item)
           ? []
-          : [{ entityType: entity, entityId: item.id }];
+          : [{ entityKind: entity, entityId: item.id }];
       },
     }),
     cell: (info) => {

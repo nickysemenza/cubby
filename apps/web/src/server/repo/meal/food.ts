@@ -114,7 +114,7 @@ export const saveMealFood = (
         "This food entry is no longer available. Refresh the meal.",
       );
     await logAuditEntry(tx, actor, {
-      entityType: "meal",
+      entityKind: "meal",
       entityId: mealId,
       action: "update",
     });
@@ -145,7 +145,7 @@ export const removeMealFood = (
         "This food entry is no longer available. Refresh the meal.",
       );
     await logAuditEntry(tx, actor, {
-      entityType: "meal",
+      entityKind: "meal",
       entityId: mealId,
       action: "update",
     });

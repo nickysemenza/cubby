@@ -113,7 +113,7 @@ export const LOCATION_DELETE_EDGE_POLICY = {
     description:
       "A location still holding inventory can't be deleted — move or remove the inventory first.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -268,7 +268,7 @@ const createLocationTx = async (
     }
 
     await logAuditEntry(tx, actor, {
-      entityType: "location",
+      entityKind: "location",
       entityId: newLocation.id,
       action: "create",
     });
@@ -434,7 +434,7 @@ export const updateLocation = async (
       ]);
       if (changes) {
         await logAuditEntry(tx, actor, {
-          entityType: "location",
+          entityKind: "location",
           entityId: id,
           action: "update",
           changes,
@@ -538,7 +538,7 @@ export const bulkReparentLocations = async (
       tx,
       actor,
       changed.map((row) => ({
-        entityType: "location" as const,
+        entityKind: "location" as const,
         entityId: row.id,
         action: "update" as const,
         changes: { parentId: { from: row.parentId, to: parentId } },
@@ -692,7 +692,7 @@ export const buildLocationWhere = async (
     .from(childLocation)
     .where(and(notDeleted(childLocation), isNotNull(childLocation.parentId)));
   const locationIdsWithImages = getDb(db)
-    .select({ locationId: entityAttachment.subjectEntityId })
+    .select({ locationId: entityAttachment.entityId })
     .from(entityAttachment)
     .innerJoin(
       image,
@@ -907,7 +907,7 @@ const loadLocationCoverImages = async (
 
   const rows = await getDb(db).query.entityAttachment.findMany({
     where: and(
-      inArray(entityAttachment.subjectEntityId, ids),
+      inArray(entityAttachment.entityId, ids),
       notDeleted(entityAttachment),
     ),
     orderBy: imageOrder,
@@ -915,7 +915,7 @@ const loadLocationCoverImages = async (
   });
 
   for (const row of rows) {
-    const locationId = parseEntityId("location", row.subjectEntityId);
+    const locationId = parseEntityId("location", row.entityId);
     if (byId.has(locationId)) continue;
     const [mapped] = mapImages([row]);
     if (mapped && isDisplayableImageFile(mapped)) {

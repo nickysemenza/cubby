@@ -492,7 +492,7 @@ describe("setTasksStatus", () => {
       .from(auditLog)
       .where(
         and(
-          eq(auditLog.entityType, "task"),
+          eq(auditLog.entityKind, "task"),
           eq(auditLog.action, "update"),
           inArray(auditLog.entityId, [changedId, unchangedId]),
         ),

@@ -60,7 +60,7 @@ function uploadedImageRow(imageId: ImageShortcode, file: File) {
     provenanceEvidence: null,
     createdAt: new Date(),
     updatedAt: new Date(),
-    entityType: null,
+    entityKind: null,
     entityId: null,
     entityName: null,
     associations: [],

@@ -127,7 +127,7 @@ export function NutrientDensityStats({
   canSeeStoredMappings?: boolean;
 }) {
   const displayImages = useEntityDisplayImages([
-    { entityType: "product", entityId: mappingProduct.id },
+    { entityKind: "product", entityId: mappingProduct.id },
   ]);
   const {
     proteinDensity,
@@ -156,7 +156,7 @@ export function NutrientDensityStats({
             displayImage={
               displayImages[
                 entityDisplayImageKey({
-                  entityType: "product",
+                  entityKind: "product",
                   entityId: mappingProduct.id,
                 })
               ] ?? null

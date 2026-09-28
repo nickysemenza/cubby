@@ -381,6 +381,21 @@ const pointEdgeAt = async (
     values.set(local.name, sql`${row.id}`);
   }
   values.set(columnName, sql`${targetId}`);
+  // An `entityRef` row carries the target's own stored kind, or the composite
+  // FK to `Entity(id, kind)` refuses it.
+  if (config.columns.some((col) => col.name === "entityKind")) {
+    const [identity] = z
+      .array(z.object({ kind: z.string() }))
+      .parse(
+        (
+          await getDb(db).execute(
+            sql`SELECT "kind" FROM "Entity" WHERE "id"::text = ${targetId}`,
+          )
+        ).rows,
+      );
+    if (!identity) return false;
+    values.set("entityKind", sql`${identity.kind}`);
+  }
   for (const col of config.columns) {
     if (values.has(col.name) || !col.notNull || col.hasDefault) continue;
     const value = filler(col);
@@ -779,6 +794,7 @@ async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
     vendorId,
     vendorAccountId,
     imageId,
+    productId,
     purchaseId,
     deviceId,
   } = ids;
@@ -796,18 +812,33 @@ async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
   if (purchaseId)
     await insertAndReturn(db, runTarget, {
       runId,
-      purchaseId,
+      entityKind: "purchase",
+      entityId: purchaseId,
       vendorAccountId: vendorAccountId ?? undefined,
       deviceWorkDeviceId: deviceId ?? undefined,
       targetFingerprint: "delete-policy-runtarget",
     }).catch(() => undefined);
 
+  // A target names a purchase, product or image; each kind is its own edge
+  // into the entity it points at.
+  for (const [entityKind, entityId] of [
+    ["product", productId],
+    ["image", imageId],
+  ] as const)
+    if (entityId)
+      await insertAndReturn(db, runTarget, {
+        runId,
+        entityKind,
+        entityId,
+        targetFingerprint: `delete-policy-runtarget-${entityKind}`,
+      }).catch(() => undefined);
+
   if (ledgerPartyId && purchaseId)
     await insertAndReturn(db, runFinding, {
       runId,
       ledgerPartyId,
-      targetKind: "purchase",
-      targetId: purchaseId,
+      entityKind: "purchase",
+      entityId: purchaseId,
       kind: "delete-policy-finding",
       summary: "Delete policy fixture finding",
       evidenceFingerprint: "delete-policy-finding-fp",
