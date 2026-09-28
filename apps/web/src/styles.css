@@ -3,7 +3,7 @@
 @import "@daveyplate/better-auth-ui/css";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-/* Porcelain Transit primitives (surface ramp, ink, cobalt, domain colors,
+/* Field Guide primitives (surface ramp, ink, signal, domain colors,
    semantic tones, type stacks) live in one framework-free file so apps/mcp-apps — which
    has no Tailwind and ships as standalone iframe HTML — renders as cubby
    instead of drifting from a copy. Imported first; everything below only
@@ -14,8 +14,8 @@
 */
 
 @theme {
-  /* Porcelain Transit type system — stacks defined in @cubby/design-tokens;
-     mirrored here so Tailwind generates font-heading/sans/mono utilities. */
+  /* Semantic type roles generated from the shared design source. */
+  --font-display: var(--brand-font-display);
   --font-heading: var(--brand-font-heading);
   --font-sans: var(--brand-font-sans);
   --font-mono: var(--brand-font-mono);
@@ -57,9 +57,9 @@
   h4 {
     font-family: var(--font-heading);
   }
-  /* Porcelain Transit: Inter throughout, with weight and rhythm doing the work. */
+  /* The editorial face belongs to page and record identity only. */
   h1 {
-    @apply scroll-m-20 text-2xl font-semibold tracking-tight lg:text-3xl;
+    @apply scroll-m-20 font-display text-2xl font-semibold tracking-tight lg:text-3xl;
   }
   h3,
   h4 {
@@ -83,7 +83,7 @@
   input:focus,
   textarea:focus,
   [data-slot="combobox-trigger"]:focus {
-    /* Crisp cobalt focus without glow or layout shift. */
+    /* Crisp ink focus without glow or layout shift. */
     box-shadow:
       0 0 0 1px var(--background),
       0 0 0 3px oklch(from var(--ring) l c h / 0.45);
@@ -143,10 +143,10 @@
 
 /*
   ---break---
-  Cubby Theme - Porcelain Transit
+  Cubby Theme - Field Guide
 */
 :root {
-  /* The Porcelain Transit palette itself lives in @cubby/design-tokens
+  /* The Field Guide palette itself lives in @cubby/design-tokens
      (imported above) — shared with apps/mcp-apps. Only cubby-web-specific
      derivations stay here. */
   /* Retained terracotta refs (legacy consumers fade out as primitives reskin;
@@ -176,7 +176,7 @@
   --border-spine: 1px;
   --border-spine-card: 1px;
 
-  /* Core colors: cool porcelain canvas, white working surfaces, quiet insets. */
+  /* Core colors: warm canvas, clear working surfaces, quiet insets. */
   --background: var(--brand-paper);
   --foreground: var(--brand-foreground);
   --card: var(--brand-cream);
@@ -184,9 +184,10 @@
   --popover: var(--brand-cream);
   --popover-foreground: var(--brand-foreground);
 
-  /* Primary cobalt: actions, selection, focus, and the current route. */
+  /* Ink owns controls; citron is a separate sparse focus/attention signal. */
   --primary: var(--brand-ultramarine);
   --primary-foreground: var(--brand-on-accent);
+  --signal: var(--brand-signal);
 
   /* Secondary and muted remain neutral so domain wayfinding stays legible. */
   --secondary: var(--brand-paper-alt);
@@ -196,7 +197,7 @@
   --muted: var(--brand-paper-alt);
   --muted-foreground: var(--brand-shelf);
 
-  /* Accent is a neutral hover/focus wash; cobalt remains an explicit action. */
+  /* Accent is a neutral hover wash; interaction and signal stay explicit. */
   --accent: var(--brand-paper-alt);
   --accent-foreground: var(--brand-foreground);
 
@@ -210,12 +211,10 @@
   --checkbox-border: oklch(0.6 0.01 80);
   --ring: var(--brand-ultramarine);
 
-  /* Selected/active table-row tint - a faint cobalt wash. Selection is the
-     one place the accent earns its keep in a list (paired with the accent row
-     spine). color-mix keeps it a whisper of the accent over paper. */
+  /* A selected row carries a faint signal wash, never a condition color. */
   --row-selected: color-mix(
     in oklab,
-    var(--brand-ultramarine) 10%,
+    var(--brand-signal) 18%,
     var(--brand-paper)
   );
 
@@ -293,7 +292,7 @@
   --phase-planning: oklch(0.55 0.04 260); /* planning · coordination */
 
   /* Modest geometry: controls 6–8px, panels 10–14px, pills remain full. */
-  --radius: 0.625rem;
+  --radius: 0.75rem;
 
   --domain-cook: var(--brand-domain-cook);
   --domain-cook-surface: color-mix(
@@ -350,6 +349,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-signal: var(--signal);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -461,7 +461,7 @@
 
   /*
     ---break---
-    Porcelain Transit surfaces
+    Field Guide surfaces
   */
 
   /* Table row hover uses a quiet wash and a precise current-domain mark. */

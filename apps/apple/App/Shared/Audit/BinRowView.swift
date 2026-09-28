@@ -15,13 +15,13 @@ struct BinRowView: View {
     @State private var showingMoveTo = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: PorcelainTokens.Space.md) {
+        HStack(alignment: .top, spacing: FieldGuideTokens.Space.md) {
             Thumb(url: row.product.coverImageURL, size: 48, symbol: "shippingbox")
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: PorcelainTokens.Space.xs) {
+                HStack(spacing: FieldGuideTokens.Space.xs) {
                     Text(row.product.name)
-                        .font(.porcelainTitle)
-                        .foregroundStyle(PorcelainTokens.graphite)
+                        .font(.fieldGuideTitle)
+                        .foregroundStyle(FieldGuideTokens.graphite)
                         .lineLimit(2)
                     if isDuplicate {
                         Eyebrow("Duplicate")
@@ -29,24 +29,24 @@ struct BinRowView: View {
                 }
                 if let manufacturer = row.product.manufacturer {
                     Text(manufacturer)
-                        .font(.porcelainLabel)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .font(.fieldGuideLabel)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         .lineLimit(1)
                 }
                 Text(Self.amountText(row.amount))
-                    .font(.porcelainData)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .font(.fieldGuideData)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
             }
-            Spacer(minLength: PorcelainTokens.Space.sm)
+            Spacer(minLength: FieldGuideTokens.Space.sm)
             StatusChip(text: statusLabel, tone: statusTone)
         }
-        .padding(.horizontal, PorcelainTokens.Space.md)
-        .padding(.vertical, PorcelainTokens.Space.md)
+        .padding(.horizontal, FieldGuideTokens.Space.md)
+        .padding(.vertical, FieldGuideTokens.Space.md)
         .contentShape(Rectangle())
         .onTapGesture { showingDialog = true }
         .swipeActions(edge: .leading) {
             Button("Verify") { session.stage(.verify, for: row.id) }
-                .tint(PorcelainTokens.positive)
+                .tint(FieldGuideTokens.positive)
         }
         .swipeActions(edge: .trailing) {
             Button("Remove", role: .destructive) { session.stage(.remove, for: row.id) }
@@ -121,25 +121,25 @@ private struct BinMoveToSheet: View {
                     session.stage(.relocate(entry.node.id, name: entry.node.name), for: id)
                     dismiss()
                 } label: {
-                    HStack(spacing: PorcelainTokens.Space.md) {
+                    HStack(spacing: FieldGuideTokens.Space.md) {
                         Text(entry.node.name)
-                            .font(.porcelainBody)
-                            .foregroundStyle(PorcelainTokens.graphite)
+                            .font(.fieldGuideBody)
+                            .foregroundStyle(FieldGuideTokens.graphite)
                             .lineLimit(1)
-                        Spacer(minLength: PorcelainTokens.Space.sm)
+                        Spacer(minLength: FieldGuideTokens.Space.sm)
                         Text(entry.node.id.rawValue)
-                            .font(.porcelainCode)
-                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                            .font(.fieldGuideCode)
+                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     }
                     .padding(.leading, CGFloat(entry.depth) * 14)
-                    .frame(minHeight: PorcelainTokens.touchTarget)
+                    .frame(minHeight: FieldGuideTokens.touchTarget)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .porcelainListRow()
+                .fieldGuideListRow()
             }
             .listStyle(.plain)
-            .porcelainScreen()
+            .fieldGuideScreen()
             .searchable(text: $query, prompt: "Filter locations")
             .navigationTitle("Move to")
             .toolbar {

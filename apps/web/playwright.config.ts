@@ -105,10 +105,18 @@ export default defineConfig({
     {
       name: "Authenticated tests",
       testMatch: /\.spec\.ts$/,
-      testIgnore: /(^|\/)unauth\.[^/]*\.spec\.ts$/,
+      testIgnore: /(^|\/)(unauth\.[^/]*|field-guide-mobile)\.spec\.ts$/,
       metadata: { authenticated: true },
       use: {
         ...devices["Desktop Chrome"],
+      },
+    },
+    {
+      name: "Mobile Safari",
+      testMatch: /(^|\/)field-guide-mobile\.spec\.ts$/,
+      metadata: { authenticated: true },
+      use: {
+        ...devices["iPhone 17"],
       },
     },
   ],

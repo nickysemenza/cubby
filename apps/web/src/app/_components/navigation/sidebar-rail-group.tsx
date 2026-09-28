@@ -106,8 +106,9 @@ export function SidebarRailLeaf({
           <Link
             {...navItemLinkProps(item, active)}
             className={cn(
-              "mb-1 flex size-10 items-center justify-center border border-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-              active && "border-border bg-background text-foreground",
+              "mb-1 flex size-10 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+              active &&
+                "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
             )}
             aria-label={item.label}
           />

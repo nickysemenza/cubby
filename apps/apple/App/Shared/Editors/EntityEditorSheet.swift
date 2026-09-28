@@ -118,7 +118,7 @@ struct EntityEditorSheet: View {
             }
             if let banner = model.bannerError {
                 Section {
-                    Text(banner).foregroundStyle(PorcelainTokens.destructive)
+                    Text(banner).foregroundStyle(FieldGuideTokens.destructive)
                     Button("Retry") { startSave() }.disabled(!model.canSave || isSaving)
                 }
             }

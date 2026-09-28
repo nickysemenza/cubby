@@ -31,7 +31,7 @@ struct ScanLookupSheet: View {
     var body: some View {
         NavigationStack {
             content
-                .porcelainScreen()
+                .fieldGuideScreen()
                 .navigationTitle("Scan a code")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -44,7 +44,7 @@ struct ScanLookupSheet: View {
 
     private var content: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
                 #if os(iOS)
                     scannerSlot
                 #endif
@@ -56,40 +56,40 @@ struct ScanLookupSheet: View {
                 } else if let errorMessage {
                     Panel {
                         Text(errorMessage)
-                            .font(.porcelainBody)
-                            .foregroundStyle(PorcelainTokens.destructive)
+                            .font(.fieldGuideBody)
+                            .foregroundStyle(FieldGuideTokens.destructive)
                     }
                 }
             }
-            .padding(PorcelainTokens.Space.lg)
-            .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)
+            .padding(FieldGuideTokens.Space.lg)
+            .frame(maxWidth: FieldGuideTokens.readingWidth, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .porcelainScreen()
+        .fieldGuideScreen()
     }
 
     #if os(iOS)
         private var scannerSlot: some View {
-            RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                .fill(PorcelainTokens.inset)
+            RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
+                .fill(FieldGuideTokens.inset)
                 .aspectRatio(4.0 / 3.0, contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: 260)
                 .overlay { ScannerSlot { raw in handleRead(raw) } }
-                .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
+                .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
                 .overlay(
-                    RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                        .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+                    RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
+                        .strokeBorder(FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
                 )
         }
     #endif
 
     private var manualEntryField: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Eyebrow("Barcode, ISBN, or label")
-            HStack(spacing: PorcelainTokens.Space.sm) {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
                 TextField("Barcode, ISBN, or label", text: $manualEntry)
                     .keyboardDismissBar()
-                    .font(.porcelainCode)
+                    .font(.fieldGuideCode)
                     .textFieldStyle(.plain)
                     .autocorrectionDisabled()
                     #if os(iOS)
@@ -97,22 +97,23 @@ struct ScanLookupSheet: View {
                         .textInputAutocapitalization(.characters)
                     #endif
                     .onSubmit { handleRead(manualEntry) }
-                    .padding(.horizontal, PorcelainTokens.Space.md)
-                    .frame(height: PorcelainTokens.touchTarget)
+                    .padding(.horizontal, FieldGuideTokens.Space.md)
+                    .frame(height: FieldGuideTokens.touchTarget)
                     .background(
-                        RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl)
-                            .fill(PorcelainTokens.surface)
+                        RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
+                            .fill(FieldGuideTokens.surface)
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl)
-                            .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+                        RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
+                            .strokeBorder(
+                                FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
                     )
                 Button("Look up") { handleRead(manualEntry) }
-                    .font(.porcelainTitle)
+                    .font(.fieldGuideTitle)
                     .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.roundedRectangle(radius: PorcelainTokens.radiusControl))
-                    .tint(PorcelainTokens.cobalt)
-                    .frame(height: PorcelainTokens.touchTarget)
+                    .buttonBorderShape(.roundedRectangle(radius: FieldGuideTokens.radiusControl))
+                    .tint(FieldGuideTokens.interaction)
+                    .frame(height: FieldGuideTokens.touchTarget)
                     .disabled(manualEntry.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }

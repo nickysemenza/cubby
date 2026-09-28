@@ -109,7 +109,7 @@ private struct PhotoAnalysisLogRow: View {
         case .progress: .secondary
         case .decision: .green
         case .abstention, .fallback: .orange
-        case .error: PorcelainTokens.destructive
+        case .error: FieldGuideTokens.destructive
         }
     }
 }

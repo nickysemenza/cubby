@@ -21,40 +21,40 @@ struct LocationPickerSheet: View {
                     capture.select(option)
                     dismiss()
                 } label: {
-                    HStack(spacing: PorcelainTokens.Space.md) {
+                    HStack(spacing: FieldGuideTokens.Space.md) {
                         DomainMark(.location, style: .symbol, size: 15)
                             .frame(width: 20)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(option.name)
-                                .font(.porcelainBody)
-                                .foregroundStyle(PorcelainTokens.graphite)
+                                .font(.fieldGuideBody)
+                                .foregroundStyle(FieldGuideTokens.graphite)
                                 .lineLimit(1)
                             if let path = option.path, !path.isEmpty {
                                 Text(path)
-                                    .font(.porcelainLabel)
-                                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                    .font(.fieldGuideLabel)
+                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                                     .lineLimit(1)
                             }
                         }
-                        Spacer(minLength: PorcelainTokens.Space.sm)
+                        Spacer(minLength: FieldGuideTokens.Space.sm)
                         Text(option.id.rawValue)
-                            .font(.porcelainCode)
-                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                            .font(.fieldGuideCode)
+                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         if option.id == capture.session.location {
                             Image(systemName: "checkmark")
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(PorcelainTokens.cobalt)
+                                .foregroundStyle(FieldGuideTokens.interaction)
                         }
                     }
-                    .frame(minHeight: PorcelainTokens.touchTarget)
+                    .frame(minHeight: FieldGuideTokens.touchTarget)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .porcelainListRow()
+                .fieldGuideListRow()
                 .accessibilityIdentifier("capture.location.\(option.id.rawValue)")
             }
             .listStyle(.plain)
-            .porcelainScreen()
+            .fieldGuideScreen()
             .overlay {
                 if capture.loadingLocations && capture.locations.isEmpty {
                     LoadingIndicator(label: "Loading locations")

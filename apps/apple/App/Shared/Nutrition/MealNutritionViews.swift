@@ -14,8 +14,8 @@ struct MealNutritionPeopleView: View {
             Text("No portions entered yet.")
                 .foregroundStyle(.secondary)
         } else {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
-                LazyVGrid(columns: peopleColumns, alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
+                LazyVGrid(columns: peopleColumns, alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
                     ForEach(summary.people) { person in
                         personPanel(person)
                     }
@@ -35,7 +35,7 @@ struct MealNutritionPeopleView: View {
 
     private func personPanel(_ person: MealNutritionPerson) -> some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
                 MacroGrid(totals: person.totals.macros, prominent: true)
                 if person.foods.isEmpty {
                     Text("No foods assigned")
@@ -56,19 +56,19 @@ struct MealNutritionPeopleView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
             NavigationLink(value: Route.entityDetail(.ledgerParty, id: person.id)) {
-                Text(person.name).font(.porcelainTitle)
+                Text(person.name).font(.fieldGuideTitle)
             }
         }
     }
 
     private func foodRow(_ food: MealNutritionFood) -> some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-            HStack(alignment: .firstTextBaseline, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+            HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
                 foodLink(food)
-                    .font(.porcelainTitle)
-                Spacer(minLength: PorcelainTokens.Space.sm)
+                    .font(.fieldGuideTitle)
+                Spacer(minLength: FieldGuideTokens.Space.sm)
                 Text(food.amountDescription)
-                    .font(.porcelainLabel.monospacedDigit())
+                    .font(.fieldGuideLabel.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
             if let amount = food.amount, amount.unit != "g" {
@@ -78,7 +78,7 @@ struct MealNutritionPeopleView: View {
             }
             MacroGrid(totals: food.totals.macros)
         }
-        .padding(.vertical, PorcelainTokens.Space.xs)
+        .padding(.vertical, FieldGuideTokens.Space.xs)
     }
 
     @ViewBuilder private func foodLink(_ food: MealNutritionFood) -> some View {
@@ -105,14 +105,14 @@ struct MealNutritionPeopleView: View {
     }
 
     private func mealHeading(_ meal: NutritionMeal, for person: MealNutritionPerson) -> some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             mealLink(meal)
-                .font(.porcelainTitle)
+                .font(.fieldGuideTitle)
             if let subtotal = person.meals.first(where: { $0.meal.id == meal.id }) {
                 MacroGrid(totals: subtotal.totals.macros)
             }
         }
-        .padding(.top, PorcelainTokens.Space.xs)
+        .padding(.top, FieldGuideTokens.Space.xs)
     }
 }
 
@@ -123,15 +123,15 @@ struct MealNutritionCompactView: View {
     var body: some View {
         if summary.people.isEmpty {
             Text("No food logged yet. Add a portion to see nutrition.")
-                .font(.porcelainLabel)
+                .font(.fieldGuideLabel)
                 .foregroundStyle(.secondary)
         } else {
             ForEach(summary.people) { person in
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-                    Text(person.name).font(.porcelainTitle)
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                    Text(person.name).font(.fieldGuideTitle)
                     MacroGrid(totals: person.totals.macros)
                 }
-                .padding(.vertical, PorcelainTokens.Space.xs)
+                .padding(.vertical, FieldGuideTokens.Space.xs)
             }
         }
     }
@@ -144,7 +144,7 @@ private struct MacroGrid: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             macro("Calories", amount: totals.calories, unit: "kcal", calories: true)
             macro("Protein", amount: totals.protein, unit: "g")
             macro("Carbs", amount: totals.carbs, unit: "g")

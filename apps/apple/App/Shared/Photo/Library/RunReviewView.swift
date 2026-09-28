@@ -273,7 +273,7 @@ struct RunReviewView: View {
 
     private func overview(_ run: RunWorkSnapshotOutput) -> some View {
         Section {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                 Text(run.purpose == .photoInventory ? photoStage : "Import progress")
                     .font(.headline)
                 HStack {
@@ -282,7 +282,7 @@ struct RunReviewView: View {
                         systemImage: run.status == .completed
                             ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath"
                     )
-                    .foregroundStyle(run.status == .completed ? PorcelainTokens.positive : .primary)
+                    .foregroundStyle(run.status == .completed ? FieldGuideTokens.positive : .primary)
                     Spacer()
                     Text(run.runId).font(.caption.monospaced()).foregroundStyle(.secondary)
                 }
@@ -325,7 +325,7 @@ struct RunReviewView: View {
                             latest.detail ?? latest.phase.replacingOccurrences(of: "_", with: " ").capitalized
                         )
                         .lineLimit(2)
-                        Spacer(minLength: PorcelainTokens.Space.sm)
+                        Spacer(minLength: FieldGuideTokens.Space.sm)
                         Text(latest.createdAt, style: .relative)
                             .fixedSize().foregroundStyle(.secondary)
                     }
@@ -333,12 +333,12 @@ struct RunReviewView: View {
                 }
                 if let error = model.error {
                     Label(error, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(PorcelainTokens.warning)
+                        .foregroundStyle(FieldGuideTokens.warning)
                     Button("Retry") { Task { await refresh() } }
                 }
                 if let error = model.actionError {
                     Label(error, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(PorcelainTokens.destructive)
+                        .foregroundStyle(FieldGuideTokens.destructive)
                 }
             }
         } header: {
@@ -432,7 +432,7 @@ struct RunReviewView: View {
                     .frame(maxWidth: 720, alignment: .leading)
             } else {
                 ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: PorcelainTokens.Space.lg) {
+                    HStack(alignment: .top, spacing: FieldGuideTokens.Space.lg) {
                         groupRegion
                             .frame(width: 190, alignment: .topLeading)
                         decisionRegion(review.images)
@@ -451,7 +451,7 @@ struct RunReviewView: View {
     }
 
     private func stackedReviewWorkspace(_ images: [PhotoRunImage]) -> some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
             groupRegion
             decisionRegion(images)
             evidenceRegion(images)
@@ -463,7 +463,7 @@ struct RunReviewView: View {
     }
 
     private var groupRegion: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Text("Groups").font(.headline)
             ForEach(proposed, id: \.groupKey) { group in
                 Button {
@@ -476,7 +476,7 @@ struct RunReviewView: View {
                             Image(systemName: "checkmark").accessibilityHidden(true)
                         }
                     }
-                    .frame(minHeight: PorcelainTokens.touchTarget, alignment: .leading)
+                    .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selectedProposal?.groupKey == group.groupKey ? .isSelected : [])
@@ -487,7 +487,7 @@ struct RunReviewView: View {
 
     @ViewBuilder private func decisionRegion(_ images: [PhotoRunImage]) -> some View {
         if let group = selectedProposal {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                 Text("Product decision").font(.headline)
                 proposal(group, images: images)
             }
@@ -496,10 +496,10 @@ struct RunReviewView: View {
     }
 
     private func evidenceRegion(_ images: [PhotoRunImage]) -> some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Text("Photo evidence · \(images.count)").font(.headline)
             ForEach(images, id: \.id) { image in
-                HStack(alignment: .top, spacing: PorcelainTokens.Space.sm) {
+                HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
                     Thumb(url: URL(string: image.originalUrl), size: 58)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(
@@ -532,9 +532,9 @@ struct RunReviewView: View {
         let described = images.filter { $0.describe == .ready || $0.describe == .skipped }.count
         let cutouts = images.filter { $0.cutout == .ready || $0.cutout == .skipped }.count
         let deviceDone = images.filter(\.localAnalysisReady).count
-        return VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: PorcelainTokens.Space.xl) {
+                HStack(spacing: FieldGuideTokens.Space.xl) {
                     processingCount("Device · optional", done: deviceDone, total: images.count)
                     processingCount("Description", done: described, total: images.count)
                     processingCount("Lift · optional", done: cutouts, total: images.count)
@@ -559,14 +559,14 @@ struct RunReviewView: View {
     }
 
     private func processingCount(_ title: String, done: Int, total: Int) -> some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             Text(title).font(.caption2).foregroundStyle(.secondary)
             Text("\(done)/\(total)").font(.subheadline.weight(.semibold)).monospacedDigit()
         }
     }
 
     private func proposal(_ group: PhotoGroupProposal, images: [PhotoRunImage]) -> some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             HStack {
                 Text(groupName(group)).font(.headline)
                 Spacer()
@@ -585,7 +585,7 @@ struct RunReviewView: View {
                 .disabled(model.busy || approvalBlocker(group, images: images) != nil)
             }
             ScrollView(.horizontal) {
-                HStack(spacing: PorcelainTokens.Space.sm) {
+                HStack(spacing: FieldGuideTokens.Space.sm) {
                     ForEach(group.images, id: \.id) { item in
                         if let image = images.first(where: { $0.id == item.id }) {
                             VStack(spacing: 2) {
@@ -604,13 +604,13 @@ struct RunReviewView: View {
                 Label(
                     "\(group.missingImageCount) photos are missing", systemImage: "exclamationmark.triangle"
                 )
-                .foregroundStyle(PorcelainTokens.warning)
+                .foregroundStyle(FieldGuideTokens.warning)
             }
             if let blocker = approvalBlocker(group, images: images) {
-                Text(blocker).font(.caption).foregroundStyle(PorcelainTokens.warning)
+                Text(blocker).font(.caption).foregroundStyle(FieldGuideTokens.warning)
             }
             if let error = group.lastError {
-                Text(error).foregroundStyle(PorcelainTokens.destructive)
+                Text(error).foregroundStyle(FieldGuideTokens.destructive)
             }
             NavigationLink {
                 PhotoCandidateSelectionView(runID: runID, group: group, images: images) {
@@ -636,7 +636,7 @@ struct RunReviewView: View {
                     .disabled(model.busy)
             }
         }
-        .padding(.vertical, PorcelainTokens.Space.xs)
+        .padding(.vertical, FieldGuideTokens.Space.xs)
     }
 
     /// Starts grouping once every photo's description has settled; the server applies the
@@ -682,7 +682,7 @@ struct RunReviewView: View {
         }
         return VStack(alignment: .leading, spacing: 2) {
             Label("\(name): \(title)", systemImage: symbol)
-                .foregroundStyle(state == .ready ? PorcelainTokens.positive : .secondary)
+                .foregroundStyle(state == .ready ? FieldGuideTokens.positive : .secondary)
             if let reason, !reason.isEmpty { Text(reason).foregroundStyle(.secondary) }
         }
     }
@@ -729,7 +729,7 @@ struct RunReviewView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             } else if let usageError = model.usageError {
-                Text(usageError).font(.caption).foregroundStyle(PorcelainTokens.warning)
+                Text(usageError).font(.caption).foregroundStyle(FieldGuideTokens.warning)
             }
             if run.purpose == .photoInventory {
                 let images = model.review?.images ?? []
@@ -782,7 +782,7 @@ struct RunReviewView: View {
                             .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         }
                         if let error = operation.error {
-                            Text(error).font(.caption).foregroundStyle(PorcelainTokens.destructive)
+                            Text(error).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
                         }
                     }
                 }
@@ -791,9 +791,9 @@ struct RunReviewView: View {
     }
 
     private func workStage(_ title: String, done: Bool, detail: String) -> some View {
-        HStack(alignment: .top, spacing: PorcelainTokens.Space.sm) {
+        HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
             Image(systemName: done ? "checkmark.circle.fill" : "circle.dotted")
-                .foregroundStyle(done ? PorcelainTokens.positive : .secondary)
+                .foregroundStyle(done ? FieldGuideTokens.positive : .secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.subheadline.weight(.medium))
                 Text(detail).font(.caption).foregroundStyle(.secondary)
@@ -821,7 +821,7 @@ private struct PhotoCandidateSelectionView: View {
         List {
             Section("Your photos") {
                 ScrollView(.horizontal) {
-                    HStack(spacing: PorcelainTokens.Space.sm) {
+                    HStack(spacing: FieldGuideTokens.Space.sm) {
                         ForEach(group.images, id: \.id) { item in
                             if let image = images.first(where: { $0.id == item.id }) {
                                 VStack(alignment: .leading, spacing: 4) {
@@ -855,7 +855,7 @@ private struct PhotoCandidateSelectionView: View {
             if loading { ProgressView("Finding products…") }
             if let error {
                 Section {
-                    Text(error).foregroundStyle(PorcelainTokens.destructive)
+                    Text(error).foregroundStyle(FieldGuideTokens.destructive)
                     Button("Retry") { Task { await load() } }
                 }
             }
@@ -873,7 +873,7 @@ private struct PhotoCandidateSelectionView: View {
                             .disabled(choosing)
                         }
                     }
-                    .padding(.vertical, PorcelainTokens.Space.xs)
+                    .padding(.vertical, FieldGuideTokens.Space.xs)
                 }
                 if !loading && candidates.isEmpty && error == nil {
                     Text("No likely existing products found.").foregroundStyle(.secondary)
@@ -973,10 +973,10 @@ private struct PhotoCandidateSelectionView: View {
             : "Proposal: \(first ?? "unknown") · Product: \(second ?? "unknown")"
         return HStack(alignment: .firstTextBaseline) {
             Text("\(title): \(detail)")
-                .foregroundStyle(relation == "different" ? PorcelainTokens.warning : .secondary)
+                .foregroundStyle(relation == "different" ? FieldGuideTokens.warning : .secondary)
             if relation == "different" {
                 Image(systemName: "exclamationmark.triangle")
-                    .foregroundStyle(PorcelainTokens.warning)
+                    .foregroundStyle(FieldGuideTokens.warning)
             }
         }
     }
@@ -1043,15 +1043,15 @@ private struct PhotoGroupDraftEditView: View {
     var body: some View {
         Form {
             Section("Product") {
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                     Text("Name").font(.caption).foregroundStyle(.secondary)
                     TextField("Product name", text: $name)
                 }
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                     Text("Manufacturer").font(.caption).foregroundStyle(.secondary)
                     TextField("Manufacturer", text: $manufacturer)
                 }
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                     Text("Model").font(.caption).foregroundStyle(.secondary)
                     TextField("Model", text: $modelName)
                 }
@@ -1074,7 +1074,7 @@ private struct PhotoGroupDraftEditView: View {
             if let error {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(PorcelainTokens.destructive)
+                        .foregroundStyle(FieldGuideTokens.destructive)
                 }
             }
         }

@@ -210,41 +210,41 @@ struct ShelfLabel: View {
 
     private var tone: Color {
         switch annotation.tone {
-        case .expected: PorcelainTokens.cobalt
-        case .verified: PorcelainTokens.positive
-        case .unexpected: PorcelainTokens.warning
-        case .pending: PorcelainTokens.graphiteSecondary
+        case .expected: FieldGuideTokens.interaction
+        case .verified: FieldGuideTokens.positive
+        case .unexpected: FieldGuideTokens.warning
+        case .pending: FieldGuideTokens.graphiteSecondary
         }
     }
 
     var body: some View {
-        HStack(spacing: PorcelainTokens.Space.sm) {
+        HStack(spacing: FieldGuideTokens.Space.sm) {
             RoundedRectangle(cornerRadius: 1).fill(tone).frame(width: 3)
             VStack(alignment: .leading, spacing: 1) {
-                Text(annotation.title).font(.porcelainLabel).foregroundStyle(PorcelainTokens.graphite)
+                Text(annotation.title).font(.fieldGuideLabel).foregroundStyle(FieldGuideTokens.graphite)
                     .lineLimit(1)
                 if let detail = annotation.detail {
-                    Text(detail).font(.porcelainData).foregroundStyle(tone).lineLimit(1)
+                    Text(detail).font(.fieldGuideData).foregroundStyle(tone).lineLimit(1)
                 }
             }
         }
-        .padding(.vertical, PorcelainTokens.Space.xs)
-        .padding(.horizontal, PorcelainTokens.Space.sm)
+        .padding(.vertical, FieldGuideTokens.Space.xs)
+        .padding(.horizontal, FieldGuideTokens.Space.sm)
         .frame(maxWidth: 220, alignment: .leading)
         .background(
-            PorcelainTokens.surface.opacity(0.94),
-            in: RoundedRectangle(cornerRadius: PorcelainTokens.radiusChip)
+            FieldGuideTokens.surface.opacity(0.94),
+            in: RoundedRectangle(cornerRadius: FieldGuideTokens.radiusChip)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: PorcelainTokens.radiusChip)
-                .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+            RoundedRectangle(cornerRadius: FieldGuideTokens.radiusChip)
+                .strokeBorder(FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
         )
         .fixedSize()
     }
 }
 
 #Preview("Shelf labels") {
-    VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
         ShelfLabel(
             annotation: ShelfAnnotation(
                 title: "Milwaukee M18 battery", detail: "2 each expected", tone: .expected))

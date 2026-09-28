@@ -1,101 +1,29 @@
-# Cubby native design
+# Cubby Field Guide on Apple platforms
 
-The Apple app follows platform conventions. This is the native design authority;
-`apps/web/DESIGN.md` applies to the web application.
+The native app follows Apple navigation, controls, typography scaling, and system light/dark appearance. The shared brand roles come from `packages/design-tokens/tokens.json`; `pnpm generate` writes the adaptive color assets and Swift geometry. Keep the existing system AppKit and SwiftUI behavior when applying those roles.
 
 ## Appearance
 
-### App icon
+Warm canvas and surface colors make records readable in light mode; their generated dark variants preserve contrast in dark mode. Ink is the interaction color, and citron is a sparse focus or attention mark. Cook, Pantry, Plan, House, and Finance are separate wayfinding colors. Positive, warning, and destructive tones remain condition colors paired with a word or symbol.
 
-`App/AppIcon.icon` is the shared iPhone, iPad, and Mac icon. It carries the web
-favicon's six colors and two rows of objects into a softly sculpted porcelain
-shelf. Keep the front-facing arrangement, generous spacing, and simple circles
-and rounded rectangles; the mark must read at small Home Screen and Dock sizes.
+Use the system serif design for a record's human title or a major dashboard heading. Use standard SwiftUI text styles for body, controls, lists, forms, and settings so Dynamic Type works. Identifiers use mono; measurements and money use monospaced digits. Real entity images may lead a detail view. If an entity has no image, title and declared data lead it without an empty media box.
 
-The seven SVG layers use a 1024 × 1024 canvas: one shelf layer and six separate
-objects. Keep their artwork flat and unmasked. Icon Composer owns the material,
-highlights, shadows, and platform mask. Default uses porcelain `#f7f9fc`; dark
-uses charcoal `#171a21` with gray `#9aa7b8` shelves. A shared 85% gray annotation
-keeps objects legible in system clear and tinted appearances.
+Use native `List`, `Form`, `Section`, `LabeledContent`, toolbars, sheets, menus, and split views. The warm canvas belongs to content, not a recreation of system bars or Liquid Glass. Resting panels use tonal separation and a hairline; overlays may use native elevation. Controls keep native hit behavior, and phone targets stay at least 44 points.
 
-Regenerate `App/Assets.xcassets/AppIcon.appiconset` fallbacks from the same Icon
-Composer document. Export the iOS default at 1024 pixels and flatten transparency
-over the porcelain background so iOS can apply its own mask. Export macOS at
-512 and 1024 pixels with native padding and transparency preserved; do not reuse
-the iOS bitmap for the Mac 2× slot. The web favicon and PWA assets are independent.
+## Navigation and generic records
 
-### Interface
+Mac has one main window and separate Settings. Catalog and Search use a grouped sidebar, selectable record list, adjacent complete detail, and an optional inspector. The inspector summarizes the already loaded row; the complete record and its actions remain in detail. Other workspaces use the main column. Keep menus, keyboard access, window restoration, selection, and related-record history.
 
-Use system surfaces, primary/secondary text, standard text styles, and native
-List, Form, Section, LabeledContent, toolbar, and sheet presentations. Respect
-system light/dark appearance. Cubby's adaptive cobalt accent denotes interaction;
-small domain marks denote wayfinding. Status always includes a word or symbol.
-Do not recreate system bars or apply glass to content backgrounds.
+iPhone keeps the Work, Capture, Library, and Find tabs with independent navigation stacks; iPad adapts to a sidebar. A pushed detail remains a complete route. Settings uses grouped native form sections. Preserve current search, filter, deep-link, and scroll behavior when switching presentation.
 
-Specialized workbenches can group content with GroupBox. Ordinary data rows use
-native separators and selection. Phone targets are at least 44 points; Mac
-controls use native density. Content wraps or stacks at accessibility text sizes.
-Use monospaced digits for quantities and a monospaced face only for identifiers.
+`EntityCatalog` and the entity manifest own names, icons, domain, image, fields, sections, relationships, list views, and available actions. A generic renderer uses those declarations for every entity. Specialist import, photo, fieldwork, and editor screens remain in declared slots or their owned flows. `NativePresentationCoverage` prevents unsupported renderers and actions from appearing operational; their existing web disclosure remains visible where needed.
 
-## Density
+## Density and feedback
 
-The app is high-density on every view — screen space goes to content, not chrome. This is a
-standing rule, not a one-off for any single flow; other screens adopt it as they are touched.
+Mac list rows prioritize comparison and native selection; iPhone rows use a readable primary line and concise supporting facts. A photo, summary, or inspector never pushes the next action off the useful first screen without purpose. At accessibility text sizes, columns and metrics wrap or stack. Preserve keyboard and VoiceOver labels, Reduce Motion, and Reduce Transparency.
 
-- Inline navigation titles by default; reserve `.large` display mode for a screen with no other
-  competing content.
-- System spacing: prefer system `padding`/`spacing` over arbitrary fixed values; use explicit
-  values when composition or compact density requires them. See `axiom-design` (`skills/hig.md`,
-  "What spacing, padding, or margin value should I use?").
-- Default control sizes; `.controlSize(.large)` only for a lone primary action on an otherwise
-  empty screen, never mixed into a list or a busy footer.
-- Actions live in toolbar placements (`.bottomBar`, `.confirmationAction`, `.cancellationAction`,
-  `.secondaryAction`, a toolbar `Menu`, …), never a hand-built `HStack + .background(.bar)` footer
-  or pill — the system toolbar is already Liquid Glass.
-- Hero media (a focused photo, a large preview) is at most ~22% of the container height on
-  phones, e.g. `containerRelativeFrame(.vertical) { min(220, $0 * 0.22) }`, so the rest of the
-  screen stays usable.
-- List rows keep default insets; do not add a per-row `.padding(16)` or similar "to give it room."
-- Check every new or touched view at iPhone width and compact height (landscape) — that is where
-  a screen built at iPad proportions runs out of room first.
-
-### Developer overlays
-
-`@Environment(\.developerOverlays)`'s layers never shift layout — overlay/caption content only,
-set with `Font.porcelainCode` and secondary color, added to an existing view rather than reserving
-new space of its own.
-
-## Navigation
-
-On iPhone retain Today, Capture, Photos, Browse, and Search, each with an independent
-navigation stack. Returning from details preserves the current session's query,
-selection, and scroll position. No new persisted phone resume state.
-
-Mac has one main Window and separate Settings. Catalog and Search browsing use a
-sidebar, selectable record list, and adjacent detail. Other workflows use the
-workspace directly. Navigator owns selections and related-record history, outside
-adaptive layout branches. Controls remain keyboard accessible. Primary record
-content belongs in detail, not an inspector. Media alone uses immersive transitions.
-
-## Tasks and feedback
-
-Form style does not determine sheet size: apply nativeSheet to the presented root.
-Short adjustments offer medium/large on iPhone (large at accessibility text sizes);
-searchable pickers and editors are large. Photo review/import is page-sized, and
-photo viewing is full-screen on iPhone with an explicit Close. Native camera/library
-presentation stays system-owned.
-
-Changed drafts offer Discard from Cancel. Failed saves preserve input. In-flight
-writes prevent dismissal, with explicit progress. Preserve every workflow's existing
-immediate/staged-write contract. Recount quantities are finite positive numbers;
-zero is the separate Remove action.
-
-Initial loads expose labelled progress and retryable errors. Same-context refreshes
-retain loaded content and show errors inline. New queries invalidate stale matches.
-Do not render preview fixtures as loading data. Preserve existing scan feedback,
-avoid duplicate haptics, and respect Reduce Motion.
+Today uses its real task, meal, activity, problem, and nutrition sources. Attention is identified by the data and a readable label; the citron mark is supporting emphasis. Loading is labelled, failed sections offer retry, and same-context refresh retains loaded data. Failed edits preserve input and in-flight writes keep their existing dismissal rules.
 
 ## Acceptance
 
-Validate iPhone and Mac workflows, iPad resizing, light/dark, accessibility text,
-VoiceOver, keyboard-only navigation, Reduce Motion, and Reduce Transparency.
+Review iPhone and Mac, narrow Mac windows, iPad resizing, light/dark, accessibility text, VoiceOver, keyboard-only operation, Reduce Motion, and the actual photo and workbench journeys. Use synthetic fixtures and screenshots.

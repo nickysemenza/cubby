@@ -5,7 +5,7 @@ import {
   type WayfindingDomain,
 } from "@cubby/schemas/entity-summary";
 
-/** The stable wayfinding families used by the Porcelain Transit shell. */
+/** The stable wayfinding families used by the Field Guide shell. */
 export type { WayfindingDomain };
 
 /**

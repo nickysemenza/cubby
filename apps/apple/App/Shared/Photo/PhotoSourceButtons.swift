@@ -61,14 +61,14 @@ struct PhotoSourceButtons: View {
     @State private var preparationTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-            LazyVGrid(columns: porcelainTwoColumns, spacing: PorcelainTokens.Space.md) { controls }
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+            LazyVGrid(columns: fieldGuideTwoColumns, spacing: FieldGuideTokens.Space.md) { controls }
                 .disabled(preparing)
             if preparing { ProgressView("Preparing photos…", value: preparationProgress, total: 1) }
             if let pickError {
                 Text(pickError)
-                    .font(.porcelainLabel)
-                    .foregroundStyle(PorcelainTokens.destructive)
+                    .font(.fieldGuideLabel)
+                    .foregroundStyle(FieldGuideTokens.destructive)
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Retry failed photos") {
                     #if os(iOS)
@@ -356,5 +356,5 @@ struct PhotoSourceButtons: View {
 #Preview {
     PhotoSourceButtons { _ in }
         .padding()
-        .porcelainScreen()
+        .fieldGuideScreen()
 }

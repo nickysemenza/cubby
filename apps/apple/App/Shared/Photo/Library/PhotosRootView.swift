@@ -255,14 +255,14 @@ private struct PhotoLibraryBrowser: View {
             }
         }
         .navigationTitle("Photos")
-        .porcelainScreen()
+        .fieldGuideScreen()
         #if os(iOS)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if library.hasFullAccess && !ids.isEmpty {
-                    HStack(spacing: PorcelainTokens.Space.md) {
+                    HStack(spacing: FieldGuideTokens.Space.md) {
                         Text("\(ids.count) selected")
-                        .font(.porcelainLabel)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .font(.fieldGuideLabel)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         Spacer(minLength: 8)
                         if loadingSelection {
                             ProgressView(value: library.selectionProgress)
@@ -278,8 +278,8 @@ private struct PhotoLibraryBrowser: View {
                             .accessibilityIdentifier(picker ? "photos.choose" : "photos.addTo")
                         }
                     }
-                    .padding(.horizontal, PorcelainTokens.Space.md)
-                    .padding(.vertical, PorcelainTokens.Space.sm)
+                    .padding(.horizontal, FieldGuideTokens.Space.md)
+                    .padding(.vertical, FieldGuideTokens.Space.sm)
                     .background(.regularMaterial)
                 }
             }
@@ -702,7 +702,7 @@ private struct PhotoLibraryCell: View {
     }
     var body: some View {
         Button(action: onTap) {
-            Rectangle().fill(PorcelainTokens.inset).aspectRatio(1, contentMode: .fit)
+            Rectangle().fill(FieldGuideTokens.inset).aspectRatio(1, contentMode: .fit)
                 .overlay {
                     if let image {
                         Image(decorative: image, scale: 1).resizable().scaledToFill()
@@ -817,7 +817,7 @@ private struct PhotoLibraryPreview: View {
         if let image {
             Image(decorative: image, scale: 1).resizable().scaledToFit().frame(maxHeight: 400)
         } else if let error {
-            Text(error).foregroundStyle(PorcelainTokens.destructive)
+            Text(error).foregroundStyle(FieldGuideTokens.destructive)
         } else {
             ProgressView("Loading photo…")
         }

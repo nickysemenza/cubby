@@ -18,7 +18,7 @@ struct CaptureView: View {
                 LoadingIndicator.screen(label: "Loading Capture")
             }
         }
-        .porcelainScreen()
+        .fieldGuideScreen()
         .navigationTitle("Capture")
         .task(id: model.host) {
             let capture = CaptureModel(client: model.client)
@@ -68,7 +68,7 @@ private struct CaptureContent: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
                 #if os(iOS)
                     scannerSlot
                 #endif
@@ -78,11 +78,11 @@ private struct CaptureContent: View {
                 chips
                 missingReview
             }
-            .padding(PorcelainTokens.Space.lg)
-            .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)
+            .padding(FieldGuideTokens.Space.lg)
+            .frame(maxWidth: FieldGuideTokens.readingWidth, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .porcelainScreen()
+        .fieldGuideScreen()
         // Newest chip first; its status settling is what changes `chips`, so that is the trigger.
         .scanFeedback(
             capture.session.chips.first.flatMap { ScanFeedbackKind(chipStatus: $0.status) },
@@ -123,22 +123,22 @@ private struct CaptureContent: View {
         /// With no location chosen the slot stays a placeholder: the camera must not start before
         /// there is somewhere to put what it reads.
         private var scannerSlot: some View {
-            RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                .fill(PorcelainTokens.inset)
+            RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
+                .fill(FieldGuideTokens.inset)
                 .aspectRatio(4.0 / 3.0, contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: 300)
                 .overlay {
                     if capture.session.location == nil {
-                        VStack(spacing: PorcelainTokens.Space.sm) {
+                        VStack(spacing: FieldGuideTokens.Space.sm) {
                             Image(systemName: "barcode.viewfinder")
                                 .font(.system(size: 32, weight: .light))
-                                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                             Text("Pick a location to start the scanner")
-                                .font(.porcelainBody)
-                                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                .font(.fieldGuideBody)
+                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                                 .multilineTextAlignment(.center)
                         }
-                        .padding(PorcelainTokens.Space.lg)
+                        .padding(FieldGuideTokens.Space.lg)
                     } else {
                         // Labels only for codes this sweep already resolved: no request per frame.
                         ScannerSlot(
@@ -147,73 +147,73 @@ private struct CaptureContent: View {
                         )
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
+                .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
                 .overlay(
-                    RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                        .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+                    RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
+                        .strokeBorder(FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
                 )
         }
     #endif
 
     private var locationRow: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Eyebrow("Sweeping")
             Panel(padding: 0, spacing: 0) {
                 Button {
                     pickingLocation = true
                 } label: {
-                    HStack(spacing: PorcelainTokens.Space.md) {
+                    HStack(spacing: FieldGuideTokens.Space.md) {
                         DomainMark(.location, style: .symbol, size: 15)
                             .frame(width: 20)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(capture.location?.name ?? "Choose a location")
-                                .font(.porcelainTitle)
+                                .font(.fieldGuideTitle)
                                 .foregroundStyle(
                                     capture.location == nil
-                                        ? PorcelainTokens.graphiteSecondary : PorcelainTokens.graphite
+                                        ? FieldGuideTokens.graphiteSecondary : FieldGuideTokens.graphite
                                 )
                                 .lineLimit(1)
                             if let path = capture.location?.path, !path.isEmpty {
                                 Text(path)
-                                    .font(.porcelainLabel)
-                                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                    .font(.fieldGuideLabel)
+                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                                     .lineLimit(1)
                             }
                         }
-                        Spacer(minLength: PorcelainTokens.Space.sm)
+                        Spacer(minLength: FieldGuideTokens.Space.sm)
                         if let code = capture.location?.id.rawValue {
                             Text(code)
-                                .font(.porcelainCode)
-                                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                .font(.fieldGuideCode)
+                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         }
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     }
-                    .padding(.horizontal, PorcelainTokens.Space.md)
-                    .frame(minHeight: PorcelainTokens.touchTarget + 8)
+                    .padding(.horizontal, FieldGuideTokens.Space.md)
+                    .frame(minHeight: FieldGuideTokens.touchTarget + 8)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 if let error = capture.locationError {
                     PanelDivider()
                     Text(error)
-                        .font(.porcelainLabel)
-                        .foregroundStyle(PorcelainTokens.destructive)
-                        .padding(.horizontal, PorcelainTokens.Space.md)
-                        .padding(.vertical, PorcelainTokens.Space.sm)
+                        .font(.fieldGuideLabel)
+                        .foregroundStyle(FieldGuideTokens.destructive)
+                        .padding(.horizontal, FieldGuideTokens.Space.md)
+                        .padding(.vertical, FieldGuideTokens.Space.sm)
                 }
             }
         }
     }
 
     private var manualEntry: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Eyebrow("Enter a code")
-            HStack(spacing: PorcelainTokens.Space.sm) {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
                 TextField("Barcode, ISBN, or PRD-/LOC- label", text: $capture.manualEntry)
                     .keyboardDismissBar()
-                    .font(.porcelainCode)
+                    .font(.fieldGuideCode)
                     .textFieldStyle(.plain)
                     .autocorrectionDisabled()
                     #if os(iOS)
@@ -221,50 +221,51 @@ private struct CaptureContent: View {
                         .textInputAutocapitalization(.characters)
                     #endif
                     .onSubmit(capture.submitManualEntry)
-                    .padding(.horizontal, PorcelainTokens.Space.md)
-                    .frame(height: PorcelainTokens.touchTarget)
+                    .padding(.horizontal, FieldGuideTokens.Space.md)
+                    .frame(height: FieldGuideTokens.touchTarget)
                     .background(
-                        RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl)
-                            .fill(PorcelainTokens.surface)
+                        RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
+                            .fill(FieldGuideTokens.surface)
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl)
-                            .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+                        RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
+                            .strokeBorder(
+                                FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
                     )
                 Button("Scan", action: capture.submitManualEntry)
-                    .font(.porcelainTitle)
+                    .font(.fieldGuideTitle)
                     .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.roundedRectangle(radius: PorcelainTokens.radiusControl))
-                    .tint(PorcelainTokens.cobalt)
-                    .frame(height: PorcelainTokens.touchTarget)
+                    .buttonBorderShape(.roundedRectangle(radius: FieldGuideTokens.radiusControl))
+                    .tint(FieldGuideTokens.interaction)
+                    .frame(height: FieldGuideTokens.touchTarget)
                     .disabled(capture.session.location == nil || capture.manualEntry.isEmpty)
             }
         }
     }
 
     private var tally: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Eyebrow("This sweep")
-            HStack(spacing: PorcelainTokens.Space.sm) {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
                 Text("\(capture.session.tally.added) added")
-                Text("·").foregroundStyle(PorcelainTokens.hairline)
+                Text("·").foregroundStyle(FieldGuideTokens.hairline)
                 Text("\(capture.session.tally.confirmed) confirmed")
-                Text("·").foregroundStyle(PorcelainTokens.hairline)
+                Text("·").foregroundStyle(FieldGuideTokens.hairline)
                 Text("\(capture.session.pendingCount) pending")
             }
-            .font(.porcelainData)
-            .foregroundStyle(PorcelainTokens.graphite)
+            .font(.fieldGuideData)
+            .foregroundStyle(FieldGuideTokens.graphite)
         }
     }
 
     @ViewBuilder
     private var missingReview: some View {
         if capture.location != nil {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                 Button("I got everything") { Task { await capture.checkMissing() } }
                     .disabled(capture.checkingMissing)
                 if let error = capture.missingError {
-                    Text(error).foregroundStyle(PorcelainTokens.destructive)
+                    Text(error).foregroundStyle(FieldGuideTokens.destructive)
                 }
                 if let missing = capture.missingBins {
                     Panel {
@@ -274,10 +275,10 @@ private struct CaptureContent: View {
                                 ? "Every movable bin was accounted for. Items are checked in a recount."
                                 : "These bins are still recorded here. Review each one; unscanned items are not marked missing."
                         )
-                        .font(.porcelainBody)
+                        .font(.fieldGuideBody)
                         ForEach(missing, id: \.id) { bin in
                             VStack(alignment: .leading) {
-                                Text(bin.name).font(.porcelainTitle)
+                                Text(bin.name).font(.fieldGuideTitle)
                                 HStack {
                                     Button("Move to Unknown") {
                                         Task { await capture.sendMissingToUnknown(bin.id) }
@@ -313,8 +314,8 @@ private struct CaptureContent: View {
             if capture.session.location != nil {
                 Panel {
                     Text("Scan or type a code. Each read lands here with what Cubby did about it.")
-                        .font(.porcelainBody)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .font(.fieldGuideBody)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
@@ -322,15 +323,15 @@ private struct CaptureContent: View {
                     // No scanner slot on the Mac, so this is the only place that can ask.
                     Panel {
                         Text("Pick a location to start sweeping.")
-                            .font(.porcelainBody)
-                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                            .font(.fieldGuideBody)
+                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     }
                 #endif
             }
         } else {
             Panel(padding: 0, spacing: 0) {
                 ForEach(Array(capture.session.chips.enumerated()), id: \.element.id) { index, chip in
-                    if index > 0 { PanelDivider(inset: PorcelainTokens.Space.lg + 20) }
+                    if index > 0 { PanelDivider(inset: FieldGuideTokens.Space.lg + 20) }
                     ScanChipRow(chip: chip)
                 }
             }
@@ -345,7 +346,7 @@ struct ScanChipRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        HStack(alignment: .top, spacing: PorcelainTokens.Space.md) {
+        HStack(alignment: .top, spacing: FieldGuideTokens.Space.md) {
             Image(systemName: symbol)
                 .font(.system(size: 15))
                 .foregroundStyle(tint)
@@ -355,21 +356,21 @@ struct ScanChipRow: View {
                 .symbolEffect(.bounce, options: .nonRepeating, isActive: !reduceMotion && isSettled)
             VStack(alignment: .leading, spacing: 2) {
                 Text(chip.label)
-                    .font(.porcelainBody)
-                    .foregroundStyle(PorcelainTokens.graphite)
+                    .font(.fieldGuideBody)
+                    .foregroundStyle(FieldGuideTokens.graphite)
                     .lineLimit(2)
                 if case .failed(let message) = chip.status {
                     Text(message)
-                        .font(.porcelainLabel)
-                        .foregroundStyle(PorcelainTokens.destructive)
+                        .font(.fieldGuideLabel)
+                        .foregroundStyle(FieldGuideTokens.destructive)
                         .lineLimit(2)
                 }
             }
-            Spacer(minLength: PorcelainTokens.Space.sm)
+            Spacer(minLength: FieldGuideTokens.Space.sm)
             StatusChip(text: statusLabel, tone: chipTone)
         }
-        .padding(.horizontal, PorcelainTokens.Space.md)
-        .padding(.vertical, PorcelainTokens.Space.md)
+        .padding(.horizontal, FieldGuideTokens.Space.md)
+        .padding(.vertical, FieldGuideTokens.Space.md)
     }
 
     private var isPending: Bool {
@@ -417,11 +418,11 @@ struct ScanChipRow: View {
 
     private var tint: Color {
         switch chip.status {
-        case .pending: PorcelainTokens.graphiteSecondary
-        case .added: PorcelainTokens.positive
-        case .confirmed: PorcelainTokens.graphiteSecondary
-        case .queued: PorcelainTokens.warning
-        case .failed: PorcelainTokens.destructive
+        case .pending: FieldGuideTokens.graphiteSecondary
+        case .added: FieldGuideTokens.positive
+        case .confirmed: FieldGuideTokens.graphiteSecondary
+        case .queued: FieldGuideTokens.warning
+        case .failed: FieldGuideTokens.destructive
         }
     }
 }

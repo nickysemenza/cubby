@@ -79,7 +79,7 @@ struct SearchContent: View {
 
     var body: some View {
         content
-            .porcelainScreen()
+            .fieldGuideScreen()
             .navigationTitle("Search")
             .searchable(text: $search.query, placement: Self.searchPlacement, prompt: searchPrompt)
             #if os(iOS)
@@ -159,9 +159,9 @@ struct SearchContent: View {
         if let outcome = search.lookupOutcome {
             ScrollView {
                 codePanel(for: outcome)
-                    .padding(PorcelainTokens.Space.lg)
+                    .padding(FieldGuideTokens.Space.lg)
             }
-            .porcelainScreen()
+            .fieldGuideScreen()
         } else {
             switch search.phase {
             case .idle:
@@ -257,12 +257,12 @@ struct SearchContent: View {
         _ groups: [SearchModel.ResultGroup], density: ListPresentationChoice
     ) -> some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
+            LazyVStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
                 ForEach(groups) { group in
                     let descriptor = EntityCatalog[group.key]
                     Text(descriptor.plural)
                         .font(.headline)
-                        .padding(.horizontal, PorcelainTokens.Space.md)
+                        .padding(.horizontal, FieldGuideTokens.Space.md)
                         .accessibilityAddTraits(.isHeader)
                     EntityShelfView(
                         descriptor: descriptor,
@@ -271,7 +271,7 @@ struct SearchContent: View {
                         section: .search)
                 }
             }
-            .padding(.vertical, PorcelainTokens.Space.sm)
+            .padding(.vertical, FieldGuideTokens.Space.sm)
         }
     }
 
@@ -344,25 +344,25 @@ private struct SearchHitRow: View {
     let hit: SearchHit
 
     var body: some View {
-        HStack(spacing: PorcelainTokens.Space.md) {
+        HStack(spacing: FieldGuideTokens.Space.md) {
             Thumb(
                 url: hit.imageURL, size: 48, symbol: hit.key.map(entitySymbol(for:)) ?? "questionmark.square"
             )
             VStack(alignment: .leading, spacing: 2) {
                 Text(hit.title)
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(PorcelainTokens.graphite)
+                    .foregroundStyle(FieldGuideTokens.graphite)
                     .lineLimit(2)
                 if let subtitle = hit.subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.porcelainBody)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .font(.fieldGuideBody)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         .lineLimit(1)
                 }
             }
-            Spacer(minLength: PorcelainTokens.Space.sm)
+            Spacer(minLength: FieldGuideTokens.Space.sm)
         }
-        .padding(.vertical, PorcelainTokens.Space.xs)
+        .padding(.vertical, FieldGuideTokens.Space.xs)
     }
 }
 
@@ -386,7 +386,7 @@ private struct SearchHitRow: View {
             }
         }
         .listStyle(.plain)
-        .porcelainScreen()
+        .fieldGuideScreen()
         .navigationTitle("Search")
     }
 }

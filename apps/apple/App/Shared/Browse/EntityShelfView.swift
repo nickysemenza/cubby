@@ -47,7 +47,7 @@ struct EntityShelfView: View {
     }
 
     private var gridSpacing: CGFloat {
-        density == .compact ? PorcelainTokens.Space.sm : PorcelainTokens.Space.md
+        density == .compact ? FieldGuideTokens.Space.sm : FieldGuideTokens.Space.md
     }
 
     var body: some View {
@@ -65,8 +65,8 @@ struct EntityShelfView: View {
                     .accessibilityIdentifier(accessibilityIdentifier(for: row))
             }
         }
-        .padding(.horizontal, PorcelainTokens.Space.md)
-        .padding(.vertical, PorcelainTokens.Space.sm)
+        .padding(.horizontal, FieldGuideTokens.Space.md)
+        .padding(.vertical, FieldGuideTokens.Space.sm)
     }
 
     @ViewBuilder
@@ -139,7 +139,7 @@ struct EntityCard: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: density == .compact ? 4 : PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: density == .compact ? 4 : FieldGuideTokens.Space.sm) {
             GeometryReader { geometry in
                 Thumb(
                     url: imageURL,
@@ -150,30 +150,30 @@ struct EntityCard: View {
 
             Text(title)
                 .font(density == .compact ? .caption.weight(.semibold) : .body.weight(.semibold))
-                .foregroundStyle(PorcelainTokens.graphite)
+                .foregroundStyle(FieldGuideTokens.graphite)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 .multilineTextAlignment(.leading)
 
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
                     .font(.caption)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(density == .compact ? 6 : PorcelainTokens.Space.sm)
+        .padding(density == .compact ? 6 : FieldGuideTokens.Space.sm)
         .background(
-            RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                .fill(PorcelainTokens.surface)
+            RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
+                .fill(FieldGuideTokens.surface)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
+            RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
                 .strokeBorder(
-                    selected ? PorcelainTokens.cobalt : PorcelainTokens.hairline,
-                    lineWidth: selected ? 2 : PorcelainTokens.hairlineWidth)
+                    selected ? FieldGuideTokens.interaction : FieldGuideTokens.hairline,
+                    lineWidth: selected ? 2 : FieldGuideTokens.hairlineWidth)
         }
-        .contentShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
+        .contentShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -196,7 +196,7 @@ struct EntityCard: View {
                 descriptor: EntityCatalog[.product], rows: PreviewFixtures.sampleRows,
                 density: .cards)
         }
-        .porcelainScreen()
+        .fieldGuideScreen()
         .navigationTitle("Products")
     }
 }
@@ -208,7 +208,7 @@ struct EntityCard: View {
                 descriptor: EntityCatalog[.product], rows: PreviewFixtures.sampleRows,
                 density: .compact)
         }
-        .porcelainScreen()
+        .fieldGuideScreen()
         .navigationTitle("Products")
     }
     .environment(\.dynamicTypeSize, .accessibility3)

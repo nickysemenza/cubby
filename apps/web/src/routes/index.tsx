@@ -104,6 +104,16 @@ function Home() {
       }
       layout="contained"
     >
+      <div className="flex items-center gap-3 border-b border-border pb-4">
+        <span
+          className="size-2.5 shrink-0 rounded-full bg-signal ring-1 ring-foreground/10"
+          aria-hidden
+        />
+        <p className="text-sm text-muted-foreground">
+          Tasks, meals, and household records in one view.
+        </p>
+      </div>
+
       {/* Status bar — absent only when there is nothing outstanding at all.
           It carries the destructive tone for real defects and a quiet one for
           a coverage-only backlog, which is why it can render either way. */}
@@ -113,18 +123,18 @@ function Home() {
           a phone. Desktop keeps tasks and meals side by side. */}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
         <div className="contents lg:grid lg:content-start lg:gap-6">
-          <div className="order-1 lg:order-none">
+          <div className="order-1 rounded-2xl border border-border bg-card p-4 lg:order-none lg:p-5">
             <TodayAttention />
           </div>
-          <div className="order-3 lg:order-none">
+          <div className="order-3 rounded-2xl border border-border bg-card p-4 lg:order-none lg:p-5">
             <DailyPasses />
           </div>
         </div>
         <div className="contents lg:grid lg:content-start lg:gap-6">
-          <div className="order-2 lg:order-none">
+          <div className="order-2 rounded-2xl border border-border bg-card p-4 lg:order-none lg:p-5">
             <TodayMeals asOf={asOf} />
           </div>
-          <div className="order-4 lg:order-none">
+          <div className="order-4 rounded-2xl border border-border bg-card p-4 lg:order-none lg:p-5">
             <TodayNutrition initialDate={asOf.meals.from} />
           </div>
         </div>

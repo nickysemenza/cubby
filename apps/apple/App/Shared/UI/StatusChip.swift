@@ -11,10 +11,10 @@ struct StatusChip: View {
 
         var color: Color {
             switch self {
-            case .neutral: PorcelainTokens.graphiteSecondary
-            case .positive: PorcelainTokens.positive
-            case .warning: PorcelainTokens.warning
-            case .destructive: PorcelainTokens.destructive
+            case .neutral: FieldGuideTokens.graphiteSecondary
+            case .positive: FieldGuideTokens.positive
+            case .warning: FieldGuideTokens.warning
+            case .destructive: FieldGuideTokens.destructive
             }
         }
     }
@@ -25,18 +25,18 @@ struct StatusChip: View {
     var body: some View {
         Text(text)
             .font(.caption2.weight(.medium))
-            .foregroundStyle(tone == .neutral ? PorcelainTokens.graphite : tone.color)
-            .padding(.horizontal, PorcelainTokens.Space.sm - 2)
+            .foregroundStyle(tone == .neutral ? FieldGuideTokens.graphite : tone.color)
+            .padding(.horizontal, FieldGuideTokens.Space.sm - 2)
             .padding(.vertical, 2)
             .background(
-                RoundedRectangle(cornerRadius: PorcelainTokens.radiusChip)
+                RoundedRectangle(cornerRadius: FieldGuideTokens.radiusChip)
                     .fill(tone.color.opacity(tone == .neutral ? 0.06 : 0.08))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: PorcelainTokens.radiusChip)
+                RoundedRectangle(cornerRadius: FieldGuideTokens.radiusChip)
                     .strokeBorder(
                         tone.color.opacity(tone == .neutral ? 0.35 : 0.5),
-                        lineWidth: PorcelainTokens.hairlineWidth
+                        lineWidth: FieldGuideTokens.hairlineWidth
                     )
             )
             .fixedSize()
@@ -44,13 +44,13 @@ struct StatusChip: View {
 }
 
 #Preview("Status chips") {
-    HStack(spacing: PorcelainTokens.Space.sm) {
+    HStack(spacing: FieldGuideTokens.Space.sm) {
         StatusChip(text: "Added", tone: .positive)
         StatusChip(text: "Confirmed")
         StatusChip(text: "Elsewhere", tone: .warning)
         StatusChip(text: "Failed", tone: .destructive)
         StatusChip(text: "Best match")
     }
-    .padding(PorcelainTokens.Space.lg)
-    .background(PorcelainTokens.canvas)
+    .padding(FieldGuideTokens.Space.lg)
+    .background(FieldGuideTokens.canvas)
 }

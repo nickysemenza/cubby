@@ -108,7 +108,7 @@ function DesignSmokeTest() {
       <Stack gap="lg">
         <Card>
           <CardHeader>
-            <CardTitle>Porcelain Transit foundations</CardTitle>
+            <CardTitle>Field Guide foundations</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-2 sm:grid-cols-5">

@@ -18,16 +18,13 @@ import {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-// Porcelain Transit palette. Canvas cannot read CSS vars, so these mirror the
-// cool canvas/inset/hairline/graphite primitives as HSL literals for the
-// shading math (parseHSL/adjustLight). Zones use cobalt at low opacity instead
-// of a rainbow.
-const FLOOR_COLOR_1 = "hsl(216, 28%, 92%)";
-const FLOOR_COLOR_2 = "hsl(216, 24%, 88%)";
-const WALL_BACK_COLOR = "hsl(216, 45%, 98%)";
-const WALL_LEFT_COLOR = "hsl(214, 33%, 95%)";
-const BASEBOARD_COLOR = "hsl(219, 18%, 40%)";
-const BG_COLOR = "#f7f9fc";
+// Warm shading remains HSL for adjustLight; the canvas ground resolves the
+// generated brand token at paint time.
+const FLOOR_COLOR_1 = "hsl(80, 15%, 91%)";
+const FLOOR_COLOR_2 = "hsl(80, 12%, 86%)";
+const WALL_BACK_COLOR = "hsl(65, 30%, 98%)";
+const WALL_LEFT_COLOR = "hsl(72, 21%, 94%)";
+const BASEBOARD_COLOR = "hsl(80, 8%, 38%)";
 
 // ─── Projection ──────────────────────────────────────────────────────────────
 
@@ -746,7 +743,7 @@ export function renderScene(
   camera: Camera,
   hoveredItemId: string | null,
 ) {
-  ctx.fillStyle = BG_COLOR;
+  ctx.fillStyle = resolveCssColor("var(--brand-canvas)");
   ctx.fillRect(0, 0, canvasW, canvasH);
 
   ctx.save();

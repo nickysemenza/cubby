@@ -4,8 +4,8 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { useHydrationGate } from "~/hooks/useHydrated";
 import { cn } from "~/lib/utils";
 
-// Porcelain Transit controls use modest radii, compact desktop heights, and a
-// crisp cobalt focus ring. Phone targets retain the 44px interaction floor.
+// Field Guide controls use modest radii, compact desktop heights, and a
+// crisp ink focus ring. Phone targets retain the 44px interaction floor.
 const ruled = "border-[var(--border)] active:opacity-90";
 
 const buttonVariants = cva(

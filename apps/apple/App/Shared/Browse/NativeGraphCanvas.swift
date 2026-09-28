@@ -75,7 +75,7 @@ struct NativeGraphCanvas: View {
                     #endif
                 }
                 .frame(width: proxy.size.width, height: proxy.size.height)
-                .background(PorcelainTokens.inset)
+                .background(FieldGuideTokens.inset)
                 .contentShape(Rectangle())
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -175,13 +175,13 @@ struct NativeGraphCanvas: View {
             } label: {
                 Text(node.label)
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(PorcelainTokens.graphite)
+                    .foregroundStyle(FieldGuideTokens.graphite)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .frame(width: cardWidth * scale, height: cardHeight * scale, alignment: .leading)
-                    .background(PorcelainTokens.surface)
+                    .background(FieldGuideTokens.surface)
                     .clipShape(RoundedRectangle(cornerRadius: 4))
                     .overlay(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 1)
@@ -192,7 +192,7 @@ struct NativeGraphCanvas: View {
                         RoundedRectangle(cornerRadius: 4)
                             .strokeBorder(
                                 node.reference == selected
-                                    ? PorcelainTokens.cobalt : PorcelainTokens.hairline,
+                                    ? FieldGuideTokens.interaction : FieldGuideTokens.hairline,
                                 lineWidth: node.reference == selected ? 2 : 1)
                     }
             }
@@ -270,10 +270,10 @@ struct NativeGraphCanvas: View {
             let incident = selected != graph.root && (edge.source == selected || edge.target == selected)
             let color =
                 active
-                ? PorcelainTokens.cobalt
+                ? FieldGuideTokens.interaction
                 : incident
-                    ? PorcelainTokens.cobalt.opacity(0.45)
-                    : PorcelainTokens.graphiteSecondary.opacity(0.25)
+                    ? FieldGuideTokens.interaction.opacity(0.45)
+                    : FieldGuideTokens.graphiteSecondary.opacity(0.25)
             var path = Path(); path.move(to: a); path.addLine(to: b)
             context.stroke(path, with: .color(color), lineWidth: active ? 1.5 : 1)
             let angle = atan2(b.y - a.y, b.x - a.x)
@@ -295,7 +295,7 @@ struct NativeGraphCanvas: View {
                 Path(roundedRect: rect, cornerRadius: 3),
                 with: .color(
                     node.reference == selected
-                        ? PorcelainTokens.cobalt : node.reference.entity.domain.color.opacity(0.45)))
+                        ? FieldGuideTokens.interaction : node.reference.entity.domain.color.opacity(0.45)))
         }
     }
     private func selectOverviewNode(at point: CGPoint) -> Bool {
@@ -335,7 +335,8 @@ struct NativeGraphCanvas: View {
                     context.fill(
                         Path(rect),
                         with: .color(
-                            node.reference == selected ? PorcelainTokens.cobalt : PorcelainTokens.hairline))
+                            node.reference == selected
+                                ? FieldGuideTokens.interaction : FieldGuideTokens.hairline))
                 }
             }
             let visible = visibleFrame(size: size)
@@ -343,9 +344,9 @@ struct NativeGraphCanvas: View {
                 x: CGFloat(visible.x + 200 - bounds.x) * ratio,
                 y: CGFloat(visible.y + 200 - bounds.y) * ratio,
                 width: CGFloat(visible.width - 400) * ratio, height: CGFloat(visible.height - 400) * ratio)
-            context.stroke(Path(viewportRect), with: .color(PorcelainTokens.cobalt), lineWidth: 1)
+            context.stroke(Path(viewportRect), with: .color(FieldGuideTokens.interaction), lineWidth: 1)
         }
-        .frame(width: 140, height: 90).background(PorcelainTokens.surface).clipShape(
+        .frame(width: 140, height: 90).background(FieldGuideTokens.surface).clipShape(
             RoundedRectangle(cornerRadius: 6)
         )
         .onTapGesture { point in

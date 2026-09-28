@@ -19,11 +19,11 @@ struct RootView: View {
     private var content: some View {
         switch model.phase {
         case .restoring:
-            VStack(spacing: PorcelainTokens.Space.md) {
+            VStack(spacing: FieldGuideTokens.Space.md) {
                 LoadingIndicator(label: "Checking sign-in")
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(PorcelainTokens.canvas)
+            .background(FieldGuideTokens.canvas)
         case .signedOut:
             LoginView()
         case .signedIn:

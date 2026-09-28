@@ -29,12 +29,12 @@ struct EntityImageBlock: View {
         Section {
             let existing = existing
             ForEach(model.imageOrder, id: \.rawValue) { id in
-                HStack(spacing: PorcelainTokens.Space.md) {
+                HStack(spacing: FieldGuideTokens.Space.md) {
                     Thumb(url: existing[id]?.url, size: 48)
                     Text(existing[id]?.filename ?? id.rawValue).lineLimit(1)
                     Spacer()
                 }
-                .frame(minHeight: PorcelainTokens.touchTarget)
+                .frame(minHeight: FieldGuideTokens.touchTarget)
                 .swipeActions(edge: .trailing) {
                     Button("Remove", role: .destructive) { remove(id) }
                 }
@@ -52,12 +52,12 @@ struct EntityImageBlock: View {
             }
             .disabled(disabled)
             ForEach(selections) { item in
-                HStack(spacing: PorcelainTokens.Space.md) {
+                HStack(spacing: FieldGuideTokens.Space.md) {
                     Image(item.preview, scale: 1, label: Text("New photo"))
                         .resizable()
                         .scaledToFill()
                         .frame(width: 48, height: 48)
-                        .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl))
+                        .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
                     VStack(alignment: .leading) {
                         Text("New photo")
                         if let day = item.capturedAt {
@@ -75,7 +75,7 @@ struct EntityImageBlock: View {
                     .disabled(disabled)
                     .accessibilityLabel("Remove new photo")
                 }
-                .frame(minHeight: PorcelainTokens.touchTarget)
+                .frame(minHeight: FieldGuideTokens.touchTarget)
             }
             if remainingCapacity > 0 {
                 PhotoSourceButtons(maxSelectionCount: remainingCapacity) { items in
@@ -83,7 +83,7 @@ struct EntityImageBlock: View {
                 }
                 .disabled(disabled)
             }
-            if let uploadStatus { Text(uploadStatus).font(.porcelainLabel) }
+            if let uploadStatus { Text(uploadStatus).font(.fieldGuideLabel) }
         } header: {
             HStack {
                 Text("Photos")

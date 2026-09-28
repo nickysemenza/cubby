@@ -411,7 +411,7 @@ private struct ActivityRunRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: run.kind.symbol)
-                .foregroundStyle(run.active ? PorcelainTokens.cobalt : Color.secondary)
+                .foregroundStyle(run.active ? FieldGuideTokens.interaction : Color.secondary)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 4) {
                 Text(run.subjectName).font(.headline)
@@ -429,7 +429,7 @@ private struct ActivityRunRow: View {
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 if let error = run.error {
-                    Text(error).font(.caption).foregroundStyle(PorcelainTokens.destructive).lineLimit(2)
+                    Text(error).font(.caption).foregroundStyle(FieldGuideTokens.destructive).lineLimit(2)
                 }
             }
         }
@@ -643,7 +643,7 @@ struct ActivityDetailView: View {
                 LabeledContent("Estimated cost", value: cost, format: .currency(code: "USD"))
             }
             if let error = detail.run.error {
-                Text(error).foregroundStyle(PorcelainTokens.destructive)
+                Text(error).foregroundStyle(FieldGuideTokens.destructive)
             }
         }
     }
@@ -666,7 +666,7 @@ struct ActivityDetailView: View {
                         diagnosticText("Diagnostics", attempt.diagnosticsJson)
                         diagnosticText("Result", attempt.resultJson)
                         if let error = attempt.error {
-                            Text(error).foregroundStyle(PorcelainTokens.destructive)
+                            Text(error).foregroundStyle(FieldGuideTokens.destructive)
                         }
                     }
                 }

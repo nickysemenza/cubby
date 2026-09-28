@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { domainForEntity, domainForRoute } from "./domain-wayfinding";
 
-describe("Porcelain Transit domain wayfinding", () => {
+describe("Field Guide domain wayfinding", () => {
   it.each([
     ["/recipes", "cook"],
     ["/ingredients/workbench", "cook"],

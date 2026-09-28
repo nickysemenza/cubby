@@ -30,7 +30,7 @@ struct EntityDetailView: View {
         let model = model
         let titled =
             content
-            .porcelainScreen()
+            .fieldGuideScreen()
             .navigationTitle(model?.row?.title ?? descriptor.singular)
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
@@ -399,6 +399,8 @@ struct EntityDetailContent: View {
             Section { RawRecordDisclosure(raw: row.raw) }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(FieldGuideTokens.canvas)
         .frame(maxWidth: 900)
         .frame(maxWidth: .infinity, alignment: .top)
         .accessibilityIdentifier("detail.\(descriptor.key.rawValue)")
@@ -418,6 +420,7 @@ struct EntityDetailContent: View {
                 #endif
             }
         }
+        .modifier(FieldGuideRecordInspector(descriptor: descriptor, row: row))
     }
 
     @ViewBuilder
@@ -553,6 +556,57 @@ struct EntityDetailContent: View {
         }
     }
 }
+
+#if os(macOS)
+    /// Uses the loaded generic row; the inspector never starts a second record query.
+    private struct FieldGuideRecordInspector: ViewModifier {
+        let descriptor: EntityDescriptor
+        let row: EntityRow
+        @State private var isPresented = false
+
+        func body(content: Content) -> some View {
+            content
+                .toolbar {
+                    Button {
+                        isPresented.toggle()
+                    } label: {
+                        Label("Inspector", systemImage: "sidebar.right")
+                    }
+                    .help(isPresented ? "Hide inspector" : "Show inspector")
+                    .accessibilityIdentifier("detail.inspectorToggle")
+                }
+                .inspector(isPresented: $isPresented) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
+                            Text("Record notes")
+                                .font(.fieldGuideHeadline)
+                            Divider()
+                            LabeledContent("Type", value: descriptor.singular)
+                            LabeledContent("Code", value: row.id)
+                            ForEach(descriptor.presentation.heroStats, id: \.self) { key in
+                                if let field = descriptor.field(key),
+                                    let value = EntityFieldValue.text(row.raw[key], field: field)
+                                {
+                                    LabeledContent(field.label, value: value)
+                                }
+                            }
+                        }
+                        .padding(FieldGuideTokens.Space.lg)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+                    .background(FieldGuideTokens.surface)
+                    .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
+                }
+        }
+    }
+#else
+    private struct FieldGuideRecordInspector: ViewModifier {
+        let descriptor: EntityDescriptor
+        let row: EntityRow
+
+        func body(content: Content) -> some View { content }
+    }
+#endif
 
 /// Developer overlays layer 4/7: shortcode plus fetched-at/age. No `uuid` field — the generic
 /// entity API never exposes the underlying uuid, only the public shortcode (`row.id`).

@@ -464,14 +464,8 @@ function SidebarExpandedDomainGroup({
   const Icon = group.icon;
 
   return (
-    <section
-      className="mb-4 border-l pl-2"
-      style={
-        domain ? { borderLeftColor: `var(${domain.accentToken})` } : undefined
-      }
-      aria-label={group.label}
-    >
-      <div className="mb-1 flex h-6 items-center gap-2 text-xs font-medium text-foreground">
+    <section className="mb-5" aria-label={group.label}>
+      <div className="mb-1 flex h-6 items-center gap-2 px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
         <span
           style={domain ? { color: `var(${domain.accentToken})` } : undefined}
           aria-hidden="true"
@@ -512,9 +506,10 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
     <Link
       {...navItemLinkProps(item, active)}
       className={cn(
-        "mb-1 flex h-8 min-w-0 items-center gap-2 border border-transparent px-2 text-xs transition-colors hover:bg-muted hover:text-foreground",
+        "mb-1 flex h-9 min-w-0 items-center gap-2 rounded-lg border border-transparent px-2.5 text-xs transition-colors hover:bg-muted hover:text-foreground",
         !active && "text-muted-foreground",
-        active && "border-border bg-background font-medium text-foreground",
+        active &&
+          "bg-primary font-medium text-primary-foreground hover:bg-primary hover:text-primary-foreground",
       )}
     >
       <Icon
@@ -522,6 +517,12 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
         weight={active ? "bold" : "regular"}
       />
       <span className="min-w-0 truncate">{item.label}</span>
+      {active && (
+        <span
+          className="size-1.5 shrink-0 rounded-full bg-signal"
+          aria-hidden
+        />
+      )}
       {item.entity && <NavigationCountBadge entity={item.entity} />}
     </Link>
   );

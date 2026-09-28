@@ -19,7 +19,7 @@ struct RelationshipDepthPicker: View {
                 Text("3").tag(3)
             }
             .pickerStyle(.segmented)
-            .frame(minHeight: PorcelainTokens.touchTarget)
+            .frame(minHeight: FieldGuideTokens.touchTarget)
             .disabled(model.activity != .idle)
             Text("Depth counts declared relationship hops.")
                 .font(.caption)

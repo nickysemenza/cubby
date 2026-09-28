@@ -21,11 +21,11 @@ struct OrderMailDetailSlot: View {
                     Text("No order email linked yet.").foregroundStyle(.secondary)
                 } else {
                     ForEach(worklist.items, id: \.messageId) { mail in
-                        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                             Text(mail.subject).font(.subheadline.weight(.semibold))
                             Text(mail.sender).font(.caption).foregroundStyle(.secondary)
                             ForEach(mail.events, id: \.id) { event in
-                                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+                                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                                     Text("\(event.event.capitalized) · \(event.orderId ?? "Order unknown")")
                                         .font(.subheadline)
                                     if let amount = event.amount {
@@ -64,7 +64,7 @@ struct OrderMailDetailSlot: View {
                                         .font(.caption)
                                     }
                                 }
-                                .padding(.top, PorcelainTokens.Space.xs)
+                                .padding(.top, FieldGuideTokens.Space.xs)
                             }
                             if let threadID = mail.threadId,
                                 let url = URL(string: "https://mail.google.com/mail/u/0/#all/\(threadID)")
@@ -81,14 +81,14 @@ struct OrderMailDetailSlot: View {
                                 }
                             }
                         }
-                        .padding(.vertical, PorcelainTokens.Space.xs)
+                        .padding(.vertical, FieldGuideTokens.Space.xs)
                     }
                 }
             } else if error == nil {
                 LoadingIndicator(label: "Loading order email")
             }
             if let error {
-                Text(error).font(.callout).foregroundStyle(PorcelainTokens.destructive)
+                Text(error).font(.callout).foregroundStyle(FieldGuideTokens.destructive)
                 Button("Retry") { Task { await load() } }
             }
         }

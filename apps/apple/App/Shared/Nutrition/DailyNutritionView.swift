@@ -46,18 +46,18 @@ struct DailyNutritionView: View {
     ) -> some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
-                    Text(displayDate).font(.porcelainHeadline)
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                    Text(displayDate).font(.fieldGuideHeadline)
                     if HouseholdDay.isFuture(selectedDay) {
                         Label("Planned", systemImage: "calendar.badge.clock")
-                            .font(.porcelainLabel)
+                            .font(.fieldGuideLabel)
                             .foregroundStyle(.secondary)
                     }
                 }
-                .padding(.vertical, PorcelainTokens.Space.xs)
+                .padding(.vertical, FieldGuideTokens.Space.xs)
                 DatePicker("Date", selection: selectedDate, displayedComponents: .date)
                     .environment(\.timeZone, HouseholdDay.timeZone)
-                HStack(spacing: PorcelainTokens.Space.sm) {
+                HStack(spacing: FieldGuideTokens.Space.sm) {
                     Button("Previous day", systemImage: "chevron.left") { moveDay(by: -1) }
                         .labelStyle(.iconOnly)
                         .accessibilityLabel("Previous day")
@@ -70,7 +70,7 @@ struct DailyNutritionView: View {
                         .accessibilityLabel("Next day")
                 }
                 .buttonStyle(.borderless)
-                .frame(minHeight: PorcelainTokens.touchTarget)
+                .frame(minHeight: FieldGuideTokens.touchTarget)
             }
             Section("Per person") {
                 switch state {
@@ -117,7 +117,7 @@ struct DailyNutritionView: View {
     private func failure(
         _ message: String, isLoading: Bool, retry: @escaping @Sendable () async -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Text(message).font(.callout).foregroundStyle(.secondary)
             if isLoading { LoadingIndicator(label: "Retrying") }
             Button("Retry") { Task { await retry() } }.disabled(isLoading)

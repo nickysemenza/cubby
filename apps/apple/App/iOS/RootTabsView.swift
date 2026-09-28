@@ -55,7 +55,7 @@ struct LibraryHomeView: View {
                 }
                 NavigationLink(value: Route.photosLibrary) {
                     Label("All photos", systemImage: "photo.on.rectangle.angled")
-                        .frame(minHeight: PorcelainTokens.touchTarget)
+                        .frame(minHeight: FieldGuideTokens.touchTarget)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -72,7 +72,7 @@ struct LibraryHomeView: View {
                     .foregroundStyle(.secondary)
                 NavigationLink(value: Route.browseCatalog) {
                     Label("Browse catalog", systemImage: "square.grid.2x2")
-                        .frame(minHeight: PorcelainTokens.touchTarget)
+                        .frame(minHeight: FieldGuideTokens.touchTarget)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

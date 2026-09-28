@@ -45,23 +45,23 @@ struct DomainMark: View {
 }
 
 #Preview("Domain marks") {
-    VStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
+    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
         ForEach(AppDomain.allCases) { domain in
-            HStack(spacing: PorcelainTokens.Space.sm) {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
                 DomainMark(domain)
                 DomainMark(domain, style: .symbol, size: 14)
-                Text(domain.title).font(.porcelainTitle)
+                Text(domain.title).font(.fieldGuideTitle)
             }
         }
         PanelDivider(inset: 0)
-        HStack(spacing: PorcelainTokens.Space.sm) {
+        HStack(spacing: FieldGuideTokens.Space.sm) {
             DomainMark(.product)
-            Text("Products").font(.porcelainBody)
+            Text("Products").font(.fieldGuideBody)
             DomainMark(.expense)
-            Text("Expenses").font(.porcelainBody)
+            Text("Expenses").font(.fieldGuideBody)
         }
     }
-    .padding(PorcelainTokens.Space.lg)
+    .padding(FieldGuideTokens.Space.lg)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(PorcelainTokens.canvas)
+    .background(FieldGuideTokens.canvas)
 }

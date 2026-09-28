@@ -321,7 +321,7 @@ struct PhotoLibraryHeader: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             filterRow
             PhotoLibraryStagePanel(
                 status: status, stages: stages,
@@ -330,8 +330,8 @@ struct PhotoLibraryHeader: View {
                 Text(footnoteText).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
             }
         }
-        .padding(.horizontal, PorcelainTokens.Space.md)
-        .padding(.vertical, PorcelainTokens.Space.sm)
+        .padding(.horizontal, FieldGuideTokens.Space.md)
+        .padding(.vertical, FieldGuideTokens.Space.sm)
     }
 
     @ViewBuilder private var filterRow: some View {
@@ -346,13 +346,13 @@ struct PhotoLibraryHeader: View {
             // or stacks" for free: once the wide row no longer fits at a larger Dynamic Type size,
             // SwiftUI falls back automatically, with no size-class branch to maintain by hand.
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: PorcelainTokens.Space.sm) {
+                HStack(spacing: FieldGuideTokens.Space.sm) {
                     filterPicker.fixedSize()
                     badgeKeyButton
                     HStack(spacing: 6) { chips }
                     Spacer(minLength: 0)
                 }
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                     HStack {
                         filterPicker
                         badgeKeyButton
@@ -473,7 +473,7 @@ private struct PhotoLibraryStagePanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             if allSettled, !expanded {
                 collapsedRow
             } else {
@@ -521,7 +521,7 @@ private struct PhotoLibraryStagePanel: View {
                 .frame(width: barWidth)
                 .animation(reduceMotion ? nil : .default, value: value)
         case .warning:
-            Image(systemName: "exclamationmark.triangle").foregroundStyle(PorcelainTokens.destructive)
+            Image(systemName: "exclamationmark.triangle").foregroundStyle(FieldGuideTokens.destructive)
         }
     }
 
@@ -553,7 +553,7 @@ private struct PhotoLibraryStagePanel: View {
         case .off:
             Image(systemName: "minus.circle").foregroundStyle(.secondary)
         case .failed:
-            Image(systemName: "exclamationmark.triangle").foregroundStyle(PorcelainTokens.destructive)
+            Image(systemName: "exclamationmark.triangle").foregroundStyle(FieldGuideTokens.destructive)
         }
     }
 
@@ -562,7 +562,7 @@ private struct PhotoLibraryStagePanel: View {
         case .off(let reason):
             Text(reason).font(.caption2).lineLimit(1)
         case .failed(let message):
-            Text(message).font(.caption2).foregroundStyle(PorcelainTokens.destructive).lineLimit(1)
+            Text(message).font(.caption2).foregroundStyle(FieldGuideTokens.destructive).lineLimit(1)
         default:
             if let caption = stage.caption(eta: etaText(for: stage)) {
                 if stage.id == "local" {
@@ -600,7 +600,7 @@ struct CategoryChip: View {
 
     private var tint: Color {
         let index = PhotoImportCatalog.categories.firstIndex { $0.key == category.key } ?? 0
-        return PorcelainTokens.chartRamp[index % PorcelainTokens.chartRamp.count]
+        return FieldGuideTokens.chartRamp[index % FieldGuideTokens.chartRamp.count]
     }
 
     var body: some View {

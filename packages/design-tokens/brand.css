@@ -1,58 +1,38 @@
-/*
- * Porcelain Transit — shared raw brand primitives.
- *
- * This file stays framework-free so apps/web and the standalone apps/mcp-apps
- * bundles consume the same light-only palette. Keep the established variable
- * names below: the web theme and MCP widgets import this file directly.
- */
-
+/* Generated from tokens.json. Edit the source and run pnpm generate. */
 :root {
-  /* Core surfaces and ink. */
-  --brand-foreground: #171a21;
-  --brand-graphite: #171a21;
-  --brand-graphite-secondary: #667085;
-  --brand-canvas: #f7f9fc;
-  --brand-surface: #ffffff;
-  --brand-inset: #f1f4f8;
-  --brand-cream: #ffffff;
-  --brand-paper: #f7f9fc;
-  --brand-paper-alt: #f1f4f8;
-  --brand-hairline: #d9dee7;
-  --brand-shelf: #667085;
-
-  /* Interaction and domain wayfinding. */
-  --brand-ultramarine: #2563eb;
-  --brand-ultramarine-dark: #1d4ed8;
-  --brand-cobalt: #2563eb;
+  --brand-foreground: #1b211b;
+  --brand-graphite-secondary: #626960;
+  --brand-canvas: #f5f4ed;
+  --brand-surface: #fffefa;
+  --brand-inset: #eeefe8;
+  --brand-hairline: #d9ded2;
+  --brand-interaction: #1b211b;
+  --brand-interaction-hover: #344035;
   --brand-on-accent: #ffffff;
-  --brand-domain-cook: #d97706;
-  --brand-domain-pantry: #16845b;
-  --brand-domain-plan: #6d5bd0;
-  --brand-domain-house: #147d92;
-  --brand-domain-finance: #b5477c;
-
-  /* Legacy accent retained as a stable alias for non-web consumers. */
-  --brand-aubergine: #b5477c;
-
-  /* Semantic tones. Pair color with text, icon, or shape; never hue alone. */
-  --positive: #16845b;
-  --warning: #b66a00;
-  --warning-ink: #8a4f00;
-  --destructive: #c93636;
-  --slate: #667085;
-  --brand-positive: #16845b;
-  --brand-warning: #b66a00;
-  --brand-destructive: #c93636;
-
-  /* Geometry and depth. Resting surfaces remain shadow-free. */
-  --brand-radius-control: 6px;
-  --brand-radius-panel: 8px;
-  --brand-radius-chip: 5px;
+  --brand-signal: #c9f45b;
+  --brand-domain-cook: #a86c25;
+  --brand-domain-pantry: #347a51;
+  --brand-domain-plan: #675dad;
+  --brand-domain-house: #337687;
+  --brand-domain-finance: #9d5a76;
+  --brand-positive: #25734e;
+  --brand-warning: #9b640d;
+  --brand-warning-ink: #75500d;
+  --brand-destructive: #b54336;
+  --brand-slate: #626960;
+  --brand-graphite: var(--brand-foreground);
+  --brand-paper: var(--brand-canvas);
+  --brand-paper-alt: var(--brand-inset);
+  --brand-cream: var(--brand-surface);
+  --brand-shelf: var(--brand-graphite-secondary);
+  --brand-ultramarine: var(--brand-interaction);
+  --brand-ultramarine-dark: var(--brand-interaction-hover);
+  --brand-cobalt: var(--brand-interaction);
+  --brand-aubergine: var(--brand-domain-finance);
+  --brand-radius-control: 8px;
+  --brand-radius-panel: 16px;
+  --brand-radius-chip: 7px;
   --brand-radius-pill: 999px;
-  --brand-elevation-popover: 0 8px 24px rgb(23 26 33 / 0.12);
-  --brand-focus-ring: 0 0 0 2px #ffffff, 0 0 0 4px var(--brand-cobalt);
-
-  /* Shared rhythm and motion. Table row sizing remains a component contract. */
   --brand-space-1: 4px;
   --brand-space-2: 8px;
   --brand-space-3: 12px;
@@ -62,19 +42,20 @@
   --brand-motion-fast: 120ms;
   --brand-motion-standard: 180ms;
   --brand-ease-cozy: cubic-bezier(0.2, 0, 0, 1);
-
-  /* Kept for consumers that still use the old rule token; new surfaces should
-     use hairlines and tonal separation instead of heavy ink rules. */
-  --rule-ink: 1px solid var(--brand-hairline);
-
-  /* Inter leads UI and headings; JetBrains Mono remains for aligned data. */
+  --brand-font-display: "Iowan Old Style", Georgia, serif;
   --brand-font-heading:
-    "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
   --brand-font-sans:
-    "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
   --brand-font-mono:
-    "JetBrains Mono Variable", "JetBrains Mono", "SF Mono", Monaco,
-    "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+    "JetBrains Mono Variable", "JetBrains Mono", "SF Mono", monospace;
+  --positive: var(--brand-positive);
+  --warning: var(--brand-warning);
+  --warning-ink: var(--brand-warning-ink);
+  --destructive: var(--brand-destructive);
+  --slate: var(--brand-slate);
+  --brand-elevation-popover: 0 12px 32px rgb(27 33 27 / 0.14);
+  --brand-focus-ring:
+    0 0 0 2px var(--brand-surface), 0 0 0 4px var(--brand-interaction);
+  --rule-ink: 1px solid var(--brand-hairline);
 }

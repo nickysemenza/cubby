@@ -40,7 +40,7 @@ export type NavGroup = {
   label: string;
   icon: Icon;
   children: NavItem[];
-  /** The stable Porcelain Transit line for the five household domains. */
+  /** The stable Field Guide line for the five household domains. */
   domain?: WayfindingDomain;
   /** Presentation tier. The complete manifest stays semantic truth while each
    * shell chooses how much of it to expose at once. */

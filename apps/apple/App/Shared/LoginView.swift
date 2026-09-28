@@ -21,19 +21,19 @@ struct LoginView: View {
         @Bindable var model = model
         NavigationStack {
             ScrollView {
-                VStack(spacing: PorcelainTokens.Space.xl) {
-                    Panel(padding: PorcelainTokens.Space.xl, spacing: PorcelainTokens.Space.lg) {
-                        VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+                VStack(spacing: FieldGuideTokens.Space.xl) {
+                    Panel(padding: FieldGuideTokens.Space.xl, spacing: FieldGuideTokens.Space.lg) {
+                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                             Text("Cubby")
-                                .font(.porcelainDisplay)
+                                .font(.fieldGuideDisplay)
                                 .tracking(-0.6)
-                                .foregroundStyle(PorcelainTokens.graphite)
+                                .foregroundStyle(FieldGuideTokens.graphite)
                             Text("Household operating software")
-                                .font(.porcelainBody)
-                                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                .font(.fieldGuideBody)
+                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         }
 
-                        VStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
+                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
                             FieldBox(focused: focused == .email) {
                                 TextField("Email", text: $email)
                                     .textContentType(.username)
@@ -53,8 +53,8 @@ struct LoginView: View {
                             }
                             if let error = model.lastError {
                                 Text(error)
-                                    .font(.porcelainBody)
-                                    .foregroundStyle(PorcelainTokens.destructive)
+                                    .font(.fieldGuideBody)
+                                    .foregroundStyle(FieldGuideTokens.destructive)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
@@ -67,54 +67,54 @@ struct LoginView: View {
                                 if submitting {
                                     LoadingIndicator(label: "Signing in").controlSize(.small)
                                 } else {
-                                    Text("Sign in").font(.porcelainTitle)
+                                    Text("Sign in").font(.fieldGuideTitle)
                                 }
                             }
-                            .frame(maxWidth: .infinity, minHeight: PorcelainTokens.touchTarget - 12)
+                            .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget - 12)
                         }
                         .buttonStyle(.borderedProminent)
-                        .buttonBorderShape(.roundedRectangle(radius: PorcelainTokens.radiusControl))
-                        .tint(PorcelainTokens.cobalt)
+                        .buttonBorderShape(.roundedRectangle(radius: FieldGuideTokens.radiusControl))
+                        .tint(FieldGuideTokens.interaction)
                         .disabled(submitting || email.isEmpty || password.isEmpty)
 
-                        HStack(spacing: PorcelainTokens.Space.sm) {
+                        HStack(spacing: FieldGuideTokens.Space.sm) {
                             Rectangle()
-                                .fill(PorcelainTokens.hairline)
-                                .frame(maxWidth: .infinity, maxHeight: PorcelainTokens.hairlineWidth)
+                                .fill(FieldGuideTokens.hairline)
+                                .frame(maxWidth: .infinity, maxHeight: FieldGuideTokens.hairlineWidth)
                             Text("or")
-                                .font(.porcelainLabel)
-                                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                .font(.fieldGuideLabel)
+                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                             Rectangle()
-                                .fill(PorcelainTokens.hairline)
-                                .frame(maxWidth: .infinity, maxHeight: PorcelainTokens.hairlineWidth)
+                                .fill(FieldGuideTokens.hairline)
+                                .frame(maxWidth: .infinity, maxHeight: FieldGuideTokens.hairlineWidth)
                         }
 
                         Button {
                             Task { await submitGoogle() }
                         } label: {
                             Text("Continue with Google")
-                                .font(.porcelainTitle)
+                                .font(.fieldGuideTitle)
                                 .frame(
                                     maxWidth: .infinity,
-                                    minHeight: PorcelainTokens.touchTarget - 12
+                                    minHeight: FieldGuideTokens.touchTarget - 12
                                 )
                         }
                         .buttonStyle(.bordered)
-                        .buttonBorderShape(.roundedRectangle(radius: PorcelainTokens.radiusControl))
-                        .tint(PorcelainTokens.cobalt)
+                        .buttonBorderShape(.roundedRectangle(radius: FieldGuideTokens.radiusControl))
+                        .tint(FieldGuideTokens.interaction)
                         .disabled(submitting)
 
                         Button {
                             showServer = true
                         } label: {
-                            HStack(spacing: PorcelainTokens.Space.xs) {
+                            HStack(spacing: FieldGuideTokens.Space.xs) {
                                 Text("Signing in to \(model.host)")
-                                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                                Text("·").foregroundStyle(PorcelainTokens.hairline)
-                                Text("Change").foregroundStyle(PorcelainTokens.cobalt)
+                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                                Text("·").foregroundStyle(FieldGuideTokens.hairline)
+                                Text("Change").foregroundStyle(FieldGuideTokens.interaction)
                             }
-                            .font(.porcelainLabel)
-                            .frame(maxWidth: .infinity, minHeight: PorcelainTokens.touchTarget - 16)
+                            .font(.fieldGuideLabel)
+                            .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget - 16)
                         }
                         .buttonStyle(.plain)
                         .disabled(submitting)
@@ -122,9 +122,9 @@ struct LoginView: View {
                     .frame(maxWidth: 420)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(PorcelainTokens.Space.xl)
+                .padding(FieldGuideTokens.Space.xl)
             }
-            .porcelainScreen()
+            .fieldGuideScreen()
             .sheet(isPresented: $showServer) {
                 NavigationStack { SettingsView() }.environment(model)
                     .nativeSheet(.editor)
@@ -151,26 +151,26 @@ struct LoginView: View {
     }
 }
 
-/// A 44pt white field with a hairline that turns cobalt on focus — a crisp boundary, never a glow.
+/// A 44pt white field with a hairline that turns ink on focus — a crisp boundary, never a glow.
 private struct FieldBox<Content: View>: View {
     let focused: Bool
     @ViewBuilder let content: Content
 
     var body: some View {
         content
-            .font(.porcelainBody)
+            .font(.fieldGuideBody)
             .textFieldStyle(.plain)
-            .padding(.horizontal, PorcelainTokens.Space.md)
-            .frame(height: PorcelainTokens.touchTarget)
+            .padding(.horizontal, FieldGuideTokens.Space.md)
+            .frame(height: FieldGuideTokens.touchTarget)
             .background(
-                RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl)
-                    .fill(PorcelainTokens.surface)
+                RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
+                    .fill(FieldGuideTokens.surface)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl)
+                RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
                     .strokeBorder(
-                        focused ? PorcelainTokens.cobalt : PorcelainTokens.hairline,
-                        lineWidth: focused ? 2 : PorcelainTokens.hairlineWidth
+                        focused ? FieldGuideTokens.interaction : FieldGuideTokens.hairline,
+                        lineWidth: focused ? 2 : FieldGuideTokens.hairlineWidth
                     )
             )
     }

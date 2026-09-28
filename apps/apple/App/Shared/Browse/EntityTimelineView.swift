@@ -23,7 +23,7 @@ struct EntityTimelineView: View {
             Section {
                 ForEach(timeline.stats, id: \.key) { stat in
                     LabeledContent(stat.label) {
-                        Text(stat.value).font(.porcelainData)
+                        Text(stat.value).font(.fieldGuideData)
                     }
                 }
             }
@@ -90,22 +90,22 @@ private struct TimelineEventRow: View {
     let event: EntityTimelineEvent
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: PorcelainTokens.Space.sm) {
+        HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
             StatusChip(text: event.kind.replacingOccurrences(of: "_", with: " ").capitalized)
             VStack(alignment: .leading, spacing: 2) {
-                Text(event.label).font(.porcelainBody)
+                Text(event.label).font(.fieldGuideBody)
                 if let detail = event.detail {
                     Text(detail).font(.caption).foregroundStyle(.secondary)
                 }
             }
-            Spacer(minLength: PorcelainTokens.Space.sm)
+            Spacer(minLength: FieldGuideTokens.Space.sm)
             if let amount = event.amount {
                 Text(EntityFieldValue.format(amount))
-                    .font(.porcelainData)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .font(.fieldGuideData)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
             }
         }
-        .frame(minHeight: PorcelainTokens.touchTarget)
+        .frame(minHeight: FieldGuideTokens.touchTarget)
     }
 }
 
@@ -115,10 +115,10 @@ private struct LifecycleRowView: View {
     let extent: ClosedRange<Date>
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
-            HStack(spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
                 Thumb(url: row.imageUrl.flatMap(URL.init(string:)), size: 28)
-                Text(row.name).font(.porcelainLabel).lineLimit(1)
+                Text(row.name).font(.fieldGuideLabel).lineLimit(1)
                 Spacer()
                 Text(span).font(.caption).foregroundStyle(.secondary).monospacedDigit()
             }
@@ -126,7 +126,7 @@ private struct LifecycleRowView: View {
                 let track = Path(
                     roundedRect: CGRect(x: 0, y: size.height / 2 - 1, width: size.width, height: 2),
                     cornerRadius: 1)
-                context.fill(track, with: .color(PorcelainTokens.hairline))
+                context.fill(track, with: .color(FieldGuideTokens.hairline))
                 for interval in row.intervals {
                     guard let start = interval.start.date else { continue }
                     let end = interval.end?.date ?? .now
@@ -136,10 +136,10 @@ private struct LifecycleRowView: View {
                         roundedRect: CGRect(x: x0, y: size.height / 2 - 5, width: x1 - x0, height: 10),
                         cornerRadius: 5)
                     if interval.confident {
-                        context.fill(bar, with: .color(PorcelainTokens.cobalt))
+                        context.fill(bar, with: .color(FieldGuideTokens.interaction))
                     } else {
                         context.stroke(
-                            bar, with: .color(PorcelainTokens.cobalt),
+                            bar, with: .color(FieldGuideTokens.interaction),
                             style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
                     }
                 }
@@ -147,13 +147,13 @@ private struct LifecycleRowView: View {
                     guard let day = marker.date.date else { continue }
                     let x = position(day, in: size.width)
                     let dot = Path(ellipseIn: CGRect(x: x - 4, y: size.height / 2 - 4, width: 8, height: 8))
-                    context.fill(dot, with: .color(PorcelainTokens.graphite))
+                    context.fill(dot, with: .color(FieldGuideTokens.graphite))
                 }
             }
             .frame(height: 20)
             .accessibilityLabel("\(row.name): \(accessibilitySummary)")
         }
-        .padding(.vertical, PorcelainTokens.Space.xs)
+        .padding(.vertical, FieldGuideTokens.Space.xs)
     }
 
     private func position(_ date: Date, in width: CGFloat) -> CGFloat {
@@ -184,6 +184,6 @@ private struct LifecycleRowView: View {
             EntityTimelineView(timeline: PreviewFixtures.sampleTimeline, title: "Movements")
         }
         .listStyle(.plain)
-        .porcelainScreen()
+        .fieldGuideScreen()
     }
 }

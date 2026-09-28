@@ -19,7 +19,7 @@ struct WardrobeView: View {
                 LoadingIndicator.screen(label: "Loading wardrobe")
             }
         }
-        .porcelainScreen()
+        .fieldGuideScreen()
         .navigationTitle("\(ownerName)’s Wardrobe")
         .searchable(text: $searchText, prompt: "Search wardrobe")
         .task(id: ownerID) {
@@ -54,7 +54,7 @@ struct WardrobeView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, PorcelainTokens.Space.md)
+                        .padding(.horizontal, FieldGuideTokens.Space.md)
                     EntityShelfView(
                         descriptor: EntityCatalog[.product], rows: model.rows,
                         subtitleOverride: { $0.subtitle })

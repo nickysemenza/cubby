@@ -90,7 +90,7 @@ struct PhotoDiagnosticsView: View {
             Section { LoadingIndicator(label: stage) }
         case .failed(let message):
             Section {
-                Text(message).foregroundStyle(PorcelainTokens.destructive)
+                Text(message).foregroundStyle(FieldGuideTokens.destructive)
             }
         case .ready(let report):
             if let photo {
@@ -126,18 +126,18 @@ private struct IdentitySection: View {
         Section("Identity") {
             LabeledContent("Dimensions") {
                 Text("\(report.file.width)×\(report.file.height) \(report.file.contentType)")
-                    .font(Font.porcelainData)
+                    .font(Font.fieldGuideData)
             }
             LabeledContent("Captured") {
                 Text(report.file.capturedAt?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown")
             }
             LabeledContent("SHA-256") {
-                Text(report.identity.sha256).font(Font.porcelainCode).lineLimit(1)
+                Text(report.identity.sha256).font(Font.fieldGuideCode).lineLimit(1)
                     .truncationMode(.middle)
             }
             if let perceptualHash = report.identity.perceptualHash {
                 LabeledContent("Perceptual hash") {
-                    Text(perceptualHash).font(Font.porcelainCode)
+                    Text(perceptualHash).font(Font.fieldGuideCode)
                 }
             }
             if let fingerprint = report.identity.sourceFingerprint {
@@ -189,8 +189,8 @@ private struct ConfidenceBar: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Capsule().fill(PorcelainTokens.inset)
-                Capsule().fill(PorcelainTokens.cobalt)
+                Capsule().fill(FieldGuideTokens.inset)
+                Capsule().fill(FieldGuideTokens.interaction)
                     .frame(width: proxy.size.width * max(0, min(1, value)))
             }
         }
@@ -236,7 +236,7 @@ private struct RoutingVerdictRow: View {
                 if verdict.meetsMinimumScore {
                     Label("PASS", systemImage: "checkmark.circle.fill")
                         .labelStyle(.iconOnly)
-                        .foregroundStyle(PorcelainTokens.positive)
+                        .foregroundStyle(FieldGuideTokens.positive)
                         .accessibilityLabel("Meets minimum score")
                 }
             }
@@ -484,7 +484,7 @@ struct ImageDiagnosticsCompareView: View {
             Section { LoadingIndicator(label: "Analyzing photo…") }
         }
         if let error = model.error {
-            Section { Text(error).foregroundStyle(PorcelainTokens.destructive) }
+            Section { Text(error).foregroundStyle(FieldGuideTokens.destructive) }
         }
         if model.server != nil || model.device != nil {
             Section("Local Vision comparison") {
@@ -529,13 +529,13 @@ private struct CompareRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(Font.porcelainLabel).foregroundStyle(.secondary)
+            Text(label).font(Font.fieldGuideLabel).foregroundStyle(.secondary)
             HStack(alignment: .top, spacing: 12) {
                 CompareColumn(title: "Stored at import", value: server)
                 CompareColumn(title: "Analyzed locally now", value: device)
             }
         }
-        .foregroundStyle(differs ? PorcelainTokens.warning : PorcelainTokens.graphite)
+        .foregroundStyle(differs ? FieldGuideTokens.warning : FieldGuideTokens.graphite)
     }
 }
 

@@ -81,7 +81,7 @@ struct CubbyApp: App {
                         previewModel: RunReviewPreviewFixture.model())
                 }
                 .environment(model)
-                .tint(PorcelainTokens.cobalt)
+                .tint(FieldGuideTokens.interaction)
             } else {
                 normalAppContent
             }
@@ -93,7 +93,7 @@ struct CubbyApp: App {
     private var normalAppContent: some View {
         RootView()
             .environment(model)
-            .tint(PorcelainTokens.cobalt)
+            .tint(FieldGuideTokens.interaction)
             .task {
                 await model.restoreSession()
                 #if DEBUG && os(iOS)

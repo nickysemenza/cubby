@@ -76,7 +76,7 @@ struct EntityPickerSheet: View {
                                 .foregroundStyle(.secondary)
                                 .buttonStyle(.borderless)
                             }
-                            .frame(minHeight: PorcelainTokens.touchTarget)
+                            .frame(minHeight: FieldGuideTokens.touchTarget)
                         }
                     }
                 }
@@ -89,7 +89,7 @@ struct EntityPickerSheet: View {
                 }
             }
             .listStyle(.plain)
-            .porcelainScreen()
+            .fieldGuideScreen()
             .searchable(text: $term, prompt: "Search \(descriptor.plural)")
             .navigationTitle(multiple ? "Choose \(descriptor.plural)" : "Choose \(descriptor.singular)")
             #if os(iOS)
@@ -164,18 +164,18 @@ struct EntityPickerSheet: View {
                 dismiss()
             }
         } label: {
-            HStack(spacing: PorcelainTokens.Space.md) {
+            HStack(spacing: FieldGuideTokens.Space.md) {
                 Thumb(url: imageURL, size: 40, symbol: descriptor.sfSymbol)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(pick.title).foregroundStyle(PorcelainTokens.graphite)
-                    Text(pick.id).font(.porcelainCode).foregroundStyle(.secondary)
+                    Text(pick.title).foregroundStyle(FieldGuideTokens.graphite)
+                    Text(pick.id).font(.fieldGuideCode).foregroundStyle(.secondary)
                 }
                 Spacer()
                 if isSelected {
-                    Image(systemName: "checkmark").foregroundStyle(PorcelainTokens.cobalt)
+                    Image(systemName: "checkmark").foregroundStyle(FieldGuideTokens.interaction)
                 }
             }
-            .frame(minHeight: PorcelainTokens.touchTarget)
+            .frame(minHeight: FieldGuideTokens.touchTarget)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

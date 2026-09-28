@@ -439,7 +439,7 @@ struct PhotoDestinationSheet: View {
         case .failed(let message):
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Label(message, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(PorcelainTokens.destructive)
+                    .foregroundStyle(FieldGuideTokens.destructive)
                 Spacer()
                 Button("Retry") {
                     Task {
@@ -620,7 +620,7 @@ struct PhotoDestinationSheet: View {
                 if let error = manifest.errorMessage {
                     Label(error, systemImage: "exclamationmark.triangle")
                         .font(.caption)
-                        .foregroundStyle(PorcelainTokens.destructive)
+                        .foregroundStyle(FieldGuideTokens.destructive)
                 }
                 if !manifest.canCommit, !manifest.isCommitting, manifest.needsDestination.isEmpty,
                     let reason = manifest.commitDisabledReason

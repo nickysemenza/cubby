@@ -19,7 +19,7 @@ struct BinView: View {
         List {
             if let bin = session.currentBin {
                 BinPassHeader(progress: session.progress, breadcrumb: breadcrumbText(for: bin))
-                    .listRowBackground(PorcelainTokens.canvas)
+                    .listRowBackground(FieldGuideTokens.canvas)
                     .listRowSeparator(.hidden)
             }
             #if os(iOS)
@@ -34,7 +34,7 @@ struct BinView: View {
             footerRows
         }
         .listStyle(.plain)
-        .porcelainScreen()
+        .fieldGuideScreen()
         .refreshControl { await session.reload() }
         .sheet(isPresented: $showingStrays) {
             BinStraysSheet(session: session)
@@ -61,8 +61,8 @@ struct BinView: View {
         @ViewBuilder
         private var scannerRow: some View {
             if DataScannerViewController.isSupported {
-                RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                    .fill(PorcelainTokens.inset)
+                RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
+                    .fill(FieldGuideTokens.inset)
                     .aspectRatio(4.0 / 3.0, contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: 300)
                     // Floating labels come from the expected rows — a local match, never a
@@ -73,24 +73,25 @@ struct BinView: View {
                             annotate: { raw in session.annotation(forScanned: raw) }
                         )
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
+                    .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
                     .overlay(
-                        RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                            .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+                        RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
+                            .strokeBorder(
+                                FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
                     )
-                    .listRowBackground(PorcelainTokens.canvas)
+                    .listRowBackground(FieldGuideTokens.canvas)
                     .listRowSeparator(.hidden)
             }
         }
     #endif
 
     private var manualEntryRow: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Eyebrow("Scan or type a code")
-            HStack(spacing: PorcelainTokens.Space.sm) {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
                 TextField("Barcode, ISBN, or PRD-/LOC- label", text: $manualEntry)
                     .keyboardDismissBar()
-                    .font(.porcelainCode)
+                    .font(.fieldGuideCode)
                     .textFieldStyle(.plain)
                     .autocorrectionDisabled()
                     #if os(iOS)
@@ -98,26 +99,27 @@ struct BinView: View {
                         .textInputAutocapitalization(.characters)
                     #endif
                     .onSubmit(submitManualEntry)
-                    .padding(.horizontal, PorcelainTokens.Space.md)
-                    .frame(height: PorcelainTokens.touchTarget)
+                    .padding(.horizontal, FieldGuideTokens.Space.md)
+                    .frame(height: FieldGuideTokens.touchTarget)
                     .background(
-                        RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl)
-                            .fill(PorcelainTokens.surface)
+                        RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
+                            .fill(FieldGuideTokens.surface)
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl)
-                            .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+                        RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
+                            .strokeBorder(
+                                FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
                     )
                 Button("Submit", action: submitManualEntry)
-                    .font(.porcelainTitle)
+                    .font(.fieldGuideTitle)
                     .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.roundedRectangle(radius: PorcelainTokens.radiusControl))
-                    .tint(PorcelainTokens.cobalt)
-                    .frame(height: PorcelainTokens.touchTarget)
+                    .buttonBorderShape(.roundedRectangle(radius: FieldGuideTokens.radiusControl))
+                    .tint(FieldGuideTokens.interaction)
+                    .frame(height: FieldGuideTokens.touchTarget)
                     .disabled(manualEntry.isEmpty)
             }
         }
-        .listRowBackground(PorcelainTokens.canvas)
+        .listRowBackground(FieldGuideTokens.canvas)
         .listRowSeparator(.hidden)
     }
 
@@ -131,11 +133,11 @@ struct BinView: View {
     private var chipsRows: some View {
         if !session.chips.isEmpty {
             Eyebrow("Recent")
-                .listRowBackground(PorcelainTokens.canvas)
+                .listRowBackground(FieldGuideTokens.canvas)
                 .listRowSeparator(.hidden)
             ForEach(session.chips) { chip in
                 ScanChipRow(chip: chip)
-                    .porcelainListRow()
+                    .fieldGuideListRow()
             }
         }
     }
@@ -143,13 +145,13 @@ struct BinView: View {
     @ViewBuilder
     private var rowsSection: some View {
         Eyebrow("Expected in this bin")
-            .listRowBackground(PorcelainTokens.canvas)
+            .listRowBackground(FieldGuideTokens.canvas)
             .listRowSeparator(.hidden)
         if session.rows.isEmpty {
             Text("Nothing expected here.")
-                .font(.porcelainBody)
-                .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                .listRowBackground(PorcelainTokens.canvas)
+                .font(.fieldGuideBody)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                .listRowBackground(FieldGuideTokens.canvas)
                 .listRowSeparator(.hidden)
         } else {
             ForEach(session.rows) { state in
@@ -157,7 +159,7 @@ struct BinView: View {
                     session: session, row: state.row, resolution: state.resolution,
                     isDuplicate: state.isDuplicate
                 )
-                .porcelainListRow()
+                .fieldGuideListRow()
             }
         }
     }
@@ -170,18 +172,18 @@ struct BinView: View {
             } label: {
                 HStack {
                     Text("\(session.strays.count) found elsewhere · \(session.adoptions.count) bins to adopt")
-                        .font(.porcelainBody)
-                        .foregroundStyle(PorcelainTokens.graphite)
-                    Spacer(minLength: PorcelainTokens.Space.sm)
+                        .font(.fieldGuideBody)
+                        .foregroundStyle(FieldGuideTokens.graphite)
+                    Spacer(minLength: FieldGuideTokens.Space.sm)
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 }
-                .frame(minHeight: PorcelainTokens.touchTarget)
+                .frame(minHeight: FieldGuideTokens.touchTarget)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .porcelainListRow()
+            .fieldGuideListRow()
         }
     }
 
@@ -192,19 +194,19 @@ struct BinView: View {
             Text(
                 "This bin changed since you loaded it. Your decisions were kept — check the rows and press Done again."
             )
-            .font(.porcelainBody)
-            .foregroundStyle(PorcelainTokens.warning)
-            .listRowBackground(PorcelainTokens.canvas)
+            .font(.fieldGuideBody)
+            .foregroundStyle(FieldGuideTokens.warning)
+            .listRowBackground(FieldGuideTokens.canvas)
             .listRowSeparator(.hidden)
         case .needsReload:
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                 Text("This bin changed twice in a row. Reload to try again.")
-                    .font(.porcelainBody)
-                    .foregroundStyle(PorcelainTokens.destructive)
+                    .font(.fieldGuideBody)
+                    .foregroundStyle(FieldGuideTokens.destructive)
                 Button("Reload") { Task { await session.reload() } }
                     .buttonStyle(.bordered)
             }
-            .listRowBackground(PorcelainTokens.canvas)
+            .listRowBackground(FieldGuideTokens.canvas)
             .listRowSeparator(.hidden)
         case nil:
             EmptyView()
@@ -215,9 +217,9 @@ struct BinView: View {
     private var errorRow: some View {
         if let lastError = session.lastError {
             Text(lastError)
-                .font(.porcelainLabel)
-                .foregroundStyle(PorcelainTokens.destructive)
-                .listRowBackground(PorcelainTokens.canvas)
+                .font(.fieldGuideLabel)
+                .foregroundStyle(FieldGuideTokens.destructive)
+                .listRowBackground(FieldGuideTokens.canvas)
                 .listRowSeparator(.hidden)
         }
     }
@@ -225,9 +227,9 @@ struct BinView: View {
     @ViewBuilder
     private var footerRows: some View {
         Text(unresolvedText)
-            .font(.porcelainLabel)
-            .foregroundStyle(PorcelainTokens.graphiteSecondary)
-            .listRowBackground(PorcelainTokens.canvas)
+            .font(.fieldGuideLabel)
+            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+            .listRowBackground(FieldGuideTokens.canvas)
             .listRowSeparator(.hidden)
 
         Button {
@@ -236,10 +238,10 @@ struct BinView: View {
             Text("Done with bin").frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
-        .tint(PorcelainTokens.cobalt)
-        .frame(height: PorcelainTokens.touchTarget)
+        .tint(FieldGuideTokens.interaction)
+        .frame(height: FieldGuideTokens.touchTarget)
         .disabled(session.busy || session.stale == .needsReload)
-        .listRowBackground(PorcelainTokens.canvas)
+        .listRowBackground(FieldGuideTokens.canvas)
         .listRowSeparator(.hidden)
 
         Button {
@@ -248,9 +250,9 @@ struct BinView: View {
             Text("Skip").frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
-        .frame(height: PorcelainTokens.touchTarget)
+        .frame(height: FieldGuideTokens.touchTarget)
         .disabled(session.busy)
-        .listRowBackground(PorcelainTokens.canvas)
+        .listRowBackground(FieldGuideTokens.canvas)
         .listRowSeparator(.hidden)
     }
 
@@ -268,27 +270,27 @@ private struct BinPassHeader: View {
     let breadcrumb: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Eyebrow("Bin \(progress.binIndex) of \(progress.binTotal)")
             Text(progress.binName)
-                .font(.porcelainHeadline)
-                .foregroundStyle(PorcelainTokens.graphite)
+                .font(.fieldGuideHeadline)
+                .foregroundStyle(FieldGuideTokens.graphite)
                 .lineLimit(1)
             if !breadcrumb.isEmpty {
                 Text(breadcrumb)
-                    .font(.porcelainLabel)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .font(.fieldGuideLabel)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     .lineLimit(1)
             }
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    Rectangle().fill(PorcelainTokens.hairline)
+                    Rectangle().fill(FieldGuideTokens.hairline)
                     Rectangle()
-                        .fill(PorcelainTokens.cobalt)
+                        .fill(FieldGuideTokens.interaction)
                         .frame(width: geometry.size.width * fraction)
                 }
             }
-            .frame(height: PorcelainTokens.hairlineWidth * 3)
+            .frame(height: FieldGuideTokens.hairlineWidth * 3)
         }
     }
 

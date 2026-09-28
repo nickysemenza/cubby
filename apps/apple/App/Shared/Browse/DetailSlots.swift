@@ -69,7 +69,7 @@ private struct ProductJourneySummaryView: View {
     private var ownPhotos: Int { product.attachments.filter { $0.source == .own }.count }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             Text("Finish this item").font(.subheadline.weight(.semibold))
             Label(
                 ownPhotos == 0 ? "Add an item photo" : "\(ownPhotos) own photos",
@@ -85,7 +85,7 @@ private struct ProductJourneySummaryView: View {
         }
         .font(.caption)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, PorcelainTokens.Space.xs)
+        .padding(.top, FieldGuideTokens.Space.xs)
     }
 }
 
@@ -138,7 +138,7 @@ private struct MealNutritionSlot: View {
     }
 
     private func failure(_ message: String, _ nutrition: MealNutritionModel) -> some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Text(message).font(.callout).foregroundStyle(.secondary)
             if nutrition.isLoading { LoadingIndicator(label: "Retrying") }
             Button("Retry") { Task { await nutrition.refresh() } }.disabled(nutrition.isLoading)

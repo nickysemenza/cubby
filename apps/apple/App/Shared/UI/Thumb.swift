@@ -18,8 +18,8 @@ struct Thumb: View {
     @State private var useCanonicalURL = false
 
     var body: some View {
-        RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl)
-            .fill(PorcelainTokens.inset)
+        RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
+            .fill(FieldGuideTokens.inset)
             .overlay {
                 if let url {
                     LazyImage(request: request(for: url, transformed: !useCanonicalURL)) { state in
@@ -39,10 +39,10 @@ struct Thumb: View {
                 }
             }
             .overlay(
-                RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl)
-                    .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+                RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
+                    .strokeBorder(FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
             )
-            .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl))
+            .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
             .frame(width: size, height: size)
             .accessibilityHidden(true)
             .onChange(of: url) {
@@ -63,16 +63,16 @@ struct Thumb: View {
     private var glyph: some View {
         Image(systemName: symbol)
             .font(.system(size: size * 0.34))
-            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
     }
 }
 
 #Preview("Thumbs") {
-    HStack(spacing: PorcelainTokens.Space.md) {
+    HStack(spacing: FieldGuideTokens.Space.md) {
         Thumb(url: nil, size: 56, symbol: "shippingbox")
         Thumb(url: nil, size: 40, symbol: "mappin.and.ellipse")
         Thumb(url: nil, size: 96, symbol: "fork.knife")
     }
-    .padding(PorcelainTokens.Space.lg)
-    .background(PorcelainTokens.canvas)
+    .padding(FieldGuideTokens.Space.lg)
+    .background(FieldGuideTokens.canvas)
 }

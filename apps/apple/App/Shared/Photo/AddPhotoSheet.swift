@@ -19,10 +19,10 @@ struct AddPhotoSheet: View {
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xl) {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xl) {
                     switch capture.phase {
                     case .picking:
-                        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                             Eyebrow("Photo")
                             PhotoSourceButtons(maxSelectionCount: 1, reviewsUploads: false) { selections in
                                 if let selection = selections.first {
@@ -32,7 +32,7 @@ struct AddPhotoSheet: View {
                         }
                     case .preparing:
                         Panel {
-                            HStack(spacing: PorcelainTokens.Space.md) {
+                            HStack(spacing: FieldGuideTokens.Space.md) {
                                 if let progress = capture.preparationProgress {
                                     ProgressView(value: progress, total: 1)
                                         .frame(width: 64)
@@ -40,17 +40,17 @@ struct AddPhotoSheet: View {
                                     LoadingIndicator(label: "Preparing photo").controlSize(.small)
                                 }
                                 Text("Preparing the full-quality photo…")
-                                    .font(.porcelainBody)
-                                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                    .font(.fieldGuideBody)
+                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                             }
                         }
                     case .lifting:
                         Panel {
-                            HStack(spacing: PorcelainTokens.Space.md) {
+                            HStack(spacing: FieldGuideTokens.Space.md) {
                                 LoadingIndicator(label: "Lifting subject").controlSize(.small)
                                 Text("Lifting the subject…")
-                                    .font(.porcelainBody)
-                                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                    .font(.fieldGuideBody)
+                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                             }
                         }
                     case .ready, .uploading, .failed:
@@ -58,47 +58,47 @@ struct AddPhotoSheet: View {
                         options
                         if case .uploading(let step) = capture.phase {
                             Panel {
-                                HStack(spacing: PorcelainTokens.Space.md) {
+                                HStack(spacing: FieldGuideTokens.Space.md) {
                                     LoadingIndicator(label: Self.label(for: step)).controlSize(.small)
                                     Text(Self.label(for: step))
-                                        .font(.porcelainBody)
-                                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                        .font(.fieldGuideBody)
+                                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                                 }
                             }
                         }
                         if preparingUpload {
                             Panel {
-                                HStack(spacing: PorcelainTokens.Space.md) {
+                                HStack(spacing: FieldGuideTokens.Space.md) {
                                     LoadingIndicator(label: "Checking final photo").controlSize(.small)
                                     Text("Checking the final photo…")
-                                        .font(.porcelainBody)
-                                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                        .font(.fieldGuideBody)
+                                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                                 }
                             }
                         }
                         if case .failed(let message) = capture.phase {
                             Text(message)
-                                .font(.porcelainLabel)
-                                .foregroundStyle(PorcelainTokens.destructive)
+                                .font(.fieldGuideLabel)
+                                .foregroundStyle(FieldGuideTokens.destructive)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     case .done:
                         Panel {
-                            HStack(spacing: PorcelainTokens.Space.md) {
+                            HStack(spacing: FieldGuideTokens.Space.md) {
                                 Image(systemName: "checkmark.circle")
-                                    .foregroundStyle(PorcelainTokens.cobalt)
+                                    .foregroundStyle(FieldGuideTokens.interaction)
                                 Text("Added to \(capture.entityTitle)")
-                                    .font(.porcelainTitle)
-                                    .foregroundStyle(PorcelainTokens.graphite)
+                                    .font(.fieldGuideTitle)
+                                    .foregroundStyle(FieldGuideTokens.graphite)
                             }
                         }
                     }
                 }
-                .padding(PorcelainTokens.Space.lg)
-                .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)
+                .padding(FieldGuideTokens.Space.lg)
+                .frame(maxWidth: FieldGuideTokens.readingWidth, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
-            .porcelainScreen()
+            .fieldGuideScreen()
             .navigationTitle("Add photo")
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
@@ -171,7 +171,7 @@ struct AddPhotoSheet: View {
 
     @ViewBuilder
     private var preview: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Eyebrow(
                 capture.lifted?.foundSubject == true
                     ? (capture.useLifted ? "Lifted subject" : "Original") : "Photo")
@@ -187,30 +187,31 @@ struct AddPhotoSheet: View {
                     )
                     .frame(maxWidth: .infinity, maxHeight: 320)
                     .background(checkerboard)
-                    .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
+                    .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
                     .overlay(
-                        RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                            .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+                        RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
+                            .strokeBorder(
+                                FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
                     )
                 }.buttonStyle(.plain).accessibilityLabel("Preview selected photo")
                     .accessibilityIdentifier("photo.add.preview")
             }
             if capture.lifted?.foundSubject == false {
                 Text("No subject found; the photo goes up as it is.")
-                    .font(.porcelainLabel)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .font(.fieldGuideLabel)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
             }
         }
     }
 
     private var checkerboard: some View {
         // A visible ground for a transparent lift; white otherwise.
-        PorcelainTokens.inset
+        FieldGuideTokens.inset
     }
 
     @ViewBuilder
     private var options: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Eyebrow("Options")
             Panel(padding: 0, spacing: 0) {
                 if capture.lifted == nil {
@@ -218,9 +219,9 @@ struct AddPhotoSheet: View {
                         capture.prepareLift()
                     } label: {
                         Label("Lift the subject", systemImage: "person.crop.rectangle")
-                            .font(.porcelainBody)
+                            .font(.fieldGuideBody)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(PorcelainTokens.Space.md)
+                            .padding(FieldGuideTokens.Space.md)
                     }
                     .buttonStyle(.plain)
                     .disabled(!capture.canLift)
@@ -233,27 +234,27 @@ struct AddPhotoSheet: View {
                         Text("Original").tag(false)
                     }
                     .pickerStyle(.segmented)
-                    .padding(PorcelainTokens.Space.md)
+                    .padding(FieldGuideTokens.Space.md)
                     PanelDivider()
                     Text("Preview only. Cubby uploads the original and stores the cutout with it.")
-                        .font(.porcelainLabel)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                        .padding(PorcelainTokens.Space.md)
+                        .font(.fieldGuideLabel)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                        .padding(FieldGuideTokens.Space.md)
                     PanelDivider()
                 }
                 if capture.canMakeCover {
                     Toggle("Make it the cover", isOn: $capture.makeCover)
-                        .font(.porcelainBody)
-                        .padding(PorcelainTokens.Space.md)
+                        .font(.fieldGuideBody)
+                        .padding(FieldGuideTokens.Space.md)
                     PanelDivider()
                 }
                 Button {
                     capture.retake()
                 } label: {
                     Label("Choose another", systemImage: "arrow.uturn.backward")
-                        .font(.porcelainBody)
+                        .font(.fieldGuideBody)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(PorcelainTokens.Space.md)
+                        .padding(FieldGuideTokens.Space.md)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("photo.add.chooseAnother")
