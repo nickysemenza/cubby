@@ -1,4 +1,5 @@
 import { NoneValue } from "~/components/ui/none-value";
+import { savedSentryEventId, sentryEventUrl } from "~/lib/error-diagnostics";
 
 import type { EntityDetailFieldRenderers } from "./index";
 
@@ -7,6 +8,7 @@ export const runDetailFields = {
     const error = run.dispatchError;
     if (!error) return { value: <NoneValue /> };
     const [summary] = error.split("\n", 1);
+    const sentryEventId = savedSentryEventId(error);
     return {
       value: (
         <div className="w-full min-w-0 text-sm">
@@ -16,17 +18,16 @@ export const runDetailFields = {
           >
             {summary}
           </p>
-          <details className="mt-1 min-w-0">
-            <summary className="w-fit cursor-pointer text-muted-foreground hover:text-foreground">
-              Show full failure
-            </summary>
-            <pre
-              data-testid="run-failure-full"
-              className="mt-2 max-h-80 max-w-full overflow-auto rounded-md bg-muted/40 p-2 font-mono text-xs break-words whitespace-pre-wrap"
+          {sentryEventId ? (
+            <a
+              className="mt-1 inline-block text-primary hover:underline"
+              href={sentryEventUrl(sentryEventId)}
+              target="_blank"
+              rel="noreferrer"
             >
-              {error}
-            </pre>
-          </details>
+              View in Sentry
+            </a>
+          ) : null}
         </div>
       ),
     };

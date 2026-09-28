@@ -830,6 +830,7 @@ export async function seedFailedVendorMailSearchRun(page: Page, name: string) {
     .limit(1);
   if (!savedRun) throw new Error("Synthetic Gmail search Run was not saved");
   await runVendorMailSearchJob(db, savedRun.id, {
+    reportError: () => "ffffffffffffffffffffffffffffffff",
     search: async () => {
       const provider = Object.assign(new Error("Synthetic upstream failure"), {
         status: 503,

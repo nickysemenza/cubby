@@ -22,7 +22,7 @@ import {
 describe("Vendor Gmail search jobs", () => {
   const ctx = withTestDb();
 
-  it("keeps a rate-limited page queued and records the model and stack for retry", async () => {
+  it("keeps a rate-limited page queued with a concise cause for retry", async () => {
     await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic member",
       kind: "member",
@@ -76,7 +76,7 @@ describe("Vendor Gmail search jobs", () => {
         expect.objectContaining({ phase: "rate_limited" }),
       ]),
     });
-    expect(progress?.gmail?.error).toContain("synthetic.ts:12:3");
+    expect(progress?.gmail?.error).not.toContain("synthetic.ts:12:3");
     expect(progress?.gmail?.error).toContain("HTTP 429");
   });
 
@@ -338,19 +338,26 @@ describe("Vendor Gmail search jobs", () => {
     const olderTask = published[2]?.[0];
     if (!olderTask || olderTask.kind !== "vendor-mail.search")
       throw new Error("test setup: missing older Gmail search task");
+    const captured = vi.fn(() => "ffffffffffffffffffffffffffffffff");
     await expect(
       runVendorMailSearchJob(ctx.db, olderTask.jobId, {
         search: async () => {
           throw new Error("Synthetic permanent search failure");
         },
+        reportError: captured,
       }),
     ).resolves.toBe("succeeded");
+    expect(captured).toHaveBeenCalledOnce();
     expect(
       await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor),
     ).toMatchObject({
       status: "failed",
       error: expect.stringContaining("Synthetic permanent search failure"),
     });
+    expect(
+      (await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor))
+        ?.error,
+    ).toContain("Sentry event: ffffffffffffffffffffffffffffffff");
     const [failedRun] = await getDb(ctx.db)
       .select({ status: run.status, failureCode: run.failureCode })
       .from(run)

@@ -180,14 +180,12 @@ test("shows a failed Gmail search's saved reason on its Run page", async ({
   await expect(page.getByText(/model: synthetic-model/u).first()).toBeVisible();
   const failurePreview = page.getByTestId("run-failure-preview");
   await expect(failurePreview).toHaveCSS("-webkit-line-clamp", "2");
-  await page.getByText("Show full failure").click();
-  await expect(page.getByTestId("run-failure-full")).toContainText(
-    "synthetic-provider.ts:12:3",
-  );
-  await page.getByText("Technical details").click();
+  await expect(page.getByText("Show full failure")).toHaveCount(0);
+  await expect(page.getByText("Technical details")).toHaveCount(0);
   await expect(
-    page.getByTestId("detail-primary-stack").locator("pre"),
-  ).toBeVisible();
+    page.getByRole("link", { name: "View in Sentry" }).first(),
+  ).toHaveAttribute("href", /query=ffffffffffffffffffffffffffffffff/u);
+  await expect(page.getByText("synthetic-provider.ts:12:3")).toHaveCount(0);
 });
 
 test("updates a Run's progress live and retains its completed search summary", async ({
