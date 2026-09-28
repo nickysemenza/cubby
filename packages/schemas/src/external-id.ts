@@ -203,3 +203,49 @@ export const externalIdOut = z.object({
 });
 
 export type ExternalIdOut = z.infer<typeof externalIdOut>;
+
+/**
+ * Every identifier kind the generic `EntityExternalId` table accepts, and the
+ * entity kinds each may attach to. The generator emits the table's
+ * `(entityKind, kind)` CHECK from this map. `externalIdKind` above stays the
+ * Product-facing subset that product editors and AI suggestions offer.
+ *
+ * `primarySlot`: whether one identifier per `(entity, source, kind)` is the
+ * primary. Settlement references are plain references — one card charge can
+ * carry several order ids — so they have no primary.
+ *
+ * Every kind is globally unique among live rows on `(source, kind,
+ * externalId)`: an identifier names at most one live entity.
+ */
+export const EXTERNAL_ID_KINDS = {
+  asin: { entities: ["product"], primarySlot: true },
+  retailer_sku: { entities: ["product"], primarySlot: true },
+  internet_number: { entities: ["product"], primarySlot: true },
+  item_number: { entities: ["product"], primarySlot: true },
+  catalog_number: { entities: ["product"], primarySlot: true },
+  gtin_14: { entities: ["product"], primarySlot: true },
+  legacy_unspecified: { entities: ["product"], primarySlot: true },
+  settlement_ref: { entities: ["financialTransaction"], primarySlot: false },
+  page: {
+    entities: ["expense", "task", "project", "recipe"],
+    primarySlot: true,
+  },
+  folder: { entities: ["project"], primarySlot: true },
+} as const satisfies Record<
+  string,
+  { entities: readonly string[]; primarySlot: boolean }
+>;
+
+export type EntityExternalIdKind = keyof typeof EXTERNAL_ID_KINDS;
+
+export const entityExternalIdKind = z.enum(
+  // SAFETY: Object.keys of a non-empty const literal returns exactly its declared keys.
+  Object.keys(EXTERNAL_ID_KINDS) as [
+    EntityExternalIdKind,
+    ...EntityExternalIdKind[],
+  ],
+);
+
+/** Sources that are not vendors but still name where an identifier came from. */
+export const NOTION_SOURCE = "notion";
+export const GOOGLE_DRIVE_SOURCE = "google-drive";
