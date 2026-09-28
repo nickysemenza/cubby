@@ -1,3 +1,7 @@
+import { createHash } from "node:crypto";
+import { globSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+
 /**
  * Every file whose contents decide the physical test-database schema. The
  * IntegreSQL template (and the E2E template) is keyed by a hash of these, so a
@@ -14,3 +18,25 @@ export const schemaTemplateInputs = [
   "./tooling/db-migrate.ts",
   "./tooling/db-extensions.ts",
 ];
+
+/**
+ * Hash the template inputs in sorted path order. IntegreSQL's own
+ * `hashFiles` concatenates file hashes in fast-glob traversal order, which is
+ * not stable across processes once a pattern spans subdirectories
+ * (`drizzle/meta`, `drizzle/transform`): the global setup and a test worker
+ * then disagree on the template hash and every release 404s.
+ */
+export function hashSchemaTemplateInputs(
+  patterns: readonly string[] = schemaTemplateInputs,
+): string {
+  const files = [
+    ...new Set(patterns.flatMap((pattern) => globSync(pattern))),
+  ].sort();
+  const hash = createHash("sha1");
+  for (const file of files) {
+    const path = join(process.cwd(), file);
+    if (!statSync(path).isFile()) continue;
+    hash.update(file).update("\0").update(readFileSync(path)).update("\0");
+  }
+  return hash.digest("hex");
+}

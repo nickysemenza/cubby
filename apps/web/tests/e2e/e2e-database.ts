@@ -1,5 +1,8 @@
 import { testServiceConfig } from "../../tooling/test-service-config";
-import { schemaTemplateInputs } from "../../tooling/schema-template-inputs";
+import {
+  hashSchemaTemplateInputs,
+  schemaTemplateInputs,
+} from "../../tooling/schema-template-inputs";
 import { taxonomyRootFixtures } from "../../tooling/product-category-fixtures";
 import {
   IntegreSQLClient,
@@ -42,7 +45,7 @@ async function templateContext() {
   const integreSQL = new IntegreSQLClient({
     url: testServiceConfig().url,
   });
-  const hash = await integreSQL.hashFiles([
+  const hash = hashSchemaTemplateInputs([
     ...schemaTemplateInputs,
     // Browser acceptance and Vitest run concurrently in `test:all`. A distinct
     // template prevents either process's template initialization/reset cycle

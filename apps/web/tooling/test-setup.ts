@@ -1,5 +1,5 @@
 import { testServiceConfig } from "./test-service-config";
-import { schemaTemplateInputs } from "./schema-template-inputs";
+import { hashSchemaTemplateInputs } from "./schema-template-inputs";
 import { taxonomyRootFixtures } from "./product-category-fixtures";
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
@@ -138,7 +138,7 @@ export const TEST_ACTOR: ActorContext = buildActorContext(
 );
 
 async function getTemplateHash(): Promise<string> {
-  return getIntegreSQL().hashFiles(schemaTemplateInputs);
+  return hashSchemaTemplateInputs();
 }
 
 export async function setup() {
