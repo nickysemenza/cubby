@@ -2396,7 +2396,8 @@ export const orderMailAttachment = pgTable(
     filename: text("filename").notNull(),
     mimeType: text("mimeType").notNull(),
     checksum: text("checksum").notNull(),
-    pendingDataBase64Url: text("pendingDataBase64Url"),
+    // Object-storage key (`order-mail-attachment/<id>`) of the pending bytes.
+    pendingObjectKey: text("pendingObjectKey"),
     imageId: uuid("imageId").references(() => image.id),
     ...baseTimestamps(),
   },

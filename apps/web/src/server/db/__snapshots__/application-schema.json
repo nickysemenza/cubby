@@ -14326,8 +14326,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "pendingDataBase64Url": {
-          "name": "pendingDataBase64Url",
+        "pendingObjectKey": {
+          "name": "pendingObjectKey",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -16917,15 +16917,15 @@
           "primaryKey": false,
           "notNull": false
         },
-        "entityKind": {
-          "name": "entityKind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "entityId": {
           "name": "entityId",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "entityKind": {
+          "name": "entityKind",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
