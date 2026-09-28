@@ -363,7 +363,7 @@ describe("Gmail order mail processing", () => {
     const attachments = await getDb(ctx.db)
       .select({ id: entityAttachment.id })
       .from(entityAttachment)
-      .where(eq(entityAttachment.subjectEntityId, target.id));
+      .where(eq(entityAttachment.entityId, target.id));
     expect(attachments).toEqual([]);
   });
 
@@ -796,7 +796,7 @@ describe("Gmail order mail processing", () => {
         .from(runFinding)
         .where(
           and(
-            eq(runFinding.targetId, target.id),
+            eq(runFinding.entityId, target.id),
             eq(runFinding.kind, "refund_unbooked"),
           ),
         );
@@ -870,7 +870,7 @@ describe("Gmail order mail processing", () => {
         .from(runFinding)
         .where(
           and(
-            eq(runFinding.targetId, target.id),
+            eq(runFinding.entityId, target.id),
             eq(runFinding.kind, "refund_unbooked"),
           ),
         );
@@ -920,7 +920,7 @@ describe("Gmail order mail processing", () => {
         .from(entityAttachment)
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, purchaseId),
+            eq(entityAttachment.entityId, purchaseId),
             notDeleted(entityAttachment),
           ),
         );

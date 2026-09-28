@@ -18,7 +18,7 @@ describe("getEmbeddingReadiness", () => {
     await expect(
       getEmbeddingReadiness(
         undefined,
-        { entityType: "product", entityId: "PRD-ABCD" },
+        { entityKind: "product", entityId: "PRD-ABCD" },
         unavailableEmbeddings,
       ),
     ).resolves.toBe("unavailable");

@@ -10,17 +10,17 @@ import { groupSearchCandidates } from "./search-grouping.service";
 import type { InternalSearchCandidate } from "./search.service";
 
 const candidate = (
-  entityType: SearchableEntity,
+  entityKind: SearchableEntity,
   seed: string,
   options: {
     matchField?: SearchMatchField;
     matchKind?: SearchMatchKind;
   } = {},
 ): InternalSearchCandidate => ({
-  id: testShortcode(entityType, seed),
-  entityId: testEntityId(entityType, seed),
-  entityType,
-  title: `${entityType} ${seed}`,
+  id: testShortcode(entityKind, seed),
+  entityId: testEntityId(entityKind, seed),
+  entityKind,
+  title: `${entityKind} ${seed}`,
   subtitle: null,
   typeHint: null,
   matchKind: options.matchKind ?? "text",
@@ -30,7 +30,7 @@ const candidate = (
 });
 
 const candidateKey = (value: InternalSearchCandidate) =>
-  `${value.entityType}:${value.entityId}`;
+  `${value.entityKind}:${value.entityId}`;
 
 const relations = (
   entries: ReadonlyArray<

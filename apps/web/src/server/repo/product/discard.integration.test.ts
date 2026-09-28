@@ -154,7 +154,7 @@ describe("discardProductUnits", () => {
       .from(entityEmbedding)
       .where(
         and(
-          eq(entityEmbedding.entityType, "inventory"),
+          eq(entityEmbedding.entityKind, "inventory"),
           eq(entityEmbedding.entityId, entry.entityId),
           isNull(entityEmbedding.deletedAt),
         ),

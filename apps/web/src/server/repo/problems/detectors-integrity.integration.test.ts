@@ -12,6 +12,7 @@ import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
   entityAttachment,
+  entityIdentity,
   expenseAttribution,
   financialTransactionAllocation,
   gardenEntryPlanting,
@@ -355,21 +356,32 @@ const mkImportPreparedOrder = async (
   });
 };
 
+const entityKindOf = async (db: Database, id: string) => {
+  const [row] = await getDb(db)
+    .select({ kind: entityIdentity.kind })
+    .from(entityIdentity)
+    .where(eq(entityIdentity.id, id));
+  if (!row) throw new Error(`No Entity row for ${id}`);
+  return row.kind;
+};
+
+const runTargetKindOf = async (db: Database, id: string) => {
+  const kind = await entityKindOf(db, id);
+  if (kind !== "purchase" && kind !== "product" && kind !== "image")
+    throw new Error(`A run target cannot name a ${kind}`);
+  return kind;
+};
+
 const mkRunTarget = async (
   db: Database,
-  values: Partial<
-    Pick<
-      typeof runTarget.$inferInsert,
-      "purchaseId" | "productId" | "imageId" | "vendorAccountId" | "runId"
-    >
-  >,
+  values: Pick<typeof runTarget.$inferInsert, "entityId" | "entityKind"> &
+    Partial<Pick<typeof runTarget.$inferInsert, "vendorAccountId" | "runId">>,
 ) => {
   const run = values.runId ? { id: values.runId } : await mkRun(db);
   return insertAndReturn(db, runTarget, {
     runId: run.id,
-    purchaseId: values.purchaseId,
-    productId: values.productId,
-    imageId: values.imageId,
+    entityId: values.entityId,
+    entityKind: values.entityKind,
     vendorAccountId: values.vendorAccountId,
     targetFingerprint: uniq("target-fingerprint"),
   });
@@ -536,8 +548,13 @@ const SOURCE_FACTORIES = {
   "ImportPreparedOrder.screenshotImageId": (db, targetId) =>
     mkImportPreparedOrder(db, { screenshotImageId: targetId }),
 
-  "RunTarget.imageId": (db, targetId) =>
-    mkRunTarget(db, { imageId: parseEntityId("image", targetId) }),
+  // One factory serves the image, product and purchase targets: the target's
+  // own stored kind is what the row must carry.
+  "RunTarget.entityId": async (db, targetId) =>
+    mkRunTarget(db, {
+      entityId: targetId,
+      entityKind: await runTargetKindOf(db, targetId),
+    }),
 
   "ImportHunt.receiptImageId": (db, targetId) =>
     mkImportHunt(db, { receiptImageId: targetId }),
@@ -576,8 +593,8 @@ const SOURCE_FACTORIES = {
     const run = await mkRun(db);
     return insertAndReturn(db, runFinding, {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
-      targetKind: "run",
-      targetId: run.id,
+      entityKind: "run",
+      entityId: run.id,
       kind: "liveness-fixture",
       summary: "Liveness fixture",
       evidenceFingerprint: uniq("finding"),
@@ -688,13 +705,11 @@ const SOURCE_FACTORIES = {
     });
   },
 
-  "RunTarget.productId": (db, targetId) =>
-    mkRunTarget(db, { productId: parseEntityId("product", targetId) }),
-
   "RunTarget.vendorAccountId": (db, targetId) =>
     mkProduct(db).then((product) =>
       mkRunTarget(db, {
-        productId: product.id,
+        entityId: product.id,
+        entityKind: "product",
         vendorAccountId: parseEntityId("vendorAccount", targetId),
       }),
     ),
@@ -1380,7 +1395,8 @@ const SOURCE_FACTORIES = {
     const product = await mkProduct(db);
     return mkRunTarget(db, {
       runId: parseEntityId("run", targetId),
-      productId: product.id,
+      entityId: product.id,
+      entityKind: "product",
     });
   },
 
@@ -1393,7 +1409,8 @@ const SOURCE_FACTORIES = {
   "RunEvidence.runId": async (db, targetId) => {
     const product = await mkProduct(db);
     const evidenceTarget = await mkRunTarget(db, {
-      productId: product.id,
+      entityId: product.id,
+      entityKind: "product",
     });
     return insertAndReturn(db, runEvidence, {
       runId: parseEntityId("run", targetId),
@@ -1476,8 +1493,8 @@ const SOURCE_FACTORIES = {
     return insertAndReturn(db, runFinding, {
       runId: parseEntityId("run", targetId),
       ledgerPartyId: party.id,
-      targetKind: "run",
-      targetId,
+      entityKind: "run",
+      entityId: targetId,
       kind: "liveness-fixture",
       summary: "Liveness fixture",
       evidenceFingerprint: uniq("finding"),
@@ -1530,15 +1547,17 @@ const SOURCE_FACTORIES = {
   "EntityAttachment.imageId": async (db, targetId) => {
     const p = await mkProduct(db);
     return insertAndReturn(db, entityAttachment, {
-      subjectEntityId: p.id,
+      entityId: p.id,
+      entityKind: "product",
       imageId: targetId,
     });
   },
 
-  "EntityAttachment.subjectEntityId": async (db, targetId) => {
+  "EntityAttachment.entityId": async (db, targetId) => {
     const img = await mkImage(db);
     return insertAndReturn(db, entityAttachment, {
-      subjectEntityId: targetId,
+      entityId: targetId,
+      entityKind: await entityKindOf(db, targetId),
       imageId: img.id,
     });
   },

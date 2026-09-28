@@ -439,7 +439,8 @@ describe("purchase repository — mergePurchases", () => {
       status: "UPLOADED",
     });
     const join = await insertAndReturn(ctx.db, entityAttachment, {
-      subjectEntityId: purchaseIdUuid,
+      entityId: purchaseIdUuid,
+      entityKind: "purchase",
       imageId: img.id,
     });
     return { imageId: img.id, joinId: join.id };
@@ -500,7 +501,7 @@ describe("purchase repository — mergePurchases", () => {
     // loser's own row tombstoned in the same transaction.
     const keeperDocs = await getDb(ctx.db).query.entityAttachment.findMany({
       where: and(
-        eq(entityAttachment.subjectEntityId, keeperUuid),
+        eq(entityAttachment.entityId, keeperUuid),
         eq(entityAttachment.imageId, loserDoc.imageId),
       ),
     });
@@ -584,7 +585,7 @@ describe("purchase repository — mergePurchases", () => {
         .from(auditLog)
         .where(
           and(
-            eq(auditLog.entityType, "purchase"),
+            eq(auditLog.entityKind, "purchase"),
             eq(auditLog.entityId, loserId),
             eq(auditLog.action, "delete"),
           ),
@@ -690,7 +691,8 @@ describe("purchase repository — deletion cascades", () => {
       status: "UPLOADED",
     });
     const join = await insertAndReturn(ctx.db, entityAttachment, {
-      subjectEntityId: purchaseId,
+      entityId: purchaseId,
+      entityKind: "purchase",
       imageId: document.id,
     });
 
@@ -725,7 +727,7 @@ describe("purchase repository — deletion cascades", () => {
       .from(auditLog)
       .where(
         and(
-          eq(auditLog.entityType, "purchase"),
+          eq(auditLog.entityKind, "purchase"),
           eq(auditLog.entityId, purchaseId),
           eq(auditLog.action, "delete"),
         ),
@@ -757,7 +759,8 @@ describe("purchase repository — deletion cascades", () => {
       status: "UPLOADED",
     });
     const join = await insertAndReturn(ctx.db, entityAttachment, {
-      subjectEntityId: chargeUuid,
+      entityId: chargeUuid,
+      entityKind: "purchase",
       imageId: img.id,
     });
 
@@ -800,7 +803,7 @@ describe("purchase repository — deletion cascades", () => {
  * (batched onto the same `lookupShortcodes` round-trip that already resolves
  * the entry's own `entityId`), which is the only fix that also covers history
  * instead of just new writes. See `EDGE_KEY_TARGET_ENTITY` in
- * `server/db/entity-incoming-edges.ts` — the (entityType, fieldName) → target
+ * `server/db/entity-incoming-edges.ts` — the (entityKind, fieldName) → target
  * entity map this derives from `INCOMING_EDGES` rather than a second,
  * hand-kept table.
  */

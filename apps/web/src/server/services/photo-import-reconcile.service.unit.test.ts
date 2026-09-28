@@ -22,12 +22,12 @@ const uploadedImage: ImageWithEntity = {
   useOriginal: false,
   createdAt: new Date("2026-09-17T00:00:00Z"),
   updatedAt: new Date("2026-09-17T00:00:00Z"),
-  entityType: "PRODUCT",
+  entityKind: "PRODUCT",
   entityId: productA,
   entityName: "Example",
   associations: [
     {
-      entityType: "product",
+      entityKind: "product",
       entityId: productA,
       entityName: "Example",
       role: "attachment",

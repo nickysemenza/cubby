@@ -350,7 +350,7 @@ describe("addInventoryEntries", () => {
 
     const changes = await getDb(ctx.db).query.auditLog.findMany({
       where: and(
-        eq(auditLog.entityType, "inventory"),
+        eq(auditLog.entityKind, "inventory"),
         eq(auditLog.entityId, existingId),
       ),
       columns: { action: true },

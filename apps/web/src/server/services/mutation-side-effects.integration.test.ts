@@ -57,7 +57,7 @@ function capturingPorts(): MutationSideEffectPorts & {
 const embeddingRefreshRefs = (tasks: readonly BackgroundTaskInput[]) =>
   tasks.flatMap((task) =>
     task.kind === "entity-embedding.refresh"
-      ? [{ entityType: task.entityType, entityId: task.entityId }]
+      ? [{ entityKind: task.entityKind, entityId: task.entityId }]
       : [],
   );
 
@@ -110,9 +110,9 @@ describe("mutation side effects integration", () => {
     const refs = embeddingRefreshRefs(ports.published.flat());
     expect(refs).toEqual(
       expect.arrayContaining([
-        { entityType: "product", entityId: product.entityId },
-        { entityType: "inventory", entityId: inventory.entityId },
-        { entityType: "task", entityId: taskId },
+        { entityKind: "product", entityId: product.entityId },
+        { entityKind: "inventory", entityId: inventory.entityId },
+        { entityKind: "task", entityId: taskId },
       ]),
     );
   });
@@ -174,12 +174,12 @@ describe("mutation side effects integration", () => {
     const refs = embeddingRefreshRefs(ports.published.flat());
     expect(refs).toEqual(
       expect.arrayContaining([
-        { entityType: "project", entityId: projectId },
-        { entityType: "task", entityId: taskId },
+        { entityKind: "project", entityId: projectId },
+        { entityKind: "task", entityId: taskId },
       ]),
     );
     expect(refs).not.toContainEqual({
-      entityType: "expense",
+      entityKind: "expense",
       entityId: expenseId,
     });
   });
@@ -228,7 +228,7 @@ describe("mutation side effects integration", () => {
     expect(refs).toEqual(
       expect.arrayContaining(
         entries.map((entry) => ({
-          entityType: "inventory",
+          entityKind: "inventory",
           entityId: entry.entityId,
         })),
       ),
@@ -260,7 +260,7 @@ describe("mutation side effects integration", () => {
     await deleteProducts(ctx.db, [product.entityId], ctx.actor);
 
     const deletedAt = await getEntityEmbeddingDeletedAtForRef(ctx.db, {
-      entityType: "product",
+      entityKind: "product",
       entityId: product.entityId,
     });
     expect(deletedAt).toBeInstanceOf(Date);

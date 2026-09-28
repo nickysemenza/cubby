@@ -20,7 +20,7 @@ describe("background task messages", () => {
       task: {
         kind: "entity-embedding.refresh",
         requestedAt,
-        entityType: "product",
+        entityKind: "product",
         entityId,
       },
     });

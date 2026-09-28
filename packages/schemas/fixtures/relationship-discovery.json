@@ -2,25 +2,25 @@
   "exploration": {
     "nodes": [
       {
-        "entityType": "expense",
+        "entityKind": "expense",
         "entityId": "EXP-4K7M",
         "label": "Reviewed switch",
         "metadata": {}
       },
       {
-        "entityType": "product",
+        "entityKind": "product",
         "entityId": "PRD-4K7M",
         "label": "Fixture switch",
         "metadata": {}
       },
       {
-        "entityType": "expense",
+        "entityKind": "expense",
         "entityId": "EXP-7M4K",
         "label": "Earlier switch",
         "metadata": {}
       },
       {
-        "entityType": "project",
+        "entityKind": "project",
         "entityId": "PRJ-7M4K",
         "label": "Workshop electrical",
         "metadata": {}
@@ -30,11 +30,11 @@
       {
         "id": "fixture-edge-0",
         "source": {
-          "entityType": "expense",
+          "entityKind": "expense",
           "entityId": "EXP-4K7M"
         },
         "target": {
-          "entityType": "product",
+          "entityKind": "product",
           "entityId": "PRD-4K7M"
         },
         "relationshipKey": "product",
@@ -45,11 +45,11 @@
       {
         "id": "fixture-edge-1",
         "source": {
-          "entityType": "product",
+          "entityKind": "product",
           "entityId": "PRD-4K7M"
         },
         "target": {
-          "entityType": "expense",
+          "entityKind": "expense",
           "entityId": "EXP-7M4K"
         },
         "relationshipKey": "expenses",
@@ -60,11 +60,11 @@
       {
         "id": "fixture-edge-2",
         "source": {
-          "entityType": "expense",
+          "entityKind": "expense",
           "entityId": "EXP-7M4K"
         },
         "target": {
-          "entityType": "project",
+          "entityKind": "project",
           "entityId": "PRJ-7M4K"
         },
         "relationshipKey": "project",
@@ -79,11 +79,11 @@
       {
         "nodeRefs": [
           {
-            "entityType": "expense",
+            "entityKind": "expense",
             "entityId": "EXP-4K7M"
           },
           {
-            "entityType": "product",
+            "entityKind": "product",
             "entityId": "PRD-4K7M"
           }
         ],
@@ -92,15 +92,15 @@
       {
         "nodeRefs": [
           {
-            "entityType": "expense",
+            "entityKind": "expense",
             "entityId": "EXP-4K7M"
           },
           {
-            "entityType": "product",
+            "entityKind": "product",
             "entityId": "PRD-4K7M"
           },
           {
-            "entityType": "expense",
+            "entityKind": "expense",
             "entityId": "EXP-7M4K"
           }
         ],
@@ -109,19 +109,19 @@
       {
         "nodeRefs": [
           {
-            "entityType": "expense",
+            "entityKind": "expense",
             "entityId": "EXP-4K7M"
           },
           {
-            "entityType": "product",
+            "entityKind": "product",
             "entityId": "PRD-4K7M"
           },
           {
-            "entityType": "expense",
+            "entityKind": "expense",
             "entityId": "EXP-7M4K"
           },
           {
-            "entityType": "project",
+            "entityKind": "project",
             "entityId": "PRJ-7M4K"
           }
         ],
@@ -136,7 +136,7 @@
   },
   "recommendations": {
     "source": {
-      "entityType": "expense",
+      "entityKind": "expense",
       "entityId": "EXP-4K7M"
     },
     "basisKey": "fixture-source-v1",
@@ -178,7 +178,7 @@
   },
   "inventoryRecommendations": {
     "source": {
-      "entityType": "inventory",
+      "entityKind": "inventory",
       "entityId": "INV-4K7M"
     },
     "basisKey": "inventory-fixture-v1",
@@ -206,7 +206,7 @@
   },
   "productRecommendations": {
     "source": {
-      "entityType": "product",
+      "entityKind": "product",
       "entityId": "PRD-4K7M"
     },
     "basisKey": "product-fixture-v1",

@@ -71,15 +71,15 @@ const imageRecord = imageWithEntitySchema.parse({
   provenanceEvidence: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
   updatedAt: new Date("2026-01-01T00:00:00Z"),
-  entityType: null,
+  entityKind: null,
   entityId: null,
   entityName: null,
   associations: [],
 });
 
-const vendorRoot = { entityType: "vendor" as const, entityId: VENDOR_ID };
+const vendorRoot = { entityKind: "vendor" as const, entityId: VENDOR_ID };
 const purchaseRef = {
-  entityType: "purchase" as const,
+  entityKind: "purchase" as const,
   entityId: testShortcode("purchase", "PUR-WORK"),
 };
 const vendorRelationships = {
@@ -169,13 +169,13 @@ function seedImageInspector() {
   harness.queryClient.setQueryData(detailOptions.queryKey, imageRecord);
   harness.queryClient.setQueryData(
     entityGraph.graph.queryOptions({
-      roots: [{ entityType: "image", entityId: IMAGE_ID }],
+      roots: [{ entityKind: "image", entityId: IMAGE_ID }],
       limit: 12,
     }).queryKey,
     {
       nodes: [
         {
-          entityType: "image",
+          entityKind: "image",
           entityId: IMAGE_ID,
           label: "fixture.jpg",
           metadata: {},

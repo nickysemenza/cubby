@@ -20,39 +20,39 @@ describe("record connection evidence", () => {
         paths={[
           [
             {
-              entityType: "plant",
+              entityKind: "plant",
               entityId: "PLT-TEST",
               label: "Example crop",
             },
             {
-              entityType: "product",
+              entityKind: "product",
               entityId: "PRD-SEED",
               label: "Example seeds",
             },
             {
-              entityType: "purchase",
+              entityKind: "purchase",
               entityId: "PUR-TEST",
               label: "Example order",
             },
           ],
           [
             {
-              entityType: "plant",
+              entityKind: "plant",
               entityId: "PLT-TEST",
               label: "Example crop",
             },
             {
-              entityType: "product",
+              entityKind: "product",
               entityId: "PRD-SEED",
               label: "Example seeds",
             },
             {
-              entityType: "expense",
+              entityKind: "expense",
               entityId: "EXP-TEST",
               label: "Example expense",
             },
             {
-              entityType: "purchase",
+              entityKind: "purchase",
               entityId: "PUR-TEST",
               label: "Example order",
             },

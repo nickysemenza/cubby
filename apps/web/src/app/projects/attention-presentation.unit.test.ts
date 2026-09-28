@@ -27,7 +27,7 @@ const item = <T extends ProjectAttentionItem["type"]>(
     severity: "info",
     name: "Placeholder",
     description: "",
-    entityType: "project",
+    entityKind: "project",
     entityId: testShortcode("project", "PRJ-0001"),
     date: null,
     amount: null,

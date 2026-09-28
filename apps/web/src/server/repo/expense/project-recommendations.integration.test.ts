@@ -59,7 +59,7 @@ describe("expense project recommendation evidence", () => {
     );
     const result = entityRecommendationsOut.parse(
       await getEntityRecommendations(ctx.db, {
-        entityType: "expense",
+        entityKind: "expense",
         entityId: source.output.id,
       }),
     );
@@ -159,7 +159,7 @@ describe("expense project recommendation evidence", () => {
       ctx.actor,
     );
     const result = await getEntityRecommendations(ctx.db, {
-      entityType: "expense",
+      entityKind: "expense",
       entityId: source.output.id,
     });
     const group = result.groups[0];
@@ -185,7 +185,7 @@ describe("expense project recommendation evidence", () => {
       (await getExpenseByShortcode(ctx.db, source.output.id))?.projectId,
     ).toBe(preferred.output.id);
     const after = await getEntityRecommendations(ctx.db, {
-      entityType: "expense",
+      entityKind: "expense",
       entityId: source.output.id,
     });
     expect(after.basisKey).not.toBe(result.basisKey);
@@ -220,7 +220,7 @@ describe("expense project recommendation evidence", () => {
       ctx.actor,
     );
     const result = await getEntityRecommendations(ctx.db, {
-      entityType: "expense",
+      entityKind: "expense",
       entityId: dated.output.id,
     });
     expect(result.groups[0]).toMatchObject({

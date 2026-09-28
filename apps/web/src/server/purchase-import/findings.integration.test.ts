@@ -44,8 +44,8 @@ describe("resolveArrivedFindingsForPurchase", () => {
       .insert(runFinding)
       .values({
         ledgerPartyId: parseEntityId("ledgerParty", ledgerPartyId),
-        targetKind: "purchase",
-        targetId: purchaseId,
+        entityKind: "purchase",
+        entityId: purchaseId,
         kind: "arrived",
         summary:
           "All shipments are marked delivered. Review and receive this purchase.",
@@ -269,8 +269,8 @@ describe("create_refund findings", () => {
       .insert(runFinding)
       .values({
         ledgerPartyId: fixture.party.id,
-        targetKind: "purchase",
-        targetId: input.purchaseId,
+        entityKind: "purchase",
+        entityId: input.purchaseId,
         kind: "refund_unbooked",
         summary:
           "Vendor mail reports a refund that is not yet booked in the expense ledger.",
@@ -392,7 +392,7 @@ describe("create_refund findings", () => {
       .from(runFinding)
       .where(
         and(
-          eq(runFinding.targetId, target.id),
+          eq(runFinding.entityId, target.id),
           eq(runFinding.kind, "refund_unbooked"),
         ),
       );

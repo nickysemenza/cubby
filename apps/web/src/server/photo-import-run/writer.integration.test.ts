@@ -78,7 +78,8 @@ describe("commitPhotoGroup", () => {
       .values(
         images.map((image, index) => ({
           runId,
-          imageId: parseEntityId("image", image.id),
+          entityKind: "image" as const,
+          entityId: parseEntityId("image", image.id),
           position: index,
           state: "pending" as const,
           targetFingerprint: `fixture-fingerprint-${crypto.randomUUID()}`,
@@ -89,7 +90,7 @@ describe("commitPhotoGroup", () => {
   const readTargetStates = async (runId: string) =>
     getDb(ctx.db)
       .select({
-        imageId: runTarget.imageId,
+        imageId: runTarget.entityId,
         state: runTarget.state,
         outcome: runTarget.outcome,
       })

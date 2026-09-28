@@ -315,7 +315,7 @@ describe("purchase import run admission", () => {
     });
     const [successorTarget] = await getDb(ctx.db)
       .select({
-        purchaseId: runTarget.purchaseId,
+        purchaseId: runTarget.entityId,
         state: runTarget.state,
       })
       .from(runTarget)

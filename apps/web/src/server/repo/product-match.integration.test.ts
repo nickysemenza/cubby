@@ -25,6 +25,7 @@ import {
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
+  insertEntityAttachments,
 } from "~/server/repo/repo.fixtures";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -403,18 +404,16 @@ describe("product match queue", () => {
       createImageFixture(ctx.db, "label", { source: "own" }),
       createImageFixture(ctx.db, "own", { source: "own" }),
     ]);
-    await getDb(ctx.db)
-      .insert(entityAttachment)
-      .values([
-        { subjectEntityId: bought.entityId, imageId: catalog.id, sortOrder: 0 },
-        {
-          subjectEntityId: photo.entityId,
-          imageId: label.id,
-          sortOrder: 0,
-          purpose: "label",
-        },
-        { subjectEntityId: photo.entityId, imageId: own.id, sortOrder: 1 },
-      ]);
+    await insertEntityAttachments(ctx.db, [
+      { entityId: bought.entityId, imageId: catalog.id, sortOrder: 0 },
+      {
+        entityId: photo.entityId,
+        imageId: label.id,
+        sortOrder: 0,
+        purpose: "label",
+      },
+      { entityId: photo.entityId, imageId: own.id, sortOrder: 1 },
+    ]);
     const base = createTestRequestContext(ctx.db, {
       auth: { userId: testUserId(TEST_USER_ID) },
     });
@@ -428,7 +427,7 @@ describe("product match queue", () => {
     const order = await getDb(ctx.db)
       .select({ imageId: entityAttachment.imageId })
       .from(entityAttachment)
-      .where(eq(entityAttachment.subjectEntityId, bought.entityId))
+      .where(eq(entityAttachment.entityId, bought.entityId))
       .orderBy(entityAttachment.sortOrder);
     expect(order.map((row) => row.imageId)).toEqual([
       own.id,

@@ -16,7 +16,7 @@ import { SearchResultMedia } from "./search-utils";
 function hit(overrides: Partial<SearchHit>): SearchHit {
   return searchHitSchema.parse({
     id: "LOC-2222",
-    entityType: "location",
+    entityKind: "location",
     title: "<location>",
     subtitle: null,
     typeHint: null,
@@ -40,7 +40,7 @@ describe("SearchResultMedia", () => {
   it("renders an unknown product category instead of throwing", () => {
     const { container } = render(
       <SearchResultMedia
-        item={hit({ entityType: "product", id: "PRD-2222", typeHint: "gone" })}
+        item={hit({ entityKind: "product", id: "PRD-2222", typeHint: "gone" })}
       />,
     );
     expect(container.querySelector("svg")).not.toBeNull();

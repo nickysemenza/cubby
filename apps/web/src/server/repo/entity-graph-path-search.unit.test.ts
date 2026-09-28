@@ -8,7 +8,7 @@ import {
 } from "./entity-graph-path-search";
 
 const ref = (id: string): EntityRef => ({
-  entityType: "task",
+  entityKind: "task",
   entityId: `TSK-${id}`,
 });
 

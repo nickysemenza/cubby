@@ -50,7 +50,7 @@ describe("complete connected record tables", () => {
 
   it("queries sources without a soft-delete column", async () => {
     const page = await getConnectedRecords(ctx.db, {
-      source: { entityType: "run", entityId: "RUN-EXAMPLE" },
+      source: { entityKind: "run", entityId: "RUN-EXAMPLE" },
       viewKey: "products",
     });
     expect(page.totalCount).toBe(0);
@@ -92,7 +92,7 @@ describe("complete connected record tables", () => {
     );
 
     const result = await getConnectedRecords(ctx.db, {
-      source: { entityType: "plant", entityId: plant.id },
+      source: { entityKind: "plant", entityId: plant.id },
       viewKey: "projects",
     });
     expect(
@@ -101,9 +101,9 @@ describe("complete connected record tables", () => {
     ).toEqual(
       expect.arrayContaining([
         expect.arrayContaining([
-          expect.objectContaining({ entityType: "planting" }),
+          expect.objectContaining({ entityKind: "planting" }),
           expect.objectContaining({
-            entityType: "task",
+            entityKind: "task",
             entityId: child.output.id,
           }),
         ]),
@@ -193,7 +193,7 @@ describe("complete connected record tables", () => {
       ctx.actor,
     );
 
-    const source = { entityType: "plant" as const, entityId: plant.id };
+    const source = { entityKind: "plant" as const, entityId: plant.id };
     const page1 = await getConnectedRecords(ctx.db, {
       source,
       viewKey: "purchases",
@@ -218,7 +218,7 @@ describe("complete connected record tables", () => {
     );
     expect(firstRecord?.shortestHops).toBe(2);
     expect(
-      firstRecord?.paths.map((path) => path.map((node) => node.entityType)),
+      firstRecord?.paths.map((path) => path.map((node) => node.entityKind)),
     ).toEqual(
       expect.arrayContaining([
         ["plant", "product", "purchase"],

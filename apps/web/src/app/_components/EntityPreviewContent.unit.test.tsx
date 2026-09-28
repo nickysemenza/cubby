@@ -233,13 +233,13 @@ describe("toImageCard", () => {
         height: 1200,
         associations: [
           {
-            entityType: "product",
+            entityKind: "product",
             entityId: testShortcode("product", "PRD-4K7M"),
             entityName: "Bench lamp",
             role: "cover",
           },
           {
-            entityType: "project",
+            entityKind: "project",
             entityId: testShortcode("project", "PRJ-7M2X"),
             entityName: "Workshop refresh",
             role: "attachment",

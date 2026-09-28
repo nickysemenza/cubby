@@ -19,7 +19,7 @@ describe("product entity graph query budget", () => {
 
     const result = await countTestDbQueries(() =>
       getEntityGraph(ctx.db, {
-        roots: [{ entityType: "product", entityId: product.id }],
+        roots: [{ entityKind: "product", entityId: product.id }],
       }),
     );
 

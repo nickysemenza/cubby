@@ -1,12 +1,13 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { entityAttachment, productExternalId } from "~/server/db/schema";
+import { productExternalId } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { createUploadedImageRecord } from "~/server/repo/image";
 import {
   createProductFixture,
   makeProductInput,
+  insertEntityAttachments,
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -39,8 +40,8 @@ describe("photo product candidates", () => {
       size: 100,
       source: "own",
     });
-    await getDb(ctx.db).insert(entityAttachment).values({
-      subjectEntityId: photographed.entityId,
+    await insertEntityAttachments(ctx.db, {
+      entityId: photographed.entityId,
       imageId: photo.id,
     });
 

@@ -29,7 +29,7 @@ describe("listScaffold", () => {
         scaffold.where({ searchQuery: "short task" }, [isNotNull(task.name)]),
       );
       expect(sql).toContain('"SearchDocument"');
-      expect(sql).toContain('"entityType"');
+      expect(sql).toContain('"entityKind"');
       expect(sql).toContain('"name"');
       // Counts and later offset pages must see every lexical hit, unlike the
       // intentionally capped global-command candidate query.

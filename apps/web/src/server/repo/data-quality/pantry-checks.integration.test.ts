@@ -6,9 +6,7 @@ import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { entityAttachment } from "~/server/db/schema";
 import { upsertCookbook } from "~/server/repo/cookbook";
-import { getDb } from "~/server/repo/database-helpers";
 import { updateLocationAiDescription } from "~/server/repo/location/crud";
 import { createMealWithEntityId } from "~/server/repo/meal/crud";
 import {
@@ -29,6 +27,7 @@ import {
   makeLocationInput,
   makeProductInput,
   makeRecipeInput,
+  insertEntityAttachments,
 } from "~/server/repo/repo.fixtures";
 
 import { loadDataQualities } from "./hydrate";
@@ -203,8 +202,8 @@ describe("data quality: pantry and garden entities", () => {
       TEST_ACTOR,
     );
     const gapImage = await createImageFixture(ctx.db, "dq-location-gap");
-    await getDb(ctx.db).insert(entityAttachment).values({
-      subjectEntityId: gap.entityId,
+    await insertEntityAttachments(ctx.db, {
+      entityId: gap.entityId,
       imageId: gapImage.id,
       sortOrder: 0,
     });
@@ -218,8 +217,8 @@ describe("data quality: pantry and garden entities", () => {
       ctx.db,
       "dq-location-complete",
     );
-    await getDb(ctx.db).insert(entityAttachment).values({
-      subjectEntityId: complete.entityId,
+    await insertEntityAttachments(ctx.db, {
+      entityId: complete.entityId,
       imageId: completeImage.id,
       sortOrder: 0,
     });

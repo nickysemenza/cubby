@@ -97,7 +97,8 @@ describe("photo import finalize", () => {
         .insert(runTarget)
         .values({
           runId: run.id,
-          imageId: parseImageId.parse(photo.id),
+          entityKind: "image",
+          entityId: parseImageId.parse(photo.id),
           position,
           state: "pending",
           targetFingerprint: String(position).repeat(64),
@@ -181,7 +182,8 @@ describe("photo import finalize", () => {
       .insert(runTarget)
       .values({
         runId: original.id,
-        imageId: parseImageId.parse(photo.id),
+        entityKind: "image",
+        entityId: parseImageId.parse(photo.id),
         position: 0,
         state: "completed",
         targetFingerprint: "e".repeat(64),
@@ -230,11 +232,11 @@ describe("photo import finalize", () => {
     const targets = await getDb(ctx.db)
       .select({
         runId: runTarget.runId,
-        imageId: runTarget.imageId,
+        imageId: runTarget.entityId,
         state: runTarget.state,
       })
       .from(runTarget)
-      .where(eq(runTarget.imageId, parseImageId.parse(photo.id)));
+      .where(eq(runTarget.entityId, parseImageId.parse(photo.id)));
     expect(targets).toEqual(
       expect.arrayContaining([
         { runId: original.id, imageId: photo.id, state: "completed" },
@@ -300,7 +302,7 @@ describe("photo import finalize", () => {
         targetFingerprint: runTarget.targetFingerprint,
       })
       .from(runTarget)
-      .where(eq(runTarget.imageId, parseImageId.parse(staged.id)));
+      .where(eq(runTarget.entityId, parseImageId.parse(staged.id)));
     expect(targets).toEqual([
       { state: "pending", position: 0, targetFingerprint: sha256 },
     ]);
@@ -361,7 +363,7 @@ describe("photo import finalize", () => {
     const targets = await getDb(ctx.db)
       .select({ id: runTarget.id })
       .from(runTarget)
-      .where(eq(runTarget.imageId, parseImageId.parse(staged.id)));
+      .where(eq(runTarget.entityId, parseImageId.parse(staged.id)));
     expect(targets).toHaveLength(1);
   });
 

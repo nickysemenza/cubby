@@ -23,9 +23,8 @@ const insertSearchDocumentRow = (
   getDb(ctx.db)
     .insert(searchDocument)
     .values({
-      entityType: ENTITY_TYPE,
+      entityKind: ENTITY_TYPE,
       entityId,
-      shortcode: `TST-${randomUUID().slice(0, 8)}`,
       title: "Reconcile fixture",
       body: "body",
       semanticText: "semantic text",
@@ -111,7 +110,7 @@ describe("selectRecentlySoftDeletedSearchRefs", () => {
     // Exact multiset equality: catches both a missed ref and a duplicate
     // (the "two soft-deleted rows" case must appear exactly once).
     expect(returnedIds.sort()).toEqual(expectedIds.sort());
-    expect(result.refs.every((ref) => ref.entityType === ENTITY_TYPE)).toBe(
+    expect(result.refs.every((ref) => ref.entityKind === ENTITY_TYPE)).toBe(
       true,
     );
     expect(result.nextCursor).toBeNull();

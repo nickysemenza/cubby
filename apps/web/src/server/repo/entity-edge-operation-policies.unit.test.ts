@@ -78,7 +78,7 @@ describe("product retaining edges", () => {
     // along with every recipe it imported.
     "Cookbook.productId",
     "Expense.productId",
-    "RunTarget.productId",
+    "RunTarget.entityId",
     "InventoryEntry.productId",
     "Location.productId",
     "MealFoodEntry.productId",

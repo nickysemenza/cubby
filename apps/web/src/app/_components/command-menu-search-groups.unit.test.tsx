@@ -24,7 +24,7 @@ const group = searchResultGroupSchema.parse({
   key: "product:fixture",
   primary: {
     id: productId,
-    entityType: "product",
+    entityKind: "product",
     title: "Relational Drill",
     subtitle: "Fixture Tools",
     typeHint: "hardware",
@@ -32,7 +32,7 @@ const group = searchResultGroupSchema.parse({
   },
   bestMatch: {
     id: productId,
-    entityType: "product",
+    entityKind: "product",
     title: "Relational Drill",
     subtitle: "Fixture Tools",
     typeHint: "hardware",
@@ -55,7 +55,7 @@ const group = searchResultGroupSchema.parse({
     {
       component: {
         id: componentProductId,
-        entityType: "product",
+        entityKind: "product",
         title: "Relational Drill Battery",
         subtitle: "Fixture Tools",
         typeHint: "hardware",
@@ -74,7 +74,7 @@ const group = searchResultGroupSchema.parse({
   matchedActivity: [
     {
       id: expenseId,
-      entityType: "expense",
+      entityKind: "expense",
       title: "Relational Drill purchase",
       subtitle: null,
       typeHint: "materials",
@@ -152,7 +152,7 @@ describe("command search Product families", () => {
     expect(placement).toBeDefined();
     fireEvent.click(placement!);
     expect(onSelect).toHaveBeenCalledWith(
-      expect.objectContaining({ id: inventoryId, entityType: "inventory" }),
+      expect.objectContaining({ id: inventoryId, entityKind: "inventory" }),
     );
 
     const componentPlacement = screen
@@ -167,7 +167,7 @@ describe("command search Product families", () => {
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({
         id: componentInventoryId,
-        entityType: "inventory",
+        entityKind: "inventory",
         title: "Relational Drill Battery",
       }),
     );

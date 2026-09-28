@@ -52,7 +52,7 @@ describe("integrity catalog", () => {
     ).toEqual([
       "Ingredient.recipeId",
       "OrderMailCandidateDecision.purchaseId",
-      "RunTarget.purchaseId",
+      "RunTarget.entityId",
       "AuditLog.runId",
       "AiUsage.runId",
       "ImageProcessingJob.runId",

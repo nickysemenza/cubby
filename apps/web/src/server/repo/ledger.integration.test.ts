@@ -299,7 +299,7 @@ describe("consolidated household ledger", () => {
       .from(auditLog)
       .where(
         and(
-          eq(auditLog.entityType, "ledgerTransfer"),
+          eq(auditLog.entityKind, "ledgerTransfer"),
           eq(auditLog.entityId, transfer.entityId),
           eq(auditLog.action, "update"),
         ),
@@ -567,7 +567,7 @@ describe("consolidated household ledger", () => {
       .from(auditLog)
       .where(
         and(
-          eq(auditLog.entityType, "expense"),
+          eq(auditLog.entityKind, "expense"),
           eq(auditLog.entityId, created.entityId),
           eq(auditLog.action, "update"),
         ),

@@ -46,6 +46,7 @@ import {
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
+  insertEntityAttachments,
 } from "./repo.fixtures";
 
 // One image per test row is enough to prove wiring; the ordering tests below
@@ -120,8 +121,8 @@ describe("entity display image resolver", () => {
       ctx.actor,
     );
     const photo = await makeImage();
-    await getDb(ctx.db).insert(entityAttachment).values({
-      subjectEntityId: hardware.entityId,
+    await insertEntityAttachments(ctx.db, {
+      entityId: hardware.entityId,
       imageId: photo.id,
       sortOrder: 0,
     });
@@ -164,21 +165,18 @@ describe("entity display image resolver", () => {
       const imgSoftDeleted = await makeImage();
 
       const db = getDb(ctx.db);
-      await db.insert(entityAttachment).values([
-        { subjectEntityId: p.entityId, imageId: imgA.id, sortOrder: 2 },
-        { subjectEntityId: p.entityId, imageId: imgB.id, sortOrder: 0 },
-        { subjectEntityId: p.entityId, imageId: imgC.id, sortOrder: 1 },
-        { subjectEntityId: p.entityId, imageId: imgPdf.id, sortOrder: 3 },
-        { subjectEntityId: p.entityId, imageId: imgMissing.id, sortOrder: 4 },
+      await insertEntityAttachments(db, [
+        { entityId: p.entityId, imageId: imgA.id, sortOrder: 2 },
+        { entityId: p.entityId, imageId: imgB.id, sortOrder: 0 },
+        { entityId: p.entityId, imageId: imgC.id, sortOrder: 1 },
+        { entityId: p.entityId, imageId: imgPdf.id, sortOrder: 3 },
+        { entityId: p.entityId, imageId: imgMissing.id, sortOrder: 4 },
       ]);
-      const [softDeletedLink] = await db
-        .insert(entityAttachment)
-        .values({
-          subjectEntityId: p.entityId,
-          imageId: imgSoftDeleted.id,
-          sortOrder: 5,
-        })
-        .returning({ id: entityAttachment.id });
+      const [softDeletedLink] = await insertEntityAttachments(db, {
+        entityId: p.entityId,
+        imageId: imgSoftDeleted.id,
+        sortOrder: 5,
+      });
       await db
         .update(entityAttachment)
         .set({ deletedAt: new Date() })
@@ -223,21 +221,19 @@ describe("entity display image resolver", () => {
       );
       const label = await makeImage();
       const legacyItem = await makeImage();
-      await getDb(ctx.db)
-        .insert(entityAttachment)
-        .values([
-          {
-            subjectEntityId: labelledProduct.entityId,
-            imageId: label.id,
-            sortOrder: 0,
-            purpose: "label",
-          },
-          {
-            subjectEntityId: labelledProduct.entityId,
-            imageId: legacyItem.id,
-            sortOrder: 1,
-          },
-        ]);
+      await insertEntityAttachments(ctx.db, [
+        {
+          entityId: labelledProduct.entityId,
+          imageId: label.id,
+          sortOrder: 0,
+          purpose: "label",
+        },
+        {
+          entityId: labelledProduct.entityId,
+          imageId: legacyItem.id,
+          sortOrder: 1,
+        },
+      ]);
       const direct = await withDisplayImages(
         ctx.db,
         "product",
@@ -298,8 +294,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const productImg = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: product.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: product.entityId,
         imageId: productImg.id,
         sortOrder: 0,
       });
@@ -310,8 +306,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const locationImg = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: location.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: location.entityId,
         imageId: locationImg.id,
         sortOrder: 0,
       });
@@ -353,8 +349,8 @@ describe("entity display image resolver", () => {
         },
         ctx.actor,
       );
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: created.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: created.entityId,
         role: "logo",
         imageId: logo.id,
       });
@@ -411,8 +407,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const productImg = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: product.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: product.entityId,
         imageId: productImg.id,
         sortOrder: 0,
       });
@@ -463,8 +459,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const olderImg = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: older.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: older.entityId,
         imageId: olderImg.id,
         sortOrder: 0,
       });
@@ -478,8 +474,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const newerImg = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: newer.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: newer.entityId,
         imageId: newerImg.id,
         sortOrder: 0,
       });
@@ -564,27 +560,25 @@ describe("entity display image resolver", () => {
         .update(image)
         .set({ deletedAt: associationTime })
         .where(eq(image.id, deletedImage.id));
-      await getDb(ctx.db)
-        .insert(entityAttachment)
-        .values([
-          ...records.map((record, index) => ({
-            subjectEntityId: owner.entityId,
-            imageId: record.id,
-            sortOrder: index === 0 ? 0 : index < 3 ? 1 : 2,
-            createdAt: associationTime,
-          })),
-          {
-            subjectEntityId: owner.entityId,
-            imageId: deletedImage.id,
-            sortOrder: 3,
-          },
-          {
-            subjectEntityId: owner.entityId,
-            imageId: deletedAssociationImage.id,
-            sortOrder: 4,
-            deletedAt: associationTime,
-          },
-        ]);
+      await insertEntityAttachments(ctx.db, [
+        ...records.map((record, index) => ({
+          entityId: owner.entityId,
+          imageId: record.id,
+          sortOrder: index === 0 ? 0 : index < 3 ? 1 : 2,
+          createdAt: associationTime,
+        })),
+        {
+          entityId: owner.entityId,
+          imageId: deletedImage.id,
+          sortOrder: 3,
+        },
+        {
+          entityId: owner.entityId,
+          imageId: deletedAssociationImage.id,
+          sortOrder: 4,
+          deletedAt: associationTime,
+        },
+      ]);
 
       const attachments = (
         await resolveEntityAttachments(ctx.db, "product", [owner.entityId])
@@ -639,12 +633,12 @@ describe("entity display image resolver", () => {
         contentType: "image/heic",
       });
       const projectPhoto = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: purchase.id,
+      await insertEntityAttachments(ctx.db, {
+        entityId: purchase.id,
         imageId: purchasePhoto.id,
       });
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: project.id,
+      await insertEntityAttachments(ctx.db, {
+        entityId: project.id,
         imageId: projectPhoto.id,
       });
       const context = entityKernelContextSchema.parse(
@@ -689,8 +683,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const imgA = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: pA.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: pA.entityId,
         imageId: imgA.id,
         sortOrder: 0,
       });
@@ -704,8 +698,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const imgB = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: pB.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: pB.entityId,
         imageId: imgB.id,
         sortOrder: 0,
       });
@@ -755,8 +749,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const img = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: product.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: product.entityId,
         imageId: img.id,
         sortOrder: 0,
       });
@@ -792,8 +786,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const img = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: product.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: product.entityId,
         imageId: img.id,
         sortOrder: 0,
       });
@@ -829,8 +823,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const photo = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: purchasedProduct.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: purchasedProduct.entityId,
         imageId: photo.id,
         sortOrder: 0,
       });
@@ -864,8 +858,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const overridePhoto = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: overriddenProduct.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: overriddenProduct.entityId,
         imageId: overridePhoto.id,
         sortOrder: 0,
       });
@@ -908,12 +902,10 @@ describe("entity display image resolver", () => {
       });
       const first = await makeImage(); // sortOrder 0
       const second = await makeImage(); // sortOrder 1
-      await getDb(ctx.db)
-        .insert(entityAttachment)
-        .values([
-          { subjectEntityId: entry.id, imageId: second.id, sortOrder: 1 },
-          { subjectEntityId: entry.id, imageId: first.id, sortOrder: 0 },
-        ]);
+      await insertEntityAttachments(ctx.db, [
+        { entityId: entry.id, imageId: second.id, sortOrder: 1 },
+        { entityId: entry.id, imageId: first.id, sortOrder: 0 },
+      ]);
 
       const rows = await withDisplayImages(
         ctx.db,
@@ -949,8 +941,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const productImg = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: seedPacket.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: seedPacket.entityId,
         imageId: productImg.id,
         sortOrder: 0,
       });
@@ -1022,8 +1014,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const productImg = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: seedPacket.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: seedPacket.entityId,
         imageId: productImg.id,
         sortOrder: 0,
       });
@@ -1092,8 +1084,8 @@ describe("entity display image resolver", () => {
         .update(image)
         .set({ sha256: sourceHash })
         .where(eq(image.id, cover.id));
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: owner.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: owner.entityId,
         imageId: cover.id,
         sortOrder: 0,
       });
@@ -1112,7 +1104,7 @@ describe("entity display image resolver", () => {
           height: 10,
         });
       const ref = [
-        { entityType: "product" as const, entityId: owner.entityId },
+        { entityKind: "product" as const, entityId: owner.entityId },
       ];
       const key = entityRefKey("product", owner.entityId);
       const original = getR2PublicUrl(cover.key);
@@ -1159,20 +1151,18 @@ describe("entity display image resolver", () => {
       );
       const cover = await makeImage();
       const second = await makeImage();
-      await getDb(ctx.db)
-        .insert(entityAttachment)
-        .values([
-          {
-            subjectEntityId: withImage.entityId,
-            imageId: cover.id,
-            sortOrder: 0,
-          },
-          {
-            subjectEntityId: withImage.entityId,
-            imageId: second.id,
-            sortOrder: 1,
-          },
-        ]);
+      await insertEntityAttachments(ctx.db, [
+        {
+          entityId: withImage.entityId,
+          imageId: cover.id,
+          sortOrder: 0,
+        },
+        {
+          entityId: withImage.entityId,
+          imageId: second.id,
+          sortOrder: 1,
+        },
+      ]);
       const withoutImage = await createProductFixture(
         ctx.db,
         makeProductInput({ name: "Coverless" }),
@@ -1180,8 +1170,8 @@ describe("entity display image resolver", () => {
       );
 
       const result = await resolveEntityDisplayImages(ctx.db, [
-        { entityType: "product", entityId: withImage.entityId },
-        { entityType: "product", entityId: withoutImage.entityId },
+        { entityKind: "product", entityId: withImage.entityId },
+        { entityKind: "product", entityId: withoutImage.entityId },
       ]);
 
       expect(result.get(entityRefKey("product", withImage.entityId))).toEqual(
@@ -1199,16 +1189,16 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const img = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: product.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: product.entityId,
         imageId: img.id,
         sortOrder: 0,
       });
       const financialAccountId = crypto.randomUUID();
 
       const result = await resolveEntityDisplayImages(ctx.db, [
-        { entityType: "product", entityId: product.entityId },
-        { entityType: "financialAccount", entityId: financialAccountId },
+        { entityKind: "product", entityId: product.entityId },
+        { entityKind: "financialAccount", entityId: financialAccountId },
       ]);
 
       expect(result.get(entityRefKey("product", product.entityId))).toEqual(
@@ -1226,8 +1216,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const productImg = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: product.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: product.entityId,
         imageId: productImg.id,
         sortOrder: 0,
       });
@@ -1238,8 +1228,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const locationImg = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: location.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: location.entityId,
         imageId: locationImg.id,
         sortOrder: 0,
       });
@@ -1270,8 +1260,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const ingredientImg = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: ingredientProduct.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: ingredientProduct.entityId,
         imageId: ingredientImg.id,
         sortOrder: 0,
       });
@@ -1285,8 +1275,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const wishImg = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: wishProduct.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: wishProduct.entityId,
         imageId: wishImg.id,
         sortOrder: 0,
       });
@@ -1306,8 +1296,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const invImg = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: invProduct.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: invProduct.entityId,
         imageId: invImg.id,
         sortOrder: 0,
       });
@@ -1332,8 +1322,8 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
       const expImg = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: expProduct.entityId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: expProduct.entityId,
         imageId: expImg.id,
         sortOrder: 0,
       });
@@ -1354,21 +1344,21 @@ describe("entity display image resolver", () => {
         observedOn: "2024-01-01",
       });
       const gardenImg = await makeImage();
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: gardenEntryRow.id,
+      await insertEntityAttachments(ctx.db, {
+        entityId: gardenEntryRow.id,
         imageId: gardenImg.id,
         sortOrder: 0,
       });
 
       const result = await resolveEntityDisplayImages(ctx.db, [
-        { entityType: "product", entityId: product.entityId },
-        { entityType: "location", entityId: location.entityId },
-        { entityType: "cookbook", entityId: cookbook.entityId },
-        { entityType: "ingredient", entityId: ingredient.entityId },
-        { entityType: "wish", entityId: wish.entityId },
-        { entityType: "inventory", entityId: inventoryEntry.entityId },
-        { entityType: "expense", entityId: expense.entityId },
-        { entityType: "gardenEntry", entityId: gardenEntryRow.id },
+        { entityKind: "product", entityId: product.entityId },
+        { entityKind: "location", entityId: location.entityId },
+        { entityKind: "cookbook", entityId: cookbook.entityId },
+        { entityKind: "ingredient", entityId: ingredient.entityId },
+        { entityKind: "wish", entityId: wish.entityId },
+        { entityKind: "inventory", entityId: inventoryEntry.entityId },
+        { entityKind: "expense", entityId: expense.entityId },
+        { entityKind: "gardenEntry", entityId: gardenEntryRow.id },
       ]);
 
       expect(result.get(entityRefKey("product", product.entityId))).toEqual(

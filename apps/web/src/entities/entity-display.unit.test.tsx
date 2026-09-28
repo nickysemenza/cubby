@@ -247,11 +247,11 @@ describe("declared entity displays", () => {
         refs={[]}
         seeded={{
           [entityDisplayImageKey({
-            entityType: "image",
+            entityKind: "image",
             entityId: "IMG-TEST",
           })]: { url: "https://images.example/sighting.jpg" },
           [entityDisplayImageKey({
-            entityType: "ledgerParty",
+            entityKind: "ledgerParty",
             entityId: "LPY-TEST",
           })]: null,
         }}

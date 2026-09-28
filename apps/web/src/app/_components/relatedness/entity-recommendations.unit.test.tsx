@@ -23,7 +23,7 @@ describe("EntityRecommendations", () => {
     const unpicturedId = testShortcode("product", "PRD-UNPICTURED");
     render(
       <EntityRecommendations
-        source={{ entityType: "product", entityId: sourceId }}
+        source={{ entityKind: "product", entityId: sourceId }}
         operations={{
           displayImages: entityMedia.displayImages.withTransport(async () => ({
             [`product:${picturedId}`]: {
@@ -32,7 +32,7 @@ describe("EntityRecommendations", () => {
             [`product:${unpicturedId}`]: null,
           })).queryOptions,
           forEntity: recommendations.forEntity.withTransport(async () => ({
-            source: { entityType: "product", entityId: sourceId },
+            source: { entityKind: "product", entityId: sourceId },
             basisKey: "product-tags",
             groups: [
               {

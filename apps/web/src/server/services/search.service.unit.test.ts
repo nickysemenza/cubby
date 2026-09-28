@@ -84,7 +84,7 @@ describe("related search candidates", () => {
             {
               entityId: liveId,
               id: "PRD-2345",
-              entityType: "product",
+              entityKind: "product",
               title: "Live product",
               subtitle: null,
               typeHint: null,
@@ -107,8 +107,8 @@ describe("related search candidates", () => {
       embed: async () => [1, 0, 0],
       vectorStore: fromPartial<VectorStorePort>({
         query: async () => [
-          { entityType: "product", entityId: liveId, similarity: 0.9 },
-          { entityType: "product", entityId: ghostId, similarity: 0.8 },
+          { entityKind: "product", entityId: liveId, similarity: 0.9 },
+          { entityKind: "product", entityId: ghostId, similarity: 0.8 },
         ],
       }),
     };

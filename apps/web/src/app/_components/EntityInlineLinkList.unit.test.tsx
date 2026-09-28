@@ -69,7 +69,7 @@ describe("EntityInlineLinkList entity dispatch", () => {
         refs={[]}
         seeded={{
           [entityDisplayImageKey({
-            entityType: "product",
+            entityKind: "product",
             entityId: product.id,
           })]: { url: "https://images.example/table-owned.jpg" },
         }}

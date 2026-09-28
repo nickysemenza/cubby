@@ -60,14 +60,14 @@ class MemoryImageStorage {
         filename: string;
         contentType: string;
         status: string;
-        entityType: string | null;
+        entityKind: string | null;
       }
     | Error = {
     key: "cubby/images/staged.png",
     filename: "staged.png",
     contentType: "image/png",
     status: "PENDING",
-    entityType: null,
+    entityKind: null,
   };
   stagedObject: Response = new Response(Buffer.from(PNG_BASE64, "base64"));
   fetchedResponse: Response | Error = new Response(
@@ -206,9 +206,9 @@ function setup() {
 }
 
 const attachmentTarget = {
-  entityType: "product",
+  entityKind: "product",
   entityId: "PRD-TEST",
-} satisfies Pick<McpAttachFileInput, "entityType" | "entityId">;
+} satisfies Pick<McpAttachFileInput, "entityKind" | "entityId">;
 
 describe("image storage ports", () => {
   it("persists optional native hash metadata on the pending upload row", async () => {
@@ -294,7 +294,7 @@ describe("image storage ports", () => {
       filename: "blender-manual.pdf",
       contentType: "application/pdf",
       size: 1024,
-      entityType: "PRODUCT",
+      entityKind: "PRODUCT",
       folder: "P-0123",
     });
 
@@ -604,7 +604,7 @@ describe("attachFileToEntity", () => {
       filename: "existing.png",
       contentType: "image/png",
       status: "UPLOADED",
-      entityType: "PRODUCT",
+      entityKind: "PRODUCT",
     };
     await expect(
       service.attachFileToEntity(database, {
@@ -628,7 +628,7 @@ describe("attachFileToEntity", () => {
       filename: "standalone.png",
       contentType: "image/png",
       status: "UPLOADED",
-      entityType: null,
+      entityKind: null,
     };
 
     await expect(

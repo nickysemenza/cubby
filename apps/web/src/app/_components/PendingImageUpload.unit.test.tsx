@@ -58,7 +58,7 @@ describe("PendingImageUpload", () => {
 
     render(
       <PendingImageUpload
-        entityType="PRODUCT"
+        entityKind="PRODUCT"
         onImagesChange={onImagesChange}
         operations={{ uploadImage, importFromUrl: imageUpload.importFromUrl }}
       />,
@@ -96,7 +96,7 @@ describe("PendingImageUpload", () => {
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 503 }));
     render(
       <PendingImageUpload
-        entityType="PRODUCT"
+        entityKind="PRODUCT"
         onImagesChange={onImagesChange}
         operations={{ uploadImage, importFromUrl: imageUpload.importFromUrl }}
       />,
@@ -120,7 +120,7 @@ describe("PendingImageUpload", () => {
     const onExistingImagesRemove = vi.fn();
     render(
       <PendingImageUpload
-        entityType="PRODUCT"
+        entityKind="PRODUCT"
         existingImages={[
           {
             id: "IMG-COVER",
@@ -154,7 +154,7 @@ describe("PendingImageUpload", () => {
     const onExistingImagesPurposeChange = vi.fn();
     render(
       <PendingImageUpload
-        entityType="PRODUCT"
+        entityKind="PRODUCT"
         existingImages={[
           {
             id: "IMG-EXISTING",
@@ -188,7 +188,7 @@ describe("PendingImageUpload", () => {
     }));
     render(
       <PendingImageUpload
-        entityType="PRODUCT"
+        entityKind="PRODUCT"
         onImagesChange={onImagesChange}
         operations={{ uploadImage: imageUpload.uploadImage, importFromUrl }}
       />,
@@ -225,7 +225,7 @@ describe("PendingImageUpload", () => {
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 200 }));
     render(
       <PendingImageUpload
-        entityType="PRODUCT"
+        entityKind="PRODUCT"
         onImagesChange={onImagesChange}
         operations={{ uploadImage, importFromUrl: imageUpload.importFromUrl }}
       />,
@@ -259,7 +259,7 @@ describe("PendingImageUpload", () => {
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 200 }));
     render(
       <PendingImageUpload
-        entityType="PRODUCT"
+        entityKind="PRODUCT"
         onImagesChange={onImagesChange}
         operations={{ uploadImage, importFromUrl: imageUpload.importFromUrl }}
       />,

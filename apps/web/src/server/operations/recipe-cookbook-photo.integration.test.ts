@@ -131,7 +131,7 @@ describe("cookbook recipe photo workflow", () => {
     expect(uploaded).toHaveLength(2);
 
     await storage.attachFileToEntity(ctx.db, {
-      entityType: "recipe",
+      entityKind: "recipe",
       entityId: existing.recipeId,
       data: PNG_BASE64,
       contentType: "image/png",
@@ -155,7 +155,7 @@ describe("cookbook recipe photo workflow", () => {
     failDeletes = true;
     await expect(
       storage.attachFileToEntity(ctx.db, {
-        entityType: "recipe",
+        entityKind: "recipe",
         entityId: existing.recipeId,
         data: PNG_BASE64,
         contentType: "image/png",
@@ -166,7 +166,7 @@ describe("cookbook recipe photo workflow", () => {
     ).rejects.toThrow(/uploaded object could not be cleaned up/);
 
     const joins = await getDb(ctx.db)
-      .select({ recipeId: entityAttachment.subjectEntityId })
+      .select({ recipeId: entityAttachment.entityId })
       .from(entityAttachment)
       .where(notDeleted(entityAttachment));
     expect(joins.map((row) => row.recipeId).sort()).toEqual(

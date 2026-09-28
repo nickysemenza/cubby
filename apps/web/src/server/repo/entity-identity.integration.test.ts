@@ -129,6 +129,25 @@ describe("durable entity identity", () => {
     });
   });
 
+  it("refuses an attachment whose entityKind disagrees with its Entity row", async () => {
+    const product = await seedProduct("Mislabelled attachment subject");
+    const image = await createUploadedImageRecord(ctx.db, {
+      key: "identity/mislabelled.jpg",
+      filename: "mislabelled.jpg",
+      contentType: "image/jpeg",
+      size: 10,
+    });
+    const productEntityId = (await identityOf(product.id))?.id;
+    await expect(
+      getDb(ctx.db).execute(
+        sql`INSERT INTO "EntityAttachment" ("entityId", "entityKind", "imageId")
+            VALUES (${productEntityId}, 'location', ${image.id})`,
+      ),
+    ).rejects.toMatchObject({
+      cause: { constraint: "EntityAttachment_entity_fk" },
+    });
+  });
+
   it("redirects reads of a merged-away code and refuses writes through it", async () => {
     const keeper = await seedProduct("Redirect keeper");
     const loser = await seedProduct("Redirect loser");
@@ -163,7 +182,7 @@ describe("durable entity identity", () => {
     // survivor as a read-time projection.
     const loserId = (await identityOf(loser.id))?.id;
     const { entries } = await getAuditLog(ctx.db, {
-      entityType: "product",
+      entityKind: "product",
       entityId: loserId,
       limit: 50,
     });

@@ -46,7 +46,7 @@ const expense = expenseOut.parse({
 
 const recommendationData = (basisKey: string, assigned = false) =>
   entityRecommendationsOut.parse({
-    source: { entityType: "expense", entityId: EXPENSE_ID },
+    source: { entityKind: "expense", entityId: EXPENSE_ID },
     basisKey,
     groups: [
       {
@@ -155,7 +155,7 @@ describe("ProjectSuggestionChips", () => {
     expect(screen.getByRole("button", { name: "Apply change" })).toBeVisible();
 
     const options = operations.forEntity.queryOptions({
-      entityType: "expense",
+      entityKind: "expense",
       entityId: EXPENSE_ID,
     });
     harness.queryClient.setQueryData(
