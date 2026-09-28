@@ -43,21 +43,25 @@ export async function recoverMissedWork(db: Database) {
   const [
     { repairImageProcessingWork },
     { expireOfflineRuns, expireStaleRuns },
+    { recoverStaleVendorMailSearchJobs },
   ] = await Promise.all([
     import("~/server/repo/image-processing-maintenance"),
     import("~/server/purchase-import/run-service"),
+    import("~/server/purchase-import/gmail/search-job"),
   ]);
   const namespace = getPurchaseImportNamespace();
-  const [image, offlineResult, staleResult] = await Promise.allSettled([
-    repairImageProcessingWork(db),
-    expireOfflineRuns(db),
-    namespace
-      ? expireStaleRuns(db, namespace)
-      : isCloudflareRuntime()
-        ? Promise.reject(new Error("PURCHASE_IMPORT binding is unavailable"))
-        : Promise.resolve(null),
-  ]);
-  const errors = [image, offlineResult, staleResult]
+  const [image, offlineResult, staleResult, vendorMailResult] =
+    await Promise.allSettled([
+      repairImageProcessingWork(db),
+      expireOfflineRuns(db),
+      namespace
+        ? expireStaleRuns(db, namespace)
+        : isCloudflareRuntime()
+          ? Promise.reject(new Error("PURCHASE_IMPORT binding is unavailable"))
+          : Promise.resolve(null),
+      recoverStaleVendorMailSearchJobs(db),
+    ]);
+  const errors = [image, offlineResult, staleResult, vendorMailResult]
     .filter((result) => result.status === "rejected")
     .map((result) => String(result.reason));
   const offline =
@@ -67,6 +71,8 @@ export async function recoverMissedWork(db: Database) {
     offlineExpired: offline?.expired,
     staleExpired: stale?.expired,
     staleFailures: stale?.failures.length,
+    vendorMailRepublished:
+      vendorMailResult.status === "fulfilled" ? vendorMailResult.value : null,
   });
   for (const failure of stale?.failures ?? [])
     Sentry.captureMessage(

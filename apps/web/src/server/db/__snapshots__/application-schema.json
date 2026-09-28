@@ -13824,6 +13824,20 @@
           "primaryKey": false,
           "notNull": false
         },
+        "searchTerms": {
+          "name": "searchTerms",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "pagesScanned": {
+          "name": "pagesScanned",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "status": {
           "name": "status",
           "type": "text",

@@ -13,6 +13,7 @@ import { ensureRun } from "~/server/runs/ensure-run";
 
 import {
   latestVendorMailSearchJob,
+  recoverStaleVendorMailSearchJobs,
   runVendorMailSearchJob,
   startVendorMailSearchJob,
 } from "./search-job";
@@ -53,7 +54,7 @@ describe("Vendor Gmail search jobs", () => {
     });
   });
 
-  it("queues once, exposes progress, and safely skips a replayed delivery", async () => {
+  it("scans every page in one Run, retains inputs, and skips replayed pages", async () => {
     const member = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic Gmail member",
       kind: "member",
@@ -121,10 +122,10 @@ describe("Vendor Gmail search jobs", () => {
       };
     });
     await expect(
-      runVendorMailSearchJob(ctx.db, task.jobId, { search }),
+      runVendorMailSearchJob(ctx.db, task.jobId, { search, publish }),
     ).resolves.toBe("succeeded");
     await expect(
-      runVendorMailSearchJob(ctx.db, task.jobId, { search }),
+      runVendorMailSearchJob(ctx.db, task.jobId, { search, publish }),
     ).resolves.toBe("skipped");
     expect(search).toHaveBeenCalledTimes(1);
     expect(search).toHaveBeenCalledWith(
@@ -133,30 +134,56 @@ describe("Vendor Gmail search jobs", () => {
       expect.objectContaining({ runId: task.jobId }),
       expect.any(Function),
     );
-    const [completedRun] = await getDb(ctx.db)
+    const [pendingRun] = await getDb(ctx.db)
       .select({ status: run.status, endedAt: run.endedAt })
       .from(run)
       .where(eq(run.id, runEntityId.parse(task.jobId)))
       .limit(1);
-    expect(completedRun).toMatchObject({
-      status: "completed",
-      endedAt: expect.any(Date),
+    expect(pendingRun).toMatchObject({ status: "running", endedAt: null });
+    expect(published[1]?.[0]).toMatchObject({
+      kind: "vendor-mail.search",
+      jobId: task.jobId,
+      page: 1,
     });
     expect(
       await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor),
     ).toMatchObject({
-      status: "completed",
+      status: "queued",
       searched: 10,
       skipped: 7,
       reviewable: 2,
       nextPageToken: "older-page",
     });
+    const nextTask = published[1]?.[0];
+    if (!nextTask || nextTask.kind !== "vendor-mail.search")
+      throw new Error("test setup: missing second page task");
+    await runVendorMailSearchJob(ctx.db, nextTask.jobId, {
+      page: nextTask.page,
+      publish,
+      search: async (_db, input) => {
+        expect(input).toMatchObject({
+          after: first.after,
+          pageToken: "older-page",
+          searchTerms: ["example.test"],
+        });
+        return {
+          searched: 4,
+          skipped: 2,
+          reviewable: 1,
+          after: first.after,
+          nextPageToken: null,
+        };
+      },
+    });
     expect(await getRunLiveProgress(ctx.db, first.runShortcode)).toMatchObject({
       status: "completed",
       gmail: expect.objectContaining({
-        searched: 10,
-        skipped: 7,
-        reviewable: 2,
+        searched: 14,
+        skipped: 9,
+        reviewable: 3,
+        pagesScanned: 2,
+        after: first.after,
+        searchTerms: ["example.test"],
       }),
       progress: expect.arrayContaining([
         expect.objectContaining({ phase: "completed" }),
@@ -170,7 +197,7 @@ describe("Vendor Gmail search jobs", () => {
       { publish },
     );
     expect(older.status).toBe("queued");
-    const olderTask = published[1]?.[0];
+    const olderTask = published[2]?.[0];
     if (!olderTask || olderTask.kind !== "vendor-mail.search")
       throw new Error("test setup: missing older Gmail search task");
     await expect(
@@ -206,8 +233,8 @@ describe("Vendor Gmail search jobs", () => {
       { publish },
     );
     expect(retried.status).toBe("queued");
-    expect(publish).toHaveBeenCalledTimes(3);
-    const retriedTask = published[2]?.[0];
+    expect(publish).toHaveBeenCalledTimes(4);
+    const retriedTask = published[3]?.[0];
     if (!retriedTask || retriedTask.kind !== "vendor-mail.search")
       throw new Error("test setup: missing retried Gmail search task");
     await runVendorMailSearchJob(ctx.db, retriedTask.jobId, {
@@ -222,5 +249,103 @@ describe("Vendor Gmail search jobs", () => {
       (await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor))
         ?.error,
     ).toMatch(/^22P02: invalid UUID input/u);
+  });
+
+  it("requeues a stale checkpoint without changing its totals", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic recovery member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic recovery vendor",
+      website: "https://example.test",
+    });
+    const publish = vi.fn<typeof publishBackgroundTasks>(
+      async (_db, tasks) => ({
+        transport: "queue",
+        count: tasks.length,
+      }),
+    );
+    const started = await startVendorMailSearchJob(
+      ctx.db,
+      { vendorId: vendor.shortcode },
+      ctx.actor,
+      { publish },
+    );
+    const [saved] = await getDb(ctx.db)
+      .select({ runId: vendorMailSearchJob.runId })
+      .from(vendorMailSearchJob)
+      .innerJoin(run, eq(vendorMailSearchJob.runId, run.id))
+      .where(eq(run.shortcode, started.runShortcode));
+    if (!saved) throw new Error("Synthetic job was not saved");
+    await getDb(ctx.db)
+      .update(vendorMailSearchJob)
+      .set({
+        status: "queued",
+        pagesScanned: 1,
+        searched: 10,
+        nextPageToken: "checkpoint",
+        updatedAt: new Date(Date.now() - 20 * 60_000),
+      })
+      .where(eq(vendorMailSearchJob.runId, saved.runId));
+    await recoverStaleVendorMailSearchJobs(ctx.db, { publish });
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish.mock.calls[1]?.[1]).toMatchObject([
+      { kind: "vendor-mail.search", jobId: saved.runId, page: 1 },
+    ]);
+    expect(
+      await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor),
+    ).toMatchObject({
+      status: "queued",
+      searched: 10,
+      nextPageToken: "checkpoint",
+    });
+  });
+
+  it("keeps a completed page's counts and cursor when the next handoff fails", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic handoff member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic handoff vendor",
+      website: "https://example.test",
+    });
+    const started = await startVendorMailSearchJob(
+      ctx.db,
+      { vendorId: vendor.shortcode },
+      ctx.actor,
+      { publish: async () => ({ transport: "queue", count: 1 }) },
+    );
+    const [saved] = await getDb(ctx.db)
+      .select({ runId: vendorMailSearchJob.runId })
+      .from(vendorMailSearchJob)
+      .innerJoin(run, eq(vendorMailSearchJob.runId, run.id))
+      .where(eq(run.shortcode, started.runShortcode));
+    if (!saved) throw new Error("Synthetic job was not saved");
+    await runVendorMailSearchJob(ctx.db, saved.runId, {
+      search: async () => ({
+        searched: 10,
+        skipped: 6,
+        reviewable: 2,
+        after: started.after,
+        nextPageToken: "saved-cursor",
+      }),
+      publish: async () => {
+        throw new Error("Synthetic queue outage");
+      },
+    });
+    expect(
+      await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor),
+    ).toMatchObject({
+      status: "failed",
+      searched: 10,
+      skipped: 6,
+      reviewable: 2,
+      nextPageToken: "saved-cursor",
+      error: "Synthetic queue outage",
+    });
   });
 });

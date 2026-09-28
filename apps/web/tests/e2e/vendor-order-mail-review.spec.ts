@@ -8,6 +8,7 @@ import {
   seedVendorDisplayPrerequisite,
   seedFailedVendorMailSearchRun,
   seedLiveVendorMailSearchRun,
+  seedPagedVendorMailSearchRun,
   seedVendorMailReviewPrerequisite,
 } from "./e2e-fixtures";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
@@ -59,7 +60,7 @@ test("queues a local synthetic Gmail search, shows progress, and continues to ol
     page,
     `Synthetic search vendor ${Date.now()}`,
   );
-  const starts: Array<{ pageToken?: string }> = [];
+  const starts: Array<{ pageToken?: string; after?: string }> = [];
   const queuedStatus: VendorSearchMailOut = {
     status: "queued",
     searched: 0,
@@ -75,9 +76,9 @@ test("queues a local synthetic Gmail search, shows progress, and continues to ol
   await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
     const operation = route.request().headers()["x-cubby-operation"];
     if (operation === "vendor.searchOrderMail") {
-      const payload = superjson.deserialize<{ input: { pageToken?: string } }>(
-        JSON.parse(route.request().postData() ?? "{}"),
-      );
+      const payload = superjson.deserialize<{
+        input: { pageToken?: string; after?: string };
+      }>(JSON.parse(route.request().postData() ?? "{}"));
       starts.push(payload.input);
       status = {
         ...queuedStatus,
@@ -141,6 +142,13 @@ test("queues a local synthetic Gmail search, shows progress, and continues to ol
   );
   await page.getByRole("button", { name: "Search Gmail now" }).click();
   expect(starts).toHaveLength(3);
+  status = {
+    ...queuedStatus,
+    status: "completed",
+    createdAt: new Date(Date.now() + 4_000).toISOString(),
+  };
+  await page.getByRole("button", { name: "Search all history" }).click();
+  expect(starts[3]).toMatchObject({ after: "1970/01/01" });
 });
 
 test("shows a failed Gmail search's saved reason on its Run page", async ({
@@ -173,11 +181,18 @@ test("updates a Run's progress live and retains its completed search summary", a
     `/runs/${seed.runShortcode}`,
     page.getByText("Waiting to search Gmail").last(),
   );
+  await expect(
+    page.getByRole("region", { name: "Search inputs" }),
+  ).toContainText("example.test");
+  await expect(
+    page.getByRole("region", { name: "Search inputs" }),
+  ).toContainText("Since");
   await seed.advance();
   await expect(page.getByText("Checked 4 of 6 messages").last()).toBeVisible();
   await expect(page.getByText("6 messages found")).toBeVisible();
   await seed.complete();
   await expect(page.getByText("Run completed")).toBeVisible();
+  await expect(page.getByText("1 page scanned")).toBeVisible();
   await expect(
     page.getByText("1 order email to review", { exact: true }),
   ).toBeVisible();
@@ -188,4 +203,34 @@ test("updates a Run's progress live and retains its completed search summary", a
       "Checked 6 messages; 2 already saved; 1 order email to review",
     ),
   ).toBeVisible();
+});
+
+test("keeps one Run live through every Gmail page and shows saved search inputs", async ({
+  page,
+}) => {
+  const seed = await seedPagedVendorMailSearchRun(
+    page,
+    `Synthetic paged search ${Date.now()}`,
+  );
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runShortcode}`,
+    page.getByRole("region", { name: "Search inputs" }),
+  );
+  await expect(
+    page.getByRole("region", { name: "Search inputs" }),
+  ).toContainText("example.test");
+  await seed.firstPage();
+  await expect(page.getByText("1 page scanned")).toBeVisible();
+  await expect(page.getByText("Continuing to older messages")).toBeVisible();
+  await expect(page.getByText("Run completed")).toHaveCount(0);
+  await seed.lastPage();
+  await expect(page.getByText("Run completed")).toBeVisible();
+  await expect(page.getByText("2 pages scanned")).toBeVisible();
+  await expect(page.getByText("13 messages checked")).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("2 pages scanned")).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Search inputs" }),
+  ).toContainText("example.test");
 });

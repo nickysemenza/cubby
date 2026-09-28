@@ -22,6 +22,7 @@ const phaseLabel = (phase: string) =>
   phase.replaceAll("_", " ").replace(/^./u, (letter) => letter.toUpperCase());
 
 /** Durable progress for every Run, including work completed outside this tab. */
+// oxlint-disable-next-line eslint/complexity -- This shared slot renders status, optional job inputs, and durable events together.
 export function RunLiveProgress({ record }: { record: RunOut }) {
   const client = useQueryClient();
   const progressQuery = useQuery({
@@ -65,6 +66,10 @@ export function RunLiveProgress({ record }: { record: RunOut }) {
       {progress.gmail ? (
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums">
           <span>
+            {progress.gmail.pagesScanned}{" "}
+            {progress.gmail.pagesScanned === 1 ? "page" : "pages"} scanned
+          </span>
+          <span>
             {progress.gmail.searched} messages{" "}
             {progress.status === "completed" ? "checked" : "found"}
           </span>
@@ -73,10 +78,38 @@ export function RunLiveProgress({ record }: { record: RunOut }) {
             {progress.gmail.reviewable} order{" "}
             {progress.gmail.reviewable === 1 ? "email" : "emails"} to review
           </span>
-          {progress.gmail.hasOlderPage ? (
-            <span>Older messages available</span>
+          {progress.gmail.hasMorePages && active ? (
+            <span>Continuing to older messages</span>
           ) : null}
         </div>
+      ) : null}
+      {progress.gmail ? (
+        <section
+          aria-label="Search inputs"
+          className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm"
+        >
+          <h3 className="font-medium">Search inputs</h3>
+          <dl className="mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-[max-content_1fr]">
+            <dt className="text-muted-foreground">Date range</dt>
+            <dd>
+              {progress.gmail.after === "1970/01/01"
+                ? "All available mail"
+                : `Since ${progress.gmail.after.replaceAll("/", "-")}`}
+            </dd>
+            <dt className="text-muted-foreground">Sender search</dt>
+            <dd className="min-w-0 break-words">
+              {progress.gmail.searchTerms.length
+                ? progress.gmail.searchTerms.join(", ")
+                : "Criteria were not saved for this earlier Run"}
+            </dd>
+            <dt className="text-muted-foreground">Starting point</dt>
+            <dd>
+              {progress.gmail.startedFromOlderPage
+                ? "Older Gmail page"
+                : "Newest matching email"}
+            </dd>
+          </dl>
+        </section>
       ) : null}
       {progress.gmail?.error ? (
         <StatusText tone="destructive">{progress.gmail.error}</StatusText>

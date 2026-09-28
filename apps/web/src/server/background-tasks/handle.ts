@@ -155,7 +155,7 @@ export async function handleBackgroundTask(
     case "vendor-mail.search": {
       const { runVendorMailSearchJob } =
         await import("~/server/purchase-import/gmail/search-job");
-      return runVendorMailSearchJob(db, task.jobId);
+      return runVendorMailSearchJob(db, task.jobId, { page: task.page });
     }
   }
 }

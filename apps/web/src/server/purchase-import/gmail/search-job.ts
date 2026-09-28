@@ -1,7 +1,7 @@
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { vendorSearchMailOut } from "@cubby/schemas/order-mail-review";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, lt } from "drizzle-orm";
 
 import {
   describeErrorCauses,
@@ -78,7 +78,8 @@ export async function startVendorMailSearchJob(
   } = {},
 ) {
   const target = await resolveVendorMailSearchTarget(db, input.vendorId, actor);
-  if (vendorSearchTerms(target.identity).length === 0)
+  const searchTerms = vendorSearchTerms(target.identity);
+  if (searchTerms.length === 0)
     throw new Error(
       "Add a Vendor website or verified sender before searching Gmail.",
     );
@@ -122,7 +123,7 @@ export async function startVendorMailSearchJob(
       .where(eq(runTable.id, runId));
     const jobs = await tx
       .insert(vendorMailSearchJob)
-      .values({ runId, after, pageToken: input.pageToken ?? null })
+      .values({ runId, after, pageToken: input.pageToken ?? null, searchTerms })
       .returning();
     await tx.insert(runProgress).values({
       runId,
@@ -144,6 +145,7 @@ export async function startVendorMailSearchJob(
         {
           kind: "vendor-mail.search",
           jobId: job.runId,
+          page: 0,
           requestedAt: new Date().toISOString(),
         },
       ],
@@ -188,7 +190,11 @@ export async function startVendorMailSearchJob(
 export async function runVendorMailSearchJob(
   db: Database,
   jobId: string,
-  options: { search?: typeof import("./search").searchVendorOrderMail } = {},
+  options: {
+    page?: number;
+    search?: typeof import("./search").searchVendorOrderMail;
+    publish?: typeof import("~/server/background-tasks/publish").publishBackgroundTasks;
+  } = {},
 ) {
   const database = getDb(db);
   const [record] = await database
@@ -197,13 +203,26 @@ export async function runVendorMailSearchJob(
     .innerJoin(runTable, eq(vendorMailSearchJob.runId, runTable.id))
     .where(eq(vendorMailSearchJob.runId, runEntityId.parse(jobId)))
     .limit(1);
-  if (
-    !record ||
-    record.job.status === "completed" ||
-    record.job.status === "failed"
-  )
-    return "skipped" as const;
+  if (!record) return "skipped" as const;
   const job = record.job;
+  const page = options.page ?? 0;
+  const [claimed] = await database
+    .update(vendorMailSearchJob)
+    .set({
+      status: "running",
+      error: null,
+      startedAt: job.startedAt ?? new Date(),
+    })
+    .where(
+      and(
+        eq(vendorMailSearchJob.runId, job.runId),
+        eq(vendorMailSearchJob.status, "queued"),
+        eq(vendorMailSearchJob.pagesScanned, page),
+      ),
+    )
+    .returning({ runId: vendorMailSearchJob.runId });
+  if (!claimed) return "skipped" as const;
+  const cursor = page === 0 ? job.pageToken : job.nextPageToken;
   const recordProgress = async (
     phase: string,
     detail: string,
@@ -213,7 +232,10 @@ export async function runVendorMailSearchJob(
       if (counts)
         await tx
           .update(vendorMailSearchJob)
-          .set(counts)
+          .set({
+            searched: job.searched + (counts.searched ?? 0),
+            skipped: job.skipped + (counts.skipped ?? 0),
+          })
           .where(eq(vendorMailSearchJob.runId, job.runId));
       await tx.insert(runProgress).values({
         runId: job.runId,
@@ -223,11 +245,7 @@ export async function runVendorMailSearchJob(
       });
     });
   };
-  await database
-    .update(vendorMailSearchJob)
-    .set({ status: "running", error: null, startedAt: new Date() })
-    .where(eq(vendorMailSearchJob.runId, job.runId));
-  await recordProgress("running", "Starting Gmail search");
+  await recordProgress("running", `Searching Gmail page ${page + 1}`);
   try {
     const search =
       options.search ?? (await import("./search")).searchVendorOrderMail;
@@ -246,54 +264,100 @@ export async function runVendorMailSearchJob(
       {
         vendorId: vendorRecord.shortcode,
         after: job.after,
-        pageToken: job.pageToken ?? undefined,
+        pageToken: cursor ?? undefined,
+        searchTerms: job.searchTerms,
       },
       buildActorContext(record.owner.actorUserId, "system", {
         runId: job.runId,
       }),
       recordProgress,
     );
-    const finishedAt = new Date();
+    if (result.nextPageToken && result.nextPageToken === cursor)
+      throw new Error("Gmail returned the same page cursor twice");
+    const hasNextPage = result.nextPageToken !== null;
+    const pagesScanned = page + 1;
+    const searched = job.searched + result.searched;
+    const skipped = job.skipped + result.skipped;
+    const reviewable = job.reviewable + result.reviewable;
+    const finishedAt = hasNextPage ? null : new Date();
     await database.transaction(async (tx) => {
       await tx
         .update(vendorMailSearchJob)
         .set({
-          status: "completed",
-          searched: result.searched,
-          skipped: result.skipped,
-          reviewable: result.reviewable,
+          status: hasNextPage ? "queued" : "completed",
+          searched,
+          skipped,
+          reviewable,
+          pagesScanned,
           nextPageToken: result.nextPageToken,
           finishedAt,
         })
         .where(eq(vendorMailSearchJob.runId, job.runId));
-      await tx
-        .update(runTable)
-        .set({ status: "completed", endedAt: finishedAt })
-        .where(eq(runTable.id, job.runId));
+      if (finishedAt)
+        await tx
+          .update(runTable)
+          .set({ status: "completed", endedAt: finishedAt })
+          .where(eq(runTable.id, job.runId));
       await tx.insert(runProgress).values({
         runId: job.runId,
         eventId: crypto.randomUUID(),
-        phase: "completed",
-        detail: `Checked ${result.searched} messages; ${result.skipped} already saved; ${result.reviewable} order emails to review`,
+        phase: hasNextPage ? "page_completed" : "completed",
+        detail: `Checked ${searched} messages across ${pagesScanned} pages; ${skipped} already saved; ${reviewable} order emails to review${hasNextPage ? "; continuing" : ""}`,
       });
     });
+    if (hasNextPage) {
+      const publish =
+        options.publish ??
+        (await import("~/server/background-tasks/publish"))
+          .publishBackgroundTasks;
+      await publish(
+        db,
+        [
+          {
+            kind: "vendor-mail.search",
+            jobId: job.runId,
+            page: pagesScanned,
+            requestedAt: new Date().toISOString(),
+          },
+        ],
+        { source: "vendor-mail.search" },
+      );
+    }
     return "succeeded" as const;
   } catch (error) {
     const message = jobErrorText(
       error instanceof Error ? error : String(error),
     );
     const finishedAt = new Date();
+    const [current] = await database
+      .select({ pagesScanned: vendorMailSearchJob.pagesScanned })
+      .from(vendorMailSearchJob)
+      .where(eq(vendorMailSearchJob.runId, job.runId))
+      .limit(1);
+    const checkpointSaved = (current?.pagesScanned ?? page) > page;
     await database.transaction(async (tx) => {
       await tx
         .update(vendorMailSearchJob)
-        .set({ status: "failed", error: message, finishedAt })
+        .set(
+          checkpointSaved
+            ? { status: "failed", error: message, finishedAt }
+            : {
+                status: "failed",
+                error: message,
+                finishedAt,
+                searched: job.searched,
+                skipped: job.skipped,
+              },
+        )
         .where(eq(vendorMailSearchJob.runId, job.runId));
       await tx
         .update(runTable)
         .set({
           status: "failed",
           endedAt: finishedAt,
-          failureCode: "vendor_mail_search_failed",
+          failureCode: checkpointSaved
+            ? "vendor_mail_publish_failed"
+            : "vendor_mail_search_failed",
         })
         .where(eq(runTable.id, job.runId));
       await tx.insert(runProgress).values({
@@ -308,4 +372,68 @@ export async function runVendorMailSearchJob(
     console.error("[vendor-mail.search] search failed", error);
     return "succeeded" as const;
   }
+}
+
+/** Repair a worker interruption or a lost handoff after a saved page. */
+export async function recoverStaleVendorMailSearchJobs(
+  db: Database,
+  options: {
+    publish?: typeof import("~/server/background-tasks/publish").publishBackgroundTasks;
+  } = {},
+) {
+  const database = getDb(db);
+  const cutoff = new Date(Date.now() - 15 * 60_000);
+  const stale = await database
+    .select({
+      runId: vendorMailSearchJob.runId,
+      page: vendorMailSearchJob.pagesScanned,
+      updatedAt: vendorMailSearchJob.updatedAt,
+    })
+    .from(vendorMailSearchJob)
+    .where(
+      and(
+        inArray(vendorMailSearchJob.status, activeStatuses),
+        lt(vendorMailSearchJob.updatedAt, cutoff),
+      ),
+    )
+    .orderBy(vendorMailSearchJob.updatedAt)
+    .limit(50);
+  const publish =
+    options.publish ??
+    (await import("~/server/background-tasks/publish")).publishBackgroundTasks;
+  let republished = 0;
+  for (const job of stale) {
+    const [claimed] = await database
+      .update(vendorMailSearchJob)
+      .set({ status: "queued" })
+      .where(
+        and(
+          eq(vendorMailSearchJob.runId, job.runId),
+          eq(vendorMailSearchJob.updatedAt, job.updatedAt),
+          inArray(vendorMailSearchJob.status, activeStatuses),
+        ),
+      )
+      .returning({ runId: vendorMailSearchJob.runId });
+    if (!claimed) continue;
+    await database.insert(runProgress).values({
+      runId: job.runId,
+      eventId: crypto.randomUUID(),
+      phase: "resumed",
+      detail: `Resuming Gmail page ${job.page + 1} after an interrupted handoff`,
+    });
+    await publish(
+      db,
+      [
+        {
+          kind: "vendor-mail.search",
+          jobId: job.runId,
+          page: job.page,
+          requestedAt: new Date().toISOString(),
+        },
+      ],
+      { source: "vendor-mail.recover" },
+    );
+    republished += 1;
+  }
+  return republished;
 }

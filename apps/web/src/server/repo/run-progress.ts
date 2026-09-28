@@ -38,7 +38,11 @@ export async function getRunLiveProgress(db: Database, shortcode: string) {
           searched: record.gmail.searched,
           skipped: record.gmail.skipped,
           reviewable: record.gmail.reviewable,
-          hasOlderPage: record.gmail.nextPageToken !== null,
+          pagesScanned: record.gmail.pagesScanned,
+          after: record.gmail.after,
+          searchTerms: record.gmail.searchTerms,
+          startedFromOlderPage: record.gmail.pageToken !== null,
+          hasMorePages: record.gmail.nextPageToken !== null,
           error: record.gmail.error,
         }
       : null,

@@ -329,7 +329,11 @@ export const runContract = defineContract("run", {
             searched: z.number().int().nonnegative(),
             skipped: z.number().int().nonnegative(),
             reviewable: z.number().int().nonnegative(),
-            hasOlderPage: z.boolean(),
+            pagesScanned: z.number().int().nonnegative(),
+            after: z.string(),
+            searchTerms: z.array(z.string()),
+            startedFromOlderPage: z.boolean(),
+            hasMorePages: z.boolean(),
             error: z.string().nullable(),
           })
           .nullable(),
