@@ -589,7 +589,8 @@ example vegetable` must not resolve to the weight of an entire linked bag
 - **Generic HTTP `resources.<entity>.batch` route.** MCP `entity_batch` runs
   up to 50 create/update commands per call, but the HTTP surface is one row
   per request, so a native bulk write (library sighting backfill, PR 5 of
-  the provenance plan) issues one generated `create` per row. Promote if a
+  the provenance plan) issued one generated `create` per row; sightings now
+  have the native `image.recordSightings` page instead. Promote if a
   5k-asset library makes that measurably slow; the route should mirror
   `entity_batch`'s independent-item semantics and benefit every entity.
 

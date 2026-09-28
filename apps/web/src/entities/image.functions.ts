@@ -6,7 +6,7 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
 export const image = defineOperationDomain(imageContract, {
-  bulkSightings: { invalidates: ripple.image },
+  recordSightings: { invalidates: ripple.image },
   list: {
     tags: [["image"]],
   },

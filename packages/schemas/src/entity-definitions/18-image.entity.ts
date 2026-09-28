@@ -3,6 +3,7 @@ import {
   imageCaptureLocation,
   imageProvenanceEvidence,
 } from "../image-capture-fields.js";
+import { imageSightingOut } from "../image-sighting-fields.js";
 import { optionalImageRepresentations } from "../image-summary.js";
 import { defineEntity } from "./definition.js";
 import { imageShortcode, ledgerPartyShortcode } from "../identifier-fields.js";
@@ -452,6 +453,25 @@ export default defineEntity({
         },
       },
       {
+        // Detail-only: the live rows of the `ImageSighting` child table
+        // (not an entity), each naming its owner and reporting device.
+        key: "sightings",
+        kind: "json",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Photo library sightings" }],
+        },
+        display: {
+          detail: true,
+          renderer: { detail: "image-sightings" },
+        },
+        validation: {
+          read: z.array(imageSightingOut).optional(),
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "metadataRevision",
         kind: "number",
         nullable: true,
@@ -588,6 +608,7 @@ export default defineEntity({
       "capturedByName",
       "captureAttribution",
       "provenanceEvidence",
+      "sightings",
       "createdAt",
       "updatedAt",
     ],
@@ -786,19 +807,6 @@ export default defineEntity({
       },
       inverse: {
         steps: [{ edge: "Image.capturedByPartyId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "sightings",
-      label: "Sightings",
-      target: "imageSighting",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "ImageSighting.imageId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "ImageSighting.imageId", direction: "outgoing" }],
       },
     },
   ],

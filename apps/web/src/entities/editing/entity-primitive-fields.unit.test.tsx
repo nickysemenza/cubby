@@ -730,12 +730,7 @@ describe("EntityIntentFields", () => {
 describe("edit intent reference pickers", () => {
   it("has a picker for every reference an edit intent renders", () => {
     // A multi-reference without one throws and takes the whole form down; a
-    // singular one degrades to a shortcode text input, which only
-    // device-reported provenance should ever need.
-    const textFallbacks = [
-      "imageSighting.full.imageId -> image",
-      "imageSighting.full.deviceId -> device",
-    ];
+    // singular one degrades to a shortcode text input.
     const missing = Object.entries(generatedEntityEditIntents).flatMap(
       ([entity, intents]) =>
         Object.entries(intents.fields).flatMap(([intent, keys]) =>
@@ -755,6 +750,6 @@ describe("edit intent reference pickers", () => {
           }),
         ),
     );
-    expect(missing).toEqual(textFallbacks);
+    expect(missing).toEqual([]);
   });
 });

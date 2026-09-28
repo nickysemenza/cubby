@@ -1,135 +1,36 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   DeviceId,
   ImageId,
-  ImageSightingId,
-  ImageSightingShortcode,
   LedgerPartyId,
   UserId,
 } from "@cubby/schemas/identifiers";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import {
-  type ImageSightingCreateInput,
-  type ImageSightingFilters,
-  type ImageSightingOut,
-  type ImageSightingUpdateData,
-  imageSightingOut,
+import type {
+  ImageRecordSightingsOut,
+  ImageSightingRecordItem,
 } from "@cubby/schemas/image-sighting";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { device, image, imageSighting } from "~/server/db/schema";
-import { entityRepository } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
-  buildPartialUpdateValues,
   notDeleted,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityCrud } from "~/server/repo/entity-crud-factory";
-import { listScaffold } from "~/server/repo/list-scaffold";
 import { currentMemberLedgerParty } from "~/server/repo/member-login";
-import {
-  lookupEntityReferences,
-  resolveAllOrThrow,
-  resolveOrThrow,
-} from "~/server/repo/shortcode-resolver";
-import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
+import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 import { deriveAndStoreImageCapture } from "~/server/services/image-capture-derivation";
 
-/** No incoming edges point at an image sighting — nothing else references one. */
-export const IMAGE_SIGHTING_DELETE_EDGE_POLICY =
-  {} as const satisfies IncomingEdgePolicy<
-    "imageSighting",
-    OperationDisposition
-  >;
-
-type ImageSightingRow = typeof imageSighting.$inferSelect;
-
-const scaffold = listScaffold("imageSighting", imageSighting);
-
-const displayDate = (row: ImageSightingRow): string =>
-  (row.capturedAt ?? row.observedAt).toISOString().slice(0, 10);
-
-const hydrate = async (
-  db: Database | DrizzleTransaction,
-  rows: ImageSightingRow[],
-): Promise<ImageSightingOut[]> => {
-  const [owners, devices, images] = await Promise.all([
-    lookupEntityReferences(
-      db,
-      "ledgerParty",
-      rows.map((row) => row.ledgerPartyId),
-    ),
-    lookupEntityReferences(
-      db,
-      "device",
-      rows.map((row) => row.deviceId),
-    ),
-    lookupEntityReferences(
-      db,
-      "image",
-      rows.map((row) => row.imageId),
-      { includeDeleted: true },
-    ),
-  ]);
-  return rows.map((row) => {
-    const owner = owners.get(row.ledgerPartyId);
-    const reporter = devices.get(row.deviceId);
-    return imageSightingOut.parse({
-      ...row,
-      id: parseShortcodeFor("imageSighting", row.shortcode),
-      imageId: images.get(row.imageId)?.id,
-      ledgerPartyId: owner?.id,
-      deviceId: reporter?.id,
-      displayName: `${owner?.name ?? "Unknown owner"} · ${reporter?.name ?? "Unknown device"} · ${displayDate(row)}`,
-    });
-  });
-};
-
-export const listImageSightings = (
-  db: Database,
-  filters: ImageSightingFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-) =>
-  scaffold.list(
-    db,
-    { filters, sorts, pagination },
-    { hydrate: (rows) => hydrate(db, rows) },
-  );
-
-const fetchById = async (
-  db: Database | DrizzleTransaction,
-  id: ImageSightingId,
-): Promise<ImageSightingRow | undefined> => {
-  const [row] = await unwrapDb(db)
-    .select()
-    .from(imageSighting)
-    .where(and(eq(imageSighting.id, id), notDeleted(imageSighting)))
-    .limit(1);
-  return row;
-};
-
-const imageSightingCrud = createEntityCrud({
-  table: imageSighting,
-  entity: "imageSighting",
-  fetchById,
-  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
-  toUpdate: (data: { placeName?: string | null; capturedAt?: Date | null }) =>
-    buildPartialUpdateValues(data),
-  auditUpdateFields: [...entityFieldModels.imageSighting.audit],
-});
-
-export const getImageSightingByID = imageSightingCrud.getByID;
-export const getImageSightingByShortcode = imageSightingCrud.getByShortcode;
+/**
+ * `ImageSighting` is a child of its Image, not an entity (ADR 0005): rows
+ * have no shortcode, every write goes through {@link recordImageSightings}
+ * (or a photo-import commit), and the audit history of a sighting is written
+ * onto the parent Image as `changes.sightings[<sighting id>]`.
+ */
 
 /**
  * The live member ledger party the acting login is linked to, via the
@@ -201,35 +102,6 @@ export async function setImageOwnDeviceSource(
     );
 }
 
-const observationColumns = (
-  data: Omit<
-    UpsertImageSightingInput,
-    | "imageId"
-    | "ledgerPartyId"
-    | "assetKey"
-    | "cloudIdentifier"
-    | "localIdentifier"
-  >,
-) => ({
-  deviceId: data.deviceId,
-  sourceType: data.sourceType,
-  mediaSubtypes: data.mediaSubtypes,
-  originalFilename: data.originalFilename ?? null,
-  pixelWidth: data.pixelWidth ?? null,
-  pixelHeight: data.pixelHeight ?? null,
-  hasAdjustments: data.hasAdjustments,
-  capturedAt: data.capturedAt ?? null,
-  capturedAtOffsetMinutes: data.capturedAtOffsetMinutes ?? null,
-  addedAt: data.addedAt ?? null,
-  location: data.location ?? null,
-  placeName: data.placeName ?? null,
-  camera: data.camera ?? null,
-  matchKind: data.matchKind,
-  hashDistance: data.hashDistance ?? null,
-  aspectGate: data.aspectGate ?? null,
-  observedAt: data.observedAt,
-});
-
 export interface UpsertImageSightingInput {
   imageId: ImageId;
   ledgerPartyId: LedgerPartyId;
@@ -237,7 +109,7 @@ export interface UpsertImageSightingInput {
   assetKey: string;
   cloudIdentifier?: string | null | undefined;
   localIdentifier?: string | null | undefined;
-  sourceType: ImageSightingCreateInput["sourceType"];
+  sourceType: ImageSightingRecordItem["sourceType"];
   mediaSubtypes: string[];
   originalFilename?: string | null | undefined;
   pixelWidth?: number | null | undefined;
@@ -246,108 +118,100 @@ export interface UpsertImageSightingInput {
   capturedAt?: Date | null | undefined;
   capturedAtOffsetMinutes?: number | null | undefined;
   addedAt?: Date | null | undefined;
-  location?: ImageSightingCreateInput["location"];
+  location?: ImageSightingRecordItem["location"];
   placeName?: string | null | undefined;
-  camera?: ImageSightingCreateInput["camera"];
-  matchKind: ImageSightingCreateInput["matchKind"];
+  camera?: ImageSightingRecordItem["camera"];
+  matchKind: ImageSightingRecordItem["matchKind"];
   hashDistance?: number | null | undefined;
   aspectGate?: boolean | null | undefined;
   observedAt: Date;
 }
 
 /**
- * The upsert itself, on an already-open transaction: every caller — the
- * generic `create` adapter below and the photo-import commit's per-item
+ * The upsert itself, on an already-open transaction: every caller —
+ * {@link recordImageSightings} and the photo-import commit's per-item
  * `library` block — resolves ids and joins one write boundary, then calls
  * this. A repeat report for the same `(imageId, ledgerPartyId, assetKey)` is
- * not an error: it replaces the observation columns on the existing row and
- * keeps its shortcode. Always runs `deriveAndStoreImageCapture` for the
- * affected image in the same transaction.
+ * not an error: it replaces the observation columns on the existing row.
+ * Writes one audit row onto the Image and re-derives the image's capture in
+ * the same transaction.
  */
 export async function upsertImageSightingInTransaction(
   tx: Database | DrizzleTransaction,
   data: UpsertImageSightingInput,
   actor: ActorContext,
-): Promise<{ id: ImageSightingId; created: boolean }> {
-  const observation = observationColumns(data);
-  const assetKey = data.assetKey.trim();
+): Promise<{ created: boolean }> {
   const now = new Date();
-  const { row, created } = await findOrCreateWithShortcode(
-    tx,
-    "imageSighting",
-    {
-      where: and(
-        eq(imageSighting.imageId, data.imageId),
-        eq(imageSighting.ledgerPartyId, data.ledgerPartyId),
-        eq(imageSighting.assetKey, assetKey),
-        notDeleted(imageSighting),
-      ),
-      values: () => ({
-        imageId: data.imageId,
-        ledgerPartyId: data.ledgerPartyId,
-        assetKey,
-        cloudIdentifier: data.cloudIdentifier ?? null,
-        localIdentifier: data.localIdentifier ?? null,
-        ...observation,
-        createdAt: now,
-        updatedAt: now,
-      }),
-    },
-  );
-  if (!created) {
-    await unwrapDb(tx)
-      .update(imageSighting)
-      .set({
-        ...observation,
-        cloudIdentifier: data.cloudIdentifier ?? null,
-        localIdentifier: data.localIdentifier ?? null,
-        updatedAt: now,
-      })
-      .where(eq(imageSighting.id, row.id));
-  }
+  const assetKey = data.assetKey.trim();
+  const observation = {
+    cloudIdentifier: data.cloudIdentifier ?? null,
+    localIdentifier: data.localIdentifier ?? null,
+    deviceId: data.deviceId,
+    sourceType: data.sourceType,
+    mediaSubtypes: data.mediaSubtypes,
+    originalFilename: data.originalFilename ?? null,
+    pixelWidth: data.pixelWidth ?? null,
+    pixelHeight: data.pixelHeight ?? null,
+    hasAdjustments: data.hasAdjustments,
+    capturedAt: data.capturedAt ?? null,
+    capturedAtOffsetMinutes: data.capturedAtOffsetMinutes ?? null,
+    addedAt: data.addedAt ?? null,
+    location: data.location ?? null,
+    placeName: data.placeName ?? null,
+    camera: data.camera ?? null,
+    matchKind: data.matchKind,
+    hashDistance: data.hashDistance ?? null,
+    aspectGate: data.aspectGate ?? null,
+    observedAt: data.observedAt,
+  };
+  const [row] = await unwrapDb(tx)
+    .insert(imageSighting)
+    .values({
+      imageId: data.imageId,
+      ledgerPartyId: data.ledgerPartyId,
+      assetKey,
+      ...observation,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [
+        imageSighting.imageId,
+        imageSighting.ledgerPartyId,
+        imageSighting.assetKey,
+      ],
+      // The unique index is partial: a tombstoned row never conflicts.
+      targetWhere: sql`${imageSighting.deletedAt} IS NULL`,
+      set: { ...observation, updatedAt: now },
+    })
+    // `xmax = 0` is true only for a row this statement inserted.
+    .returning({
+      id: imageSighting.id,
+      created: sql<boolean>`(xmax = 0)`,
+    });
+  if (!row) throw new Error("Sighting upsert returned no row");
   await logAuditEntry(tx, actor, {
-    entityKind: "imageSighting",
-    entityId: row.id,
-    action: created ? "create" : "update",
+    entityKind: "image",
+    entityId: data.imageId,
+    action: "update",
+    changes: { sightings: { [row.id]: {} } },
   });
   await deriveAndStoreImageCapture(tx, data.imageId);
-  return { id: row.id, created };
+  return { created: row.created };
 }
 
 /**
- * Report a sighting through the generic entity surface: resolve every id
+ * Record a page of sightings for one or more images: resolve every id
  * (owner falls back to the acting login's linked member party when omitted),
- * then delegate to {@link upsertImageSightingInTransaction}.
+ * upsert each on `(image, owner, assetKey)`. All-or-nothing, so a failed response can simply be
+ * resent: the same image, owner and asset key resolves to the existing live
+ * row.
  */
-export async function createImageSighting(
+export async function recordImageSightings(
   db: Database,
-  data: ImageSightingCreateInput,
+  items: readonly ImageSightingRecordItem[],
   actor: ActorContext,
-): Promise<{ output: ImageSightingOut; entityId: ImageSightingId }> {
-  const id = await withTransaction(db, async (tx) => {
-    const imageId = await resolveOrThrow(tx, "image", data.imageId);
-    const ledgerPartyId =
-      data.ledgerPartyId === undefined
-        ? await resolveSightingOwnerParty(tx, actor.userId)
-        : await resolveOrThrow(tx, "ledgerParty", data.ledgerPartyId);
-    const deviceId = await resolveOrThrow(tx, "device", data.deviceId);
-    const { id: sightingId } = await upsertImageSightingInTransaction(
-      tx,
-      { ...data, imageId, ledgerPartyId, deviceId },
-      actor,
-    );
-    return parseEntityId("imageSighting", sightingId);
-  });
-  return { output: await imageSightingCrud.getByID(db, id), entityId: id };
-}
-
-/** All-or-nothing page: a failed response can be resent because the same image, owner and asset
- * key resolves to the existing live row. The transaction includes capture derivation and audit. */
-export async function upsertImageSightingPage(
-  db: Database,
-  items: ImageSightingCreateInput[],
-  actor: ActorContext,
-): Promise<{ processed: number; created: number }> {
+): Promise<ImageRecordSightingsOut> {
   return withTransaction(db, async (tx) => {
     const images = await resolveAllOrThrow(
       tx,
@@ -359,23 +223,24 @@ export async function upsertImageSightingPage(
       "device",
       items.map((item) => item.deviceId),
     );
-    const explicitOwners = items.flatMap((item) =>
-      item.ledgerPartyId ? [item.ledgerPartyId] : [],
+    const explicitOwners = uniq(
+      items.flatMap((item) => (item.ledgerPartyId ? [item.ledgerPartyId] : [])),
     );
-    const ownerIDs = await resolveAllOrThrow(tx, "ledgerParty", explicitOwners);
+    const ownerIds = await resolveAllOrThrow(tx, "ledgerParty", explicitOwners);
     const owners = new Map(
-      explicitOwners.map((code, index) => [code, ownerIDs[index]!]),
+      explicitOwners.map((code, index) => [code, ownerIds[index]!]),
     );
     const actingOwner = items.some((item) => !item.ledgerPartyId)
       ? await resolveSightingOwnerParty(tx, actor.userId)
       : null;
-    let created = 0;
+
+    const sightings: ImageRecordSightingsOut["sightings"] = [];
     for (const [index, item] of items.entries()) {
       const owner = item.ledgerPartyId
         ? owners.get(item.ledgerPartyId)
         : actingOwner;
       if (!owner) throw new Error("Sighting owner could not be resolved");
-      const outcome = await upsertImageSightingInTransaction(
+      const { created } = await upsertImageSightingInTransaction(
         tx,
         {
           ...item,
@@ -385,46 +250,16 @@ export async function upsertImageSightingPage(
         },
         actor,
       );
-      if (outcome.created) created += 1;
+      sightings.push({
+        imageId: item.imageId,
+        assetKey: item.assetKey.trim(),
+        created,
+      });
     }
-    return { processed: items.length, created };
+    return {
+      processed: items.length,
+      created: sightings.filter((sighting) => sighting.created).length,
+      sightings,
+    };
   });
 }
-
-export async function updateImageSighting(
-  db: Database,
-  shortcode: ImageSightingShortcode,
-  data: ImageSightingUpdateData,
-  actor: ActorContext,
-): Promise<{ output: ImageSightingOut; entityId: ImageSightingId }> {
-  const id = await resolveOrThrow(db, "imageSighting", shortcode);
-  return withTransaction(db, async (tx) => {
-    const output = await imageSightingCrud.update(tx, id, data, actor);
-    const imageId = await resolveOrThrow(tx, "image", output.imageId);
-    await deriveAndStoreImageCapture(tx, imageId);
-    return { output, entityId: id };
-  });
-}
-
-/** Re-derive each affected image's capture once its sightings are gone. */
-const rederiveSightingImages = async (
-  tx: DrizzleTransaction,
-  ids: ImageSightingId[],
-) => {
-  // includes-deleted: these sightings were tombstoned by this very delete.
-  const rows = await tx
-    .select({ imageId: imageSighting.imageId })
-    .from(imageSighting)
-    .where(inArray(imageSighting.id, ids));
-  for (const imageId of uniq(rows.map((row) => row.imageId)))
-    await deriveAndStoreImageCapture(tx, parseEntityId("image", imageId));
-};
-
-export const imageSightingRepository = entityRepository("imageSighting", {
-  lifecycle: { delete: IMAGE_SIGHTING_DELETE_EDGE_POLICY },
-  get: getImageSightingByShortcode,
-  list: listImageSightings,
-  create: createImageSighting,
-  update: updateImageSighting,
-  deleteHooks: { afterDelete: rederiveSightingImages },
-});

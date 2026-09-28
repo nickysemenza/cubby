@@ -139,6 +139,20 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records the device that last reported on-device processing",
   },
+  // ImageSighting is a child table of Image, not an entity, so no relation
+  // path can start from it; the Image detail reads its sightings directly.
+  "ImageSighting.imageId": {
+    classification: "ownership",
+    reason: "a sighting is a child row of the Image it reports on",
+  },
+  "ImageSighting.ledgerPartyId": {
+    classification: "metadata",
+    reason: "the member whose photo library reported the sighting",
+  },
+  "ImageSighting.deviceId": {
+    classification: "metadata",
+    reason: "the native install that reported the sighting",
+  },
   "PhotoGroupProposal.runId": {
     classification: "ownership",
     reason: "a photo-inventory run's proposed item groupings",

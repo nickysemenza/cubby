@@ -829,17 +829,21 @@ original bytes remain the analysis source and fallback, and the original can
 be selected explicitly.
 
 An Image's _who took this and when_ is derived, never entered directly.
-`ImageSighting` records each report that a stored Image appears in one Ledger
+`ImageSighting` — a non-entity child table of Image, with no shortcode and no
+identity row — records each report that a stored Image appears in one Ledger
 Party member's photo library or cloud asset store, from one reporting
-`Device` — unique per `(imageId, ledgerPartyId, assetKey)`, so a member's
+`Device`. It is unique per `(imageId, ledgerPartyId, assetKey)`, so a member's
 second device reporting the same synced asset updates the existing sighting
-rather than creating another one. `deriveImageCapture` reduces an image's
+rather than creating another one. Sightings are written only through
+`image.recordSightings` (and a photo-import commit's `library` block), read on
+the Image detail as `sightings`, and their audit history lives on the parent
+Image. `deriveImageCapture` reduces an image's
 live sightings, and failing those its embedded EXIF, to Image's own
 `capturedAt`, `captureLocation`, `capturePlaceName`, `captureDeviceLabel`, and
 `capturedByPartyId` fields, recording how confidently in
 `captureAttribution` (`none`, `derived`, `ambiguous` when several members'
 evidence ties, or `confirmed` once a member sets it by hand — confirmed is
-never recomputed). Every sighting create, update, or delete re-runs this
+never recomputed). Every sighting write or reporting-device delete re-runs this
 derivation for its image in the same transaction. See ADR 0005 for the full
 precedence rule.
 

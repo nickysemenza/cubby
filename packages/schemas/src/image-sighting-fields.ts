@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { deviceShortcode, ledgerPartyShortcode } from "./identifier-fields";
+
 /** Where a sighting's asset was found. */
 export const imageSightingSourceType = z.enum([
   "userLibrary",
@@ -28,3 +30,29 @@ export const imageSightingCamera = z.object({
   software: z.string().optional(),
 });
 export type ImageSightingCamera = z.infer<typeof imageSightingCamera>;
+
+/** A sighting as the Image detail reads it: owner and reporter are named. */
+export const imageSightingOut = z.object({
+  ledgerPartyId: ledgerPartyShortcode.nullable(),
+  ownerName: z.string().nullable(),
+  deviceId: deviceShortcode.nullable(),
+  deviceName: z.string().nullable(),
+  assetKey: z.string(),
+  sourceType: imageSightingSourceType,
+  mediaSubtypes: z.array(z.string()),
+  originalFilename: z.string().nullable(),
+  pixelWidth: z.number().int().nullable(),
+  pixelHeight: z.number().int().nullable(),
+  hasAdjustments: z.boolean(),
+  capturedAt: z.date().nullable(),
+  capturedAtOffsetMinutes: z.number().int().nullable(),
+  addedAt: z.date().nullable(),
+  location: imageSightingLocation.nullable(),
+  placeName: z.string().nullable(),
+  camera: imageSightingCamera.nullable(),
+  matchKind: imageSightingMatchKind,
+  hashDistance: z.number().int().nullable(),
+  aspectGate: z.boolean().nullable(),
+  observedAt: z.date(),
+});
+export type ImageSightingOut = z.infer<typeof imageSightingOut>;

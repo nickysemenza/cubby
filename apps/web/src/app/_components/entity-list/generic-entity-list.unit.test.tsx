@@ -382,23 +382,6 @@ describe("GenericEntityList", () => {
     expect(screen.getByText("$18.50")).toBeVisible();
   });
 
-  it("table: shows an image sighting's related image from the shared preview projection", async () => {
-    const rows = [
-      {
-        id: testShortcode("imageSighting", "IMS-4K7M"),
-        assetKey: "Fixture asset",
-        displayImages: [
-          { id: "IMG-4K7M", url: "https://example.invalid/sighting.jpg" },
-        ],
-      },
-    ];
-    await renderListPage("imageSighting", "/image-sightings?view=table", rows);
-    expect(await screen.findByRole("img", { name: "Image" })).toHaveAttribute(
-      "src",
-      expect.stringContaining("sighting.jpg"),
-    );
-  });
-
   it("shelf: captions each card from the declared `shelf.subtitle` fields", async () => {
     const priced = mock(productListItem, {
       overrides: {

@@ -279,7 +279,7 @@ const mkImageSighting = async (
     >
   >,
 ) =>
-  insertWithShortcode(db, "imageSighting", {
+  insertAndReturn(db, imageSighting, {
     imageId: values.imageId ?? (await mkImage(db)).id,
     ledgerPartyId: values.ledgerPartyId ?? (await mkLedgerParty(db)).id,
     deviceId: values.deviceId ?? (await mkDevice(db)).id,

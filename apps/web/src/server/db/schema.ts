@@ -2,7 +2,7 @@ import type {
   AiAnalysisEntityKind,
   AiAnalysisRuntime,
 } from "@cubby/schemas/ai";
-import type { AuditEntityKind } from "@cubby/schemas/audit";
+import type { AuditEntityKind, AuditFieldChange } from "@cubby/schemas/audit";
 import type { Amount } from "@cubby/schemas/codec";
 import type { AuditChannel } from "@cubby/schemas/context";
 import {
@@ -38,6 +38,10 @@ import type {
   VendorId,
   WishId,
 } from "@cubby/schemas/identifiers";
+import type {
+  ImageSightingCamera,
+  ImageSightingLocation,
+} from "@cubby/schemas/image-sighting-fields";
 import type { ContributionRole } from "@cubby/schemas/ledger-party";
 import type { LedgerSourceClaimNormalizedEvidence } from "@cubby/schemas/ledger-transfer";
 import type { MealFoodAmount, MealFoodNutrients } from "@cubby/schemas/meal";
@@ -97,7 +101,6 @@ import {
   generatedFinancialAccountColumns,
   generatedFinancialTransactionColumns,
   generatedImageColumns,
-  generatedImageSightingColumns,
   generatedIngredientColumns,
   generatedInventoryColumns,
   generatedLedgerPartyColumns,
@@ -1436,17 +1439,59 @@ export const device = pgTable(
 );
 
 /** One report of a stored Image appearing in a member's photo library or
- * cloud asset; see ADR 0005. */
+ * cloud asset; see ADR 0005. A child of its Image, not an entity: it has no
+ * shortcode or identity row, and its audit history lives on the Image. */
 export const imageSighting = pgTable(
   "ImageSighting",
-  generatedImageSightingColumns({
-    image: (): AnyPgColumn => image.id,
-    ledgerParty: (): AnyPgColumn => ledgerParty.id,
-    device: (): AnyPgColumn => device.id,
-  }),
+  {
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    imageId: uuid("imageId")
+      .notNull()
+      .references((): AnyPgColumn => image.id, { onDelete: "cascade" }),
+    ledgerPartyId: uuid("ledgerPartyId")
+      .$type<LedgerPartyId>()
+      .notNull()
+      .references((): AnyPgColumn => ledgerParty.id),
+    deviceId: uuid("deviceId")
+      .$type<DeviceId>()
+      .notNull()
+      .references((): AnyPgColumn => device.id),
+    assetKey: text("assetKey").notNull(),
+    cloudIdentifier: text("cloudIdentifier"),
+    localIdentifier: text("localIdentifier"),
+    sourceType: text("sourceType", {
+      enum: ["userLibrary", "cloudShared", "iTunesSynced"],
+    }).notNull(),
+    mediaSubtypes: text("mediaSubtypes")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    originalFilename: text("originalFilename"),
+    pixelWidth: integer("pixelWidth"),
+    pixelHeight: integer("pixelHeight"),
+    hasAdjustments: boolean("hasAdjustments").notNull().default(false),
+    capturedAt: timestamp("capturedAt", { mode: "date" }),
+    capturedAtOffsetMinutes: integer("capturedAtOffsetMinutes"),
+    addedAt: timestamp("addedAt", { mode: "date" }),
+    location: jsonb("location").$type<ImageSightingLocation | null>(),
+    placeName: text("placeName"),
+    camera: jsonb("camera").$type<ImageSightingCamera | null>(),
+    matchKind: text("matchKind", {
+      enum: ["import", "libraryMatch"],
+    }).notNull(),
+    hashDistance: integer("hashDistance"),
+    aspectGate: boolean("aspectGate"),
+    observedAt: timestamp("observedAt", { mode: "date" }).notNull(),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deletedAt", { mode: "date" }),
+  },
   (table) => [
-    shortcodeUnique("ImageSighting", table.shortcode),
-    entityIdentityFk("ImageSighting", table),
     uniqueIndex("ImageSighting_image_party_asset_key")
       .on(table.imageId, table.ledgerPartyId, table.assetKey)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -3679,8 +3724,9 @@ export const auditLog = pgTable(
     id: pkUuid(),
     ...entityRef<AuditEntityKind>({ nullable: false }),
     action: text("action").notNull(), // 'create', 'update', 'delete'
-    changes:
-      jsonb("changes").$type<Record<string, { from: unknown; to: unknown }>>(),
+    // Flat field diffs. An Image row written for an ImageSighting nests them
+    // (`AuditStoredChanges`); every reader goes through `readStoredChanges`.
+    changes: jsonb("changes").$type<Record<string, AuditFieldChange>>(),
     userId: text("userId")
       .notNull()
       .$type<UserId>()

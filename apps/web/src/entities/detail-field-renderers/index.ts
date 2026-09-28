@@ -14,7 +14,7 @@ import {
 import { expenseDetailFields } from "./expense";
 import { financialAccountDetailFields } from "./financial-account";
 import { financialTransactionDetailFields } from "./financial-transaction";
-import { imageDetailFields, imageSightingDetailFields } from "./image-capture";
+import { imageDetailFields } from "./image-capture";
 import { inventoryDetailFields } from "./inventory";
 import { ledgerTransferDetailFields } from "./ledger-transfer";
 import { productDetailFields } from "./product";
@@ -126,14 +126,7 @@ export const detailRendererCoverage = {
     "image-provenance-evidence": implemented(
       imageDetailFields["image-provenance-evidence"],
     ),
-  },
-  imageSighting: {
-    "image-sighting-location": implemented(
-      imageSightingDetailFields["image-sighting-location"],
-    ),
-    "image-sighting-camera": implemented(
-      imageSightingDetailFields["image-sighting-camera"],
-    ),
+    "image-sightings": implemented(imageDetailFields["image-sightings"]),
   },
 } satisfies {
   [E in DetailRendererEntity]: EntityDetailRendererCoverage<E>;
@@ -171,8 +164,6 @@ const detailCoverageFor = (
       return detailRendererCoverage.wish;
     case "image":
       return detailRendererCoverage.image;
-    case "imageSighting":
-      return detailRendererCoverage.imageSighting;
     default:
       return undefined;
   }

@@ -1,7 +1,9 @@
 import type {
   AuditEntityKind,
+  AuditFieldChange,
   AuditJsonValue,
   AuditLogListOut,
+  AuditStoredChanges,
 } from "@cubby/schemas/audit";
 import {
   auditChannelSchema,
@@ -67,6 +69,30 @@ const auditChangesSchema: z.ZodType<AuditChanges> = z.record(
   z.string(),
   auditChangeSchema,
 );
+const auditSightingChangesSchema = z.object({
+  sightings: z.record(z.string(), z.record(z.string(), auditChangeSchema)),
+});
+
+/**
+ * Stored `AuditLog.changes` as flat field diffs. An `ImageSighting` event is
+ * stored on its Image as `{ sightings: { <sighting id>: <field diffs> } }`
+ * (sightings are not entities, so the Image is the audit subject); it reads
+ * as `sightings.<field>` entries, or a lone `sighting` entry when the report
+ * changed no tracked field, so the row still says what happened.
+ */
+export function readStoredChanges(stored: unknown) {
+  const nested = auditSightingChangesSchema.safeParse(stored);
+  if (!nested.success) return auditChangesSchema.parse(stored);
+  const fields = Object.values(nested.data.sightings).flatMap((diff) =>
+    Object.entries(diff).map(
+      ([field, change]) => [`sightings.${field}`, change] as const,
+    ),
+  );
+  return Object.fromEntries(
+    fields.length > 0 ? fields : [["sighting", { to: "reported" }] as const],
+  );
+}
+
 const auditCursorPayloadSchema = z.object({
   createdAt: z.string(),
   id: z.string().min(1),
@@ -79,7 +105,7 @@ function isNonEmptyString(value: unknown): value is string {
 type AuditEntryFields = {
   entityKind: AuditEntityKind;
   entityId: string;
-  changes?: AuditChangeMap;
+  changes?: AuditStoredChanges;
 };
 
 type AuditChange = { from: unknown; to: unknown };
@@ -223,6 +249,17 @@ export function diffUnorderedIdSet<T extends string>(
   return { from: [...before], to: [...after] };
 }
 
+/**
+ * The column is typed as flat diffs so every reader must go through
+ * {@link readStoredChanges}; the one nested shape (a sighting event on its
+ * Image) is written here.
+ */
+const storedChanges = (
+  changes: AuditStoredChanges | undefined,
+): Record<string, AuditFieldChange> | undefined =>
+  // SAFETY: jsonb stores either shape as-is; `readStoredChanges` reads both.
+  changes as Record<string, AuditFieldChange> | undefined;
+
 const auditActorColumns = (actor: ActorContext) => ({
   userId: actor.userId,
   channel: actor.channel,
@@ -245,7 +282,7 @@ export async function logAuditEntry(
       entityKind: entry.entityKind,
       entityId: entry.entityId,
       action: entry.action,
-      changes: entry.changes,
+      changes: storedChanges(entry.changes),
       ...auditActorColumns(actor),
     });
 }
@@ -265,7 +302,7 @@ export async function logAuditEntries(
     entityKind: entry.entityKind,
     entityId: entry.entityId,
     action: entry.action,
-    changes: entry.changes,
+    changes: storedChanges(entry.changes),
     ...auditActorColumns(actor),
   }));
 
@@ -461,8 +498,7 @@ export async function getAuditLog(
     ...entry,
     action: auditActionSchema.parse(entry.action),
     channel: auditChannelSchema.parse(entry.channel),
-    changes:
-      entry.changes == null ? null : auditChangesSchema.parse(entry.changes),
+    changes: entry.changes == null ? null : readStoredChanges(entry.changes),
   }));
   const lastEntry = returnEntries.at(-1);
   const nextCursor =

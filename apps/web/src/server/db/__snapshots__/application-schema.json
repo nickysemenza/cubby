@@ -3580,11 +3580,11 @@
       "checkConstraints": {
         "Entity_kind_check": {
           "name": "Entity_kind_check",
-          "value": "\"Entity\".\"kind\" IN ('product', 'recipe', 'ingredient', 'cookbook', 'location', 'inventory', 'meal', 'ledgerParty', 'ledgerTransfer', 'project', 'task', 'vendor', 'purchase', 'financialAccount', 'financialTransaction', 'wish', 'expense', 'image', 'planting', 'gardenEntry', 'vendorAccount', 'productCategory', 'run', 'device', 'imageSighting', 'plant')"
+          "value": "\"Entity\".\"kind\" IN ('product', 'recipe', 'ingredient', 'cookbook', 'location', 'inventory', 'meal', 'ledgerParty', 'ledgerTransfer', 'project', 'task', 'vendor', 'purchase', 'financialAccount', 'financialTransaction', 'wish', 'expense', 'image', 'planting', 'gardenEntry', 'vendorAccount', 'productCategory', 'run', 'device', 'plant')"
         },
         "Entity_shortcode_prefix_check": {
           "name": "Entity_shortcode_prefix_check",
-          "value": "\"Entity\".\"shortcode\" IS NULL OR CASE \"Entity\".\"kind\" WHEN 'product' THEN \"Entity\".\"shortcode\" LIKE 'PRD-%' WHEN 'recipe' THEN \"Entity\".\"shortcode\" LIKE 'RCP-%' WHEN 'ingredient' THEN \"Entity\".\"shortcode\" LIKE 'ING-%' WHEN 'cookbook' THEN \"Entity\".\"shortcode\" LIKE 'CKB-%' WHEN 'location' THEN \"Entity\".\"shortcode\" LIKE 'LOC-%' WHEN 'inventory' THEN \"Entity\".\"shortcode\" LIKE 'INV-%' WHEN 'meal' THEN \"Entity\".\"shortcode\" LIKE 'MEL-%' WHEN 'ledgerParty' THEN \"Entity\".\"shortcode\" LIKE 'LPY-%' WHEN 'ledgerTransfer' THEN \"Entity\".\"shortcode\" LIKE 'LTR-%' WHEN 'project' THEN \"Entity\".\"shortcode\" LIKE 'PRJ-%' WHEN 'task' THEN \"Entity\".\"shortcode\" LIKE 'TSK-%' WHEN 'vendor' THEN \"Entity\".\"shortcode\" LIKE 'VEN-%' WHEN 'purchase' THEN \"Entity\".\"shortcode\" LIKE 'PUR-%' WHEN 'financialAccount' THEN \"Entity\".\"shortcode\" LIKE 'FAC-%' WHEN 'financialTransaction' THEN \"Entity\".\"shortcode\" LIKE 'FTX-%' WHEN 'wish' THEN \"Entity\".\"shortcode\" LIKE 'WSH-%' WHEN 'expense' THEN \"Entity\".\"shortcode\" LIKE 'EXP-%' WHEN 'image' THEN \"Entity\".\"shortcode\" LIKE 'IMG-%' WHEN 'planting' THEN \"Entity\".\"shortcode\" LIKE 'PLT-%' WHEN 'gardenEntry' THEN \"Entity\".\"shortcode\" LIKE 'GDE-%' WHEN 'vendorAccount' THEN \"Entity\".\"shortcode\" LIKE 'VACCT-%' WHEN 'productCategory' THEN \"Entity\".\"shortcode\" LIKE 'CAT-%' WHEN 'run' THEN \"Entity\".\"shortcode\" LIKE 'RUN-%' WHEN 'device' THEN \"Entity\".\"shortcode\" LIKE 'DEV-%' WHEN 'imageSighting' THEN \"Entity\".\"shortcode\" LIKE 'IMS-%' WHEN 'plant' THEN \"Entity\".\"shortcode\" LIKE 'PLANT-%' ELSE false END"
+          "value": "\"Entity\".\"shortcode\" IS NULL OR CASE \"Entity\".\"kind\" WHEN 'product' THEN \"Entity\".\"shortcode\" LIKE 'PRD-%' WHEN 'recipe' THEN \"Entity\".\"shortcode\" LIKE 'RCP-%' WHEN 'ingredient' THEN \"Entity\".\"shortcode\" LIKE 'ING-%' WHEN 'cookbook' THEN \"Entity\".\"shortcode\" LIKE 'CKB-%' WHEN 'location' THEN \"Entity\".\"shortcode\" LIKE 'LOC-%' WHEN 'inventory' THEN \"Entity\".\"shortcode\" LIKE 'INV-%' WHEN 'meal' THEN \"Entity\".\"shortcode\" LIKE 'MEL-%' WHEN 'ledgerParty' THEN \"Entity\".\"shortcode\" LIKE 'LPY-%' WHEN 'ledgerTransfer' THEN \"Entity\".\"shortcode\" LIKE 'LTR-%' WHEN 'project' THEN \"Entity\".\"shortcode\" LIKE 'PRJ-%' WHEN 'task' THEN \"Entity\".\"shortcode\" LIKE 'TSK-%' WHEN 'vendor' THEN \"Entity\".\"shortcode\" LIKE 'VEN-%' WHEN 'purchase' THEN \"Entity\".\"shortcode\" LIKE 'PUR-%' WHEN 'financialAccount' THEN \"Entity\".\"shortcode\" LIKE 'FAC-%' WHEN 'financialTransaction' THEN \"Entity\".\"shortcode\" LIKE 'FTX-%' WHEN 'wish' THEN \"Entity\".\"shortcode\" LIKE 'WSH-%' WHEN 'expense' THEN \"Entity\".\"shortcode\" LIKE 'EXP-%' WHEN 'image' THEN \"Entity\".\"shortcode\" LIKE 'IMG-%' WHEN 'planting' THEN \"Entity\".\"shortcode\" LIKE 'PLT-%' WHEN 'gardenEntry' THEN \"Entity\".\"shortcode\" LIKE 'GDE-%' WHEN 'vendorAccount' THEN \"Entity\".\"shortcode\" LIKE 'VACCT-%' WHEN 'productCategory' THEN \"Entity\".\"shortcode\" LIKE 'CAT-%' WHEN 'run' THEN \"Entity\".\"shortcode\" LIKE 'RUN-%' WHEN 'device' THEN \"Entity\".\"shortcode\" LIKE 'DEV-%' WHEN 'plant' THEN \"Entity\".\"shortcode\" LIKE 'PLANT-%' ELSE false END"
         },
         "Entity_merge_not_self_check": {
           "name": "Entity_merge_not_self_check",
@@ -9620,12 +9620,6 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "shortcode": {
-          "name": "shortcode",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "imageId": {
           "name": "imageId",
           "type": "uuid",
@@ -9782,21 +9776,6 @@
         }
       },
       "indexes": {
-        "ImageSighting_shortcode_unique": {
-          "name": "ImageSighting_shortcode_unique",
-          "columns": [
-            {
-              "expression": "shortcode",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "ImageSighting_image_party_asset_key": {
           "name": "ImageSighting_image_party_asset_key",
           "columns": [
@@ -9882,7 +9861,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "ImageSighting_ledgerPartyId_LedgerParty_id_fk": {
@@ -9907,21 +9886,6 @@
           ],
           "columnsTo": [
             "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "ImageSighting_entity_identity_fk": {
-          "name": "ImageSighting_entity_identity_fk",
-          "tableFrom": "ImageSighting",
-          "tableTo": "Entity",
-          "columnsFrom": [
-            "id",
-            "shortcode"
-          ],
-          "columnsTo": [
-            "id",
-            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -16917,15 +16881,15 @@
           "primaryKey": false,
           "notNull": false
         },
-        "entityKind": {
-          "name": "entityKind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "entityId": {
           "name": "entityId",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "entityKind": {
+          "name": "entityKind",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
