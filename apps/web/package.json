@@ -30,6 +30,7 @@
     "test:e2e:postgres": "pnpm test:e2e",
     "typecheck": "node ../../scripts/generator/ensure.ts && tsc --noEmit --checkers 1",
     "db:generate": "node ../../scripts/generator/ensure.ts && tsx tooling/db-generate.ts",
+    "db:compose": "node ../../scripts/generator/ensure.ts && tsx tooling/db-compose-migration.ts --tag",
     "db:check": "node ../../scripts/generator/ensure.ts && node ../../scripts/test-services.ts -- tsx tooling/db-check.ts",
     "db:migrate": "tsx tooling/db-migrate.ts",
     "db:pull": "drizzle-kit pull",
