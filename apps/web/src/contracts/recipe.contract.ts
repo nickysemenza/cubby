@@ -83,11 +83,14 @@ export const recipeContract = defineContract("recipe", {
     input: recipeIdInput,
     output: recipeRecomputeAllOut,
   }),
+  // Reads that drive imports or delegate to modules owning a strong database.
   dryRunRecomputeTotals: query({
+    readPolicy: "strong",
     input: z.undefined(),
     output: recipeDryRunRecomputeTotalsOut,
   }),
   explainCosting: query({
+    readPolicy: "strong",
     input: recipeIdInput,
     output: recipeCostingExplain,
   }),
@@ -116,14 +119,17 @@ export const recipeContract = defineContract("recipe", {
     output: cookbookIdOut,
   }),
   getCookbookSource: query({
+    readPolicy: "strong",
     input: cookbookIdInput,
     output: cookbookSourceOut,
   }),
   getCookbookDiff: query({
+    readPolicy: "strong",
     input: cookbookDiffInput,
     output: cookbookDiffOut,
   }),
   previewNotionSync: query({
+    readPolicy: "strong",
     input: z.undefined(),
     output: notionPreviewOut,
   }),

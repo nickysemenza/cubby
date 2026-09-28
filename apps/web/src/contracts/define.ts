@@ -5,7 +5,9 @@ import type { z } from "zod";
  *
  * A contract names a domain and its operations with their Zod input/output
  * (or event) schemas and nothing else: no cache policy, no invalidation, no
- * React, no server code. That is what lets ONE declaration feed the browser
+ * React, no server code. The one server-facing hint is a query's
+ * `readPolicy: "strong"` (see `QueryContract`), a data-freshness requirement
+ * rather than a cache policy. That is what lets ONE declaration feed the browser
  * catalog (`defineOperationDomain`), the server implementers
  * (`implementOperationDomain` / `implementSubscriptionDomain`), the operation
  * registry generator (which imports these modules at build time), and the
@@ -47,6 +49,12 @@ interface OperationObservability {
  * flagged member is also the only way an RPC id reaches CubbyKit. Resource
  * verbs are flagged on the entity declaration (`native.create/update/delete`)
  * instead.
+ *
+ * `readPolicy: "strong"` on a query keeps it on the authoritative database
+ * adapter: it needs live data, or is a bounded read where the freshness RPC
+ * would cost more than it saves. Absent, the query reads through the
+ * request-selected adapter. The generator collects the strong set into
+ * `STRONG_QUERY_OPERATIONS`; mutations are always strong.
  */
 export interface QueryContract<
   Input extends z.ZodTypeAny = z.ZodTypeAny,
@@ -59,6 +67,7 @@ export interface QueryContract<
   readonly http?: false;
   readonly native?: string;
   readonly mcp?: McpToolSpec;
+  readonly readPolicy?: "strong";
 }
 
 export interface MutationContract<

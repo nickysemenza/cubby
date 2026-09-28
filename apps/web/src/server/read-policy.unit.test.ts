@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { registeredStartOperationKind } from "~/lib/start-operation-observability";
 import { Database } from "~/server/db";
 
 import {
   applyReadPolicy,
   mutationChangesHouseholdData,
   readPolicyFor,
-  STRONG_QUERY_OPERATIONS,
 } from "./read-policy";
 
 const database = (label: string) =>
@@ -16,17 +14,6 @@ const database = (label: string) =>
   });
 
 describe("shared read policy", () => {
-  it("keeps every registry member query-shaped and strong", () => {
-    expect(new Set(STRONG_QUERY_OPERATIONS).size).toBe(
-      STRONG_QUERY_OPERATIONS.length,
-    );
-
-    for (const operation of STRONG_QUERY_OPERATIONS) {
-      expect(registeredStartOperationKind(operation)).toBe("query");
-      expect(readPolicyFor(operation, "query")).toBe("strong");
-    }
-  });
-
   it("uses bounded-stale context for representative display reads", () => {
     for (const operation of [
       "ai.usageRecent",

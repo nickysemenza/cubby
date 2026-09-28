@@ -3,7 +3,9 @@ import * as schemas from "@cubby/schemas/meal";
 import { defineContract, mutation, query } from "~/contracts/define";
 
 export const mealContract = defineContract("meal", {
+  // Bounded Home summary; see expense.monthlySummary.
   getNutrition: query({
+    readPolicy: "strong",
     native: "Meal and daily macro summaries",
     input: schemas.mealNutritionInput,
     output: schemas.mealNutritionOut,
@@ -21,6 +23,7 @@ export const mealContract = defineContract("meal", {
     output: schemas.mealListOut,
   }),
   upcomingSummary: query({
+    readPolicy: "strong",
     input: schemas.mealDateRange,
     output: schemas.upcomingMealSummaryOut,
   }),

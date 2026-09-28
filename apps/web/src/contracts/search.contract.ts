@@ -36,7 +36,9 @@ export const searchContract = defineContract("search", {
     input: searchQueryInputSchema,
     output: relatedSearchGroupsOutSchema,
   }),
+  // Integrity/repair diagnostics.
   debug: query({
+    readPolicy: "strong",
     input: searchQueryInputSchema,
     output: searchDebugOutSchema,
   }),

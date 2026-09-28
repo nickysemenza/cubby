@@ -36,6 +36,7 @@ export const statementRowContract = defineContract("statementRow", {
     output: recordStatementRowsOut,
   }),
   list: query({
+    readPolicy: "strong",
     mcp: {
       name: "list_statement_rows",
       description:
@@ -45,6 +46,7 @@ export const statementRowContract = defineContract("statementRow", {
     output: statementRowListOut,
   }),
   summary: query({
+    readPolicy: "strong",
     mcp: {
       name: "get_statement_row_summary",
       description:
@@ -53,7 +55,9 @@ export const statementRowContract = defineContract("statementRow", {
     input: statementRowSummaryInput,
     output: statementRowSummaryOut,
   }),
+  // Statement rows drive imports and reconciliation against live data.
   imports: query({
+    readPolicy: "strong",
     mcp: {
       name: "list_statement_imports",
       description:

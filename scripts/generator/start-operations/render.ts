@@ -11,6 +11,7 @@ import {
   collectDeclaredOperations,
   collectNativeOperationIds,
   collectStartOperationHandlers,
+  collectStrongQueryOperationIds,
   collectStartOperations,
   type HandlerDefinition,
   SOURCE_ROOT,
@@ -20,6 +21,9 @@ const renderStartOperationRegistry = async (): Promise<string> => {
   const operations = [...(await collectStartOperations())].sort(([a], [b]) =>
     a.localeCompare(b),
   );
+  const strongEntries = (await collectStrongQueryOperationIds())
+    .map((operation) => `  ${JSON.stringify(operation)},\n`)
+    .join("");
   return (
     generatedHeader +
     `export const START_OPERATIONS = {\n${operations
@@ -40,7 +44,9 @@ const renderStartOperationRegistry = async (): Promise<string> => {
     `  (typeof START_OPERATIONS)[Id]["kind"];\n` +
     `export type StartOperationIdOfKind<Kind extends "query" | "mutation" | "subscription"> = {\n` +
     `  [Id in StartOperationId]: RegisteredStartOperationKind<Id> extends Kind ? Id : never;\n` +
-    `}[StartOperationId];\n`
+    `}[StartOperationId];\n` +
+    `\n/** Queries whose contract member declares \`readPolicy: "strong"\`. */\n` +
+    `export const STRONG_QUERY_OPERATIONS = [\n${strongEntries}] as const satisfies readonly StartOperationIdOfKind<"query">[];\n`
   );
 };
 

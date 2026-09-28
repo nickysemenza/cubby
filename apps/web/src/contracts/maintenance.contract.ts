@@ -39,7 +39,9 @@ export const maintenanceContract = defineContract("maintenance", {
     input: imageProcessingSettings,
     output: imageProcessingSettings,
   }),
+  // Live operational state.
   awaitingWork: query({
+    readPolicy: "strong",
     input: z.undefined(),
     output: awaitingWorkSchema,
   }),

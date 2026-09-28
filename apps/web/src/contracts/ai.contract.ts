@@ -85,13 +85,16 @@ export const aiContract = defineContract("ai", {
   }),
   // Nested `basis` can't ride the HTTP GET projection (precedent:
   // `entity-list.contract.ts`'s `list`) — `.queryOptions()` still works.
+  // AI and externally hydrated food reads own authoritative database helpers.
   suggestFields: query({
+    readPolicy: "strong",
     input: fieldSuggestionsInput,
     output: fieldSuggestionsOut,
     http: false,
   }),
   // Same reason as `suggestFields`: a per-row hint, not a public HTTP query.
   suggestExternalIdKind: query({
+    readPolicy: "strong",
     input: externalIdKindSuggestionInput,
     output: suggestExternalIdKindOut,
     http: false,

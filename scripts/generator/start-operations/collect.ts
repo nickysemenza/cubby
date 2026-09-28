@@ -43,6 +43,8 @@ type ContractMember = {
   http?: false;
   /** Why the Apple app calls this operation (see contracts/define.ts). */
   native?: string;
+  /** Keeps a query on the authoritative adapter (see contracts/define.ts). */
+  readPolicy?: "strong";
   input?: z.ZodType;
 };
 type Contract = { domain: string; ops: Record<string, ContractMember> };
@@ -52,6 +54,7 @@ export type DeclaredOperation = {
   observability: OperationObservability;
   http: boolean;
   native: boolean;
+  strongRead: boolean;
   input: z.ZodType | undefined;
   exportName: string;
   member: string;
@@ -281,6 +284,7 @@ export const collectDeclaredOperations = (): Promise<
           },
           http: definition.http !== false,
           native: definition.native !== undefined,
+          strongRead: definition.readPolicy === "strong",
           input: definition.input,
           exportName,
           member,
@@ -486,6 +490,25 @@ export const collectStartOperations = async (): Promise<
       { kind: declared.kind, observability: declared.observability },
     ]),
   );
+};
+
+/**
+ * Query ids whose contract member declares `readPolicy: "strong"`, sorted. A
+ * flag on a mutation or subscription is an error here: mutations are always
+ * strong and subscriptions run through the workflow stream's own policy, so a
+ * flag there would be silently meaningless.
+ */
+export const collectStrongQueryOperationIds = async (): Promise<string[]> => {
+  const ids: string[] = [];
+  for (const [operation, declared] of await collectDeclaredOperations()) {
+    if (!declared.strongRead) continue;
+    if (declared.kind !== "query")
+      throw new Error(
+        `${operation} declares readPolicy: "strong" but is a ${declared.kind}; only queries choose a read policy.`,
+      );
+    ids.push(operation);
+  }
+  return ids.sort((a, b) => a.localeCompare(b));
 };
 
 /**

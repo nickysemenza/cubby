@@ -25,14 +25,18 @@ export const calendarContract = defineContract("calendar", {
     output: calendarScheduleOut,
   }),
   getFeed: query({
+    readPolicy: "strong",
     input: z.undefined(),
     output: calendarFeedOut,
   }),
+  // Credentials and live operational state.
   getCredential: query({
+    readPolicy: "strong",
     input: z.undefined(),
     output: calendarCredentialOut,
   }),
   inspectFeed: query({
+    readPolicy: "strong",
     input: z.undefined(),
     output: calendarFeedInspectionOut,
   }),

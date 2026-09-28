@@ -61,12 +61,15 @@ export const inventoryContract = defineContract("inventory", {
     input: resolveScanStraysInput,
     output: resolveScanStraysOut,
   }),
+  // Interactive inventory work and integrity/repair diagnostics.
   findDuplicates: query({
+    readPolicy: "strong",
     native: "Audit duplicate badge",
     input: inventoryFindDuplicatesInput,
     output: inventoryDuplicateUniqueProductsOut,
   }),
   getByLocationIds: query({
+    readPolicy: "strong",
     native: "Audit bin rows",
     input: inventoryLocationIdsInput,
     output: inventoryWithLocationAndProductListOut,

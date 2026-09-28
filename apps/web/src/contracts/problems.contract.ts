@@ -37,6 +37,7 @@ export const problemsContract = defineContract("problems", {
     output: problemsFastSchema,
   }),
   getCounts: query({
+    readPolicy: "strong",
     native: "Today problems tile",
     input: noInput,
     output: problemsCountSchema,
@@ -62,14 +63,18 @@ export const problemsContract = defineContract("problems", {
     output: coverageTotalsSchema,
   }),
   getMaintenanceCounts: query({
+    readPolicy: "strong",
     input: noInput,
     output: maintenanceCountsSchema,
   }),
   dryRunReparse: query({
+    readPolicy: "strong",
     input: noInput,
     output: dryRunReparseOut,
   }),
+  // Integrity/repair diagnostics.
   dryRunPruneAliases: query({
+    readPolicy: "strong",
     input: noInput,
     output: dryRunPruneAliasesOut,
   }),

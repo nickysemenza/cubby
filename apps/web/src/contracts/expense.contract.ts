@@ -20,7 +20,9 @@ export const expenseContract = defineContract("expense", {
     input: schemas.expenseFiltersSchema,
     output: schemas.expenseAnalyticsOut,
   }),
+  // Home summaries are bounded, single-round-trip reads. Asking the freshness Durable Object first adds another network hop before these short queries.
   monthlySummary: query({
+    readPolicy: "strong",
     input: schemas.expenseFiltersSchema,
     output: schemas.expenseMonthlySummaryOut,
   }),

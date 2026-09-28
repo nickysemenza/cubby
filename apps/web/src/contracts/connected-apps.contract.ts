@@ -11,6 +11,7 @@ import { defineContract, mutation, query } from "~/contracts/define";
 
 export const oauthContract = defineContract("oauth", {
   listConnectedApps: query({
+    readPolicy: "strong",
     input: z.null(),
     output: connectedAppsOut,
   }),
@@ -18,7 +19,9 @@ export const oauthContract = defineContract("oauth", {
     input: revokeConnectedAppInput,
     output: revokeConnectedAppOut,
   }),
+  // Credentials and live operational state.
   countOrphanedClients: query({
+    readPolicy: "strong",
     input: z.null(),
     output: orphanedOAuthClientsOut,
   }),

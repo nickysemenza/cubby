@@ -31,7 +31,9 @@ export const locationContract = defineContract("location", {
     input: z.undefined(),
     output: infLocationListOut,
   }),
+  // Bounded Home summary; see expense.monthlySummary.
   valuationSummary: query({
+    readPolicy: "strong",
     input: z.undefined(),
     output: locationValuationSummaryOut,
   }),
