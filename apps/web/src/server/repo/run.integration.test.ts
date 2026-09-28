@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { run as runTable } from "~/server/db/schema";
+import { run as runTable, vendorMailSearchJob } from "~/server/db/schema";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 import { getDb } from "./database-helpers";
@@ -39,6 +39,30 @@ describe("getRunByShortcode", () => {
       purpose: "ai_action",
       ledgerPartyId: null,
       ledgerPartyName: null,
+    });
+  });
+
+  it("shows a failed Gmail search job's saved error on its Run detail", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "background",
+      trigger: "manual",
+    });
+    const [row] = await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "failed", failureCode: "vendor_mail_search_failed" })
+      .where(eq(runTable.id, runId))
+      .returning({ shortcode: runTable.shortcode });
+    if (!row) throw new Error("test setup: Run missing");
+    await getDb(ctx.db).insert(vendorMailSearchJob).values({
+      runId,
+      after: "2025/09/27",
+      status: "failed",
+      error: "Synthetic Gmail search failed at review count",
+    });
+
+    expect(await getRunByShortcode(ctx.db, row.shortcode)).toMatchObject({
+      status: "failed",
+      dispatchError: "Synthetic Gmail search failed at review count",
     });
   });
 });

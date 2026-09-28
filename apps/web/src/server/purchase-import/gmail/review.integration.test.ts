@@ -75,6 +75,13 @@ describe("Vendor order mail review", () => {
       ledgerPartyId: party.shortcode,
     };
     expect(
+      (
+        await listVendorOrderMail(ctx.db, input, {
+          messageIds: ["review-mail-1"],
+        })
+      ).items,
+    ).toHaveLength(1);
+    expect(
       (await listVendorOrderMail(ctx.db, input)).items[0]?.events[0]
         ?.candidates[0],
     ).toMatchObject({

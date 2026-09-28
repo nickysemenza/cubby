@@ -314,6 +314,7 @@ export default defineEntity({
       },
       {
         key: "dispatchError",
+        labelOverride: "Failure details",
         kind: "text",
         nullable: true,
         display: { detail: true },

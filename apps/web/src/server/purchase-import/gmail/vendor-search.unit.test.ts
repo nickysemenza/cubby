@@ -70,5 +70,6 @@ describe("on-demand Vendor Gmail search", () => {
     expect(getMessage).toHaveBeenCalledTimes(1);
     expect(getMessage).toHaveBeenCalledWith("new");
     expect(result.skipped).toBe(1);
+    expect(result.messageIds).toEqual(["saved", "new"]);
   });
 });
