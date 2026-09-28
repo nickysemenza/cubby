@@ -7,7 +7,7 @@ import { z } from "zod";
 import { generatedEntitySort } from "./generated/entity-sort.gen";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { nonEmptyTuple } from "./identifiers";
-import { mutationSideEffectsSchema } from "./background-jobs";
+import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import {
   createPaginatedResponseSchemaWithContext,
   createSortPaginationFields,
@@ -627,9 +627,6 @@ export const imageWithEntitySchema = z
     // (`imageList`, `getImageById`, `getImagesByShortcodes`) merges in the
     // batch-loaded score.
     dataQuality: generatedImageFieldSchemas.read.dataQuality.optional(),
-    entityKind: entityImage.nullable(),
-    entityId: attachableImageEntityId.nullable(),
-    entityName: z.string().nullable(),
     associations: z.array(imageAssociationSchema),
     processingIssue: imageProcessingIssue.nullable().optional(),
     importTarget: importTargetSummarySchema.nullable().optional(),

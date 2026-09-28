@@ -13,7 +13,6 @@ import type {
   DetectedItem,
   LocationDescription,
 } from "@cubby/schemas/ai";
-import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type RunId,
@@ -23,6 +22,7 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
+import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
 import {
   productCategorySummary,
   type ProductCategorySummary,

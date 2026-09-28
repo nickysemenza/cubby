@@ -33,7 +33,7 @@ function editorPort(beforeWrite: () => Promise<void> = async () => undefined) {
       action: "update",
       entity: "vendor",
       item: record,
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     });
   });
   const mutation = entityMutation.mutate.withTransport(transport);

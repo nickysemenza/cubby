@@ -6,11 +6,6 @@
  * - Batch UPC image backfill
  */
 
-import {
-  EMPTY_MUTATION_SIDE_EFFECTS,
-  type MutationSideEffects,
-  mutationSideEffectsWithWarnings,
-} from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import { displayGtin } from "@cubby/schemas/external-id";
 import {
@@ -21,6 +16,11 @@ import {
   parseEntityId,
 } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
+import {
+  EMPTY_MUTATION_SIDE_EFFECTS,
+  type MutationSideEffects,
+  mutationSideEffectsWithWarnings,
+} from "@cubby/schemas/mutation-side-effects";
 import type {
   ProductCreateInput,
   ProductTopLevelOut,

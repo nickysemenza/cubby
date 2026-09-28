@@ -15,8 +15,6 @@ const refreshedImage = mock(imageWithEntitySchema, {
   overrides: {
     id: "IMG-4K7M",
     filename: "renamed.jpg",
-    entityKind: "PRODUCT",
-    entityId: "PRD-4K7M",
   },
 });
 
@@ -44,7 +42,7 @@ describe("Image browser operations", () => {
       ),
     ).resolves.toMatchObject({
       id: "IMG-4K7M",
-      entityKind: "PRODUCT",
+      filename: "renamed.jpg",
     });
 
     expect(commands).toEqual(["update", "get"]);

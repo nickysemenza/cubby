@@ -1,7 +1,6 @@
 import { wrapFetchWithSentry } from "@sentry/tanstackstart-react";
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
-import { rewriteLegacyStartRequest } from "~/lib/start-dispatch-url";
 import { withErrorReporting } from "~/server/errors/report-error";
 
 // __CF_WORKERS__ is a build-time define (true only in build:cf, false elsewhere). In production
@@ -27,10 +26,7 @@ const serverEntry = {
   async fetch(request: Request) {
     try {
       return await withErrorReporting(
-        () =>
-          handler.fetch(
-            import.meta.env.PROD ? rewriteLegacyStartRequest(request) : request,
-          ),
+        () => handler.fetch(request),
         request.headers,
       );
     } catch (error) {

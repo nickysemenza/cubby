@@ -29,7 +29,7 @@ const matrixFields = {
 };
 
 /** The Usage renderer's route-independent search contract. */
-export const toolMatrixSearchSchema = z
+const toolMatrixSearchSchema = z
   .object({
     ...matrixFields,
     group: z.enum(["trade", "manufacturer"]).optional().catch(undefined),
@@ -66,9 +66,4 @@ export function matrixSearchFromTools(search: ToolsSearch): ToolMatrixSearch {
     floor: search.floor,
     group: search.usageGroup,
   };
-}
-
-export function legacyToolSearchToTools(search: ToolMatrixSearch): ToolsSearch {
-  const { group, ...matrix } = search;
-  return { ...matrix, view: "usage", usageGroup: group };
 }

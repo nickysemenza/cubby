@@ -60,14 +60,14 @@ class MemoryImageStorage {
         filename: string;
         contentType: string;
         status: string;
-        entityKind: string | null;
+        associations: { entityKind: string }[];
       }
     | Error = {
     key: "cubby/images/staged.png",
     filename: "staged.png",
     contentType: "image/png",
     status: "PENDING",
-    entityKind: null,
+    associations: [],
   };
   stagedObject: Response = new Response(Buffer.from(PNG_BASE64, "base64"));
   fetchedResponse: Response | Error = new Response(
@@ -604,7 +604,7 @@ describe("attachFileToEntity", () => {
       filename: "existing.png",
       contentType: "image/png",
       status: "UPLOADED",
-      entityKind: "PRODUCT",
+      associations: [{ entityKind: "product" }],
     };
     await expect(
       service.attachFileToEntity(database, {
@@ -628,7 +628,7 @@ describe("attachFileToEntity", () => {
       filename: "standalone.png",
       contentType: "image/png",
       status: "UPLOADED",
-      entityKind: null,
+      associations: [],
     };
 
     await expect(

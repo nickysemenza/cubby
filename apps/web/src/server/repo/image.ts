@@ -894,23 +894,6 @@ const imageWithRelationsToAPI = (
       return association === null ? [] : [association];
     },
   );
-  const legacyAssociation = associations.find(
-    ({ entityKind }) => entityKind !== "cookbook" && entityKind !== "vendor",
-  );
-  const legacyEntityKind = legacyAssociation
-    ? match(legacyAssociation.entityKind)
-        .with("product", () => "PRODUCT" as const)
-        .with("location", () => "LOCATION" as const)
-        .with("recipe", () => "RECIPE" as const)
-        .with("project", () => "PROJECT" as const)
-        .with("purchase", () => "PURCHASE" as const)
-        .with("gardenEntry", () => "GARDENENTRY" as const)
-        .with("meal", () => "MEAL" as const)
-        .with("task", () => "TASK" as const)
-        .with("cookbook", "vendor", () => null)
-        .exhaustive()
-    : null;
-
   return {
     id: parseShortcodeFor("image", imageData.shortcode),
     url: getR2PublicUrl(imageData.key),
@@ -937,12 +920,6 @@ const imageWithRelationsToAPI = (
     provenanceEvidence: imageData.provenanceEvidence,
     createdAt: imageData.createdAt,
     updatedAt: imageData.updatedAt,
-    entityKind: legacyEntityKind,
-    entityId:
-      legacyEntityKind && legacyAssociation
-        ? attachableImageEntityId.parse(legacyAssociation.entityId)
-        : null,
-    entityName: legacyAssociation?.entityName ?? null,
     associations: associations.sort(
       (a, b) =>
         a.entityKind.localeCompare(b.entityKind) ||

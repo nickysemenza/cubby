@@ -511,7 +511,7 @@ describe("MCP protocol smoke", () => {
         action: "create",
         entity: "product",
         item: { ...created, name: command.data.name },
-        sideEffects: { backgroundBatches: [] },
+        sideEffects: {},
       };
     });
     const server = new McpServer({ name: "test", version: "1.0.0" });

@@ -198,7 +198,7 @@ describe("record suggestions", () => {
                 id: record.id,
                 locationId,
               },
-              sideEffects: { backgroundBatches: [] },
+              sideEffects: {},
             };
           },
         })}
@@ -285,7 +285,7 @@ describe("record suggestions", () => {
               action: "update",
               entity: "product",
               item,
-              sideEffects: { backgroundBatches: [] },
+              sideEffects: {},
             };
           },
         })}
@@ -530,7 +530,7 @@ describe("record suggestions", () => {
                 id: record.id,
                 costType: "tools",
               },
-              sideEffects: { backgroundBatches: [] },
+              sideEffects: {},
             };
           },
         })}

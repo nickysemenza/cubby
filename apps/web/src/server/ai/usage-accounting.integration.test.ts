@@ -26,7 +26,7 @@ import {
   createLocationFixture,
   makeLocationInput,
 } from "~/server/repo/repo.fixtures";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 afterEach(() => {
@@ -92,7 +92,7 @@ describe("AiUsage accounting", () => {
       makeLocationInput({ name: "Usage Accounting Shelf" }),
       ctx.actor,
     );
-    const locationId = await resolveLiveShortcode(ctx.db, shelf.id, "location");
+    const locationId = await resolveOrThrow(ctx.db, "location", shelf.id);
 
     // No model runs on an analysis-cache hit, so this is the only writer for
     // the call: the runner's usage middleware never fires.

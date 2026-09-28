@@ -6,7 +6,6 @@ import { CopyRecipeParseButton } from "~/app/_components/recipe/copy-corpus-butt
 import { RecipeAvailabilityPanel } from "~/app/_components/recipe/RecipeAvailabilityPanel";
 import RecipeDetail, {
   type RecipeViewMode,
-  remapLegacyView,
 } from "~/app/_components/recipe/RecipeDetail";
 import type { RecipeFlowLayoutMode } from "~/app/_components/recipe/RecipeFlowView";
 import { AddToMeal } from "~/app/meals/add-to-meal";
@@ -29,7 +28,7 @@ export const RecipeWorkflow: DetailSlotComponent<"recipe"> = ({
     nutritionBasis = "whole",
   } = useSearch({ from: "/_authenticated/recipes/$shortcode" });
   const navigate = useNavigate();
-  const recipeView = remapLegacyView(view);
+  const recipeView = view ?? "read";
   const setRecipeView = (next: RecipeViewMode) => {
     // Keep the default ("read") out of the URL for clean links.
     void navigate({

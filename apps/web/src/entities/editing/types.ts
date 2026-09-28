@@ -1,5 +1,5 @@
-import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { Entity } from "@cubby/schemas/entity";
+import type { MutationSideEffects } from "@cubby/schemas/mutation-side-effects";
 
 import type {
   EntityBrowserMutationCommand,

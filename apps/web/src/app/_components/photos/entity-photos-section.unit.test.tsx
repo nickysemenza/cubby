@@ -82,7 +82,7 @@ describe("EntityPhotosSection", () => {
           action: "update",
           entity: "meal",
           item: mealRecordWithImages([]),
-          sideEffects: { backgroundBatches: [] },
+          sideEffects: {},
         };
       },
     };
@@ -125,7 +125,7 @@ describe("EntityPhotosSection", () => {
           action: "update",
           entity: "meal",
           item: mealRecordWithImages([existing]),
-          sideEffects: { backgroundBatches: [] },
+          sideEffects: {},
         };
       },
     };
@@ -197,7 +197,7 @@ describe("EntityPhotosSection", () => {
           action: "update",
           entity: "meal",
           item: mealRecordWithImages([existing]),
-          sideEffects: { backgroundBatches: [] },
+          sideEffects: {},
         };
       },
     };

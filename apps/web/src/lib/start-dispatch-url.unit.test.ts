@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  labelStartRequest,
-  LEGACY_START_DISPATCH_ID,
-  rewriteLegacyStartRequest,
-} from "./start-dispatch-url";
+import { labelStartRequest } from "./start-dispatch-url";
 import { startOperationHeaders } from "./start-operation-observability";
 
 describe("Start request URLs", () => {
@@ -50,24 +46,5 @@ describe("Start request URLs", () => {
         }),
       }),
     ).toBe("/api/example");
-  });
-
-  it("internally rewrites only the old dispatcher, preserving a mutation payload", async () => {
-    const request = new Request(
-      `https://example.test/_serverFn/${LEGACY_START_DISPATCH_ID}?existing=1`,
-      {
-        method: "POST",
-        body: "mutation",
-        headers: { origin: "https://example.test" },
-      },
-    );
-    const rewritten = rewriteLegacyStartRequest(request);
-    expect(rewritten.url).toBe(
-      "https://example.test/_serverFn/dispatch?existing=1",
-    );
-    expect(await rewritten.text()).toBe("mutation");
-    expect(rewritten.headers.get("origin")).toBe("https://example.test");
-    const other = new Request("https://example.test/_serverFn/other");
-    expect(rewriteLegacyStartRequest(other)).toBe(other);
   });
 });

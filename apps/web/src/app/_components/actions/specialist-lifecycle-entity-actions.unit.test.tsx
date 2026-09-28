@@ -53,7 +53,7 @@ function lifecycleOperations(
       onImageDelete(input.ids);
       return {
         deleted: input.ids.length,
-        sideEffects: { backgroundBatches: [] },
+        sideEffects: {},
       };
     }),
   };

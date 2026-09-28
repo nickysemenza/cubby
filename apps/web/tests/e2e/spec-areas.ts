@@ -497,7 +497,6 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
   {
     file: "tools-flow.spec.ts",
     globs: [
-      `${WEB}/src/routes/_authenticated/projects.tools.tsx`,
       `${WEB}/src/app/tools/**`,
       `${WEB}/src/app/projects/**`,
       `${WEB}/src/server/repo/project-tools.integration.test.ts`,

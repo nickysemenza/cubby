@@ -7,7 +7,7 @@ describe("splitExpenseSpend", () => {
     expect(splitExpenseSpend([])).toEqual({
       actual: 0,
       committed: 0,
-      contributions: 0,
+      credits: 0,
       net: 0,
     });
   });
@@ -20,7 +20,7 @@ describe("splitExpenseSpend", () => {
     expect(split).toEqual({
       actual: 350,
       committed: 0,
-      contributions: 0,
+      credits: 0,
       net: 350,
     });
   });
@@ -33,12 +33,12 @@ describe("splitExpenseSpend", () => {
     expect(split).toEqual({
       actual: 100,
       committed: 400,
-      contributions: 0,
+      credits: 0,
       net: 500,
     });
   });
 
-  it("treats negative expenses as contributions (positive magnitude) that offset net", () => {
+  it("treats negative expenses as credits (positive magnitude) that offset net", () => {
     // A project credit is a negative, future row.
     const split = splitExpenseSpend([
       { cost: 60_000, future: false },
@@ -48,7 +48,7 @@ describe("splitExpenseSpend", () => {
     ]);
     expect(split.actual).toBe(60_000);
     expect(split.committed).toBe(46_600);
-    expect(split.contributions).toBe(75_000);
+    expect(split.credits).toBe(75_000);
     expect(split.net).toBe(60_000 + 46_600 - 75_000);
   });
 
@@ -61,12 +61,12 @@ describe("splitExpenseSpend", () => {
     expect(split).toEqual({
       actual: 42,
       committed: 0,
-      contributions: 0,
+      credits: 0,
       net: 42,
     });
   });
 
-  it("net always equals actual + committed − contributions (matches rollup.spent)", () => {
+  it("net always equals actual + committed − credits (matches rollup.spent)", () => {
     const expenses = [
       { cost: 10, future: false },
       { cost: 20, future: true },
@@ -76,9 +76,7 @@ describe("splitExpenseSpend", () => {
     const split = splitExpenseSpend(expenses);
     const rawSum = expenses.reduce((t, p) => t + (p.cost ?? 0), 0);
     expect(split.net).toBe(rawSum);
-    expect(split.net).toBe(
-      split.actual + split.committed - split.contributions,
-    );
+    expect(split.net).toBe(split.actual + split.committed - split.credits);
   });
 });
 
@@ -109,7 +107,7 @@ describe("budgetRemaining", () => {
 describe("net cost basis over a product's linked expenses", () => {
   const netCost = (expenses: Parameters<typeof splitExpenseSpend>[0]) => {
     const split = splitExpenseSpend(expenses);
-    return split.actual - split.contributions;
+    return split.actual - split.credits;
   };
 
   it("nets an acquisition against a later sale", () => {

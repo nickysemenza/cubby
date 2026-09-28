@@ -83,7 +83,7 @@ type StagedImageRecord = Pick<
   "key" | "filename" | "contentType"
 > & {
   status: string;
-  entityKind: string | null;
+  associations: readonly { entityKind: string }[];
 };
 
 /** Explicit external seams for image storage; production binds real adapters. */
@@ -566,10 +566,10 @@ const readStagedUpload = async <TDatabase>(
       }
       throw notFound(error);
     });
-  if (staged.status !== "PENDING" || staged.entityKind !== null) {
+  if (staged.status !== "PENDING" || staged.associations.length > 0) {
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
-      `${uploadId} is not a staged upload — it is an existing ${staged.entityKind ?? "stored"} file. ` +
+      `${uploadId} is not a staged upload — it is an existing ${staged.associations[0]?.entityKind ?? "stored"} file. ` +
         "Pass the uploadId returned by create_file_uploads, not an imageId from a previous attach_files.",
     );
   }

@@ -1,9 +1,9 @@
-import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type {
   CandidateEquivalence,
   EquivalenceReport,
 } from "@cubby/schemas/equivalences";
 import type { RunId, RecipeId } from "@cubby/schemas/identifiers";
+import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
 import type {
   recipeCooccurrenceInput,
   recipeCookbookScopeInput,

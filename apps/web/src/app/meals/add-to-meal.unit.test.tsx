@@ -94,7 +94,7 @@ const testOperations: AddToMealOperations = {
         action: "create" as const,
         entity: "meal" as const,
         item: tuesdayDinner,
-        sideEffects: { backgroundBatches: [] },
+        sideEffects: {},
       };
     }
     if (command.action === "update" && command.entity === "meal") {
@@ -104,7 +104,7 @@ const testOperations: AddToMealOperations = {
         action: "update" as const,
         entity: "meal" as const,
         item: { ...cornerDeli, mealKind: "cooked" as const },
-        sideEffects: { backgroundBatches: [] },
+        sideEffects: {},
       };
     }
     throw new Error("Add to meal only issues meal create and update commands.");

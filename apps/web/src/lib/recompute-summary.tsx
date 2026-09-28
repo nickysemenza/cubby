@@ -1,14 +1,12 @@
-import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
+import type { MutationSideEffects } from "@cubby/schemas/mutation-side-effects";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 
 /**
  * Human toast payload for a mutation's persisted side-effects.
  *
- * `sideEffects.backgroundBatches` is a wire-compatibility remnant of the
- * removed background-job ledger — always empty, kept only so existing
- * generated clients keep decoding (see `@cubby/schemas/background-jobs`).
- * There is nothing left to link to, so this always returns the plain
+ * The background-job ledger is gone, so there is nothing left to link to and
+ * this always returns the plain
  * "Saved."-style toast; the parameter stays for every call site's existing
  * `savedWithBackgroundWork(data.sideEffects, ...)` shape.
  */

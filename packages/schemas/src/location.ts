@@ -15,7 +15,7 @@ import {
 } from "./base-entity";
 import { amount } from "./codec";
 import { money, moneyNullable } from "./money";
-import { mutationSideEffectsSchema } from "./background-jobs";
+import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import {
   inventoryShortcode,
   locationShortcode,

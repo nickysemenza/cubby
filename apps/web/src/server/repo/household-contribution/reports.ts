@@ -483,7 +483,7 @@ export async function projectContribution(
     ),
     actualSpend: spend.actual,
     committedSpend: spend.committed,
-    creditsReceived: spend.contributions,
+    creditsReceived: spend.credits,
     householdInitialExposure: money(householdInitialExposure),
     guestInitialFunding: money(guestInitialFunding),
     unattributedConsumption: money(unattributedConsumption),

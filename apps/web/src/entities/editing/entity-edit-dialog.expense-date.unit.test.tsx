@@ -25,7 +25,7 @@ function renderExpense(intent: "date" | "cost", date: string | null) {
       action: "update",
       entity: "expense",
       item: record,
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     }),
   );
   const mutation = entityMutation.mutate.withTransport(transport);

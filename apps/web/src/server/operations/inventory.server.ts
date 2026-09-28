@@ -1,4 +1,3 @@
-import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import {
@@ -22,6 +21,7 @@ import {
   type InventoryOwnershipSelection,
   setInventoryOwnershipInput,
 } from "@cubby/schemas/inventory-ownership";
+import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
 import {
   resolveScanStraysInput,
   scanAtLocationInput,

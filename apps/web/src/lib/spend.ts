@@ -6,8 +6,8 @@
 // three economically distinct quantities into one "spent" number —
 //   - actual: money already out the door (cost > 0, not future-flagged)
 //   - committed: planned/future expenses (cost > 0, future-flagged)
-//   - contributions: legacy wire name for negative Expense credits that offset
-//     spend; unrelated to household funding contributions
+//   - credits: negative Expense rows that offset spend; unrelated to
+//     household funding credits
 // `net` deliberately equals that old blended figure (== `rollup.spent`) so nothing
 // downstream regresses; the split fields are purely additive.
 
@@ -23,20 +23,20 @@ export interface SpendSplit {
   actual: number;
   /** cost > 0 && future — planned/committed, not yet spent. */
   committed: number;
-  /** Σ|cost| where cost < 0 — credits (legacy field name), positive magnitude. */
-  contributions: number;
-  /** Σ cost across all rows === actual + committed − contributions === rollup.spent. */
+  /** Σ|cost| where cost < 0 — credits, positive magnitude. */
+  credits: number;
+  /** Σ cost across all rows === actual + committed − credits === rollup.spent. */
   net: number;
 }
 
 export function splitExpenseSpend(expenses: SpendableExpense[]): SpendSplit {
   let actual = 0;
   let committed = 0;
-  let contributions = 0;
+  let credits = 0;
   for (const { cost, future } of expenses) {
     if (cost == null || cost === 0) continue;
     if (cost < 0) {
-      contributions += -cost;
+      credits += -cost;
     } else if (future) {
       committed += cost;
     } else {
@@ -46,8 +46,8 @@ export function splitExpenseSpend(expenses: SpendableExpense[]): SpendSplit {
   return {
     actual,
     committed,
-    contributions,
-    net: actual + committed - contributions,
+    credits,
+    net: actual + committed - credits,
   };
 }
 
