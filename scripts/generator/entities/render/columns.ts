@@ -15,7 +15,6 @@ const identifierTypeNames = {
   expense: "ExpenseId",
   financialAccount: "FinancialAccountId",
   financialTransaction: "FinancialTransactionId",
-  imageSighting: "ImageSightingId",
   ingredient: "IngredientId",
   inventory: "InventoryId",
   ledgerParty: "LedgerPartyId",
@@ -46,8 +45,6 @@ const storageJsonTypes = {
   "image.captureLocation": "ImageCaptureLocation | null",
   "image.provenanceEvidence": "ImageProvenanceEvidence | null",
   "image.embeddedMetadata": "StoredImageEmbeddedMetadata | null",
-  "imageSighting.location": "ImageSightingLocation | null",
-  "imageSighting.camera": "ImageSightingCamera | null",
   "inventory.amount": "Amount",
   "location.valuation": "LocationValuation | null",
   "product.labelNutrition": "ProductLabelNutrition | null",
@@ -87,8 +84,6 @@ const enumColumnExpression = (
     "productCategory.feature": `text(${column},{enum:productCategoryFeatureValues})`,
     "image.source": `text(${column},{enum:["own", "catalog", "unknown", "screenshot"]})`,
     "image.captureAttribution": `text(${column},{enum:["none","derived","ambiguous","confirmed"]})`,
-    "imageSighting.sourceType": `text(${column},{enum:["userLibrary","cloudShared","iTunesSynced"]})`,
-    "imageSighting.matchKind": `text(${column},{enum:["import","libraryMatch"]})`,
     "project.kind": `text(${column},{enum:projectKindValues})`,
     "project.status": `text(${column},{enum:projectStatusValues})`,
     "recipe.SourceType": `recipeSourceEnum(${column})`,
@@ -215,7 +210,6 @@ export const renderEntityColumnsArtifact = (
     'import { imageStatusValues } from "@cubby/schemas/image";\n' +
     'import type { ImageSourceFingerprint, StoredImageEmbeddedMetadata } from "@cubby/schemas/image";\n' +
     'import type { ImageCaptureLocation, ImageProvenanceEvidence } from "@cubby/schemas/image-capture-fields";\n' +
-    'import type { ImageSightingCamera, ImageSightingLocation } from "@cubby/schemas/image-sighting-fields";\n' +
     'import type { CookbookExtraction, CookbookRunReport } from "@cubby/schemas/cookbook";\n' +
     'import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";\n' +
     'import { mealKindValues, mealTypeValues } from "@cubby/schemas/meal-classification";\n' +

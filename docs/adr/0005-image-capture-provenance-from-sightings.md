@@ -75,6 +75,20 @@ is limited to the derivation function itself, the sighting adapter's upsert,
 the photo-import commit's per-item `library` block, and (later PRs) EXIF
 parsing and filename heuristics.
 
+## Amendment: sightings are not entities
+
+`ImageSighting` was first declared as an entity (`IMS-`). Nothing ever
+addressed a sighting on its own — no route, link, search, or attachment — so
+it is now a plain child table of Image: the rows and uuids are kept, the
+shortcode, identity FK, identity triggers, and `Entity` rows are gone, and
+`imageId` cascades on delete. The audit history of the former sighting
+entities was moved onto the parent Image (`entityKind='image'`,
+`changes.sightings[<sighting id>]`) before their `Entity` rows were deleted —
+a deliberate exception to ADR 0006's "Entity rows are never deleted". Writes
+go through the native `image.recordSightings` operation, which upserts on
+`(imageId, ledgerPartyId, assetKey)` and audits onto the Image; the Image
+detail reads its sightings from the child table.
+
 ## Consequences
 
 - New edges: `ImageSighting → Image` (cascade on delete), `ImageSighting →

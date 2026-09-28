@@ -13,16 +13,34 @@ import { oneOrMany } from "./pagination";
 
 /**
  * Audit log schemas and types.
- * Auditable entities are a subset of all entities (excludes usda-food, image) —
- * the set is the source-of-truth `auditableEntities` projection of the entity
- * manifest (kept in sync by entity-manifest.unit.test.ts).
+ * Auditable entities are a subset of all entities (excludes usda-food and run)
+ * — the set is the source-of-truth `auditableEntities` projection of the
+ * entity manifest (kept in sync by entity-manifest.unit.test.ts).
+ *
+ * `image` is not auditable in its own right, but it is the audit subject of
+ * its `ImageSighting` children (which are not entities): a sighting event is
+ * recorded on the parent Image as `changes.sightings[<sighting id>]`.
  */
-export const auditEntitySchema = entitySchema.extract([...auditableEntities]);
+const auditSubjectEntities = [...auditableEntities, "image"] as const;
+export const auditEntitySchema = entitySchema.extract(auditSubjectEntities);
 export type AuditEntityKind = z.infer<typeof auditEntitySchema>;
 
 const auditableEntityIdSchema = anyShortcodeSchema(
-  nonEmptyTuple<ShortcodeEntity>(auditableEntities),
+  nonEmptyTuple<ShortcodeEntity>(auditSubjectEntities),
 );
+
+/** One field's `from`/`to` as stored in `AuditLog.changes`. */
+export type AuditFieldChange = { from: unknown; to: unknown };
+
+/**
+ * `AuditLog.changes` as stored: a flat field diff, or — on the Image an
+ * `ImageSighting` belongs to — the sighting's own diff nested by sighting id
+ * (an empty object for a create). The read path flattens the nested shape
+ * into `sightings.<field>` entries, so consumers only ever see field diffs.
+ */
+export type AuditStoredChanges =
+  | Record<string, AuditFieldChange>
+  | { sightings: Record<string, Record<string, AuditFieldChange>> };
 
 export const auditLogListInput = z.object({
   entityKind: auditEntitySchema.optional(),

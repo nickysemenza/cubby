@@ -16,7 +16,6 @@ struct ImageEntityDetailView: View {
     @State private var diagnostics = ImageDiagnosticsCompareModel()
     @State private var processing = ImageProcessingHistoryModel()
     @State private var jobs = ImageJobHistoryModel()
-    @State private var sightings = ImageSightingsModel()
     @State private var showingAllAnalyses = false
     @State private var showingAllJobs = false
 
@@ -35,8 +34,7 @@ struct ImageEntityDetailView: View {
                         preferredAnalysis: processing.preferred,
                         history: processing.entries,
                         totalAnalyses: processing.total, jobs: jobs.runs, totalJobs: jobs.total,
-                        sightings: sightings.rows,
-                        showingAllAnalyses: $showingAllAnalyses, showingAllJobs: $showingAllJobs)
+                            showingAllAnalyses: $showingAllAnalyses, showingAllJobs: $showingAllJobs)
                     if developerOverlays {
                         Section("Developer overlays") {
                             DevOverlayText(ImageDiagnostics.compareCaption(diagnostics))
@@ -119,11 +117,9 @@ struct ImageEntityDetailView: View {
             async let detail = appModel.client.imageDetail(id)
             async let analyses = processing.load(id: id, client: appModel.client)
             async let jobLoad = jobs.load(id: id, client: appModel.client)
-            async let sightingsLoad = sightings.load(id: id, client: appModel.client)
             self.detail = try await detail
             await analyses
             await jobLoad
-            await sightingsLoad
         } catch {
             self.error = error.localizedDescription
             Diagnostics.report(error, context: "photos.imageDetail")
@@ -139,7 +135,6 @@ private struct PhotoTab: View {
     let totalAnalyses: Int
     let jobs: [ActivityRun]
     let totalJobs: Int
-    let sightings: [EntityRow]
     @Binding var showingAllAnalyses: Bool
     @Binding var showingAllJobs: Bool
 
@@ -203,16 +198,17 @@ private struct PhotoTab: View {
         Section("Provenance") {
             ProvenanceRows(detail: detail)
         }
-        if !sightings.isEmpty {
+        if let sightings = detail.sightings, !sightings.isEmpty {
             Section("In libraries") {
-                ForEach(sightings) { row in
-                    NavigationLink(value: Route.entityDetail(.imageSighting, id: row.id)) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(row.title)
-                            if let subtitle = row.subtitle {
-                                Text(subtitle).font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
+                ForEach(Array(sightings.enumerated()), id: \.offset) { _, sighting in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(
+                            "\(sighting.ownerName ?? "Unknown owner") · \(sighting.deviceName ?? "Unknown device")")
+                        Text(
+                            (sighting.capturedAt ?? sighting.observedAt)
+                                .formatted(date: .abbreviated, time: .omitted)
+                        )
+                        .font(.caption).foregroundStyle(.secondary)
                     }
                 }
             }
@@ -597,24 +593,6 @@ private struct ProvenanceMapRow: View {
         guard let url = URL(string: "https://maps.apple.com/?ll=\(location.lat),\(location.lng)")
         else { return }
         openURL(url)
-    }
-}
-
-@Observable
-@MainActor
-private final class ImageSightingsModel {
-    private(set) var rows: [EntityRow] = []
-
-    func load(id: ImageCode, client: CubbyClient) async {
-        do {
-            var filters = EntityFilterState()
-            filters.set(.single(id.rawValue), for: "imageId")
-            let page = try await client.list(
-                EntityCatalog[.imageSighting], page: 1, pageSize: 25, filters: filters)
-            rows = page.items
-        } catch {
-            Diagnostics.report(error, context: "photos.imageSightings")
-        }
     }
 }
 

@@ -1,10 +1,12 @@
+import type { ImageSightingOut } from "@cubby/schemas/image-sighting";
+
 import { NoneValue } from "~/components/ui/none-value";
 
 import type { EntityDetailFieldRenderers } from "./index";
 
 /**
  * Shared shape for any `captureLocation`-kind json field — today
- * `Image.captureLocation` and `ImageSighting.location`, and reusable by any
+ * `Image.captureLocation` and each sighting's `location`, and reusable by any
  * future coordinate field without a new renderer: this one function renders
  * "lat, lng · Open in Maps" (plus optional elevation/accuracy) for any of
  * them.
@@ -77,6 +79,43 @@ function renderCamera(camera: Camera | null) {
   );
 }
 
+const SOURCE_TYPE_LABEL = {
+  userLibrary: "User library",
+  cloudShared: "Cloud shared",
+  iTunesSynced: "iTunes synced",
+} as const satisfies Record<ImageSightingOut["sourceType"], string>;
+
+function renderSightings(sightings: readonly ImageSightingOut[] | undefined) {
+  if (!sightings || sightings.length === 0) return <NoneValue />;
+  return (
+    <ul className="flex flex-col gap-2 text-xs">
+      {sightings.map((sighting) => (
+        <li key={[sighting.ledgerPartyId, sighting.assetKey].join(":")}>
+          <span className="font-medium">
+            {sighting.ownerName ?? "Unknown owner"} ·{" "}
+            {sighting.deviceName ?? "Unknown device"}
+          </span>{" "}
+          <span className="text-muted-foreground">
+            {[
+              SOURCE_TYPE_LABEL[sighting.sourceType],
+              (sighting.capturedAt ?? sighting.observedAt)
+                .toISOString()
+                .slice(0, 10),
+              sighting.placeName,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+          {sighting.location ? (
+            <div>{renderCoordinates(sighting.location)}</div>
+          ) : null}
+          {sighting.camera ? <div>{renderCamera(sighting.camera)}</div> : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export const imageDetailFields = {
   "image-capture-location": (image) => ({
     value: renderCoordinates(image.captureLocation),
@@ -84,13 +123,7 @@ export const imageDetailFields = {
   "image-provenance-evidence": (image) => ({
     value: renderProvenanceEvidence(image.provenanceEvidence),
   }),
+  "image-sightings": (image) => ({
+    value: renderSightings(image.sightings),
+  }),
 } satisfies EntityDetailFieldRenderers<"image">;
-
-export const imageSightingDetailFields = {
-  "image-sighting-location": (sighting) => ({
-    value: renderCoordinates(sighting.location),
-  }),
-  "image-sighting-camera": (sighting) => ({
-    value: renderCamera(sighting.camera),
-  }),
-} satisfies EntityDetailFieldRenderers<"imageSighting">;

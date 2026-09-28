@@ -166,9 +166,10 @@ public protocol LibraryAssetFacts: Sendable {
 
 /// Builds the two shapes `ImageSighting`-related data takes on the wire from one set of library
 /// facts: the photo-import commit item's `library` sibling of `analysis`
-/// (`ImageSightingReportFields`), and a library-scan match's `ImageSightingCreateInput` (used only
-/// by `LibraryMetadataSync`'s backward path — the forward/import path never constructs a create
-/// input itself; the server derives the `import` sighting from the commit item's `library` block).
+/// (`ImageSightingReportFields`), and a library-scan match's `ImageSightingRecordItem` (used only
+/// by `LibraryMetadataSync`'s backward path, sent through `image.recordSightings` — the
+/// forward/import path never constructs a record item itself; the server derives the `import`
+/// sighting from the commit item's `library` block).
 public enum LibrarySightingBuilder {
     public static func metadata(
         from facts: some LibraryAssetFacts, cloudIdentifier: String?
@@ -218,7 +219,7 @@ public enum LibrarySightingBuilder {
 
     /// `matchKind` is always `.libraryMatch`: this builder is never used for the import path, which
     /// the server derives server-side from the commit item's `library` block instead.
-    public static func createInput(
+    public static func recordItem(
         imageId: ImageShortcode,
         deviceId: DeviceShortcode,
         ledgerPartyId: LedgerPartyShortcode? = nil,
@@ -227,11 +228,8 @@ public enum LibrarySightingBuilder {
         hashDistance: Int?,
         aspectGate: Bool?,
         observedAt: Date = .now
-    ) -> ImageSightingCreateInput {
-        ImageSightingCreateInput(
-            imageId: imageId,
-            ledgerPartyId: ledgerPartyId,
-            deviceId: deviceId,
+    ) -> ImageSightingRecordItem {
+        ImageSightingRecordItem(
             assetKey: metadata.assetKey(installationID: installationID),
             cloudIdentifier: metadata.cloudIdentifier,
             localIdentifier: metadata.localIdentifier,
@@ -247,10 +245,13 @@ public enum LibrarySightingBuilder {
             location: locationInput(metadata.location),
             placeName: nil,
             camera: cameraInput(metadata.camera),
-            matchKind: .libraryMatch,
             hashDistance: hashDistance,
             aspectGate: aspectGate,
-            observedAt: observedAt)
+            observedAt: observedAt,
+            imageId: imageId,
+            ledgerPartyId: ledgerPartyId,
+            deviceId: deviceId,
+            matchKind: .libraryMatch)
     }
 
     private static func locationInput(

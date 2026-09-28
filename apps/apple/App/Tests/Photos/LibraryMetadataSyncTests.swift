@@ -49,7 +49,7 @@ struct LibraryMetadataSyncTests {
         thermal: any PhotoThermalSource = StubThermalSource(state: .nominal),
         power: any PhotoPowerSource = StubPowerSource(lowPower: false),
         deviceShortcode: DeviceShortcode? = "DEV-0001",
-        send: @escaping @MainActor (ImageSightingCreateInput) async throws -> Void
+        send: @escaping @MainActor (ImageSightingRecordItem) async throws -> Void
     ) -> LibraryMetadataSync {
         LibraryMetadataSync(
             analysisStore: analysisStore, host: "cubby.example", installationID: "installation-1",
@@ -227,7 +227,7 @@ struct LibraryMetadataSyncTests {
 
     @Test func aSuccessfulSendMarksTheStoreSoALaterRunSkipsIt() async throws {
         let store = try PhotoAnalysisStore.make(inMemory: true)
-        let sentInputs = Mutex<[ImageSightingCreateInput]>([])
+        let sentInputs = Mutex<[ImageSightingRecordItem]>([])
         let sync = makeSync(
             analysisStore: store, candidates: [candidate("asset-1", imageID: "IMG-1")],
             send: { input in sentInputs.withLock { $0.append(input) } })
@@ -256,7 +256,7 @@ struct LibraryMetadataSyncTests {
         try await store.markLibrarySightingSent(
             host: "cubby.example", localIdentifier: "asset-a", imageId: "IMG-A", version: 1,
             modificationDate: Date(timeIntervalSince1970: 1_700_000_200), cloudIdentifier: nil)
-        let sentInputs = Mutex<[ImageSightingCreateInput]>([])
+        let sentInputs = Mutex<[ImageSightingRecordItem]>([])
         let sync = makeSync(
             analysisStore: store,
             candidates: [candidate("asset-a", imageID: "IMG-A"), candidate("asset-b", imageID: "IMG-B")],

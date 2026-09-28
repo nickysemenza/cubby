@@ -57,10 +57,10 @@ struct EntityRowTests {
         #expect(row?.imageURL == URL(string: "https://images.example/first.jpg"))
     }
 
-    @Test(arguments: [EntityKey.imageSighting, .plant, .device])
+    @Test(arguments: [EntityKey.plant, .device])
     func relatedImagePreviewUsesTheSameProjection(key: EntityKey) {
         let object: JSONValue = [
-            "id": "IMS-4K7M",
+            "id": "PLANT-4K7M",
             "displayImages": [["id": "IMG-4K7M", "url": "https://images.example/related.jpg"]],
         ]
         #expect(

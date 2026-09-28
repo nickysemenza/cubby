@@ -386,7 +386,7 @@ struct PhotoImportStagerTests {
         #expect(sentLibrary["cloudIdentifier"]?.stringValue == "cloud-1")
         #expect(sentLibrary["sourceType"]?.stringValue == "userLibrary")
         // `hashDistance`/`aspectGate` are never sent from the import path — only a library-scan
-        // match (`LibrarySightingBuilder.createInput`, used by `LibraryMetadataSync`) carries them.
+        // match (`LibrarySightingBuilder.recordItem`, used by `LibraryMetadataSync`) carries them.
         #expect(sentLibrary["hashDistance"] == nil)
         #expect(sentLibrary["aspectGate"] == nil)
     }

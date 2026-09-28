@@ -155,7 +155,6 @@ public actor CubbyClient {
             case .vendorAccount: .vendorAccount
             case .run: .run
             case .device: .device
-            case .imageSighting: .imageSighting
             case .plant: .plant
             }
         return try await perform {
@@ -354,11 +353,12 @@ public actor CubbyClient {
 
     // MARK: - Images
 
-    /// One bounded, transactional library sighting page; the server upserts by image/owner/asset.
-    public func bulkImageSightings(_ items: [ImageSightingCreateInput]) async throws {
+    /// One bounded, transactional library sighting page (`image.recordSightings`); the server
+    /// upserts by image/owner/asset key, so a resent page changes nothing.
+    public func recordImageSightings(_ items: [ImageSightingRecordItem]) async throws {
         guard !items.isEmpty else { return }
         _ = try await perform {
-            try await api.image_bulkSightings(.init(body: .json(.init(items: items)))).ok.body.json
+            try await api.image_recordSightings(.init(body: .json(.init(items: items)))).ok.body.json
         }
     }
 

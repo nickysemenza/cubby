@@ -1405,5 +1405,4 @@ export const ENTITY_EDGES = {
       },
     },
   }),
-  imageSighting: edges({}),
 } as const satisfies Record<Entity, Record<string, EntityEdge>>;

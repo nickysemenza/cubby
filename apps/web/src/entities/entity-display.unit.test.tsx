@@ -247,9 +247,9 @@ describe("declared entity displays", () => {
         refs={[]}
         seeded={{
           [entityDisplayImageKey({
-            entityKind: "image",
-            entityId: "IMG-TEST",
-          })]: { url: "https://images.example/sighting.jpg" },
+            entityKind: "product",
+            entityId: "PRD-TEST",
+          })]: { url: "https://images.example/product.jpg" },
           [entityDisplayImageKey({
             entityKind: "ledgerParty",
             entityId: "LPY-TEST",
@@ -257,18 +257,18 @@ describe("declared entity displays", () => {
         }}
       >
         <EntityBasicInfo
-          entity="imageSighting"
-          fields={["imageId", "ledgerPartyId"]}
+          entity="device"
+          fields={["productId", "ledgerPartyId"]}
           cohortLinks={false}
-          record={{ imageId: "IMG-TEST", ledgerPartyId: "LPY-TEST" }}
+          record={{ productId: "PRD-TEST", ledgerPartyId: "LPY-TEST" }}
         />
       </EntityDisplayImagesProvider>,
       { wrapper: harness.wrapper },
     );
 
     expect(
-      screen.getByRole("link", { name: "IMG-TEST" }).querySelector("img"),
-    ).toHaveAttribute("src", "https://images.example/sighting.jpg");
+      screen.getByRole("link", { name: "PRD-TEST" }).querySelector("img"),
+    ).toHaveAttribute("src", "https://images.example/product.jpg");
     // No cover: the entity icon holds the mark's box instead of an image.
     const party = screen.getByRole("link", { name: "LPY-TEST" });
     expect(party.querySelector("img")).toBeNull();

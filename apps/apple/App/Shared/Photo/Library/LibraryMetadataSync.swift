@@ -13,8 +13,9 @@ import Photos
 final class LibraryMetadataSync {
     /// `library_sighting_sync.version` — bump to force every sighting to resend (a schema or
     /// builder change), the same role `PhotoClassificationSweep.classifyVersion` plays for
-    /// classification.
-    static let version = 1
+    /// classification. v2: sightings are now recorded through `image.recordSightings` (they are a
+    /// child of the Image, no longer an entity), so every asset resends once.
+    static let version = 2
 
     struct Candidate: Sendable, Hashable {
         let localIdentifier: String
@@ -52,7 +53,7 @@ final class LibraryMetadataSync {
     /// exist yet the first time a run starts (`DeviceRegistration.sync` races this on sign-in), so
     /// a run with no shortcode yet simply does nothing rather than failing every candidate.
     @ObservationIgnored private let deviceShortcodeProvider: @MainActor () async -> DeviceShortcode?
-    @ObservationIgnored private let sendPage: @MainActor ([ImageSightingCreateInput]) async throws -> Void
+    @ObservationIgnored private let sendPage: @MainActor ([ImageSightingRecordItem]) async throws -> Void
 
     @ObservationIgnored private var isSignedIn: Bool
     @ObservationIgnored private var isSceneActive = true
@@ -87,7 +88,7 @@ final class LibraryMetadataSync {
         factsProvider: @escaping @MainActor (String) -> (any LibraryAssetFacts)?,
         cloudIdentifierProvider: @escaping @MainActor (String) async -> String? = { _ in nil },
         deviceShortcodeProvider: @escaping @MainActor () async -> DeviceShortcode?,
-        sendPage: @escaping @MainActor ([ImageSightingCreateInput]) async throws -> Void
+        sendPage: @escaping @MainActor ([ImageSightingRecordItem]) async throws -> Void
     ) {
         self.analysisStore = analysisStore
         self.host = host
@@ -255,7 +256,7 @@ final class LibraryMetadataSync {
             var prepared:
                 [(
                     candidate: Candidate, facts: any LibraryAssetFacts,
-                    cloudIdentifier: String?, input: ImageSightingCreateInput
+                    cloudIdentifier: String?, input: ImageSightingRecordItem
                 )] = []
             for candidate in candidates {
                 guard !Task.isCancelled, runGeneration == token else { return }
@@ -266,7 +267,7 @@ final class LibraryMetadataSync {
                 let cloudIdentifier = await cloudIdentifierProvider(candidate.localIdentifier)
                 let metadata = LibrarySightingBuilder.metadata(
                     from: facts, cloudIdentifier: cloudIdentifier)
-                let input = LibrarySightingBuilder.createInput(
+                let input = LibrarySightingBuilder.recordItem(
                     imageId: candidate.imageID, deviceId: deviceShortcode, metadata: metadata,
                     installationID: installationID, hashDistance: candidate.hashDistance,
                     aspectGate: candidate.aspectGate)
@@ -370,7 +371,7 @@ extension LibraryMetadataSync {
             },
             sendPage: { [weak client] inputs in
                 guard let client else { throw LibraryMetadataSyncError.clientUnavailable }
-                try await client.bulkImageSightings(inputs)
+                try await client.recordImageSightings(inputs)
             })
     }
 }
