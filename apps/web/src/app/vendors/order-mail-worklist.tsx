@@ -17,6 +17,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { NativeSelect } from "~/components/ui/native-select";
 import { StatusText } from "~/components/ui/status-text";
+import { TechnicalError } from "~/components/ui/technical-error";
 import { formatCurrency } from "~/lib/utils";
 
 import { vendor } from "./vendor.functions";
@@ -243,9 +244,16 @@ function OrderMailWorklist({
               >
                 View run
               </Link>
-              {currentJob.status === "queued"
-                ? "Waiting for the background worker. View the Run for wait time and retry."
-                : null}
+              {currentJob.status === "queued" ? (
+                currentJob.error ? (
+                  <div>
+                    <span>Rate limited. This page will retry shortly.</span>
+                    <TechnicalError error={currentJob.error} tone="muted" />
+                  </div>
+                ) : (
+                  "Waiting for the background worker. View the Run for wait time and retry."
+                )
+              ) : null}
               {currentJob.status === "running"
                 ? "Scanning Gmail. You can leave this page and return."
                 : null}
@@ -257,12 +265,17 @@ function OrderMailWorklist({
                 </span>
               ) : null}
               {currentJob.status === "failed" ? (
-                <span role="alert" className="text-destructive">
-                  Search stopped: {currentJob.error}.{" "}
-                  {resumablePage
-                    ? "Resume from the last completed page."
-                    : "Search Gmail again to retry."}
-                </span>
+                <div>
+                  <TechnicalError
+                    error={currentJob.error ?? "Search stopped"}
+                    prefix="Search stopped: "
+                  />
+                  <span className="text-muted-foreground">
+                    {resumablePage
+                      ? "Resume from the last completed page."
+                      : "Search Gmail again to retry."}
+                  </span>
+                </div>
               ) : null}
             </div>
           ) : null}

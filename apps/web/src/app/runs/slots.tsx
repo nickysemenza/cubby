@@ -13,6 +13,7 @@ import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { StatusText } from "~/components/ui/status-text";
+import { TechnicalError } from "~/components/ui/technical-error";
 import { run } from "~/entities/run.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
@@ -62,7 +63,9 @@ export function RunLiveProgress({ record }: { record: RunOut }) {
         <strong className="font-medium">
           {active
             ? waiting
-              ? "Waiting for background worker"
+              ? last?.phase === "rate_limited"
+                ? "AI Gateway rate limited; waiting to retry"
+                : "Waiting for background worker"
               : (last?.detail ?? "Working…")
             : progress.status === "completed"
               ? "Run completed"
@@ -148,7 +151,10 @@ export function RunLiveProgress({ record }: { record: RunOut }) {
         </section>
       ) : null}
       {progress.gmail?.error ? (
-        <StatusText tone="destructive">{progress.gmail.error}</StatusText>
+        <TechnicalError
+          error={progress.gmail.error}
+          tone={progress.gmail.status === "failed" ? "destructive" : "muted"}
+        />
       ) : null}
       {progress.progress.length > 0 ? (
         <ol className="grid gap-0 border-t border-border text-sm">

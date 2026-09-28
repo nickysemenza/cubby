@@ -22,6 +22,64 @@ import {
 describe("Vendor Gmail search jobs", () => {
   const ctx = withTestDb();
 
+  it("keeps a rate-limited page queued and records the model and stack for retry", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic vendor",
+      website: "https://example.test",
+    });
+    const started = await startVendorMailSearchJob(
+      ctx.db,
+      { vendorId: vendor.shortcode },
+      ctx.actor,
+      { publish: async () => ({ transport: "queue", count: 1 }) },
+    );
+    const [saved] = await getDb(ctx.db)
+      .select({ id: run.id })
+      .from(run)
+      .where(eq(run.shortcode, started.runShortcode));
+    if (!saved) throw new Error("Synthetic Run was not saved");
+    const provider = Object.assign(new Error("Wholesale Rate limited"), {
+      status: 429,
+      code: 2018,
+    });
+    provider.stack =
+      "Error: Wholesale Rate limited\n    at provider (synthetic.ts:12:3)";
+    const error = new Error(
+      "AI Gateway request failed (model: synthetic-model)",
+      {
+        cause: provider,
+      },
+    );
+
+    await expect(
+      runVendorMailSearchJob(ctx.db, saved.id, {
+        search: async () => {
+          throw error;
+        },
+      }),
+    ).rejects.toBe(error);
+
+    const progress = await getRunLiveProgress(ctx.db, started.runShortcode);
+    expect(progress).toMatchObject({
+      status: "running",
+      gmail: {
+        status: "queued",
+        pagesScanned: 0,
+        error: expect.stringContaining("model: synthetic-model"),
+      },
+      progress: expect.arrayContaining([
+        expect.objectContaining({ phase: "rate_limited" }),
+      ]),
+    });
+    expect(progress?.gmail?.error).toContain("synthetic.ts:12:3");
+    expect(progress?.gmail?.error).toContain("HTTP 429");
+  });
+
   it("resends only an overdue queued page and leaves its checkpoint intact", async () => {
     await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic retry member",
@@ -289,7 +347,10 @@ describe("Vendor Gmail search jobs", () => {
     ).resolves.toBe("succeeded");
     expect(
       await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor),
-    ).toMatchObject({ status: "failed", error: "429 synthetic limit" });
+    ).toMatchObject({
+      status: "failed",
+      error: expect.stringContaining("429 synthetic limit"),
+    });
     const [failedRun] = await getDb(ctx.db)
       .select({ status: run.status, failureCode: run.failureCode })
       .from(run)
@@ -328,7 +389,7 @@ describe("Vendor Gmail search jobs", () => {
     expect(
       (await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor))
         ?.error,
-    ).toMatch(/^22P02: invalid UUID input/u);
+    ).toContain("22P02: invalid UUID input");
   });
 
   it("requeues a stale checkpoint without changing its totals", async () => {
@@ -425,7 +486,7 @@ describe("Vendor Gmail search jobs", () => {
       skipped: 6,
       reviewable: 2,
       nextPageToken: "saved-cursor",
-      error: "Synthetic queue outage",
+      error: expect.stringContaining("Synthetic queue outage"),
     });
   });
 });

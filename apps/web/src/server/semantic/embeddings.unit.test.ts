@@ -67,6 +67,21 @@ const openAiEmbeddingsResponse = (count: number): OpenAiEmbeddingsResponse => ({
 });
 
 describe("embedTexts over the AI Gateway", () => {
+  it("reports the embedding model and operation when the gateway rejects a request", async () => {
+    const { embedTexts } = await embedTextsOverFakeGateway(
+      openAiEmbeddingsResponse(1),
+    );
+    vi.stubGlobal(
+      "fetch",
+      async () => new Response('{"error":"rate limited"}', { status: 429 }),
+    );
+    await expect(
+      embedTexts(["synthetic input"], {
+        feature: "entity-embedding",
+        operation: "refresh",
+      }),
+    ).rejects.toThrow(/model: text-embedding-3-small.*operation: refresh/u);
+  });
   it("sends one request carrying every text, the dimensions, and the call's metadata", async () => {
     const { embedTexts, sent } = await embedTextsOverFakeGateway(
       openAiEmbeddingsResponse(3),

@@ -3,6 +3,7 @@ import { z } from "zod";
 const errorCauseSchema = z.object({
   name: z.string(),
   message: z.string(),
+  stack: z.string().optional(),
   code: z.string().optional(),
   status: z.number().optional(),
 });
@@ -62,6 +63,7 @@ export function scrubErrorMessage(message: string): string {
 const errorNodeSchema = z.object({
   name: z.string().optional().catch(undefined),
   message: z.string().optional().catch(undefined),
+  stack: z.string().optional().catch(undefined),
   code: z.union([z.string(), z.number()]).optional().catch(undefined),
   status: z.number().optional().catch(undefined),
   statusCode: z.number().optional().catch(undefined),
@@ -81,6 +83,7 @@ function errorCause(
   };
   if (node.code !== undefined)
     result.code = scrubErrorMessage(String(node.code));
+  if (node.stack) result.stack = scrubErrorMessage(node.stack);
   const status = node.status ?? node.statusCode;
   if (status !== undefined) result.status = status;
   return result;
