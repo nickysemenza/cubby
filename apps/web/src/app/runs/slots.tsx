@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import type { z } from "zod";
 
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { StatusText } from "~/components/ui/status-text";
@@ -32,6 +33,11 @@ export function RunLiveProgress({ record }: { record: RunOut }) {
       return status === "running" ? 1_000 : false;
     },
   });
+  const retryQueue = useActionMutation({
+    mutationFn: run.retryGmailSearch.mutationOptions,
+    error: "Could not resend Gmail work",
+    onSuccess: () => void progressQuery.refetch(),
+  });
   const progress = progressQuery.data;
   useEffect(() => {
     if (progress && progress.status !== record.status)
@@ -46,23 +52,53 @@ export function RunLiveProgress({ record }: { record: RunOut }) {
   if (!progress) return <StatusText>Run progress is unavailable.</StatusText>;
   const active = progress.status === "running";
   const last = progress.progress.at(-1);
+  const waiting = active && progress.gmail?.status === "queued";
+  const waitingSeconds = last?.ageSeconds ?? 0;
+  const retryAvailable = waiting && waitingSeconds >= 180;
 
   return (
     <div className="grid gap-3" aria-live="polite" aria-atomic="false">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
         <strong className="font-medium">
           {active
-            ? (last?.detail ?? "Working…")
+            ? waiting
+              ? "Waiting for background worker"
+              : (last?.detail ?? "Working…")
             : progress.status === "completed"
               ? "Run completed"
               : progress.status === "failed"
                 ? "Run failed"
                 : phaseLabel(progress.status)}
         </strong>
-        {active ? (
-          <span className="text-muted-foreground">Updating live</span>
+        {waiting ? (
+          <span className="text-muted-foreground tabular-nums">
+            Waiting for {Math.floor(waitingSeconds / 60)}m {waitingSeconds % 60}
+            s
+          </span>
+        ) : active ? (
+          <span className="text-muted-foreground">
+            {last && last.ageSeconds > 10
+              ? `Last update ${Math.floor(last.ageSeconds / 60)}m ${last.ageSeconds % 60}s ago`
+              : "Updating live"}
+          </span>
         ) : null}
       </div>
+      {retryAvailable ? (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <span className="text-muted-foreground">
+            The saved task has not started. Resend it to the background queue.
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={retryQueue.isPending}
+            onClick={() => retryQueue.mutate({ shortcode: record.id })}
+          >
+            {retryQueue.isPending ? "Resending…" : "Retry queue delivery"}
+          </Button>
+        </div>
+      ) : null}
       {progress.gmail ? (
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums">
           <span>
