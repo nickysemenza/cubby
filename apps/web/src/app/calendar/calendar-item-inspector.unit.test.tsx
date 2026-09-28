@@ -89,7 +89,7 @@ function createCalendarOperations() {
         action: "update" as const,
         entity: "expense" as const,
         item: savedExpense,
-        sideEffects: { backgroundBatches: [] },
+        sideEffects: {},
       };
     }
     throw new Error("Calendar inspector only issues expense updates.");

@@ -75,7 +75,7 @@ describe("useEntityPhotoCapture", () => {
           item: locationRecord(
             attaching ? [oldImage, newImage] : [newImage, oldImage],
           ),
-          sideEffects: { backgroundBatches: [] },
+          sideEffects: {},
         };
       },
     };
@@ -118,7 +118,7 @@ describe("useEntityPhotoCapture", () => {
           action: "update",
           entity: "location",
           item: locationRecord([oldImage, newImage]),
-          sideEffects: { backgroundBatches: [] },
+          sideEffects: {},
         };
       },
     };
@@ -158,7 +158,7 @@ describe("useEntityPhotoCapture", () => {
           action: "update",
           entity: "location",
           item: locationRecord([newImage]),
-          sideEffects: { backgroundBatches: [] },
+          sideEffects: {},
         };
       },
     };
@@ -189,7 +189,7 @@ describe("useEntityPhotoCapture", () => {
           action: "update",
           entity: "location",
           item: locationRecord([oldImage]),
-          sideEffects: { backgroundBatches: [] },
+          sideEffects: {},
         };
       },
     };

@@ -174,7 +174,7 @@ describe("EntityEditDialog thrown submit errors", () => {
         action: "update",
         entity: "task",
         item: {},
-        sideEffects: { backgroundBatches: [] },
+        sideEffects: {},
       }),
     );
     const mutation = entityMutation.mutate.withTransport(transport);

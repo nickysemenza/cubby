@@ -52,7 +52,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-export const LEDGER_TRANSFER_DELETE_EDGE_POLICY = {
+const LEDGER_TRANSFER_DELETE_EDGE_POLICY = {
   "FinancialTransaction.ledgerTransferId": {
     code: "clear-evidence-link",
     effect: "detach",
@@ -483,7 +483,7 @@ export async function buildLedgerTransferWhere(
   ]);
 }
 
-export const listLedgerTransfers = async (
+const listLedgerTransfers = async (
   db: Database,
   filters: LedgerTransferFilters,
   sorts: SortParams[],

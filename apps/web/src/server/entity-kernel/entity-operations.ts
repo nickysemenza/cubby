@@ -1,13 +1,13 @@
-import {
-  EMPTY_MUTATION_SIDE_EFFECTS,
-  mutationSideEffectsWithWarnings,
-} from "@cubby/schemas/background-jobs";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
   parseEntityRef,
 } from "@cubby/schemas/identifiers";
+import {
+  EMPTY_MUTATION_SIDE_EFFECTS,
+  mutationSideEffectsWithWarnings,
+} from "@cubby/schemas/mutation-side-effects";
 import {
   buildPaginatedResponse,
   listGroupSummarySchema,

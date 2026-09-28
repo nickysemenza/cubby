@@ -29,7 +29,7 @@ function financialAccountMutationPort() {
       action: "update",
       entity: "financialAccount",
       item,
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     }),
   );
   const mutation = entityMutation.mutate.withTransport(transport);

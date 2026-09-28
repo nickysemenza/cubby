@@ -27,7 +27,7 @@ function gardenEntryPort(action: "create" | "update" = "create") {
       action,
       entity: "gardenEntry",
       item: created,
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     }),
   );
   const mutation = entityMutation.mutate.withTransport(transport);

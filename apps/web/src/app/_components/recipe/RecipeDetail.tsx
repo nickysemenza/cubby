@@ -11,7 +11,6 @@ import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import { Link } from "@tanstack/react-router";
 import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
-import { match } from "ts-pattern";
 
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
@@ -76,22 +75,6 @@ const RECIPE_VIEW_OPTIONS: ViewSwitcherOption<RecipeViewMode>[] = [
   { value: "prep", label: "Prep", icon: ListChecksIcon },
   { value: "flow", label: "Flow", icon: GitBranchIcon },
 ];
-
-/**
- * Normalize a URL view value — which may be one of the legacy names from an old
- * bookmark — into a current view. The merges: magazine→read, nested→spec,
- * table/charts→data, matrix→prep. (The former table/charts and checklist/grid
- * sub-modes are gone; charts stack inside Data and the grid folds into Prep.)
- */
-export function remapLegacyView(view: string | undefined): RecipeViewMode {
-  return match(view)
-    .with("read", "spec", "data", "prep", "flow", (v) => v)
-    .with("magazine", () => "read" as const)
-    .with("table", "charts", () => "data" as const)
-    .with("nested", () => "spec" as const)
-    .with("matrix", () => "prep" as const)
-    .otherwise(() => "read" as const);
-}
 
 function RecipeViewContent({
   viewMode,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { fieldResolutionsSchema } from "./field-resolution";
-import { mutationSideEffectsSchema } from "./background-jobs";
+import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { shortcodeEntities } from "./entity-manifest";
 import { moneyNullable } from "./money";
 import {

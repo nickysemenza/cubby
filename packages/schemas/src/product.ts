@@ -47,7 +47,7 @@ import {
 import { baseKind } from "./problems";
 import { plainDate, taskStatusSchema } from "./project";
 import { recipeUsageMcpEntityOut, recipeUsageOut } from "./recipe";
-import { mutationSideEffectsSchema } from "./background-jobs";
+import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import {
   generatedProductFieldSchemas,
   generatedProductFilterFields,

@@ -98,7 +98,7 @@ const dependencies: LocationSweepDependencies = {
     return {
       moved: 1,
       skipped: [],
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     } satisfies ResolveScanStraysOut;
   },
   bulkUpdateParent: async () => {
@@ -165,7 +165,7 @@ const queueStray = (locationId: string, locationName: string) => {
       hasPrice: true,
     },
     strays: [strayRow(locationId, locationName)],
-    sideEffects: { backgroundBatches: [] },
+    sideEffects: {},
   };
 };
 

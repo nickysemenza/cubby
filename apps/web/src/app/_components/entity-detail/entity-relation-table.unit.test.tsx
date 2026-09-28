@@ -268,7 +268,7 @@ describe("EntityRelationTable", () => {
           action: "update",
           entity: "task",
           item: { ...task, status: "done" },
-          sideEffects: { backgroundBatches: [] },
+          sideEffects: {},
         };
       },
     });

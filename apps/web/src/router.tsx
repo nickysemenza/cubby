@@ -1,3 +1,4 @@
+import { CUBBY_SENTRY_DSN } from "@cubby/worker-tracing/sentry-dsn";
 import * as Sentry from "@sentry/tanstackstart-react";
 import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
@@ -9,7 +10,6 @@ import { installPreloadErrorRecovery } from "~/lib/deploy-recovery";
 import { isSupersededViewTransitionError } from "~/lib/error-utils";
 import { installJsProfiler } from "~/lib/perf/js-self-profile";
 import { installNavigationTracker } from "~/lib/perf/navigation-tracker";
-import { SENTRY_DSN } from "~/lib/sentry-dsn";
 import { sentryEnvironment } from "~/lib/sentry-environment";
 import { SENTRY_IGNORED_ERRORS } from "~/lib/sentry-noise";
 import { scrubSentryEvent } from "~/lib/sentry-scrub";
@@ -63,7 +63,7 @@ export const getRouter = () => {
 
     const isProd = import.meta.env.PROD;
     Sentry.init({
-      dsn: SENTRY_DSN,
+      dsn: CUBBY_SENTRY_DSN,
       // E2E uses the production bundle but installs this flag before client
       // scripts run. Disabling the SDK here keeps test events out of Sentry
       // without Playwright routing, which disables the browser HTTP cache.

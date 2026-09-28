@@ -1,14 +1,12 @@
 import type { RunId } from "@cubby/schemas/identifiers";
-import { embed } from "@tanstack/ai";
 import {
   createOpenaiEmbedding,
   type OpenAIEmbeddingAdapter,
 } from "@tanstack/ai-openai";
 import { LRUCache } from "lru-cache";
 
-import type { UnparsedError } from "~/lib/error-utils";
-import { recordAiUsage } from "~/server/ai-usage";
 import { SEMANTIC_QUERY_FEATURE } from "~/server/ai/features";
+import { runEmbeddingFeature } from "~/server/ai/run-feature";
 import { cachedCall } from "~/server/clients/ai-adapters";
 import {
   gatewayBaseURL,
@@ -16,7 +14,6 @@ import {
   gatewayFetch,
   type GatewayMetadata,
 } from "~/server/clients/ai-gateway";
-import { wrapAiGatewayError } from "~/server/clients/ai-gateway-error";
 import type { Database } from "~/server/db";
 import { ensureRun, systemActor } from "~/server/runs/ensure-run";
 import { TraceNames, withTrace } from "~/server/tracing";
@@ -50,12 +47,10 @@ export interface EmbeddingPorts {
   /** Provider reachability only; `embedTexts` guards on this alone. */
   readonly configured: () => boolean;
   readonly vectorStore: VectorStorePort;
-  readonly recordAiUsage: typeof recordAiUsage;
   readonly config: typeof getSemanticEmbeddingConfig;
 }
 
-/** Exported so a test can swap one port and keep the real transport. */
-export const productionEmbeddingPorts: EmbeddingPorts = {
+const productionEmbeddingPorts: EmbeddingPorts = {
   adapter: (config, metadata) =>
     createOpenaiEmbedding(config.model, UNIFIED_BILLING_PLACEHOLDER_KEY, {
       baseURL: gatewayBaseURL("openai"),
@@ -67,7 +62,6 @@ export const productionEmbeddingPorts: EmbeddingPorts = {
     }),
   configured: gatewayConfigured,
   vectorStore: productionVectorStore,
-  recordAiUsage,
   config: getSemanticEmbeddingConfig,
 };
 
@@ -130,47 +124,27 @@ export async function embedTexts(
       "ai.dimensions": config.dimensions,
       "ai.input_count": texts.length,
     });
-    const startedAt = performance.now();
     const metadata: GatewayMetadata = {
       feature,
       operation,
       inputCount: texts.length,
     };
-    const result = await embed({
-      adapter: ports.adapter(config, metadata),
-      input: texts,
-      dimensions: config.dimensions,
-    }).catch((error: UnparsedError) => {
-      throw wrapAiGatewayError(error, {
-        model: config.model,
-        provider: config.provider,
-        route: "openai",
-        feature,
-        operation,
-      });
-    });
-
-    if (opts?.db) {
-      const runId =
-        opts.runId ??
+    const runId = opts?.db
+      ? (opts.runId ??
         (await ensureRun(opts.db, systemActor(), {
           purpose: "background",
           clientKey: `embeddings:${new Date().toISOString().slice(0, 10)}`,
-        }));
-      await ports.recordAiUsage(opts.db, {
-        feature,
-        provider: config.provider,
-        model: config.model,
-        operation,
-        runId,
-        inputTokens:
-          result.usage?.promptTokens ?? result.usage?.totalTokens ?? null,
-        outputTokens: null,
-        durationMs: Math.round(performance.now() - startedAt),
-        cacheStatus: "none",
-        entity: opts.entity,
-      });
-    }
+        })))
+      : undefined;
+    const result = await runEmbeddingFeature(
+      { feature, model: config.model },
+      {
+        adapter: ports.adapter(config, metadata),
+        texts,
+        dimensions: config.dimensions,
+      },
+      { db: opts?.db, runId, operation, entity: opts?.entity },
+    );
 
     // Ordered by the reported input position, not by arrival. A batch caller
     // zips these against its own refs, so a reordered response would write

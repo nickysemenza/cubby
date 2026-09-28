@@ -18,7 +18,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import * as schema from "~/server/db/schema";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
+import { ENTITY_BINDINGS } from "~/server/generated/entity-bindings.gen";
 
 // SAFETY: Drizzle's runtime `is` predicate has identified every retained
 // value as a PgTable; its generic predicate does not preserve that type here.

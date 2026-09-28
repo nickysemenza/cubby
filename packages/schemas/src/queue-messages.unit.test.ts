@@ -4,7 +4,6 @@ import {
   RECIPE_RECOMPUTE_CHUNK_SIZE,
 } from "./background-tasks";
 import type { RecipeId } from "./identifiers";
-import { mutationSideEffectsSchema } from "./background-jobs";
 import { backgroundTaskMessageSchema } from "./queue-messages";
 import { telemetryMessageV1Schema } from "./telemetry";
 import { testEntityId } from "./test-support/identifiers";
@@ -79,16 +78,6 @@ describe("background task messages", () => {
         userId: "u",
         clientId: "c",
       }).success,
-    ).toBe(false);
-  });
-
-  it("keeps the deprecated side-effects field decodable but always empty", () => {
-    expect(mutationSideEffectsSchema.parse({ backgroundBatches: [] })).toEqual({
-      backgroundBatches: [],
-    });
-    expect(
-      mutationSideEffectsSchema.safeParse({ backgroundBatches: [{ id: "x" }] })
-        .success,
     ).toBe(false);
   });
 });

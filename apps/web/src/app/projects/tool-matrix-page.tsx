@@ -1,5 +1,5 @@
 /**
- * `/projects/tools` — the projects x tools grid.
+ * The `/tools` Usage view — the projects x tools grid.
  *
  * Its job is backfill throughput, not analysis: `ProjectToolUsage` only becomes
  * useful once tools carry several edges, and attaching one project at a time

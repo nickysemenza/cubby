@@ -2,15 +2,11 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 export type DatabaseOperationMetrics = {
   queryCount: number;
-  /** @deprecated Use queryDurationSumMs; retained while span consumers migrate. */
-  queryDurationMs: number;
   queryDurationSumMs: number;
   queryActiveWallMs: number;
   queryMaxDurationMs: number;
   queryMaxConcurrency: number;
   acquireCount: number;
-  /** @deprecated Use acquireDurationSumMs; retained while span consumers migrate. */
-  acquireDurationMs: number;
   acquireDurationSumMs: number;
   acquireActiveWallMs: number;
   acquireMaxDurationMs: number;
@@ -35,13 +31,11 @@ const operationMetricsStore = new AsyncLocalStorage<
 
 const emptyMetrics = (): StoredDatabaseOperationMetrics => ({
   queryCount: 0,
-  queryDurationMs: 0,
   queryDurationSumMs: 0,
   queryActiveWallMs: 0,
   queryMaxDurationMs: 0,
   queryMaxConcurrency: 0,
   acquireCount: 0,
-  acquireDurationMs: 0,
   acquireDurationSumMs: 0,
   acquireActiveWallMs: 0,
   acquireMaxDurationMs: 0,
@@ -102,7 +96,6 @@ const beginDatabaseActivity = (
       const activity = metrics.activity[kind];
       if (kind === "query") {
         metrics.queryCount += 1;
-        metrics.queryDurationMs += durationMs;
         metrics.queryDurationSumMs += durationMs;
         metrics.queryMaxDurationMs = Math.max(
           metrics.queryMaxDurationMs,
@@ -110,7 +103,6 @@ const beginDatabaseActivity = (
         );
       } else {
         metrics.acquireCount += 1;
-        metrics.acquireDurationMs += durationMs;
         metrics.acquireDurationSumMs += durationMs;
         metrics.acquireMaxDurationMs = Math.max(
           metrics.acquireMaxDurationMs,

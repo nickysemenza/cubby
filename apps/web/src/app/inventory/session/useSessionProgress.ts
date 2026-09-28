@@ -6,7 +6,6 @@ import { z } from "zod";
 import {
   clearStoredQueuePass,
   type QueuePassPersistence,
-  type StoredQueuePass,
   useQueuePass,
 } from "~/app/_components/queue-pass/useQueuePass";
 
@@ -18,9 +17,8 @@ const AUDIT_SESSION_STORAGE_PREFIX = "cubby:audit-session:";
 /**
  * Bumped from 3 when the pass moved onto the shared `useQueuePass` envelope,
  * which names the settle sets `completed`/`skipped` and parks recount's own
- * staged state under `extra`. Version 3 blobs are still read — see
- * {@link readLegacyV3}. Bumping without that reader would silently discard
- * every in-flight recount sitting on someone's phone.
+ * staged state under `extra`. Version 3 blobs are no longer read; an in-flight
+ * v3 recount is discarded.
  */
 const SESSION_PROGRESS_VERSION = 4;
 
@@ -30,11 +28,8 @@ interface SessionExtra {
   summary: SessionSummary;
 }
 
-/**
- * One unfinished pass discovered in localStorage, for the session picker's
- * resume list. `totalCount` is null for entries written before it was
- * persisted — resolve the total from the location tree in that case.
- */
+/** One unfinished pass discovered in localStorage, for the session picker's
+ * resume list. */
 export interface StoredSessionPass {
   rootId: string;
   startedAt: number;
@@ -77,18 +72,6 @@ const sessionExtraSchema = z.object({
   summary: sessionSummarySchema,
 });
 
-const persistedV3Schema = z.object({
-  version: z.literal(3),
-  startedAt: z.number(),
-  updatedAt: z.number().optional(),
-  totalCount: z.number().optional(),
-  itemResolutions: z.array(z.tuple([z.string(), itemResolutionSchema])),
-  completedLocationIds: z.array(z.string()),
-  skippedLocationIds: z.array(z.string()).optional(),
-  currentIndex: z.number(),
-  summary: sessionSummarySchema,
-});
-
 const storedQueuePassSchema = z.object({
   version: z.literal(SESSION_PROGRESS_VERSION),
   startedAt: z.number(),
@@ -102,37 +85,15 @@ const storedQueuePassSchema = z.object({
 const storedJsonSchema = z.json();
 type StoredJson = z.output<typeof storedJsonSchema>;
 
-function readLegacyV3(
-  parsed: StoredJson,
-): StoredQueuePass<SessionExtra> | null {
-  const result = persistedV3Schema.safeParse(parsed);
-  if (!result.success) return null;
-  const v3 = result.data;
-  return {
-    version: 3,
-    startedAt: v3.startedAt,
-    updatedAt: v3.updatedAt ?? v3.startedAt,
-    currentIndex: v3.currentIndex,
-    completed: v3.completedLocationIds,
-    skipped: v3.skippedLocationIds ?? [],
-    totalCount: v3.totalCount ?? 0,
-    extra: { itemResolutions: v3.itemResolutions, summary: v3.summary },
-  };
-}
-
 const SESSION_PERSISTENCE: QueuePassPersistence<SessionExtra> = {
   storageKey: (rootId) => `${AUDIT_SESSION_STORAGE_PREFIX}${rootId}`,
   version: SESSION_PROGRESS_VERSION,
   extraSchema: sessionExtraSchema,
-  readLegacy: readLegacyV3,
 };
 
 /**
  * Every pass this device has stored, newest write first. Client-only: returns
  * an empty array during SSR so callers can render it straight into markup.
- *
- * Reads both the current envelope and v3, so the picker keeps listing passes
- * started before the migration.
  */
 export function listStoredSessionPasses(): StoredSessionPass[] {
   if (!("localStorage" in globalThis)) return [];
@@ -156,8 +117,8 @@ export function listStoredSessionPasses(): StoredSessionPass[] {
       }
 
       const current = storedQueuePassSchema.safeParse(parsed);
-      const pass = current.success ? current.data : readLegacyV3(parsed);
-      if (!pass) continue;
+      if (!current.success) continue;
+      const pass = current.data;
 
       passes.push({
         rootId: key.slice(AUDIT_SESSION_STORAGE_PREFIX.length),

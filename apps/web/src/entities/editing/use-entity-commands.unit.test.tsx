@@ -46,7 +46,7 @@ async function removeAndReadIssues(error: StartOperationError) {
 
 describe("useEntityCommands structured refusals", () => {
   it("retains side effects on schema-correlated create and update results", async () => {
-    const sideEffects = { backgroundBatches: [] };
+    const sideEffects = {};
     const item = mock(productTopLevelOut, {
       seed: 31,
       overrides: {

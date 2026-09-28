@@ -55,7 +55,7 @@ export interface DeletableConfig {
   /** Delete mutation options factory. */
   mutationOptions: () => DeleteMutationOptions;
   entityLabel: string;
-  /** Entity slug — picks the registered-command delete path vs the legacy mutation. */
+  /** Entity slug the delete acts on. */
   entity: DeletableEntity;
 }
 
@@ -78,7 +78,7 @@ export function useDeletableConfig<TData extends DeleteMutationResult>({
   ) => UseMutationOptions<TData, Error, DeleteMutationVariables>;
   /** Dialog noun. Defaults to the entity's registry label. */
   entityLabel?: string;
-  /** Entity slug — picks the registered-command delete path vs the legacy mutation. */
+  /** Entity slug the delete acts on. */
   entity: DeletableEntity;
 }) {
   const label = entityLabel ?? labelFor(entity);

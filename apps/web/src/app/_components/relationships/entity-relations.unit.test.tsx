@@ -111,7 +111,7 @@ describe("shared entity Relations", () => {
         seed: 12,
         overrides: { id: expenseId, projectId },
       }),
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     }));
 
     render(

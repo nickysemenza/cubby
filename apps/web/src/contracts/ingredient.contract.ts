@@ -1,5 +1,5 @@
-import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";
 import * as schemas from "@cubby/schemas/ingredient";
+import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";

@@ -206,12 +206,6 @@ export const activityViews = [
         description: "See which reusable tools support household work.",
         icon: WrenchIcon,
       },
-      {
-        to: "/projects/tools",
-        label: "Project tools",
-        description: "Connect project plans to the tools they require.",
-        icon: CubeFocusIcon,
-      },
     ],
   },
   {

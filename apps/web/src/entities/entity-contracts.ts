@@ -1,4 +1,4 @@
-import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
+import type { MutationSideEffects } from "@cubby/schemas/mutation-side-effects";
 import type { UseMutationOptions } from "@tanstack/react-query";
 import { z } from "zod";
 

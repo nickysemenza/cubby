@@ -30,7 +30,7 @@ import {
 import {
   type EntityInspectorHealth,
   entityInspectorHealth,
-} from "~/entities/entity-inspector-health";
+} from "~/entities/entity-inspector-health.functions";
 import { entityDeclarationOverrides } from "~/entities/generated/entity-overrides.gen";
 import { viewsForEntity } from "~/entities/view-manifest";
 import { authClient } from "~/lib/auth-client";

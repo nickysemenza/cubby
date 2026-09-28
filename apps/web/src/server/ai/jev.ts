@@ -5,13 +5,16 @@
 import type { Confidence } from "@cubby/schemas/ai";
 import { z } from "zod";
 
-import { recordAiUsage } from "~/server/ai-usage";
 import type { AiDecisionFeature } from "~/server/ai/features";
 import {
   type ApplicationCacheStatus,
   withAiResponseCache,
 } from "~/server/ai/response-cache";
-import type { AiRunContext } from "~/server/ai/run-feature";
+import {
+  type AiRunContext,
+  recordApplicationCacheHit,
+  recordFeatureUsage,
+} from "~/server/ai/run-feature";
 import { cachedCall } from "~/server/clients/ai-adapters";
 import {
   type GatewayMetadata,
@@ -142,7 +145,6 @@ function parseJevResponse(response: unknown): JevChoiceResponse {
   throw new Error("Jev returned an invalid choice response.");
 }
 
-// eslint-disable-next-line complexity -- The one deadline and retry loop also preserves provider context on every failure.
 async function requestJev(
   input: JevChoiceInput,
   ctx: AiRunContext,
@@ -214,26 +216,15 @@ async function requestJev(
     });
   } finally {
     clearTimeout(deadline);
-    if (ctx.db) {
-      await recordAiUsage(ctx.db, {
-        provider: "typesafe",
-        model: feature.model,
-        feature: feature.feature,
-        operation: ctx.operation,
-        runId: ctx.runId,
-        jobKind: ctx.job?.kind ?? null,
-        jobId: ctx.job?.id ?? null,
-        inputTokens: parsed?.usage?.input_tokens ?? null,
-        outputTokens: parsed?.usage?.output_tokens ?? null,
-        durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
-        cacheStatus: ctx.cacheStatus ?? "none",
-        applicationCacheStatus,
-        entity: ctx.entity ?? null,
-        attempt,
-        status: parsed ? "succeeded" : "failed",
-        gatewayLogId,
-      });
-    }
+    await recordFeatureUsage(feature, ctx, {
+      inputTokens: parsed?.usage?.input_tokens ?? null,
+      outputTokens: parsed?.usage?.output_tokens ?? null,
+      durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+      applicationCacheStatus,
+      attempt,
+      status: parsed ? "succeeded" : "failed",
+      gatewayLogId,
+    });
   }
 }
 
@@ -341,26 +332,8 @@ export async function runJevChoice(args: {
       input,
     },
     validate,
-    onHit: async (durationMs) => {
-      if (!args.usage.db) return;
-      await recordAiUsage(args.usage.db, {
-        provider: "typesafe",
-        model: args.feature.model,
-        feature: args.feature.feature,
-        operation: args.usage.operation,
-        runId: args.usage.runId,
-        jobKind: args.usage.job?.kind ?? null,
-        jobId: args.usage.job?.id ?? null,
-        entity: args.usage.entity ?? null,
-        cacheStatus: args.usage.cacheStatus ?? "none",
-        applicationCacheStatus: "hit",
-        inputTokens: 0,
-        outputTokens: 0,
-        estimatedCost: 0,
-        attempt: 0,
-        durationMs,
-      });
-    },
+    onHit: (durationMs) =>
+      recordApplicationCacheHit(args.feature, args.usage, durationMs),
     compute: async (applicationCacheStatus) => {
       const response = await (args.port
         ? args.port(input)

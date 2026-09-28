@@ -115,7 +115,7 @@ describe("InventoryPlacementSuggestion", () => {
           displayName: "Canned tomatoes · Pantry",
         },
       ],
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     }));
     render(
       <InventoryPlacementSuggestion

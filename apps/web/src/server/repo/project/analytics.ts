@@ -37,7 +37,7 @@ type ProjectExpenseStatsRow = {
   spent: number;
   actualSpent: number;
   committedSpent: number;
-  contributions: number;
+  credits: number;
   expenseCount: number;
   contentStart: string | null;
   contentEnd: string | null;
@@ -52,7 +52,7 @@ const projectExpenseStats = async (
         (coalesce(sum(allocation."attributedCents"::bigint), 0) / 100.0)::double precision AS "spent",
         (coalesce(sum(allocation."attributedCents"::bigint) filter (where e."future" = false and e."cost" >= 0), 0) / 100.0)::double precision AS "actualSpent",
         (coalesce(sum(allocation."attributedCents"::bigint) filter (where e."future" = true), 0) / 100.0)::double precision AS "committedSpent",
-        (coalesce(sum(-allocation."attributedCents"::bigint) filter (where e."future" = false and e."cost" < 0), 0) / 100.0)::double precision AS "contributions",
+        (coalesce(sum(-allocation."attributedCents"::bigint) filter (where e."future" = false and e."cost" < 0), 0) / 100.0)::double precision AS "credits",
         count(distinct allocation."expenseId")::int AS "expenseCount",
         min(e."date") AS "contentStart", max(e."date") AS "contentEnd"
       FROM (${expenseProjectAllocationSql()}) allocation
@@ -93,7 +93,7 @@ const mergeProjectOwnRollups = (
       spent: row.spent,
       actualSpent: row.actualSpent,
       committedSpent: row.committedSpent,
-      contributions: row.contributions,
+      credits: row.credits,
       expenseCount: row.expenseCount,
     });
   }

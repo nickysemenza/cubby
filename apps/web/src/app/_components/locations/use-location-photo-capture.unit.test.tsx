@@ -50,7 +50,7 @@ describe("useLocationPhotoCapture", () => {
           seed: 2,
           overrides: { id: locationId, images: [newImage] },
         }),
-        sideEffects: { backgroundBatches: [] },
+        sideEffects: {},
       }),
     };
     const uploadImageOperation = imageUpload.uploadImage.withTransport(

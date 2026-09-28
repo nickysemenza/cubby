@@ -42,7 +42,7 @@ function locationMutationPort() {
       action: "update",
       entity: "location",
       item: record,
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     }),
   );
   const mutation = entityMutation.mutate.withTransport(transport);
