@@ -159,8 +159,8 @@ class InMemoryRecipeFlowPorts {
       });
       return result;
     },
-    recordAiUsage: async (_db, usage) => {
-      this.usage.push({ cacheStatus: usage.cacheStatus });
+    recordFeatureUsage: async (_spec, _ctx, outcome) => {
+      this.usage.push({ cacheStatus: outcome.cacheStatus });
     },
     // Stands in for `AiClient.generateRecipeFlow`, which now runs through
     // `runStructuredFeature`'s own bounded repair: one retry if `ctx.validate`

@@ -30,13 +30,12 @@ import {
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 
 import { getErrorMessage } from "~/lib/error-utils";
-import { recordAiUsage } from "~/server/ai-usage";
 import {
   buildLocationAnalysisFingerprint,
   LOCATION_DESCRIPTION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
 } from "~/server/ai/features";
-import { providerFor } from "~/server/ai/models";
+import { recordFeatureUsage } from "~/server/ai/run-feature";
 import { publishBackgroundTasks } from "~/server/background-tasks/publish";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
@@ -206,18 +205,16 @@ async function recordLocationAiUsage(
     runId: RunId;
   },
 ): Promise<void> {
-  await recordAiUsage(db, {
-    feature: input.feature.feature,
-    provider: providerFor(input.feature.model),
-    model: input.feature.model,
-    operation: input.operation,
-    runId: input.runId,
-    inputTokens: null,
-    outputTokens: null,
-    durationMs: input.durationMs,
-    cacheStatus: input.cacheStatus,
-    entity: { entityKind: "location", entityId: input.locationId },
-  });
+  await recordFeatureUsage(
+    input.feature,
+    {
+      db,
+      runId: input.runId,
+      operation: input.operation,
+      entity: { entityKind: "location", entityId: input.locationId },
+    },
+    { durationMs: input.durationMs, cacheStatus: input.cacheStatus },
+  );
 }
 
 /**

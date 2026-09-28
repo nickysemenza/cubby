@@ -260,7 +260,9 @@ export function adaptiveThinkingFor(model: SupportedChatModel): boolean {
   return config.adaptiveThinking ?? true;
 }
 
-export function providerFor(model: SupportedChatModel): AiProvider {
+export function providerFor(
+  model: AiModel | SupportedEmbeddingModel,
+): AiProvider {
   return AI_MODEL_REGISTRY[model].provider;
 }
 
