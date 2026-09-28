@@ -3,11 +3,21 @@
 ## Production changes
 
 Serialize production schema changes: one owner verifies the migration and no
-push overlaps another session. Inspect constraints/data, run relevant checks,
+application overlaps another session. Inspect constraints/data, run relevant checks,
 keep deployed and prepared code compatible, and use expand → backfill → deploy
-→ cleanup for incompatible work. `db:push` is interactive: cancel ambiguous
-rename/drop prompts. It does not diff CHECK constraints or partial-index WHERE
-clauses; apply those deliberately and read the resulting schema back. Before a
+→ cleanup for incompatible work. Schema reaches every database only through
+committed migrations in `apps/web/drizzle/`: `pnpm db:generate` writes them
+(drizzle-kit for `schema.ts`, plus a custom migration when the derived DDL in
+`src/server/db/derived-ddl.ts` changes), and `pnpm db:migrate
+--target=production` applies them with `PRODUCTION_DIRECT_DATABASE_URL`.
+Migrations are the one committed generated artifact and are immutable once
+merged — the runner refuses bookkeeping that is not a prefix of the journal.
+A transform is a custom migration (`drizzle-kit generate --custom`); while
+unmerged it may be recomposed from `drizzle/transform/NN-<slice>.sql`
+fragments with `tooling/db-compose-migration.ts --tag <tag>`, which also
+points its snapshot at the current `schema.ts`. CI `db:check` fails when `schema.ts` has no migration or the
+migrations build a catalog different from `schema.ts`; `tooling/db-catalog.ts`
+reads the same catalog from production. Before a
 `DROP COLUMN`, remove the `schema.ts` declaration and DEPLOY first — the
 relational query builder selects every declared column, so the declaration is
 the read. The reverse also bites: an undeclared legacy table or column keeps
@@ -16,19 +26,16 @@ fails until the drop. Either drop the legacy FKs in the expand step or run the
 drop right after the deploy (the ADR 0006 image joins blocked image deletes
 this way).
 
-Traps around `db:push`, all seen for real:
+Traps, all seen for real:
 
-- The dev `DATABASE_URL` is the production Neon database, so `db:push` and MCP
-  writes hit prod, and other sessions plus the UI write to it concurrently —
-  point-in-time sweeps are unreliable.
-- `db:push` from a worktree behind `main` proposes dropping tables that landed
-  on `main` in the meantime. Fetch and merge `origin/main` first.
-- Every plan includes a spurious drop/recreate of the `gin_trgm_ops` indexes
-  and array-default `ALTER`s — persistent drift, not your change. Never
-  `--force`; it auto-approves every data-loss statement including these.
+- The dev `DATABASE_URL` is the production Neon database, so MCP writes hit
+  prod, and other sessions plus the UI write to it concurrently —
+  point-in-time sweeps are unreliable. `db:migrate` never reads it.
+- Migrations from parallel branches can interleave: drizzle skips a journal
+  entry older than the last applied one, so regenerate after merging `main`
+  (`db:check` rejects an out-of-order journal).
 - Adding a value to a `packages/schemas` pgEnum needs an expand-first
-  `ALTER TYPE` in prod before deploy, and stales the cached IntegreSQL test
-  templates (`apps/web/tooling/schema-template-inputs.ts` lists the inputs).
+  `ALTER TYPE` in prod before deploy.
 - Adding a column needs a full dev-server restart: the Drizzle client is cached
   on `globalThis` across HMR, and a stale schema silently omits the column from
   `SELECT`s (reads as `null`).
