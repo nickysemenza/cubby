@@ -877,7 +877,13 @@ export async function seedLiveVendorMailSearchRun(page: Page, name: string) {
       await getDb(db).transaction(async (tx) => {
         await tx
           .update(schema.vendorMailSearchJob)
-          .set({ status: "completed", searched: 6, skipped: 2, reviewable: 1 })
+          .set({
+            status: "completed",
+            searched: 6,
+            skipped: 2,
+            reviewable: 1,
+            pagesScanned: 1,
+          })
           .where(eq(schema.vendorMailSearchJob.runId, saved.id));
         await tx
           .update(schema.run)
@@ -892,6 +898,71 @@ export async function seedLiveVendorMailSearchRun(page: Page, name: string) {
         });
       });
     },
+  };
+}
+
+/** A real two-page job execution with Gmail replaced at its external seam. */
+export async function seedPagedVendorMailSearchRun(page: Page, name: string) {
+  const db = getFixtureDb();
+  const userId = await fixtureUserId(page);
+  const member = await getDb(db).query.ledgerParty.findFirst({
+    where: and(
+      eq(schema.ledgerParty.userId, userId),
+      eq(schema.ledgerParty.kind, "member"),
+      isNull(schema.ledgerParty.deletedAt),
+    ),
+  });
+  if (!member)
+    await insertWithShortcode(db, "ledgerParty", {
+      name: `${name} member`,
+      kind: "member",
+      userId,
+    });
+  const vendor = await insertWithShortcode(db, "vendor", {
+    name,
+    website: "https://example.test",
+  });
+  const publish = async () => ({ transport: "queue" as const, count: 1 });
+  const started = await startVendorMailSearchJob(
+    db,
+    { vendorId: vendor.shortcode },
+    buildActorContext(userId),
+    { publish },
+  );
+  const [saved] = await getDb(db)
+    .select({ id: schema.run.id })
+    .from(schema.run)
+    .where(eq(schema.run.shortcode, started.runShortcode));
+  if (!saved) throw new Error("Synthetic Run was not saved");
+  return {
+    runShortcode: started.runShortcode,
+    firstPage: () =>
+      runVendorMailSearchJob(db, saved.id, {
+        publish,
+        search: async () => ({
+          searched: 10,
+          skipped: 6,
+          reviewable: 1,
+          after: started.after,
+          nextPageToken: "synthetic-next-page",
+        }),
+      }),
+    lastPage: () =>
+      runVendorMailSearchJob(db, saved.id, {
+        page: 1,
+        publish,
+        search: async (_db, input) => {
+          if (input.pageToken !== "synthetic-next-page")
+            throw new Error("The Gmail checkpoint was not used");
+          return {
+            searched: 3,
+            skipped: 2,
+            reviewable: 1,
+            after: started.after,
+            nextPageToken: null,
+          };
+        },
+      }),
   };
 }
 

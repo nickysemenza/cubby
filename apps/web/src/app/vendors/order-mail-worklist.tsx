@@ -163,6 +163,10 @@ function OrderMailWorklist({
   const jobActive =
     currentJob?.status === "queued" || currentJob?.status === "running";
   const completedPage = currentJob?.status === "completed" ? currentJob : null;
+  const resumablePage =
+    currentJob?.status === "failed" && currentJob.nextPageToken
+      ? currentJob
+      : null;
   useEffect(() => {
     if (jobStatus.data?.status === "completed") void refetchWorklist();
   }, [jobStatus.data?.createdAt, jobStatus.data?.status, refetchWorklist]);
@@ -180,12 +184,18 @@ function OrderMailWorklist({
               variant="outline"
               disabled={search.isPending || jobActive || !hasSearchTerms}
               onClick={() => {
-                search.mutate({ vendorId: vendorShortcode.parse(vendorId) });
+                search.mutate({
+                  vendorId: vendorShortcode.parse(vendorId),
+                  after: resumablePage?.after,
+                  pageToken: resumablePage?.nextPageToken ?? undefined,
+                });
               }}
             >
               {search.isPending || jobActive
                 ? "Searching Gmail…"
-                : "Search Gmail now"}
+                : resumablePage
+                  ? "Resume Gmail search"
+                  : "Search Gmail now"}
             </Button>
             {completedPage?.nextPageToken ? (
               <Button
@@ -204,9 +214,23 @@ function OrderMailWorklist({
                 Search older email
               </Button>
             ) : null}
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={search.isPending || jobActive || !hasSearchTerms}
+              onClick={() =>
+                search.mutate({
+                  vendorId: vendorShortcode.parse(vendorId),
+                  after: "1970/01/01",
+                })
+              }
+            >
+              Search all history
+            </Button>
             <span className="text-xs text-muted-foreground">
               {hasSearchTerms
-                ? "Search this Vendor’s website domain and known senders. Saved order evidence appears below."
+                ? "Search all matching email since the date shown in the Run, using this Vendor’s website domain and known senders. Saved order evidence appears below."
                 : "Add a website to this Vendor to search Gmail."}
             </span>
           </Row>
@@ -231,7 +255,10 @@ function OrderMailWorklist({
               ) : null}
               {currentJob.status === "failed" ? (
                 <span role="alert" className="text-destructive">
-                  Search stopped: {currentJob.error}. Search Gmail now to retry.
+                  Search stopped: {currentJob.error}.{" "}
+                  {resumablePage
+                    ? "Resume from the last completed page."
+                    : "Search Gmail again to retry."}
                 </span>
               ) : null}
             </div>

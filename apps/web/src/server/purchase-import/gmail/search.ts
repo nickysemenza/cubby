@@ -14,6 +14,7 @@ import { processOrderMails } from "./process";
 import { listVendorOrderMail } from "./review";
 import { resolveVendorMailSearchTarget } from "./targets";
 import { createGmailProviderFactory } from "./tokens";
+import { identityFromSearchTerms } from "./vendor-identity";
 import { loadVendorMailPage } from "./vendor-search";
 
 export type VendorMailSearchProgress = (
@@ -28,6 +29,7 @@ export async function searchVendorOrderMail(
     vendorId: string;
     after?: string;
     pageToken?: string;
+    searchTerms?: string[];
   },
   actor: ActorContext,
   onProgress: VendorMailSearchProgress = async () => undefined,
@@ -55,7 +57,9 @@ export async function searchVendorOrderMail(
   let page: Awaited<ReturnType<typeof loadVendorMailPage>>;
   try {
     page = await loadVendorMailPage(provider, {
-      identity: target.identity,
+      identity: input.searchTerms?.length
+        ? identityFromSearchTerms(input.searchTerms)
+        : target.identity,
       after,
       pageToken: input.pageToken ?? null,
       onProgress,

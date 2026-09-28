@@ -125,6 +125,7 @@ export const vendorMailSearchTaskSchema = z.object({
   kind: z.literal("vendor-mail.search"),
   ...taskEnvelopeFields,
   jobId: z.uuid(),
+  page: z.number().int().nonnegative().optional(),
 });
 
 export const backgroundTaskSchema = z.discriminatedUnion("kind", [

@@ -2241,6 +2241,8 @@ export const vendorMailSearchJob = pgTable("VendorMailSearchJob", {
     .references(() => run.id),
   after: text("after").notNull(),
   pageToken: text("pageToken"),
+  searchTerms: text("searchTerms").array().notNull().default([]),
+  pagesScanned: integer("pagesScanned").notNull().default(0),
   status: text("status").notNull().default("queued"),
   searched: integer("searched").notNull().default(0),
   skipped: integer("skipped").notNull().default(0),
