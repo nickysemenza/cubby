@@ -6,6 +6,7 @@ import type { SimilarEntitiesOut } from "@cubby/schemas/search";
 import { isCollectionTag } from "@cubby/shared/collection-tag";
 
 import type { Database } from "~/server/db";
+import { findSimilarEntitiesWorkflow } from "~/server/operations/semantic-similarity.server";
 import {
   getProductsByShortcodes,
   getProductsSharingTags,
@@ -16,7 +17,6 @@ import {
   suggestionCandidateKey,
 } from "~/server/repo/suggestion-dismissal";
 import { bindWorkflow, workflow } from "~/server/workflow-runtime";
-import { findSimilarEntitiesWorkflow } from "~/server/workflows/semantic-similarity.server";
 
 import { buildProductRelatednessLedger } from "./relatedness-ledger";
 

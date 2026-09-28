@@ -4,7 +4,7 @@ import {
 } from "@cubby/schemas/inventory";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import { moveInventoryEntriesWorkflow } from "~/server/workflows/inventory.server";
+import { moveInventoryEntriesWorkflow } from "~/server/operations/inventory.server";
 
 import {
   registerRouterTool,

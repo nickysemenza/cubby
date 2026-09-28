@@ -10,7 +10,7 @@ import {
   revokeCalendarCredentialWorkflow,
   rotateCalendarCredentialWorkflow,
   rotateCalendarFeedWorkflow,
-} from "~/server/workflows/calendar.server";
+} from "~/server/operations/calendar.server";
 
 export const calendarHandlers = implementOperationDomain(calendarContract, {
   range: (context, input) => getCalendarRangeWorkflow(context.db, input),

@@ -5,6 +5,11 @@ import { createRecipeKernelTestCaller } from "tooling/entity-kernel-test-caller"
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getShoppingListWorkflow } from "~/server/operations/meal.server";
+import {
+  getMakeableWorkflow,
+  duplicateWorkflow,
+} from "~/server/operations/recipe.server";
 import { getIngredientByID, updateIngredient } from "~/server/repo/ingredient";
 import { getInventoryForProducts } from "~/server/repo/inventory";
 import { createMealWithEntityId } from "~/server/repo/meal/crud";
@@ -17,11 +22,6 @@ import {
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { getShoppingListWorkflow } from "~/server/workflows/meal.server";
-import {
-  getMakeableWorkflow,
-  duplicateWorkflow,
-} from "~/server/workflows/recipe.server";
 
 describe("AvailabilityService.getRecipeAvailability", () => {
   const tdb = withTestDb();

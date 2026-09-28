@@ -30,7 +30,7 @@ import {
   getMealPreparationsWorkflow,
   removeMealRecipeWorkflow,
   updateMealRecipeWorkflow,
-} from "~/server/workflows/meal.server";
+} from "~/server/operations/meal.server";
 
 import {
   READ_ONLY_CLOSED,

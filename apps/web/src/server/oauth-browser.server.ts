@@ -5,7 +5,7 @@ import {
   listConnectedAppsWorkflow,
   pruneOrphanedOAuthClientsWorkflow,
   revokeConnectedAppWorkflow,
-} from "~/server/workflows/oauth.server";
+} from "~/server/operations/oauth.server";
 
 export const oauthHandlers = implementOperationDomain(oauthContract, {
   listConnectedApps: (context) =>

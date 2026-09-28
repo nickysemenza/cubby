@@ -10,7 +10,7 @@ import {
   projectToolGalleryWorkflow,
   projectToolSuggestionsWorkflow,
   projectTreeWorkflow,
-} from "~/server/workflows/project.server";
+} from "~/server/operations/project.server";
 
 export const projectHandlers = implementOperationDomain(projectContract, {
   getDependencyGraph: (context, input) =>

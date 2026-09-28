@@ -7,12 +7,12 @@ import { z } from "zod";
 
 import { projectToolUsage } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
-import { requireActor } from "~/server/request-context";
-import { createTestRequestContext } from "~/server/testing/request-context";
 import {
   projectRepointUsesWorkflow,
   projectSetToolUsageWorkflow,
-} from "~/server/workflows/project.server";
+} from "~/server/operations/project.server";
+import { requireActor } from "~/server/request-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { taxonomyShortcode } from "../../../tooling/product-category-fixtures";
 import { getDb, notDeleted } from "./database-helpers";

@@ -6,9 +6,9 @@ import { describe, expect, it } from "vitest";
 
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { explainField } from "~/server/field-explanation-browser.server";
+import { expenseChargeContextWorkflow } from "~/server/operations/expense.server";
 import { getEntityRecommendations } from "~/server/services/entity-recommendations.service";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { expenseChargeContextWorkflow } from "~/server/workflows/expense.server";
 
 import { getDb } from "./database-helpers";
 import { getExpenseByShortcode, updateExpense } from "./expense";

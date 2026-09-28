@@ -49,6 +49,7 @@ import { z } from "zod";
 
 import { purchaseContract } from "~/contracts/purchase.contract";
 import { executeEntity } from "~/server/entity-kernel";
+import { splitExpenseWorkflow } from "~/server/operations/purchase.server";
 import { confirmMerchantVendorRule } from "~/server/purchase-import/hunts";
 import {
   commitPurchaseImport,
@@ -60,7 +61,6 @@ import {
 } from "~/server/purchase-import/import-orders";
 import { reclassifyPurchaseDocument } from "~/server/repo/purchase";
 import { getVendorCoverage } from "~/server/repo/vendor";
-import { splitExpenseWorkflow } from "~/server/workflows/purchase.server";
 
 import { getEntityKernelContext } from "../kernel-context";
 import {

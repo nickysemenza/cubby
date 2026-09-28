@@ -4,12 +4,12 @@ import {
   problemsStreamsContract,
 } from "~/contracts/problems.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { findProblemCountsWorkflow } from "~/server/operations/problem-counts.server";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
-import { findProblemCountsWorkflow } from "~/server/workflows/problem-counts.server";
 
 // The homepage counts read normally ends at the Durable Object. Keep the
 // detector graph out of its cold path and load it only for other operations.
-const problemWorkflows = () => import("~/server/workflows/problems.server");
+const problemWorkflows = () => import("~/server/operations/problems.server");
 
 /** Problem reads are authoritative so fixes disappear on the next fetch. */
 export const problemsHandlers = implementOperationDomain(problemsContract, {

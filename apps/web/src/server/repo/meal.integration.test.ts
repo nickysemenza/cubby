@@ -14,12 +14,12 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { inventoryEntry, recipe } from "~/server/db/schema";
-import { createTestRequestContext } from "~/server/testing/request-context";
 import {
   getMealPreparationsWorkflow,
   getShoppingListWorkflow,
   saveMealRecipePreparationWorkflow,
-} from "~/server/workflows/meal.server";
+} from "~/server/operations/meal.server";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { getDb } from "./database-helpers";
 import { createLedgerParty } from "./ledger-party";

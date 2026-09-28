@@ -3,15 +3,15 @@ import {
   ledgerPartyContract,
 } from "~/contracts/finance.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import {
+  financialTransactionSourceOptionsWorkflow,
+  merchantVendorInferenceWorkflow,
+} from "~/server/operations/finance.server";
 import { previewFinancialStatementImport } from "~/server/repo/financial-statement-preview";
 import {
   listMemberLogins,
   setMemberLoginParty,
 } from "~/server/repo/member-login";
-import {
-  financialTransactionSourceOptionsWorkflow,
-  merchantVendorInferenceWorkflow,
-} from "~/server/workflows/finance.server";
 
 export const ledgerPartyHandlers = implementOperationDomain(
   ledgerPartyContract,

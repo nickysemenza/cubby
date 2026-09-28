@@ -8,7 +8,7 @@ import {
   taskSummaryWorkflow,
   taskTimelineWorkflow,
   taskTodayBriefingWorkflow,
-} from "~/server/workflows/task.server";
+} from "~/server/operations/task.server";
 
 export const taskHandlers = implementOperationDomain(taskContract, {
   listActionable: (context, input) =>

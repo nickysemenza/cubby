@@ -27,15 +27,15 @@ import {
   taxonomyId,
   taxonomyShortcode,
 } from "../../../tooling/product-category-fixtures";
+import {
+  pruneAllUnusedAliasesWorkflow,
+  reparseStaleWorkflow,
+} from "../operations/problems.server";
 import { requireActor } from "../request-context";
 import { runDiagnostic } from "../services/problem-diagnostics.service";
 import { findViewProblems } from "../services/problem-views.service";
 import { findFastProblems } from "../services/problems.service";
 import { createTestRequestContext } from "../testing/request-context";
-import {
-  pruneAllUnusedAliasesWorkflow,
-  reparseStaleWorkflow,
-} from "../workflows/problems.server";
 import { setDataException } from "./data-quality";
 import { getDb } from "./database-helpers";
 import { createExpense, updateExpense } from "./expense";

@@ -4,7 +4,7 @@ import {
   getMcpUsageDashboardWorkflow,
   listMcpCatalogWorkflow,
   listMcpUsageActivityWorkflow,
-} from "~/server/workflows/mcp-browser.server";
+} from "~/server/operations/mcp-browser.server";
 
 export const mcpHandlers = implementOperationDomain(mcpContract, {
   listTools: {

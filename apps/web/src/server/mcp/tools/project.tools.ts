@@ -33,16 +33,16 @@ import { z } from "zod";
 import {
   expenseAnalyticsWorkflow,
   expenseMatchWorkflow,
-} from "~/server/workflows/expense.server";
+} from "~/server/operations/expense.server";
 import {
   projectDashboardSummaryWorkflow,
   projectPortfolioAnalyticsWorkflow,
   projectRepointUsesWorkflow,
-} from "~/server/workflows/project.server";
+} from "~/server/operations/project.server";
 import {
   taskListActionableWorkflow,
   taskSummaryWorkflow,
-} from "~/server/workflows/task.server";
+} from "~/server/operations/task.server";
 
 import {
   READ_ONLY_CLOSED,

@@ -11,7 +11,7 @@ import {
   findRelatedSearchHitsWorkflow,
   findSearchHitsWorkflow,
   findSimilarEntitiesWorkflow,
-} from "~/server/workflows/search.server";
+} from "~/server/operations/search.server";
 
 import { READ_ONLY_CLOSED, registerRouterTool } from "./_shared";
 

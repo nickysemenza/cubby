@@ -16,6 +16,19 @@ import {
   inventoryEntry,
   product as productTable,
 } from "~/server/db/schema";
+import {
+  bulkAddInventoryWorkflow,
+  bulkDiscardInventoryWorkflow,
+  moveInventoryEntriesWorkflow,
+} from "~/server/operations/inventory.server";
+import {
+  quickCreateProductWorkflow,
+  createManyProductsWorkflow,
+  markProductsUsdaUnavailableWorkflow,
+  discardProductWorkflow,
+  getProductInventoryEntriesWorkflow,
+} from "~/server/operations/product.server";
+import { getPlacementRecommendationWorkflow } from "~/server/operations/recommendations.server";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   addInventoryEntries,
@@ -33,19 +46,6 @@ import {
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import {
-  bulkAddInventoryWorkflow,
-  bulkDiscardInventoryWorkflow,
-  moveInventoryEntriesWorkflow,
-} from "~/server/workflows/inventory.server";
-import {
-  quickCreateProductWorkflow,
-  createManyProductsWorkflow,
-  markProductsUsdaUnavailableWorkflow,
-  discardProductWorkflow,
-  getProductInventoryEntriesWorkflow,
-} from "~/server/workflows/product.server";
-import { getPlacementRecommendationWorkflow } from "~/server/workflows/recommendations.server";
 
 /**
  * Guards for the additive bulk-add.

@@ -1,7 +1,5 @@
 import { aiContract, aiStreamsContract } from "~/contracts/ai.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { ensureRun } from "~/server/runs/ensure-run";
-import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import {
   approveDetectedInventoryItemWorkflow,
   backfillLocationDescriptionsWorkflow,
@@ -16,7 +14,9 @@ import {
   suggestUsdaFoodBatchWorkflow,
   suggestUsdaFoodWorkflow,
   summarizeAiUsageWorkflow,
-} from "~/server/workflows/ai.server";
+} from "~/server/operations/ai.server";
+import { ensureRun } from "~/server/runs/ensure-run";
+import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 
 /** AI reads are authoritative: suggestions must see the row just written. */
 export const aiHandlers = implementOperationDomain(aiContract, {

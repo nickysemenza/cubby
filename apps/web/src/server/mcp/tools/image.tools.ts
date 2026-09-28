@@ -15,7 +15,7 @@ import {
   attachExistingImageWorkflow,
   attachFileWorkflow,
   createFileUploadWorkflow,
-} from "~/server/workflows/image.server";
+} from "~/server/operations/image.server";
 
 import {
   getRequestContext,

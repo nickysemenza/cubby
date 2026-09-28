@@ -5,6 +5,7 @@ import { runContract } from "~/contracts/run.contract";
 import { oauthRefreshToken } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { listRunAiUsageWorkflow } from "~/server/operations/ai.server";
 import {
   findActivePurchaseAgentGrant,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
@@ -34,7 +35,6 @@ import {
 import { getDb } from "~/server/repo/database-helpers";
 import { getRunByShortcode } from "~/server/repo/run";
 import type { AuthenticatedRequestContext } from "~/server/request-context";
-import { listRunAiUsageWorkflow } from "~/server/workflows/ai.server";
 
 /** Import runs belong to a household member's ledger party. */
 async function memberParty(context: AuthenticatedRequestContext) {

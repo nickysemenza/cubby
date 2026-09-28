@@ -8,8 +8,8 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { auditLog, product } from "~/server/db/schema";
+import { listAuditLog } from "~/server/operations/audit-log";
 import { getAuditLog } from "~/server/repo/audit-log";
-import { listAuditLog } from "~/server/workflows/audit-log";
 
 import { insertAndReturn, withTransaction } from "./database-helpers";
 import {

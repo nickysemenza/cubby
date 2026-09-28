@@ -9,7 +9,7 @@ import {
   makeTreeWorkflow,
   subtreeWorkflow,
   valuationSummaryWorkflow,
-} from "~/server/workflows/location.server";
+} from "~/server/operations/location.server";
 
 export const locationHandlers = implementOperationDomain(locationContract, {
   makeTree: makeTreeWorkflow,

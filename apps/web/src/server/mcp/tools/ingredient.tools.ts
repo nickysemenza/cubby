@@ -2,7 +2,7 @@ import { ingredientResolvableNamesInput } from "@cubby/schemas/ingredient";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { ingredientContract } from "~/contracts/ingredient.contract";
-import { resolveOrCreateWorkflow } from "~/server/workflows/ingredient.server";
+import { resolveOrCreateWorkflow } from "~/server/operations/ingredient.server";
 
 import { registerRouterTool, WRITE_CLOSED } from "./_shared";
 import { fromContract, mcpResultsEnvelope } from "./contract-envelope";

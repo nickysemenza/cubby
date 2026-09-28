@@ -19,6 +19,14 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
+import {
+  expenseAnalyticsWorkflow,
+  expenseAnalyzeWorkflow,
+  expenseChargeContextWorkflow,
+  expenseChartDataWorkflow,
+  expenseFacetCountsWorkflow,
+  expenseTradeAffinityWorkflow,
+} from "~/server/operations/expense.server";
 import { getAuditLog } from "~/server/repo/audit-log";
 import {
   createExpense,
@@ -42,14 +50,6 @@ import { resolveShortcode } from "~/server/repo/shortcode-resolver";
 import { vendorOptions } from "~/server/repo/vendor";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import {
-  expenseAnalyticsWorkflow,
-  expenseAnalyzeWorkflow,
-  expenseChargeContextWorkflow,
-  expenseChartDataWorkflow,
-  expenseFacetCountsWorkflow,
-  expenseTradeAffinityWorkflow,
-} from "~/server/workflows/expense.server";
 
 const unwrap = async <T>(p: Promise<{ output: T }>): Promise<T> =>
   (await p).output;

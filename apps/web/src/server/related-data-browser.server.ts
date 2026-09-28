@@ -5,7 +5,7 @@ import {
   loadRelatedOptionsWorkflow,
   loadRelatedPreviewsWorkflow,
   loadRelatedSummaryWorkflow,
-} from "~/server/workflows/related-data.server";
+} from "~/server/operations/related-data.server";
 
 export const relatedDataHandlers = implementOperationDomain(
   relatedDataContract,

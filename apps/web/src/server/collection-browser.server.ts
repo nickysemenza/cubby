@@ -3,16 +3,16 @@ import { collectionDefinitionForReference } from "@cubby/schemas/collection";
 import { collectionContract } from "~/contracts/collection.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
-  getSmartCollectionDetail,
-  listSmartCollections,
-} from "~/server/repo/collection";
-import {
   createCollection,
   listCollectionSummaries,
   readCollectionDetail,
   readCollectionMatrix,
   setCollectionMembership,
-} from "~/server/workflows/collection";
+} from "~/server/operations/collection";
+import {
+  getSmartCollectionDetail,
+  listSmartCollections,
+} from "~/server/repo/collection";
 
 export const collectionHandlers = implementOperationDomain(collectionContract, {
   referenceDetail: (context, input) =>

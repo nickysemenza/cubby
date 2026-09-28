@@ -30,13 +30,13 @@ import {
   purchase,
 } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
-import { requireActor } from "~/server/request-context";
-import { createTestRequestContext } from "~/server/testing/request-context";
 import {
   linkExpensesToPurchaseWorkflow,
   purchaseProductsWorkflow,
   splitExpenseWorkflow,
-} from "~/server/workflows/purchase.server";
+} from "~/server/operations/purchase.server";
+import { requireActor } from "~/server/request-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { getDb, insertAndReturn } from "./database-helpers";
 import { createExpense, getExpenseByShortcode } from "./expense";

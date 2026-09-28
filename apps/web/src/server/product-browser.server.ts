@@ -4,6 +4,20 @@ import {
 } from "~/contracts/product.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
+  applyProductUpcDataWorkflow,
+  backfillProductUpcImagesWorkflow,
+  createManyProductsWorkflow,
+  discardProductWorkflow,
+  getProductInventoryEntriesWorkflow,
+  getProductQuantitySummariesWorkflow,
+  getProductSummariesWorkflow,
+  listProductComponentsWorkflow,
+  markProductsUsdaUnavailableWorkflow,
+  quickCreateProductWorkflow,
+  searchProductsWorkflow,
+  setProductProjectUsesWorkflow,
+} from "~/server/operations/product.server";
+import {
   getCategoryDistribution,
   getProductExternalIdSourceOptions,
   getProductManufacturerOptions,
@@ -23,20 +37,6 @@ import {
   findOrCreateByUPC,
 } from "~/server/services/product-orchestration.service";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
-import {
-  applyProductUpcDataWorkflow,
-  backfillProductUpcImagesWorkflow,
-  createManyProductsWorkflow,
-  discardProductWorkflow,
-  getProductInventoryEntriesWorkflow,
-  getProductQuantitySummariesWorkflow,
-  getProductSummariesWorkflow,
-  listProductComponentsWorkflow,
-  markProductsUsdaUnavailableWorkflow,
-  quickCreateProductWorkflow,
-  searchProductsWorkflow,
-  setProductProjectUsesWorkflow,
-} from "~/server/workflows/product.server";
 
 const productShortcodes = bindShortcodeResolver("product");
 

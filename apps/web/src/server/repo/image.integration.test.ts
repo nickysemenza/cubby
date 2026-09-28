@@ -21,8 +21,8 @@ import {
   ledgerParty,
   user,
 } from "~/server/db/schema";
+import { markImageUploadedWorkflow } from "~/server/operations/image.server";
 import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
-import { markImageUploadedWorkflow } from "~/server/workflows/image.server";
 
 import { deleteCookbook, upsertCookbook } from "./cookbook";
 import {

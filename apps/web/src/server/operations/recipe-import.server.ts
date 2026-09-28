@@ -28,6 +28,12 @@ import {
 } from "~/lib/recipe-signature";
 import { appErrorFromUnknown, createAppError } from "~/server/errors/app-error";
 import {
+  projectCookbookImportEvent,
+  projectNotionImportEvent,
+  type CookbookImportProjection,
+  type NotionImportProjection,
+} from "~/server/operations/recipe-import-projection";
+import {
   cookbookRecipesById,
   deleteCookbook,
   getCookbookByName,
@@ -94,12 +100,6 @@ import {
   type BulkWorkflowSummary,
   workflow,
 } from "~/server/workflow-runtime";
-import {
-  projectCookbookImportEvent,
-  projectNotionImportEvent,
-  type CookbookImportProjection,
-  type NotionImportProjection,
-} from "~/server/workflows/recipe-import-projection";
 
 const cookbookShortcodes = bindShortcodeResolver("cookbook");
 const productShortcodes = bindShortcodeResolver("product");

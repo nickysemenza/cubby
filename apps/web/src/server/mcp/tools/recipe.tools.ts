@@ -21,18 +21,18 @@ import { cookbookContract } from "~/contracts/cookbook.contract";
 import { scaleTotals } from "~/lib/nutrition-estimates";
 import { executeEntity } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
-import { listCookbooks } from "~/server/repo/cookbook";
-import { getAllTags } from "~/server/repo/recipe";
-import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
-import { recipeUsagesWorkflow } from "~/server/workflows/ingredient.server";
+import { recipeUsagesWorkflow } from "~/server/operations/ingredient.server";
 import {
   insertImportWorkflow,
   scrapeWorkflow,
-} from "~/server/workflows/recipe-import.server";
+} from "~/server/operations/recipe-import.server";
 import {
   explainCostingWorkflow,
   getMakeableWorkflow,
-} from "~/server/workflows/recipe.server";
+} from "~/server/operations/recipe.server";
+import { listCookbooks } from "~/server/repo/cookbook";
+import { getAllTags } from "~/server/repo/recipe";
+import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 
 import { getEntityKernelContext } from "../kernel-context";
 import {

@@ -1,6 +1,6 @@
 import { mealContract } from "~/contracts/meal.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import * as workflow from "~/server/workflows/meal.server";
+import * as workflow from "~/server/operations/meal.server";
 
 export const mealHandlers = implementOperationDomain(mealContract, {
   getNutrition: (context, input) =>

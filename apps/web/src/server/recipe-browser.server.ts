@@ -4,10 +4,10 @@ import {
   suggestionsContract,
 } from "~/contracts/recipe.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import * as imports from "~/server/operations/recipe-import.server";
+import * as recipe from "~/server/operations/recipe.server";
 import { ensureRun } from "~/server/runs/ensure-run";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
-import * as imports from "~/server/workflows/recipe-import.server";
-import * as recipe from "~/server/workflows/recipe.server";
 
 export const recipeHandlers = implementOperationDomain(recipeDomainContract, {
   getManyByIDs: (context, input) =>

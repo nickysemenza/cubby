@@ -21,6 +21,13 @@ import {
 } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import {
+  cullPendingImagesWorkflow,
+  importImageFromUrlWorkflow,
+  initiateDocumentUploadWorkflow,
+  initiateImageUploadWorkflow,
+  markImageUploadedWorkflow,
+} from "~/server/operations/image.server";
 import { getDb } from "~/server/repo/database-helpers";
 import {
   getImageHashIndex,
@@ -36,13 +43,6 @@ import {
   type ImportImageRow,
 } from "~/server/repo/photo-import";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
-import {
-  cullPendingImagesWorkflow,
-  importImageFromUrlWorkflow,
-  initiateDocumentUploadWorkflow,
-  initiateImageUploadWorkflow,
-  markImageUploadedWorkflow,
-} from "~/server/workflows/image.server";
 
 type ImageListInput = z.output<typeof imageBrowserListInput>;
 type ImageListOutput = z.output<typeof imageBrowserListOut>;

@@ -3,13 +3,6 @@ import {
   relatednessContract,
 } from "~/contracts/recommendations.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { getEntityRecommendations } from "~/server/services/entity-recommendations.service";
-import {
-  dismissProductMatchPair,
-  getProductMatchQueue,
-  mergeProductMatch,
-  proposeProductMatch,
-} from "~/server/services/product-match.service";
 import {
   dismissDuplicateProductRecommendationWorkflow,
   dismissProductRecommendationWorkflow,
@@ -19,7 +12,14 @@ import {
   getProductRecommendationWorkflow,
   getProductRelatednessWorkflow,
   getTagPropagationRecommendationWorkflow,
-} from "~/server/workflows/recommendations.server";
+} from "~/server/operations/recommendations.server";
+import { getEntityRecommendations } from "~/server/services/entity-recommendations.service";
+import {
+  dismissProductMatchPair,
+  getProductMatchQueue,
+  mergeProductMatch,
+  proposeProductMatch,
+} from "~/server/services/product-match.service";
 
 export const relatednessHandlers = implementOperationDomain(
   relatednessContract,

@@ -10,7 +10,7 @@ import {
   expenseInventoryOwnershipContextWorkflow,
   confirmInventoryExpenseBeneficiaryWorkflow,
   expenseTradeAffinityWorkflow,
-} from "~/server/workflows/expense.server";
+} from "~/server/operations/expense.server";
 
 export const expenseHandlers = implementOperationDomain(expenseContract, {
   chartData: (context, input) => expenseChartDataWorkflow(context.db, input),

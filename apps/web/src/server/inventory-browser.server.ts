@@ -13,7 +13,7 @@ import {
   resolveInventoryScanStraysWorkflow,
   scanInventoryAtLocationWorkflow,
   setInventoryOwnershipWorkflow,
-} from "~/server/workflows/inventory.server";
+} from "~/server/operations/inventory.server";
 
 export const inventoryHandlers = implementOperationDomain(inventoryContract, {
   bulkAdd: (context, input) =>

@@ -961,7 +961,7 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   each occurrence must stay a distinguishable shopping-list contribution. Retry-safety
   needs a caller-supplied key. The guard test that named this as intentional was
   deleted with the tRPC-era `meal.integration.test.ts` (#914) and never replaced, so
-  the first slice of this — or of any meal-line work — is a `workflows/meal.server.ts`
+  the first slice of this — or of any meal-line work — is a `operations/meal.server.ts`
   integration test asserting one meal holds one recipe twice at different scales with
   two independent shopping-list contributions.
 

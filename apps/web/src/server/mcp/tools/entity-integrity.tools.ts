@@ -9,7 +9,7 @@ import {
   generatedMcpEntityRelationCommandSchema,
   generatedMcpEntityRelationPreviewInputSchema,
 } from "~/server/generated/entity-relation-contracts.gen";
-import { previewOperation } from "~/server/workflows/entity-integrity-preview.server";
+import { previewOperation } from "~/server/operations/entity-integrity-preview.server";
 
 import { READ_ONLY_CLOSED, registerRouterTool } from "./_shared";
 

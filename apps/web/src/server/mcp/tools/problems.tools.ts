@@ -13,7 +13,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { expectedProblemKeys, problemQuery } from "~/entities/problem-registry";
-import { findProblemCountsWorkflow } from "~/server/workflows/problem-counts.server";
+import { findProblemCountsWorkflow } from "~/server/operations/problem-counts.server";
 import {
   findCoverageProblemsWorkflow,
   findFastProblemsWorkflow,
@@ -21,7 +21,7 @@ import {
   findTrackerProblemsWorkflow,
   findUpcProblemsWorkflow,
   findViewProblemsWorkflow,
-} from "~/server/workflows/problems.server";
+} from "~/server/operations/problems.server";
 
 import { READ_ONLY_CLOSED, registerRouterTool } from "./_shared";
 

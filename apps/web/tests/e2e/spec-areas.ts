@@ -101,7 +101,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/server.ts`,
       `${WEB}/src/server/start-operation-dispatch.contract.ts`,
       `${WEB}/src/server/start-operation.contract.ts`,
-      `${WEB}/src/server/workflows/audit-log.ts`,
+      `${WEB}/src/server/operations/audit-log.ts`,
       `${WEB}/src/server/repo/vendor.ts`,
     ],
   },
@@ -481,7 +481,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/app/finance/statement-csv.ts`,
       `${WEB}/src/server/repo/statement-row.ts`,
       `${WEB}/src/server/repo/financial-transaction.ts`,
-      `${WEB}/src/server/workflows/statement-row.server.ts`,
+      `${WEB}/src/server/operations/statement-row.server.ts`,
     ],
   },
   {

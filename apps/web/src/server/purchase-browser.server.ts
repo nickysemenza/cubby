@@ -1,11 +1,11 @@
 import { purchaseContract } from "~/contracts/purchase.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { listPurchaseOrderMail } from "~/server/purchase-import/gmail/review";
 import {
   linkExpensesToPurchaseWorkflow,
   purchaseProductsWorkflow,
   splitExpenseWorkflow,
-} from "~/server/workflows/purchase.server";
+} from "~/server/operations/purchase.server";
+import { listPurchaseOrderMail } from "~/server/purchase-import/gmail/review";
 
 export const purchaseHandlers = implementOperationDomain(purchaseContract, {
   orderMail: (context, input) => listPurchaseOrderMail(context.db, input),

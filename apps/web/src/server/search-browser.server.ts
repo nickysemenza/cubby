@@ -7,10 +7,6 @@ import {
   isCloudflareRuntime,
 } from "~/server/cf-env";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { streamSearchIndexRepairWorkflow } from "~/server/search-index-repair-workflow-adapter";
-import { repairSearchIndex } from "~/server/services/search-index-repair.service";
-import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
-import { getRequestId } from "~/server/tracing";
 import {
   findGroupedSearchHitsWorkflow,
   findRelatedSearchGroupsWorkflow,
@@ -18,7 +14,11 @@ import {
   findSearchHitsWorkflow,
   inspectSearchDebugWorkflow,
   requestEmbeddingRefreshWorkflow,
-} from "~/server/workflows/search.server";
+} from "~/server/operations/search.server";
+import { streamSearchIndexRepairWorkflow } from "~/server/search-index-repair-workflow-adapter";
+import { repairSearchIndex } from "~/server/services/search-index-repair.service";
+import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
+import { getRequestId } from "~/server/tracing";
 
 /**
  * User-facing search reads ride the cached read handle; debug and the

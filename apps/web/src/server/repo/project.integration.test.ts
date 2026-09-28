@@ -8,7 +8,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { projectDependency } from "~/server/db/schema";
-import { projectCreateFromTasksWorkflow } from "~/server/workflows/project.server";
+import { projectCreateFromTasksWorkflow } from "~/server/operations/project.server";
 
 import { insertAndReturn } from "./database-helpers";
 import { createExpense } from "./expense";

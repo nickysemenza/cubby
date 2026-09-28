@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { auditLog, taskDependency } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
+import { taskBulkReorderWorkflow } from "~/server/operations/task.server";
 import { getDb } from "~/server/repo/database-helpers";
 import {
   getSearchDocumentEmbeddingText,
@@ -25,7 +26,6 @@ import {
 import { listActionableTasks } from "~/server/repo/task/actionable";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { taskBulkReorderWorkflow } from "~/server/workflows/task.server";
 
 describe("task reorder workflow", () => {
   const ctx = withTestDb();

@@ -1,6 +1,6 @@
 import { dashboardContract } from "~/contracts/dashboard.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { getDashboardCounts } from "~/server/workflows/dashboard";
+import { getDashboardCounts } from "~/server/operations/dashboard";
 
 /** Browser adapter: authenticated, policy-selected, schema-checked read. */
 export const dashboardHandlers = implementOperationDomain(dashboardContract, {

@@ -14,7 +14,7 @@ import {
   listCollectionSummaries,
   readCollectionDetail,
   setCollectionMembership,
-} from "~/server/workflows/collection";
+} from "~/server/operations/collection";
 
 import { getSmartCollectionDetail, listSmartCollections } from "./collection";
 import { getDb } from "./database-helpers";

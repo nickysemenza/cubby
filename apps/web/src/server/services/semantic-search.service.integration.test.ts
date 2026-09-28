@@ -12,6 +12,16 @@ import type {
 import { refreshEntityEmbeddings } from "~/server/background-tasks/embedding";
 import { type getAiGateway, setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
+import {
+  getDuplicateProductRecommendationWorkflow,
+  dismissDuplicateProductRecommendationWorkflow,
+  dismissTagPropagationWorkflow,
+  dismissProductRecommendationWorkflow,
+} from "~/server/operations/recommendations.server";
+import {
+  requestEmbeddingRefreshWorkflow,
+  findSimilarEntitiesWorkflow,
+} from "~/server/operations/search.server";
 import { getStoredEmbeddingHashes } from "~/server/repo/entity-embedding-refresh";
 import { createExpense } from "~/server/repo/expense";
 import {
@@ -36,16 +46,6 @@ import {
   vectorId,
 } from "~/server/semantic/vector-store";
 import { executeWorkflow } from "~/server/workflow-runtime";
-import {
-  getDuplicateProductRecommendationWorkflow,
-  dismissDuplicateProductRecommendationWorkflow,
-  dismissTagPropagationWorkflow,
-  dismissProductRecommendationWorkflow,
-} from "~/server/workflows/recommendations.server";
-import {
-  requestEmbeddingRefreshWorkflow,
-  findSimilarEntitiesWorkflow,
-} from "~/server/workflows/search.server";
 
 import { countAwaitingWork, settleAwaitingWork } from "./awaiting-work.service";
 
