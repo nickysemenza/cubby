@@ -341,7 +341,7 @@ describe("Vendor Gmail search jobs", () => {
     await expect(
       runVendorMailSearchJob(ctx.db, olderTask.jobId, {
         search: async () => {
-          throw new Error("429 synthetic limit");
+          throw new Error("Synthetic permanent search failure");
         },
       }),
     ).resolves.toBe("succeeded");
@@ -349,7 +349,7 @@ describe("Vendor Gmail search jobs", () => {
       await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor),
     ).toMatchObject({
       status: "failed",
-      error: expect.stringContaining("429 synthetic limit"),
+      error: expect.stringContaining("Synthetic permanent search failure"),
     });
     const [failedRun] = await getDb(ctx.db)
       .select({ status: run.status, failureCode: run.failureCode })

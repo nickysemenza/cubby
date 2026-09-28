@@ -76,6 +76,7 @@ const thrownPrimitiveSchema = z.union([z.string(), z.number(), z.boolean()]);
 
 function errorCause(
   node: z.infer<typeof errorNodeSchema>,
+  includeStacks: boolean,
 ): z.infer<typeof errorCauseSchema> {
   const result: z.infer<typeof errorCauseSchema> = {
     name: scrubErrorMessage(node.name ?? "Error"),
@@ -83,7 +84,7 @@ function errorCause(
   };
   if (node.code !== undefined)
     result.code = scrubErrorMessage(String(node.code));
-  if (node.stack) result.stack = scrubErrorMessage(node.stack);
+  if (includeStacks && node.stack) result.stack = scrubErrorMessage(node.stack);
   const status = node.status ?? node.statusCode;
   if (status !== undefined) result.status = status;
   return result;
@@ -102,6 +103,7 @@ function readErrorNode<TError>(error: TError) {
 
 export function describeErrorCauses<TError>(
   error: TError,
+  options: { includeStacks?: boolean } = {},
 ): Pick<ErrorDiagnostics, "causes" | "truncated"> {
   const result: Pick<ErrorDiagnostics, "causes" | "truncated"> = { causes: [] };
   const seen = new Set<unknown>();
@@ -127,7 +129,8 @@ export function describeErrorCauses<TError>(
       continue;
     }
     const node = parsed.data;
-    if (node.message || node.code) result.causes.push(errorCause(node));
+    if (node.message || node.code)
+      result.causes.push(errorCause(node, options.includeStacks ?? false));
     if ((node.message?.length ?? 0) > 2000) result.truncated = true;
     if (node.cause !== undefined) pending.push(node.cause);
     if (node.originalError !== undefined) pending.push(node.originalError);

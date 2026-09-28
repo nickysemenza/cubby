@@ -26,7 +26,7 @@ const activeStatuses = ["queued", "running"];
 type SearchJob = typeof vendorMailSearchJob.$inferSelect;
 
 const jobErrorText = (error: Error | string) => {
-  const causes = describeErrorCauses(error).causes;
+  const causes = describeErrorCauses(error, { includeStacks: true }).causes;
   if (causes.length === 0) return scrubErrorMessage(String(error));
   const chain = causes
     .map((cause, index) => {
