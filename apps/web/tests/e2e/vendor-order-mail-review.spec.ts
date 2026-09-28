@@ -35,11 +35,18 @@ test("reviews a vendor email match and shows the linked conversation on Purchase
   await expect(
     receipt.getByRole("link", { name: "SYN-ORDER-1001" }),
   ).toBeVisible();
-  await receipt.getByRole("button", { name: "Dismiss" }).click();
+  await expect(receipt.getByText("Strong match")).toBeVisible();
+  await expect(receipt.getByText("Possible match")).toBeVisible();
+  await expect(receipt.getByText("Weak lead")).toBeVisible();
+  const exactRow = receipt
+    .getByRole("link", { name: "SYN-ORDER-1001" })
+    .locator("..")
+    .locator("..");
+  await exactRow.getByRole("button", { name: "Dismiss" }).click();
   await expect(receipt.getByText("dismissed", { exact: true })).toBeVisible();
   await page.reload();
   await expect(receipt.getByText("dismissed", { exact: true })).toBeVisible();
-  await receipt.getByRole("button", { name: "Link" }).click();
+  await exactRow.getByRole("button", { name: "Link" }).click();
   await expect(receipt.getByText("linked", { exact: true })).toBeVisible();
 
   await gotoAuthenticatedPage(
@@ -171,9 +178,15 @@ test("shows a failed Gmail search's saved reason on its Run page", async ({
   await expect(page).toHaveURL(new RegExp(`/runs/${seed.runShortcode}$`, "u"));
   await expect(page.getByText("Failure details")).toBeVisible();
   await expect(page.getByText(/model: synthetic-model/u).first()).toBeVisible();
+  const failurePreview = page.getByTestId("run-failure-preview");
+  await expect(failurePreview).toHaveCSS("-webkit-line-clamp", "2");
+  await page.getByText("Show full failure").click();
+  await expect(page.getByTestId("run-failure-full")).toContainText(
+    "synthetic-provider.ts:12:3",
+  );
   await page.getByText("Technical details").click();
   await expect(
-    page.locator("pre").filter({ hasText: "synthetic-provider.ts:12:3" }),
+    page.getByTestId("detail-primary-stack").locator("pre"),
   ).toBeVisible();
 });
 

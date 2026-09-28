@@ -67,7 +67,8 @@ enum NativePresentationCoverage {
             .productIngredient,
             .productPrimaryGtin,
             .productTags,
-            .financialTransactionAllocations:
+            .financialTransactionAllocations,
+            .runFailureDetails:
             .generic
         case .recipeSource:
             .implemented

@@ -1,6 +1,26 @@
 import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
 
+import type { GatewayResponseFailure } from "./ai-gateway";
+
+class GatewayHttpError extends Error {
+  readonly status: number;
+
+  constructor(failure: GatewayResponseFailure, cause: unknown) {
+    const retry = failure.retryAfter
+      ? ` (Retry-After: ${failure.retryAfter})`
+      : "";
+    super(
+      `HTTP ${failure.status} ${failure.statusText}${retry}: ${failure.body}`,
+      {
+        cause,
+      },
+    );
+    this.name = "GatewayHttpError";
+    this.status = failure.status;
+  }
+}
+
 /** Keep request identity next to the provider's original error and stack. */
 export class AiGatewayRequestError extends Error {
   constructor(message: string, cause: unknown) {
@@ -19,14 +39,18 @@ export function wrapAiGatewayError(
     operation: string;
     gatewayLogId?: string | null;
   },
+  responseFailure?: GatewayResponseFailure,
 ): Error {
   const log = context.gatewayLogId
     ? `, gateway log: ${context.gatewayLogId}`
     : "";
-  const reason = error instanceof Error ? error.message : String(error);
+  const cause = responseFailure
+    ? new GatewayHttpError(responseFailure, error)
+    : error;
+  const reason = cause instanceof Error ? cause.message : String(cause);
   return new AiGatewayRequestError(
     `AI Gateway request failed (model: ${context.model}, provider: ${context.provider}, route: ${context.route}, feature: ${context.feature}, operation: ${context.operation}${log}): ${reason}`,
-    error,
+    cause,
   );
 }
 

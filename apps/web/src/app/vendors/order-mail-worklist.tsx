@@ -23,6 +23,36 @@ import { formatCurrency } from "~/lib/utils";
 import { vendor } from "./vendor.functions";
 
 type MailEvent = VendorOrderMailOut["items"][number]["events"][number];
+type MailCandidate = MailEvent["candidates"][number];
+
+const matchEvidence = (candidate: MailCandidate) => {
+  switch (candidate.reason) {
+    case "exact_order_id":
+      return {
+        label: "Strong match",
+        explanation: "Exact order ID",
+        tone: "positive",
+      } as const;
+    case "amount_and_date":
+      return {
+        label: "Possible match",
+        explanation: "Amount and date match",
+        tone: "secondary",
+      } as const;
+    case "nearby_date":
+      return {
+        label: "Weak lead",
+        explanation: "Date only",
+        tone: "outline",
+      } as const;
+    case "previous_decision":
+      return {
+        label: "Reviewed",
+        explanation: "Previous decision",
+        tone: "secondary",
+      } as const;
+  }
+};
 
 function OrderMailEvent({ event }: { event: MailEvent }) {
   const decide = useActionMutation({
@@ -46,66 +76,70 @@ function OrderMailEvent({ event }: { event: MailEvent }) {
         <p className="mt-1 text-muted-foreground">No likely Purchase yet.</p>
       ) : (
         <div className="mt-2 grid gap-2">
-          {event.candidates.map((candidate) => (
-            <Row
-              key={candidate.purchaseId}
-              align="center"
-              justify="between"
-              gap="sm"
-              className="flex-wrap rounded-md bg-muted/50 px-2 py-1"
-            >
-              <div className="flex min-w-0 items-center gap-2">
-                <a
-                  className="font-medium text-primary hover:underline"
-                  href={`/purchases/${candidate.purchaseId}`}
-                >
-                  {candidate.orderId ?? candidate.purchaseId}
-                </a>
-                <span className="text-xs text-muted-foreground">
-                  {candidate.reason.replaceAll("_", " ")}
-                </span>
-                {candidate.decision ? (
-                  <Badge variant="secondary">{candidate.decision}</Badge>
-                ) : null}
-              </div>
-              <div className="flex gap-2">
-                {candidate.decision !== "linked" ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={decide.isPending}
-                    onClick={() =>
-                      decide.mutate({
-                        eventId: event.id,
-                        purchaseId: candidate.purchaseId,
-                        decision: "linked",
-                        evidenceChecksum: event.evidenceChecksum,
-                      })
-                    }
+          {event.candidates.map((candidate) => {
+            const evidence = matchEvidence(candidate);
+            return (
+              <Row
+                key={candidate.purchaseId}
+                align="center"
+                justify="between"
+                gap="sm"
+                className="flex-wrap rounded-md bg-muted/50 px-2 py-1"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <a
+                    className="font-medium text-primary hover:underline"
+                    href={`/purchases/${candidate.purchaseId}`}
                   >
-                    Link
-                  </Button>
-                ) : null}
-                {candidate.decision !== "dismissed" ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={decide.isPending}
-                    onClick={() =>
-                      decide.mutate({
-                        eventId: event.id,
-                        purchaseId: candidate.purchaseId,
-                        decision: "dismissed",
-                        evidenceChecksum: event.evidenceChecksum,
-                      })
-                    }
-                  >
-                    Dismiss
-                  </Button>
-                ) : null}
-              </div>
-            </Row>
-          ))}
+                    {candidate.orderId ?? candidate.purchaseId}
+                  </a>
+                  <Badge variant={evidence.tone}>{evidence.label}</Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {evidence.explanation}
+                  </span>
+                  {candidate.decision ? (
+                    <Badge variant="secondary">{candidate.decision}</Badge>
+                  ) : null}
+                </div>
+                <div className="flex gap-2">
+                  {candidate.decision !== "linked" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={decide.isPending}
+                      onClick={() =>
+                        decide.mutate({
+                          eventId: event.id,
+                          purchaseId: candidate.purchaseId,
+                          decision: "linked",
+                          evidenceChecksum: event.evidenceChecksum,
+                        })
+                      }
+                    >
+                      Link
+                    </Button>
+                  ) : null}
+                  {candidate.decision !== "dismissed" ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={decide.isPending}
+                      onClick={() =>
+                        decide.mutate({
+                          eventId: event.id,
+                          purchaseId: candidate.purchaseId,
+                          decision: "dismissed",
+                          evidenceChecksum: event.evidenceChecksum,
+                        })
+                      }
+                    >
+                      Dismiss
+                    </Button>
+                  ) : null}
+                </div>
+              </Row>
+            );
+          })}
         </div>
       )}
     </div>

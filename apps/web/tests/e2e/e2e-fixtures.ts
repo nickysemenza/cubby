@@ -759,6 +759,18 @@ export async function seedVendorMailReviewPrerequisite(
     date: "2026-09-10",
     statedTotal: 48,
   });
+  await insertWithShortcode(db, "purchase", {
+    vendorId: vendor.id,
+    orderId: "SYN-OTHER-2002",
+    date: "2026-09-09",
+    statedTotal: 19,
+  });
+  await insertWithShortcode(db, "purchase", {
+    vendorId: vendor.id,
+    orderId: "SYN-OTHER-3003",
+    date: "2026-09-08",
+    statedTotal: 48,
+  });
   const [mail] = await getDb(db)
     .insert(schema.orderMail)
     .values({

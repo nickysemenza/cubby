@@ -318,7 +318,7 @@ export default defineEntity({
         labelOverride: "Failure details",
         kind: "text",
         nullable: true,
-        display: { detail: true },
+        display: { detail: true, renderer: { detail: "run-failure-details" } },
         validation: readOnly(z.string().nullable()),
       },
       {

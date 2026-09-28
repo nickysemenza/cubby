@@ -20,6 +20,7 @@ import { ledgerTransferDetailFields } from "./ledger-transfer";
 import { productDetailFields } from "./product";
 import { productCategoryDetailFields } from "./product-category";
 import { recipeDetailFields } from "./recipe";
+import { runDetailFields } from "./run";
 import { vendorDetailFields } from "./vendor";
 import { wishDetailFields } from "./wish";
 
@@ -82,6 +83,9 @@ export const detailRendererCoverage = {
   },
   vendor: {
     "vendor-agent-hints": implemented(vendorDetailFields["vendor-agent-hints"]),
+  },
+  run: {
+    "run-failure-details": implemented(runDetailFields["run-failure-details"]),
   },
   financialAccount: {
     "financial-account-identity": implemented(
@@ -155,6 +159,8 @@ const detailCoverageFor = (
       return detailRendererCoverage.recipe;
     case "vendor":
       return detailRendererCoverage.vendor;
+    case "run":
+      return detailRendererCoverage.run;
     case "financialAccount":
       return detailRendererCoverage.financialAccount;
     case "financialTransaction":
