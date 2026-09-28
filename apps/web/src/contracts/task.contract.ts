@@ -36,5 +36,6 @@ export const taskContract = defineContract("task", {
     native: "Task board ordering",
     input: schemas.taskBulkReorderInput,
     output: schemas.taskBulkMutationOut,
+    invalidates: ["task"],
   }),
 });

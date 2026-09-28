@@ -40,6 +40,7 @@ export const ledgerPartyContract = defineContract("ledgerParty", {
       ledgerParty: ledgerPartyShortcode.nullable(),
     }),
     output: memberLogins,
+    invalidates: ["memberLogins"],
   }),
 });
 
@@ -55,6 +56,7 @@ export const financialTransactionContract = defineContract(
       },
       input: financialStatementImportPreviewInput,
       output: financialStatementImportPreviewOut,
+      cache: { tags: [["financialTransaction"], ["financialAccount"]] },
     }),
     sourceOptions: query({
       input: z.null(),
@@ -63,6 +65,7 @@ export const financialTransactionContract = defineContract(
     vendorInference: query({
       input: merchantVendorInferenceInput,
       output: merchantVendorInference,
+      cache: { tags: [["financialTransaction"], ["purchase"], ["vendor"]] },
     }),
   },
 );

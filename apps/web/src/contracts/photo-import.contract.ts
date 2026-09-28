@@ -256,11 +256,13 @@ export const photoImportContract = defineContract("photoImport", {
       /** Pending photos whose description is still queued or running; grouping waits for them. */
       waitingForAnalysis: z.number().int().nonnegative(),
     }),
+    invalidates: ["runOnly"],
   }),
   review: query({
     native: "Review proposed photo groups and processing status in Apple apps",
     input: z.object({ runId: runShortcode }),
     output: photoRunReviewResponse,
+    cache: { tags: [["run"]] },
   }),
   candidates: query({
     native: "Explain possible Product matches for a proposed photo group",
@@ -292,6 +294,7 @@ export const photoImportContract = defineContract("photoImport", {
         }),
       ),
     }),
+    cache: { tags: [["run"]] },
   }),
   linkExpense: mutation({
     input: z.object({
@@ -303,6 +306,7 @@ export const photoImportContract = defineContract("photoImport", {
       expenseId: expenseShortcode,
       productId: productShortcode,
     }),
+    invalidates: ["runOnly"],
   }),
   chooseExisting: mutation({
     native: "Select an existing Product for a proposed photo group",
@@ -343,6 +347,7 @@ export const photoImportContract = defineContract("photoImport", {
         .optional(),
     }),
     output: reviewPhotoGroupsOutput,
+    invalidates: ["runOnly"],
   }),
   discardGroup: mutation({
     native: "Discard a proposed photo group in Apple apps",
@@ -351,12 +356,14 @@ export const photoImportContract = defineContract("photoImport", {
       groupKey: z.string().min(1).max(200),
     }),
     output: reviewPhotoGroupsOutput,
+    invalidates: ["runOnly"],
   }),
   saveGroups: mutation({
     input: saveGroupsAction
       .omit({ action: true })
       .extend({ runId: runShortcode }),
     output: reviewPhotoGroupsOutput,
+    invalidates: ["runOnly"],
   }),
   stage: mutation({
     native: "Manifest photo import staging",

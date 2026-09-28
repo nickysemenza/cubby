@@ -16,6 +16,7 @@ import {
   type HandlerDefinition,
   SOURCE_ROOT,
 } from "./collect.ts";
+import { renderClientCatalog } from "./client-catalog.ts";
 
 const renderStartOperationRegistry = async (): Promise<string> => {
   const operations = [...(await collectStartOperations())].sort(([a], [b]) =>
@@ -180,7 +181,7 @@ const renderHttpContract = async (
 
 /**
  * Stage 2 of `pnpm generate`: the Start operation registry, the lazy handler
- * loaders, and the ts-rest HTTP contract. Runs after stage 1's files are on
+ * loaders, the browser client catalog, and the ts-rest HTTP contract. Runs after stage 1's files are on
  * disk (the contracts runtime-import `~/entities/generated/*.gen.ts`) and
  * takes stage 1's `HTTP_RESOURCES` in memory rather than re-parsing its
  * artifact.
@@ -202,6 +203,11 @@ export const renderStartOperationArtifacts = async (
       relativePath:
         "apps/web/src/server/generated/start-operation-handlers.gen.ts",
       source: await renderStartOperationHandlers(),
+    },
+    {
+      relativePath:
+        "apps/web/src/integrations/tanstack-query/generated/catalog.gen.ts",
+      source: await renderClientCatalog(),
     },
     {
       relativePath: "apps/web/src/lib/generated/http-contract.gen.ts",

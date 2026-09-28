@@ -307,10 +307,12 @@ export const runContract = defineContract("run", {
   list: query({
     input: runBrowserListInput,
     output: runListResponse,
+    cache: { tags: [["run"]], profile: "browse" },
   }),
   detail: query({
     input: z.object({ shortcode: z.string() }),
     output: runOut.nullable(),
+    cache: { tags: [["run"]] },
   }),
   liveProgress: query({
     input: z.object({ shortcode: runShortcode }),
@@ -342,6 +344,7 @@ export const runContract = defineContract("run", {
           .nullable(),
       })
       .nullable(),
+    cache: { tags: [["run"]] },
   }),
   retryGmailSearch: mutation({
     input: z.object({ shortcode: runShortcode }),
@@ -381,6 +384,7 @@ export const runContract = defineContract("run", {
         }),
       ),
     }),
+    cache: { tags: [] },
   }),
   history: query({
     input: z
@@ -392,10 +396,12 @@ export const runContract = defineContract("run", {
         message: "Choose either a Purchase or a Product",
       }),
     output: z.object({ runs: z.array(runSummary) }),
+    cache: { tags: [["run"]] },
   }),
   work: query({
     input: z.object({ runId: runShortcode }),
     output: runDetail,
+    cache: { tags: [["run"]] },
   }),
   control: mutation({
     input: z.object({
@@ -427,6 +433,7 @@ export const runContract = defineContract("run", {
         })
         .nullable(),
     }),
+    invalidates: ["runOnly"],
   }),
   logs: query({
     input: z.object({ runId: runShortcode }),
@@ -434,6 +441,7 @@ export const runContract = defineContract("run", {
       entries: z.array(runLogEntry),
       truncated: z.boolean(),
     }),
+    cache: { tags: [["run"]] },
   }),
   targetedLaunch: query({
     input: z.object({
@@ -441,20 +449,31 @@ export const runContract = defineContract("run", {
       targetId: z.string().min(1),
     }),
     output: targetedImportLaunch,
+    cache: { tags: [] },
   }),
   startTargeted: mutation({
     native: "Launch a targeted purchase-validation or product-enrichment run",
     input: targetedImportStartInput,
     output: targetedImportStartOutput,
+    invalidates: ["runOnly"],
   }),
   /** The member's purchase-import agent OAuth grant. */
-  agentConnection: query({ input: z.undefined(), output: agentConnection }),
+  agentConnection: query({
+    input: z.undefined(),
+    output: agentConnection,
+    cache: { tags: [["run"]] },
+  }),
   /** Revokes the grant and pauses the runs it authorized. */
   disconnectAgent: mutation({
     input: z.undefined(),
     output: agentConnection,
+    invalidates: ["runOnly"],
   }),
-  merchantRules: query({ input: z.undefined(), output: merchantRules }),
+  merchantRules: query({
+    input: z.undefined(),
+    output: merchantRules,
+    cache: { tags: [] },
+  }),
   confirmMerchantRule: mutation({
     input: confirmMerchantVendorRuleInput,
     output: merchantRules,
@@ -463,6 +482,7 @@ export const runContract = defineContract("run", {
     native: "Show live AI spend alongside native run timing",
     input: aiRunUsageInput,
     output: aiRunUsageOut,
+    cache: { tags: [["ai", "usage"]] },
   }),
   /**
    * Idempotent device-side status for one photo-run image target. The

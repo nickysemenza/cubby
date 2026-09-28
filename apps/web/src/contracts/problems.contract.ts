@@ -41,6 +41,7 @@ export const problemsContract = defineContract("problems", {
     native: "Today problems tile",
     input: noInput,
     output: problemsCountSchema,
+    cache: { profile: "stable" },
   }),
   getViews: query({
     input: noInput,
@@ -66,6 +67,7 @@ export const problemsContract = defineContract("problems", {
     readPolicy: "strong",
     input: noInput,
     output: maintenanceCountsSchema,
+    cache: { profile: "stable" },
   }),
   dryRunReparse: query({
     readPolicy: "strong",
@@ -85,14 +87,17 @@ export const problemsContract = defineContract("problems", {
   deleteUnused: mutation({
     input: deleteUnusedIngredientsInput,
     output: deleteUnusedIngredientsOut,
+    invalidates: ["ingredientCleanup"],
   }),
   resolveRunFinding: mutation({
     input: resolveRunFindingInput,
     output: resolveRunFindingOut,
+    invalidates: ["problems"],
   }),
   resolveArrivedFindings: mutation({
     input: resolveArrivedFindingsInput,
     output: resolveArrivedFindingsOut,
+    invalidates: ["problems"],
   }),
 });
 

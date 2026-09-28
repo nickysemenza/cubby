@@ -1,5 +1,7 @@
 import type { DefaultOptions } from "@tanstack/react-query";
 
+import type { CacheProfile } from "~/contracts/cache-policy";
+
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
@@ -34,13 +36,7 @@ export type OperationFreshnessPolicy = {
   gcTime?: number;
 };
 
-export type OperationCacheProfile =
-  | "interactive"
-  | "live-status"
-  | "browse"
-  | "stable"
-  | "derived-summary"
-  | "persisted-detail";
+export type OperationCacheProfile = CacheProfile;
 
 export type ResolvedOperationCachePolicy = {
   profile: OperationCacheProfile;
