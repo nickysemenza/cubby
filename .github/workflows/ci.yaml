@@ -246,6 +246,36 @@ jobs:
           CUBBY_TEST_INTEGRATION: "1"
         run: pnpm --dir apps/web exec vitest run --project integration
 
+  # Committed migrations are the only schema path: prove they carry every
+  # schema.ts change and build the same catalog as schema.ts itself.
+  db-check:
+    name: Database migrations
+    needs: scope
+    if: needs.scope.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: cubby
+          POSTGRES_HOST_AUTH_METHOD: trust
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 3s
+        ports: ["5432:5432"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          wasm: "false"
+          workspace-filter: "@cubby/web..."
+      - run: pnpm --dir apps/web db:check
+
   test-e2e:
     name: E2E tests (${{ matrix.lane }})
     needs: scope
@@ -386,7 +416,7 @@ jobs:
   # required check verifies their combined result whenever they run.
   web-checks:
     name: Web checks
-    needs: [scope, test-web, test-postgres, test-e2e]
+    needs: [scope, test-web, test-postgres, db-check, test-e2e]
     if: always() && !(github.event_name == 'workflow_dispatch' && inputs.simulator_e2e)
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -397,12 +427,14 @@ jobs:
           WEB: ${{ needs.scope.outputs.web }}
           WEB_RESULT: ${{ needs.test-web.result }}
           POSTGRES_RESULT: ${{ needs.test-postgres.result }}
+          DB_CHECK_RESULT: ${{ needs.db-check.result }}
           E2E_RESULT: ${{ needs.test-e2e.result }}
         run: |
           test "$SCOPE_RESULT" = success || exit 1
           if [ "$WEB" = true ]; then
             test "$WEB_RESULT" = success || exit 1
             test "$POSTGRES_RESULT" = success || exit 1
+            test "$DB_CHECK_RESULT" = success || exit 1
             test "$E2E_RESULT" = success || exit 1
           fi
 

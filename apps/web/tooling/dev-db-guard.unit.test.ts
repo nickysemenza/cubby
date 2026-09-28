@@ -31,6 +31,18 @@ describe("assertDevDatabaseUrl", () => {
       "wrong protocol",
       "postgres://postgres:password@localhost:55432/cubby_dev",
     ],
+    [
+      "a name that only starts like the dev database",
+      "postgresql://postgres:password@localhost:55432/cubby_devx",
+    ],
+    [
+      "an empty branch suffix",
+      "postgresql://postgres:password@localhost:55432/cubby_dev_",
+    ],
+    [
+      "a branch suffix that needs quoting",
+      "postgresql://postgres:password@localhost:55432/cubby_dev_a-b",
+    ],
   ];
 
   it.each(cases)("refuses %s", (_name, url) => {
@@ -42,6 +54,13 @@ describe("assertDevDatabaseUrl", () => {
       "postgresql://postgres:password@localhost:55432/cubby_dev",
     );
     expect(url.hostname).toBe("localhost");
+  });
+
+  it("accepts a branch-named dev database (CUBBY_DEV_DB_NAME)", () => {
+    const url = assertDevDatabaseUrl(
+      "postgresql://postgres:password@localhost:55432/cubby_dev_cleanup",
+    );
+    expect(url.pathname).toBe("/cubby_dev_cleanup");
   });
 
   it("accepts 127.0.0.1 with the dev database name", () => {

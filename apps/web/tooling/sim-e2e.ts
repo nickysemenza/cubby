@@ -1267,19 +1267,8 @@ async function main(): Promise<void> {
     if (watch) startDatabaseWatchdog();
     const pool = new Pool({ connectionString: databaseURL });
     try {
-      const { ensureDbExtensions } = await import("./db-extensions");
-      const { installEntityIdentityTriggers } =
-        await import("../src/server/db/entity-identity-schema");
-      const { toPushSchemaDatabase } = await import("./drizzle-kit-interop");
-      const schema = await import("../src/server/db/schema");
-      const { pushSchema } = await import("drizzle-kit/api");
-      const db = drizzle(pool);
-      await ensureDbExtensions(db);
-      const { apply } = await pushSchema(schema, toPushSchemaDatabase(db), [
-        "public",
-      ]);
-      await apply();
-      await installEntityIdentityTriggers(db);
+      const { migrateDatabase } = await import("./db-migrate");
+      await migrateDatabase(drizzle(pool));
     } finally {
       await pool.end();
     }

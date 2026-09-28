@@ -300,14 +300,14 @@ the shared prod Neon instance (see "⚠ Shared prod DB" below). For iteration
 that shouldn't touch prod, use the persistent local PostgreSQL lane:
 
 ```sh
-pnpm dev:local      # start PostgreSQL, push schema, seed if empty, then Vite
+pnpm dev:local      # start PostgreSQL, apply migrations, seed if empty, then Vite
 pnpm db:dev:reset  # delete the guarded local volume, then rebuild its corpus
 pnpm db:dev:down    # stop the container (the named volume, and its data, persist)
 ```
 
 `db:dev:up` is macOS/Apple-`container`-only, matches a fixed name
 (`cubby-dev-pg`) and port (`localhost:55432`), and is idempotent — rerunning
-it reuses the existing container rather than recreating it. `db:dev:push` and
+it reuses the existing container rather than recreating it. `db:dev:migrate` and
 `db:dev:seed` refuse to run against anything but that local database (checked
 by protocol, host, port, user, password, and database). The reset also checks
 the running container's image, published port, environment, and named volume
@@ -315,9 +315,12 @@ before removing it; after `db:dev:down`, run `db:dev:up` before resetting.
 `dev:local` skips corpus seeding when products already exist;
 `db:dev:reset` restores a clean corpus. The persistent database is shared by
 local worktrees.
-If a later schema change needs a Drizzle rename decision, `dev:local` stops
-before changing data; run `pnpm db:dev:push` interactively or use the explicit
-reset to replace the synthetic corpus.
+`db:dev:migrate` applies the committed migrations (`apps/web/drizzle/`); a
+database built by the retired `db:push` is adopted at the baseline (0000 is
+recorded, later migrations run). A branch whose migrations are ahead of main
+sets `CUBBY_DEV_DB_NAME=cubby_dev_<name>` for `dev:local`, `db:dev:migrate`,
+`db:dev:seed`, and `db:dev:reset` to use its own database in the same
+container; reset then drops only that database.
 
 The corpus is created through a local, synthetic-only account
 (`dev@cubby.localhost` / `cubby-dev-local-only`, seeded by the real
@@ -468,8 +471,9 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   `CUBBY_E2E_WORKERS=1|2|3|4` overrides its local macOS default of 2. CI and Linux
   default to one browser worker. Multiple pairs share the host's finite CPU and memory.
 - **⚠ Shared prod DB:** every worktree's `DATABASE_URL` is the **same prod Neon**
-  instance (dev DB _is_ prod). `db:push` and data changes from one worktree are
-  visible everywhere and hit prod — coordinate schema changes across parallel work.
+  instance (dev DB _is_ prod). Data changes from one worktree are visible
+  everywhere and hit prod; schema changes reach prod only through
+  `db:migrate --target=production` — coordinate them across parallel work.
 - Editing `recipebridge/` Rust source — or the patched sibling ingredient-parser
   checkout — is picked up automatically on the next `pnpm dev` (see "WASM never
   silently drifts" above); `pnpm run wasm` forces it. Needs the rust toolchain + the
@@ -477,40 +481,42 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 
 ## ⚡ Common Commands
 
-| Command                                            | What it does                                                                     |
-| -------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `pnpm run dev`                                     | Start the web, UPC, and USDA local services                                      |
-| `pnpm run build`                                   | Build all three production Worker bundles                                        |
-| `pnpm run check`                                   | Fast full-tree quality, TypeScript, entity freshness, Knip, and high-risk guards |
-| `pnpm run check:all`                               | `check` plus Worker/OpenAPI, script-test, and security validation                |
-| `pnpm run dedupe:check`                            | Dependency deduplication; CI runs it for code validation                         |
-| `pnpm run typecheck`                               | Recursive package typecheck with `tsc` (TypeScript 7, native)                    |
-| `pnpm run lint`                                    | Full-tree Oxlint                                                                 |
-| `pnpm run lint:fix`                                | Full-tree Oxlint auto-fix                                                        |
-| `pnpm run format:check`                            | Full-tree Oxfmt check                                                            |
-| `pnpm run format`                                  | Full-tree Oxfmt write                                                            |
-| `pnpm run test`                                    | All fast unit, UI, contract, and auxiliary-package tests                         |
-| `pnpm run test:postgres`                           | Authoritative PostgreSQL contracts (disposable Apple containers on macOS)        |
-| `pnpm run test:e2e`                                | PostgreSQL-backed Playwright tests (disposable Apple containers on macOS)        |
-| `pnpm run test:all`                                | Fast tests, then PostgreSQL and Playwright concurrently                          |
-| `pnpm run test:local`                              | Alias of `test:all`                                                              |
-| `pnpm run test:services:down`                      | Remove warm `CUBBY_TEST_SERVICES=warm` containers                                |
-| `pnpm --filter @cubby/web run test:e2e:watch`      | Warm services + `vite build --watch` + Playwright `--ui`, local-only             |
-| `pnpm run db:dev:up` / `:push` / `:seed` / `:down` | Persistent local dev PostgreSQL + synthetic corpus (see above)                   |
-| `pnpm run dev:local`                               | `vite dev` against the local dev database instead of prod                        |
-| `pnpm --filter @cubby/web run db:push`             | Push the web Drizzle schema to the configured Postgres DB                        |
-| `pnpm --filter @cubby/web run build:cf`            | Build only the main web Worker                                                   |
-| `pnpm --filter @cubby/web run preview:cf`          | Run the Workers build locally                                                    |
-| `pnpm --filter @cubby/web run deploy:cf`           | Deploy to Cloudflare Workers                                                     |
-| `pnpm run deploy:all`                              | Deploy all four production Workers in dependency order                           |
-| `pnpm run wasm`                                    | Rebuild `@cubby/recipebridge` from Rust source                                   |
+| Command                                                          | What it does                                                                     |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `pnpm run dev`                                                   | Start the web, UPC, and USDA local services                                      |
+| `pnpm run build`                                                 | Build all three production Worker bundles                                        |
+| `pnpm run check`                                                 | Fast full-tree quality, TypeScript, entity freshness, Knip, and high-risk guards |
+| `pnpm run check:all`                                             | `check` plus Worker/OpenAPI, script-test, and security validation                |
+| `pnpm run dedupe:check`                                          | Dependency deduplication; CI runs it for code validation                         |
+| `pnpm run typecheck`                                             | Recursive package typecheck with `tsc` (TypeScript 7, native)                    |
+| `pnpm run lint`                                                  | Full-tree Oxlint                                                                 |
+| `pnpm run lint:fix`                                              | Full-tree Oxlint auto-fix                                                        |
+| `pnpm run format:check`                                          | Full-tree Oxfmt check                                                            |
+| `pnpm run format`                                                | Full-tree Oxfmt write                                                            |
+| `pnpm run test`                                                  | All fast unit, UI, contract, and auxiliary-package tests                         |
+| `pnpm run test:postgres`                                         | Authoritative PostgreSQL contracts (disposable Apple containers on macOS)        |
+| `pnpm run test:e2e`                                              | PostgreSQL-backed Playwright tests (disposable Apple containers on macOS)        |
+| `pnpm run test:all`                                              | Fast tests, then PostgreSQL and Playwright concurrently                          |
+| `pnpm run test:local`                                            | Alias of `test:all`                                                              |
+| `pnpm run test:services:down`                                    | Remove warm `CUBBY_TEST_SERVICES=warm` containers                                |
+| `pnpm --filter @cubby/web run test:e2e:watch`                    | Warm services + `vite build --watch` + Playwright `--ui`, local-only             |
+| `pnpm run db:dev:up` / `:migrate` / `:seed` / `:down`            | Persistent local dev PostgreSQL + synthetic corpus (see above)                   |
+| `pnpm run dev:local`                                             | `vite dev` against the local dev database instead of prod                        |
+| `pnpm run db:generate`                                           | Generate a migration for `schema.ts` + derived-DDL changes (`apps/web/drizzle/`) |
+| `pnpm run db:check`                                              | Prove the migrations carry `schema.ts` and build its exact catalog               |
+| `pnpm --filter @cubby/web run db:migrate -- --target=production` | Apply pending migrations; needs `PRODUCTION_DIRECT_DATABASE_URL`                 |
+| `pnpm --filter @cubby/web run build:cf`                          | Build only the main web Worker                                                   |
+| `pnpm --filter @cubby/web run preview:cf`                        | Run the Workers build locally                                                    |
+| `pnpm --filter @cubby/web run deploy:cf`                         | Deploy to Cloudflare Workers                                                     |
+| `pnpm run deploy:all`                                            | Deploy all four production Workers in dependency order                           |
+| `pnpm run wasm`                                                  | Rebuild `@cubby/recipebridge` from Rust source                                   |
 
 See [docs/ci.md](docs/ci.md) for CI scoping, artifact provenance, scheduled
 coverage, deployment behavior, and the measured optimizations that should not
 be reintroduced.
 
 The auxiliary Workers (`@cubby/upc-lookup` and `@cubby/usda-api`) are included in
-recursive checks/tests. Their D1 databases do not use the web `db:push` workflow:
+recursive checks/tests. Their D1 databases do not use the web migration workflow:
 generate/apply their D1 migrations locally first, run the package checks, then apply
 remote D1 migrations before deploying code that depends on the new schema. Use staged
 expand/migrate/deploy/cleanup changes for incompatible D1 schema changes.
