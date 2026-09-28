@@ -63,6 +63,15 @@ export const runHandlers = implementOperationDomain(runContract, {
     const { getRunLiveProgress } = await import("~/server/repo/run-progress");
     return getRunLiveProgress(context.db, input.shortcode);
   },
+  retryGmailSearch: async (context, input) => {
+    const { retryStalledVendorMailSearchJob } =
+      await import("~/server/purchase-import/gmail/search-job");
+    return retryStalledVendorMailSearchJob(
+      context.db,
+      input.shortcode,
+      context.actorContext,
+    );
+  },
   workSnapshot: async (context, input) => {
     const run = await loadRunDetail(context.db, input.runId);
     return {

@@ -201,7 +201,7 @@ function OrderMailWorklist({
               <Button
                 type="button"
                 size="sm"
-                variant="ghost"
+                variant="outline"
                 disabled={search.isPending}
                 onClick={() =>
                   search.mutate({
@@ -211,13 +211,13 @@ function OrderMailWorklist({
                   })
                 }
               >
-                Search older email
+                Continue unfinished search
               </Button>
             ) : null}
             <Button
               type="button"
               size="sm"
-              variant="ghost"
+              variant="outline"
               disabled={search.isPending || jobActive || !hasSearchTerms}
               onClick={() =>
                 search.mutate({
@@ -243,8 +243,11 @@ function OrderMailWorklist({
               >
                 View run
               </Link>
-              {jobActive
-                ? "Gmail search is running. You can leave this page and return."
+              {currentJob.status === "queued"
+                ? "Waiting for the background worker. View the Run for wait time and retry."
+                : null}
+              {currentJob.status === "running"
+                ? "Scanning Gmail. You can leave this page and return."
                 : null}
               {currentJob.status === "completed" ? (
                 <span>

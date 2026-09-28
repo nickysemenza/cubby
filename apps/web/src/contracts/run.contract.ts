@@ -5,6 +5,7 @@ import {
   productShortcode,
   purchaseShortcode,
 } from "@cubby/schemas/identifiers";
+import { vendorSearchMailOut } from "@cubby/schemas/order-mail-review";
 import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import { confirmMerchantVendorRuleInput } from "@cubby/schemas/purchase-import";
 import {
@@ -322,10 +323,12 @@ export const runContract = defineContract("run", {
             phase: z.string(),
             detail: z.string().nullable(),
             createdAt: z.iso.datetime(),
+            ageSeconds: z.number().int().nonnegative(),
           }),
         ),
         gmail: z
           .object({
+            status: z.enum(["queued", "running", "completed", "failed"]),
             searched: z.number().int().nonnegative(),
             skipped: z.number().int().nonnegative(),
             reviewable: z.number().int().nonnegative(),
@@ -339,6 +342,10 @@ export const runContract = defineContract("run", {
           .nullable(),
       })
       .nullable(),
+  }),
+  retryGmailSearch: mutation({
+    input: z.object({ shortcode: runShortcode }),
+    output: vendorSearchMailOut,
   }),
   workSnapshot: query({
     native: "Show durable live import progress in Apple apps",

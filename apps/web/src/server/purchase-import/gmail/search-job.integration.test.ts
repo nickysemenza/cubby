@@ -14,12 +14,92 @@ import { ensureRun } from "~/server/runs/ensure-run";
 import {
   latestVendorMailSearchJob,
   recoverStaleVendorMailSearchJobs,
+  retryStalledVendorMailSearchJob,
   runVendorMailSearchJob,
   startVendorMailSearchJob,
 } from "./search-job";
 
 describe("Vendor Gmail search jobs", () => {
   const ctx = withTestDb();
+
+  it("resends only an overdue queued page and leaves its checkpoint intact", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic retry member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic retry vendor",
+      website: "https://example.test",
+    });
+    const publish = vi.fn<typeof publishBackgroundTasks>(async () => ({
+      transport: "queue",
+      count: 1,
+    }));
+    const started = await startVendorMailSearchJob(
+      ctx.db,
+      { vendorId: vendor.shortcode },
+      ctx.actor,
+      { publish },
+    );
+    await expect(
+      retryStalledVendorMailSearchJob(ctx.db, started.runShortcode, ctx.actor, {
+        publish,
+      }),
+    ).rejects.toThrow(/still waiting/u);
+    expect(publish).toHaveBeenCalledTimes(1);
+    const [saved] = await getDb(ctx.db)
+      .select({ runId: run.id })
+      .from(run)
+      .where(eq(run.shortcode, started.runShortcode));
+    if (!saved) throw new Error("Synthetic Run was not saved");
+    await getDb(ctx.db)
+      .update(vendorMailSearchJob)
+      .set({ updatedAt: new Date(Date.now() - 4 * 60_000) })
+      .where(eq(vendorMailSearchJob.runId, saved.runId));
+    await retryStalledVendorMailSearchJob(
+      ctx.db,
+      started.runShortcode,
+      ctx.actor,
+      {
+        publish,
+      },
+    );
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish.mock.calls[1]?.[1]).toMatchObject([
+      { kind: "vendor-mail.search", jobId: saved.runId, page: 0 },
+    ]);
+    await expect(
+      retryStalledVendorMailSearchJob(ctx.db, started.runShortcode, ctx.actor, {
+        publish,
+      }),
+    ).rejects.toThrow(/still waiting/u);
+    expect(publish).toHaveBeenCalledTimes(2);
+    await getDb(ctx.db)
+      .update(vendorMailSearchJob)
+      .set({ updatedAt: new Date(Date.now() - 4 * 60_000) })
+      .where(eq(vendorMailSearchJob.runId, saved.runId));
+    await expect(
+      retryStalledVendorMailSearchJob(ctx.db, started.runShortcode, ctx.actor, {
+        publish: async () => {
+          throw new Error("Synthetic queue unavailable");
+        },
+      }),
+    ).rejects.toThrow("Synthetic queue unavailable");
+    expect(
+      (await getRunLiveProgress(ctx.db, started.runShortcode))?.progress.at(-1),
+    ).toMatchObject({
+      phase: "retry_failed",
+      detail: "Synthetic queue unavailable",
+    });
+    await retryStalledVendorMailSearchJob(
+      ctx.db,
+      started.runShortcode,
+      ctx.actor,
+      { publish },
+    );
+    expect(publish).toHaveBeenCalledTimes(3);
+  });
 
   it("reads durable progress for a Run without a Gmail job", async () => {
     const runId = await ensureRun(

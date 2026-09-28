@@ -1,5 +1,5 @@
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
-import { runEntityId } from "@cubby/schemas/identifiers";
+import { runEntityId, runShortcode } from "@cubby/schemas/identifiers";
 import { vendorSearchMailOut } from "@cubby/schemas/order-mail-review";
 import { and, desc, eq, inArray, lt } from "drizzle-orm";
 
@@ -67,6 +67,87 @@ export async function latestVendorMailSearchJob(
     .orderBy(desc(vendorMailSearchJob.createdAt))
     .limit(1);
   return record ? displayJob(record.job, record.runShortcode) : null;
+}
+
+/** Resend a saved page when queue delivery has not reached its worker. */
+export async function retryStalledVendorMailSearchJob(
+  db: Database,
+  runCode: string,
+  actor: ActorContext,
+  options: {
+    publish?: typeof import("~/server/background-tasks/publish").publishBackgroundTasks;
+  } = {},
+) {
+  const database = getDb(db);
+  const [record] = await database
+    .select({ job: vendorMailSearchJob, runShortcode: runTable.shortcode })
+    .from(vendorMailSearchJob)
+    .innerJoin(runTable, eq(vendorMailSearchJob.runId, runTable.id))
+    .where(
+      and(
+        eq(runTable.shortcode, runShortcode.parse(runCode)),
+        eq(runTable.actorUserId, actor.userId),
+      ),
+    )
+    .limit(1);
+  if (!record) throw new Error("No Gmail search job exists for this Run.");
+  const [claimed] = await database
+    .update(vendorMailSearchJob)
+    .set({ status: "queued" })
+    .where(
+      and(
+        eq(vendorMailSearchJob.runId, record.job.runId),
+        eq(vendorMailSearchJob.status, "queued"),
+        lt(vendorMailSearchJob.updatedAt, new Date(Date.now() - 3 * 60_000)),
+      ),
+    )
+    .returning();
+  if (!claimed)
+    throw new Error(
+      "Gmail search is still waiting for its worker or has already started. Retry is available after three minutes without a worker.",
+    );
+  const publish =
+    options.publish ??
+    (await import("~/server/background-tasks/publish")).publishBackgroundTasks;
+  try {
+    await publish(
+      db,
+      [
+        {
+          kind: "vendor-mail.search",
+          jobId: claimed.runId,
+          page: claimed.pagesScanned,
+          requestedAt: new Date().toISOString(),
+        },
+      ],
+      { source: "vendor-mail.retry" },
+    );
+  } catch (error) {
+    await database
+      .update(vendorMailSearchJob)
+      .set({ updatedAt: record.job.updatedAt })
+      .where(
+        and(
+          eq(vendorMailSearchJob.runId, claimed.runId),
+          eq(vendorMailSearchJob.status, "queued"),
+          eq(vendorMailSearchJob.updatedAt, claimed.updatedAt),
+        ),
+      );
+    await database.insert(runProgress).values({
+      runId: claimed.runId,
+      eventId: crypto.randomUUID(),
+      phase: "retry_failed",
+      detail: jobErrorText(error instanceof Error ? error : String(error)),
+    });
+    throw error;
+  }
+  await database.insert(runProgress).values({
+    runId: claimed.runId,
+    eventId: crypto.randomUUID(),
+    phase: "requeued",
+    detail: `Resent Gmail page ${claimed.pagesScanned + 1} to the background queue`,
+  });
+  return displayJob(claimed, record.runShortcode);
 }
 
 export async function startVendorMailSearchJob(

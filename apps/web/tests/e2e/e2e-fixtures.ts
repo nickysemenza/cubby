@@ -859,6 +859,17 @@ export async function seedLiveVendorMailSearchRun(page: Page, name: string) {
   if (!saved) throw new Error("Synthetic Run was not saved");
   return {
     runShortcode: started.runShortcode,
+    async ageQueue() {
+      const old = new Date(Date.now() - 4 * 60_000);
+      await getDb(db)
+        .update(schema.vendorMailSearchJob)
+        .set({ updatedAt: old })
+        .where(eq(schema.vendorMailSearchJob.runId, saved.id));
+      await getDb(db)
+        .update(schema.runProgress)
+        .set({ createdAt: old })
+        .where(eq(schema.runProgress.runId, saved.id));
+    },
     async advance() {
       await getDb(db).transaction(async (tx) => {
         await tx

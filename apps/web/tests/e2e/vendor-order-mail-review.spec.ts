@@ -105,7 +105,9 @@ test("queues a local synthetic Gmail search, shows progress, and continues to ol
     page.getByRole("button", { name: "Search Gmail now" }),
   );
   await page.getByRole("button", { name: "Search Gmail now" }).click();
-  await expect(page.getByText(/Gmail search is running/u)).toBeVisible();
+  await expect(
+    page.getByText(/Waiting for the background worker/u),
+  ).toBeVisible();
   await expect(page.getByRole("link", { name: "View run" })).toHaveAttribute(
     "href",
     "/runs/RUN-TEST",
@@ -128,7 +130,9 @@ test("queues a local synthetic Gmail search, shows progress, and continues to ol
   ).toBeVisible({
     timeout: 10_000,
   });
-  await page.getByRole("button", { name: "Search older email" }).click();
+  await page
+    .getByRole("button", { name: "Continue unfinished search" })
+    .click();
   expect(starts[1]?.pageToken).toBe("older-page");
   status = {
     ...queuedStatus,
@@ -203,6 +207,26 @@ test("updates a Run's progress live and retains its completed search summary", a
       "Checked 6 messages; 2 already saved; 1 order email to review",
     ),
   ).toBeVisible();
+});
+
+test("shows how long a queued Gmail Run has waited and offers retry", async ({
+  page,
+}) => {
+  const seed = await seedLiveVendorMailSearchRun(
+    page,
+    `Synthetic queued search ${Date.now()}`,
+  );
+  await seed.ageQueue();
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runShortcode}`,
+    page.getByText("Waiting for background worker"),
+  );
+  await expect(page.getByText(/Waiting for 4m/u)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Retry queue delivery" }),
+  ).toBeVisible();
+  await expect(page.getByText("Updating live")).toHaveCount(0);
 });
 
 test("keeps one Run live through every Gmail page and shows saved search inputs", async ({

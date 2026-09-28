@@ -1,6 +1,7 @@
 import { runShortcode } from "@cubby/schemas/identifiers";
+import { vendorSearchMailOut } from "@cubby/schemas/order-mail-review";
 import { runStatus } from "@cubby/schemas/run-fields";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { run, runProgress, vendorMailSearchJob } from "~/server/db/schema";
@@ -22,6 +23,7 @@ export async function getRunLiveProgress(db: Database, shortcode: string) {
       phase: runProgress.phase,
       detail: runProgress.detail,
       createdAt: runProgress.createdAt,
+      ageSeconds: sql<number>`greatest(0, floor(extract(epoch from (now()::timestamp - ${runProgress.createdAt}))))::int`,
     })
     .from(runProgress)
     .where(eq(runProgress.runId, record.run.id))
@@ -35,6 +37,7 @@ export async function getRunLiveProgress(db: Database, shortcode: string) {
     })),
     gmail: record.gmail
       ? {
+          status: vendorSearchMailOut.shape.status.parse(record.gmail.status),
           searched: record.gmail.searched,
           skipped: record.gmail.skipped,
           reviewable: record.gmail.reviewable,

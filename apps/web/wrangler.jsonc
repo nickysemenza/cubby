@@ -192,13 +192,12 @@
     "consumers": [
       {
         "queue": "cubby-background",
-        // Batch many tasks into one invocation while preserving per-message
-        // ack/retry isolation in background-tasks/consume.ts.
-        "max_batch_size": 10,
+        // One task per invocation bounds isolate memory. A ten-task batch
+        // exceeded the Worker memory limit before a queued Run was claimed.
+        "max_batch_size": 1,
         "max_batch_timeout": 0,
         // Serial delivery is not what makes this safe — freshness gates are.
-        // Each invocation still holds one `pg.Client`, and 10 is within
-        // Neon's connection ceiling. The binding constraints this
+        // Each invocation still holds one `pg.Client`. The binding constraints this
         // concurrency actually runs into are the AI Gateway and Vectorize
         // per-call rate limits; the consumer keeps under those by sharing
         // one embed call and one Vectorize upsert per batch, so
