@@ -6,7 +6,7 @@ import { detailSlotsFor } from "./detail-slots";
 
 // A Run's page is the generic detail; its purpose decides which slots render.
 // AI runs (no vendor, orders or transcript) once had no page at all, so the
-// import workflow must never claim them — nor any run lose usage or changes.
+// import workflow must never claim them — nor any run lose progress, usage or changes.
 describe("Run detail slots", () => {
   const slots = detailSlotsFor("run") ?? {};
   const applying = (purpose: RunOut["purpose"]) =>
@@ -29,6 +29,6 @@ describe("Run detail slots", () => {
     ["file_import", ["import-workflow", "ai-usage", "changes"]],
     ["legacy", ["import-workflow", "ai-usage", "changes"]],
   ])("a %s run renders %j", (purpose, expected) => {
-    expect(applying(purpose)).toEqual(expected);
+    expect(applying(purpose)).toEqual(["live-progress", ...expected]);
   });
 });
