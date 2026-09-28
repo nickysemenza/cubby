@@ -34,9 +34,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import type { ScanFeedbackEntry } from "~/app/_components/inventory/persistent-scanner";
-import { inventory } from "~/app/inventory/inventory.functions";
-import { location } from "~/app/locations/location.functions";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
+import {
+  inventory,
+  location,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { resolveLocationScan, resolveProductScan } from "~/lib/scan-code";

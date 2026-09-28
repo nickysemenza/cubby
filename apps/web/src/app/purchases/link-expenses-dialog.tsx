@@ -46,11 +46,10 @@ import {
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
-import { entityListFor } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list";
+import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
-
-import { purchase as purchaseOperations } from "./purchase.functions";
 
 const NO_CANDIDATES: ExpenseOut[] = [];
 const CANDIDATE_PAGE_SIZE = 100;

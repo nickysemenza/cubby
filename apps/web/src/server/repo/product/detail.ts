@@ -173,7 +173,7 @@ export async function readProductDetail(
     },
   );
   // Not wrapped in `observeOperationPhase`: the tracked phase vocabulary for
-  // "entity.detail" is a closed list (`entity-detail.functions.ts`) this repo
+  // "entity.detail" is a closed list (`entity-detail.ts`) this repo
   // module doesn't own, so this batched lookup rides alongside the "quality"
   // phase's timing instead of minting a new one.
   const coverImageUrl =

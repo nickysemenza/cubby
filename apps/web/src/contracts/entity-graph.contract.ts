@@ -15,6 +15,7 @@ import {
   entityGraphPathsOutputSchema,
 } from "@cubby/schemas/entity-graph";
 
+import { ENTITY_ROOT_TAGS } from "~/contracts/cache-policy";
 import { defineContract, query } from "~/contracts/define";
 import {
   generatedEntityRelationListInputSchema,
@@ -26,21 +27,25 @@ export const entityGraphContract = defineContract("entity", {
     native: "Complete connection tables with record path evidence",
     input: connectedRecordsInputSchema,
     output: connectedRecordsOutputSchema,
+    cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
   }),
   explore: query({
     native: "Native relationship explorer",
     input: entityGraphExploreInputSchema,
     output: entityGraphExploreOutputSchema,
+    cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
   }),
   graph: query({
     native: "Native relationship branch paging",
     input: entityGraphInputSchema,
     output: entityGraphOutputSchema,
+    cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
   }),
   graphPaths: query({
     native: "Native relationship path evidence",
     input: entityGraphPathsInputSchema,
     output: entityGraphPathsOutputSchema,
+    cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
   }),
   relation: query({
     mcp: {
@@ -53,6 +58,7 @@ export const entityGraphContract = defineContract("entity", {
     },
     input: generatedEntityRelationListInputSchema,
     output: generatedEntityRelationListOutputSchema,
+    cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
   }),
   connections: query({
     mcp: {
@@ -64,5 +70,6 @@ export const entityGraphContract = defineContract("entity", {
     native: "Native one-hop physical connections and delete/merge impact",
     input: entityConnectionsInput,
     output: entityConnectionsOut,
+    cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
   }),
 });

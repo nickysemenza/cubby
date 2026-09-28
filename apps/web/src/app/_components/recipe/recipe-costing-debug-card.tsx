@@ -3,11 +3,11 @@ import type { RowDiagnosticOut } from "@cubby/schemas/recipe-shared";
 import { useQuery } from "@tanstack/react-query";
 import { match } from "ts-pattern";
 
-import { recipe } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { StatusText } from "~/components/ui/status-text";
+import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { formatCurrency } from "~/lib/utils";
 

@@ -39,6 +39,18 @@ export const recommendationsContract = defineContract("recommendations", {
     native: "Native inline relationship recommendations",
     input: entityRecommendationsInput,
     output: entityRecommendationsOut,
+    cache: {
+      tags: [
+        ["recommendations", "forEntity"],
+        ["expense"],
+        ["project"],
+        ["inventory"],
+        ["location"],
+        ["product"],
+        ["task"],
+        ["relatedness"],
+      ],
+    },
   }),
   placement: query({
     input: placementRecommendationInput,
@@ -59,18 +71,22 @@ export const recommendationsContract = defineContract("recommendations", {
   dismissDuplicateProduct: mutation({
     input: dismissDuplicateProductRecommendationInput,
     output: recommendationOkSchema,
+    invalidates: ["recommendations"],
   }),
   dismissTagPropagation: mutation({
     input: dismissTagPropagationInput,
     output: recommendationOkSchema,
+    invalidates: ["recommendations"],
   }),
   dismissProduct: mutation({
     input: dismissProductRecommendationInput,
     output: recommendationOkSchema,
+    invalidates: ["recommendations"],
   }),
   productMatches: query({
     input: productMatchQueueInput,
     output: productMatchQueueOut,
+    cache: { tags: [["recommendations", "productMatches"], ["product"]] },
   }),
   proposeProductMatch: mutation({
     mcp: {
@@ -80,13 +96,16 @@ export const recommendationsContract = defineContract("recommendations", {
     },
     input: proposeProductMatchInput,
     output: proposeProductMatchOut,
+    invalidates: ["recommendations"],
   }),
   dismissProductMatch: mutation({
     input: dismissProductMatchInput,
     output: recommendationOkSchema,
+    invalidates: ["recommendations"],
   }),
   mergeProductMatch: mutation({
     input: mergeProductMatchInput,
     output: recommendationOkSchema,
+    invalidates: ["productMerge"],
   }),
 });

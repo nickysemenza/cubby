@@ -16,10 +16,9 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
+import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { parsePlainDate } from "~/lib/plain-date";
 import { formatCurrency } from "~/lib/utils";
-
-import { expense as expenseOperations } from "./expense.functions";
 
 // Module-level so the fallback keeps a stable reference across renders.
 const NO_OTHER_EXPENSES: ExpenseOut[] = [];

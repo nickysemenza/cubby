@@ -9,7 +9,7 @@ import { type RefObject, useMemo, useRef } from "react";
 
 import { getSortableFields } from "~/entities/entities";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
-import { relatedData } from "~/lib/related-data.functions";
+import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { RelatedPreviewCell } from "../data-table/related-preview-cell";
 import type {

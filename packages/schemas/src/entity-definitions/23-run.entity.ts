@@ -32,7 +32,7 @@ export default defineEntity({
     // generic page reads the run through its own query.
     detailOverride: {
       query: {
-        module: "~/entities/run.functions",
+        module: "~/entities/run-queries",
         export: "runDetailQuery",
       },
     },

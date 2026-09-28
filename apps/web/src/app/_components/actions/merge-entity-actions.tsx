@@ -1,11 +1,13 @@
 import { z } from "zod";
 
-import { ingredient } from "~/app/ingredients/ingredient.functions";
-import { vendor } from "~/app/vendors/vendor.functions";
 import {
   entityMergeMutationOptions,
   type MergeCommand,
-} from "~/entities/entity-mutation.functions";
+} from "~/entities/entity-mutation";
+import {
+  ingredient,
+  vendor,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 import { useActionMutation } from "../hooks/useActionMutation";

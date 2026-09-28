@@ -7,10 +7,10 @@ import { useId } from "react";
 
 import { formatMealCost, mealListLabel } from "~/app/meals/meal-format";
 import { mealKindIcon, mealTypeIcon } from "~/app/meals/meal-options";
-import { meal } from "~/app/meals/meal.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
+import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import type { HomeAsOfWindow } from "./home-as-of-window";
 

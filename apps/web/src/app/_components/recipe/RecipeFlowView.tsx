@@ -14,7 +14,6 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { VerbButton } from "~/app/_components/actions/action-verb-ui";
-import { recipe as recipeOperations } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -34,6 +33,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import { CopyJsonButton } from "./copy-debug-button";

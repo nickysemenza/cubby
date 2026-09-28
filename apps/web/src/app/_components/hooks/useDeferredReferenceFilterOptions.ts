@@ -3,11 +3,11 @@ import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQueries } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 
-import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
 import {
   getEntityFilters,
   referenceFilterOptionsKey,
 } from "~/entities/filter-manifest";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import type { RuntimeFilterOptions } from "./filter-option-types";
 

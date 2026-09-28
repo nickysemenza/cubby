@@ -45,6 +45,7 @@ export const searchContract = defineContract("search", {
   requestEmbeddingRefresh: mutation({
     input: requestEmbeddingRefreshInputSchema,
     output: requestEmbeddingRefreshOutSchema,
+    invalidates: [],
   }),
 });
 

@@ -5,7 +5,7 @@ import { basisValueOf } from "~/app/_components/ai/field-suggestion";
 import { FieldSuggestionHint } from "~/app/_components/ai/field-suggestion-hint";
 import { useFieldSuggestionContext } from "~/app/_components/ai/field-suggestion-provider";
 import { useRowEnumSuggestion } from "~/app/_components/ai/use-row-enum-suggestion";
-import { ai } from "~/lib/ai.functions";
+import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 /** Row values that mean "no kind picked yet" — the array's default
  * (`legacy_unspecified`, `ProductExternalIds`'s `emptyValue`) and a blank

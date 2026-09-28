@@ -23,7 +23,7 @@ import {
 } from "~/components/ui/collapsible";
 import { Description } from "~/components/ui/description";
 import { EntityIcon, entityLabel } from "~/entities/entities";
-import type { AuditLogEntry } from "~/lib/audit-log.functions";
+import type { AuditLogEntry } from "~/lib/audit-log-list";
 import { countLabel } from "~/lib/pluralize";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";

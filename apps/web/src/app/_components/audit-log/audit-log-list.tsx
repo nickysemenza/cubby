@@ -18,7 +18,8 @@ import {
 } from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
 import { useHydrated } from "~/hooks/useHydrated";
-import { auditLog, auditLogListOptions } from "~/lib/audit-log.functions";
+import { auditLog } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { auditLogListOptions } from "~/lib/audit-log-list";
 import { authClient } from "~/lib/auth-client";
 import { getErrorMessage } from "~/lib/error-utils";
 

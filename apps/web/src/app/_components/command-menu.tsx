@@ -34,7 +34,7 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import { enumFieldLabel } from "~/entities/enum-field-display";
 import { useDebug } from "~/hooks/useDebug";
 import { cn } from "~/lib/utils";

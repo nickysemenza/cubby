@@ -7,8 +7,10 @@ import { useEffect, useMemo } from "react";
 
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { recommendations } from "~/lib/recommendations.functions";
-import { search } from "~/lib/search.functions";
+import {
+  recommendations,
+  search,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import {
   type EntityDisplayImageMap,

@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { useId, useMemo } from "react";
 
-import { expense } from "~/app/expenses/expense.functions";
 import { Row } from "~/components/layout";
 import {
   CardActionLink,
@@ -12,6 +11,7 @@ import {
 } from "~/components/layout/dashboard-card";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
+import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 
 import { getHomeAsOfWindow, type HomeAsOfWindow } from "./home-as-of-window";

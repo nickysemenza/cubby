@@ -9,8 +9,8 @@ import { Eyebrow } from "~/components/ui/eyebrow";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entities } from "~/entities/entities";
 import { useHydrated } from "~/hooks/useHydrated";
+import { dashboard } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
-import { dashboard } from "~/lib/dashboard.functions";
 import { formatCompactCount } from "~/lib/utils";
 
 const getCountLabel = (

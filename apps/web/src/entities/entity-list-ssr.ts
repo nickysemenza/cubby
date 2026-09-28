@@ -1,7 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { compileEntityListInput, entityListFor } from "~/entities/entity-list";
+
 import { defaultSortDirectionFor, defaultSortFor } from "./entities";
-import { compileEntityListInput, entityListFor } from "./entity-list.functions";
 import type { FilterPatch } from "./filters";
 import type { ListEntity } from "./generated/entity-lists.gen";
 

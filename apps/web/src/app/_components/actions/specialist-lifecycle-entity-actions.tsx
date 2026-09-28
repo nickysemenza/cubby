@@ -2,9 +2,11 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useRef, useState } from "react";
 
-import { recipe } from "~/app/recipes/recipe.functions";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
-import { image } from "~/entities/image.functions";
+import {
+  recipe,
+  image,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 

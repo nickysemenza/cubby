@@ -13,7 +13,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
-import { maintenance } from "~/lib/maintenance.functions";
+import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pluralWord } from "~/lib/pluralize";
 
 import { ProblemActionButton } from "./problem-action-button";

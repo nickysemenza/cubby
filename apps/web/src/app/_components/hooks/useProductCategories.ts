@@ -1,7 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-import { entityListFor } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list";
 
 /** A complete shared vocabulary: later pages must remain selectable, including
  * broad parents that a relevance-ranked first page might omit. */

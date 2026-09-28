@@ -13,7 +13,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { StatusText } from "~/components/ui/status-text";
-import { activity } from "~/lib/activity.functions";
+import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyText } from "~/lib/clipboard";
 import { formatCurrency } from "~/lib/utils";
 

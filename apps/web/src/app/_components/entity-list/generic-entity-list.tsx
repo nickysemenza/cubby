@@ -53,7 +53,7 @@ import {
   createEntityDisplayColumns,
   entityListHiddenColumns,
 } from "~/entities/entity-display";
-import { entityListFor } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list";
 import {
   type ListEntity,
   listEntities,

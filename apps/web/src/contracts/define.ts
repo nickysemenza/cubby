@@ -1,14 +1,20 @@
 import type { z } from "zod";
 
+import type { QueryCachePolicy, RippleKey } from "~/contracts/cache-policy";
+
 /**
  * Transport-neutral operation contracts.
  *
  * A contract names a domain and its operations with their Zod input/output
- * (or event) schemas and nothing else: no cache policy, no invalidation, no
- * React, no server code. The one server-facing hint is a query's
- * `readPolicy: "strong"` (see `QueryContract`), a data-freshness requirement
- * rather than a cache policy. That is what lets ONE declaration feed the browser
- * catalog (`defineOperationDomain`), the server implementers
+ * (or event) schemas, plus browser cache policy expressed purely as DATA: a
+ * query's `cache` (tags, freshness profile) and a mutation's `invalidates`
+ * (named fan-out rows). No React, no query client, no server code, and no
+ * function of the input — a policy that must read the input at runtime lives in
+ * `integrations/tanstack-query/operation-overrides.ts`. The one server-facing
+ * hint is a query's `readPolicy: "strong"` (see `QueryContract`), a
+ * data-freshness requirement. That is what lets ONE declaration feed the browser
+ * catalog (the generated `catalog.gen.ts`, which resolves the cache data and
+ * defaults every query's tags to `[domain, member]`), the server implementers
  * (`implementOperationDomain` / `implementSubscriptionDomain`), the operation
  * registry generator (which imports these modules at build time), and the
  * ts-rest HTTP router. Modules under `~/contracts` may import only `zod`,
@@ -68,6 +74,8 @@ export interface QueryContract<
   readonly native?: string;
   readonly mcp?: McpToolSpec;
   readonly readPolicy?: "strong";
+  /** Browser cache tags and freshness profile; see `QueryCachePolicy`. */
+  readonly cache?: QueryCachePolicy;
 }
 
 export interface MutationContract<
@@ -81,6 +89,12 @@ export interface MutationContract<
   readonly http?: false;
   readonly native?: string;
   readonly mcp?: McpToolSpec;
+  /**
+   * The browser fan-out rows a successful call invalidates. Absent or empty
+   * invalidates nothing (a mutation that writes no cache-backed state, or whose
+   * effect a readiness poll observes).
+   */
+  readonly invalidates?: readonly RippleKey[];
 }
 
 /**

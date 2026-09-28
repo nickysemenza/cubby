@@ -1,13 +1,13 @@
 import { QueryClient, type FetchQueryOptions } from "@tanstack/react-query";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
-import type { OperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
-
 import {
   type EntityDetailScoped,
   entityDetailFor,
-} from "./entity-detail.functions";
-import { type EntityListScoped, entityListFor } from "./entity-list.functions";
+} from "~/entities/entity-detail";
+import { type EntityListScoped, entityListFor } from "~/entities/entity-list";
+import type { OperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
+
 import type {
   EntityDetailByEntity,
   EntityDetailInputByEntity,

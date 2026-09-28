@@ -1,10 +1,12 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
-import { calendar } from "~/app/calendar/calendar.functions";
-import { location } from "~/app/locations/location.functions";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import {
+  calendar,
+  location,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 
 describe("operation freshness metadata", () => {

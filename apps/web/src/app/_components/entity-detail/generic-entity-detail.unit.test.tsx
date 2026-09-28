@@ -8,13 +8,15 @@ import { TIER1_NUTRIENT_KEYS } from "@cubby/usda-schemas";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { entityList } from "~/entities/entity-list.functions";
-import { entityTimeline } from "~/entities/entity-timeline.functions";
 import {
   detailEntities,
   getEntityDetailOutputSchema,
 } from "~/entities/generated/entity-details.gen";
 import { inventoryListItem } from "~/entities/generated/entity-lists.gen";
+import {
+  entityList,
+  entityTimeline,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 

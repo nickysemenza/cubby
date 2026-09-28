@@ -13,7 +13,7 @@ import {
   entities,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
-import { entityGraph } from "~/entities/entity-graph.functions";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import {
   useSectionCount,

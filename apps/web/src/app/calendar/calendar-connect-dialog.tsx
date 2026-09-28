@@ -10,7 +10,6 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { calendar } from "~/app/calendar/calendar.functions";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button, buttonVariants } from "~/components/ui/button";
@@ -23,6 +22,7 @@ import {
   DialogTrigger,
 } from "~/components/ui/dialog";
 import { StatusText } from "~/components/ui/status-text";
+import { calendar } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyText } from "~/lib/clipboard";
 import { cn } from "~/lib/utils";
 

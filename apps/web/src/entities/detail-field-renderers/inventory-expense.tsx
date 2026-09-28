@@ -8,10 +8,10 @@ import { useState } from "react";
 
 import type { DetailRecordOf } from "~/app/_components/entity-detail/detail-record";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { expense } from "~/app/expenses/expense.functions";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Button } from "~/components/ui/button";
-import { entityListFor } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list";
+import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { expenseCaptureRequest } from "../editing/editor-requests";
 import { EntityEditDialog } from "../editing/entity-edit-dialog";

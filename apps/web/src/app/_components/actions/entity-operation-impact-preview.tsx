@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Stack } from "~/components/layout";
-import { entityGraph } from "~/entities/entity-graph.functions";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn } from "~/lib/utils";
 
 /**

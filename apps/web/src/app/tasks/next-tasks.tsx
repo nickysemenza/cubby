@@ -38,9 +38,8 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { fieldEnumOptions } from "~/entities/enum-field-display";
+import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
-
-import { task } from "./task.functions";
 
 /** A single chain node (task or project) as a linked breadcrumb chip. */
 function ChainNodeLink({

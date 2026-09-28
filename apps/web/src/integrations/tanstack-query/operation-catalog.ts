@@ -81,16 +81,22 @@ export type MutationPolicy<
       }["bivarianceHack"];
 };
 
-/** A contract member plus the browser-only policy layered onto it. */
+/**
+ * A contract member plus the resolved browser policy layered onto it. The
+ * contract's own `cache` / `invalidates` are data the generated catalog
+ * resolves into `tags`, `cache`, and `invalidates` here, so they are replaced,
+ * not intersected.
+ */
 export type QueryDefinition<
   Input extends z.ZodTypeAny,
   Output extends z.ZodTypeAny,
-> = QueryContract<Input, Output> & QueryPolicy<Input, Output>;
+> = Omit<QueryContract<Input, Output>, "cache"> & QueryPolicy<Input, Output>;
 
 export type MutationDefinition<
   Input extends z.ZodTypeAny,
   Output extends z.ZodTypeAny,
-> = MutationContract<Input, Output> & MutationPolicy<Input, Output>;
+> = Omit<MutationContract<Input, Output>, "invalidates"> &
+  MutationPolicy<Input, Output>;
 
 /**
  * Subscriptions carry no browser policy: there is no cache entry and no
@@ -299,14 +305,28 @@ type SubscriptionDescriptor<
   ): Promise<AsyncIterable<z.output<Event>>>;
 };
 
-export type OperationDescriptorFor<Definition extends AnyDefinition> =
-  Definition extends QueryDefinition<infer Input, infer Output>
-    ? QueryDescriptor<Input, Output>
-    : Definition extends MutationDefinition<infer Input, infer Output>
-      ? MutationDescriptor<Input, Output>
-      : Definition extends SubscriptionDefinition<infer Input, infer Event>
-        ? SubscriptionDescriptor<Input, Event>
-        : never;
+/**
+ * The descriptor for a contract member or a resolved definition. Keyed on the
+ * member's kind and schemas alone, so the contract's data-only cache fields
+ * never affect which descriptor a member gets.
+ */
+export type OperationDescriptorFor<
+  Definition extends AnyDefinition | OperationContractMember,
+> = Definition extends {
+  kind: "query";
+  input: infer Input extends z.ZodTypeAny;
+  output: infer Output extends z.ZodTypeAny;
+}
+  ? QueryDescriptor<Input, Output>
+  : Definition extends {
+        kind: "mutation";
+        input: infer Input extends z.ZodTypeAny;
+        output: infer Output extends z.ZodTypeAny;
+      }
+    ? MutationDescriptor<Input, Output>
+    : Definition extends SubscriptionDefinition<infer Input, infer Event>
+      ? SubscriptionDescriptor<Input, Event>
+      : never;
 
 const descriptorMeta = <
   Input extends z.ZodTypeAny,
@@ -606,10 +626,24 @@ function buildDescriptor(options: {
 }
 
 /**
+ * A member's contract-level `cache` / `invalidates` are unresolved data (tag
+ * lists, ripple keys); the policy passed to `defineOperationDomain` carries
+ * their resolved form under the same names, so drop the raw fields first.
+ */
+const withoutCacheData = (member: OperationContractMember): object =>
+  Object.fromEntries(
+    Object.entries(member).filter(
+      ([field]) => field !== "cache" && field !== "invalidates",
+    ),
+  );
+
+/**
  * Bind a transport-neutral contract to the browser transport, layering the
- * cache/invalidation/parse policy each member needs. The contract is the only
- * source of ids, kinds, and schemas; a policy for a member the contract does
- * not declare is a type error.
+ * resolved cache/invalidation/parse policy each member needs. The generated
+ * catalog (`generated/catalog.gen.ts`) is the only production caller: it
+ * resolves each contract member's cache data and passes the result here. The
+ * contract is the only source of ids, kinds, and schemas; a policy for a
+ * member the contract does not declare is a type error.
  */
 export function defineOperationDomain<const Contract extends OperationContract>(
   contract: Contract,
@@ -637,7 +671,7 @@ export function defineOperationDomain<const Contract extends OperationContract>(
       // kind, so merging it onto the contract member yields that kind's
       // browser definition.
       const definition = {
-        ...member,
+        ...withoutCacheData(member),
         ...policyByMember.get(name),
       } as AnyDefinition;
       return [name, buildDescriptor({ id: operation.id, definition })];

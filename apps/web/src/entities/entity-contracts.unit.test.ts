@@ -3,6 +3,7 @@ import { imageOut } from "@cubby/schemas/image";
 import { MutationObserver, QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
+import { entityListFor } from "~/entities/entity-list";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { mock } from "~/lib/test/mock-schema";
 import {
@@ -14,7 +15,6 @@ import {
   entityMutationOptionsFactory,
   type EntityMutationTransport,
 } from "./entity-contracts";
-import { entityListFor } from "./entity-list.functions";
 
 function inMemoryMutationTransport(
   result: ReturnType<typeof entityBrowserMutationResultSchema.parse>,

@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { listChromePage } from "~/app/_components/routing/entity-routes";
 import { ActivityChanges } from "~/app/activity/activity-changes";
-import { auditLogListOptions } from "~/lib/audit-log.functions";
+import { auditLogListOptions } from "~/lib/audit-log-list";
 import { pageTitle } from "~/lib/page-title";
 
 const searchSchema = z.object({

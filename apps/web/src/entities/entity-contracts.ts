@@ -2,6 +2,10 @@ import type { MutationSideEffects } from "@cubby/schemas/mutation-side-effects";
 import type { UseMutationOptions } from "@tanstack/react-query";
 import { z } from "zod";
 
+import {
+  countPrimaryDeletedReferences,
+  parseEntityWriteResult,
+} from "~/entities/entity-mutation";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import type { CubbyOperationMeta } from "~/integrations/tanstack-query/operation-meta";
 import { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
@@ -11,10 +15,6 @@ import {
   executeEntityMutationCommand,
   type EntityMutationTransport,
 } from "./entity-mutation-command";
-import {
-  countPrimaryDeletedReferences,
-  parseEntityWriteResult,
-} from "./entity-mutation.functions";
 import {
   type GeneratedBrowserCrudEntity,
   generatedBrowserCrudEntities,

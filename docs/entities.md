@@ -39,9 +39,11 @@ pnpm generate:check
 ```
 
 One generator (`scripts/generator/main.ts`) runs three stages in order: the
-entity stage (`scripts/generator/entities/`), the Start operation registry
-(`scripts/generator/start-operations/`), and the HTTP OpenAPI document with
-its native derivations (`scripts/generator/http-api/`). `generate:check` fails
+entity stage (`scripts/generator/entities/`), the Start operation stage
+(`scripts/generator/start-operations/`: the operation registry, handler loaders,
+and the browser client catalog that resolves each contract's cache tags and
+invalidation data), and the HTTP OpenAPI document with its native derivations
+(`scripts/generator/http-api/`). `generate:check` fails
 on invalid metadata, duplicate entity keys or routes, invalid relation
 policies, unsupported capabilities, and stale, missing, or extraneous generated
 files from any stage. Typecheck verifies declaration types and referenced

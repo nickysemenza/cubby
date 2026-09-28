@@ -5,9 +5,9 @@ import { useCallback, useMemo } from "react";
 import { z } from "zod";
 
 import { useLocalStorage } from "~/hooks/useLocalStorage";
+import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { getDefaultShoppingRange } from "./meal-search";
-import { meal } from "./meal.functions";
 import {
   buildShoppingColumns,
   buildShoppingRows,

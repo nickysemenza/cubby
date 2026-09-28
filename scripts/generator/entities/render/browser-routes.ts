@@ -119,7 +119,7 @@ const renderDetailRoute = (
     'import { RouteErrorComponent } from "~/components/lazy-route-error";',
     'import { DetailPagePending } from "~/components/route-pending";',
     queryRef === undefined
-      ? 'import { entityDetailFor } from "~/entities/entity-detail.functions";'
+      ? 'import { entityDetailFor } from "~/entities/entity-detail";'
       : importLine(queryRef),
     'import { shortcodeHead } from "~/lib/page-title";',
   ];

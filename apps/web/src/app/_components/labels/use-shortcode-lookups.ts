@@ -2,8 +2,10 @@ import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { location } from "~/app/locations/location.functions";
-import { product } from "~/app/products/product.functions";
+import {
+  location,
+  product,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import type { LabelItem } from "./sheet-layouts";
 

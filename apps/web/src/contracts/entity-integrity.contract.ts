@@ -16,6 +16,7 @@ export const entityIntegrityContract = defineContract("entityIntegrity", {
   catalog: query({
     input: z.null(),
     output: integrityCatalogSchema,
+    cache: { tags: [["entityIntegrity"]] },
   }),
 });
 
@@ -23,5 +24,6 @@ export const integrityProblemsContract = defineContract("problems", {
   getByType: query({
     input: z.object({ key: z.literal("referentialLivenessViolations") }),
     output: referentialLivenessResultSchema,
+    cache: { tags: [["problems"]] },
   }),
 });

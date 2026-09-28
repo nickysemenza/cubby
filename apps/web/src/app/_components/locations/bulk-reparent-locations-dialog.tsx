@@ -12,10 +12,10 @@ import {
   requiredLocationField,
 } from "~/app/_components/form-fields";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
-import { location } from "~/app/locations/location.functions";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
+import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 const formSchema = z.object({
   targetParent: requiredLocationField,

@@ -4,10 +4,12 @@ import { vendorOut } from "@cubby/schemas/vendor";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { entityGraph } from "~/entities/entity-graph.functions";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
-import { image } from "~/entities/image.functions";
-import { recommendations } from "~/lib/recommendations.functions";
+import {
+  entityGraph,
+  image,
+  recommendations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityWorkbenchInspector } from "./entity-workbench-inspector";

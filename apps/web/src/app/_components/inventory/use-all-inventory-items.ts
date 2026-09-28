@@ -2,7 +2,7 @@ import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 
-import { entityListFor } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list";
 
 import { flattenUniquePageItems } from "../hooks/infinite-page-utils";
 

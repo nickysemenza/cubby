@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 

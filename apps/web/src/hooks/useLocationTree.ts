@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { location } from "~/app/locations/location.functions";
 import { useHydrated } from "~/hooks/useHydrated";
+import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 /**
  * Shared fetch for the raw location tree (`location.makeTree`).

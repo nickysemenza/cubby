@@ -35,10 +35,10 @@ import {
   domainForEntity,
   domainWayfinding,
 } from "~/app/_components/navigation/domain-wayfinding";
+import { entityListFor } from "~/entities/entity-list";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { cn, formatCurrency } from "~/lib/utils";
 
-import { entityListFor } from "./entity-list.functions";
 import { generatedBrowserRoutes } from "./generated/entity-routes.gen";
 import {
   defineMergeableConfig,

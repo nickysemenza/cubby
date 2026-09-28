@@ -35,7 +35,7 @@ import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
-import { mcp } from "~/lib/mcp.functions";
+import { mcp } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
 import { formatCount } from "~/lib/utils";
 

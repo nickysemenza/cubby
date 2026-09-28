@@ -49,5 +49,6 @@ export const expenseContract = defineContract("expense", {
   confirmInventoryBeneficiary: mutation({
     input: confirmInventoryExpenseBeneficiaryInput,
     output: confirmInventoryExpenseBeneficiaryOut,
+    invalidates: ["expense"],
   }),
 });

@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { readReferenceField } from "~/entities/entity-references";
-import { ai } from "~/lib/ai.functions";
+import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 /**
  * User's call, snappy by design: every typing pause longer than this fires

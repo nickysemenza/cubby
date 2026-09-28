@@ -22,9 +22,9 @@ import {
 } from "~/components/ui/empty";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useHydratedLoading } from "~/hooks/useHydrated";
+import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 
-import { task } from "../task.functions";
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
 
 const boardColsSchema = z

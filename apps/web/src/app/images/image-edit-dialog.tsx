@@ -8,7 +8,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { NativeSelect } from "~/components/ui/native-select";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { image as imageOperations } from "~/entities/image.functions";
+import { image as imageOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 /**
  * Image has no kernel update contract, so its Edit action renames through

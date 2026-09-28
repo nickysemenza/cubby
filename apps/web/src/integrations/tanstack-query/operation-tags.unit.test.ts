@@ -2,7 +2,14 @@ import { allEntities } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
 import { z, type JSONType } from "zod";
 
-import { entityRipple, ripple, type InvalidationTagSet } from "./cache-tags";
+import {
+  EMPTY_INVALIDATION_TAG_SET,
+  entityRipple,
+  ripple,
+  rippleFor,
+  type InvalidationTagSet,
+} from "./cache-tags";
+import * as catalog from "./generated/catalog.gen";
 import type { OperationCacheTag } from "./operation-meta";
 
 /**
@@ -62,20 +69,17 @@ const isInvalidationPolicy = (
 /**
  * There is no runtime registry of operation descriptors — `defineOperationDomain`
  * only records mutation invalidation policies — so the catalog is reassembled by
- * eagerly loading every `*.functions.ts` module and walking its domain exports.
+ * walking the domain objects the generated `catalog.gen.ts` exports. `path` is
+ * the domain's export name.
  */
 const descriptors: ReadonlyArray<{ path: string; descriptor: AnyDescriptor }> =
-  Object.entries(
-    import.meta.glob("../../**/*.functions.ts", { eager: true }),
-  ).flatMap(([path, module]) =>
-    Object.values(moduleExportsSchema.parse(module)).flatMap((domain) => {
-      const parsed = moduleExportsSchema.safeParse(domain);
-      if (!parsed.success) return [];
-      return Object.values(parsed.data)
-        .filter(isDescriptor)
-        .map((descriptor) => ({ path, descriptor }));
-    }),
-  );
+  Object.entries(catalog).flatMap(([path, domain]) => {
+    const parsed = moduleExportsSchema.safeParse(domain);
+    if (!parsed.success) return [];
+    return Object.values(parsed.data)
+      .filter(isDescriptor)
+      .map((descriptor) => ({ path, descriptor }));
+  });
 
 /**
  * SOURCE-declared tags, not `meta.cacheTags`: `descriptorMeta` appends `[[entity]]`
@@ -93,7 +97,7 @@ const declaredQueryTags = descriptors.flatMap(({ descriptor }) =>
  * entity, because `forEntity(e)` appends `[[e]]` at runtime
  * (`operation-catalog.ts`, `descriptorMeta`). `entity.list` / `entity.detail`
  * therefore answer to `["wish"]`, `["ledgerParty"]`, … even though no
- * `*.functions.ts` spells those tags out.
+ * contract member spells those tags out.
  */
 const liveDeclaredTags: readonly OperationCacheTag[] = [
   ...declaredQueryTags,
@@ -127,6 +131,17 @@ describe("operation cache tags", () => {
     ]) {
       expect(tags).toContainEqual([entity]);
     }
+  });
+
+  it("resolves a contract's invalidates list without adding tags", () => {
+    // One row is that row itself, so an exact row never gains the filter-option roster.
+    expect(rippleFor(["calendarFeed"])).toBe(ripple.calendarFeed);
+    expect(rippleFor([])).toBe(EMPTY_INVALIDATION_TAG_SET);
+    const union = rippleFor(["calendarFeed", "calendarCredential"]);
+    expect(union).toEqual([
+      ["calendar", "feed"],
+      ["calendar", "credential"],
+    ]);
   });
 
   it("loads the whole catalog", () => {

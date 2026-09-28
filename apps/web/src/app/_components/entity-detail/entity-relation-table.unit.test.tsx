@@ -5,12 +5,12 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createEntityMutationPort } from "~/entities/editing/use-entity-commands";
-import { entityList } from "~/entities/entity-list.functions";
 import {
   type EntityListInputByEntity,
   productListItem,
   taskListItem,
 } from "~/entities/generated/entity-lists.gen";
+import { entityList } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 

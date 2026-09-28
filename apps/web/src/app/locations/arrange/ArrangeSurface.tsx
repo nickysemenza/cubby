@@ -6,13 +6,13 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { collectTreeProductIds } from "~/app/_components/locations/location-gallery-data";
 import { ProductImageSummariesProvider } from "~/app/_components/products/product-image-summaries";
-import { location } from "~/app/locations/location.functions";
 import { Row, Stack } from "~/components/layout";
 import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { useHydrated } from "~/hooks/useHydrated";
+import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { findUnknownRoot } from "./arrange-tree-utils";
 import { ArrangeBoard } from "./ArrangeBoard";

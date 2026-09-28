@@ -21,14 +21,14 @@ import {
   ScheduleGrid,
   type ScheduleRow,
 } from "~/app/_components/schedule/schedule-grid";
-import { task } from "~/app/tasks/task.functions";
 import { Button } from "~/components/ui/button";
 import { entityDetailParams, entities } from "~/entities/entities";
-import {
-  compileEntityListInput,
-  entityListFor,
-} from "~/entities/entity-list.functions";
+import { compileEntityListInput, entityListFor } from "~/entities/entity-list";
 import type { FilterPatch } from "~/entities/filters";
+import {
+  task,
+  project,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import {
@@ -41,7 +41,6 @@ import {
   type ProjectScheduleEntry,
   projectScheduleWindow,
 } from "./project-schedule-model";
-import { project } from "./project.functions";
 
 const EMPTY_TASKS: TaskOut[] = [];
 

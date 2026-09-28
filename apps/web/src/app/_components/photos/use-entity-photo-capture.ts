@@ -68,8 +68,8 @@ import {
   type EntityMutationVariables,
 } from "~/entities/entity-contracts";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { imageUpload } from "~/lib/image.functions";
 import {
   PresignedUploadError,
   putPresignedObject,

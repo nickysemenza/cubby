@@ -4,11 +4,11 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { CollectionProductsTable } from "~/app/collections/collection-detail-page";
-import { collection } from "~/app/collections/collection.functions";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
+import { collection } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { urlStringParam } from "~/lib/search-params";
 
 export const Route = createFileRoute(

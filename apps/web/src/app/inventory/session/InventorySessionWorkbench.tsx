@@ -23,9 +23,6 @@ import {
 } from "~/app/_components/hooks/useActionMutation";
 import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
 import { QueuePassResumePrompt } from "~/app/_components/queue-pass/QueuePassProgress";
-import { inventory } from "~/app/inventory/inventory.functions";
-import { location } from "~/app/locations/location.functions";
-import { product } from "~/app/products/product.functions";
 import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import { Button, buttonVariants } from "~/components/ui/button";
@@ -39,6 +36,11 @@ import {
 } from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import {
+  inventory,
+  location,
+  product,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import { LocationReviewPane } from "./_components/LocationReviewPane";

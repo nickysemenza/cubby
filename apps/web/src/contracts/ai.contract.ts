@@ -58,30 +58,37 @@ export const aiContract = defineContract("ai", {
   describeLocation: mutation({
     input: aiLocationIdInput,
     output: locationDescriptionWithProvenance,
+    invalidates: ["location"],
   }),
   detectInventoryItems: mutation({
     input: aiLocationIdInput,
     output: detectedInventoryWithProvenance,
+    invalidates: ["inventory"],
   }),
   approveDetectedInventoryItem: mutation({
     input: approveDetectedInventoryItemInput,
     output: approveDetectedInventoryItemOut,
+    invalidates: ["inventory"],
   }),
   identifyProduct: mutation({
     input: productIdentificationInput,
     output: productIdentificationSchema,
+    invalidates: [],
   }),
   suggestUsdaFood: mutation({
     input: usdaFoodSuggestionInput,
     output: usdaFoodSuggestionOut,
+    invalidates: [],
   }),
   suggestUsdaFoodBatch: mutation({
     input: usdaFoodSuggestionBatchInput,
     output: usdaFoodSuggestionBatchOut,
+    invalidates: ["ingredient"],
   }),
   suggestIngredientMergeBatch: mutation({
     input: ingredientMergeSuggestionBatchInput,
     output: ingredientMergeSuggestionBatchOut,
+    invalidates: ["ingredient"],
   }),
   // Nested `basis` can't ride the HTTP GET projection (precedent:
   // `entity-list.contract.ts`'s `list`) — `.queryOptions()` still works.
@@ -91,6 +98,7 @@ export const aiContract = defineContract("ai", {
     input: fieldSuggestionsInput,
     output: fieldSuggestionsOut,
     http: false,
+    cache: { profile: "stable" },
   }),
   // Same reason as `suggestFields`: a per-row hint, not a public HTTP query.
   suggestExternalIdKind: query({
@@ -98,14 +106,17 @@ export const aiContract = defineContract("ai", {
     input: externalIdKindSuggestionInput,
     output: suggestExternalIdKindOut,
     http: false,
+    cache: { profile: "stable" },
   }),
   usageRecent: query({
     input: aiUsageRecentInput,
     output: aiUsageRecentOut,
+    cache: { tags: [["ai", "usage"]] },
   }),
   usageSummary: query({
     input: aiUsageSummaryInput,
     output: aiUsageSummaryOut,
+    cache: { tags: [["ai", "usage"]] },
   }),
 });
 

@@ -19,7 +19,7 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { createEntityDisplayColumns } from "~/entities/entity-display";
-import { entityListFor } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list";
 import { formatCurrency } from "~/lib/utils";
 
 const EMBEDDED_TABLE_STATE = {

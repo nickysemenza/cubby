@@ -11,9 +11,9 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
-import { usdaFood as usdaFoodOperations } from "~/entities/usda.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import { useHydrated } from "~/hooks/useHydrated";
+import { usdaFood as usdaFoodOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import {
   BASE_KINDS,
   type BaseKind,

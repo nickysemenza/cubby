@@ -248,7 +248,7 @@ export default defineConfig(async ({ command, mode }) => {
     //     Radix UI, and small runtime utilities are bounded shared
     //     families; entry-aware groups keep route-specific subsets local.
     // Application-owned server-function wrappers stay on Rolldown's default
-    // graph: grouping image.functions created a cross-chunk initialization
+    // graph: grouping the image operation wrappers created a cross-chunk initialization
     // cycle once authenticated routes shared entity-schema dependencies.
     // React stays on the default graph too: its entry-aware group merged a
     // Base UI timeout singleton into a cyclic chunk, crashing hydration.

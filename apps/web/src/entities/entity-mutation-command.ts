@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import {
   entityBrowserMutationCommandSchema,
   type EntityBrowserMutationInput,
@@ -7,7 +8,6 @@ import {
 } from "~/server/entity-kernel/contracts";
 
 import type { EditableEntity } from "./editing/types";
-import { entityMutation } from "./entity-mutation.functions";
 
 const unparsedEntityMutationSchema = z.unknown();
 type UnparsedEntityMutation = z.input<typeof unparsedEntityMutationSchema>;

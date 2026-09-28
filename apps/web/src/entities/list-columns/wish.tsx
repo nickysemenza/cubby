@@ -26,8 +26,8 @@ import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { relationshipFieldProvenance } from "~/entities/field-provenance";
+import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrencyRange, rangeMidpoint } from "~/lib/format-range";
-import { relatedData } from "~/lib/related-data.functions";
 import { formatCurrency } from "~/lib/utils";
 
 import { defineListOverride, interleaveDeclared } from "./types";

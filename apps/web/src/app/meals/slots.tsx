@@ -23,8 +23,9 @@ import { DialogFooter } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entityDetailLink } from "~/entities/entities";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
+import { meal as mealOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { AddFoodDialog } from "./add-food-dialog";
 import { formatCostEstimate } from "./meal-nutrition";
@@ -33,7 +34,6 @@ import { MealPortionsSection } from "./meal-preparation/meal-portions-section";
 import { PortionSheet } from "./meal-preparation/portion-sheet";
 import { RecipeFoodDialog } from "./meal-preparation/recipe-food-dialog";
 import { useMealPreparationController } from "./meal-preparation/use-meal-preparation-controller";
-import { meal as mealOperations } from "./meal.functions";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
 type MealDetail = EntityDetailByEntity["meal"];

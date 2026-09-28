@@ -2,10 +2,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 
 import { flattenUniquePageItems } from "~/app/_components/hooks/infinite-page-utils";
-import {
-  compileEntityListInput,
-  entityListFor,
-} from "~/entities/entity-list.functions";
+import { compileEntityListInput, entityListFor } from "~/entities/entity-list";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 
 const plantingList = entityListFor("planting");

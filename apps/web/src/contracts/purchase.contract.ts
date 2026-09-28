@@ -18,6 +18,7 @@ export const purchaseContract = defineContract("purchase", {
     native: "Show linked order email events on native Purchase detail",
     input: purchaseOrderMailInput,
     output: purchaseOrderMailOut,
+    cache: { tags: [["purchase"]] },
   }),
   products: query({
     input: purchaseProductsInput,
@@ -33,9 +34,11 @@ export const purchaseContract = defineContract("purchase", {
     },
     input: linkExpensesToPurchaseInput,
     output: purchaseOut,
+    invalidates: ["purchase"],
   }),
   split: mutation({
     input: splitExpenseInput,
     output: splitExpenseOut,
+    invalidates: ["expense"],
   }),
 });

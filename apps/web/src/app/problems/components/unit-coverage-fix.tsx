@@ -10,7 +10,7 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 
 import type { UnitCoverageItem } from "./unit-coverage-items";
