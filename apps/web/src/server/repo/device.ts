@@ -44,7 +44,7 @@ import { deriveAndStoreImageCapture } from "~/server/services/image-capture-deri
 /** `ImageSighting.deviceId` cascades: a sighting reported by a device is
  * meaningless once that device is gone. `AuditLog.deviceId` and
  * `RunTarget.deviceWorkDeviceId` are cleared. */
-export const DEVICE_DELETE_EDGE_POLICY = {
+const DEVICE_DELETE_EDGE_POLICY = {
   "AuditLog.deviceId": {
     code: "clearFk",
     effect: "detach",
@@ -108,7 +108,7 @@ const hydrate = async (
 export const buildDeviceWhere = (filters: DeviceFilters) =>
   scaffold.where(filters);
 
-export const listDevices = (
+const listDevices = (
   db: Database,
   filters: DeviceFilters,
   sorts: SortParams[],
@@ -151,7 +151,7 @@ const deviceCrud = createEntityCrud({
 });
 
 export const getDeviceByID = deviceCrud.getByID;
-export const getDeviceByShortcode = deviceCrud.getByShortcode;
+const getDeviceByShortcode = deviceCrud.getByShortcode;
 
 export async function createDevice(
   db: Database,

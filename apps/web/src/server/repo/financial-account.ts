@@ -242,8 +242,7 @@ const financialAccountReader = createEntityReader<
 });
 
 const getFinancialAccountByID = financialAccountReader.getByID;
-export const getFinancialAccountByShortcode =
-  financialAccountReader.getByShortcode;
+const getFinancialAccountByShortcode = financialAccountReader.getByShortcode;
 
 async function assertAliasesAvailable(
   db: Database | DrizzleTransaction,

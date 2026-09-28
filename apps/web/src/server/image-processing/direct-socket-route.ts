@@ -1,10 +1,5 @@
 import { getImageProcessingNamespace } from "~/server/cf-env";
-import { IMAGE_PROCESSING_SOCKET_PATH } from "~/server/direct-socket-paths";
 import { createRequestContext, requireActor } from "~/server/request-context";
-
-export function isImageProcessingSocketUpgrade(request: Request): boolean {
-  return new URL(request.url).pathname === IMAGE_PROCESSING_SOCKET_PATH;
-}
 
 /** Authenticate the upgrade once; the companion's hello never asserts actor identity. */
 export async function handleImageProcessingSocketUpgrade(

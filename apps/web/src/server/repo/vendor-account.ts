@@ -35,7 +35,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-export const VENDOR_ACCOUNT_DELETE_EDGE_POLICY = {
+const VENDOR_ACCOUNT_DELETE_EDGE_POLICY = {
   "Purchase.vendorAccountId": {
     code: "block-purchases",
     effect: "block",
@@ -111,7 +111,7 @@ type VendorAccountReferencePatch = {
 export const buildVendorAccountWhere = (filters: VendorAccountFilters) =>
   scaffold.where(filters);
 
-export const listVendorAccounts = (
+const listVendorAccounts = (
   db: Database,
   filters: VendorAccountFilters,
   sorts: SortParams[],
@@ -141,7 +141,7 @@ const reader = createEntityReader<
   fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
 });
 
-export const getVendorAccountByShortcode = reader.getByShortcode;
+const getVendorAccountByShortcode = reader.getByShortcode;
 
 async function resolveReferences(
   db: Database | DrizzleTransaction,
@@ -193,7 +193,7 @@ export async function createVendorAccount(
   return { output: await reader.getByID(db, id), entityId: id };
 }
 
-export async function updateVendorAccount(
+async function updateVendorAccount(
   db: Database,
   shortcode: VendorAccountShortcode,
   data: VendorAccountUpdateData,

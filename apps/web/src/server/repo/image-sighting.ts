@@ -45,7 +45,7 @@ import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 import { deriveAndStoreImageCapture } from "~/server/services/image-capture-derivation";
 
 /** No incoming edges point at an image sighting — nothing else references one. */
-export const IMAGE_SIGHTING_DELETE_EDGE_POLICY =
+const IMAGE_SIGHTING_DELETE_EDGE_POLICY =
   {} as const satisfies IncomingEdgePolicy<
     "imageSighting",
     OperationDisposition
@@ -129,7 +129,7 @@ const imageSightingCrud = createEntityCrud({
 });
 
 export const getImageSightingByID = imageSightingCrud.getByID;
-export const getImageSightingByShortcode = imageSightingCrud.getByShortcode;
+const getImageSightingByShortcode = imageSightingCrud.getByShortcode;
 
 /**
  * The live member ledger party the acting login is linked to, via the

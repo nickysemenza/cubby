@@ -52,7 +52,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 type WishRow = typeof wish.$inferSelect;
 
-export const WISH_DELETE_EDGE_POLICY = {
+const WISH_DELETE_EDGE_POLICY = {
   "WishCandidate.wishId": {
     code: "soft-delete-candidate-alternatives",
     effect: "soft-delete",
@@ -352,7 +352,7 @@ const wishReader = createEntityReader({
   fromDB: async (db, row) => (await hydrateWishes(db, [row]))[0]!,
 });
 const getWishByID = wishReader.getByID;
-export const getWishByShortcode = wishReader.getByShortcode;
+const getWishByShortcode = wishReader.getByShortcode;
 
 /** Any live Product can be a wish candidate — the only requirement is that it
  * exists and is live. */

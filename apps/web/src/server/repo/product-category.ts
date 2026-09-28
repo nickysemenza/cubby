@@ -45,7 +45,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { categoryDescendantsSql } from "./product-category-sql";
 
-export const PRODUCT_CATEGORY_DELETE_EDGE_POLICY = {
+const PRODUCT_CATEGORY_DELETE_EDGE_POLICY = {
   "ProductCategory.parentId": {
     code: "block-child-categories",
     effect: "block",
