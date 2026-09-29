@@ -26,7 +26,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { patchEntityRows } from "~/server/repo/entity-patch";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import {
   asActor,
   defineRepository,

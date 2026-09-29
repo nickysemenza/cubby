@@ -72,7 +72,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { linkValues, liveLinks, ofLinkKind } from "~/server/repo/entity-links";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import { getCategoryFeature } from "~/server/repo/product-category";
 import {
   resolveAllOrThrow,

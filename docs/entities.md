@@ -755,7 +755,7 @@ expected — the same arithmetic the hydrated `score` uses, so `ORDER BY`
 agrees with the read value. The score is unindexed — a correlated `EXISTS`
 per check per row — which is fine at household scale. `related` roll-ups add
 an `EXISTS` against an aliased related table using that entity's own
-bindings; `list-scaffold.ts` binds the resulting filters and sort for every
+bindings; `repo/list.ts` binds the resulting filters and sort for every
 scored entity's list in one place.
 
 Durable "not available" exceptions (`set_data_exception`/

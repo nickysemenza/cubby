@@ -44,7 +44,7 @@ import {
   relations,
   updateLiveAndReturn,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
+import { declaredFilterPredicates } from "~/server/repo/list";
 import { isGlobalUnknownLocation } from "~/server/repo/location";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
 import {

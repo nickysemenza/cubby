@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { task } from "~/server/db/schema";
 
-import { declaredFilterPredicates } from "./declared-filter-predicates";
+import { declaredFilterPredicates } from "./list";
 
 describe("declaredFilterPredicates", () => {
   it("leaves effective task trade to the task resolver", () => {

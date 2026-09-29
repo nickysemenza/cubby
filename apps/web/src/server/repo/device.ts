@@ -30,7 +30,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import { currentMemberLedgerParty } from "~/server/repo/member-login";
 import {
   asActor,

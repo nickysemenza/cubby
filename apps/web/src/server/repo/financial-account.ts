@@ -38,8 +38,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { lockLedgerPartiesForReference } from "~/server/repo/ledger-party-reference";
-import { listScaffold } from "~/server/repo/list-scaffold";
-import { relatedWhereConditions } from "~/server/repo/related-view";
+import { listScaffold } from "~/server/repo/list";
 import {
   asActor,
   defineRepository,
@@ -168,7 +167,6 @@ export const buildFinancialAccountWhere = (filters: FinancialAccountFilters) =>
   // `name` (text) and `provisional` (boolean) are declared stored filters —
   // applied by `.where` before the conditions below.
   financialAccountScaffold.where(filters, [
-    ...relatedWhereConditions("financialAccount", filters, financialAccount.id),
     // `matchesStringValues`, NOT sql`expr = ANY(${arr})`: drizzle expands a
     // JS array in a template into a row constructor (`ANY(($1, $2))`), which
     // postgres rejects.

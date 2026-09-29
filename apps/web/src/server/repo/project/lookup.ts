@@ -30,8 +30,7 @@ import {
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
-import { listScaffold } from "~/server/repo/list-scaffold";
-import { relatedWhereConditions } from "~/server/repo/related-view";
+import { listScaffold } from "~/server/repo/list";
 import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
 import {
   effectiveProjectLocationsSql,
@@ -240,7 +239,6 @@ export const buildProjectListQuery = async (
         filters.search,
       ),
     ),
-    ...relatedWhereConditions("project", filters, project.id),
     dashboardProjectDateCondition(filters),
     attentionCodes
       ? attentionCodes.length

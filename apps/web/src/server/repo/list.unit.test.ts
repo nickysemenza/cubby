@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { task } from "~/server/db/schema";
 
 import { renderWhereSql } from "./database-helpers/mock-db";
-import { listScaffold } from "./list-scaffold";
+import { listScaffold } from "./list";
 
 describe("listScaffold", () => {
   const scaffold = listScaffold("task", task);

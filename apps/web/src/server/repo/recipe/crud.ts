@@ -76,8 +76,7 @@ import {
 } from "~/server/repo/entity-external-ids";
 import { recipeHasImages } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
-import { listScaffold } from "~/server/repo/list-scaffold";
-import { relatedWhereConditions } from "~/server/repo/related-view";
+import { listScaffold } from "~/server/repo/list";
 import { deleteByPolicy } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
@@ -490,7 +489,6 @@ export const buildRecipeWhere = async (
   // declared stored filters — applied by `recipeScaffold.where` before the
   // conditions below.
   return recipeScaffold.where(filters, [
-    ...relatedWhereConditions("recipe", filters, recipe.id),
     // `eqAnyRequested` + `presenceCondition` rather than `eqAnyOrPresence`:
     // the id half must distinguish "no cookbook filter" (unrestricted) from
     // "a cookbook code that resolves to nothing" (match nothing), which the

@@ -118,7 +118,7 @@ import {
 import { softDeleteEntitySearchArtifactsTx } from "~/server/repo/entity-embedding-cleanup";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import {
   lookupEntityReferences,
   resolveAllPresent,

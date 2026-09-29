@@ -62,10 +62,9 @@ import {
   resolveAllocationInputs,
   writeAllocationSet,
 } from "~/server/repo/financial-transaction-allocations";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import { enrichFinancialTransactionsWithVendorInference } from "~/server/repo/merchant-vendor-inference";
 import { cents } from "~/server/repo/money";
-import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
   asActor,
   defineRepository,
@@ -293,11 +292,6 @@ export async function buildFinancialTransactionWhere(
   // filters — applied by `financialTransactionScaffold.where` before the
   // conditions below.
   return financialTransactionScaffold.where(filters, [
-    ...relatedWhereConditions(
-      "financialTransaction",
-      filters,
-      financialTransaction.id,
-    ),
     eqAny(financialTransaction.accountId, accountIds),
     // Allocations, not the mirror column: a transaction split across two
     // purchases has a NULL mirror, so filtering on it would hide the split

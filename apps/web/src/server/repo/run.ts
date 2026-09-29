@@ -9,7 +9,7 @@ import { formatDuration } from "~/lib/format-duration";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { run as runTable } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import { defineRepository, listOn, onDb } from "~/server/repo/repository";
 import { createEntityReader } from "~/server/repo/repository";
 import { lookupEntityReferences } from "~/server/repo/shortcode-resolver";

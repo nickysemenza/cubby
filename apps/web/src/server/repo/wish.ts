@@ -41,13 +41,12 @@ import {
   liveLinks,
   replaceLinkSet,
 } from "~/server/repo/entity-links";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import {
   effectiveProductPriceSql,
   loadProductPricing,
   resolveProductPricing,
 } from "~/server/repo/product/pricing";
-import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
   asActor,
   defineRepository,
@@ -302,7 +301,6 @@ export const buildWishWhere = async (
     // entity's UI work set out to remove, just pointing the other way (the UI
     // sends a filter the server silently ignores). Every other related-view
     // source repo applies both.
-    ...relatedWhereConditions("wish", filters, wish.id),
   ]);
 };
 

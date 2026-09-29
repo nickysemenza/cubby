@@ -39,7 +39,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { resolveOrCreateIngredients } from "~/server/repo/ingredient/crud";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge";
 import { applyMergePolicy } from "~/server/repo/removal";
 import { createEntityCrud } from "~/server/repo/repository";

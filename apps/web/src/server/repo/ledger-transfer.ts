@@ -41,7 +41,7 @@ import {
   assertExplicitSourceClaimsForAmountChange,
   replaceLedgerSourceClaims,
 } from "~/server/repo/ledger-source-claim";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import { cents } from "~/server/repo/money";
 import {
   asActor,
