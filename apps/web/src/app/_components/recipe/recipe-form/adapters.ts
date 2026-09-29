@@ -1,3 +1,4 @@
+import { cookbookShortcode } from "@cubby/schemas/identifiers";
 import type {
   RecipeCreateInput,
   RecipeIngredientInput,
@@ -27,12 +28,16 @@ type RecipeImageChanges = Pick<RecipeCreateInput, "pendingImageIds"> &
 
 const blankAmount = { value: null, unit: "" };
 
+const cookbookIdOf = (recipe: RecipeOut) =>
+  recipe.source?.type === "book" ? recipe.source.cookbookId : null;
+
 export const recipeToFormValues = (
   recipe: RecipeOut | undefined,
   initialName?: string,
   initialUrl?: string,
 ): RecipeFormValues => ({
   name: recipe ? recipe.name : (initialName ?? ""),
+  cookbookId: recipe ? cookbookIdOf(recipe) : null,
   meta: recipe ? recipe.meta : initialUrl ? { url: initialUrl } : null,
   yield: recipe?.yield ?? null,
   servings: recipe?.servings ?? null,
@@ -177,6 +182,16 @@ export const recipeFormValuesToUpdateInput = (
     ["name", "meta", "yield", "servings", "tags", "notes"],
   );
 
+  // Provenance reads back as `source`, so the diff is against its cookbook.
+  const cookbookUpdate =
+    (values.cookbookId ?? null) === cookbookIdOf(recipe)
+      ? {}
+      : {
+          cookbookId: values.cookbookId
+            ? cookbookShortcode.parse(values.cookbookId)
+            : null,
+        };
+
   const sectionUpdates = values.sections.map((section, idx) => {
     const originalSection = recipe.sections[idx];
     if (!originalSection || !section.id) return mapSectionToApiFormat(section);
@@ -215,6 +230,7 @@ export const recipeFormValuesToUpdateInput = (
 
   const hasFieldChanges =
     Object.keys(basicUpdates).length > 0 ||
+    Object.keys(cookbookUpdate).length > 0 ||
     sectionUpdates.some((section) => Object.keys(section).length > 1);
 
   if (!hasFieldChanges && !hasImageChanges) return null;
@@ -223,6 +239,7 @@ export const recipeFormValuesToUpdateInput = (
     id: recipe.id,
     data: {
       ...basicUpdates,
+      ...cookbookUpdate,
       sections: sectionUpdates,
       ...imageChanges,
     },

@@ -4,6 +4,8 @@ import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail
 import { FullNutrientBreakdown } from "~/app/_components/nutrition/FullNutrientBreakdown";
 import { NutrientDensityStats } from "~/app/_components/nutrition/NutrientDensityStats";
 import { ProductNutritionLabel } from "~/app/_components/nutrition/ProductNutritionLabel";
+import { RecipeUsagesTable } from "~/app/_components/recipe/recipe-usages-table";
+import { useReparseUsage } from "~/app/_components/recipe/use-reparse-usage";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { labelNutrientsPer100 } from "~/lib/label-nutrition";
@@ -75,5 +77,25 @@ export const IngredientNutritionProduct: DetailSlotComponent<"ingredient"> = ({
         <FullNutrientBreakdown nutritionInfo={product.food.nutritionInfo} />
       )}
     </Stack>
+  );
+};
+
+/**
+ * Every recipe line using this ingredient, with parser drift. A drifted line
+ * offers "Re-parse", which applies the fresh parse to that line.
+ */
+export const IngredientRecipeUsages: DetailSlotComponent<"ingredient"> = ({
+  record: ingredient,
+}) => {
+  const { reparse } = useReparseUsage();
+  return ingredient.recipeUsages.length > 0 ? (
+    <RecipeUsagesTable
+      usages={ingredient.recipeUsages}
+      ingredientName={ingredient.name}
+      aliases={ingredient.aliases}
+      onReparse={reparse}
+    />
+  ) : (
+    <Description>Not used in any recipes yet.</Description>
   );
 };

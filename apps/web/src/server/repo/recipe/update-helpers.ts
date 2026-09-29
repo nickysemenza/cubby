@@ -4,18 +4,23 @@
  */
 
 import type { amount } from "@cubby/schemas/codec";
-import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
+import type {
+  CookbookId,
+  IngredientId,
+  RecipeId,
+} from "@cubby/schemas/identifiers";
 import type {
   RecipeCreateInput,
   RecipeUpdateInput,
   RecipeYield,
   recipeIngredientInput,
 } from "@cubby/schemas/recipe";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, notInArray, or } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  cookbook,
   ingredient,
   recipe,
   recipeSection,
@@ -34,7 +39,7 @@ import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 
 import type { ExistingRecipeWithSections } from "./internal-types";
 import { type RecipeMetaColumns, recipeMetaToColumns } from "./meta";
-import { webProvenance } from "./source";
+import { recipeSourceToColumns, webProvenance } from "./source";
 
 /**
  * Process a single ingredient input.
@@ -195,22 +200,105 @@ async function resolveForkedFromRecipeIdUpdate(
 /** `Recipe.tags` is NOT NULL: a cleared tag list is stored empty. */
 const tagsOrEmpty = (tags: string[] | null): string[] => tags ?? [];
 
+/**
+ * A `cookbookId` edit re-derives the recipe's provenance the way the importer
+ * writes it: a cookbook makes it a Book recipe (the Cookbook row names the
+ * book, so the URL and label columns clear); clearing it falls back to a
+ * Website recipe when a URL is on file, else Other. Notion recipes are keyed
+ * by their page and never belong to a cookbook.
+ *
+ * Both partial unique indexes are pre-checked so the collision reads as a
+ * sentence naming the holder instead of a bare constraint name:
+ * `Recipe_cookbookId_name_key` (one title per cookbook) and, once a recipe
+ * leaves its cookbook, `Recipe_name_key` (Book and Notion recipes are exempt).
+ */
+async function resolveCookbookRepoint(
+  tx: DrizzleTransaction,
+  recipeId: RecipeId,
+  updates: RecipeUpdateInput["data"],
+  existingRecipe: ExistingRecipeWithSections,
+): Promise<ReturnType<typeof recipeSourceToColumns> | undefined> {
+  if (updates.cookbookId === undefined) return undefined;
+  const cookbookId: CookbookId | null =
+    updates.cookbookId === null
+      ? null
+      : await resolveOrThrow(tx, "cookbook", updates.cookbookId);
+  if (cookbookId === existingRecipe.cookbookId) return undefined;
+  if (existingRecipe.sourceType === "Notion") {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Recipe ${existingRecipe.shortcode} is synced from Notion, so it cannot be moved into a cookbook.`,
+    );
+  }
+  const name = updates.name || existingRecipe.name;
+  if (cookbookId !== null) {
+    const holder = await tx.query.recipe.findFirst({
+      where: and(
+        eq(recipe.cookbookId, cookbookId),
+        eq(recipe.name, name),
+        ne(recipe.id, recipeId),
+        notDeleted(recipe),
+      ),
+      columns: { shortcode: true },
+    });
+    if (holder) {
+      const book = await tx.query.cookbook.findFirst({
+        where: eq(cookbook.id, cookbookId),
+        columns: { name: true },
+      });
+      throw createAppError(
+        "DUPLICATE_RECORD",
+        `Cookbook "${book?.name ?? cookbookId}" already has a recipe named "${name}" (${holder.shortcode}); rename one of them first.`,
+      );
+    }
+    return recipeSourceToColumns({
+      sourceType: "Book",
+      sourceData: null,
+      cookbookId,
+    });
+  }
+  const holder = await tx.query.recipe.findFirst({
+    where: and(
+      eq(recipe.name, name),
+      ne(recipe.id, recipeId),
+      notDeleted(recipe),
+      or(
+        isNull(recipe.sourceType),
+        notInArray(recipe.sourceType, ["Book", "Notion"]),
+      ),
+    ),
+    columns: { shortcode: true },
+  });
+  if (holder) {
+    throw createAppError(
+      "DUPLICATE_RECORD",
+      `Removing the cookbook would give this recipe the same name as ${holder.shortcode} ("${name}"); rename it first.`,
+    );
+  }
+  return recipeSourceToColumns(
+    webProvenance(updates.meta?.url ?? existingRecipe.sourceUrl),
+  );
+}
+
+const hasBasicUpdates = (updates: RecipeUpdateInput["data"]): boolean =>
+  Boolean(updates.name) ||
+  [
+    updates.meta,
+    updates.yield,
+    updates.servings,
+    updates.tags,
+    updates.notes,
+    updates.forkedFromRecipeId,
+    updates.cookbookId,
+  ].some((value) => value !== undefined);
+
 export async function updateRecipeBasicProperties(
   tx: DrizzleTransaction,
   recipeId: RecipeId,
   updates: RecipeUpdateInput["data"],
   existingRecipe: ExistingRecipeWithSections,
 ): Promise<{ forkedFromRecipeId?: RecipeId | null }> {
-  const hasBasicUpdates =
-    updates.name ||
-    updates.meta !== undefined ||
-    updates.yield !== undefined ||
-    updates.servings !== undefined ||
-    updates.tags !== undefined ||
-    updates.notes !== undefined ||
-    updates.forkedFromRecipeId !== undefined;
-
-  if (!hasBasicUpdates) return {};
+  if (!hasBasicUpdates(updates)) return {};
 
   // Lineage pointer only ("Recipe.forkedFromRecipeId" — see
   // RECIPE_DELETE_EDGE_POLICY in crud.ts).
@@ -231,10 +319,19 @@ export async function updateRecipeBasicProperties(
       ? updates.meta.url
       : existingRecipe.sourceUrl;
 
+  const cookbookRepoint = await resolveCookbookRepoint(
+    tx,
+    recipeId,
+    updates,
+    existingRecipe,
+  );
+
   const updateData: {
     name?: string;
     sourceType?: "Book" | "Website" | "Other" | "Notion";
     sourceUrl?: string | null;
+    sourceLabel?: string | null;
+    cookbookId?: CookbookId | null;
     yield?: RecipeYield | null;
     servings?: number | null;
     tags?: string[];
@@ -268,6 +365,8 @@ export async function updateRecipeBasicProperties(
   if (forkedFromRecipeId !== undefined) {
     updateData.forkedFromRecipeId = forkedFromRecipeId;
   }
+  // After the `meta` branch: an explicit cookbook move owns the provenance.
+  if (cookbookRepoint !== undefined) Object.assign(updateData, cookbookRepoint);
 
   await tx
     .update(recipe)

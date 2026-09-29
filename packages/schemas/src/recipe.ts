@@ -237,6 +237,11 @@ export const cookbookSummary = z.object({
 });
 export type CookbookSummary = z.infer<typeof cookbookSummary>;
 
+export const cookbookUpdateInput = z.object(
+  generatedCookbookFieldSchemas.update,
+);
+export type CookbookUpdateInput = z.infer<typeof cookbookUpdateInput>;
+
 export type SectionIngredientType = z.infer<
   typeof sectionIngredientOut
 >["type"];

@@ -143,6 +143,21 @@ interface UnifiedCalendarProps {
   onPeriodChange: (period: CalendarViewPeriod) => void;
   onDateChange: (date?: string) => void;
   onDayChange?: (day?: string) => void;
+  /** Surface-specific toolbar controls for the period being shown. */
+  periodActions?: (range: {
+    startDate: string;
+    endDateExclusive: string;
+  }) => ReactNode;
+}
+
+function PeriodActions({
+  render,
+  range,
+}: {
+  render: UnifiedCalendarProps["periodActions"];
+  range: { startDate: string; endDateExclusive: string };
+}) {
+  return render?.(range) ?? null;
 }
 
 const canDropCalendarEvent = (
@@ -261,6 +276,7 @@ export function UnifiedCalendar({
   onPeriodChange,
   onDateChange,
   onDayChange,
+  periodActions,
 }: UnifiedCalendarProps) {
   const today = householdLocalDate();
   const anchorDate = date ?? today;
@@ -494,13 +510,15 @@ export function UnifiedCalendar({
           <h2 className="font-heading text-base font-semibold">
             {periodTitle}
           </h2>
-          <ChoiceSwitcher
-            className="ml-auto"
-            ariaLabel="Calendar period"
-            options={lockedKinds ? GRID_PERIOD_OPTIONS : PERIOD_OPTIONS}
-            value={period}
-            onValueChange={onPeriodChange}
-          />
+          <Row align="center" gap="xs" className="ml-auto">
+            <PeriodActions render={periodActions} range={activePeriod} />
+            <ChoiceSwitcher
+              ariaLabel="Calendar period"
+              options={lockedKinds ? GRID_PERIOD_OPTIONS : PERIOD_OPTIONS}
+              value={period}
+              onValueChange={onPeriodChange}
+            />
+          </Row>
         </Row>
 
         {period === "schedule" ? (

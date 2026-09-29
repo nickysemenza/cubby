@@ -39,6 +39,32 @@ const planRecipeOut = z.object({
   nutrition: compactNutrition.optional(),
 });
 
+export const mealDuplicateInput = z.object({
+  mealId: mealShortcode,
+  date: plainDate
+    .optional()
+    .describe("Day for the copy; defaults to the source meal's day"),
+});
+
+export const mealCopyRangeInput = z.object({
+  from: plainDate.describe("First day to copy, inclusive"),
+  to: plainDate.describe("Last day to copy, inclusive"),
+  targetFrom: plainDate.describe(
+    "Day the range's first day lands on; later days keep their offset",
+  ),
+});
+const mealCopyRangeOut = z.object({
+  copied: z.number().int().nonnegative(),
+  mealIds: z.array(mealShortcode),
+  skippedPortions: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      "Portions not copied because their source or target meal was outside the range",
+    ),
+});
+
 export const dailyIntakeInput = z.object({
   date: plainDate,
   partyId: ledgerPartyShortcode,
@@ -128,6 +154,17 @@ export const mealContract = defineContract("meal", {
   removeRecipe: mutation({
     input: schemas.mealRecipeIdInput,
     output: schemas.mealOut,
+    invalidates: ["meal"],
+  }),
+  // Copies are plans: planned portions, no images, appended to the target days.
+  duplicate: mutation({
+    input: mealDuplicateInput,
+    output: schemas.mealOut,
+    invalidates: ["meal"],
+  }),
+  copyRange: mutation({
+    input: mealCopyRangeInput,
+    output: mealCopyRangeOut,
     invalidates: ["meal"],
   }),
   savePreparation: mutation({

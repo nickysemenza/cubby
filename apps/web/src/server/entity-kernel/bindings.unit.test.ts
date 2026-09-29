@@ -97,10 +97,10 @@ describe("entity kernel bindings", () => {
     expect(Object.keys(ENTITY_SCHEMA_BINDINGS).sort()).toEqual(
       [...ENTITY_KERNEL_ENTITIES].sort(),
     );
-    // Cookbook is a read-only kernel entity: no mutation command exists.
+    // Cookbook is born from an EPUB import: it can be edited, never created.
     const cookbook = ENTITY_SCHEMA_BINDINGS.cookbook;
     expect(cookbook.createInput).toBeNull();
-    expect(cookbook.updateInput).toBeNull();
+    expect(cookbook.updateInput).not.toBeNull();
     expect(cookbook.bulkUpdateInput).toBeNull();
     expect(
       entityCommandSchema.safeParse({
@@ -109,6 +109,14 @@ describe("entity kernel bindings", () => {
         data: { name: "Example" },
       }).success,
     ).toBe(false);
+    expect(
+      entityCommandSchema.safeParse({
+        action: "update",
+        entity: "cookbook",
+        id: "CKB-ABCD",
+        data: { name: "Example" },
+      }).success,
+    ).toBe(true);
 
     for (const entity of ENTITY_KERNEL_ENTITIES) {
       const binding = ENTITY_KERNEL_BINDINGS[entity];

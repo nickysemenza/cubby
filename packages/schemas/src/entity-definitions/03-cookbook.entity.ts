@@ -63,31 +63,34 @@ export default defineEntity({
         key: "name",
         kind: "text",
         readKeyOverride: "book",
+        control: { kind: "text", placeholder: "Cookbook title" },
         display: { list: true, detail: true },
         validation: {
           read: z.string(),
           create: null,
-          update: null,
+          update: z.string().trim().min(1).optional(),
         },
       },
       {
         key: "author",
         kind: "text-array",
+        control: { kind: "specialized", renderer: "tag-list" },
         display: { list: true, detail: true },
         validation: {
           read: z.array(z.string()),
           create: null,
-          update: null,
+          update: z.array(z.string().trim().min(1)).optional(),
         },
       },
       {
         key: "subjects",
         kind: "text-array",
+        control: { kind: "specialized", renderer: "tag-list" },
         display: { list: true, detail: true },
         validation: {
           read: z.array(z.string()),
           create: null,
-          update: null,
+          update: z.array(z.string().trim().min(1)).optional(),
         },
       },
       { key: "sourceLabel", kind: "text" },
@@ -234,12 +237,14 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [],
-    update: [],
+    update: ["name", "author", "subjects"],
     bulk: [],
-    audit: [],
+    audit: ["name", "author", "subjects"],
     sort: {
       fields: ["name", "recipeCount", "createdAt", "updatedAt"],
       computed: ["recipeCount"],
+      // A shelf reads alphabetically, not by import date.
+      defaultOverride: "name",
     },
     output: [
       "shortcode",
@@ -255,7 +260,10 @@ export default defineEntity({
   },
   fields: {
     create: null,
-    update: null,
+    update: {
+      module: "@cubby/schemas/recipe",
+      export: "cookbookUpdateInput",
+    },
     output: { module: "@cubby/schemas/recipe", export: "cookbookSummary" },
     list: { module: "@cubby/schemas/recipe", export: "cookbookSummary" },
     detail: { module: "@cubby/schemas/recipe", export: "cookbookSummary" },
@@ -369,9 +377,8 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "workflow", merge: null },
     // Born only from an EPUB import and deleted with its recipes by that
-    // import workflow; the kernel serves its reads.
-    lifecycle: "readOnly",
-    mcp: ["get", "list"],
+    // import workflow; the kernel serves reads and title/author/subject edits.
+    mcp: ["get", "list", "update"],
     dataQuality: {
       checks: [
         {
