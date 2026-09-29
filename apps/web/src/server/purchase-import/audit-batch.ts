@@ -5,7 +5,7 @@ import type { PurchaseAuditRenderedBatch } from "~/server/agents/purchase-import
 import type { Database } from "~/server/db";
 import {
   expense,
-  runMutation,
+  auditLog,
   product,
   purchase,
   purchasePaymentEvidence,
@@ -25,14 +25,12 @@ export async function loadPurchaseAuditBatch(
       statedTotal: purchase.statedTotal,
       displayLabel: purchase.displayLabel,
     })
-    .from(runMutation)
+    .from(auditLog)
     .innerJoin(
       purchase,
-      and(eq(purchase.id, runMutation.targetId), notDeleted(purchase)),
+      and(eq(purchase.id, auditLog.entityId), notDeleted(purchase)),
     )
-    .where(
-      and(eq(runMutation.runId, runId), eq(runMutation.targetKind, "purchase")),
-    )
+    .where(and(eq(auditLog.runId, runId), eq(auditLog.entityKind, "purchase")))
     .orderBy(asc(purchase.id))
     .limit(25)
     .offset(offset);

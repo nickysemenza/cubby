@@ -109,7 +109,6 @@ export const ENTITY_EDGE_OWNERS = {
   RunApproval: { excluded: WORKFLOW },
   RunControlEvent: { excluded: WORKFLOW },
   RunEvidence: { excluded: WORKFLOW },
-  RunMutation: { excluded: WORKFLOW },
   RunOperation: { excluded: WORKFLOW },
   RunOrderCandidate: { excluded: WORKFLOW },
   RunProgress: { excluded: WORKFLOW },
@@ -120,7 +119,6 @@ export const ENTITY_EDGE_OWNERS = {
   OrderMail: { excluded: WORKFLOW },
   OrderMailCandidateDecision: { excluded: WORKFLOW },
   OrderMailAttachment: { excluded: WORKFLOW },
-  VendorMailSearchJob: { excluded: WORKFLOW },
   ProductMatchCandidate: {
     excluded: "A review queue of possible duplicates, not a relationship.",
   },

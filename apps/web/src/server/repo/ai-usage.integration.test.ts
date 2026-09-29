@@ -13,7 +13,7 @@ describe("listAiUsageForRun", () => {
   // An AI run has no member party; the run detail page must still read its
   // usage (the import-run loader only ever served member-scoped runs).
   it("pages an AI run's calls newest first with a full-run subtotal", async () => {
-    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_action" });
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     const call = (minute: number, estimatedCost: number | null) => ({
       feature: "field_suggest",
       provider: "test",
@@ -50,7 +50,7 @@ describe("listAiUsageForRun", () => {
   });
 
   it("retains an application hit as a zero-cost usage event", async () => {
-    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_action" });
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     await getDb(ctx.db).insert(aiUsage).values({
       feature: "field-suggestion",
       provider: "typesafe",

@@ -27,7 +27,6 @@ import {
   runApproval,
   runControlEvent,
   runEvidence,
-  runMutation,
   runOperation,
   runOrderCandidate,
   runProgress,
@@ -1421,15 +1420,6 @@ const SOURCE_FACTORIES = {
       mediaType: "application/pdf",
     });
   },
-
-  "RunMutation.runId": (db, targetId) =>
-    insertAndReturn(db, runMutation, {
-      runId: parseEntityId("run", targetId),
-      targetKind: "run",
-      targetId,
-      mutationKind: "liveness-fixture",
-      postFingerprint: uniq("post-fingerprint"),
-    }),
 
   "RunOperation.runId": (db, targetId) =>
     insertAndReturn(db, runOperation, {

@@ -31,9 +31,40 @@ export const runPurpose = z.enum([
   // Every AI call belongs to a run; these purposes group work that is not an
   // import. Their lifetime is set by `trigger` (`ephemeral` or not).
   "ai_suggest",
-  "ai_action",
   "background",
   "file_import",
-  "legacy",
+  "mail_search",
 ]);
 export type RunPurpose = z.infer<typeof runPurpose>;
+
+/**
+ * `Run.input` / `Run.progress` for a `mail_search` run: the Gmail search a
+ * member asked for and where its page-by-page walk stands. `phase` is the
+ * claim state a worker CAS-es on (`queued` between pages, `running` while one
+ * is scanned); the Run's own `status` stays `running` until the last page.
+ */
+export const mailSearchRunInput = z.object({
+  after: z.string(),
+  searchTerms: z.array(z.string()),
+});
+export type MailSearchRunInput = z.infer<typeof mailSearchRunInput>;
+export const mailSearchPhase = z.enum([
+  "queued",
+  "running",
+  "completed",
+  "failed",
+]);
+export const mailSearchRunProgress = z.object({
+  phase: mailSearchPhase,
+  /** The cursor the walk started from; null when it began at the newest page. */
+  pageToken: z.string().nullable(),
+  nextPageToken: z.string().nullable(),
+  pagesScanned: z.number().int().nonnegative(),
+  searched: z.number().int().nonnegative(),
+  reviewable: z.number().int().nonnegative(),
+  /** A transient cause kept while a rate-limited page waits to be retried. */
+  error: z.string().nullable().optional(),
+});
+export type MailSearchRunProgress = z.infer<typeof mailSearchRunProgress>;
+export type RunInput = MailSearchRunInput;
+export type RunProgress = MailSearchRunProgress;

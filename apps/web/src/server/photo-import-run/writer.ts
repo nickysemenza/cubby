@@ -7,14 +7,12 @@
  * `packages/schemas/src/photo-import-run.ts` for the wire contract and
  * `.claude/skills/photo-inventory-import/SKILL.md` for the workflow this serves.
  */
-import { auditEntitySchema } from "@cubby/schemas/audit";
 import { type ActorContext, actorInRun } from "@cubby/schemas/context";
 import {
   runEntityId,
   parseShortcodeFor,
   type ImageId,
   type ImageShortcode,
-  type InventoryId,
   type LedgerPartyId,
   type ProductId,
 } from "@cubby/schemas/identifiers";
@@ -27,14 +25,13 @@ import {
   type CommitPhotoGroupOutput,
 } from "@cubby/schemas/photo-import-run";
 import { productCreateInput } from "@cubby/schemas/product";
-import { and, count, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, count, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
   auditLog,
   run as runTable,
-  runMutation,
   runTarget,
   inventoryEntry,
   product,
@@ -56,7 +53,6 @@ import {
 } from "~/server/repo/inventory/crud";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/request-context";
-import { sha256Hex } from "~/server/semantic/hash";
 import { createProductWithSideEffects } from "~/server/services/product-orchestration.service";
 import { createProductWriteActions } from "~/server/services/product.service";
 
@@ -121,15 +117,16 @@ async function findProductNameConflicts(
   const ownProductIds = new Set(
     (
       await getDb(db)
-        .select({ targetId: runMutation.targetId })
-        .from(runMutation)
+        .select({ entityId: auditLog.entityId })
+        .from(auditLog)
         .where(
           and(
-            eq(runMutation.runId, runId),
-            eq(runMutation.targetKind, "product"),
+            eq(auditLog.runId, runEntityId.parse(runId)),
+            eq(auditLog.entityKind, "product"),
+            eq(auditLog.action, "create"),
           ),
         )
-    ).map((row) => row.targetId),
+    ).map((row) => row.entityId),
   );
   const matches = await getDb(db)
     .select({ id: product.id, shortcode: product.shortcode })
@@ -146,28 +143,6 @@ async function findProductNameConflicts(
   return matches
     .filter((row) => !ownProductIds.has(row.id))
     .map((row) => parseShortcodeFor("product", row.shortcode));
-}
-
-/** Best-effort link from an `RunMutation` row to the audit trail that carries the actor. */
-async function latestAuditLogId(
-  db: Database,
-  entityKind: string,
-  entityId: string,
-): Promise<string | null> {
-  const parsedType = auditEntitySchema.safeParse(entityKind);
-  if (!parsedType.success) return null;
-  const [row] = await getDb(db)
-    .select({ id: auditLog.id })
-    .from(auditLog)
-    .where(
-      and(
-        eq(auditLog.entityKind, parsedType.data),
-        eq(auditLog.entityId, entityId),
-      ),
-    )
-    .orderBy(desc(auditLog.createdAt), desc(auditLog.id))
-    .limit(1);
-  return row?.id ?? null;
 }
 
 /**
@@ -321,7 +296,6 @@ function buildReplayOutput(
 /** Resolve the group's target Product — an existing one by id, or a brand-new one. */
 async function resolveProduct(
   txDb: Database,
-  scope: RunScope,
   input: CommitPhotoGroupInput,
   actor: ActorContext,
 ): Promise<string> {
@@ -347,26 +321,7 @@ async function resolveProduct(
     }),
     actor,
   );
-  const productShortcodeStr = created.id;
-  const productEntityId = await resolveOrThrow(
-    txDb,
-    "product",
-    productShortcodeStr,
-  );
-  await getDb(txDb)
-    .insert(runMutation)
-    .values({
-      runId: scope.public.runId,
-      targetKind: "product",
-      targetId: productEntityId,
-      mutationKind: "create",
-      fields: ["name", "categoryId", "manufacturer", "model", "notes", "tags"],
-      postFingerprint: await sha256Hex(
-        JSON.stringify({ groupKey: input.groupKey, product: input.product }),
-      ),
-      auditLogId: await latestAuditLogId(txDb, "product", productEntityId),
-    });
-  return productShortcodeStr;
+  return created.id;
 }
 
 /**
@@ -475,29 +430,7 @@ async function receiveInventory(
           },
           actor,
         );
-  const inventoryShortcodeStr = entry.id;
-  const inventoryEntityId: InventoryId = await resolveOrThrow(
-    txDb,
-    "inventory",
-    inventoryShortcodeStr,
-  );
-  await getDb(txDb)
-    .insert(runMutation)
-    .values({
-      runId: scope.public.runId,
-      targetKind: "inventory",
-      targetId: inventoryEntityId,
-      mutationKind: targetId ? "update" : "create",
-      fields: ["amount", "ownershipMode", "ownerLedgerPartyId"],
-      postFingerprint: await sha256Hex(
-        JSON.stringify({
-          groupKey: input.groupKey,
-          inventory: input.inventory,
-        }),
-      ),
-      auditLogId: await latestAuditLogId(txDb, "inventory", inventoryEntityId),
-    });
-  return inventoryShortcodeStr;
+  return entry.id;
 }
 
 /** Attach every non-skipped image to the resolved Product's gallery. */
@@ -520,10 +453,9 @@ async function attachImages(
   }
 }
 
-/** Mark each target row completed (attach) or skipped, with a matching `RunMutation` row. */
+/** Mark each target row completed (attach) or skipped; the RunTarget row is the record. */
 async function markTargets(
   txDb: Database,
-  scope: RunScope,
   groupKey: string,
   attaches: ResolvedAttach[],
   skips: ResolvedSkip[],
@@ -559,22 +491,6 @@ async function markTargets(
         updatedAt: now,
       })
       .where(eq(runTarget.id, target.id));
-    await getDb(txDb)
-      .insert(runMutation)
-      .values({
-        runId: scope.public.runId,
-        targetKind: "image",
-        targetId: entry.imageId,
-        mutationKind: "attach",
-        fields: ["purpose"],
-        postFingerprint: await sha256Hex(
-          JSON.stringify({
-            groupKey,
-            imageId: entry.code,
-            purpose: entry.purpose,
-          }),
-        ),
-      });
     images.push({ id: entry.code, state: "completed" });
   }
   for (const entry of skips) {
@@ -590,22 +506,6 @@ async function markTargets(
         updatedAt: now,
       })
       .where(eq(runTarget.id, target.id));
-    await getDb(txDb)
-      .insert(runMutation)
-      .values({
-        runId: scope.public.runId,
-        targetKind: "image",
-        targetId: entry.imageId,
-        mutationKind: "skip",
-        fields: ["warning"],
-        postFingerprint: await sha256Hex(
-          JSON.stringify({
-            groupKey,
-            imageId: entry.code,
-            reason: entry.reason,
-          }),
-        ),
-      });
     images.push({ id: entry.code, state: "skipped" });
   }
   return images;
@@ -724,7 +624,7 @@ async function doCommit(
   let productShortcodeStr: string | undefined;
   let inventoryShortcodeStr: string | undefined;
   if (groupTouchesProduct(input)) {
-    productShortcodeStr = await resolveProduct(txDb, scope, input, actor);
+    productShortcodeStr = await resolveProduct(txDb, input, actor);
     const productId = await resolveOrThrow(
       txDb,
       "product",
@@ -742,7 +642,6 @@ async function doCommit(
   const now = new Date();
   const images = await markTargets(
     txDb,
-    scope,
     input.groupKey,
     attaches,
     skips,

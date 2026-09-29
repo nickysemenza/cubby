@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { run as runTable, vendorMailSearchJob } from "~/server/db/schema";
+import { run as runTable } from "~/server/db/schema";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 import { getDb } from "./database-helpers";
@@ -27,7 +27,7 @@ describe("getRunByShortcode", () => {
   // The Run output once declared that name non-null, and the Run detail page
   // failed validation for exactly the runs it was built to show.
   it("reads an AI run that has no member party", async () => {
-    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_action" });
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     const [row] = await getDb(ctx.db)
       .select({ shortcode: runTable.shortcode })
       .from(runTable)
@@ -36,33 +36,9 @@ describe("getRunByShortcode", () => {
     const run = await getRunByShortcode(ctx.db, row!.shortcode);
 
     expect(run).toMatchObject({
-      purpose: "ai_action",
+      purpose: "ai_suggest",
       ledgerPartyId: null,
       ledgerPartyName: null,
-    });
-  });
-
-  it("shows a failed Gmail search job's saved error on its Run detail", async () => {
-    const runId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "background",
-      trigger: "manual",
-    });
-    const [row] = await getDb(ctx.db)
-      .update(runTable)
-      .set({ status: "failed", failureCode: "vendor_mail_search_failed" })
-      .where(eq(runTable.id, runId))
-      .returning({ shortcode: runTable.shortcode });
-    if (!row) throw new Error("test setup: Run missing");
-    await getDb(ctx.db).insert(vendorMailSearchJob).values({
-      runId,
-      after: "2025/09/27",
-      status: "failed",
-      error: "Synthetic Gmail search failed at review count",
-    });
-
-    expect(await getRunByShortcode(ctx.db, row.shortcode)).toMatchObject({
-      status: "failed",
-      dispatchError: "Synthetic Gmail search failed at review count",
     });
   });
 });
@@ -72,7 +48,7 @@ describe("ensureRun shortcode collisions", () => {
 
   it("retries a used code for an unkeyed AI run", async () => {
     const existingId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_action",
+      purpose: "ai_suggest",
     });
     const [existing] = await getDb(ctx.db)
       .select({ shortcode: runTable.shortcode })
@@ -94,7 +70,7 @@ describe("ensureRun shortcode collisions", () => {
 
   it("retries a used code and reuses the same client-keyed run", async () => {
     const existingId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_action",
+      purpose: "ai_suggest",
     });
     const [existing] = await getDb(ctx.db)
       .select({ shortcode: runTable.shortcode })

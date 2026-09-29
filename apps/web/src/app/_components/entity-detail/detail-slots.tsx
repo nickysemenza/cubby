@@ -25,7 +25,7 @@ export interface DetailSlot<E extends GenericDetailEntity> {
 
 /**
  * Run purposes the purchase agent drives: they carry a vendor, orders, an
- * agent transcript and evidence. AI-only runs (`ai_suggest`, `ai_action`,
+ * agent transcript and evidence. AI-only runs (`ai_suggest`,
  * `background`) and photo batches do not.
  */
 const IMPORT_WORKFLOW_PURPOSES: ReadonlySet<RunPurpose> = new Set([
@@ -33,7 +33,6 @@ const IMPORT_WORKFLOW_PURPOSES: ReadonlySet<RunPurpose> = new Set([
   "purchase_validation",
   "product_enrichment",
   "file_import",
-  "legacy",
 ]);
 
 type SlotModule<T> = Promise<{ default: T }>;

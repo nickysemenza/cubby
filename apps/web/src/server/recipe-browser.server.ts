@@ -6,7 +6,7 @@ import {
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import * as imports from "~/server/operations/recipe-import.server";
 import * as recipe from "~/server/operations/recipe.server";
-import { ensureRun } from "~/server/runs/ensure-run";
+import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 
 export const recipeHandlers = implementOperationDomain(recipeDomainContract, {
@@ -35,9 +35,11 @@ export const recipeHandlers = implementOperationDomain(recipeDomainContract, {
     ),
   getFlow: (context, input) => recipe.getFlowWorkflow(context.db, input),
   generateFlow: async (context, input) => {
-    const runId = await ensureRun(context.db, context.actorContext, {
-      purpose: "ai_action",
-    });
+    const runId = await ensureRun(
+      context.db,
+      context.actorContext,
+      aiCallRunInput(context.actorContext),
+    );
     return recipe.generateFlowWorkflow({ db: context.db, runId }, input);
   },
   harvestEquivalences: (context) =>

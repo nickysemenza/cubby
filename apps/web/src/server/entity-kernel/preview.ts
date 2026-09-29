@@ -8,7 +8,7 @@ import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { generatedMcpEntityActionEntities } from "~/server/generated/entity-kernel-entities.gen";
 import { resolveDraftExpenseFields } from "~/server/repo/expense-inheritance";
 import { resolveDraftTaskFields } from "~/server/repo/task-project-inheritance";
-import { ensureRun } from "~/server/runs/ensure-run";
+import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
 
 import type { EntityKernelContext } from "./adapter";
 
@@ -169,10 +169,11 @@ async function applyPreviewSuggestions(args: {
     (field) => !suggestedSet.has(field),
   );
 
+  // One run per actor and hour, however many previews (or a whole batch) ask.
   const runId = await args.ports.ensureRun(
     args.context.db,
     args.context.actorContext,
-    { purpose: "ai_action" },
+    aiCallRunInput(args.context.actorContext),
   );
   const runBatch = async (
     basisMode: "suggested" | "provided",

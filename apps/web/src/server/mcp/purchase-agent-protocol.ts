@@ -1,5 +1,5 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
-import type { ActorContext } from "@cubby/schemas/context";
+import { type ActorContext, actorInRun } from "@cubby/schemas/context";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import { parseShortcode } from "@cubby/shared";
@@ -11,10 +11,10 @@ import {
   auditLog,
   run as runTable,
   runApproval,
-  runMutation,
   runOperation,
 } from "~/server/db/schema";
 import type { McpOperationContext } from "~/server/mcp/operation-context";
+import { recordRunWrites } from "~/server/purchase-import/run-audit";
 import { getDb } from "~/server/repo/database-helpers";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
@@ -299,25 +299,27 @@ export async function executePurchaseAgentMutation<T>(input: {
         : undefined,
     };
     const result = await input.run(transactionalExtra);
-    const postFingerprint = await sha256(JSON.stringify(result));
     const resultArguments = purchaseAgentArguments.parse(result);
+    // The tool may write rows without auditing them itself; the Run's audit
+    // trail names every entity the approved call touched.
     const refs = await targetSnapshot(transactionDb, [args, resultArguments]);
-    const provenance = refs.flatMap((ref) =>
-      ref.id && auditEntitySchema.safeParse(ref.type).success
-        ? [
-            {
-              runId: run.id,
-              targetKind: ref.type,
-              targetId: ref.id,
-              mutationKind: "update",
-              fields: [input.toolName],
-              postFingerprint,
-            },
-          ]
-        : [],
+    await recordRunWrites(
+      transactionDb,
+      actorInRun(input.actor, run.id),
+      refs.flatMap((ref) => {
+        const kind = auditEntitySchema.safeParse(ref.type);
+        return ref.id && kind.success
+          ? [
+              {
+                entityKind: kind.data,
+                entityId: ref.id,
+                action: "update" as const,
+                fields: [input.toolName],
+              },
+            ]
+          : [];
+      }),
     );
-    if (provenance.length > 0)
-      await database.insert(runMutation).values(provenance);
     await database
       .update(runApproval)
       .set({ state: "consumed", consumedAt: new Date() })

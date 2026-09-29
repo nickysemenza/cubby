@@ -45,6 +45,7 @@ import {
   type PurchaseDocumentKind,
   purchaseDocumentKindValues,
 } from "@cubby/schemas/purchase";
+import type { RunInput, RunProgress } from "@cubby/schemas/run-fields";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import type {
   McpToolCallOutcome,
@@ -1573,6 +1574,10 @@ export const run = pgTable(
     deviceId: uuid("deviceId").$type<DeviceId>(),
     /** Client-minted grouping key, e.g. one Jev pass per page mount. */
     clientKey: text("clientKey"),
+    /** What the run was asked to do; the shape belongs to its purpose. */
+    input: jsonb("input").$type<RunInput>(),
+    /** Resumable position within `input`; the shape belongs to its purpose. */
+    progress: jsonb("progress").$type<RunProgress>(),
   },
   (table) => [
     shortcodeUnique("Run", table.shortcode),
@@ -1606,7 +1611,7 @@ export const run = pgTable(
     ),
     check(
       "Run_purpose_check",
-      sql`${table.purpose} IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'ai_action', 'background', 'file_import', 'legacy')`,
+      sql`${table.purpose} IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'background', 'file_import', 'mail_search')`,
     ),
     check(
       "Run_photo_inventory_no_vendor_check",
@@ -1626,8 +1631,8 @@ export const run = pgTable(
 const runTargetKinds = ["purchase", "product", "image"] as const;
 
 /**
- * Explicit no-op-validation/enrichment targets; RunMutation remains
- * writes-only. A target names a purchase, product or image by `entityRef`;
+ * Explicit no-op-validation/enrichment targets; the Run's writes are
+ * AuditLog rows carrying its `runId`. A target names a purchase, product or image by `entityRef`;
  * the composite FK targets `Entity`, whose rows outlive a hard delete, so a
  * target keeps its tombstone the way the old Purchase FK's policy asked.
  */
@@ -1800,38 +1805,6 @@ export const importSourceClaim = pgTable(
       "ImportSourceClaim_kind_check",
       sql`${table.kind} IN ('browser_order', 'mail_message', 'mail_attachment', 'receipt_photo', 'vendor_export')`,
     ),
-  ],
-);
-
-/** Explicit run provenance for every row mutation, independent of AuditLog's actor shape. */
-export const runMutation = pgTable(
-  "RunMutation",
-  {
-    id: pkUuid(),
-    runId: uuid("runId")
-      .notNull()
-      .references(() => run.id),
-    targetKind: text("targetKind").notNull(),
-    targetId: uuid("targetId").notNull(),
-    mutationKind: text("mutationKind").notNull(),
-    fields: jsonb("fields")
-      .$type<string[]>()
-      .notNull()
-      .default(sql`'[]'::jsonb`),
-    postFingerprint: text("postFingerprint").notNull(),
-    auditLogId: uuid("auditLogId"),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-  },
-  (table) => [
-    index("RunMutation_run_idx").on(table.runId),
-    index("RunMutation_target_idx").on(table.targetKind, table.targetId),
-    // A rebuildable pointer to a live identity (ADR 0006): history keeps the
-    // identity that received the mutation.
-    foreignKey({
-      name: "RunMutation_target_fk",
-      columns: [table.targetId, table.targetKind],
-      foreignColumns: [entityIdentity.id, entityIdentity.kind],
-    }),
   ],
 );
 
@@ -2262,26 +2235,6 @@ export const mailboxCursor = pgTable(
     ),
   ],
 );
-
-export const vendorMailSearchJob = pgTable("VendorMailSearchJob", {
-  runId: uuid("runId")
-    .primaryKey()
-    .$type<RunId>()
-    .references(() => run.id),
-  after: text("after").notNull(),
-  pageToken: text("pageToken"),
-  searchTerms: text("searchTerms").array().notNull().default([]),
-  pagesScanned: integer("pagesScanned").notNull().default(0),
-  status: text("status").notNull().default("queued"),
-  searched: integer("searched").notNull().default(0),
-  skipped: integer("skipped").notNull().default(0),
-  reviewable: integer("reviewable").notNull().default(0),
-  nextPageToken: text("nextPageToken"),
-  error: text("error"),
-  startedAt: timestamp("startedAt", { mode: "date" }),
-  finishedAt: timestamp("finishedAt", { mode: "date" }),
-  ...baseTimestamps(),
-});
 
 export const orderMail = pgTable(
   "OrderMail",
@@ -3709,8 +3662,9 @@ export const auditLog = pgTable(
     // Real identity FK (ADR 0006): the row names an entity that exists, of
     // the kind it claims. History keeps the identity that received the event.
     entityRefFk("AuditLog_entity_fk", table),
-    index("AuditLog_runId_idx")
-      .on(table.runId)
+    // Everything one Run wrote, narrowed by entity kind (import provenance).
+    index("AuditLog_runId_entityKind_idx")
+      .on(table.runId, table.entityKind)
       .where(sql`${table.runId} IS NOT NULL`),
     check(
       "AuditLog_channel_check",
