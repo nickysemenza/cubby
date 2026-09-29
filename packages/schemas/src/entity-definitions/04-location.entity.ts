@@ -158,10 +158,10 @@ export default defineEntity({
       {
         key: "type",
         kind: "enum",
-        nullable: true,
         // Auto-suggest is manifest-driven (`control.suggest`) now, not the
-        // hand-rendered AI-suggest widget; `type` still disappears once a
-        // product link supplies the form factor — see `intents.fields` below.
+        // hand-rendered AI-suggest widget. A Product-linked location has no
+        // form factor of its own; the server stores `furniture` for it when
+        // the request omits `type`. `furniture` requires a `productId`.
         control: {
           kind: "select",
           options: selectControlOptions.locationType,
@@ -174,9 +174,9 @@ export default defineEntity({
           mobile: { slot: "subtitle", priority: 15 },
         },
         validation: {
-          read: locationType.nullable(),
-          create: locationType.nullable().optional(),
-          update: locationType.nullable().optional(),
+          read: locationType,
+          create: locationType.optional(),
+          update: locationType.optional(),
         },
       },
       {
@@ -319,6 +319,12 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         // Rendered (and regenerated) by the `ai-description` detail slot.
+        // Read from the latest live `location-description` AiAnalysis; the
+        // location row stores nothing.
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Latest location-description AI analysis" }],
+        },
         display: {
           list: true,
           listHidden: true,
@@ -449,7 +455,6 @@ export default defineEntity({
       { key: "productId", reference: "product" },
       { key: "type", specialized: "enum:type" },
       "notes",
-      "aiDescription",
     ],
     create: [
       "name",
@@ -596,10 +601,6 @@ export default defineEntity({
         field: "aiDescriptionPresenceFilter",
         kind: "presence",
         placeholder: "Filter descriptions...",
-        deriveSchema: true,
-        schemaDescription:
-          "Filter to locations that do / don't have an AI-generated description.",
-        stored: true,
         options: [
           { value: "has", label: "Has description", meta: true },
           { value: "none", label: "(none)", meta: true },
@@ -612,7 +613,7 @@ export default defineEntity({
         placeholder: "Filter by location name...",
         deriveSchema: true,
         schemaDescription: "Filter by location name (substring)",
-        stored: { columns: ["name", "aiDescription", "aliases"] },
+        stored: { columns: ["name", "aliases"] },
       },
       {
         columnId: "type",
@@ -887,11 +888,16 @@ export default defineEntity({
           message: "No AI-generated description is recorded.",
         },
         {
-          id: "location_type",
-          facet: "identity",
-          weight: 1,
-          label: "Type",
-          message: "Location type is not recorded.",
+          // A furniture location IS a Product instance; stock of that same
+          // Product elsewhere counts the item twice (once as the place, once
+          // as an inventory row).
+          id: "location_furniture_counted",
+          facet: "integrity",
+          kind: "defect",
+          weight: 2,
+          label: "Counted twice",
+          message:
+            "This furniture location's Product also has live inventory entries, so the item is counted twice.",
         },
       ],
     },

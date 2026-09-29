@@ -147,6 +147,10 @@ export default defineEntity({
         key: "lastRunAt",
         kind: "timestamp",
         nullable: true,
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Latest Run start for this account" }],
+        },
         display: { list: true, detail: true, format: "timestamp" },
         validation: {
           read: z.date().nullable(),
@@ -158,6 +162,10 @@ export default defineEntity({
         key: "lastSuccessAt",
         kind: "timestamp",
         nullable: true,
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Latest completed Run end for this account" }],
+        },
         display: { list: true, detail: true, format: "timestamp" },
         validation: {
           read: z.date().nullable(),
@@ -233,8 +241,6 @@ export default defineEntity({
           '\'{"newestOrderAt":null,"orderIdsOnNewestDate":[],"backfillBeforeOrderAt":null,"earliestAvailableOrderAt":null}\'::jsonb',
         specialized: "json:cursor",
       },
-      "lastRunAt",
-      "lastSuccessAt",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",

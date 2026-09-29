@@ -145,7 +145,6 @@ export const imageProcessingJob = pgTable(
       table.state,
       table.nextAttemptAt,
     ),
-    index("ImageProcessingJob_image_idx").on(table.imageId),
     index("ImageProcessingJob_runId_idx")
       .on(table.runId)
       .where(sql`${table.runId} IS NOT NULL`),

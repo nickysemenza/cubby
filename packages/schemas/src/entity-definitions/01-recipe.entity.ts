@@ -539,7 +539,12 @@ export default defineEntity({
       { key: "forkedFromRecipeId", reference: "recipe" },
       { key: "yield", specialized: "json:yield" },
       "servings",
-      { key: "tags", specialized: "text-array" },
+      {
+        key: "tags",
+        nullableOverride: false,
+        defaultValue: "'{}'::text[]",
+        specialized: "text-array",
+      },
       "notes",
       { key: "totals", specialized: "json:totals" },
       "totalsComputedAt",
