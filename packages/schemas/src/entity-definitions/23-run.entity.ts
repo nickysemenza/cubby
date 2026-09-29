@@ -504,6 +504,7 @@ export default defineEntity({
       export: "runOut",
     },
   },
+  // One durable attempt to discover, fetch, extract, write, and audit evidence.
   storage: {
     // The actor snapshot, the run's own lineage, dispatch fencing and the
     // history walk are operational state outside the model.

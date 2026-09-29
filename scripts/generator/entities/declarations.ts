@@ -284,7 +284,7 @@ export type EntityTableColumn = Readonly<{
   type: SourceRef | null;
 }>;
 /** SQL with `{columnKey}` placeholders the renderer binds to table columns. */
-export type EntityTableSql = string;
+type EntityTableSql = string;
 export type EntityTableIndex = Readonly<{
   name: string;
   unique: boolean;

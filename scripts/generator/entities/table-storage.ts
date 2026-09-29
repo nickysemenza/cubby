@@ -189,6 +189,8 @@ export const compileEntityTable = (
     const values =
       check.values ??
       readEnumValues(fieldModel, check.column, `${where}.values`);
+    // Inlined literals, never bound parameters: a bound value would render as
+    // `$1` in migration DDL. Declared value sets are plain identifiers.
     const inList = `{${check.column}} IN (${values.map((value) => `'${value.replaceAll("'", "''")}'`).join(", ")})`;
     const sql = check.nullClause
       ? `{${check.column}} IS NULL OR ${inList}`

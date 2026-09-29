@@ -325,6 +325,7 @@ export default defineEntity({
       export: "ledgerTransferOut",
     },
   },
+  // A durable movement between ledger parties; it is never spend.
   storage: {
     indexes: [{ on: ["date"] }],
     checks: [

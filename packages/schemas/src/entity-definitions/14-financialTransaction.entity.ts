@@ -579,6 +579,8 @@ export default defineEntity({
       export: "financialTransactionOut",
     },
   },
+  // A settlement-side event. Amounts are evidence only: they never participate
+  // in spend/project/calendar rollups, which remain derived from Expense.cost.
   storage: {
     indexes: [
       {

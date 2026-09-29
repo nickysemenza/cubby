@@ -680,6 +680,9 @@ export default defineEntity({
     output: { module: "@cubby/schemas/purchase", export: "purchaseOut" },
     list: { module: "@cubby/schemas/purchase", export: "purchaseListItemOut" },
   },
+  // One vendor order, receipt, or deliberately separate purchase event — the
+  // home for vendor-side truth (literal stated total, documents, identity).
+  // No money is summed from this table: spend is `SUM(Expense.cost)`.
   storage: {
     columns: [{ key: "runId", kind: "identifier", reference: "run" }],
     indexes: [

@@ -1928,10 +1928,6 @@ export type EntityDeclaration = z.input<EntityMetadataSchemas["declaration"]>;
 export type EntityDeclarationMetadata = z.output<
   EntityMetadataSchemas["declaration"]
 >;
-export type EntityTableStorageMetadata = NonNullable<
-  EntityDeclarationMetadata["storage"]
->;
-
 const pathAt = (context: string, path: readonly PropertyKey[]) =>
   path.length === 0 ? context : `${context}.${path.join(".")}`;
 

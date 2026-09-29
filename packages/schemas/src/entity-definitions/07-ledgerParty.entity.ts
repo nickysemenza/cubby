@@ -150,6 +150,7 @@ export default defineEntity({
     },
     output: { module: "@cubby/schemas/ledger-party", export: "ledgerPartyOut" },
   },
+  // A durable economic participant in the household ledger.
   storage: {
     columns: [
       // Auth ownership is intentionally storage-only: a member claims it from
