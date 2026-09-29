@@ -20,13 +20,16 @@ import {
   makeExpenseInput,
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
   callMcpTool,
   kernelRequestContext,
+  listMcpTools,
   type McpTestRequestContext,
 } from "./mcp-test-utils";
+import { McpOperationContext } from "./operation-context";
 import { createMcpServer, listMcpToolCatalog } from "./server";
 import type { ToolArguments } from "./tools/tool-registration";
 
@@ -304,6 +307,15 @@ describe("MCP catalog", () => {
       name: "Catalog widget",
       upc: "012345678905",
     });
+    // Detector rows carry Date timestamps; the action publishes their JSON.
+    expect(
+      await call("activity", { action: "problems", type: "orphanedProducts" }),
+    ).toMatchObject({
+      type: "orphanedProducts",
+      items: expect.arrayContaining([
+        expect.objectContaining({ createdAt: expect.any(String) }),
+      ]),
+    });
     expect(
       await call("product_enrichment", {
         action: "verify_images",
@@ -479,5 +491,53 @@ describe("MCP catalog", () => {
     expect(stage(commit)).toBe("context");
     expect(validate.isError).toBe(true);
     expect(stage(validate)).toBe("run");
+  });
+
+  it("shows a purchase agent only its run purpose's actions", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Catalog photo member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const run = await startPhotoInventoryRun(ctx.db, {
+      actorUserId: ctx.actor.userId,
+    });
+    const requestContext = createTestRequestContext(ctx.db, {
+      auth: { userId: ctx.actor.userId },
+    });
+    const { tools } = await listMcpTools(
+      createMcpServer(),
+      {},
+      {
+        operationContext: new McpOperationContext(requireActor(requestContext)),
+        purchaseAgent: { runId: run.id, grantId: "catalog-photo-grant" },
+      },
+    );
+    const actionsOf = (name: string) =>
+      z
+        .object({
+          properties: z.object({
+            action: z.object({ enum: z.array(z.string()) }),
+          }),
+        })
+        .parse(tools.find((tool) => tool.name === name)?.inputSchema).properties
+        .action.enum;
+
+    expect(tools.map((tool) => tool.name).sort()).toEqual([
+      "entity_read",
+      "imports_read",
+      "photo_run",
+      "product_enrichment",
+      "search",
+    ]);
+    expect(actionsOf("entity_read")).toEqual(["resolve"]);
+    expect(actionsOf("photo_run")).toEqual(["propose_groups"]);
+    expect(actionsOf("product_enrichment")).toEqual(["patch_external_ids"]);
+    expect(actionsOf("imports_read").sort()).toEqual([
+      "image_processing",
+      "photo_candidates",
+      "photo_context",
+      "photo_proposals",
+    ]);
   });
 });

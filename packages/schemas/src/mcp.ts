@@ -225,9 +225,19 @@ export const recipeCostingExplainMcpOut = z.union([
   recipeCostingExplainLinesOut,
 ]);
 
+/**
+ * A detector row as the wire carries it. Detectors return typed rows (with
+ * `Date` timestamps); the MCP result and Start transport carry their JSON form,
+ * so the row is normalized exactly as `JSON.stringify` would before validating.
+ */
+const problemItem = z.preprocess(
+  (row) => (row === undefined ? row : JSON.parse(JSON.stringify(row))),
+  z.json(),
+);
+
 export const problemsTypeSliceOut = z.object({
   type: z.string(),
-  items: z.array(z.json()),
+  items: z.array(problemItem),
   total: z.number().int(),
   meta: paginatedMetaSchema
     .extend({ pageSize: z.number().int().positive().max(100) })

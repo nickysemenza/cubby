@@ -4,6 +4,7 @@ import { z } from "zod";
 import { generatedHeader } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
 import {
+  assertContractPurity,
   collectStartOperationHandlers,
   loadContracts,
   SOURCE_ROOT,
@@ -70,7 +71,20 @@ export const toolKind = (
   return first.kind;
 };
 
+/**
+ * The declaration and its helpers load here, at generation time, with the
+ * contracts: a runtime import of server code would drag the database layer
+ * into the generator, so they are held to the contract import boundary.
+ */
+const MCP_DECLARATION_FILES = [
+  "contracts/mcp-tools.ts",
+  "contracts/mcp-define.ts",
+  "contracts/mcp-projections.ts",
+];
+
 const loadMcpTools = async (): Promise<Record<string, ToolDeclaration>> => {
+  for (const file of MCP_DECLARATION_FILES)
+    assertContractPurity(join(SOURCE_ROOT, file));
   const module: { MCP_TOOLS?: Record<string, ToolDeclaration> } = await import(
     pathToFileURL(join(SOURCE_ROOT, "contracts/mcp-tools.ts")).href
   );

@@ -152,14 +152,13 @@ export function kernelRequestContext(
   return kernel as McpTestRequestContext;
 }
 
-/** Calls a tool through the production MCP transport with a test-supplied request context. */
-export async function callMcpTool(
+/** Run one client request through the production transport with a test-supplied context. */
+async function withTestClient<T>(
   server: McpServer,
-  toolName: string,
-  args: ToolArguments,
-  requestContext: McpTestRequestContext = {},
-  extra: ToolCallExtra = {},
-) {
+  requestContext: McpTestRequestContext,
+  extra: ToolCallExtra,
+  request: (client: Client) => Promise<T>,
+): Promise<T> {
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test", version: "1.0.0" });
@@ -188,8 +187,32 @@ export async function callMcpTool(
     client.connect(clientTransport),
   ]);
   try {
-    return await client.callTool({ name: toolName, arguments: args });
+    return await request(client);
   } finally {
     await Promise.allSettled([client.close(), server.close()]);
   }
+}
+
+/** Calls a tool through the production MCP transport with a test-supplied request context. */
+export async function callMcpTool(
+  server: McpServer,
+  toolName: string,
+  args: ToolArguments,
+  requestContext: McpTestRequestContext = {},
+  extra: ToolCallExtra = {},
+) {
+  return withTestClient(server, requestContext, extra, (client) =>
+    client.callTool({ name: toolName, arguments: args }),
+  );
+}
+
+/** `tools/list` as a caller with this context sees it (a purchase agent's is narrowed). */
+export async function listMcpTools(
+  server: McpServer,
+  requestContext: McpTestRequestContext = {},
+  extra: ToolCallExtra = {},
+) {
+  return withTestClient(server, requestContext, extra, (client) =>
+    client.listTools(),
+  );
 }
