@@ -2,7 +2,7 @@
  * Which Products a Purchase acquired, and the transpose — answered from TWO
  * sources, because one of them alone cannot answer it.
  *
- * `PurchaseProduct` is a deliberately SPARSE provenance edge. It exists because
+ * `purchaseProduct` is a deliberately SPARSE provenance edge. It exists because
  * an installment/lump-sum Purchase's Expenses are `lineBasis: "allocation"`
  * (see `packages/schemas/src/expense-line-kind.ts`) and can never carry a
  * `productId`. An allocation is a slice of a total that was never itemized —
@@ -357,7 +357,7 @@ async function livePurchaseProductIds(
  * SEQUENTIALLY so both call sites are safe — see `repo/relation-preflight.ts`.
  *
  * There is no category gate here on purpose: an order can buy anything. The
- * only counterpart to `ProjectToolUsage`'s `ineligible` bucket is the empty
+ * only counterpart to `projectTool`'s `ineligible` bucket is the empty
  * one this returns.
  */
 async function preflightAttachPurchaseProducts(

@@ -1,5 +1,5 @@
 /**
- * Barcodes, as `ProductExternalId` rows.
+ * Barcodes, as `EntityExternalId` rows.
  *
  * A product carries a SET of barcodes, not one: a manufacturer reissues a SKU,
  * a retailer relabels, two listings of one item disagree. `Product.upc` could
@@ -57,7 +57,7 @@ const liveGtinRows = (db: Database | DrizzleTransaction, ids: ProductId[]) =>
  * Modelled on `loadProductDataQualities` / `getProductImagesByProductIds`
  * rather than a correlated subquery on purpose: drizzle strips table prefixes
  * from interpolated columns inside a `sql` SELECT field on a single-table
- * select, so a correlated scalar over `ProductExternalId` silently self-joins
+ * select, so a correlated scalar over `EntityExternalId` silently self-joins
  * and returns NULL with no error.
  */
 export const loadPrimaryGtins = async (

@@ -16,7 +16,7 @@
  * extra `quantity` field allows: same transaction shape, same liveness
  * checks, same partial-unique-index insert, same before/after audit diff.
  * Quantity is set at attach time; changing it is detach-then-reattach, not an
- * in-place update — the same "no edit path" precedent `PurchaseProduct`
+ * in-place update — the same "no edit path" precedent `purchaseProduct`
  * sets, kept for the same reason: one fewer write shape to keep consistent
  * with the audit diff.
  */
@@ -315,7 +315,7 @@ async function loadMostRecentPurchaseByProductId(
   const liveVendor = and(eq(vendor.id, purchase.vendorId), notDeleted(vendor));
 
   // Both legs, for the same reason `listProductPurchases` needs both: a kit
-  // whose order is itemized per product has no `PurchaseProduct` row at all,
+  // whose order is itemized per product has no `purchaseProduct` link at all,
   // so the link-only query returned null for exactly the kits this carve-out
   // exists to link to.
   const [linkRows, expenseRows] = await Promise.all([
@@ -417,7 +417,7 @@ export async function listKitMembership(
   }));
 }
 
-/** Every LIVE `ProductComponent` edge, for the cycle guard — it needs the
+/** Every LIVE `productComponent` link, for the cycle guard — it needs the
  * whole graph, not just the rows touching the attach's own parent, because a
  * kit several hops above a proposed component can close a loop the touched
  * edges alone would never reveal. */

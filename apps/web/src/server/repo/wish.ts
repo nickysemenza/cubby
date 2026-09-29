@@ -197,7 +197,7 @@ const candidateProductSearch = (term: string) => {
  * away.
  *
  * Both soft-delete guards are load-bearing: emptying a wish soft-deletes its
- * WishCandidate rows, so a subquery without them would price alternatives the
+ * `wishCandidate` links, so a subquery without them would price alternatives the
  * user already removed.
  */
 const candidatePriceAggregate = (fn: "min" | "max") => sql`(

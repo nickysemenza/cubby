@@ -46,7 +46,7 @@ export interface HeroPresenceInput {
    */
   identityLocationIds: readonly string[];
   /**
-   * Live `ProductComponent` edges where this product is the parent. Non-zero
+   * Live `productComponent` links where this product is the parent. Non-zero
    * means it is a kit, and a kit that has been split into a composition record
    * holds its stock under its parts' names rather than its own.
    */

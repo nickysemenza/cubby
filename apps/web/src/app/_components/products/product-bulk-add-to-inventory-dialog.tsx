@@ -97,7 +97,7 @@ interface KitAccounting {
   expectedQuantity: number;
   /** Units already on shelves under THIS product's own name. */
   ownOnHandUnits: number | null;
-  /** Live `ProductComponent` edges — zero means this is not a kit. */
+  /** Live `productComponent` links — zero means this is not a kit. */
   componentCount: number;
 }
 

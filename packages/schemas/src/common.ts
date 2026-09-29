@@ -40,7 +40,7 @@ export type DeletedCountOut = z.infer<typeof deletedCountOut>;
 
 /**
  * Result of a list-attach/detach mutation on a many-to-many relation edge —
- * `ProductComponent`, `ProjectToolUsage`, `PurchaseProduct`, and any future
+ * `productComponent`, `projectTool`, `purchaseProduct`, and any future
  * sibling. All three of today's relation families declared this exact same
  * shape independently (nine restatements total, counting the repo-layer
  * signatures); this is the one place it's said now.

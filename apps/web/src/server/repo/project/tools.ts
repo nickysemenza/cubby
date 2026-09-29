@@ -1744,7 +1744,7 @@ export async function listProductProjectUses(
   if (!productRow) {
     throw createAppError("PRODUCT_NOT_FOUND", `Product ${productId} not found`);
   }
-  // ProjectToolUsage is durable history. It may predate a legitimate category
+  // `projectTool` is durable history. It may predate a legitimate category
   // correction, so reads must never reinterpret a live edge as nonexistent.
   // Writes continue through assertReusableResource/assertUsagePair, which keep
   // the project-resource admission policy intact.

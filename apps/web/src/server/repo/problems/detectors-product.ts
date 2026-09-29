@@ -267,7 +267,7 @@ export const findOrphanedProducts = async (
           .filter(isRetainingEdgeKey)
           .map((key) => PRODUCT_RETAINING_NOT_EXISTS[key](dbClient)),
         // A composition parent owns no retaining incoming edge: deleting it
-        // merely removes its ProductComponent rows. It is still a meaningful
+        // merely removes its `productComponent` links. It is still a meaningful
         // live product, though, so offering it as an orphan would discard the
         // kit or multi-pack identity represented by those rows.
         notExists(

@@ -67,15 +67,12 @@ function formatChangeValue(value: AuditJsonValue | undefined): string {
  * lose the fight for the one line a row gets.
  */
 const LOW_SIGNAL_CHANGE_FIELDS = new Set([
-  "SourceData",
-  "dataExceptions",
   "embedding",
-  "notionPageId",
+  "externalIds",
   "sortOrder",
   "sourceRefs",
   "totals",
   "updatedAt",
-  "valuation",
 ]);
 
 /** Column names whose camel-case split still doesn't read as English. */
@@ -177,7 +174,7 @@ export function summarizeChanges(
   ]);
   const shown = ranked.slice(0, LEDGER_MAX_FIELDS);
   // Counted against every changed field, not just the renderable ones. A
-  // field with no glanceable rendering (an object-valued `totals`/`valuation`
+  // field with no glanceable rendering (an object-valued `totals`
   // diff, which is exactly what a recompute-style update touches) is dropped
   // from the line — but dropping it from the count too would let the row claim
   // it changed less than it did, which is the one thing this disclosure exists

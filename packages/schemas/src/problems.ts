@@ -129,7 +129,7 @@ export const weightSoldProductSchema = z.object({
   ingredientId: ingredientShortcode.nullable(),
 });
 
-// A recorded ProjectToolUsage edge for a tool we did not own while the project
+// A recorded `projectTool` link for a tool we did not own while the project
 // ran. The `trade_match` suggestion lane shipped without consulting ownership
 // dates, so it drew candidates from the whole present-day tool shelf — for a
 // 2020 project, 293 of the 295 inventoried tools were acquired after it ended.

@@ -571,7 +571,7 @@ interface ComponentMergePlan {
 }
 
 /**
- * The whole `ProductComponent` consequence of a merge, computed without
+ * The whole `productComponent` consequence of a merge, computed without
  * writing, so `mergeProducts` and `previewMergeProducts` share one
  * implementation of the rules rather than two readings of them. Throws
  * nothing: both refusals come back as data (`cycle`, `kit.conflicts`) so the

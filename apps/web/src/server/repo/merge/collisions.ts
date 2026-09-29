@@ -4,7 +4,7 @@
  * Most incoming edges re-point cleanly: change the FK, done. The interesting
  * ones sit under a *partial unique index* — `(vendorId, orderId)` on Purchase,
  * `(productId, locationId)` on InventoryEntry, `(productId, source, kind)` on
- * ProductExternalId — where two of the merged rows can occupy the same slot.
+ * `EntityExternalId` — where two of the merged rows can occupy the same slot.
  * Blind re-pointing there doesn't produce a wrong answer, it aborts the whole
  * transaction on a constraint violation.
  *

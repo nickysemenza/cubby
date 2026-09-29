@@ -72,7 +72,7 @@ const hasAmazonId = (t: Product) => sql`EXISTS (
 )`;
 
 // A photo-inventory-created Product is stocked (has inventory) but was never
-// claimed by a purchase: no acquiring Expense, and no explicit PurchaseProduct
+// claimed by a purchase: no acquiring Expense, and no explicit `purchaseProduct`
 // link (the enrichment path a purchase import takes when it later matches
 // this same Product — see `product-identity.md`).
 const hasPurchaseProductLink = (t: Product) => sql`EXISTS (

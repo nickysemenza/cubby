@@ -2427,7 +2427,7 @@ export const financialTransactionAllocation = pgTable(
   },
   (table) => [
     // Partial, so unallocating and re-allocating the same pair stays legal — same
-    // rule as PurchaseProduct's. One live row per (transaction, purchase): two
+    // rule as `purchaseProduct`'s. One live row per (transaction, purchase): two
     // slices of one charge against one order is one slice, and merging two
     // purchases that share a transaction SUMS into this row rather than adding a
     // second (see PURCHASE_MERGE_EDGE_POLICY — `onConflictDoNothing` there would

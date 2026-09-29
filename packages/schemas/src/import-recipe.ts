@@ -168,7 +168,7 @@ export const upsertCookbookInput = z.object({
    *
    * Transient: it is NOT stored on the Cookbook. The importer resolves it to a
    * Product — matching an existing one by barcode, or minting one — and keeps
-   * only `Cookbook.productId`. Barcodes live on `ProductExternalId`, and a
+   * only `Cookbook.productId`. Barcodes live on `EntityExternalId`, and a
    * second copy on Cookbook would be a second thing to keep in agreement.
    */
   isbn: z.string().optional(),

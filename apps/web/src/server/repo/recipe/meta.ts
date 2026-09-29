@@ -15,7 +15,7 @@ import type {
  * equipment, page — rides in the jsonb because nothing queries it.
  *
  * `meta.url` never round-trips through here: it is derived from
- * `SourceType`/`SourceData` on read (see `dbRecipeToTopLevelShape`) and written
+ * `sourceType`/`sourceUrl`/`sourceLabel` on read (see `dbRecipeToTopLevelShape`) and written
  * through `recipeSourceToColumns` on write. Storing it here too would give
  * provenance two sources of truth.
  */

@@ -341,7 +341,7 @@ export const viewManifest = defineViewManifest({
       // decomposed kit is not "stocked nowhere", it is stocked as its
       // components. The parts are also the ACTIONABLE rows: an unstocked
       // component carries its own projected `expectedQuantity` (the kit's units
-      // reach it through `ProductComponent`) and matches this view by itself, so
+      // reach it through `productComponent`) and matches this view by itself, so
       // admitting the parent too reports one gap twice and less precisely.
       // Verified on production: all 25 kit parents leave, and every genuinely
       // unaccounted component stays.

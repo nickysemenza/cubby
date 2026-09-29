@@ -3,7 +3,7 @@
  *
  * A kit or multi-pack keeps its OWN Expense — buying a 9-piece combo kit is one
  * $199 line against the kit Product, and it is never split into nine per-part
- * expenses. `ProductComponent` says what came out of it, and this module is how
+ * expenses. `productComponent` says what came out of it, and this module is how
  * that edge carries money and units to the parts:
  *
  *   componentShare = parentKnownCost × qtyᵢ / Σqty(that parent's live components)
@@ -50,7 +50,7 @@ import { uuidArrayParam } from "~/server/repo/database-helpers";
 /**
  * How many kit hops a projection will walk before it stops.
  *
- * `ProductComponent` has a CHECK against the one-row self-reference and the
+ * `productComponent` has a CHECK against the one-row self-reference and the
  * merge path has a write-time reachability guard, but neither makes a longer
  * cycle (A contains B contains A) unrepresentable in rows that already exist —
  * and a read path that assumed a clean graph would spin forever inside a

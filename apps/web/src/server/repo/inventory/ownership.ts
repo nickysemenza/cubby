@@ -497,7 +497,7 @@ const resolveInheritedCandidate = (args: {
  * Resolve inheritance for every requested product in one bounded set of
  * queries. Acquisition identity is a Purchase where one exists, otherwise the
  * acquisition Expense itself. The map therefore deduplicates repeated lines
- * and an overlapping sparse PurchaseProduct edge by construction.
+ * and an overlapping sparse `purchaseProduct` link by construction.
  */
 async function loadInheritedCandidates(
   db: Database | DrizzleTransaction,

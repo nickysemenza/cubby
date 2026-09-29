@@ -8,7 +8,7 @@ The repository layer follows a strict access control pattern using TypeScript's 
 
 ```
 ┌─────────────┐
-│   Workflow  │  (Start functions / MCP adapters)
+│  Operation  │  (server/operations handlers / MCP adapters)
 └──────┬──────┘
        │ passes Database (request-scoped handle)
        ▼
@@ -207,7 +207,7 @@ const product = await getDb(db).query.product.findFirst({
 Repos transform database records to API types to:
 
 1. Apply branded types (e.g., `ProductId`, `LocationId`)
-2. Extract nested join table data (e.g., images)
+2. Extract nested attachment data (e.g., images)
 3. Validate shapes with Zod schemas
 
 ### Type Assertion Helpers
@@ -266,10 +266,10 @@ never pass the raw column straight through.
 
 ### 2. Extracting Images
 
-Images use join tables, extract them explicitly:
+Images are `EntityAttachment` rows, extract them explicitly:
 
 ```typescript
-// Database structure: product -> productImage -> image
+// Database structure: product -> entityAttachment -> image
 const productImages = product.images?.map((pi) => pi.image) ?? [];
 
 return {
@@ -326,7 +326,7 @@ const [results, [countResult]] = await Promise.all([
 - Add clear comments for complex queries
 - Use transactions for multi-step operations
 - Validate API output with Zod schemas
-- Extract images from join tables explicitly
+- Extract images from attachment rows explicitly
 
 ### ❌ DON'T
 

@@ -41,7 +41,7 @@
  *    component list, when it's a kit. NOT retaining, deliberately asymmetric
  *    with the edge above: deleting a kit is supposed to take its component
  *    list with it, the same way deleting a recipe takes its sections.
- *  - metadata / media: `ProductExternalId.productId`,
+ *  - metadata / media: `EntityExternalId.entityId`,
  *    `ProductUnitMapping.productId`, `ProductConversionCoverage.productId`,
  *    `ProductImage.productId` — none of which say anything about ownership on
  *    their own.

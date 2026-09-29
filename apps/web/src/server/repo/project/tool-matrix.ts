@@ -2,7 +2,7 @@
  * The projects x tools matrix behind the `/tools` Usage view — one read that returns
  * every column, row, and non-empty cell of the grid.
  *
- * Why it exists: `ProjectToolUsage` records that a tool was used on a project,
+ * Why it exists: `projectTool` records that a tool was used on a project,
  * and cost-per-use only becomes meaningful once a tool has several of those
  * edges. Attaching one project at a time through a dialog is the bottleneck, so
  * this surface exists for backfill throughput — a grid you can scan for holes.

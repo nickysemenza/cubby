@@ -1743,7 +1743,7 @@ export default defineEntity({
         placeholder: "Search related used on projects...",
       },
       {
-        // Components of a kit: products on the kit's `ProductComponent` rows.
+        // Components of a kit: products on the kit's `productComponent` links.
         columnId: "kitId",
         kind: "idMulti",
         placeholder: "Filter by kit...",
@@ -1751,7 +1751,7 @@ export default defineEntity({
         urlOnly: true,
       },
       {
-        // Kits containing a component: parents on its `ProductComponent` rows.
+        // Kits containing a component: parents on its `productComponent` links.
         columnId: "componentId",
         kind: "idMulti",
         placeholder: "Filter by component...",

@@ -212,9 +212,9 @@ export const productFilterFields = {
   ...auditDateFilterFields,
   ...productRelatedFilterFields,
   ...generatedProductFilterFields,
-  /** Components of the given kit(s): products on their `ProductComponent` rows. */
+  /** Components of the given kit(s): products on their `productComponent` links. */
   kitId: oneOrMany(productShortcode).optional(),
-  /** Kits containing the given component(s): the parents on their `ProductComponent` rows. */
+  /** Kits containing the given component(s): the parents on their `productComponent` links. */
   componentId: oneOrMany(productShortcode).optional(),
   upcPresenceFilter: presenceFilter,
   externalIdSource: oneOrMany(externalIdSource).optional(),
@@ -695,7 +695,7 @@ export const productWithIngredientAndInventoryAndMappingsOut = z.object({
    */
   servingAsLocations: z.array(productLocationRefOut),
   /**
-   * Live `ProductComponent` edges where this product is the parent — non-zero
+   * Live `productComponent` links where this product is the parent — non-zero
    * means it is a kit or multi-pack. Counts distinct components, not units.
    *
    * Embedded here rather than read from `product.components` beside it, for the
@@ -751,7 +751,7 @@ export const productListItemOut = z.object({
   ingredient: productIngredientOut.nullable(),
   inventoryEntry: z.array(productListInventoryEntryOut),
   expenseCount: z.number().int(),
-  // Live `ProductComponent` edges where this product is the parent — non-zero
+  // Live `productComponent` links where this product is the parent — non-zero
   // means it's a kit or multi-pack. Counts distinct components, not units: a
   // 4-pack stored as one edge with `quantity: 4` reads as 1.
   componentCount: z.number().int().nonnegative(),
@@ -782,7 +782,7 @@ export const productWithFoodOut = z.object({
   inventoryEntry: z.array(productInventoryWithLocationOut),
   servingAsLocations: z.array(productLocationRefOut),
   /**
-   * Live `ProductComponent` edges where this product is the parent — non-zero
+   * Live `productComponent` links where this product is the parent — non-zero
    * means it is a kit or multi-pack. Counts distinct components, not units.
    *
    * Embedded here rather than read from `product.components` beside it, for the

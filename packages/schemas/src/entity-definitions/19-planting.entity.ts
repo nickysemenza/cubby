@@ -591,7 +591,7 @@ export default defineEntity({
         brandRef: { entity: "product" },
       },
       {
-        // Plantings a garden entry is logged against (`GardenEntryPlanting`).
+        // Plantings a garden entry is logged against (`gardenEntryPlanting`).
         columnId: "gardenEntryId",
         kind: "idMulti",
         placeholder: "Filter by garden entry...",

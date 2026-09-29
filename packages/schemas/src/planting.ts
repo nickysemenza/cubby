@@ -33,7 +33,7 @@ export const plantingFilterFields = {
   plantId: oneOrMany(plantShortcode).optional(),
   taskId: oneOrMany(taskShortcode).optional(),
   sourceProductId: oneOrMany(productShortcode).optional(),
-  /** Plantings a garden entry is logged against (`GardenEntryPlanting`). */
+  /** Plantings a garden entry is logged against (`gardenEntryPlanting`). */
   gardenEntryId: oneOrMany(gardenEntryShortcode).optional(),
   activeOn: plainDate.optional(),
 };

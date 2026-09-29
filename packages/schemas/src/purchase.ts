@@ -350,7 +350,7 @@ export const productPurchasesInput = z.object({
 /**
  * How a purchase⟷product row came to exist.
  *
- * `"link"` is an explicit `PurchaseProduct` row — the sparse provenance edge
+ * `"link"` is an explicit `purchaseProduct` link — the sparse provenance edge
  * that exists for allocation-basis orders, whose Expenses can never carry a
  * `productId`. `"expense"` is derived: a live acquisition Expense on that
  * purchase names that product. That case is the overwhelmingly common one and

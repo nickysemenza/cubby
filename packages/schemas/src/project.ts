@@ -1203,7 +1203,7 @@ export const productProjectUsesOut = z.object({
   productId: productShortcode,
   productName: z.string(),
   manufacturer: z.string(),
-  // This is the Product's *current* category. A historical ProjectToolUsage
+  // This is the Product's *current* category. A historical `projectTool`
   // remains readable after recategorization, but is no longer editable unless
   // it is currently tools or software.
   category: z.string().nullable(),

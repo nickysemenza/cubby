@@ -51,7 +51,7 @@ function findPgError(error: UnparsedDatabaseError, depth = 0): PgError | null {
   }
 }
 
-/** "ProductExternalId" -> "product external id" for prose. */
+/** "EntityExternalId" -> "entity external id" for prose. */
 function prettyTable(table?: string): string {
   if (!table) return "record";
   return table.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
