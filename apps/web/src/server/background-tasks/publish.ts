@@ -123,6 +123,29 @@ export async function publishBackgroundTasks(
 }
 
 /**
+ * Enqueue one task from code that holds no `Database` — a Durable Object's
+ * fallback once its own retries are spent. Resolves `true` once the queue
+ * accepted the task. Plain Node development has no queue binding and no
+ * request database to run the handler inline against, so there it logs and
+ * resolves `false`; a failed send rejects.
+ */
+export async function enqueueBackgroundTask(
+  task: BackgroundTaskInput,
+  options: PublishOptions,
+): Promise<boolean> {
+  const queue = getBackgroundQueue();
+  if (!queue) {
+    console.warn(
+      `[background-tasks] no queue binding; not enqueued kind=${task.kind} source=${options.source}`,
+    );
+    return false;
+  }
+  await sendToQueue(queue, [task]);
+  console.log(`[background-tasks] published count=1 source=${options.source}`);
+  return true;
+}
+
+/**
  * Publish after a mutation without holding the response for it.
  *
  * On a handle inside a `withTransaction` the publication waits for the
