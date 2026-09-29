@@ -8,15 +8,14 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { CategoryLabel } from "~/app/_components/products/CategoryLabel";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import {
   ProductGtin,
   productGtinLabel,
 } from "~/components/entity/product-gtin";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
-import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 
 import type { EntityDetailFieldRenderers } from "./index";
 
@@ -29,7 +28,7 @@ function ProductIngredientLink({
     { entityKind: "ingredient", entityId: ingredient.id },
   ]);
   return (
-    <EntityInlineLink
+    <EntityRefLink
       displayImage={
         displayImages[
           entityDisplayImageKey({
@@ -84,7 +83,7 @@ export const productDetailFields = {
       <Row gap="sm" wrap>
         <ProductIngredientLink ingredient={product.ingredient} />
         {product.food ? (
-          <EntityInlineLink
+          <EntityRefLink
             displayImage={null}
             entity="usda-food"
             data={product.food}
@@ -142,16 +141,17 @@ export const productDetailFields = {
                 </Badge>
               </Link>
             ) : (
-              <EntityFilterLink
+              <EntityRefLink
+                variant="filter"
                 key={tag}
                 to="/products"
                 search={{ tags: tag }}
                 label={`Show all products tagged ${tag}`}
-                variant="value"
+                display="value"
                 className="no-underline"
               >
                 <Badge variant="outline">{tag}</Badge>
-              </EntityFilterLink>
+              </EntityRefLink>
             );
           })}
         </Row>

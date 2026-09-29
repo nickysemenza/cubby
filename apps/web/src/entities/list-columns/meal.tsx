@@ -7,10 +7,10 @@ import {
   type CubbyColumnCollection,
 } from "~/app/_components/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
-import { EntityInlineLinkList } from "~/app/_components/EntityInlineLinkList";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { formatMealCost, mealDateLabel } from "~/app/meals/meal-format";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { relationshipFieldProvenance } from "~/entities/field-provenance";
 
@@ -87,7 +87,8 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
                     })),
                 }),
                 cell: (info) => (
-                  <EntityInlineLinkList
+                  <EntityRefLink
+                    variant="list"
                     entity="recipe"
                     items={info.getValue()}
                     compact

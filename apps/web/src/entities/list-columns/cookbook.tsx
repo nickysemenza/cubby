@@ -15,7 +15,7 @@ import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
@@ -47,7 +47,7 @@ function CookbookProductLink({
     entityId: product.id,
   });
   return (
-    <EntityInlineLink
+    <EntityRefLink
       displayImage={displayImage}
       entity="product"
       data={product}

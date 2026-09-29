@@ -18,13 +18,13 @@ import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useProductCategories } from "~/app/_components/hooks/useProductCategories";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { InventoryValuationSummary } from "~/app/_components/locations/inventory-valuation-summary";
 import { CategoryLabel } from "~/app/_components/products/CategoryLabel";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ProductGtin } from "~/components/entity/product-gtin";
 import { Stack } from "~/components/layout";
 import { NoneValue } from "~/components/ui/none-value";
@@ -51,7 +51,7 @@ function InventoryProductLink({
     entityId: product.id,
   });
   return (
-    <EntityInlineLink
+    <EntityRefLink
       displayImage={displayImage}
       entity="product"
       data={product}

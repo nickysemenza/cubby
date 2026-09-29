@@ -13,9 +13,9 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
-import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { FinancialSettlementCell } from "~/app/purchases/financial-settlement";
 import { ReconciliationStatus } from "~/app/purchases/purchase-reconciliation";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { VendorCell } from "~/components/entity/vendor-cell";
 import { Grid, Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -127,7 +127,8 @@ export const purchaseListOverride = defineListOverride<
                 v ? (
                   <Row align="center" gap="xs">
                     <span className="min-w-0 truncate">{v}</span>
-                    <OrderIdLink
+                    <EntityRefLink
+                      variant="order"
                       orderUrl={purchase.orderUrl}
                       orderId={v}
                       vendorName={purchase.vendorName}

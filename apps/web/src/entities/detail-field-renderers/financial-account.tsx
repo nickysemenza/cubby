@@ -1,5 +1,5 @@
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
-import { EntityFilterLink } from "~/components/ui/entity-filter-link";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { fieldEnumOptions } from "~/entities/enum-field-display";
 
@@ -12,7 +12,8 @@ export const financialAccountDetailFields = {
       fieldEnumOptions("financialAccount", "identity"),
     ),
     filterAction: (
-      <EntityFilterLink
+      <EntityRefLink
+        variant="filter"
         to="/financial-accounts"
         search={{ identity: account.identity.kind }}
         label={`Show all ${account.identity.kind.replaceAll("_", " ")} accounts`}
