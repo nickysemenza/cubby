@@ -195,10 +195,10 @@ describe("data quality: pantry and garden entities", () => {
     });
   });
 
-  it("location: AI description and type", async () => {
+  it("location: AI description", async () => {
     const gap = await createLocationFixture(
       ctx.db,
-      makeLocationInput({ name: "DQ location gap", type: null }),
+      makeLocationInput({ name: "DQ location gap" }),
       TEST_ACTOR,
     );
     const gapImage = await createImageFixture(ctx.db, "dq-location-gap");
@@ -234,7 +234,6 @@ describe("data quality: pantry and garden entities", () => {
     ]);
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("location_ai_description");
-    expect(gapChecks).toContain("location_type");
     expect(hydrated.get(gap.entityId)?.status).toBe("needs_data");
 
     expect(hydrated.get(complete.entityId)).toMatchObject({

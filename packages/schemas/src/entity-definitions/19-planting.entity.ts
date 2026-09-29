@@ -47,7 +47,7 @@ export default defineEntity({
             "kind",
             "observedOn",
             "locationId",
-            "note",
+            "notes",
             "harvestAmount",
           ],
           sort: { field: "observedOn", direction: "desc" },

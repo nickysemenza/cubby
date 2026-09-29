@@ -84,6 +84,7 @@ import {
   ownershipExitExpensePredicate,
 } from "~/server/repo/product/ownership";
 import { loadProductPricing } from "~/server/repo/product/pricing";
+import { unitMappingSides } from "~/server/repo/product/unit-mappings";
 import { loadProjectDateWindows } from "~/server/repo/project/subtree";
 import { buildTimelineGates } from "~/server/repo/project/tools";
 import { effectiveTaskSubjectProductSql } from "~/server/repo/task-project-inheritance";
@@ -817,7 +818,13 @@ export const loadProductsForCoverage = async (
     with: {
       unitMappings: {
         where: notDeleted(productUnitMappings),
-        columns: { a: true, b: true, source: true },
+        columns: {
+          aValue: true,
+          aUnit: true,
+          bValue: true,
+          bUnit: true,
+          source: true,
+        },
       },
       // The linked ingredient's N/A opt-outs, so partial coverage grades only the
       // kinds that apply (a count-only item isn't flagged for a volume it never uses).
@@ -833,6 +840,10 @@ export const loadProductsForCoverage = async (
   );
   return rows.map((row) => ({
     ...row,
+    unitMappings: row.unitMappings.map((mapping) => ({
+      ...unitMappingSides(mapping),
+      source: mapping.source,
+    })),
     price: pricing.get(row.id)?.effectivePrice ?? null,
     primaryGtin: gtins.get(row.id) ?? null,
   }));

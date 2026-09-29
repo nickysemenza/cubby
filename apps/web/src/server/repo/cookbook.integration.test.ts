@@ -77,7 +77,45 @@ describe("cookbook repository", () => {
     expect(cb?.author).toEqual(["Ada", "Bob"]);
     expect(cb?.subjects).toEqual(["Baking"]);
     expect(cb?.rawJson.chapters[0]?.items).toHaveLength(1);
-    expect(cb?.sourceRecipeCount).toBe(1);
+    // The source recipe count is computed from the stored extraction on read.
+    expect(
+      (await listCookbooks(ctx.db)).find((row) => row.id === cb?.shortcode)
+        ?.sourceRecipeCount,
+    ).toBe(1);
+  });
+
+  it("counts source recipes for both stored extraction shapes", async () => {
+    const tree = await upsertCookbook(
+      ctx.db,
+      {
+        name: "Counted tree book",
+        rawJson: makeCookbookExtraction([
+          makeCookbookRecipe("Count One", ["1 cup flour"]),
+          makeCookbookRecipe("Count Two", ["2 cups flour"]),
+        ]),
+        sourceLabel: "tree.epub",
+      },
+      ctx.actor,
+    );
+    // The pre-tree flat array (`needsReextract`): its length is its count.
+    const legacy = await upsertCookbook(
+      ctx.db,
+      {
+        name: "Counted legacy book",
+        rawJson: makeCookbookExtraction([]),
+        sourceLabel: "legacy.epub",
+      },
+      ctx.actor,
+    );
+    await getDb(ctx.db).execute(
+      sql`UPDATE "Cookbook" SET "rawJson" = '[{"a":1},{"a":2},{"a":3}]'::jsonb WHERE id = ${legacy.entityId}`,
+    );
+
+    const summaries = await listCookbooks(ctx.db);
+    const countOf = (id: string) =>
+      summaries.find((row) => row.id === id)?.sourceRecipeCount;
+    expect(countOf(tree.output.id)).toBe(2);
+    expect(countOf(legacy.output.id)).toBe(3);
   });
 
   it("returns no diff for a missing book and recipes for an existing book", async () => {

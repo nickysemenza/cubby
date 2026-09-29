@@ -204,14 +204,14 @@ export default defineEntity({
         provenance: {
           kind: "derived",
           sources: [
-            { label: "Stored inventory valuation" },
+            { label: "Inventory amount" },
             { label: "Current product price and unit mappings" },
           ],
         },
         explanation: {
           ruleId: "inventory.valuation",
           description:
-            "This is the stored valuation produced when Cubby last evaluated the inventory amount against the product's pricing and unit mappings. Current inputs are shown as reference evidence and do not recompute the stored value.",
+            "Computed on every read: the inventory amount routed to money through the product's current price and unit mappings, so a price or mapping change is reflected immediately.",
           resolver: "productValuation",
           readPath: "valuation",
           sourceDependencies: [
@@ -222,7 +222,7 @@ export default defineEntity({
         },
         validation: {
           read: inventoryValuation.describe(
-            "Precomputed value: amount × product price",
+            "Computed on read: amount routed through the product's unit mappings to its current price",
           ),
           create: null,
           update: null,
@@ -289,12 +289,12 @@ export default defineEntity({
       },
       { key: "shortcode", specialized: "shortcode" },
       { key: "productId", reference: "product" },
-      { key: "amount", specialized: "json:amount" },
+      // Stored as `amountValue` + `amountUnit`; the wire shape stays `{ value, unit }`.
+      { key: "amount", specialized: "amount-columns" },
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
       { key: "locationId", reference: "location" },
-      { key: "valuation", kindOverride: "number", specialized: "real" },
       "verifiedAt",
       {
         key: "placement",
@@ -344,7 +344,7 @@ export default defineEntity({
         "valuation",
         "verifiedAt",
       ],
-      computed: ["name", "product", "location"],
+      computed: ["name", "product", "location", "valuation"],
     },
     intents: {
       fields: {

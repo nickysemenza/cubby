@@ -60,7 +60,8 @@ export const inventorySnapshotToken = async (
     placement: InventoryPlacement;
     ownershipMode: InventoryOwnershipMode;
     ownerLedgerPartyId: LedgerPartyId | null;
-    amount: unknown;
+    amountValue: number;
+    amountUnit: string;
   }>,
 ): Promise<string> => {
   const snapshot = rows
@@ -71,7 +72,9 @@ export const inventorySnapshotToken = async (
       placement: row.placement,
       ownershipMode: row.ownershipMode,
       ownerLedgerPartyId: row.ownerLedgerPartyId,
-      amount: row.amount,
+      // Unit before value: the key order the jsonb column used to hand back,
+      // so a token issued before the column split still matches.
+      amount: { unit: row.amountUnit, value: row.amountValue },
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
   const digest = await crypto.subtle.digest(

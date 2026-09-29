@@ -209,9 +209,8 @@ export const ripple = {
   /**
    * Product MERGE moves far more than a product write does. A rename touches
    * the product row and the surfaces that embed its name; a merge re-parents
-   * rows across five other entities: inventory entries move and re-value at
-   * the keeper's price (`planInventoryFold` →
-   * `syncInventoryValuationsForProduct`), expenses and projectUses are
+   * rows across five other entities: inventory entries move and value at
+   * the keeper's price on their next read (`planInventoryFold`), expenses and projectUses are
    * re-pointed, and dependent recipe costs are recomputed (#603). Left on the
    * narrow set, every one of those views kept rendering the pre-merge state —
    * including rows pointing at a now soft-deleted loser.

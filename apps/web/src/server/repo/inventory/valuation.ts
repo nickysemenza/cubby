@@ -1,27 +1,31 @@
 /**
- * A Product's conversion graph, loaded for valuation.
+ * Inventory valuation, computed on every read.
  *
- * `InventoryEntry.valuation` is the entry's amount routed to money through the
- * product's unit-mapping graph — not `amount.value × price`. The graph is what
- * makes "4 roll" of a four-pack worth one pack rather than four, so every write
- * path that stores a valuation has to load it. This module is that load, kept
- * in one place: four hand-copied `priceMap` blocks across `bulk.ts` and
- * `crud.ts` used to each rebuild half of it.
+ * An entry's valuation is its amount routed to money through the product's
+ * unit-mapping graph — not `amount.value × price`. The graph is what makes
+ * "4 roll" of a four-pack worth one pack rather than four. Nothing stores the
+ * result: a price or mapping change is reflected on the next read, so there is
+ * no recompute fan-out to forget and no stale figure to disagree with the
+ * product page. {@link loadInventoryValuations} prices specific rows;
+ * {@link loadLiveInventoryValuations} prices every live row for the list's
+ * sort, filter and footer total, which SQL cannot compute (the graph is WASM),
+ * and {@link inventoryValuationSql} hands that map back to SQL.
  *
  * A repo helper rather than a service on purpose — it is data access plus a
  * call into lib compute, and a `*.service.ts` here would be the empty
  * pass-through the boundary rule forbids (`price-sync.ts` is the precedent).
  */
 
-import type { ProductId } from "@cubby/schemas/identifiers";
+import type { InventoryId, ProductId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import { and, inArray } from "drizzle-orm";
+import { and, type AnyColumn, inArray, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import { computeInventoryValuations } from "~/lib/price-mapping-utils";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { product } from "~/server/db/schema";
+import { inventoryEntry, product } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { loadExactEffectivePrices } from "~/server/repo/product/pricing";
 import { getProductUnitMappingsByProductIds } from "~/server/repo/product/unit-mappings";
@@ -92,3 +96,120 @@ export const loadValuationGraph = async (
   productId: ProductId,
 ): Promise<UnitMapping[]> =>
   (await loadValuationGraphs(db, [productId])).get(productId) ?? [];
+
+/** The columns valuing one inventory row needs. */
+export interface InventoryValuationRow {
+  id: InventoryId;
+  productId: ProductId;
+  amountValue: number;
+  amountUnit: string;
+}
+
+/** Entry id → computed valuation; `null` when there is no path from the unit to money. */
+export type InventoryValuations = ReadonlyMap<InventoryId, number | null>;
+
+/**
+ * Value the given rows against their products' current graphs: one graph load
+ * for all products, one batched WASM call per product. A row whose product is
+ * missing or soft-deleted values at `null`, the honest answer.
+ */
+export const loadInventoryValuations = async (
+  db: Database | DrizzleTransaction,
+  rows: readonly InventoryValuationRow[],
+): Promise<InventoryValuations> => {
+  const byProduct = new Map<ProductId, InventoryValuationRow[]>();
+  for (const row of rows) {
+    const group = byProduct.get(row.productId) ?? [];
+    group.push(row);
+    byProduct.set(row.productId, group);
+  }
+  const graphs = await loadValuationGraphs(db, [...byProduct.keys()]);
+  const valuations = new Map<InventoryId, number | null>();
+  for (const [productId, group] of byProduct) {
+    const values = computeInventoryValuations(
+      group.map((row) => ({ value: row.amountValue, unit: row.amountUnit })),
+      graphs.get(productId) ?? [],
+    );
+    group.forEach((row, index) => {
+      valuations.set(row.id, values[index] ?? null);
+    });
+  }
+  return valuations;
+};
+
+/** Attach each row's computed valuation, for mappers that read `entry.valuation`. */
+export const attachInventoryValuations = <T extends { id: InventoryId }>(
+  entries: readonly T[],
+  valuations: InventoryValuations,
+): Array<T & { valuation: number | null }> =>
+  entries.map((entry) => ({
+    ...entry,
+    valuation: valuations.get(entry.id) ?? null,
+  }));
+
+/**
+ * Attach computed valuations to the `inventoryEntry` rows nested in loaded
+ * product rows (the detail/list product reads embed their stock).
+ */
+export const enrichProductRowsWithInventoryValuations = async <
+  T extends { inventoryEntry: readonly InventoryValuationRow[] },
+>(
+  db: Database | DrizzleTransaction,
+  products: readonly T[],
+): Promise<
+  Array<
+    Omit<T, "inventoryEntry"> & {
+      inventoryEntry: Array<
+        T["inventoryEntry"][number] & { valuation: number | null }
+      >;
+    }
+  >
+> => {
+  const valuations = await loadInventoryValuations(
+    db,
+    products.flatMap((product) => product.inventoryEntry),
+  );
+  return products.map((product) => ({
+    ...product,
+    inventoryEntry: attachInventoryValuations(
+      product.inventoryEntry,
+      valuations,
+    ),
+  }));
+};
+
+/**
+ * Every live inventory row's valuation. Used where SQL has to sort, filter or
+ * sum by valuation over the whole population (the population is the household's
+ * inventory — about a thousand rows — so one pass per list request is cheap).
+ */
+export const loadLiveInventoryValuations = async (
+  db: Database | DrizzleTransaction,
+): Promise<InventoryValuations> =>
+  loadInventoryValuations(
+    db,
+    await unwrapDb(db)
+      .select({
+        id: inventoryEntry.id,
+        productId: inventoryEntry.productId,
+        amountValue: inventoryEntry.amountValue,
+        amountUnit: inventoryEntry.amountUnit,
+      })
+      .from(inventoryEntry)
+      .where(notDeleted(inventoryEntry)),
+  );
+
+/**
+ * A computed valuation map as a SQL scalar for `idColumn`'s row, so the list's
+ * `ORDER BY`, `WHERE` and `SUM` see exactly the figure the mappers display.
+ * The map travels as ONE jsonb parameter (`{ "<uuid>": 12.5 | null }`) and each
+ * row does an O(1) key lookup; no bound value is a `Column`, so this survives
+ * the relational-query layer's alias rewriting untouched.
+ */
+export const inventoryValuationSql = (
+  valuations: InventoryValuations,
+  idColumn: AnyColumn | SQL,
+): SQL<number | null> =>
+  sql<
+    number | null
+  >`((${JSON.stringify(Object.fromEntries(valuations))}::jsonb ->> (${idColumn})::text)::double precision)`;

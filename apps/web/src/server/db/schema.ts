@@ -38,13 +38,18 @@ import type {
   VendorId,
   WishId,
 } from "@cubby/schemas/identifiers";
+import {
+  imageRenderStatusValues,
+  imageStatusValues,
+  imageStorageStatusValues,
+} from "@cubby/schemas/image";
 import type {
   ImageSightingCamera,
   ImageSightingLocation,
 } from "@cubby/schemas/image-sighting-fields";
 import type { ContributionRole } from "@cubby/schemas/ledger-party";
 import type { LedgerSourceClaimNormalizedEvidence } from "@cubby/schemas/ledger-transfer";
-import type { MealFoodAmount, MealFoodNutrients } from "@cubby/schemas/meal";
+import type { MealFoodNutrients } from "@cubby/schemas/meal";
 import {
   type PurchaseDocumentKind,
   purchaseDocumentKindValues,
@@ -55,7 +60,7 @@ import type {
   McpToolCallOutcome,
   McpToolCallSurface,
 } from "@cubby/schemas/telemetry";
-import type { ShortcodeType } from "@cubby/shared";
+import { inventoryPlacementValues, type ShortcodeType } from "@cubby/shared";
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -120,21 +125,11 @@ import {
   generatedRunColumns,
   generatedVendorAccountColumns,
   generatedWishColumns,
-  imageRenderStatusEnum,
-  imageStatusEnum,
-  imageStorageStatusEnum,
-  inventoryPlacementEnum,
   recipeSourceEnum,
 } from "./generated/entity-columns.gen";
 import { productCategory } from "./product-category-schema";
 
-export {
-  recipeSourceEnum,
-  imageStatusEnum,
-  inventoryPlacementEnum,
-  imageRenderStatusEnum,
-  imageStorageStatusEnum,
-};
+export { recipeSourceEnum };
 
 export type { Amount };
 export type Instruction = { text: string };
@@ -254,23 +249,35 @@ const entityRefFk = (
 const shortcodeUnique = (tableName: string, column: AnyPgColumn) =>
   uniqueIndex(`${tableName}_shortcode_unique`).on(column);
 
-/** Exact scalar meal amount shape shared by food entries and served portions. */
-const validMealFoodAmount = (column: AnyPgColumn) => sql`
-  ${column} IS NULL OR COALESCE((
-    jsonb_typeof(${column}) = 'object'
-    AND ${column} ? 'value'
-    AND ${column} ? 'unit'
-    AND ${column} - 'value' - 'unit' = '{}'::jsonb
-    AND CASE
-      WHEN jsonb_typeof(${column}->'value') = 'number' THEN
-        (${column}->>'value')::numeric > 0
-        AND (${column}->>'value')::numeric < 'Infinity'::numeric
-      ELSE false
-    END
-    AND jsonb_typeof(${column}->'unit') = 'string'
-    AND length(trim(${column}->>'unit')) > 0
-    AND ${column}->>'unit' = trim(${column}->>'unit')
-  ), false)
+/**
+ * A text column restricted to a closed set of values, as a CHECK. Drizzle's
+ * `text(name, { enum })` types the column but emits no constraint, so every
+ * value-set column that used to be a `pgEnum` declares this beside its table.
+ * The list is inlined as literals (`sql.raw`), not bound: a bound parameter
+ * would render as `$1` in the migration DDL. Values come from the
+ * `packages/schemas` arrays, which hold plain identifiers, never user input.
+ */
+const enumCheck = (
+  name: string,
+  column: AnyPgColumn,
+  values: readonly string[],
+) =>
+  check(
+    name,
+    sql`${column} IN (${sql.raw(values.map((value) => `'${value}'`).join(", "))})`,
+  );
+
+/**
+ * The `{ value, unit }` amount stored as two columns. Both null (an absent
+ * optional amount) or both set with a positive finite value and a trimmed,
+ * non-empty unit.
+ */
+const validAmountColumns = (value: AnyPgColumn, unit: AnyPgColumn) => sql`
+  (${value} IS NULL AND ${unit} IS NULL) OR (
+    ${value} IS NOT NULL AND ${unit} IS NOT NULL
+    AND ${value} > 0 AND ${value} < 'Infinity'::double precision
+    AND length(trim(${unit})) > 0 AND ${unit} = trim(${unit})
+  )
 `;
 
 export const recipe = pgTable(
@@ -492,7 +499,8 @@ export const mealRecipePortion = pgTable(
       .notNull()
       .$type<LedgerPartyId>()
       .references(() => ledgerParty.id),
-    amount: jsonb("amount").notNull().$type<MealFoodAmount>(),
+    amountValue: doublePrecision("amountValue").notNull(),
+    amountUnit: text("amountUnit").notNull(),
     confirmedAt: timestamp("confirmedAt", { mode: "date" }),
     ...baseTimestamps(),
     ...softDeletedAt(),
@@ -504,7 +512,10 @@ export const mealRecipePortion = pgTable(
     index("MealRecipePortion_mealRecipeId_idx").on(table.mealRecipeId),
     index("MealRecipePortion_mealId_idx").on(table.mealId),
     index("MealRecipePortion_ledgerPartyId_idx").on(table.ledgerPartyId),
-    check("MealRecipePortion_amount_check", validMealFoodAmount(table.amount)),
+    check(
+      "MealRecipePortion_amount_check",
+      validAmountColumns(table.amountValue, table.amountUnit),
+    ),
   ],
 );
 
@@ -529,7 +540,8 @@ export const mealFoodEntry = pgTable(
     productId: uuid("productId")
       .$type<ProductId>()
       .references((): AnyPgColumn => product.id),
-    amount: jsonb("amount").$type<MealFoodAmount>(),
+    amountValue: doublePrecision("amountValue"),
+    amountUnit: text("amountUnit"),
     name: text("name"),
     nutrients: jsonb("nutrients").$type<MealFoodNutrients>(),
     ...baseTimestamps(),
@@ -540,10 +552,13 @@ export const mealFoodEntry = pgTable(
     index("MealFoodEntry_ledgerPartyId_idx").on(table.ledgerPartyId),
     index("MealFoodEntry_ingredientId_idx").on(table.ingredientId),
     index("MealFoodEntry_productId_idx").on(table.productId),
-    check("MealFoodEntry_amount_check", validMealFoodAmount(table.amount)),
+    check(
+      "MealFoodEntry_amount_check",
+      validAmountColumns(table.amountValue, table.amountUnit),
+    ),
     check(
       "MealFoodEntry_source_check",
-      sql`(${table.sourceKind} = 'ingredient' AND ${table.ingredientId} IS NOT NULL AND ${table.productId} IS NULL AND ${table.amount} IS NOT NULL AND ${table.name} IS NULL AND ${table.nutrients} IS NULL) OR (${table.sourceKind} = 'product' AND ${table.ingredientId} IS NULL AND ${table.productId} IS NOT NULL AND ${table.amount} IS NOT NULL AND ${table.name} IS NULL AND ${table.nutrients} IS NULL) OR (${table.sourceKind} = 'manual' AND ${table.ingredientId} IS NULL AND ${table.productId} IS NULL AND length(trim(${table.name})) > 0 AND ${table.name} IS NOT NULL AND ${table.nutrients} IS NOT NULL AND jsonb_typeof(${table.nutrients}) = 'object' AND ${table.nutrients} <> '{}'::jsonb)`,
+      sql`(${table.sourceKind} = 'ingredient' AND ${table.ingredientId} IS NOT NULL AND ${table.productId} IS NULL AND ${table.amountValue} IS NOT NULL AND ${table.name} IS NULL AND ${table.nutrients} IS NULL) OR (${table.sourceKind} = 'product' AND ${table.ingredientId} IS NULL AND ${table.productId} IS NOT NULL AND ${table.amountValue} IS NOT NULL AND ${table.name} IS NULL AND ${table.nutrients} IS NULL) OR (${table.sourceKind} = 'manual' AND ${table.ingredientId} IS NULL AND ${table.productId} IS NULL AND length(trim(${table.name})) > 0 AND ${table.name} IS NOT NULL AND ${table.nutrients} IS NOT NULL AND jsonb_typeof(${table.nutrients}) = 'object' AND ${table.nutrients} <> '{}'::jsonb)`,
     ),
   ],
 );
@@ -571,7 +586,6 @@ export const product = pgTable(
     index("Product_ingredientId_idx").on(table.ingredientId),
     index("Product_growsPlantId_idx").on(table.growsPlantId),
     index("Product_createdAt_idx").on(table.createdAt),
-    index("Product_name_idx").on(table.name),
     index("Product_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
     // No GIN on `aliases` (here, Ingredient, or Location): every alias filter
     // is `unnest(aliases) ILIKE`, which an array GIN cannot serve — those
@@ -656,20 +670,22 @@ export const productExternalId = pgTable(
 );
 
 export const productUnitMappings = pgTable(
-  "ProductUnitMappings",
+  "ProductUnitMapping",
   {
     id: pkUuid(),
     productId: uuid("productId")
       .notNull()
       .$type<ProductId>()
       .references(() => product.id),
-    a: jsonb("a").notNull().$type<Amount>(),
-    b: jsonb("b").notNull().$type<Amount>(),
+    aValue: doublePrecision("aValue").notNull(),
+    aUnit: text("aUnit").notNull(),
+    bValue: doublePrecision("bValue").notNull(),
+    bUnit: text("bUnit").notNull(),
     source: text("source"),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
-  (table) => [index("ProductUnitMappings_productId_idx").on(table.productId)],
+  (table) => [index("ProductUnitMapping_productId_idx").on(table.productId)],
 );
 
 /**
@@ -748,7 +764,6 @@ export const location = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
     index("Location_name_idx").on(table.name),
     index("Location_tags_idx").using("gin", table.tags),
-    index("Location_type_idx").on(table.type),
     index("Location_productId_idx").on(table.productId),
     index("Location_parentId_idx").on(table.parentId),
     index("Location_createdAt_idx").on(table.createdAt),
@@ -764,6 +779,13 @@ export const location = pgTable(
     index("Location_type_active_idx")
       .on(table.type)
       .where(sql`${table.deletedAt} IS NULL`),
+    // `furniture` marks a Product-instance location (the bin or rack itself).
+    // One direction only: a garden bed or planter may link a Product and keep
+    // its own type, so `productId IS NOT NULL` does not imply `furniture`.
+    check(
+      "Location_furniture_product_check",
+      sql`${table.type} <> 'furniture' OR ${table.productId} IS NOT NULL`,
+    ),
   ],
 );
 
@@ -951,6 +973,11 @@ export const inventoryEntry = pgTable(
         sql`coalesce(${table.ownerLedgerPartyId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
       )
       .where(sql`${table.deletedAt} IS NULL`),
+    enumCheck(
+      "InventoryEntry_placement_check",
+      table.placement,
+      inventoryPlacementValues,
+    ),
     check(
       "InventoryEntry_ownership_valid",
       sql`(${table.ownershipMode} = 'person' AND ${table.ownerLedgerPartyId} IS NOT NULL) OR (${table.ownershipMode} IN ('inherit', 'unassigned') AND ${table.ownerLedgerPartyId} IS NULL)`,
@@ -1002,6 +1029,17 @@ export const image = pgTable(
   (table) => [
     shortcodeUnique("Image", table.shortcode),
     entityIdentityFk("Image", table),
+    enumCheck("Image_status_check", table.status, imageStatusValues),
+    enumCheck(
+      "Image_renderStatus_check",
+      table.renderStatus,
+      imageRenderStatusValues,
+    ),
+    enumCheck(
+      "Image_storageStatus_check",
+      table.storageStatus,
+      imageStorageStatusValues,
+    ),
     check(
       "Image_perceptualHash_format_check",
       sql`${table.perceptualHash} IS NULL OR ${table.perceptualHash} ~ '^[0-9a-f]{16}$'`,
@@ -2699,7 +2737,6 @@ export const statementRow = pgTable(
       .on(table.source, table.externalId)
       .where(sql`${table.deletedAt} IS NULL`),
     index("StatementRow_batchId_idx").on(table.batchId),
-    index("StatementRow_accountId_idx").on(table.accountId),
     index("StatementRow_statementDate_idx").on(table.statementDate),
     index("StatementRow_worklist_idx")
       .on(table.statementDate.desc())

@@ -450,7 +450,8 @@ export const FIELD_SUGGEST_REGISTRY = {
   } satisfies ArrayPruneSuggestSpec,
   "location.type": {
     kind: "enum",
-    values: locationType.options,
+    // `furniture` is a Product instance; only a productId link can make one.
+    values: locationType.options.filter((value) => value !== "furniture"),
     describe: (v) => LOCATION_TYPE_DESCRIPTIONS[v],
     rules: LOCATION_TYPE_RULES,
     subject: (basis) => renderSubject("location", basis),

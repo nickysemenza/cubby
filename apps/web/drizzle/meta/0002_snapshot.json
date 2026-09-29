@@ -1085,13 +1085,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "sourceRecipeCount": {
-          "name": "sourceRecipeCount",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
         "productId": {
           "name": "productId",
           "type": "uuid",
@@ -3393,8 +3386,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "note": {
-          "name": "note",
+        "notes": {
+          "name": "notes",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -3684,8 +3677,7 @@
         },
         "status": {
           "name": "status",
-          "type": "ImageStatus",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'PENDING'"
@@ -3728,15 +3720,13 @@
         },
         "renderStatus": {
           "name": "renderStatus",
-          "type": "ImageRenderStatus",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
         "storageStatus": {
           "name": "storageStatus",
-          "type": "ImageStorageStatus",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -3972,6 +3962,18 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
+        "Image_status_check": {
+          "name": "Image_status_check",
+          "value": "\"Image\".\"status\" IN ('PENDING', 'UPLOADED', 'FAILED')"
+        },
+        "Image_renderStatus_check": {
+          "name": "Image_renderStatus_check",
+          "value": "\"Image\".\"renderStatus\" IN ('unverified', 'verified', 'failed')"
+        },
+        "Image_storageStatus_check": {
+          "name": "Image_storageStatus_check",
+          "value": "\"Image\".\"storageStatus\" IN ('unverified', 'available', 'missing', 'metadata_mismatch')"
+        },
         "Image_perceptualHash_format_check": {
           "name": "Image_perceptualHash_format_check",
           "value": "\"Image\".\"perceptualHash\" IS NULL OR \"Image\".\"perceptualHash\" ~ '^[0-9a-f]{16}$'"
@@ -4801,21 +4803,6 @@
             },
             {
               "expression": "nextAttemptAt",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "ImageProcessingJob_image_idx": {
-          "name": "ImageProcessingJob_image_idx",
-          "columns": [
-            {
-              "expression": "imageId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -6495,9 +6482,15 @@
           "primaryKey": false,
           "notNull": true
         },
-        "amount": {
-          "name": "amount",
-          "type": "jsonb",
+        "amountValue": {
+          "name": "amountValue",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amountUnit": {
+          "name": "amountUnit",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -6527,12 +6520,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "valuation": {
-          "name": "valuation",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
         "verifiedAt": {
           "name": "verifiedAt",
           "type": "timestamp",
@@ -6541,8 +6528,7 @@
         },
         "placement": {
           "name": "placement",
-          "type": "InventoryPlacement",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'stock'"
@@ -6738,6 +6724,10 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
+        "InventoryEntry_placement_check": {
+          "name": "InventoryEntry_placement_check",
+          "value": "\"InventoryEntry\".\"placement\" IN ('stock', 'installed')"
+        },
         "InventoryEntry_ownership_valid": {
           "name": "InventoryEntry_ownership_valid",
           "value": "(\"InventoryEntry\".\"ownershipMode\" = 'person' AND \"InventoryEntry\".\"ownerLedgerPartyId\" IS NOT NULL) OR (\"InventoryEntry\".\"ownershipMode\" IN ('inherit', 'unassigned') AND \"InventoryEntry\".\"ownerLedgerPartyId\" IS NULL)"
@@ -7424,16 +7414,10 @@
           "name": "type",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "notes": {
           "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "aiDescription": {
-          "name": "aiDescription",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -7499,21 +7483,6 @@
           "isUnique": false,
           "concurrently": false,
           "method": "gin",
-          "with": {}
-        },
-        "Location_type_idx": {
-          "name": "Location_type_idx",
-          "columns": [
-            {
-              "expression": "type",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
           "with": {}
         },
         "Location_productId_idx": {
@@ -7691,7 +7660,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "Location_furniture_product_check": {
+          "name": "Location_furniture_product_check",
+          "value": "\"Location\".\"type\" <> 'furniture' OR \"Location\".\"productId\" IS NOT NULL"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.MailboxCursor": {
@@ -8165,9 +8139,15 @@
           "primaryKey": false,
           "notNull": false
         },
-        "amount": {
-          "name": "amount",
-          "type": "jsonb",
+        "amountValue": {
+          "name": "amountValue",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amountUnit": {
+          "name": "amountUnit",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -8326,11 +8306,11 @@
       "checkConstraints": {
         "MealFoodEntry_amount_check": {
           "name": "MealFoodEntry_amount_check",
-          "value": "\n  \"MealFoodEntry\".\"amount\" IS NULL OR COALESCE((\n    jsonb_typeof(\"MealFoodEntry\".\"amount\") = 'object'\n    AND \"MealFoodEntry\".\"amount\" ? 'value'\n    AND \"MealFoodEntry\".\"amount\" ? 'unit'\n    AND \"MealFoodEntry\".\"amount\" - 'value' - 'unit' = '{}'::jsonb\n    AND CASE\n      WHEN jsonb_typeof(\"MealFoodEntry\".\"amount\"->'value') = 'number' THEN\n        (\"MealFoodEntry\".\"amount\"->>'value')::numeric > 0\n        AND (\"MealFoodEntry\".\"amount\"->>'value')::numeric < 'Infinity'::numeric\n      ELSE false\n    END\n    AND jsonb_typeof(\"MealFoodEntry\".\"amount\"->'unit') = 'string'\n    AND length(trim(\"MealFoodEntry\".\"amount\"->>'unit')) > 0\n    AND \"MealFoodEntry\".\"amount\"->>'unit' = trim(\"MealFoodEntry\".\"amount\"->>'unit')\n  ), false)\n"
+          "value": "\n  (\"MealFoodEntry\".\"amountValue\" IS NULL AND \"MealFoodEntry\".\"amountUnit\" IS NULL) OR (\n    \"MealFoodEntry\".\"amountValue\" IS NOT NULL AND \"MealFoodEntry\".\"amountUnit\" IS NOT NULL\n    AND \"MealFoodEntry\".\"amountValue\" > 0 AND \"MealFoodEntry\".\"amountValue\" < 'Infinity'::double precision\n    AND length(trim(\"MealFoodEntry\".\"amountUnit\")) > 0 AND \"MealFoodEntry\".\"amountUnit\" = trim(\"MealFoodEntry\".\"amountUnit\")\n  )\n"
         },
         "MealFoodEntry_source_check": {
           "name": "MealFoodEntry_source_check",
-          "value": "(\"MealFoodEntry\".\"sourceKind\" = 'ingredient' AND \"MealFoodEntry\".\"ingredientId\" IS NOT NULL AND \"MealFoodEntry\".\"productId\" IS NULL AND \"MealFoodEntry\".\"amount\" IS NOT NULL AND \"MealFoodEntry\".\"name\" IS NULL AND \"MealFoodEntry\".\"nutrients\" IS NULL) OR (\"MealFoodEntry\".\"sourceKind\" = 'product' AND \"MealFoodEntry\".\"ingredientId\" IS NULL AND \"MealFoodEntry\".\"productId\" IS NOT NULL AND \"MealFoodEntry\".\"amount\" IS NOT NULL AND \"MealFoodEntry\".\"name\" IS NULL AND \"MealFoodEntry\".\"nutrients\" IS NULL) OR (\"MealFoodEntry\".\"sourceKind\" = 'manual' AND \"MealFoodEntry\".\"ingredientId\" IS NULL AND \"MealFoodEntry\".\"productId\" IS NULL AND length(trim(\"MealFoodEntry\".\"name\")) > 0 AND \"MealFoodEntry\".\"name\" IS NOT NULL AND \"MealFoodEntry\".\"nutrients\" IS NOT NULL AND jsonb_typeof(\"MealFoodEntry\".\"nutrients\") = 'object' AND \"MealFoodEntry\".\"nutrients\" <> '{}'::jsonb)"
+          "value": "(\"MealFoodEntry\".\"sourceKind\" = 'ingredient' AND \"MealFoodEntry\".\"ingredientId\" IS NOT NULL AND \"MealFoodEntry\".\"productId\" IS NULL AND \"MealFoodEntry\".\"amountValue\" IS NOT NULL AND \"MealFoodEntry\".\"name\" IS NULL AND \"MealFoodEntry\".\"nutrients\" IS NULL) OR (\"MealFoodEntry\".\"sourceKind\" = 'product' AND \"MealFoodEntry\".\"ingredientId\" IS NULL AND \"MealFoodEntry\".\"productId\" IS NOT NULL AND \"MealFoodEntry\".\"amountValue\" IS NOT NULL AND \"MealFoodEntry\".\"name\" IS NULL AND \"MealFoodEntry\".\"nutrients\" IS NULL) OR (\"MealFoodEntry\".\"sourceKind\" = 'manual' AND \"MealFoodEntry\".\"ingredientId\" IS NULL AND \"MealFoodEntry\".\"productId\" IS NULL AND length(trim(\"MealFoodEntry\".\"name\")) > 0 AND \"MealFoodEntry\".\"name\" IS NOT NULL AND \"MealFoodEntry\".\"nutrients\" IS NOT NULL AND jsonb_typeof(\"MealFoodEntry\".\"nutrients\") = 'object' AND \"MealFoodEntry\".\"nutrients\" <> '{}'::jsonb)"
         }
       },
       "isRLSEnabled": false
@@ -8508,9 +8488,15 @@
           "primaryKey": false,
           "notNull": true
         },
-        "amount": {
-          "name": "amount",
-          "type": "jsonb",
+        "amountValue": {
+          "name": "amountValue",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amountUnit": {
+          "name": "amountUnit",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -8663,7 +8649,7 @@
       "checkConstraints": {
         "MealRecipePortion_amount_check": {
           "name": "MealRecipePortion_amount_check",
-          "value": "\n  \"MealRecipePortion\".\"amount\" IS NULL OR COALESCE((\n    jsonb_typeof(\"MealRecipePortion\".\"amount\") = 'object'\n    AND \"MealRecipePortion\".\"amount\" ? 'value'\n    AND \"MealRecipePortion\".\"amount\" ? 'unit'\n    AND \"MealRecipePortion\".\"amount\" - 'value' - 'unit' = '{}'::jsonb\n    AND CASE\n      WHEN jsonb_typeof(\"MealRecipePortion\".\"amount\"->'value') = 'number' THEN\n        (\"MealRecipePortion\".\"amount\"->>'value')::numeric > 0\n        AND (\"MealRecipePortion\".\"amount\"->>'value')::numeric < 'Infinity'::numeric\n      ELSE false\n    END\n    AND jsonb_typeof(\"MealRecipePortion\".\"amount\"->'unit') = 'string'\n    AND length(trim(\"MealRecipePortion\".\"amount\"->>'unit')) > 0\n    AND \"MealRecipePortion\".\"amount\"->>'unit' = trim(\"MealRecipePortion\".\"amount\"->>'unit')\n  ), false)\n"
+          "value": "\n  (\"MealRecipePortion\".\"amountValue\" IS NULL AND \"MealRecipePortion\".\"amountUnit\" IS NULL) OR (\n    \"MealRecipePortion\".\"amountValue\" IS NOT NULL AND \"MealRecipePortion\".\"amountUnit\" IS NOT NULL\n    AND \"MealRecipePortion\".\"amountValue\" > 0 AND \"MealRecipePortion\".\"amountValue\" < 'Infinity'::double precision\n    AND length(trim(\"MealRecipePortion\".\"amountUnit\")) > 0 AND \"MealRecipePortion\".\"amountUnit\" = trim(\"MealRecipePortion\".\"amountUnit\")\n  )\n"
         }
       },
       "isRLSEnabled": false
@@ -11582,21 +11568,6 @@
           "method": "btree",
           "with": {}
         },
-        "Product_name_idx": {
-          "name": "Product_name_idx",
-          "columns": [
-            {
-              "expression": "name",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "Product_name_gin_idx": {
           "name": "Product_name_gin_idx",
           "columns": [
@@ -12543,8 +12514,8 @@
       },
       "isRLSEnabled": false
     },
-    "public.ProductUnitMappings": {
-      "name": "ProductUnitMappings",
+    "public.ProductUnitMapping": {
+      "name": "ProductUnitMapping",
       "schema": "",
       "columns": {
         "id": {
@@ -12560,15 +12531,27 @@
           "primaryKey": false,
           "notNull": true
         },
-        "a": {
-          "name": "a",
-          "type": "jsonb",
+        "aValue": {
+          "name": "aValue",
+          "type": "double precision",
           "primaryKey": false,
           "notNull": true
         },
-        "b": {
-          "name": "b",
-          "type": "jsonb",
+        "aUnit": {
+          "name": "aUnit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bValue": {
+          "name": "bValue",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bUnit": {
+          "name": "bUnit",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -12600,8 +12583,8 @@
         }
       },
       "indexes": {
-        "ProductUnitMappings_productId_idx": {
-          "name": "ProductUnitMappings_productId_idx",
+        "ProductUnitMapping_productId_idx": {
+          "name": "ProductUnitMapping_productId_idx",
           "columns": [
             {
               "expression": "productId",
@@ -12617,9 +12600,9 @@
         }
       },
       "foreignKeys": {
-        "ProductUnitMappings_productId_Product_id_fk": {
-          "name": "ProductUnitMappings_productId_Product_id_fk",
-          "tableFrom": "ProductUnitMappings",
+        "ProductUnitMapping_productId_Product_id_fk": {
+          "name": "ProductUnitMapping_productId_Product_id_fk",
+          "tableFrom": "ProductUnitMapping",
           "tableTo": "Product",
           "columnsFrom": [
             "productId"
@@ -13853,7 +13836,8 @@
           "name": "tags",
           "type": "text[]",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": "'{}'::text[]"
         },
         "notes": {
           "name": "notes",
@@ -16843,21 +16827,6 @@
           "method": "btree",
           "with": {}
         },
-        "StatementRow_accountId_idx": {
-          "name": "StatementRow_accountId_idx",
-          "columns": [
-            {
-              "expression": "accountId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "StatementRow_statementDate_idx": {
           "name": "StatementRow_statementDate_idx",
           "columns": [
@@ -17958,18 +17927,6 @@
           "notNull": true,
           "default": "'{\"newestOrderAt\":null,\"orderIdsOnNewestDate\":[],\"backfillBeforeOrderAt\":null,\"earliestAvailableOrderAt\":null}'::jsonb"
         },
-        "lastRunAt": {
-          "name": "lastRunAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "lastSuccessAt": {
-          "name": "lastSuccessAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
@@ -18429,42 +18386,6 @@
     }
   },
   "enums": {
-    "public.ImageRenderStatus": {
-      "name": "ImageRenderStatus",
-      "schema": "public",
-      "values": [
-        "unverified",
-        "verified",
-        "failed"
-      ]
-    },
-    "public.ImageStatus": {
-      "name": "ImageStatus",
-      "schema": "public",
-      "values": [
-        "PENDING",
-        "UPLOADED",
-        "FAILED"
-      ]
-    },
-    "public.ImageStorageStatus": {
-      "name": "ImageStorageStatus",
-      "schema": "public",
-      "values": [
-        "unverified",
-        "available",
-        "missing",
-        "metadata_mismatch"
-      ]
-    },
-    "public.InventoryPlacement": {
-      "name": "InventoryPlacement",
-      "schema": "public",
-      "values": [
-        "stock",
-        "installed"
-      ]
-    },
     "public.RecipeSource": {
       "name": "RecipeSource",
       "schema": "public",

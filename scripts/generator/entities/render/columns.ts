@@ -45,7 +45,6 @@ const storageJsonTypes = {
   "image.captureLocation": "ImageCaptureLocation | null",
   "image.provenanceEvidence": "ImageProvenanceEvidence | null",
   "image.embeddedMetadata": "StoredImageEmbeddedMetadata | null",
-  "inventory.amount": "Amount",
   "location.valuation": "LocationValuation | null",
   "product.labelNutrition": "ProductLabelNutrition | null",
   "recipe.meta": "RecipeStoredMeta | null",
@@ -69,10 +68,10 @@ const enumColumnExpression = (
     "expense.lineBasis": `text(${column},{enum:expenseLineBasisValues})`,
     "expense.lineKind": `text(${column},{enum:expenseLineKindValues})`,
     "expense.trade": `text(${column},{enum:tradeValues})`,
-    "image.renderStatus": `imageRenderStatusEnum(${column})`,
-    "image.status": `imageStatusEnum(${column})`,
-    "image.storageStatus": `imageStorageStatusEnum(${column})`,
-    "inventory.placement": `inventoryPlacementEnum(${column})`,
+    "image.renderStatus": `text(${column},{enum:imageRenderStatusValues})`,
+    "image.status": `text(${column},{enum:imageStatusValues})`,
+    "image.storageStatus": `text(${column},{enum:imageStorageStatusValues})`,
+    "inventory.placement": `text(${column},{enum:inventoryPlacementValues})`,
     "meal.mealKind": `text(${column},{enum:mealKindValues})`,
     "meal.mealType": `text(${column},{enum:mealTypeValues})`,
     "inventory.ownershipMode": `text(${column},{enum:inventoryOwnershipModeValues})`,
@@ -115,6 +114,16 @@ const renderStorageColumn = (
   field: EntityStorageField,
 ): string => {
   const column = JSON.stringify(field.column);
+  if (field.specialized === "amount-columns") {
+    // One `{ value, unit }` model field stored as `<column>Value` +
+    // `<column>Unit` (the shape `amountFromColumns`/`amountToColumns` in
+    // `server/repo/database-helpers` convert). The pair is atomic: both set or
+    // both null, and a live unit is never blank.
+    const valueColumn = JSON.stringify(`${field.column}Value`);
+    const unitColumn = JSON.stringify(`${field.column}Unit`);
+    const notNull = field.nullable ? "" : ".notNull()";
+    return `${JSON.stringify(`${field.key}Value`)}:doublePrecision(${valueColumn})${notNull},${JSON.stringify(`${field.key}Unit`)}:text(${unitColumn})${notNull}`;
+  }
   const ownIdType = lookupGeneratedType(identifierTypeNames, entity.key);
   const referenceIdType =
     field.reference === null
@@ -203,11 +212,10 @@ export const renderEntityColumnsArtifact = (
     .join("\n\n");
   return (
     generatedHeader +
-    'import type { Amount } from "@cubby/schemas/codec";\n' +
     'import type { FinancialAccountCardNumber, FinancialAccountIdentity, FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";\n' +
     'import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction";\n' +
     `import type { ${Object.values(identifierTypeNames).sort().join(", ")} } from "@cubby/schemas/identifiers";\n` +
-    'import { imageStatusValues } from "@cubby/schemas/image";\n' +
+    'import { imageRenderStatusValues, imageStatusValues, imageStorageStatusValues } from "@cubby/schemas/image";\n' +
     'import type { ImageSourceFingerprint, StoredImageEmbeddedMetadata } from "@cubby/schemas/image";\n' +
     'import type { ImageCaptureLocation, ImageProvenanceEvidence } from "@cubby/schemas/image-capture-fields";\n' +
     'import type { CookbookExtraction, CookbookRunReport } from "@cubby/schemas/cookbook";\n' +
@@ -225,10 +233,7 @@ export const renderEntityColumnsArtifact = (
     'import { sql } from "drizzle-orm";\n' +
     'import { type AnyPgColumn, boolean, date, doublePrecision, integer, jsonb, pgEnum, real, text, timestamp, uuid } from "drizzle-orm/pg-core";\n\n' +
     'export const recipeSourceEnum = pgEnum("RecipeSource", recipeSourceValues);\n' +
-    'export const imageStatusEnum = pgEnum("ImageStatus", imageStatusValues);\n' +
-    'export const inventoryPlacementEnum = pgEnum("InventoryPlacement", inventoryPlacementValues);\n' +
-    'export const imageRenderStatusEnum = pgEnum("ImageRenderStatus", ["unverified", "verified", "failed"]);\n' +
-    'export const imageStorageStatusEnum = pgEnum("ImageStorageStatus", ["unverified", "available", "missing", "metadata_mismatch"]);\n\n' +
+    "\n" +
     functions +
     "\n"
   );

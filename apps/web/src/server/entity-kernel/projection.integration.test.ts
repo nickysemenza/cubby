@@ -198,7 +198,7 @@ describe("entity kernel search projections", () => {
         plantingIds: [],
         kind: "note",
         observedOn: "2026-05-01",
-        note: "Projected garden entry note",
+        notes: "Projected garden entry note",
         harvestAmount: null,
       },
     });

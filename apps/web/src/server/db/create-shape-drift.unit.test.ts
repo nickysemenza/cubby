@@ -71,6 +71,9 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
     evidenceTransactionIds:
       "records the FinancialTransactions that evidence the transfer",
   },
+  inventory: {
+    amount: "stored as the amountValue + amountUnit column pair",
+  },
   location: { pendingImageIds: "writes LocationImage rows" },
   gardenEntry: {
     plantingIds: "writes GardenEntryPlanting rows",
@@ -84,7 +87,7 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
     upc: "barcode write slot; lands in ProductExternalId, not on Product",
     isbn: "book identifier; lands in ProductExternalId, not on Product",
     externalIds: "writes ProductExternalId rows",
-    unitMappings: "writes ProductUnitMappings rows",
+    unitMappings: "writes ProductUnitMapping rows",
     pendingImageIds: "writes ProductImage rows",
     pendingImagePurposes:
       "sets the item or label purpose for each pending ProductImage row",
@@ -104,7 +107,15 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
  * required by its create schema, so a new one has to be either required or
  * justified here.
  */
-const UNSUPPLIED_REQUIRED_COLUMNS: EntityFieldNotes = {};
+const UNSUPPLIED_REQUIRED_COLUMNS: EntityFieldNotes = {
+  inventory: {
+    amountValue: "supplied by the create input's `amount`",
+    amountUnit: "supplied by the create input's `amount`",
+  },
+  location: {
+    type: "optional in the create shape: a Product link alone stores `furniture`; the repo refuses a create with neither (createLocationTx)",
+  },
+};
 
 type BoundEntity = {
   entity: Entity;

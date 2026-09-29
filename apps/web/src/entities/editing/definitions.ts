@@ -783,9 +783,9 @@ const foldCollectionsIntoTags = (collections: EntityEditValue): string[] => {
 };
 
 /**
- * A fresh product link always clears `type` (a linked location's form factor
- * comes from the SKU); `collections` folds into the stored `tags` column and
- * never reaches the create/update contract on its own.
+ * `collections` folds into the stored `tags` column and never reaches the
+ * create/update contract on its own. `type` is sent as chosen: a Product link
+ * without one is stored as `furniture` by the server.
  */
 const locationBuildData = (patch: EntityEditValueBag): EntityEditValueBag => {
   const data: EntityEditValueBag = { ...patch };

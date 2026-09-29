@@ -45,7 +45,7 @@ export interface QueuedBin {
   id: InfLocation["id"];
   name: string;
   /** Carried for the review row's glyph, not for any decision here. */
-  type: InfLocation["type"];
+  type: InfLocation["type"] | null;
   /** Where it sits now — the sentence the review row reads out. */
   currentParentName: string;
 }

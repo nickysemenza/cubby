@@ -51,7 +51,6 @@ import {
 import {
   findLocationsNeedingAiDescription,
   getLocationById,
-  updateLocationAiDescription,
 } from "~/server/repo/location";
 import {
   findProductByNameFuzzyManufacturer,
@@ -268,18 +267,6 @@ export async function describeLocation(
       entityKind: "location",
       entityId: locationId,
     });
-    if (location.aiDescription !== cached.result.description) {
-      await updateLocationAiDescription(
-        db,
-        locationId,
-        cached.result.description,
-      );
-      await runMutationSideEffects(db, {
-        action: "updated",
-        entity: { entity: "location", id: locationId },
-        source: "location-ai.description",
-      });
-    }
     await recordLocationAiUsage(db, {
       feature: LOCATION_DESCRIPTION_FEATURE,
       operation: "locationDescription",
@@ -318,7 +305,6 @@ export async function describeLocation(
     entityId: locationId,
   });
 
-  await updateLocationAiDescription(db, locationId, result.description);
   await runMutationSideEffects(db, {
     action: "updated",
     entity: { entity: "location", id: locationId },

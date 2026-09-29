@@ -804,7 +804,8 @@ const SOURCE_FACTORIES = {
     return insertWithShortcode(db, "inventory", {
       productId: product.id,
       locationId: location.id,
-      amount: { value: 1, unit: "each" },
+      amountValue: 1,
+      amountUnit: "each",
       ownershipMode: "person",
       ownerLedgerPartyId: parseEntityId("ledgerParty", targetId),
     });
@@ -888,7 +889,8 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: party.id,
       sourceKind: "ingredient",
       ingredientId: parseEntityId("ingredient", targetId),
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -955,7 +957,8 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: party.id,
       sourceKind: "product",
       productId: product.id,
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -973,7 +976,8 @@ const SOURCE_FACTORIES = {
       mealRecipeId: preparation.id,
       mealId: parseEntityId("meal", targetId),
       ledgerPartyId: party.id,
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -987,7 +991,8 @@ const SOURCE_FACTORIES = {
       mealRecipeId: preparation.id,
       mealId: meal.id,
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -998,7 +1003,8 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
       sourceKind: "product",
       productId: product.id,
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -1009,11 +1015,13 @@ const SOURCE_FACTORIES = {
       externalId: uniq("B"),
     }),
 
-  "ProductUnitMappings.productId": (db, targetId) =>
+  "ProductUnitMapping.productId": (db, targetId) =>
     insertAndReturn(db, productUnitMappings, {
       productId: parseEntityId("product", targetId),
-      a: { value: 1, unit: "cup" },
-      b: { value: 120, unit: "g" },
+      aValue: 1,
+      aUnit: "cup",
+      bValue: 120,
+      bUnit: "g",
     }),
 
   "InventoryEntry.productId": async (db, targetId) => {
@@ -1021,7 +1029,8 @@ const SOURCE_FACTORIES = {
     return insertWithShortcode(db, "inventory", {
       productId: parseEntityId("product", targetId),
       locationId: l.id,
-      amount: { value: 1, unit: "each" },
+      amountValue: 1,
+      amountUnit: "each",
     });
   },
 
@@ -1064,7 +1073,8 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: party.id,
       sourceKind: "product",
       productId: parseEntityId("product", targetId),
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -1107,7 +1117,8 @@ const SOURCE_FACTORIES = {
     return insertWithShortcode(db, "inventory", {
       productId: p.id,
       locationId: parseEntityId("location", targetId),
-      amount: { value: 1, unit: "each" },
+      amountValue: 1,
+      amountUnit: "each",
     });
   },
 
@@ -1135,7 +1146,7 @@ const SOURCE_FACTORIES = {
   "Location.productId": (db, targetId) =>
     insertWithShortcode(db, "location", {
       name: uniq("Location"),
-      type: null,
+      type: "furniture",
       productId: parseEntityId("product", targetId),
     }),
 

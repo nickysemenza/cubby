@@ -201,7 +201,7 @@ describe("planProductComponentMerge", () => {
  * a real merge (two products each already holding a density), so it is tested
  * directly — the same reason the kit-graph planner is exported.
  *
- * `ProductUnitMappings` carries no unique index, so before this fold nothing
+ * `ProductUnitMapping` carries no unique index, so before this fold nothing
  * refused the duplicate: a merge simply left the survivor holding two answers
  * for one conversion, and which one a valuation used came down to row order.
  */

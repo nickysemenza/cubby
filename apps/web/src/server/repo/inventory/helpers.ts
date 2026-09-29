@@ -2,9 +2,36 @@ import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { location, product } from "~/server/db/schema";
+import { inventoryEntry, location, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import {
+  amountFromColumns,
+  amountJsonSql,
+  notDeleted,
+  unwrapDb,
+} from "~/server/repo/database-helpers";
+
+/**
+ * `InventoryEntry.amount` as a `{ value, unit }` object in a `select`, for the
+ * read projections that hand the amount on unchanged. Stored as two columns
+ * (`amountValue`, `amountUnit`); `inventoryAuditRow` and `amountFromColumns`
+ * cover rows already in memory.
+ */
+export const inventoryAmountSql = amountJsonSql(
+  inventoryEntry.amountValue,
+  inventoryEntry.amountUnit,
+);
+
+/**
+ * The audited shape of an inventory row: `amount` is stored as a column pair
+ * but audited (and shown in the timeline) as one `{ value, unit }`, so
+ * `computeChanges` over `["amount"]` needs it as a single field.
+ */
+export const inventoryAuditRow = <
+  T extends { amountValue: number; amountUnit: string },
+>(
+  row: T,
+) => ({ ...row, amount: amountFromColumns(row) });
 
 /**
  * Reject inventory writes whose target product/location is soft-deleted. Without

@@ -1,4 +1,3 @@
-import { amount } from "@cubby/schemas/codec";
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
@@ -30,6 +29,7 @@ import {
 } from "~/server/operations/product.server";
 import { getPlacementRecommendationWorkflow } from "~/server/operations/recommendations.server";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { amountFromColumns } from "~/server/repo/database-helpers";
 import {
   addInventoryEntries,
   createInventoryEntry,
@@ -257,11 +257,17 @@ describe("addInventoryEntries", () => {
         eq(inventoryEntry.locationId, locationId),
         notDeleted(inventoryEntry),
       ),
-      columns: { id: true, productId: true, amount: true, placement: true },
+      columns: {
+        id: true,
+        productId: true,
+        amountValue: true,
+        amountUnit: true,
+        placement: true,
+      },
     });
     return rows
       .map((row) => {
-        const parsedAmount = amount.parse(row.amount);
+        const parsedAmount = amountFromColumns(row);
         return {
           id: row.id,
           productId: row.productId,

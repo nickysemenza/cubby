@@ -15,6 +15,7 @@ import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient";
+import { enrichProductRowsWithInventoryValuations } from "~/server/repo/inventory/valuation";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
@@ -156,9 +157,13 @@ export async function readProductDetail(
     PRODUCT_DETAIL_OPERATION,
     "breadcrumbs",
     () =>
-      hydrateProductLocationBreadcrumbs(context.db, [
-        { ...row, quantityLedger },
-      ]).then((rows) => rows[0]!),
+      enrichProductRowsWithInventoryValuations(context.db, [row])
+        .then((valued) =>
+          hydrateProductLocationBreadcrumbs(context.db, [
+            { ...valued[0]!, quantityLedger },
+          ]),
+        )
+        .then((rows) => rows[0]!),
   );
   const dataQuality = await observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,

@@ -5,8 +5,8 @@ import type { InfLocation, LocationType } from "@cubby/schemas/location";
 export interface SessionLocation {
   id: LocationShortcode;
   name: string;
-  type: LocationType | null;
-  /** The SKU this location IS; supplies the glyph when `type` is null. */
+  type: LocationType;
+  /** The SKU this location IS; supplies the glyph when `type` is `furniture`. */
   product: InfLocation["product"];
   shortcode: string;
   lastBulkInventory: Date | null;

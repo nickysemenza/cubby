@@ -51,6 +51,7 @@ import {
   createInventoryEntry,
   updateInventoryEntry,
 } from "~/server/repo/inventory/crud";
+import { inventoryAmountSql } from "~/server/repo/inventory/helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/request-context";
 import { createProductWithSideEffects } from "~/server/services/product-orchestration.service";
@@ -383,7 +384,7 @@ async function receiveInventory(
           placement: inventoryEntry.placement,
           ownershipMode: inventoryEntry.ownershipMode,
           ownerLedgerPartyId: inventoryEntry.ownerLedgerPartyId,
-          amount: inventoryEntry.amount,
+          amount: inventoryAmountSql,
         })
         .from(inventoryEntry)
         .where(and(eq(inventoryEntry.id, targetId), notDeleted(inventoryEntry)))

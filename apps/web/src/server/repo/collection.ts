@@ -40,6 +40,7 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { inventoryAmountSql } from "~/server/repo/inventory/helpers";
 import {
   getLocationCoverImageUrlsByLocationIds,
   updateLocation,
@@ -280,7 +281,7 @@ const loadCollectionGraph = async (db: Database): Promise<CollectionGraph> => {
       .select({
         id: inventoryEntry.id,
         shortcode: inventoryEntry.shortcode,
-        amount: inventoryEntry.amount,
+        amount: inventoryAmountSql,
         placement: inventoryEntry.placement,
         ownershipMode: inventoryEntry.ownershipMode,
         ownerLedgerPartyId: inventoryEntry.ownerLedgerPartyId,

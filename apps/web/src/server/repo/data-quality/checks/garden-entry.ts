@@ -13,7 +13,7 @@ export const gardenEntryChecks = defineEntityChecks({
     garden_entry_note: {
       expected: (t: GardenEntry) => sql`${t.kind} = 'note'`,
       missing: (t: GardenEntry) =>
-        sql`(${t.note} IS NULL OR trim(${t.note}) = '')`,
+        sql`(${t.notes} IS NULL OR trim(${t.notes}) = '')`,
     },
     garden_entry_harvest_amount: {
       expected: (t: GardenEntry) => sql`${t.kind} = 'harvest'`,

@@ -174,7 +174,7 @@ async function readConvergenceFacts(
         productId: string;
         amount: { value: number; unit: string };
       }>(
-        `SELECT "productId", amount FROM "InventoryEntry"
+        `SELECT "productId", jsonb_build_object('value', "amountValue", 'unit', "amountUnit") AS amount FROM "InventoryEntry"
        WHERE "productId" IN (SELECT id FROM "Product" WHERE shortcode = ANY($1::text[]))
          AND "deletedAt" IS NULL`,
         [[photoProductId, purchaseProductId]],
