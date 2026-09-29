@@ -7,8 +7,19 @@ export const recipeAvailabilityInput = z.object({
 });
 
 export const makeableRecipesInput = z.object({
-  minCoverage: z.number().min(0).max(1).optional(),
-  limit: z.number().int().positive().max(100).optional(),
+  minCoverage: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe("Only return recipes with at least this coverage (0..1)"),
+  limit: z
+    .number()
+    .int()
+    .positive()
+    .max(100)
+    .optional()
+    .describe("Max recipes to return (default 24, max 100)"),
 });
 
 // Ranking scores a bounded candidate pool, so the answer can be partial:

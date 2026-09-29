@@ -1,4 +1,10 @@
 import {
+  problemsTypeSliceOut,
+  problemsUnknownTypeOut,
+} from "@cubby/schemas/mcp";
+import { mcpPaginationFields } from "@cubby/schemas/pagination";
+import {
+  allProblemsMcpSchema,
   coverageTotalsSchema,
   deleteUnusedIngredientsInput,
   deleteUnusedIngredientsOut,
@@ -99,7 +105,44 @@ export const problemsContract = defineContract("problems", {
     output: resolveArrivedFindingsOut,
     invalidates: ["problems"],
   }),
+  /**
+   * Counts, one paged problem type, or the complete report (MCP `activity`).
+   * Counts are the snapshot computation and keep its authoritative detector
+   * reads; a requested type is a paged detail read.
+   */
+  report: query({
+    http: false,
+    input: z.object({
+      countsOnly: z
+        .boolean()
+        .optional()
+        .describe(
+          "Defaults to counts when no type is supplied. Set false without a type for the complete report; true always returns counts.",
+        ),
+      type: z
+        .string()
+        .optional()
+        .describe(
+          "Return only this problem category (e.g. 'orphanedProducts'). Ignored when countsOnly is true.",
+        ),
+      ...mcpPaginationFields({ defaultPageSize: 25, maxPageSize: 100 }),
+    }),
+    output: z.union([
+      problemsCountSchema,
+      allProblemsMcpSchema,
+      problemsTypeSliceOut,
+      problemsUnknownTypeOut,
+    ]),
+  }),
 });
+
+/** Whether a `report` call is the counts read rather than a detail read. */
+export const problemReportWantsCounts = (input: {
+  countsOnly?: boolean;
+  type?: string;
+}) =>
+  input.countsOnly === true ||
+  (input.countsOnly === undefined && input.type === undefined);
 
 export const problemsStreamsContract = defineContract("problems", {
   reparseStale: subscription({

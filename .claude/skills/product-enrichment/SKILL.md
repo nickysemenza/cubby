@@ -13,7 +13,7 @@ source-backed batch report.
 
 Use supplied `PRD-` identifiers regardless of inventory. Enrichment never
 decides whether an import line becomes a Product and never receives inventory.
-For a backlog, `entity list product` with `sort=dataQuality` ascending puts the
+For a backlog, `entity_read.list product` with `sort=dataQuality` ascending puts the
 weakest identity first (heavier identity checks — manufacturer, external ID —
 outweigh lighter ones), in pages of 25. Narrow to a specific gap with
 `filters.dataGap` on a check id: `product_manufacturer`, `product_external_id`,
@@ -52,12 +52,12 @@ write, collision, batch, kit, replacement, or verification.
 Before enriching, check whether this Product has a merge candidate on the
 other side (a photo Product for a purchase-created one, or vice versa) per
 [product identity](references/product-identity.md)'s either-side-first
-contract; propose it with `propose_product_match` rather than enriching two
+contract; propose it with `product_enrichment.propose_match` rather than enriching two
 records that should converge into one.
 
-Use `patch_products_external_ids` for exact slot changes and preserve unrelated
-IDs; use a full `entity update product` external-ID set only when deliberately
-replacing it. Check `find_product_external_id_collisions` before each new ID.
+Use `product_enrichment.patch_external_ids` for exact slot changes and preserve unrelated
+IDs; use a full `entity.update product` external-ID set only when deliberately
+replacing it. Check `imports_read.external_id_collisions` before each new ID.
 A collision needs manual resolution, normally a proven merge, never a silent
 reassignment.
 
@@ -78,7 +78,7 @@ otherwise append the catalog image after the own item image (see
 [product identity](references/product-identity.md) on belongings cover order)
 and preserve our photos and labels. Later
 manual order remains authoritative until another explicit replacement. Schedule
-original analysis and useful item cutouts through `schedule_image_processing`;
+original analysis and useful item cutouts through `image.schedule_processing`;
 skip label cutouts and already-transparent assets, preserve pairs, and let
 pending/failed processing fall back to the original. Verify every mutation, including retained
 identity facts, gallery order, cover, display position, integrity metadata, and

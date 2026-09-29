@@ -59,7 +59,7 @@ export const importImageFromUPC = async (
  * Import a scraped recipe's hero photo into R2 and attach it to the recipe.
  *
  * Runs inline on the server-side import path (`recipe.insertImport`, which the
- * MCP `import_recipe` / `scrape_recipe` tools drive) — the browser scrape form
+ * MCP `recipe_import.import` / `recipe_insights.scrape` tools drive) — the browser scrape form
  * imports its image client-side via `image.importFromUrl` instead.
  *
  * No-ops when the recipe already has an image so a re-import doesn't stack a

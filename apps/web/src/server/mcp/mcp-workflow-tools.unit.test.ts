@@ -21,20 +21,20 @@ import { SHORTCODE_PREFIX } from "@cubby/shared";
 import { describe, expect, it, vi } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
-
-import { callMcpTool } from "./mcp-test-utils";
-import { createMcpServer, MCP_SERVER_INSTRUCTIONS } from "./server";
 import {
   addedMealRecipe,
   dailyIntake,
   mealPreparations,
-} from "./tools/meal.tools";
-import { pageProblemTypeSlice } from "./tools/problems.tools";
+} from "~/server/operations/meal.server";
+import { pageProblemTypeSlice } from "~/server/operations/problems.server";
 import {
   buildRecipeNutrition,
   costingExplanation,
   effectiveRecipeServings,
-} from "./tools/recipe.tools";
+} from "~/server/operations/recipe.server";
+
+import { callMcpTool } from "./mcp-test-utils";
+import { createMcpServer, MCP_SERVER_INSTRUCTIONS } from "./server";
 import { toolCallResultTraceAttributes } from "./tools/tool-call-telemetry";
 
 /** The mock generator can't satisfy the coverage refine; build totals by hand. */
@@ -62,7 +62,7 @@ describe("MCP workflow tools", () => {
     for (const [entity, prefix] of Object.entries(SHORTCODE_PREFIX)) {
       expect(MCP_SERVER_INSTRUCTIONS).toContain(`- ${prefix} ${entity}`);
     }
-    expect(MCP_SERVER_INSTRUCTIONS).toContain("add_recipe_to_meal");
+    expect(MCP_SERVER_INSTRUCTIONS).toContain("meal_recipe.add");
     expect(MCP_SERVER_INSTRUCTIONS).not.toContain("add_meal_recipe");
     expect(MCP_SERVER_INSTRUCTIONS).not.toContain("attach_file,");
   });
@@ -120,7 +120,7 @@ describe("MCP workflow tools", () => {
     ).toBe(8);
   });
 
-  it("add_recipe_to_meal defaults to compact coverage and opts into nutrition", () => {
+  it("meal_recipe.add defaults to compact coverage and opts into nutrition", () => {
     const meal = mock(mealOut, {
       overrides: { name: "Dinner", totals: knownTotals, recipes: [] },
     });
@@ -323,15 +323,15 @@ describe("MCP workflow tools", () => {
     // An unknown problem type is answered before any database read.
     await callMcpTool(
       createMcpServer(),
-      "list_problems",
-      { type: "notAProblemType" },
+      "activity",
+      { action: "problems", type: "notAProblemType" },
       {},
       { telemetry: { identity, emit } },
     );
     await callMcpTool(
       createMcpServer(),
-      "get_expense_analytics",
-      { unknownFilter: "not-a-filter" },
+      "project_overview",
+      { action: "expense_analytics", unknownFilter: "not-a-filter" },
       {},
       { telemetry: { identity, emit } },
     );
@@ -346,14 +346,14 @@ describe("MCP workflow tools", () => {
     expect(emit).toHaveBeenCalledWith(
       expect.objectContaining({
         ...identity,
-        toolName: "list_problems",
+        toolName: "activity",
         outcome: "success",
         registeredAtCall: true,
       }),
     );
     expect(emit).toHaveBeenCalledWith(
       expect.objectContaining({
-        toolName: "get_expense_analytics",
+        toolName: "project_overview",
         outcome: "error",
       }),
     );
@@ -396,22 +396,23 @@ describe("MCP workflow tools", () => {
 
   it("rejects unknown filters and semantic pairs outside the allowlist before running", async () => {
     const server = createMcpServer();
-    const unknown = await callMcpTool(server, "get_expense_analytics", {
+    const unknown = await callMcpTool(server, "project_overview", {
+      action: "expense_analytics",
       costMinn: 500,
     });
     expect(unknown.isError).toBe(true);
     expect(JSON.stringify(unknown.content)).toContain("costMinn");
 
-    const rejected = await callMcpTool(
-      createMcpServer(),
-      "find_similar_entities",
-      { pair: "expense_to_product", sourceId: "PRD-2222" },
-    );
+    const rejected = await callMcpTool(createMcpServer(), "search", {
+      action: "similar",
+      pair: "expense_to_product",
+      sourceId: "PRD-2222",
+    });
     expect(rejected.isError).toBe(true);
     expect(JSON.stringify(rejected.content)).toContain("pair");
   });
 
-  it("explain_recipe_costing detail=lines drops both totals blocks and drift", () => {
+  it("recipe_insights.costing detail=lines drops both totals blocks and drift", () => {
     const explain = mock(recipeCostingExplain, {
       overrides: {
         persisted: { totals: knownTotals },
@@ -437,7 +438,7 @@ describe("MCP workflow tools", () => {
     });
   });
 
-  it("get_meal_preparations nutrition=kcal keeps cost and only the kcal estimate", () => {
+  it("nutrition.preparations nutrition=kcal keeps cost and only the kcal estimate", () => {
     const view = mock(getMealPreparationsOut, {
       overrides: {
         preparations: [],

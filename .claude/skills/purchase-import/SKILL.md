@@ -35,7 +35,7 @@ through Cubby's prepare/commit writer rather than generic entity mutation.
    and amount-direction mapping. Keep the raw file out of prompts and the
    repository. Save normalized nonzero StatementRows in bounded batches with a
    stable file fingerprint; count zero-value rows separately. Submit transaction
-   candidates to `preview_financial_statement_import` and create only approved
+   candidates to `finance_read.preview_import` and create only approved
    `ready_to_create` FinancialTransactions with an explicit kind. Repeated
    exports replay without another charge. A source row remains evidence until
    its account and transaction have been resolved.
@@ -85,7 +85,7 @@ same outcome without prescribing an agent runtime.
    De-duplicate saved snapshots by stable order id. A generic mail subject may
    omit the brand and variant; search sender, order id, and time window, then
    inspect the order page for itemization.
-3. Call `prepare_purchase_import` in batches of at most 50 orders. Preserve its
+3. Call `purchase_import.prepare` in batches of at most 50 orders. Preserve its
    preparation revision and stable line ids.
 4. Resolve every principal line. Prefer exact retailer SKU, ASIN, UPC/GTIN, or
    manufacturer model; then inspect Product aliases, names, and details. Before
@@ -94,12 +94,12 @@ same outcome without prescribing an agent runtime.
    [product identity](../product-enrichment/references/product-identity.md).
    An exact identifier match resolves the line straight to that Product
    (`existingId`); a descriptive-only match does not — choose `new` for this
-   line's own vendor Product instead, then call `propose_product_match` with
+   line's own vendor Product instead, then call `product_enrichment.propose_match` with
    the candidate pair and evidence for human review. Otherwise choose an
    existing Product shortcode, explicitly choose `new`, or leave the line
    `unresolved`. Never create a Product merely because search was
    inconclusive, and never claim a descriptive-only candidate directly.
-5. Call `commit_purchase_import` with the preparation revision and every line
+5. Call `purchase_import.commit` with the preparation revision and every line
    resolution. Do not use generic entity creation for imported Products or
    Expenses.
 6. Inspect every ordered result. `created`, `updated`, and `replayed` are
@@ -114,7 +114,7 @@ cursor), then one `order` at a time (capture and import its detail page),
 then hunts and enrichment; `finish_import_run` refuses while a listed order
 is still pending. A `receipt_evidence` item must go through
 `extract_receipt_evidence`, whose immutable source/checksum/extraction payload
-is passed unchanged to `prepare_purchase_import`; it is not a separate writer.
+is passed unchanged to `purchase_import.prepare`; it is not a separate writer.
 For browser evidence, continue every selected order or hunt before calling
 `finish_import_run`; that server transition refuses pending hunts and performs
 the required auditor batches. Persist only same-domain observations with
@@ -127,7 +127,7 @@ does); a run left without any of these is moved to review by the server.
 These run-lifecycle tools are not substitutes for the prepare/commit writer.
 
 An interrupted mutation is recovered through
-`import_operation_status` with its original operation id. Repeating
+`imports_read.purchase_status` with its original operation id. Repeating
 the source payload is replay, not a way to revise a reviewed decision; a
 correction creates a linked successor run and new decision revision.
 
@@ -151,7 +151,7 @@ email worklist. Treat cached navigation hints as advisory observations within
 `browserDomains`.
 
 For every exact merchant descriptor observed on that member's statement, call
-`confirm_purchase_merchant_vendor` after the human/vendor mapping is known.
+`purchase_import.confirm_vendor` after the human/vendor mapping is known.
 Charge-driven hunts leave unmapped descriptors for review.
 
 ## Settlement

@@ -12,10 +12,10 @@ and stir-fry cannot be one ingredient list.
 ## Read and decide
 
 Start with summary/count reads, then page through a narrowed result, then fetch
-the full record only when it is selected. `list_problems` defaults to counts;
+the full record only when it is selected. `activity.problems` defaults to counts;
 to inspect a class, call it with explicit `type`, `pageIndex`, and `pageSize`
 (for example `{ type: "…", pageIndex: 0, pageSize: 25 }`).
-`explain_recipe_costing` defaults to
+`recipe_insights.costing` defaults to
 `detail: "lines"`; request `detail: "full"` only when nutrient totals or drift
 are needed.
 
@@ -24,7 +24,7 @@ repeatable staple deserves instructions; a one-off plate can be an accurately
 named ingredient list. List meals for the date before creating one and choose
 `cooked`, `eating_out`/`takeout`, or `other` to match how it arrived.
 
-Search an ingredient before `resolve_ingredients`: that resolver creates a new
+Search an ingredient before `entity.resolve` (`entity: "ingredient"`): that resolver creates a new
 one without an exact match. Prefer an existing nutrition-linked ingredient; put
 descriptive detail in `rawLine`. Create a distinct ingredient only when a new
 nutrition mapping would alter unrelated recipes using the shared one.
@@ -38,7 +38,7 @@ label plus USDA, a prep-matched generic USDA food, then an explicit
 material seasoning. Repoint a wrongly linked Product, never a shared ingredient
 whose existing recipes must keep their nutrition.
 
-Use `explain_recipe_costing` lines to find missing coverage. A nutrient-free
+Use `recipe_insights.costing` lines to find missing coverage. A nutrient-free
 item requires zero `labelNutrition` to count as covered. Cost requires mappings
 from line unit to the priced unit. Read again until `persisted.stale: false`;
 a stale browser recipe table is not a data gap.
@@ -55,6 +55,6 @@ When a later eater shares a batch originally sized for one person, enlarge the
 recipe quantities and yield to the true combined amount before adding their
 portion.
 
-Verify `get_daily_intake(date, partyId)` for every eater: it must be `logged`,
+Verify `nutrition.daily_intake(date, partyId)` for every eater: it must be `logged`,
 have nutrition, and include the meal. Report per-meal kcal/protein/carbs/fat
 and clearly name every estimate.

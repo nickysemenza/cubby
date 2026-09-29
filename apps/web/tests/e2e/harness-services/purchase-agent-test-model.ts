@@ -122,7 +122,8 @@ export default {
         );
       if (!requestBody.includes("photo-propose"))
         return toolResponse(
-          call("photo-propose", "mcp__cubby__propose_photo_groups", {
+          call("photo-propose", "mcp__cubby__photo_run", {
+            action: "propose_groups",
             runId: fixture.runShortcode,
             _runExecution: {
               runId: fixture.runId,
@@ -144,7 +145,8 @@ export default {
         );
       if (!requestBody.includes("photo-list"))
         return toolResponse(
-          call("photo-list", "mcp__cubby__list_photo_group_proposals", {
+          call("photo-list", "mcp__cubby__imports_read", {
+            action: "photo_proposals",
             runId: fixture.runShortcode,
           }),
         );
@@ -201,7 +203,8 @@ export default {
 
     if (!requestBody.includes("prepare:workerd")) {
       return toolResponse(
-        call("prepare-1", "mcp__cubby__prepare_purchase_import", {
+        call("prepare-1", "mcp__cubby__purchase_import", {
+          action: "prepare",
           _runExecution: {
             runId: fixture.runId,
             operationId: "prepare:workerd",
@@ -249,7 +252,8 @@ export default {
 
     if (!requestBody.includes("validate:workerd")) {
       return toolResponse(
-        call("validate-1", "mcp__cubby__validate_purchase_import", {
+        call("validate-1", "mcp__cubby__purchase_import", {
+          action: "validate",
           _runExecution: {
             runId: fixture.runId,
             operationId: "validate:workerd",

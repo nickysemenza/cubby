@@ -91,14 +91,20 @@ export const mealAddRecipeInput = z.object({
     .describe("Sort order within the meal"),
 });
 
+// mealRecipe.id is a declared exception to shortcode-only ids: the meal-recipe
+// join row has no shortcode, so agents address it by this raw id.
+const mealRecipeOccurrenceId = mealRecipeId.describe(
+  "Meal-recipe ID (the `id` inside a meal's recipes[], NOT the recipe id)",
+);
+
 export const mealUpdateRecipeInput = z.object({
-  id: mealRecipeId,
-  scale: mealScale.optional(),
-  sortOrder: z.number().int().nullable().optional(),
+  id: mealRecipeOccurrenceId,
+  scale: mealScale.optional().describe("New scale multiplier (e.g. 1.5)"),
+  sortOrder: z.number().int().nullable().optional().describe("New sort order"),
 });
 
 export const mealRecipeIdInput = z.object({
-  id: mealRecipeId,
+  id: mealRecipeOccurrenceId,
 });
 
 export const mealFilterFields = {
@@ -279,7 +285,7 @@ export const getMealPreparationsMcpInput = getMealPreparationsInput.extend({
 });
 
 /**
- * `get_meal_preparations` over MCP: the same shape as {@link getMealPreparationsOut}
+ * `nutrition.preparations` over MCP: the same shape as {@link getMealPreparationsOut}
  * but every `totals.nutrition` may be a subset of the 22 nutrient keys. One
  * meal read carries (1 + preparations + portions + 2) totals objects; at 22
  * estimates each that was ~10KB to answer "is this portion confirmed?". The
@@ -343,7 +349,7 @@ export const mealMcpEntityOut = mealOut.extend({
  * Slim MCP projection of a meal row: built from the same field map as
  * `mealOut` minus its audit timestamps, so it cannot drift from the plain
  * shape. Each entry in `recipes` is a full `mealRecipeOut` — its `id` is the
- * mealRecipe row id (the one `update_meal_recipe`/`remove_meal_recipe` take)
+ * mealRecipe row id (the one `meal_recipe.update`/`meal_recipe.remove` take)
  * and the recipe's own name lives at `recipes[].recipe.name`.
  */
 export const mealMcpOut = z.object({

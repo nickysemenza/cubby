@@ -5,6 +5,7 @@ import {
   buildPaginatedResponse,
   normalizeSorts,
 } from "@cubby/schemas/pagination";
+import { productExternalIdCollisionsOut } from "@cubby/schemas/product";
 import type {
   ProductListInventoryEntryOut,
   ProductQuantitySummaryOut,
@@ -38,6 +39,7 @@ import {
   getProductManufacturerOptions,
   getProductPickerItemsByIds,
   getProductsByShortcodes,
+  patchProductExternalIds,
   productSearch,
   quickCreateProduct,
   resolveProductNames,
@@ -47,6 +49,7 @@ import {
   listKitMembership,
   listProductComponents,
 } from "~/server/repo/product-components";
+import { findProductExternalIdCollisions } from "~/server/repo/product/external-id-collisions";
 import { loadProductInventoryEntries } from "~/server/repo/product/lookup";
 import { previewProductMergeDecisions } from "~/server/repo/product/merge";
 import { loadProductQuantitySummaries } from "~/server/repo/product/quantity-ledger";
@@ -62,6 +65,7 @@ import {
 import type { requireActor } from "~/server/request-context";
 import { shouldUseSemanticComboboxFallback } from "~/server/semantic/combobox-fallback";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
+import { verifyProductImages } from "~/server/services/image-verification.service";
 import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
@@ -71,6 +75,7 @@ import {
   findOrCreateByCode,
   findOrCreateByUPC,
   importUpcImageBackfillCandidate,
+  lookupUPC,
   selectUpcImageBackfill,
   summarizeUpcImageBackfill,
 } from "~/server/services/product-orchestration.service";
@@ -78,6 +83,7 @@ import {
   createProductWithFood,
   createProductWriteActions,
   getProductSummaries,
+  getProductWithFood,
   updateProductWithFood,
 } from "~/server/services/product.service";
 import { semanticProductCandidates } from "~/server/services/semantic-search.service";
@@ -554,6 +560,27 @@ export const productHandlers = implementOperationDomain(productContract, {
     ),
   setProjectUses,
   discard: discardProductWorkflow,
+  lookupUpc: (context, input) =>
+    lookupUPC(
+      context.db,
+      context.usdaClient,
+      context.upcLookupClient,
+      input.upc,
+    ),
+  externalIdCollisions: async (context, input) =>
+    productExternalIdCollisionsOut.parse(
+      await findProductExternalIdCollisions(context.db, input),
+    ),
+  patchExternalIds: async (context, input) => {
+    const id = await productShortcodes.one(context.db, input.id);
+    await patchProductExternalIds(context.db, id, input, context.actorContext);
+    return getProductWithFood(context.db, context.usdaClient, id);
+  },
+  verifyImages: async (context, input) => {
+    const id = await productShortcodes.one(context.db, input.id);
+    await verifyProductImages(context.db, id);
+    return getProductWithFood(context.db, context.usdaClient, id);
+  },
 });
 
 export const productStreamHandlers = implementSubscriptionDomain(

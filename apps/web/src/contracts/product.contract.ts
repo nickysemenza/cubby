@@ -1,6 +1,12 @@
+import { productShortcode } from "@cubby/schemas/identifiers";
 import {
+  patchProductExternalIdsInput,
   productCreateManyInput,
+  productExternalIdCollisionInput,
+  productExternalIdCollisionsOut,
+  productLookupUpcOut,
   productMarkUsdaUnavailableManyInput,
+  productWithFoodOut,
 } from "@cubby/schemas/product";
 import {
   productBackfillUpcImagesEvent,
@@ -12,6 +18,7 @@ import {
   mergeProductMatchInput,
   productMergePreview,
 } from "@cubby/schemas/recommendations";
+import { upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 
 import {
@@ -71,11 +78,6 @@ export const productContract = defineContract("product", {
   }),
   projectUses: query({
     ...productWorkflowSchemas.projectUses,
-    mcp: {
-      name: "list_product_project_uses",
-      description:
-        "Show every exact project on which a reusable Cubby tool or software Product is explicitly recorded as used. Tool rows include purchase/use economics; software rows include non-additive spend charged during each project's effective window.",
-    },
     cache: {
       tags: [
         ["product", "projectUses"],
@@ -118,6 +120,33 @@ export const productContract = defineContract("product", {
   discard: mutation({
     ...productWorkflowSchemas.discard,
     invalidates: ["expense"],
+  }),
+  // Agent-facing (MCP `imports_read`, `product_enrichment`): off the HTTP API.
+  /** What a barcode names in every source at once, creating nothing. */
+  lookupUpc: query({
+    http: false,
+    input: z.object({ upc }),
+    output: productLookupUpcOut,
+    cache: { tags: [] },
+  }),
+  externalIdCollisions: query({
+    http: false,
+    input: productExternalIdCollisionInput,
+    output: productExternalIdCollisionsOut,
+  }),
+  /** One product's slot-addressed identifier patch (MCP batches it). */
+  patchExternalIds: mutation({
+    http: false,
+    input: patchProductExternalIdsInput,
+    output: productWithFoodOut,
+    invalidates: ["product"],
+  }),
+  /** Fetch every attached file from R2 and record its integrity state. */
+  verifyImages: mutation({
+    http: false,
+    input: z.object({ id: productShortcode }),
+    output: productWithFoodOut,
+    invalidates: ["product"],
   }),
 });
 

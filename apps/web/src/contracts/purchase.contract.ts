@@ -7,11 +7,38 @@ import {
   purchaseOut,
   purchaseProductsInput,
   purchaseProductsOut,
+  reclassifyPurchaseDocumentInput,
   splitExpenseInput,
   splitExpenseOut,
 } from "@cubby/schemas/purchase";
+import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
+
+/**
+ * `originalCost`/`partsSum`/`delta` confirm a priced split conserved its source
+ * amount; `splitExpenseDelta` (`@cubby/schemas/purchase`) is the pure
+ * computation, and the write path rejects a non-zero delta before replacing
+ * the original Expense.
+ */
+export const splitExpenseWithDeltaOut = z.object({
+  items: splitExpenseOut,
+  originalCost: z
+    .number()
+    .nullable()
+    .describe(
+      "The original Expense's cost before the split, in dollars. Null only when the original had no recorded cost.",
+    ),
+  partsSum: z
+    .number()
+    .describe("Sum of the parts' `cost` as submitted, in dollars."),
+  delta: z
+    .number()
+    .nullable()
+    .describe(
+      "partsSum minus originalCost, in dollars. Priced splits require zero; null when originalCost is null and there is no source amount to conserve.",
+    ),
+});
 
 export const purchaseContract = defineContract("purchase", {
   orderMail: query({
@@ -25,13 +52,6 @@ export const purchaseContract = defineContract("purchase", {
     output: purchaseProductsOut,
   }),
   link: mutation({
-    mcp: {
-      name: "link_expenses_to_purchase",
-      description:
-        "Re-parent existing Expenses onto ONE existing purchase — e.g. one plumbing transaction that spans both rough-in and fixtures. This only rewrites `purchaseId` on the given expenses; it creates no money, changes no cost/trade/costType/project on any Expense, and leaves the target purchase's identity (vendorId/orderId/date/statedTotal/documents) untouched aside from gaining those expenses. " +
-        "NOT for payment schedules: a contractor's progress payments are separate transactions and therefore separate purchases. Do not combine them just because they share a project or vendor; use the Project rollup for that view. " +
-        "REFUSES when `purchaseId` does not resolve to a live purchase.",
-    },
     input: linkExpensesToPurchaseInput,
     output: purchaseOut,
     invalidates: ["purchase"],
@@ -40,5 +60,19 @@ export const purchaseContract = defineContract("purchase", {
     input: splitExpenseInput,
     output: splitExpenseOut,
     invalidates: ["expense"],
+  }),
+  // Agent-facing (MCP `expenses`, `purchase_import`): off the HTTP API.
+  /** `split` plus the conservation check an agent confirms before moving on. */
+  splitWithDelta: mutation({
+    http: false,
+    input: splitExpenseInput,
+    output: splitExpenseWithDeltaOut,
+    invalidates: ["expense"],
+  }),
+  reclassifyDocument: mutation({
+    http: false,
+    input: reclassifyPurchaseDocumentInput,
+    output: purchaseOut,
+    invalidates: ["purchase"],
   }),
 });

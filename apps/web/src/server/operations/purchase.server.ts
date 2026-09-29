@@ -1,15 +1,22 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import type {
-  linkExpensesToPurchaseInput,
-  purchaseProductsInput,
-  splitExpenseInput,
+import { expenseOut } from "@cubby/schemas/project";
+import {
+  type linkExpensesToPurchaseInput,
+  type purchaseProductsInput,
+  splitExpenseDelta,
+  type splitExpenseInput,
 } from "@cubby/schemas/purchase";
 
 import { purchaseContract } from "~/contracts/purchase.contract";
+import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { listPurchaseOrderMail } from "~/server/purchase-import/gmail/review";
-import { linkExpensesToPurchase, splitExpense } from "~/server/repo/purchase";
+import {
+  linkExpensesToPurchase,
+  reclassifyPurchaseDocument,
+  splitExpense,
+} from "~/server/repo/purchase";
 import { listPurchaseProducts } from "~/server/repo/purchase-products";
 import {
   resolveAllPresent,
@@ -102,4 +109,24 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
   products: (context, input) => purchaseProductsWorkflow(context, input),
   link: (context, input) => linkExpensesToPurchaseWorkflow(context, input),
   split: (context, input) => splitExpenseWorkflow(context, input),
+  splitWithDelta: async (context, input) => {
+    // Read before the split runs — the original row is soft-deleted by the
+    // time `purchase.split` returns, so its cost has to be captured first.
+    const original = await executeEntity(context, {
+      action: "get",
+      entity: "expense",
+      id: input.expenseId,
+      missing: "error",
+    });
+    if (original.action !== "get" || !original.item)
+      throw new Error("Entity kernel returned the wrong expense detail");
+    const items = await splitExpenseWorkflow(context, input);
+    const { originalCost, partsSum, delta } = splitExpenseDelta(
+      expenseOut.parse(original.item).cost,
+      input.parts.map((part) => part.cost),
+    );
+    return { items, originalCost, partsSum, delta };
+  },
+  reclassifyDocument: (context, input) =>
+    reclassifyPurchaseDocument(context.db, input, context.actorContext),
 });

@@ -9,7 +9,7 @@ import {
   projectEntityResult,
   slimProduct,
   slimProductDetail,
-} from "./response-projection";
+} from "./mcp-projections";
 
 const productAttachmentImageOut = productTopLevelOut.shape.images.element;
 

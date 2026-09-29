@@ -1,5 +1,5 @@
 /**
- * `list_actionable_tasks` — the computed "what can I actually do" read.
+ * `tasks_overview.actionable` — the computed "what can I actually do" read.
  *
  * A live (non-deleted), non-`done` task is blocked when ANY of:
  *   (a) its own status is `blocked` (manual flag)                — kind "manual"

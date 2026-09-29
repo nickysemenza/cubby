@@ -1,5 +1,10 @@
 import { recipeAvailabilityOut } from "@cubby/schemas/availability";
+import { positiveAmount } from "@cubby/schemas/codec";
 import { equivalenceReportSchema } from "@cubby/schemas/equivalences";
+import {
+  ingredientShortcode,
+  recipeShortcode,
+} from "@cubby/schemas/identifiers";
 import {
   attachCookbookRecipePhotoInput,
   attachCookbookRecipePhotoOut,
@@ -16,15 +21,23 @@ import {
   importCookbookStreamInput,
   importNotionSyncInput,
   importRecipeSchema,
+  mcpRecipeCreateFromTextInput,
   notionImportEventSchema,
   notionPreviewOut,
   parseRecipeHtmlInput,
+  recipeImportIdOut,
   scrapeRecipeInput,
   setCookbookProductInput,
   upsertCookbookInput,
 } from "@cubby/schemas/import-recipe";
 import { ingredientCooccurrenceSchema } from "@cubby/schemas/ingredient-cooccurrence";
 import { ingredientUsageSchema } from "@cubby/schemas/ingredient-usage";
+import {
+  recipeCostingExplainDetail,
+  recipeCostingExplainMcpOut,
+  scrapeRecipeMcpOut,
+} from "@cubby/schemas/mcp";
+import { nutritionEstimate } from "@cubby/schemas/nutrition";
 import {
   cookbookSummary,
   recipeCooccurrenceInput,
@@ -34,6 +47,7 @@ import {
   recipeIdInput,
   recipeIdsInput,
   recipeRecomputeAllOut,
+  recipeTagsOut,
   recipeWithSideEffectsOut,
 } from "@cubby/schemas/recipe";
 import { recipeDependencyGraphSchema } from "@cubby/schemas/recipe-dependency-graph";
@@ -57,6 +71,72 @@ import {
   query,
   subscription,
 } from "~/contracts/define";
+
+const recipeNutritionInput = z.object({
+  recipeId: recipeShortcode,
+  servings: z.number().positive(),
+});
+export const recipeNutritionOut = z.object({
+  recipe: z.object({ id: recipeShortcode, name: z.string() }),
+  recipeServings: z.number().positive(),
+  requestedServings: z.number().positive(),
+  nutrition: nutritionEstimate,
+  coverage: z.object({
+    totalLines: z.number().int().nonnegative(),
+    mappedLines: z.number().int().nonnegative(),
+    unmappedLines: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        reasons: z.array(z.enum(["weight", "nutrients"])),
+      }),
+    ),
+  }),
+});
+
+export const recipeLinePatchFields = z
+  .object({
+    amounts: z
+      .array(positiveAmount)
+      .min(1)
+      .optional()
+      .describe('Replacement amounts, e.g. [{ value: 150, unit: "g" }]'),
+    ingredientId: ingredientShortcode
+      .optional()
+      .describe("Point the line at this ingredient instead"),
+    subRecipeId: recipeShortcode
+      .optional()
+      .describe("Point the line at this sub-recipe instead"),
+    rawLine: z.string().optional().describe("Replacement source line text"),
+    modifier: z.string().optional().describe("Replacement prep modifier"),
+  })
+  .refine((patch) => !(patch.ingredientId && patch.subRecipeId), {
+    message: "Give ingredientId or subRecipeId, not both",
+  })
+  .refine((patch) => Object.values(patch).some((v) => v !== undefined), {
+    message: "Give at least one field to change",
+  });
+
+const recipeLinePatchInput = z.object({
+  recipeId: recipeShortcode,
+  // Declared exception: a recipe line has no shortcode; this is the row id
+  // `recipe_insights` returns (using_ingredient usages[].lineId, costing
+  // per-line diagnostics id).
+  lineId: z.uuid(),
+  patch: recipeLinePatchFields,
+});
+
+const recipeLinePatchOut = z.object({
+  recipeId: recipeShortcode,
+  line: z.object({
+    type: z.enum(["ingredient", "recipe"]),
+    ingredientId: ingredientShortcode.nullable(),
+    subRecipeId: recipeShortcode.nullable(),
+    amounts: z.array(z.object({ value: z.number(), unit: z.string() })),
+    rawLine: z.string().nullish(),
+    modifier: z.string().nullish(),
+  }),
+});
 
 export const recipeContract = defineContract("recipe", {
   getManyByIDs: query({
@@ -121,6 +201,54 @@ export const recipeContract = defineContract("recipe", {
     input: scrapeRecipeInput,
     output: importRecipeSchema,
     invalidates: [],
+  }),
+  // Agent-facing (MCP `recipe_insights`, `recipe_import`): off the HTTP API.
+  /** Nutrient totals scaled to a serving count, with mapped-line coverage. */
+  nutrition: query({
+    http: false,
+    input: recipeNutritionInput,
+    output: recipeNutritionOut,
+  }),
+  /** `explainCosting` trimmed to the per-line diagnostics unless `detail: "full"`. */
+  costingExplanation: query({
+    http: false,
+    readPolicy: "strong",
+    input: z.object({
+      id: recipeShortcode,
+      detail: recipeCostingExplainDetail.default("lines"),
+    }),
+    output: recipeCostingExplainMcpOut,
+  }),
+  tags: query({
+    http: false,
+    input: z.undefined(),
+    output: recipeTagsOut,
+  }),
+  /** Parse a recipe URL into structured form without saving it. */
+  scrapeUrl: query({
+    http: false,
+    input: z.object({ url: scrapeRecipeInput }),
+    output: scrapeRecipeMcpOut,
+    cache: { tags: [] },
+  }),
+  importFromUrl: mutation({
+    http: false,
+    input: z.object({ url: scrapeRecipeInput }),
+    output: recipeImportIdOut,
+    invalidates: ["recipe"],
+  }),
+  createFromText: mutation({
+    http: false,
+    input: mcpRecipeCreateFromTextInput,
+    output: recipeImportIdOut,
+    invalidates: ["recipe"],
+  }),
+  /** Change one ingredient line without resending the recipe's sections. */
+  patchLine: mutation({
+    http: false,
+    input: recipeLinePatchInput,
+    output: recipeLinePatchOut,
+    invalidates: ["recipe"],
   }),
   parseHtml: mutation({
     input: parseRecipeHtmlInput,

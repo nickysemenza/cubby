@@ -2,6 +2,8 @@ import type { PhotoRunImage } from "@cubby/schemas/photo-import-run";
 import type { FlueConversationMessage } from "@flue/sdk";
 
 import type { RunDetail } from "~/contracts/run.contract";
+
+import { displayToolAction } from "./agent-tool-names";
 export { formatDuration as formatWorkDuration } from "~/lib/format-duration";
 
 type WorkKind =
@@ -47,25 +49,26 @@ const WORK_LABELS = {
   "photo-review": "Review proposed groups",
 } satisfies Record<WorkKind, string>;
 
-function toolWorkKind(name: string): WorkKind | null {
-  const leaf = name.split("__").at(-1) ?? name;
-  switch (leaf) {
-    case "get_photo_run_context":
+function toolWorkKind(action: string): WorkKind | null {
+  switch (action) {
+    case "imports_read.photo_context":
       return "photo-context";
-    case "get_image_processing":
+    case "imports_read.image_processing":
       return "photo-analysis";
-    case "resolve_products":
-    case "suggest_photo_product_candidates":
+    case "entity_read.resolve":
+    case "imports_read.photo_candidates":
       return "catalog";
-    case "get_entities":
+    case "entity_read.get":
+    case "entity_read.list":
+    case "entity_read.search":
       return "records";
-    case "propose_photo_groups":
+    case "photo_run.propose_groups":
       return "photo-groups";
-    case "propose_product_match":
+    case "product_enrichment.propose_match":
       return "product-match";
-    case "prepare_purchase_import":
+    case "purchase_import.prepare":
       return "purchase-review";
-    case "commit_purchase_import":
+    case "purchase_import.commit":
       return "purchase-import";
     default:
       return null;
@@ -154,7 +157,7 @@ export function summarizeAgentWork(
   for (const message of messages) {
     for (const part of message.parts) {
       if (part.type !== "dynamic-tool") continue;
-      const kind = toolWorkKind(part.toolName);
+      const kind = toolWorkKind(displayToolAction(part.toolName, part.input));
       if (!kind) continue;
       toolKinds.add(kind);
       add(

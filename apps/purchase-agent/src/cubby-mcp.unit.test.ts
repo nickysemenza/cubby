@@ -17,16 +17,12 @@ describe("cubbyMcpConnection", () => {
     );
 
     expect(connection.tools).toEqual([
-      "get_photo_run_context",
-      "get_image_processing",
-      "suggest_photo_product_candidates",
-      "resolve_products",
-      "find_similar_entities",
-      "propose_photo_groups",
-      "list_photo_group_proposals",
-      "patch_products_external_ids",
+      "imports_read",
+      "entity_read",
+      "search",
+      "photo_run",
+      "product_enrichment",
     ]);
-    expect(connection.tools).not.toContain("get_entities");
     expect(connection.tools).not.toContain("entity");
   });
 

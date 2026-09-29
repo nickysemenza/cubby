@@ -26,6 +26,7 @@ import {
   expenseMonthlySummary,
   expenseTradeAffinity,
   getExpenseByID,
+  matchExpenses,
 } from "~/server/repo/expense";
 import {
   buildExpenseAnalysisGrid,
@@ -475,4 +476,5 @@ export const expenseHandlers = implementOperationDomain(expenseContract, {
     expenseInventoryOwnershipContext(context.db, input),
   confirmInventoryBeneficiary: (context, input) =>
     confirmInventoryBeneficiary(context, input),
+  match: (context, input) => matchExpenses(context.db, input),
 });

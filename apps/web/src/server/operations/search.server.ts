@@ -26,6 +26,8 @@ import {
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import { getRequestId } from "~/server/tracing";
 
+import { findSimilarEntitiesWorkflow } from "./semantic-similarity.server";
+
 type RefreshInput = z.output<typeof requestEmbeddingRefreshInputSchema>;
 export async function requestEmbeddingRefreshWorkflow(
   db: Database,
@@ -73,6 +75,24 @@ export const searchHandlers = implementOperationDomain(searchContract, {
   },
   requestEmbeddingRefresh: (context, input) =>
     requestEmbeddingRefreshWorkflow(context.db, input),
+  global: async (context, input) => {
+    const { includeRelated, ...query } = input;
+    const results = await findSearchHits(context.db, query);
+    if (!includeRelated)
+      return { results, related: [], relatedStatus: "not_requested" as const };
+    const related = await findRelatedSearchHits(context.db, query);
+    const primaryKeys = new Set(
+      results.map((result) => `${result.entityKind}:${result.id}`),
+    );
+    return {
+      results,
+      related: related.results.filter(
+        (result) => !primaryKeys.has(`${result.entityKind}:${result.id}`),
+      ),
+      relatedStatus: related.status,
+    };
+  },
+  similar: (context, input) => findSimilarEntitiesWorkflow(context.db, input),
 });
 
 export const searchStreamHandlers = implementSubscriptionDomain(

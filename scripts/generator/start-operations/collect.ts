@@ -168,7 +168,7 @@ const CONTRACT_IMPORT_ALLOWLIST = [
   /^\.\/[^/]+$/u,
 ];
 
-const assertContractPurity = (path: string): void => {
+export const assertContractPurity = (path: string): void => {
   for (const source of runtimeImportSources(parseFile(path).body)) {
     if (CONTRACT_IMPORT_ALLOWLIST.some((pattern) => pattern.test(source)))
       continue;

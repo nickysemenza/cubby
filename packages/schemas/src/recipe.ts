@@ -353,7 +353,7 @@ const recipeWithUsagesMcpOut = z.object({
 
 export const recipesUsingIngredientOut = z.object({
   // The ingredient shortcode the caller passed in — echoed back, not resolved
-  // to a uuid (find_recipes_using_ingredient never needs the private id).
+  // to a uuid (recipe_insights.using_ingredient never needs the private id).
   ingredientId: ingredientShortcode,
   count: z.number().int().nonnegative(),
   recipes: z.array(recipeWithUsagesMcpOut),

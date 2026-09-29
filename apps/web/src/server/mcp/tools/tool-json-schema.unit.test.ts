@@ -3,14 +3,12 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { type JSONType, z } from "zod";
 
+import { MCP_TOOLS } from "~/contracts/mcp-tools";
 import { toWire } from "~/lib/http-api/wire";
+import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
 
-import { createMcpServer } from "../server";
-import {
-  type DeclaredToolSchemas,
-  listDeclaredToolSchemas,
-} from "./tool-catalog";
-import { advertisedJsonSchema } from "./tool-json-schema";
+import { advertisedJsonSchema, safeToJsonSchema } from "./tool-json-schema";
+import { compiledMcpTools } from "./tool-registration";
 
 type JsonObject = Extract<JSONType, { [key: string]: JSONType }>;
 
@@ -37,23 +35,23 @@ function collectBareDateFormats(
   }
 }
 
-function requireZodType(
-  schema: z.core.$ZodType | undefined,
-  label: string,
-): z.ZodType {
-  if (!(schema instanceof z.ZodType)) {
-    throw new Error(`${label}: expected a registered Zod schema`);
-  }
-  return schema;
-}
+type ActionSchemas = { name: string; input: z.ZodType; output: z.ZodType };
 
-function requireTool(
-  tools: readonly DeclaredToolSchemas[],
-  name: string,
-): DeclaredToolSchemas {
-  const tool = tools.find((candidate) => candidate.name === name);
-  if (!tool) throw new Error(`${name} is not a registered MCP tool`);
-  return tool;
+const actions: readonly ActionSchemas[] = compiledMcpTools(
+  MCP_TOOL_BINDINGS,
+  MCP_TOOLS,
+).flatMap((tool) =>
+  [...tool.actions.values()].map((action) => ({
+    name: action.name,
+    input: action.input,
+    output: action.output,
+  })),
+);
+
+function requireAction(name: string): ActionSchemas {
+  const action = actions.find((candidate) => candidate.name === name);
+  if (!action) throw new Error(`${name} is not a registered MCP action`);
+  return action;
 }
 
 /** Walks a JSON Schema by draft-7 `properties`/`items` path segments. */
@@ -69,33 +67,23 @@ function jsonAt(node: JSONType, ...path: string[]): JSONType {
 }
 
 describe("MCP tool JSON Schema — toWire parity", () => {
-  const server = createMcpServer();
-  const tools = listDeclaredToolSchemas(server);
-
-  it("registers more than 50 tools", () => {
-    expect(tools.length).toBeGreaterThan(50);
+  it("compiles every action of the 21 tools", () => {
+    expect(
+      new Set(actions.map((action) => action.name.split(".")[0])).size,
+    ).toBe(21);
   });
 
-  it("declares an input and an output schema for every registered tool", () => {
-    const incomplete = tools
-      .filter((tool) => !tool.inputSchema || !tool.outputSchema)
-      .map((tool) => tool.name);
-    expect(incomplete).toEqual([]);
-  });
-
-  it.each(tools.map((tool) => [tool.name, tool] as const))(
+  it.each(actions.map((action) => [action.name, action] as const))(
     "%s: input and output schema pass through toWire without throwing",
-    (name, tool) => {
-      const input = requireZodType(tool.inputSchema, `${name} input`);
-      const output = requireZodType(tool.outputSchema, `${name} output`);
-      expect(() => toWire(input, "input")).not.toThrow();
-      expect(() => toWire(output, "output")).not.toThrow();
+    (_name, action) => {
+      expect(() => toWire(action.input, "input")).not.toThrow();
+      expect(() => toWire(action.output, "output")).not.toThrow();
     },
   );
 
-  it("documents list_statement_rows' nested createdAt as date-time", () => {
-    const tool = requireTool(tools, "list_statement_rows");
-    const schema = advertisedJsonSchema(tool.name, tool.outputSchema, "output");
+  it("documents finance_read.statement_rows' nested createdAt as date-time", () => {
+    const action = requireAction("finance_read.statement_rows");
+    const schema = advertisedJsonSchema(action.name, action.output, "output");
     const createdAt = jsonAt(
       schema,
       "properties",
@@ -111,38 +99,33 @@ describe("MCP tool JSON Schema — toWire parity", () => {
 
   it("advertises no bare `format: date` anywhere in the catalog", () => {
     const hits: string[] = [];
-    for (const tool of tools) {
-      const input = advertisedJsonSchema(tool.name, tool.inputSchema, "input");
-      const output = advertisedJsonSchema(
-        tool.name,
-        tool.outputSchema,
-        "output",
-      );
-      collectBareDateFormats(input, `${tool.name}.input`, hits);
-      collectBareDateFormats(output, `${tool.name}.output`, hits);
+    for (const action of actions) {
+      const input = safeToJsonSchema(action.input, "input");
+      const output = advertisedJsonSchema(action.name, action.output, "output");
+      collectBareDateFormats(input, `${action.name}.input`, hits);
+      collectBareDateFormats(output, `${action.name}.output`, hits);
     }
     expect(hits).toEqual([]);
   });
 
   it("advertises every gallery entity and rejects non-gallery attachment targets", () => {
-    const attachFiles = requireTool(tools, "attach_files");
-    const attachExisting = requireTool(tools, "attach_existing_image");
-    const schemas = [attachFiles, attachExisting].map((tool) => ({
-      tool,
-      input: requireZodType(tool.inputSchema, `${tool.name} input`),
-    }));
+    const attachFiles = requireAction("image.attach_files").input;
+    const attachExisting = requireAction("image.attach_existing").input;
+    const description =
+      compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOLS).find(
+        (tool) => tool.name === "image",
+      )?.inputJsonSchema ?? {};
 
     for (const entity of galleryEntities) {
       const targetId = testShortcode(entity, "ABC1");
-      expect(attachFiles.description ?? "").toContain(entity);
-      expect(attachExisting.description ?? "").toContain(entity);
+      expect(JSON.stringify(description)).toContain(entity);
       expect(
-        schemas[0]!.input.safeParse({
+        attachFiles.safeParse({
           items: [{ entityId: targetId, url: "https://example.test/file.jpg" }],
         }).success,
       ).toBe(true);
       expect(
-        schemas[1]!.input.safeParse({
+        attachExisting.safeParse({
           imageId: testShortcode("image", "IMG1"),
           targetId,
         }).success,
@@ -151,12 +134,12 @@ describe("MCP tool JSON Schema — toWire parity", () => {
 
     const vendorId = testShortcode("vendor", "ABC1");
     expect(
-      schemas[0]!.input.safeParse({
+      attachFiles.safeParse({
         items: [{ entityId: vendorId, url: "https://example.test/file.jpg" }],
       }).success,
     ).toBe(false);
     expect(
-      schemas[1]!.input.safeParse({
+      attachExisting.safeParse({
         imageId: testShortcode("image", "IMG1"),
         targetId: vendorId,
       }).success,
@@ -164,19 +147,8 @@ describe("MCP tool JSON Schema — toWire parity", () => {
   });
 
   it("publishes batched upload initiation and excludes base64 attachment input", () => {
-    expect(tools.some((tool) => tool.name === "create_file_upload")).toBe(
-      false,
-    );
-    expect(tools.some((tool) => tool.name === "attach_file")).toBe(false);
-
-    const createUploads = requireZodType(
-      requireTool(tools, "create_file_uploads").inputSchema,
-      "create_file_uploads input",
-    );
-    const attachFiles = requireZodType(
-      requireTool(tools, "attach_files").inputSchema,
-      "attach_files input",
-    );
+    const createUploads = requireAction("image.create_uploads").input;
+    const attachFiles = requireAction("image.attach_files").input;
     const entityId = testShortcode("product", "ABC1");
     const upload = {
       entityId,

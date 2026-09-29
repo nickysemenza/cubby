@@ -670,13 +670,16 @@ hold no business logic; there is no per-transport `*-browser.server.ts` module.
 Removing an operation has no deployment shim: a tab loaded before that
 deployment must reload before calling the removed function.
 
-MCP invokes `executeEntity` directly through the `entity` tool and publishes its
-machine-readable contract at `entities://catalog`. `entity_read` uses the same
-generated get/list/search contracts with mutation actions excluded by its input
-schema. Workflow-shaped MCP tools remain separate. MCP, jobs, repositories,
-entity modules, and kernel tests must not import browser transport modules.
-Operation adapters and typed JSONL stream routes are the only transport seams;
-business behavior remains in the operation and workflow modules.
+The MCP surface is declared once in `apps/web/src/contracts/mcp-tools.ts`: 21
+tools, each a group of actions called as `{ action, ...fields }`, where an
+action is a contract member or an entity-kernel verb. `pnpm generate` binds
+every action to its `implementOperationDomain` handler and refuses a tool that
+mixes queries and mutations, so read-only tools stay auto-approvable. MCP
+invokes `executeEntity` through the kernel verbs of the `entity` (writes) and
+`entity_read` (reads) tools and publishes their machine-readable contract at
+`entities://catalog`. MCP, jobs, repositories, entity modules, and kernel tests must
+not import browser transport modules. Operation adapters and typed JSONL stream routes are the only transport
+seams; business behavior remains in the operation modules.
 
 ## Filters and search
 
@@ -759,8 +762,8 @@ an `EXISTS` against an aliased related table using that entity's own
 bindings; `list-scaffold.ts` binds the resulting filters and sort for every
 scored entity's list in one place.
 
-Durable "not available" exceptions (`set_data_exception`/
-`clear_data_exception`) live in the `DataException` table, keyed by an
+Durable "not available" exceptions (`data_exception.set`/
+`data_exception.clear`) live in the `DataException` table, keyed by an
 `Entity(id, kind)` FK, for every entity whose declaration sets `exceptions`.
 Enabling it requires fingerprint inputs for every check and an allowed-reason
 list per check (`EXCEPTION_REASONS` in `repo/data-quality/exceptions.ts`). An
@@ -817,7 +820,7 @@ The physical graph is composed at read time from `ENTITY_EDGES` and
 `ENTITY_EDGE_OWNERS` (`repo/entity-edge-source.ts`): `(edgeKey, sourceKind,
 sourceId, targetKind, targetId)` with both ends live. It backs the Relations
 tab's Connections, the impact preview, the graph explorer's physical edges,
-the Problems orphan finder, and the MCP connections read. Writes never go
+the Problems orphan finder, and MCP `entity_read.connections`. Writes never go
 through it.
 
 Two generic tables carry the relationships and identifiers that used to have a

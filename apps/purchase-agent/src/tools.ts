@@ -66,7 +66,7 @@ export function purchaseImportTools(
     defineTool({
       name: "extract_receipt_evidence",
       description:
-        "Run Cubby's bounded receipt extractor for the receipt assigned to this run. Its returned immutable source, checksum, extraction, image id, and stable ids are the input to prepare_purchase_import.",
+        "Run Cubby's bounded receipt extractor for the receipt assigned to this run. Its returned immutable source, checksum, extraction, image id, and stable ids are the input to purchase_import.prepare.",
       input: v.object({ operationId }),
       output: serviceResult,
       durable: true,

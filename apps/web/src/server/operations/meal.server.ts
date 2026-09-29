@@ -4,6 +4,7 @@ import type {
 } from "@cubby/schemas/availability";
 import type { MealId } from "@cubby/schemas/identifiers";
 import type {
+  MealPreparationNutritionDetail,
   SaveMealRecipePreparationInput,
   mealAddRecipeInput,
   shoppingListInput,
@@ -12,9 +13,23 @@ import type {
   ShoppingListContribution,
 } from "@cubby/schemas/meal";
 import { contributesToShoppingList } from "@cubby/schemas/meal-classification";
+import {
+  type MeasureEstimate,
+  nutrientKey,
+  type NutritionTotals,
+  type NutritionTotalsPartial,
+} from "@cubby/schemas/nutrition";
 import { sumBy } from "es-toolkit";
+import type { z } from "zod";
 
-import { mealContract } from "~/contracts/meal.contract";
+import { slimMeal } from "~/contracts/mcp-projections";
+import {
+  type addRecipeNutritionDetail,
+  type compactEstimate,
+  type dailyIntakeInput,
+  mealContract,
+} from "~/contracts/meal.contract";
+import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
@@ -282,4 +297,170 @@ export const mealHandlers = implementOperationDomain(mealContract, {
   removeRecipe: (context, input) => removeMealRecipeWorkflow(context, input),
   savePreparation: (context, input) =>
     saveMealRecipePreparationWorkflow(context, input),
+  dailyIntake: async (context, input) =>
+    dailyIntake(
+      await getMealNutrition(
+        context.db,
+        { date: input.date },
+        context.usdaClient,
+        context.services.recipeCosting,
+      ),
+      input,
+    ),
+  preparationsDetail: async (context, input) =>
+    mealPreparations(
+      await getMealPreparations(
+        context.db,
+        { mealId: input.mealId },
+        context.services.recipeCosting,
+      ),
+      input.nutrition,
+    ),
+  planRecipe: async (context, input) =>
+    addedMealRecipe(
+      await addRecipeToMealWorkflow(context, {
+        mealId: input.mealId,
+        recipeId: input.recipeId,
+        scale: input.scale,
+        sortOrder: input.sortOrder,
+      }),
+      input.nutrition,
+    ),
 });
+
+const macroKeys = ["kcal", "protein", "carbs", "fat", "fiber"] as const;
+
+function compactValue(value: MeasureEstimate): z.infer<typeof compactEstimate> {
+  if (value.status === "unavailable") return null;
+  if (value.status === "pending") return "pending";
+  if (
+    value.status === "complete" &&
+    (value.upper === null || value.upper === value.lower)
+  )
+    return value.lower;
+  return {
+    lower: value.lower,
+    upper: value.upper,
+    partial: value.status === "partial",
+  };
+}
+
+function compactTotals(totals: NutritionTotals, detail: "macros" | "full") {
+  const keys = detail === "macros" ? macroKeys : nutrientKey.options;
+  return Object.fromEntries(
+    keys.map((key) => [key, compactValue(totals.nutrition[key])]),
+  );
+}
+
+/** Keep cost and the requested nutrient estimates for the preparation read. */
+const trimNutrition =
+  (detail: MealPreparationNutritionDetail) =>
+  (totals: NutritionTotals): NutritionTotalsPartial => {
+    if (detail === "full") return totals;
+    if (detail === "macros")
+      return {
+        cost: totals.cost,
+        nutrition: Object.fromEntries(
+          macroKeys.map((key) => [key, totals.nutrition[key]]),
+        ),
+      };
+    if (detail === "kcal")
+      return { cost: totals.cost, nutrition: { kcal: totals.nutrition.kcal } };
+    return { cost: totals.cost, nutrition: {} };
+  };
+
+/** The meal-nutrition read projected onto one eater. */
+export function dailyIntake(
+  summary: Awaited<ReturnType<typeof getMealNutrition>>,
+  params: z.output<typeof dailyIntakeInput>,
+) {
+  const person = summary.people.find(
+    (candidate) => candidate.eater.id === params.partyId,
+  );
+  return {
+    date: params.date,
+    partyId: params.partyId,
+    status:
+      params.date > householdLocalDate()
+        ? ("planned" as const)
+        : ("logged" as const),
+    nutrition: person ? compactTotals(person.totals, params.nutrition) : null,
+    meals:
+      person?.meals.map(({ meal, totals }) => ({
+        mealId: meal.id,
+        name: meal.name,
+        nutrition: compactTotals(totals, params.nutrition),
+        foods: params.includeFoods
+          ? person.foods
+              .filter((food) => food.meal.id === meal.id)
+              .map((food) => ({
+                name: food.name,
+                grams: food.grams,
+                amount: food.amount,
+                sourceKind: food.sourceKind,
+                nutrition: compactTotals(food.totals, params.nutrition),
+              }))
+          : undefined,
+      })) ?? [],
+  };
+}
+
+/** Every totals block of a preparation view trimmed to the requested detail. */
+export function mealPreparations(
+  view: Awaited<ReturnType<typeof getMealPreparations>>,
+  nutrition: MealPreparationNutritionDetail,
+) {
+  const project = trimNutrition(nutrition);
+  return {
+    mealId: view.mealId,
+    preparations: view.preparations.map((preparation) => ({
+      ...preparation,
+      totals: project(preparation.totals),
+      portions: preparation.portions.map((portion) => ({
+        ...portion,
+        totals: project(portion.totals),
+      })),
+    })),
+    totals: {
+      confirmed: {
+        ...view.totals.confirmed,
+        totals: project(view.totals.confirmed.totals),
+      },
+      projected: {
+        ...view.totals.projected,
+        totals: project(view.totals.projected.totals),
+      },
+    },
+  };
+}
+
+/** Compact meal identity and cost/kcal coverage, plus the requested nutrients. */
+export function addedMealRecipe(
+  result: Awaited<ReturnType<typeof addRecipeToMealWorkflow>>,
+  nutrition: z.output<typeof addRecipeNutritionDetail>,
+) {
+  const meal = slimMeal(result.meal);
+  const keys =
+    nutrition === "full"
+      ? nutrientKey.options
+      : nutrition === "macros"
+        ? macroKeys
+        : nutrition === "kcal"
+          ? (["kcal"] as const)
+          : [];
+  return {
+    id: meal.id,
+    mealRecipeId: result.mealRecipeId,
+    name: meal.name ?? meal.mealType ?? meal.date,
+    coverage: {
+      cost: compactValue(meal.totals.cost),
+      kcal: compactValue(meal.totals.nutrition.kcal),
+    },
+    nutrition:
+      keys.length > 0
+        ? Object.fromEntries(
+            keys.map((key) => [key, compactValue(meal.totals.nutrition[key])]),
+          )
+        : undefined,
+  };
+}

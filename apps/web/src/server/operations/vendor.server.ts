@@ -9,6 +9,7 @@ import {
   decideOrderMailCandidate,
   listVendorOrderMail,
 } from "~/server/purchase-import/gmail/review";
+import { getVendorCoverage } from "~/server/repo/vendor";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { fetchAndAttachVendorLogo } from "~/server/services/vendor-logo.service";
 import { bindWorkflow, workflow } from "~/server/workflow-runtime";
@@ -64,4 +65,5 @@ export const vendorHandlers = implementOperationDomain(vendorContract, {
     });
   },
   fetchLogo: (context, input) => fetchVendorLogoWorkflow(context, input),
+  coverage: (context, input) => getVendorCoverage(context.db, input),
 });

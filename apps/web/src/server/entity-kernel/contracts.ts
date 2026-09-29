@@ -184,44 +184,58 @@ export const entityCommandSchema = z.union([
   entityBrowserMutationCommandSchema,
 ]);
 
-export const entityMcpReadCommandSchema = z.union([
-  z.object({
-    action: z.literal("get"),
-    entity: z.enum(generatedMcpEntityActionEntities.get),
-    id: anyShortcodeSchema(generatedMcpEntityActionEntities.get),
-    missing: z.enum(["error", "null"]).default("error"),
-    resultDetail,
-  }),
-  mcpListCommandSchema,
-  z.object({
-    action: z.literal("search"),
-    entity: z.enum(generatedMcpEntityActionEntities.search),
-    query: z.string().trim().min(1).max(100),
-    limit: z.number().int().min(1).max(50).default(5),
-    semantic: z.boolean().default(true),
-  }),
-]);
-
-const mcpDeleteCommandSchema = deleteCommandSchema.extend({
+/**
+ * MCP ingress, one schema per kernel verb (`server/mcp/kernel-actions.ts`
+ * binds each to an `entity_read` / `entity` action). Generated from the
+ * executable actions each literal exposes.
+ */
+export const entityMcpGetCommandSchema = z.object({
+  action: z.literal("get"),
+  entity: z.enum(generatedMcpEntityActionEntities.get),
+  id: anyShortcodeSchema(generatedMcpEntityActionEntities.get),
+  missing: z.enum(["error", "null"]).default("error"),
+  resultDetail,
+});
+export const entityMcpListCommandSchema = mcpListCommandSchema;
+export const entityMcpSearchCommandSchema = z.object({
+  action: z.literal("search"),
+  entity: z.enum(generatedMcpEntityActionEntities.search),
+  query: z.string().trim().min(1).max(100),
+  limit: z.number().int().min(1).max(50).default(5),
+  semantic: z.boolean().default(true),
+});
+export const entityMcpCreateCommandSchema =
+  generatedMcpEntityCreateCommandSchema.and(resultDetailFields);
+export const entityMcpUpdateCommandSchema =
+  generatedMcpEntityUpdateCommandSchema.and(resultDetailFields);
+export const entityMcpDeleteCommandSchema = deleteCommandSchema.extend({
   entity: z.enum(generatedMcpEntityActionEntities.delete),
 });
-
-const mcpMergeCommandSchema = z.object({
+export const entityMcpBulkUpdateCommandSchema =
+  generatedMcpEntityBulkUpdateCommandSchema(uniqueEntityIdsSchema);
+export const entityMcpRelationCommandSchema =
+  generatedMcpEntityRelationCommandSchema;
+export const entityMcpMergeCommandSchema = z.object({
   action: z.literal("merge"),
   entity: z.enum(generatedMcpEntityActionEntities.merge),
   data: z.record(z.string(), z.unknown()),
   resultDetail,
 });
 
-/** MCP ingress is generated from executable actions each literal exposes. */
+export const entityMcpReadCommandSchema = z.union([
+  entityMcpGetCommandSchema,
+  entityMcpListCommandSchema,
+  entityMcpSearchCommandSchema,
+]);
+
 export const entityMcpCommandSchema = z.union([
   entityMcpReadCommandSchema,
-  generatedMcpEntityCreateCommandSchema.and(resultDetailFields),
-  generatedMcpEntityUpdateCommandSchema.and(resultDetailFields),
-  mcpDeleteCommandSchema,
-  generatedMcpEntityBulkUpdateCommandSchema(uniqueEntityIdsSchema),
-  generatedMcpEntityRelationCommandSchema,
-  mcpMergeCommandSchema,
+  entityMcpCreateCommandSchema,
+  entityMcpUpdateCommandSchema,
+  entityMcpDeleteCommandSchema,
+  entityMcpBulkUpdateCommandSchema,
+  entityMcpRelationCommandSchema,
+  entityMcpMergeCommandSchema,
 ]);
 
 export type EntityQueryCommand = z.infer<typeof entityQueryCommandSchema>;

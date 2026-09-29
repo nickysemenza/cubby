@@ -3,11 +3,13 @@ import {
   buildPaginatedResponse,
   normalizeSorts,
 } from "@cubby/schemas/pagination";
-import type {
-  createProjectFromTasksInput,
-  projectToolUsageSetInput,
-  repointProjectUsesInput,
+import {
+  type createProjectFromTasksInput,
+  LIVE_PROJECT_STATUSES,
+  type projectToolUsageSetInput,
+  type repointProjectUsesInput,
 } from "@cubby/schemas/project";
+import { sumBy } from "es-toolkit";
 import type { z } from "zod";
 
 import { projectContract } from "~/contracts/project.contract";
@@ -154,4 +156,64 @@ export const projectHandlers = implementOperationDomain(projectContract, {
   toolGallery: (context, input) => projectToolGallery(context.db, input),
   setToolUsage: (context, input) =>
     projectSetToolUsageWorkflow(context.db, input, context.actorContext),
+  // Mirrors the UI's Overview default (live statuses) rather than the filter
+  // schema's "no status condition", so an unscoped call doesn't balloon with
+  // completed-project history.
+  houseStatus: (context, input) =>
+    projectDashboardSummary(context.db, {
+      statusScope: [...LIVE_PROJECT_STATUSES],
+      ...input,
+    }),
+  budget: async (context, input) =>
+    projectBudget(await projectPortfolioAnalytics(context.db, input)),
+  repointUses: (context, input) =>
+    projectRepointUsesWorkflow(context.db, input, context.actorContext),
 });
+
+/**
+ * Budget rows sorted worst overrun first; unbudgeted rows sink to the bottom
+ * ordered by projected spend (they're the missing-budget attention items).
+ */
+function projectBudget(
+  analytics: Awaited<ReturnType<typeof projectPortfolioAnalytics>>,
+) {
+  const projects = analytics.costVsEstimate
+    .map((row) => {
+      const projected = row.actual + row.committed;
+      const estimate = row.estimate;
+      return {
+        ...row,
+        projected,
+        remaining: estimate === null ? null : estimate - projected,
+        percentUsed:
+          estimate === null || estimate <= 0
+            ? null
+            : Math.round((projected / estimate) * 100),
+        overBudget: estimate !== null && projected > estimate,
+      };
+    })
+    .sort((a, b) => {
+      if (a.remaining === null || b.remaining === null) {
+        if (a.remaining === b.remaining) return b.projected - a.projected;
+        return a.remaining === null ? 1 : -1;
+      }
+      return a.remaining - b.remaining || b.projected - a.projected;
+    });
+
+  // Totals sum SCOPE ROOTS only. Every row is a subtree rollup, so totalling
+  // all of them counts an in-scope child twice — once in its own row and once
+  // inside its parent's. The rows stay complete; only totals are deduplicated.
+  const scopeRoots = projects.filter((p) => p.isScopeRoot);
+  return {
+    projects,
+    totals: {
+      estimate: sumBy(scopeRoots, (p) => p.estimate ?? 0),
+      actual: sumBy(scopeRoots, (p) => p.actual),
+      committed: sumBy(scopeRoots, (p) => p.committed),
+      projected: sumBy(scopeRoots, (p) => p.projected),
+      overBudgetCount: projects.filter((p) => p.overBudget).length,
+      missingEstimateCount: projects.filter((p) => p.estimate === null).length,
+    },
+    plannedVsActualByMonth: analytics.plannedVsActual,
+  };
+}

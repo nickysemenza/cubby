@@ -118,7 +118,7 @@ history is the archive. Permanent product constraints live in the
 - **Backfill image descriptions as a paced, visible sweep.** Product
   classification evidence is built from `image-description` analyses, but
   automatic scheduling is off (image-processing settings `enabled: false`) and
-  `schedule_image_processing` queues one image at a time, so nearly every
+  `image.schedule_processing` queues one image at a time, so nearly every
   product photo is undescribed and category suggestions see only text. Add a
   "describe every undescribed image" command that enqueues `describe_image`
   jobs in pages on the existing `ImageProcessingJob` queue, with a cap, the
@@ -147,17 +147,17 @@ onHandUnits`; `product-hero-presence.ts` computes the presentation and is
   (not only the `unlocated` view) and reuse the existing location picker and
   immediate-write inventory flows.
 
-- **`resolve_ingredients` suggests product links.** A newly resolved ingredient
+- **`entity.resolve` suggests product links.** A newly resolved ingredient
   can remain unlinked to an existing matching product. Products with
   `ingredientId: null` do not contribute costing until hand-linked. Return
   `candidateProducts` by name similarity and accept
   `linkProductId` in the same call. Pairs with the coverage-visibility entry
   below.
 
-- **`resolve_products` should share `global_search`'s lexical engine.** Name
+- **`entity_read.resolve` should share `search.global`'s lexical engine.** Name
   variants such as
   `Organic Example Fruit` and `Example Fruit` should resolve through the same
-  lexical matching that powers `global_search`. For grocery the ASIN collision
+  lexical matching that powers `search.global`. For grocery the ASIN collision
   check
   misses the Fresh / Whole Foods / in-store ASIN split constantly, so the name
   fallback is load-bearing. Ideal shape: one call taking `{name,
@@ -181,7 +181,7 @@ externalIds[]}` per line and returning exact-id hits, alias hits, and lexical
 
 - **Coverage diagnostics on recipe and product writes.** Recipe create returned
   `totals: pending`, so finding the uncosted lines took a separate
-  `explain_recipe_costing` per recipe per fix. Return
+  `recipe_insights.costing` per recipe per fix. Return
   the per-line `missing: [price|weight|nutrients]` list inline on recipe
   create/update, and on product updates report which recipe lines the change
   closed: one corrected package-weight mapping can repair many recipes.
@@ -262,7 +262,7 @@ text: none` plus candidate names and passes through as "Deterministic local
   extract the Nutrition Facts panel into `labelNutrition` with the image as
   provenance.
 
-- **USDA search ranking and product-driven suggestion.** `search_usda_foods`
+- **USDA search ranking and product-driven suggestion.** `usda_food.search`
   is phrase/AND matching: `"chicken breast ground raw"` (sr_legacy) → 0,
   `"chicken, ground"` → 344. Tokenize and rank, and add
   `suggest_usda_for_product(productId)` that searches on name + brand + GTIN
@@ -327,7 +327,7 @@ example vegetable` must not resolve to the weight of an entire linked bag
 - **Portion shares alongside grams.** Once a household stops weighing and
   serves by eye ("one diner ~40% of the pot"), grams are a proxy that goes stale
   when `estimatedYieldGrams` changes. Accept `{share}` per portion in
-  `save_meal_recipe_preparation` and derive grams at read time from the
+  `meal_recipe.save_preparation` and derive grams at read time from the
   current yield.
 
 - **Project materials and shortfalls.** Add a project-material edge with quantity,
@@ -386,7 +386,7 @@ example vegetable` must not resolve to the weight of an entire linked bag
   Decide between semantic candidates (`services/semantic-search.service.ts`),
   the whole ingredient list if it stays small, or lexical fan-out plus aliases.
   Basis `name, manufacturer, categoryId, notes` — the category lets Jev return
-  none for non-food. Pairs with the `resolve_ingredients` product-link entry.
+  none for non-food. Pairs with the `entity.resolve` product-link entry.
   Other fields without `suggest` (`location.parentId`,
   `productCategory.parentId`, `recipe.cookbookId`, `ledgerParty.kind`,
   `product.growsIngredientId`) stay manual: rare, deliberate edits.
@@ -399,7 +399,7 @@ example vegetable` must not resolve to the weight of an entire linked bag
   the current scoring contract.
   What remains: durable "not available" exceptions still only exist for
   Product and Purchase (the `dataExceptions` jsonb column and
-  `set_data_exception`/`clear_data_exception` are hardcoded to those two —
+  `data_exception.set`/`data_exception.clear` are hardcoded to those two —
   generic durable exceptions are not yet designed); the per-check weights shipped
   are a first cut and may need tuning once worklists are used in anger;
   `projectsMissingBudget` remains a Problems tracker rule, not a `dataQuality`
@@ -589,13 +589,13 @@ example vegetable` must not resolve to the weight of an entire linked bag
   relation `provenance.sources[]` is the declarative construct to extend
   first.
 
-- **Generic HTTP `resources.<entity>.batch` route.** MCP `entity_batch` runs
+- **Generic HTTP `resources.<entity>.batch` route.** MCP `entity.commands` runs
   up to 50 create/update commands per call, but the HTTP surface is one row
   per request, so a native bulk write (library sighting backfill, PR 5 of
   the provenance plan) issued one generated `create` per row; sightings now
   have the native `image.recordSightings` page instead. Promote if a
   5k-asset library makes that measurably slow; the route should mirror
-  `entity_batch`'s independent-item semantics and benefit every entity.
+  `entity.commands`'s independent-item semantics and benefit every entity.
 
 - **One FROM context per entity list.** Every list repo pairs a Drizzle
   relational `findMany` rows query (root table aliased to its lowercase name;
@@ -801,7 +801,7 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   `Broccoli Crowns (Conventional)`, and three ground-beef 80/20s with nothing
   tying them together — each a defensible SKU, none reachable from the
   others. Suggest or require an Ingredient on grocery Product creation and
-  make `resolve_products` search ingredient aliases, so "banana" resolves
+  make `entity_read.resolve` search ingredient aliases, so "banana" resolves
   regardless of which storefront's ASIN the receipt carries.
 
 - **Meal nutrition goals.** Let meal planning compare planned nutrition with
@@ -819,10 +819,10 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   then re-check production.
 
 - **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
-  `get_shopping_list` is a plain structured/text tool. The remaining USDA
+  `nutrition.shopping_list` is a plain structured/text tool. The remaining USDA
   Picker template is 352,004 bytes raw / 83,655 gzip and builds in 132 ms on
   the local M3 development machine. Keep it only while refinement and explicit
-  selection materially outperform a plain `search_usda_foods` result.
+  selection materially outperform a plain `usda_food.search` result.
 
 - **Recurring meals.** Add a focused recurrence model for meals as its own slice,
   separate from templates and nutrition goals.
@@ -908,7 +908,7 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   web-side AI feature needs per-call latency or cost debugging that the AI
   Gateway dashboard cannot answer.
 
-- **`get_vendor_coverage` per account** — Promote when two members hold
+- **`imports_read.vendor_coverage` per account** — Promote when two members hold
   accounts at the same vendor. Coverage and `needs_data` are per Vendor
   today, which would conflate their histories.
 
@@ -938,7 +938,7 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
 - **Decode bytes in image verification** — Promote when a corrupt or fully transparent
   cover is next found by eye. `inspectImageFile`
   (`apps/web/src/server/services/image-integrity.ts`) checks magic bytes, header
-  dimensions, byte length and sha256 but never rasterizes, so `verify_products_images`
+  dimensions, byte length and sha256 but never rasterizes, so `product_enrichment.verify_images`
   reports `verified` for files that will not render. A subagent citing the verify tool
   is therefore not proof of a good image.
 
@@ -951,7 +951,7 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   analytics inform a real decision; disclose the allocation-basis portion without
   excluding it from total spend.
 
-- **Exact entity attribution for `attach_files`** — Promote if mixed-entity batches
+- **Exact entity attribution for `image.attach_files`** — Promote if mixed-entity batches
   distort the MCP usage dashboard. The batch attributes telemetry to its first item's
   entity because one row has nowhere to put a set; a batch spanning entities
   under-reports the rest.
@@ -973,7 +973,7 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   computation; never infer selected sources from matching values or linked-product
   lists. The Cubby-only nutrition overhaul does not depend on this work.
 
-- **Explicit idempotency key for `add_recipe_to_meal`** — Promote if a re-sent agent
+- **Explicit idempotency key for `meal_recipe.add`** — Promote if a re-sent agent
   call actually duplicates a meal line in practice. A natural-key unique index is NOT
   the answer: a meal repeating a recipe at different scales is intended behavior, and
   each occurrence must stay a distinguishable shopping-list contribution. Retry-safety
@@ -1469,7 +1469,7 @@ PRs; unordered.
 
 - **Settle bare card charges.** Work from `/finance` with the purchase-presence
   filter set to none, matching existing Purchases before booking new ones
-  (`match_expenses`, `suggest_financial_transfer_pairs`). Itemize lump-line
+  (`finance_read.expense_match`, `finance_read.transfer_pairs`). Itemize lump-line
   orders only where a receipt is on hand.
 
 - **Ingest a seasonal garden plan with `garden-plan-import`.** Turn a
@@ -1478,7 +1478,7 @@ PRs; unordered.
 
 - **Import the household wardrobe.** One member's clothes per capture session,
   uploaded from the Apple app into a `photo_inventory` run with that member as
-  owner; an agent proposes groups with `propose_photo_groups` and a human
+  owner; an agent proposes groups with `photo_run.propose_groups` and a human
   approves them on the run page. Then import the matching vendor orders and
   work the product match queue (`/recommendations/workbench?kind=product-match`)
   so photo- and purchase-created Products converge. Playbook:

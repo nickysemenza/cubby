@@ -1,10 +1,13 @@
 import { statementRowContract } from "~/contracts/statement-row.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
+  deleteStatementRows,
+  findStatementRowDrift,
   getStatementRowSummary,
   listStatementImports,
   listStatementRows,
   recordStatementRows,
+  updateStatementRows,
 } from "~/server/repo/statement-row";
 import {
   commitStatementCsv,
@@ -30,5 +33,10 @@ export const statementRowHandlers = implementOperationDomain(
     summary: (context, input) =>
       getStatementRowSummary(context.db, input.filters ?? {}),
     imports: (context, input) => listStatementImports(context.db, input.source),
+    drift: (context, input) => findStatementRowDrift(context.db, input),
+    update: (context, input) =>
+      updateStatementRows(context.db, input, context.actorContext),
+    delete: (context, input) =>
+      deleteStatementRows(context.db, input.selector, context.actorContext),
   },
 );

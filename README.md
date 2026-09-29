@@ -783,9 +783,9 @@ One tool renders an interactive UI in hosts that support the
 [MCP Apps extension](https://modelcontextprotocol.io/docs/extensions/apps)
 (SEP-1865) — Claude web and desktop among them:
 
-| Tool                | App                                                                                       |
-| ------------------- | ----------------------------------------------------------------------------------------- |
-| `search_usda_foods` | Pickable cards with data-type richness cues and macros; selection flows back to the agent |
+| Tool               | App                                                                                       |
+| ------------------ | ----------------------------------------------------------------------------------------- |
+| `usda_food.search` | Pickable cards with data-type richness cues and macros; selection flows back to the agent |
 
 The USDA UI is **strictly additive** — a host without the extension ignores
 `_meta.ui.resourceUri` and gets the same `structuredContent` as before. Scope is
@@ -793,7 +793,7 @@ deliberately narrow: an app earns its place only where the chat is the right
 home for the interaction _and_ text is a bad medium for it. Tables, boards, and
 charts stay in the web app, one `openLink` away.
 
-`get_shopping_list` remains a plain tool with structured content and readable
+`nutrition.shopping_list` remains a plain tool with structured content and readable
 text. The removed widget's temporary checkbox state was never durable; durable
 manual items and checks belong to the ranked shopping-list project.
 
@@ -852,10 +852,10 @@ sections there.
 
 ### Recently shipped
 
-- **Either-side-first product import** — belongings can be imported from photos or from vendor orders in any order and converge on one Product. A photo-inventory run's agent proposes item groups (`propose_photo_groups`) that a human edits and approves on the run page, alongside each photo's original, cutout, and processing state. A product match queue in the recommendations workbench pairs never-bought stocked Products with purchased ones (text similarity, name overlap, plus agent pairs recorded with evidence via `propose_product_match`) for side-by-side review and merge into the purchase Product with own photos leading the cover. Purchase prep also treats a numeric order-line SKU as a GTIN, so a barcode read off a photographed tag is an exact match.
-- **Product merge** — fold duplicate Product rows into one survivor: stock, ledger lines, external identifiers, images, unit mappings, tasks, project uses, and wishlist candidacies move onto the keeper, same-location stock is summed rather than dropped, and every recipe that costs through a merged-away or deleted product recomputes. Exposed as `merge_products` over MCP; `findDuplicateProductIdentities` (Problems) surfaces candidates by shared identifier-slot evidence (a barcode or a retailer SKU). Built on a shared merge core (`finalizeMerge`) that now underlies all four entity merges (ingredient, vendor, purchase, product) and makes the embedding-cleanup cascade structural rather than a per-merge obligation.
+- **Either-side-first product import** — belongings can be imported from photos or from vendor orders in any order and converge on one Product. A photo-inventory run's agent proposes item groups (`photo_run.propose_groups`) that a human edits and approves on the run page, alongside each photo's original, cutout, and processing state. A product match queue in the recommendations workbench pairs never-bought stocked Products with purchased ones (text similarity, name overlap, plus agent pairs recorded with evidence via `product_enrichment.propose_match`) for side-by-side review and merge into the purchase Product with own photos leading the cover. Purchase prep also treats a numeric order-line SKU as a GTIN, so a barcode read off a photographed tag is an exact match.
+- **Product merge** — fold duplicate Product rows into one survivor: stock, ledger lines, external identifiers, images, unit mappings, tasks, project uses, and wishlist candidacies move onto the keeper, same-location stock is summed rather than dropped, and every recipe that costs through a merged-away or deleted product recomputes. Exposed as `entity.merge` (`entity: "product"`) over MCP; `findDuplicateProductIdentities` (Problems) surfaces candidates by shared identifier-slot evidence (a barcode or a retailer SKU). Built on a shared merge core (`finalizeMerge`) that now underlies all four entity merges (ingredient, vendor, purchase, product) and makes the embedding-cleanup cascade structural rather than a per-merge obligation.
 - **Tool wishlist** — a `Wish` entity (`WSH-`) for tracking wanted-but-not-yet-owned items, independent of inventory or projects. Rebuilt on the shared entity/CRUD-factory machinery; the list surfaces each wish's candidate-product cover images and price range, and expands into per-candidate rows the way the Projects Data tab nests sub-projects.
-- **Manufacturer spelling snapped on create** — `entity create product` resolves `manufacturer` to the established spelling already used among live Products, closing the drift that let variant spellings accumulate; `entity update product` deliberately does not auto-snap.
+- **Manufacturer spelling snapped on create** — `entity.create product` resolves `manufacturer` to the established spelling already used among live Products, closing the drift that let variant spellings accumulate; `entity.update product` deliberately does not auto-snap.
 - **Financial accounts & transactions** — a settlement evidence layer, `FinancialAccount ──< FinancialTransaction`, separate from spend: statement activity (pending charges, split tender, installments, refunds), allocated across the Purchases it settles so one card line can cover several orders. `Expense.cost` remains the sole spend source; reconciliation compares linked transactions against Expense lines as `unknown`/`pending`/`match`/`mismatch`. Client-parsed Monarch statement preview drives selective, user-approved creation.
 - **Typed Expense line roles** — `Expense.lineKind` (`principal`, tax, shipping, discount, fee, tip, other adjustment) distinguishes merchandise/services from productless receipt adjustments, all still summed into `SUM(Expense.cost)`, while excluding adjustment rows from merchandise/category analytics.
 - **`projectTool` link** — a durable, deliberately coarse edge recording that a reusable tool or software Product was used on a project, feeding tool-lifetime-cost and cost-per-project-use rollups without double-counting the original Expense. The `/tools` Usage view adds a tools × projects matrix (three-state toggle cells, grouped by derived trade or manufacturer) for bulk-backfilling usage history, since attaching one project at a time through a dialog had left the ledger largely empty.

@@ -181,7 +181,7 @@ export type FoodSummary = z.infer<typeof foodSummary>;
  * That field is the full ~115-row USDA nutrient table (every fatty acid, amino
  * acid and tocotrienol); embedded once per USDA-linked product it was most of
  * a 133KB `entity get ingredient`. The compact `nutrientsPer100` beside it
- * carries the same tier-1 nutrients keyed by code, and `get_usda_food` still
+ * carries the same tier-1 nutrients keyed by code, and `usda_food.get` still
  * returns the whole table for the one food a caller settles on.
  */
 export const foodSummaryMcpOut = foodSummary.extend({

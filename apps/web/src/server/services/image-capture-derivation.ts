@@ -207,7 +207,7 @@ const cameraLabel = (camera: ImageSightingCamera | null): string | null => {
 
 /**
  * The pure derivation rule. Precedence across every writer of Image capture
- * evidence — including writers outside this function, such as `attach_files`'
+ * evidence — including writers outside this function, such as `image.attach_files`'
  * `import-url` evidence — is `manual > sighting > import-url > exif > analysis
  * > filename`; this function only ever produces `sighting` or `exif`
  * evidence, so it must not downgrade evidence already ranked above the tier

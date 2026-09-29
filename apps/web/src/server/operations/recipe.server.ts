@@ -3,34 +3,45 @@ import type {
   EquivalenceReport,
 } from "@cubby/schemas/equivalences";
 import type { RecipeId } from "@cubby/schemas/identifiers";
+import type { recipeCostingExplainDetail } from "@cubby/schemas/mcp";
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
 import type {
   recipeCookbookScopeInput,
   recipeIdInput,
 } from "@cubby/schemas/recipe";
+import type { RecipeCostingExplain } from "@cubby/schemas/recipe-shared";
 import type { makeableRecipesInput } from "@cubby/schemas/suggestions";
 import { uniq } from "es-toolkit";
+import { z } from "zod";
 
 import {
   recipeContract,
+  recipeNutritionOut,
   recipeStreamsContract,
   suggestionsContract,
 } from "~/contracts/recipe.contract";
 import { harvestEquivalences } from "~/lib/harvest-equivalences";
+import { scaleTotals } from "~/lib/nutrition-estimates";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import type { Database } from "~/server/db";
+import { executeEntity } from "~/server/entity-kernel";
+import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getMultiMeasureRecipeIngredients } from "~/server/repo/equivalences";
 import {
   duplicateRecipe,
+  getAllTags,
   getIngredientCooccurrence,
   getIngredientUsage,
   getRecipeDependencyGraph,
   getRecipesByIDs,
   recipeList,
 } from "~/server/repo/recipe";
-import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
+import {
+  bindShortcodeResolver,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
 import { getIngredientsByIDs } from "~/server/services/ingredient.service";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
@@ -48,6 +59,7 @@ import {
 } from "~/server/workflow-runtime";
 
 import * as imports from "./recipe-import.server";
+import { patchRecipeLine } from "./recipe-line-patch";
 
 const recipeShortcodes = bindShortcodeResolver("recipe");
 const cookbookShortcodes = bindShortcodeResolver("cookbook");
@@ -364,7 +376,145 @@ export const recipeHandlers = implementOperationDomain(recipeContract, {
     imports.forwardGatewayRequestWorkflow(context, input),
   attachCookbookRecipePhoto: (context, input) =>
     imports.attachCookbookRecipePhotoWorkflow(context, input),
+  nutrition: (context, input) => recipeNutrition(context, input),
+  costingExplanation: async (context, input) =>
+    costingExplanation(
+      await explainCostingWorkflow(
+        context.db,
+        { id: input.id },
+        context.services.recipeCosting,
+      ),
+      input.detail,
+    ),
+  tags: (context) => getAllTags(context.db),
+  scrapeUrl: (_context, input) => imports.scrapeWorkflow(input.url),
+  importFromUrl: async (context, input) =>
+    imports.insertImportWorkflow(
+      context,
+      await imports.scrapeWorkflow(input.url),
+    ),
+  createFromText: (context, input) => {
+    const importRecipe = {
+      meta: {
+        title: input.name,
+        description: input.notes || undefined,
+        recipe_yield: input.yield || undefined,
+      },
+      sections: input.sections.map((section) => ({
+        name: section.name || undefined,
+        ingredients: section.ingredients,
+        instructions: section.instructions,
+      })),
+      references: [],
+      servings: input.servings ?? undefined,
+    };
+    return imports.insertImportWorkflow(context, importRecipe);
+  },
+  patchLine: (context, input) => patchRecipeLine(context, input),
 });
+
+type RecipeServingBasis = {
+  servings?: number | null;
+  yield?: { value: number; unit: string } | null;
+};
+
+export const effectiveRecipeServings = (recipe: RecipeServingBasis) =>
+  recipe.servings ??
+  (recipe.yield?.unit === "servings" ? recipe.yield.value : null);
+
+export const buildRecipeNutrition = (input: {
+  recipe: { id: string; name: string };
+  recipeServings: number;
+  requestedServings: number;
+  explain: RecipeCostingExplain;
+}) => {
+  const scaled = scaleTotals(
+    input.explain.computed.totals,
+    input.requestedServings / input.recipeServings,
+  );
+  const unmappedLines = input.explain.computed.diagnostics.flatMap((line) => {
+    const reasons = [
+      ...(line.missing.weight ? (["weight"] as const) : []),
+      ...(line.missing.nutrients ? (["nutrients"] as const) : []),
+    ];
+    return reasons.length > 0
+      ? [{ id: line.id, name: line.name, reasons }]
+      : [];
+  });
+  return recipeNutritionOut.parse({
+    recipe: input.recipe,
+    recipeServings: input.recipeServings,
+    requestedServings: input.requestedServings,
+    nutrition: scaled.nutrition,
+    coverage: {
+      totalLines: input.explain.computed.diagnostics.length,
+      mappedLines:
+        input.explain.computed.diagnostics.length - unmappedLines.length,
+      unmappedLines,
+    },
+  });
+};
+
+const recipeServingBasis = z.object({
+  id: z.string(),
+  name: z.string(),
+  servings: z.number().nullable().optional(),
+  yield: z
+    .object({ value: z.number(), unit: z.string() })
+    .nullable()
+    .optional(),
+});
+
+/** Refuses a recipe with no effective serving basis instead of guessing. */
+async function recipeNutrition(
+  context: AuthenticatedStartOperationContext,
+  input: { recipeId: string; servings: number },
+) {
+  const detail = await executeEntity(context, {
+    action: "get",
+    entity: "recipe",
+    id: input.recipeId,
+    missing: "error",
+  });
+  if (detail.action !== "get" || !detail.item)
+    throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
+  const recipe = recipeServingBasis.parse(detail.item);
+  const recipeServings = effectiveRecipeServings(recipe);
+  if (!recipeServings || recipeServings <= 0)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Recipe ${input.recipeId} has no effective serving basis`,
+    );
+  const recipeId = (
+    await resolveLiveShortcodes(context.db, [input.recipeId], "recipe")
+  ).get(input.recipeId);
+  if (!recipeId) throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
+  return buildRecipeNutrition({
+    recipe: { id: input.recipeId, name: recipe.name },
+    recipeServings,
+    requestedServings: input.servings,
+    explain: await context.services.recipeCosting.explainRecipe(recipeId),
+  });
+}
+
+/** `detail: "lines"` drops both totals blocks and the drift record. */
+export function costingExplanation(
+  explain: RecipeCostingExplain,
+  detail: z.output<typeof recipeCostingExplainDetail>,
+) {
+  if (detail === "full") return explain;
+  const { totals: _persistedTotals, ...persisted } = explain.persisted;
+  const { totals: computedTotals, ...computed } = explain.computed;
+  return {
+    detail: "lines" as const,
+    persisted,
+    computed,
+    coverage: {
+      cost: computedTotals.cost,
+      kcal: computedTotals.nutrition.kcal,
+    },
+  };
+}
 
 export const suggestionsHandlers = implementOperationDomain(
   suggestionsContract,

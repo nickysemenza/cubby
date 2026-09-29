@@ -51,4 +51,11 @@ export const expenseContract = defineContract("expense", {
     output: confirmInventoryExpenseBeneficiaryOut,
     invalidates: ["expense"],
   }),
+  /** Rank ledger rows against vendor-export lines; ranks, never verifies or writes. */
+  match: query({
+    http: false,
+    input: schemas.expenseMatchInput,
+    output: schemas.expenseMatchOut,
+    cache: { tags: [] },
+  }),
 });
