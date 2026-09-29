@@ -330,6 +330,8 @@ export interface RepositorySpec<
 > {
   /** Declared delete/merge edge policies; `{ delete: {} }` when omitted. */
   lifecycle?: EntityLifecycleContract;
+  listRead?: EntityRepository<E, SchemasFor<E>>["listRead"];
+  listSummary?: EntityRepository<E, SchemasFor<E>>["listSummary"];
   /** `false` when writes have no projections or dependents to refresh. */
   sideEffects?: boolean;
   get: (
@@ -510,6 +512,8 @@ export function defineRepository<
   const repository: EntityRepository<E, SchemasFor<E>> = {
     get: spec.get,
     list: spec.list,
+    listRead: spec.listRead,
+    listSummary: spec.listSummary,
   };
   // Only the actions the declaration grants reach the kernel; a readOnly
   // entity's spec may still carry methods its own workflows use.

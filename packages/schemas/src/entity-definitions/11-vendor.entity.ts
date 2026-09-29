@@ -41,6 +41,11 @@ export default defineEntity({
       ],
     },
     list: {
+      read: {
+        media: ["logo", "displayImages"],
+        derived: ["purchaseCount", "spend", "latestPurchaseDate"],
+        quality: ["dataQuality"],
+      },
       actionOverrides: ["merge", "delete"],
       totalOverrides: [
         { id: "spend", label: "Spend", keys: ["spend"], format: "currency" },

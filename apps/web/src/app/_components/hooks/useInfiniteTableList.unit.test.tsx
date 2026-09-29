@@ -4,6 +4,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { entityListBaseFor } from "~/entities/entity-list";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 
@@ -59,6 +60,253 @@ afterEach(() => {
 });
 
 describe("useInfiniteTableList", () => {
+  it("invalidates the generated base catalog plan after an entity mutation", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+    });
+    clients.push(client);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const execute = vi.fn(async () => page("first", 0, 1));
+    const basePlan = entityListBaseFor("expense").listQueryPlan({
+      pagination: { pageIndex: 0, pageSize: 1 },
+      filters: {},
+    });
+    const queryOptions = () => ({
+      ...basePlan,
+      execute,
+      progressive: undefined,
+    });
+    renderHook(
+      () =>
+        useInfiniteTableList({
+          queryOptions,
+          buildFilters: () => ({}),
+          tableState,
+        }),
+      { wrapper },
+    );
+    await waitFor(() => expect(execute).toHaveBeenCalledOnce());
+    await invalidateOperationTags(client, entityRipple("expense"));
+    await waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
+  });
+
+  // A mutation can refetch identical core data before React observes fetching.
+  // The prior derived request must retire at invalidation, not at base arrival.
+  it("retires pending enrichment immediately when a mutation refetch structurally shares base rows", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    clients.push(client);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const old = deferred<{
+      groups: {
+        id: "derived";
+        state: "ready";
+        data: { id: string; cost: number }[];
+      }[];
+      missingIds: string[];
+    }>();
+    const signals: AbortSignal[] = [];
+    const response = {
+      ...page("first", 0, 1),
+      deferredGroups: [{ id: "derived" as const, fields: ["cost"] }],
+    };
+    const basePlan = entityListBaseFor("expense").listQueryPlan({
+      pagination: { pageIndex: 0, pageSize: 1 },
+      filters: {},
+    });
+    const execute = vi.fn(async () => response);
+    const queryOptions = () => ({
+      ...basePlan,
+      execute,
+      progressive: {
+        enrich: async (
+          _ids: string[],
+          _groups: ("media" | "quality" | "relations" | "derived")[],
+          signal: AbortSignal,
+        ) => {
+          signals.push(signal);
+          return signals.length === 1
+            ? old.promise
+            : {
+                groups: [
+                  {
+                    id: "derived" as const,
+                    state: "ready" as const,
+                    data: [{ id: "first", cost: 5 }],
+                  },
+                ],
+                missingIds: [],
+              };
+        },
+        summary: async () => ({ cost: 5 }),
+      },
+    });
+    const { result } = renderHook(
+      () =>
+        useInfiniteTableList({
+          queryOptions,
+          buildFilters: () => ({}),
+          tableState,
+        }),
+      { wrapper },
+    );
+    await waitFor(() => expect(signals).toHaveLength(1));
+    await act(async () => {
+      const invalidation = invalidateOperationTags(
+        client,
+        entityRipple("expense"),
+      );
+      expect(signals[0]?.aborted).toBe(true);
+      old.resolve({
+        groups: [
+          { id: "derived", state: "ready", data: [{ id: "first", cost: 999 }] },
+        ],
+        missingIds: [],
+      });
+      await invalidation;
+    });
+    await waitFor(() =>
+      expect(result.current.data).toEqual([{ id: "first", cost: 5 }]),
+    );
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores a late group after a filter transition and retains the new group's error", async () => {
+    const old = deferred<{
+      groups: {
+        id: "derived";
+        state: "ready";
+        data: { id: string; cost: number }[];
+      }[];
+      missingIds: string[];
+    }>();
+    let oldSignal: AbortSignal | undefined;
+    const queryOptions = ({ filters }: { filters: TestFilters }) => ({
+      queryKey: ["staged-filter", filters.scope],
+      execute: async () => ({
+        ...page(filters.scope, 0, 1),
+        deferredGroups: [{ id: "derived" as const, fields: ["cost"] }],
+      }),
+      progressive: {
+        enrich: async (
+          _ids: string[],
+          _groups: ("media" | "quality" | "relations" | "derived")[],
+          signal: AbortSignal,
+        ) => {
+          if (filters.scope === "old") {
+            oldSignal = signal;
+            return old.promise;
+          }
+          return {
+            groups: [
+              {
+                id: "derived" as const,
+                state: "error" as const,
+                error: {
+                  code: "INTERNAL_SERVER_ERROR",
+                  message: "Synthetic derived failure",
+                },
+              },
+            ],
+            missingIds: [],
+          };
+        },
+        summary: async () => ({ cost: filters.scope === "old" ? 999 : 5 }),
+      },
+    });
+    const { result, rerender } = renderHook(
+      ({ scope }) =>
+        useInfiniteTableList({
+          queryOptions,
+          buildFilters: () => ({ scope }),
+          tableState,
+        }),
+      { initialProps: { scope: "old" }, wrapper: createWrapper() },
+    );
+    await waitFor(() => expect(oldSignal).toBeDefined());
+    rerender({ scope: "new" });
+    await waitFor(() => expect(result.current.data).toEqual([{ id: "new" }]));
+    await waitFor(() =>
+      expect(result.current.enrichmentState("new", "cost")).toMatchObject({
+        state: "error",
+        error: "Synthetic derived failure",
+      }),
+    );
+    expect(oldSignal?.aborted).toBe(true);
+    await act(async () =>
+      old.resolve({
+        groups: [
+          { id: "derived", state: "ready", data: [{ id: "new", cost: 999 }] },
+        ],
+        missingIds: [],
+      }),
+    );
+    expect(result.current.data).toEqual([{ id: "new" }]);
+    expect(result.current.sums).toEqual({ cost: 5 });
+  });
+
+  it("renders base rows before deferred fields and totals, and cancels them on refresh", async () => {
+    const enrichment = deferred<{
+      groups: {
+        id: "derived";
+        state: "ready";
+        data: { id: string; cost: number }[];
+      }[];
+      missingIds: string[];
+    }>();
+    const summary = deferred<{ cost: number }>();
+    let enrichmentSignal: AbortSignal | undefined;
+    const queryOptions = () => ({
+      queryKey: ["progressive-boundary"],
+      execute: async () => ({
+        ...page("first", 0, 1),
+        deferredGroups: [{ id: "derived" as const, fields: ["cost"] }],
+      }),
+      progressive: {
+        enrich: async (
+          _ids: string[],
+          _groups: ("media" | "quality" | "relations" | "derived")[],
+          signal: AbortSignal,
+        ) => {
+          enrichmentSignal = signal;
+          return enrichment.promise;
+        },
+        summary: async () => summary.promise,
+      },
+    });
+    const { result, unmount } = renderHook(
+      () =>
+        useInfiniteTableList({
+          queryOptions,
+          buildFilters: () => ({ scope: "same" }),
+          tableState,
+        }),
+      { wrapper: createWrapper() },
+    );
+    await waitFor(() => expect(result.current.data).toEqual([{ id: "first" }]));
+    await waitFor(() =>
+      expect(result.current.enrichmentState("first", "cost")).toEqual({
+        state: "loading",
+      }),
+    );
+    expect(result.current.sums).toBeUndefined();
+    expect(result.current.summaryState.state).toBe("loading");
+    unmount();
+    expect(enrichmentSignal?.aborted).toBe(true);
+    enrichment.resolve({
+      groups: [
+        { id: "derived", state: "ready", data: [{ id: "first", cost: 99 }] },
+      ],
+      missingIds: [],
+    });
+    summary.resolve({ cost: 99 });
+  });
+
   it("keeps operation cache tags on the infinite query", async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false, gcTime: Infinity } },

@@ -2,6 +2,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { mealListItemOut } from "@cubby/schemas/meal";
 import type {
   MealCreateInput,
   MealFilters,
@@ -14,6 +15,7 @@ import { mealTypeValues } from "@cubby/schemas/meal-classification";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, gte, inArray, lte, or, type SQL, sql } from "drizzle-orm";
 
+import { projectListRows } from "~/entities/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -40,6 +42,11 @@ import {
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list";
+import {
+  loadListGroup,
+  type ListProjection,
+  wantsListGroup,
+} from "~/server/repo/list-projection";
 import { deleteByPolicy } from "~/server/repo/removal";
 import { createEntityReader } from "~/server/repo/repository";
 import {
@@ -49,7 +56,11 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { dbMealToAPI, rollupMealTotals } from "./helpers";
+import {
+  dbMealToAPI,
+  dbMealListReadProjection,
+  rollupMealTotals,
+} from "./helpers";
 
 type MealMutationResult = { output: MealOut; entityId: MealId };
 
@@ -241,12 +252,13 @@ export const buildMealWhere = (
   ]);
 };
 
-export const mealList = async (
+export const mealListRead = async (
   db: Database,
   filters: MealFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
+  projection: ListProjection = { kind: "full" },
 ) => {
   // `mealType` must sort by slot, not by slug: a plain text ordering puts
   // dessert before dinner, which reads as a broken table. `mealTypeValues`
@@ -266,7 +278,7 @@ export const mealList = async (
   };
   return mealScaffold.list(
     db,
-    { filters, sorts, pagination, readIntent },
+    { filters, sorts, pagination, readIntent, projection },
     {
       where: buildMealWhere(db, filters),
       resolveSort: resolveMealSort,
@@ -274,21 +286,73 @@ export const mealList = async (
       // dump every one of them into an arbitrarily-ordered NULL block. This
       // orders that block the way its visible label reads.
       tieBreaker: sql`${meal.date} desc`,
-      select: (page) =>
-        getDb(db).query.meal.findMany({ ...page, ...relations.meal.full }),
-      hydrate: async (rows) => {
-        const qualities = await loadDataQualities(
-          db,
-          "meal",
-          rows.map((row) => row.id),
+      select: (page, selected) =>
+        getDb(db).query.meal.findMany({
+          ...page,
+          with: {
+            recipes:
+              wantsListGroup(selected, "relations") ||
+              wantsListGroup(selected, "derived")
+                ? relations.meal.full.with.recipes
+                : undefined,
+            images: wantsListGroup(selected, "media")
+              ? relations.meal.full.with.images
+              : undefined,
+          },
+        }),
+      hydrate: async (rows, selected) => {
+        const qualities = await loadListGroup(selected, "quality", () =>
+          loadDataQualities(
+            db,
+            "meal",
+            rows.map((row) => row.id),
+          ),
         );
-        return withDisplayImages(db, "meal", rows, (row) =>
-          // SAFETY: `row` came from `rows`, which `qualities` was loaded for.
-          dbMealToAPI(row, qualities.get(row.id)!),
-        );
+        const mapRow = (row: (typeof rows)[number]) => {
+          const result = dbMealListReadProjection(
+            {
+              ...row,
+              recipes: (row.recipes ?? []).flatMap((entry) =>
+                "recipe" in entry ? [entry] : [],
+              ),
+              images: (row.images ?? []).flatMap((entry) =>
+                "image" in entry ? [entry] : [],
+              ),
+            },
+            selected,
+          );
+          if (qualities)
+            Object.assign(result, { dataQuality: qualities.get(row.id) });
+          return result;
+        };
+        const mapped = wantsListGroup(selected, "media")
+          ? await withDisplayImages(db, "meal", rows, mapRow)
+          : rows.map(mapRow);
+        return projectListRows("meal", mapped, selected);
       },
     },
   );
+};
+
+export const mealList = async (
+  db: Database,
+  filters: MealFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
+) => {
+  const result = await mealListRead(
+    db,
+    filters,
+    sorts,
+    pagination,
+    readIntent,
+    { kind: "full" },
+  );
+  return {
+    ...result,
+    data: result.data.map((row) => mealListItemOut.parse(row)),
+  };
 };
 
 export const createMealWithEntityId = async (

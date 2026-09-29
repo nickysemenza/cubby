@@ -88,6 +88,8 @@ export interface CubbyColumnMeta<TData = CellData> {
   mono?: boolean;
   filterConfig?: FilterConfig;
   cellData?: ColumnCellData<TData>;
+  /** Authoritative list inputs when a display column has another id. */
+  readFields?: readonly string[];
   /** Public refs rendered by this column, collected once at the table owner. */
   entityRefs?: (row: TData) => readonly EntityRef[];
 }

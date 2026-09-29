@@ -12,6 +12,10 @@ import type {
   ProductCategoryShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
+import {
+  inventoryDisplayName,
+  inventoryListItemOut,
+} from "@cubby/schemas/inventory";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import {
   buildTakeSkip,
@@ -20,6 +24,7 @@ import {
 } from "@cubby/schemas/pagination";
 import { and, asc, count, desc, eq, inArray, not, sql, sum } from "drizzle-orm";
 
+import { projectListRows } from "~/entities/list-read-schema";
 import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { inventoryEntry, location, product } from "~/server/db/schema";
@@ -45,6 +50,11 @@ import {
   updateLiveAndReturn,
 } from "~/server/repo/database-helpers";
 import { declaredFilterPredicates, listIdsCondition } from "~/server/repo/list";
+import {
+  loadListGroup,
+  wantsListGroup,
+  type ListProjection,
+} from "~/server/repo/list-projection";
 import { isGlobalUnknownLocation } from "~/server/repo/location";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
 import {
@@ -60,6 +70,11 @@ import {
 } from "~/server/repo/search-lexical";
 import { resolveFilterIds } from "~/server/repo/shortcode-resolver";
 
+import {
+  inventoryEntryBaseFields,
+  dbInventoryEntryListValues,
+} from "./mappers";
+
 // InventoryEntry has no incoming foreign keys. Keep the empty policy explicit
 // so a newly introduced reference must be classified before kernel deletion
 // can remain registered.
@@ -69,11 +84,7 @@ export const INVENTORY_DELETE_EDGE_POLICY =
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { assertLiveTargets, inventoryAuditRow } from "./helpers";
-import {
-  dbInventoryEntryToAPI,
-  dbInventoryEntryToListAPI,
-  requireLoadedProductPricing,
-} from "./mappers";
+import { dbInventoryEntryToAPI, requireLoadedProductPricing } from "./mappers";
 import {
   assertIndividualOwner,
   loadEffectiveInventoryOwnership,
@@ -358,18 +369,24 @@ export const buildInventoryWhere = async (
   );
 };
 
-export const inventoryentryList = async (
+export const inventoryentryListRead = async (
   db: Database,
   filters: InventoryFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  projection: ListProjection,
   readIntent: ListReadIntent = "page",
 ) => {
   const { take, skip } = buildTakeSkip(pagination);
   // The rows, their sort/filter and the footer total all read ONE computed map;
   // a count-only read shows none of them.
   const valuations =
-    readIntent === "count" ? undefined : await loadLiveInventoryValuations(db);
+    readIntent === "count" ||
+    (!wantsListGroup(projection, "derived") &&
+      !sorts.some((sort) => sort.orderBy === "valuation") &&
+      filters.valuationStatus === undefined)
+      ? undefined
+      : await loadLiveInventoryValuations(db);
   const whereCondition = await buildInventoryWhere(db, filters, valuations);
 
   if (readIntent === "count") {
@@ -394,7 +411,11 @@ export const inventoryentryList = async (
   }
 
   const baseQuery = getDb(db)
-    .select({ inventoryEntry })
+    .select({
+      inventoryEntry,
+      productName: product.name,
+      locationName: location.name,
+    })
     .from(inventoryEntry)
     .innerJoin(
       product,
@@ -413,73 +434,146 @@ export const inventoryentryList = async (
       .offset(skip),
     // Count + valuation aggregate share the joins/filters, so the footer's
     // valuation total covers the FULL filtered set (client only holds a page).
-    getDb(db)
-      .select({
-        count: count(),
-        valuationSum:
-          valuations === undefined || readIntent === "sample"
-            ? sql<number>`0`
-            : sum(inventoryValuationSql(valuations, inventoryEntry.id)),
-      })
-      .from(inventoryEntry)
-      .innerJoin(
-        product,
-        and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
-      )
-      .innerJoin(
-        location,
-        and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
-      )
-      .where(whereCondition),
+    inventoryListAggregate(
+      db,
+      whereCondition,
+      valuations,
+      projection.kind === "full" && readIntent === "page",
+    ).then((result) => [result]),
   ]);
 
-  // Fetch row-display data with relations in a single batched query (avoids N+1)
-  const ids = results.map((row) => row.inventoryEntry.id);
-  const listResults =
-    ids.length > 0
+  const entries = results.map((row) => row.inventoryEntry);
+  const [ownership, dataQualities] = await Promise.all([
+    loadListGroup(projection, ["relations", "derived"], () =>
+      loadEffectiveInventoryOwnership(db, entries),
+    ),
+    loadListGroup(projection, "quality", () =>
+      loadDataQualities(
+        db,
+        "inventory",
+        entries.map((row) => row.id),
+      ),
+    ),
+  ]);
+  const titleById = new Map(
+    results.map((row) => [
+      row.inventoryEntry.id,
+      inventoryDisplayName({
+        productName: row.productName,
+        locationName: row.locationName,
+      }),
+    ]),
+  );
+  const coreRow = (row: (typeof entries)[number]) => ({
+    ...inventoryEntryBaseFields(
+      row,
+      valuations?.get(row.id) ?? null,
+      dataQualities?.get(row.id),
+      ownership?.get(row.id),
+    ),
+    displayName: titleById.get(row.id),
+  });
+  let candidates = entries.map(coreRow);
+  if (wantsListGroup(projection, "relations")) {
+    const rows = entries.length
       ? await getDb(db).query.inventoryEntry.findMany({
-          where: inArray(inventoryEntry.id, ids),
+          where: inArray(
+            inventoryEntry.id,
+            entries.map((row) => row.id),
+          ),
           ...relations.inventory.list,
         })
       : [];
-
-  // Preserve original order from the paged query.
-  const resultsById = new Map(listResults.map((r) => [r.id, r]));
-  const orderedResults = ids
-    .map((id) => resultsById.get(id))
-    .filter((r): r is NonNullable<typeof r> => r !== undefined);
-  const [pricing, ownership, dataQualities] = await Promise.all([
-    loadInventoryEntryPricing(db, orderedResults),
-    loadEffectiveInventoryOwnership(db, orderedResults),
-    loadDataQualities(
-      db,
-      "inventory",
-      orderedResults.map((entry) => entry.id),
-    ),
-  ]);
-  const inventoryEntries = await withDisplayImages(
-    db,
-    "inventory",
-    orderedResults,
-    (entry) =>
-      dbInventoryEntryToListAPI(
-        entry,
-        valuations?.get(entry.id) ?? null,
-        requireLoadedProductPricing(pricing, entry.product.id),
-        // SAFETY: `entry` came from `orderedResults`, which `dataQualities` was
-        // loaded for.
-        dataQualities.get(entry.id)!,
-        ownership.get(entry.id),
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const ordered = entries.flatMap((row) => {
+      const found = byId.get(row.id);
+      return found ? [found] : [];
+    });
+    const pricing = await loadInventoryEntryPricing(db, ordered);
+    candidates = ordered.map((row) =>
+      dbInventoryEntryListValues(
+        row,
+        valuations?.get(row.id) ?? null,
+        requireLoadedProductPricing(pricing, row.product.id),
+        dataQualities?.get(row.id),
+        ownership?.get(row.id),
       ),
-  );
+    );
+  }
+  const candidatesByCode = new Map(candidates.map((row) => [row.id, row]));
+  const mapped = wantsListGroup(projection, "media")
+    ? await withDisplayImages(db, "inventory", entries, (row) =>
+        candidatesByCode.get(
+          inventoryEntryBaseFields(row, null, undefined).id,
+        )!,
+      )
+    : candidates;
+  const inventoryEntries = projectListRows("inventory", mapped, projection);
   const valuationSum = Number(countResult?.valuationSum ?? 0);
   return {
     data: inventoryEntries,
     count: countResult?.count ?? 0,
     sums:
-      readIntent === "page"
+      projection.kind === "full" && readIntent === "page"
         ? { valuation: Number.isNaN(valuationSum) ? 0 : valuationSum }
         : undefined,
+  };
+};
+
+const inventoryListAggregate = async (
+  db: Database,
+  where: Awaited<ReturnType<typeof buildInventoryWhere>>,
+  valuations: InventoryValuations | undefined,
+  includeSummary: boolean,
+) => {
+  const [result] = await getDb(db)
+    .select({
+      count: count(),
+      valuationSum:
+        includeSummary && valuations
+          ? sum(inventoryValuationSql(valuations, inventoryEntry.id))
+          : sql<number>`0`,
+    })
+    .from(inventoryEntry)
+    .innerJoin(
+      product,
+      and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
+    )
+    .innerJoin(
+      location,
+      and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
+    )
+    .where(where);
+  return result ?? { count: 0, valuationSum: 0 };
+};
+export const inventoryentryListSummary = async (
+  db: Database,
+  filters: InventoryFilters,
+) => {
+  const valuations = await loadLiveInventoryValuations(db);
+  const where = await buildInventoryWhere(db, filters, valuations);
+  const result = await inventoryListAggregate(db, where, valuations, true);
+  const value = Number(result.valuationSum ?? 0);
+  return { valuation: Number.isNaN(value) ? 0 : value };
+};
+export const inventoryentryList = async (
+  db: Database,
+  filters: InventoryFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
+) => {
+  const page = await inventoryentryListRead(
+    db,
+    filters,
+    sorts,
+    pagination,
+    { kind: "full" },
+    readIntent,
+  );
+  return {
+    ...page,
+    data: page.data.map((row) => inventoryListItemOut.parse(row)),
   };
 };
 

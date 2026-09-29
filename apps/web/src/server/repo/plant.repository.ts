@@ -20,6 +20,7 @@ import {
   createPlant,
   getPlantByShortcode,
   listPlants,
+  listPlantsRead,
   mergePlants,
   PLANT_DELETE_EDGE_POLICY,
   PLANT_MERGE_EDGE_POLICY,
@@ -45,6 +46,8 @@ export const plantRepository = defineRepository("plant", {
   },
   get: onDb(getPlantByShortcode),
   list: listOn(listPlants),
+  listRead: (ctx, filters, sorts, pagination, projection) =>
+    listPlantsRead(ctx.db, filters, sorts, pagination, projection),
   create: asActor(createPlant),
   update: asActor(updatePlant),
   bulkUpdate: async (ctx, ids, data) => {

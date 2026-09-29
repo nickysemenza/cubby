@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { entityListInputSchema } from "../../../apps/web/src/entities/generated/entity-lists.gen.ts";
 import { generatedEntityFieldModels } from "../../../packages/schemas/src/generated/entity-field-model.gen.ts";
 import { entityInspectorMetadata } from "../../../packages/schemas/src/generated/entity-inspector.gen.ts";
 import { entityKeys } from "../../../packages/schemas/src/generated/entity-summary.gen.ts";
@@ -228,6 +229,49 @@ const renderFilterSwitch = (
   `                }\n` +
   `            }`;
 
+/** The same one-level flattening as the resource HTTP query, emitted in reverse for POST lists. */
+const progressiveFilterPaths = (
+  entity: string,
+): Map<string, readonly string[]> => {
+  const input = entityListInputSchema.options.find(
+    (option) => option.shape.entity.value === entity,
+  );
+  if (input === undefined)
+    throw new Error(`${entity}: progressive list input is missing`);
+  const result = new Map<string, readonly string[]>();
+  for (const [field, schema] of Object.entries(input.shape.filters.shape)) {
+    let inner: z.core.$ZodType = schema;
+    while (inner instanceof z.ZodOptional || inner instanceof z.ZodNullable)
+      inner = inner.unwrap();
+    if (inner instanceof z.ZodObject) {
+      for (const key of Object.keys(inner.shape))
+        result.set(`${field}${key.charAt(0).toUpperCase()}${key.slice(1)}`, [
+          field,
+          key,
+        ]);
+    } else result.set(field, [field]);
+  }
+  return result;
+};
+
+const progressiveFilterValue = ({ wire }: ClassifiedParameter): string => {
+  switch (wire.kind) {
+    case "number":
+      return `.number(try value.double(name))`;
+    case "integer":
+      return `.number(Double(try value.int(name)))`;
+    case "boolean":
+      return `.bool(try value.bool(name))`;
+    case "stringArray":
+    case "enumArray":
+    case "anyOfStringArray":
+    case "anyOfEnumArray":
+      return `.array(value.strings.map(JSONValue.string))`;
+    default:
+      return `.string(try value.string(name))`;
+  }
+};
+
 /**
  * Generate-time checks that tie the stage-1 catalog facts to the document:
  * every declared filter wire name is a query parameter of the entity's list
@@ -421,6 +465,39 @@ ${renderFilterSwitch(
             )`,
     )
     .join("\n");
+  const progressiveCases = [...listParameters]
+    .map(([entity, parameters]) => {
+      const paths = progressiveFilterPaths(entity);
+      const arms = parameters
+        .filter(
+          (parameter) =>
+            !PAGING_PARAMETERS.has(parameter.name) &&
+            parameter.name !== "groupBy",
+        )
+        .map((parameter) => {
+          const path = paths.get(parameter.name);
+          if (path === undefined)
+            throw new Error(
+              `${entity}.${parameter.name}: progressive filter path is missing`,
+            );
+          const converted = progressiveFilterValue(parameter);
+          return path.length === 1
+            ? `${ARM}case ${swiftString(parameter.name)}: result[${swiftString(path[0]!)}] = ${converted}`
+            : `${ARM}case ${swiftString(parameter.name)}:
+                    var nested = result[${swiftString(path[0]!)}]?.objectValue ?? [:]
+                    nested[${swiftString(path[1]!)}] = ${converted}
+                    result[${swiftString(path[0]!)}] = .object(nested)`;
+        });
+      return `        case .${swiftCase(entity)}:
+            for name in filters.names {
+                guard name != "groupBy", let value = filters[name] else { continue }
+                switch name {
+${arms.join("\n")}
+${ARM}default: throw EntityFilterError.unknownParameter(.${swiftCase(entity)}, name)
+                }
+            }`;
+    })
+    .join("\n");
   const filterValueCases = [...listParameters]
     .map(([entity, parameters]) => {
       const arms = parameters.flatMap((parameter) => {
@@ -531,6 +608,29 @@ ${nativeReadCases}${fallback((key) => nativeActionsByEntity.get(key)?.has("list"
 }
 
 extension EntityDescriptor {
+    /// Reverses the resource query's generated filter flattening for the shared structured POST.
+    func progressiveListInput(
+        page: Int, pageSize: Int, sort: String?, filters: EntityFilterState
+    ) throws -> EntityListBaseInput {
+        var result: [String: JSONValue] = [:]
+        switch key {
+${progressiveCases}
+        default: throw EntityOperationError.unsupported(key, .list)
+        }
+        var input: [String: JSONValue] = [
+            "entity": .string(key.rawValue), "filters": .object(result),
+            "pagination": .object(["pageIndex": .number(Double(max(0, page - 1))), "pageSize": .number(Double(pageSize))])
+        ]
+        if let sort {
+            input["sort"] = .array(sort.split(separator: ",").map { field in
+                .object(["orderBy": .string(field.hasPrefix("-") ? String(field.dropFirst()) : String(field)),
+                         "direction": .string(field.hasPrefix("-") ? "desc" : "asc")])
+            })
+        }
+        if let group = filters["groupBy"] { input["groupBy"] = .string(try group.string("groupBy")) }
+        return try JSONValue.object(input).decoded()
+    }
+
     /// One page of rows as the dynamic projection \`EntityRow\` reads. Typed on the wire; the
     /// \`JSONValue\` is produced from the decoded value, never from the response bytes. Filters
     /// are keyed by the list route's query parameter names (\`FilterDescriptor.wire\`).
@@ -592,7 +692,7 @@ ${switchBody(orderCases, "update")}
 }
 
 extension JSONValue {
-    fileprivate func decoded<T: Decodable>() throws -> T {
+    func decoded<T: Decodable>() throws -> T {
         try JSONDecoder.cubby().decode(T.self, from: JSONEncoder.cubby().encode(self))
     }
 }
@@ -612,6 +712,9 @@ extension JSONValue {
  * hand-written in `CubbyClient.swift`.
  */
 const CLIENT_PASSTHROUGH_METHODS = {
+  "entity.listBase": { method: "entityListBase", doc: null },
+  "entity.listEnrichment": { method: "entityListEnrichment", doc: null },
+  "entity.listSummary": { method: "entityListSummary", doc: null },
   "activity.detail": { method: "activityDetail", doc: null },
   "activity.devices": { method: "activityDevices", doc: null },
   "activity.events": { method: "activityEvents", doc: null },

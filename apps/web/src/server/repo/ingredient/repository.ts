@@ -26,6 +26,7 @@ import {
 } from "./crud";
 import { deleteIngredients, INGREDIENT_DELETE_EDGE_POLICY } from "./deletion";
 import { INGREDIENT_MERGE_EDGE_POLICY, mergeIngredients } from "./merge";
+import { ingredientListRead } from "./search";
 import { ingredientList } from "./search";
 
 const ingredientShortcodes = bindShortcodeResolver("ingredient");
@@ -46,6 +47,8 @@ export const ingredientRepository = defineRepository("ingredient", {
       : null;
   },
   list: listOn(ingredientList),
+  listRead: (ctx, filters, sorts, pagination, projection) =>
+    ingredientListRead(ctx.db, filters, sorts, pagination, projection),
   create: asActor(createIngredient),
   update: async (ctx, shortcode, data) => {
     const entityId = await ingredientShortcodes.one(ctx.db, shortcode);

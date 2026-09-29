@@ -10,12 +10,15 @@ import {
   updateExpensesInBulk,
   updateExpense,
 } from "./crud";
-import { expenseList } from "./lookup";
+import { expenseList, expenseListRead, expenseListSummary } from "./lookup";
 
 export const expenseRepository = defineRepository("expense", {
   lifecycle: { delete: EXPENSE_DELETE_EDGE_POLICY },
   get: onDb(getExpenseByShortcode),
   list: listOn(expenseList),
+  listRead: (ctx, filters, sorts, pagination, projection) =>
+    expenseListRead(ctx.db, filters, sorts, pagination, projection),
+  listSummary: (ctx, filters) => expenseListSummary(ctx.db, filters),
   create: async (ctx, data) => {
     const result = await createExpense(ctx.db, data, ctx.actorContext);
     await recomputeRecipesForPriceAffectedProducts(

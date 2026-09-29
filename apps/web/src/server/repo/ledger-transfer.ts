@@ -20,6 +20,7 @@ import { ledgerTransferOut } from "@cubby/schemas/ledger-transfer";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { projectListRows } from "~/entities/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -42,6 +43,11 @@ import {
   replaceLedgerSourceClaims,
 } from "~/server/repo/ledger-source-claim";
 import { listScaffold } from "~/server/repo/list";
+import {
+  listGroupFields,
+  loadListGroup,
+  type ListProjection,
+} from "~/server/repo/list-projection";
 import { cents } from "~/server/repo/money";
 import {
   asActor,
@@ -176,6 +182,84 @@ const hydrate = async (
   );
   // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
   return rows.map((row) => toOut(row, dataQualities.get(row.id)!));
+};
+
+const selectTransfersRead = (
+  db: Database | DrizzleTransaction,
+  projection: ListProjection,
+) => {
+  const {
+    fromPartyShortcode,
+    toPartyShortcode,
+    toPartyName,
+    fromPartyKind,
+    toPartyKind,
+    sourceClaims,
+    evidenceTransactionIds,
+    ...core
+  } = columns;
+  return unwrapDb(db)
+    .select({
+      ...core,
+      ...listGroupFields(projection, "relations", () => ({
+        fromPartyShortcode,
+        toPartyShortcode,
+        toPartyName,
+        sourceClaims,
+        evidenceTransactionIds,
+      })),
+      ...listGroupFields(projection, "derived", () => ({
+        fromPartyKind,
+        toPartyKind,
+      })),
+    })
+    .from(ledgerTransfer);
+};
+const hydrateTransfersRead = async (
+  db: Database,
+  rows: Awaited<ReturnType<typeof selectTransfersRead>>,
+  projection: ListProjection,
+) => {
+  const qualities = await loadListGroup(projection, "quality", () =>
+    loadDataQualities(
+      db,
+      "ledgerTransfer",
+      rows.map((row) => row.id),
+    ),
+  );
+  return projectListRows(
+    "ledgerTransfer",
+    rows.map((row) => ({
+      ...row,
+      id: parseShortcodeFor("ledgerTransfer", row.shortcode),
+      ...listGroupFields(projection, "relations", () => ({
+        fromPartyId: parseShortcodeFor("ledgerParty", row.fromPartyShortcode!),
+        toPartyId: parseShortcodeFor("ledgerParty", row.toPartyShortcode!),
+        sourceClaims: row.sourceClaims?.map((claim) => ({
+          ...claim,
+          createdAt: new Date(claim.createdAt),
+          updatedAt: new Date(claim.updatedAt),
+        })),
+        evidenceTransactionIds: row.evidenceTransactionIds?.map((id) =>
+          parseShortcodeFor("financialTransaction", id),
+        ),
+      })),
+      ...listGroupFields(projection, "derived", () => ({
+        classification:
+          row.fromPartyId === row.toPartyId
+            ? "internal_move"
+            : row.toPartyKind === "household"
+              ? "contribution"
+              : row.fromPartyKind === "household"
+                ? "household_distribution"
+                : "reimbursement",
+      })),
+      ...listGroupFields(projection, "quality", () => ({
+        dataQuality: qualities!.get(row.id)!,
+      })),
+    })),
+    projection,
+  );
 };
 
 const getById = async (
@@ -488,32 +572,48 @@ export async function buildLedgerTransferWhere(
   ]);
 }
 
+export const listLedgerTransfersRead = async (
+  db: Database,
+  filters: LedgerTransferFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  projection: ListProjection = { kind: "full" },
+) =>
+  ledgerTransferScaffold.list(
+    db,
+    { filters, sorts, pagination, projection },
+    {
+      where: await buildLedgerTransferWhere(db, filters),
+      select: (page) =>
+        selectTransfersRead(db, projection)
+          .where(page.where)
+          .orderBy(...page.orderBy)
+          .limit(page.limit)
+          .offset(page.offset),
+      hydrate: (rows) => hydrateTransfersRead(db, rows, projection),
+    },
+  );
+
 const listLedgerTransfers = async (
   db: Database,
   filters: LedgerTransferFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-) =>
-  ledgerTransferScaffold.list(
-    db,
-    { filters, sorts, pagination },
-    {
-      where: await buildLedgerTransferWhere(db, filters),
-      select: (page) =>
-        selectTransfers(db)
-          .where(page.where)
-          .orderBy(...page.orderBy)
-          .limit(page.limit)
-          .offset(page.offset),
-      hydrate: (rows) => hydrate(db, rows),
-    },
-  );
+) => {
+  const result = await listLedgerTransfersRead(db, filters, sorts, pagination);
+  return {
+    ...result,
+    data: result.data.map((row) => ledgerTransferOut.parse(row)),
+  };
+};
 
 export const ledgerTransferRepository = defineRepository("ledgerTransfer", {
   sideEffects: false,
   lifecycle: { delete: LEDGER_TRANSFER_DELETE_EDGE_POLICY },
   get: onDb(getLedgerTransferByShortcode),
   list: listOn(listLedgerTransfers),
+  listRead: (ctx, filters, sorts, pagination, projection) =>
+    listLedgerTransfersRead(ctx.db, filters, sorts, pagination, projection),
   create: asActor(createLedgerTransfer),
   update: asActor(updateLedgerTransfer),
 });

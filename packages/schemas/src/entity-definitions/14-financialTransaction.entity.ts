@@ -46,6 +46,21 @@ export default defineEntity({
   // `displayName` falls back through `rawDescription` and `kind` for a
   // human-identifying label that is never blank.
   presentation: {
+    list: {
+      read: {
+        relations: [
+          "accountId",
+          "purchaseId",
+          "ledgerTransferId",
+          "accountName",
+          "allocations",
+          "sourceRefs",
+        ],
+        derived: ["itemization", "vendorInference"],
+        media: ["displayImages"],
+        quality: ["dataQuality"],
+      },
+    },
     titleField: "displayName",
     domain: "finance",
     description: "Imported and matched settlement activity.",

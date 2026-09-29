@@ -47,6 +47,8 @@ export interface QueryContract<
   Output extends z.ZodTypeAny = z.ZodTypeAny,
 > {
   readonly kind: "query";
+  /** Large batched reads use a JSON body rather than a bounded URL. */
+  readonly transport?: "post";
   readonly input: Input;
   readonly output: Output;
   readonly observability?: OperationObservability;

@@ -81,6 +81,7 @@ function InventoryProductLink({
  * of these here" — reach this row without the inventory table declaring one.
  */
 const PRODUCT_SUBJECT = {
+  readFields: ["product"],
   entity: "product" as const,
   resolve: (row: InventoryListItem) => ({
     entity: "product" as const,
@@ -281,6 +282,7 @@ export const inventoryListOverride = defineListOverride<
       overrides,
       compose,
       list,
+      wrapReadFields: ["product", "location"],
       wrap: (children, { data }) => (
         <EntityDisplayImagesProvider
           refs={data.flatMap((row) => [
@@ -358,6 +360,7 @@ export function createInventoryEntriesColumn<
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
       provenance: options?.provenance,
+      readFields: [String(accessor)],
       entityRefs: (row) =>
         row[accessor].flatMap((entry) => {
           const related = getRelatedEntity(entry);

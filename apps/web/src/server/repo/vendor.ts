@@ -20,6 +20,7 @@ import type {
   VendorOut,
   VendorUpdateData,
 } from "@cubby/schemas/vendor";
+import { vendorOut } from "@cubby/schemas/vendor";
 import {
   vendorAgentHints,
   vendorOrderEvidence,
@@ -36,6 +37,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { projectListRows } from "~/entities/list-read-schema";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { entityAttachment, image, purchase, vendor } from "~/server/db/schema";
@@ -44,7 +46,6 @@ import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   correlated,
-  countWhere,
   getDb,
   type ListReadIntent,
   lockAndValidateForDelete,
@@ -59,6 +60,12 @@ import {
   displayableImageWhere,
 } from "~/server/repo/image-displayability";
 import { listScaffold } from "~/server/repo/list";
+import {
+  listGroupFields,
+  loadListGroup,
+  wantsListGroup,
+  type ListProjection,
+} from "~/server/repo/list-projection";
 import {
   finalizeMerge,
   planSlotCollisions,
@@ -393,6 +400,19 @@ type VendorRow = {
   } | null;
 };
 
+const vendorLogoToAPI = (logo: VendorRow["logo"]) =>
+  logo && {
+    ...logo,
+    source: logo.source ?? "unknown",
+    id: parseShortcodeFor("image", logo.id),
+    url: getR2PublicUrl(logo.key),
+    // Not resolved here: this select has no join to LedgerParty for a
+    // shortcode or a name — a vendor logo is never a member's own photo.
+    capturedByPartyId: null,
+    capturedByName: null,
+    captureAttribution: logo.captureAttribution ?? "none",
+  };
+
 const dbVendorToAPI = (
   row: VendorRow,
   dataQuality: DataQuality,
@@ -410,17 +430,7 @@ const dbVendorToAPI = (
   purchaseCount: Number(row.purchaseCount),
   spend: Number(row.spend),
   latestPurchaseDate: row.latestPurchaseDate,
-  logo: row.logo && {
-    ...row.logo,
-    source: row.logo.source ?? "unknown",
-    id: parseShortcodeFor("image", row.logo.id),
-    url: getR2PublicUrl(row.logo.key),
-    // Not resolved here: this select has no join to LedgerParty for a
-    // shortcode or a name — a vendor logo is never a member's own photo.
-    capturedByPartyId: null,
-    capturedByName: null,
-    captureAttribution: row.logo.captureAttribution ?? "none",
-  },
+  logo: vendorLogoToAPI(row.logo),
   dataQuality,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
@@ -460,6 +470,100 @@ const resolveVendorSort = (sort: SortParams) => {
   return null;
 };
 
+export const vendorListRead = async (
+  db: Database,
+  filters: VendorFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
+  projection: ListProjection = { kind: "full" },
+) => {
+  const { purchaseCount, spend, latestPurchaseDate, logo, ...core } =
+    vendorColumns;
+  return vendorScaffold.list(
+    db,
+    { filters, sorts, pagination, readIntent, projection },
+    {
+      where: buildVendorWhereClause(filters),
+      resolveSort: resolveVendorSort,
+      select: async (page) => {
+        const query = getDb(db)
+          .select({
+            ...core,
+            ...listGroupFields(projection, "derived", () => ({
+              purchaseCount,
+              spend,
+              latestPurchaseDate,
+            })),
+            ...listGroupFields(projection, "media", () => ({ logo })),
+          })
+          .from(vendor)
+          .where(page.where)
+          .orderBy(...page.orderBy)
+          .limit(page.limit)
+          .offset(page.offset)
+          .$dynamic();
+        if (wantsListGroup(projection, "media"))
+          return query
+            .leftJoin(entityAttachment, vendorLogoAttachment)
+            .leftJoin(
+              image,
+              and(
+                eq(image.id, entityAttachment.imageId),
+                notDeleted(image),
+                displayableImageWhere,
+              ),
+            );
+        return query;
+      },
+      hydrate: async (rows) => {
+        const qualities = await loadListGroup(projection, "quality", () =>
+          loadDataQualities(
+            db,
+            "vendor",
+            rows.map((row) => row.id),
+          ),
+        );
+        return projectListRows(
+          "vendor",
+          rows.map((row) => ({
+            ...row,
+            id: parseShortcodeFor("vendor", row.shortcode),
+            orderEvidence: vendorOrderEvidence
+              .nullable()
+              .parse(row.orderEvidence),
+            agentHints: vendorAgentHints.parse(row.agentHints),
+            ...listGroupFields(projection, "media", () => ({
+              logo: vendorLogoToAPI(row.logo ?? null),
+            })),
+            ...listGroupFields(projection, "quality", () => ({
+              dataQuality: qualities!.get(row.id)!,
+            })),
+          })),
+          projection,
+        );
+      },
+    },
+  );
+};
+
+export const vendorListSummary = async (
+  db: Database,
+  filters: VendorFilters,
+) => {
+  const [totals] = await getDb(db)
+    .select({
+      spend: sql<number>`COALESCE(sum(${vendorSpend}), 0)::double precision`,
+      purchaseCount: sql<number>`COALESCE(sum(${vendorPurchaseCount}), 0)::int`,
+    })
+    .from(vendor)
+    .where(buildVendorWhereClause(filters));
+  return {
+    spend: Number(totals?.spend ?? 0),
+    purchaseCount: Number(totals?.purchaseCount ?? 0),
+  };
+};
+
 export const vendorList = async (
   db: Database,
   filters: VendorFilters,
@@ -471,68 +575,16 @@ export const vendorList = async (
   count: number;
   sums?: { spend: number; purchaseCount: number };
 }> => {
-  const whereClause = buildVendorWhereClause(filters);
-  if (readIntent === "count") {
-    return {
-      data: [],
-      count: await countWhere(db, vendor, whereClause),
-    };
-  }
-  const { take, skip } = vendorScaffold.page(pagination);
-
-  // Footer totals cover the filtered set, not only the loaded page.
-  const [rows, count, [totals]] = await Promise.all([
-    getDb(db)
-      .select(vendorColumns)
-      .from(vendor)
-      .leftJoin(entityAttachment, vendorLogoAttachment)
-      .leftJoin(
-        image,
-        and(
-          eq(image.id, entityAttachment.imageId),
-          notDeleted(image),
-          displayableImageWhere,
-        ),
-      )
-      .where(whereClause)
-      .orderBy(
-        ...vendorScaffold.orderBy(
-          sorts,
-          { resolve: resolveVendorSort },
-          filters,
-        ),
-      )
-      .limit(take)
-      .offset(skip),
-    countWhere(db, vendor, whereClause),
-    readIntent === "sample"
-      ? Promise.resolve([{ spend: 0, purchaseCount: 0 }])
-      : getDb(db)
-          .select({
-            spend: sql<number>`COALESCE(sum(${vendorSpend}), 0)::double precision`,
-            purchaseCount: sql<number>`COALESCE(sum(${vendorPurchaseCount}), 0)::int`,
-          })
-          .from(vendor)
-          .where(whereClause),
+  const [page, sums] = await Promise.all([
+    vendorListRead(db, filters, sorts, pagination, readIntent),
+    readIntent === "page" ? vendorListSummary(db, filters) : undefined,
   ]);
-
-  const dataQualities = await loadDataQualities(
-    db,
-    "vendor",
-    rows.map((row) => row.id),
-  );
-  return {
-    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-    data: rows.map((row) => dbVendorToAPI(row, dataQualities.get(row.id)!)),
-    count,
-    sums:
-      readIntent === "page"
-        ? {
-            spend: Number(totals?.spend ?? 0),
-            purchaseCount: Number(totals?.purchaseCount ?? 0),
-          }
-        : undefined,
+  const result = {
+    ...page,
+    data: page.data.map((row) => vendorOut.parse(row)),
   };
+  if (sums) Object.assign(result, { sums });
+  return result;
 };
 
 export const getVendorByID = async (

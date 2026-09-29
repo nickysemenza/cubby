@@ -4,6 +4,7 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   type GardenEntryFilters,
   gardenEntryOut,
+  gardenEntryListItemOut,
   type gardenEntryCreateInput,
   type gardenEntryUpdateData,
 } from "@cubby/schemas/garden-entry";
@@ -17,6 +18,7 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
   type PlantingFilters,
   plantingOut,
+  plantingListItemOut,
   type plantingCreateInput,
   type plantingUpdateData,
 } from "@cubby/schemas/planting";
@@ -35,6 +37,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
+import { projectListRows } from "~/entities/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   entityLink,
@@ -73,6 +76,11 @@ import {
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { linkValues, liveLinks, ofLinkKind } from "~/server/repo/entity-links";
 import { listScaffold } from "~/server/repo/list";
+import {
+  loadListGroup,
+  type ListProjection,
+  wantsListGroup,
+} from "~/server/repo/list-projection";
 import { getCategoryFeature } from "~/server/repo/product-category";
 import {
   resolveAllOrThrow,
@@ -180,39 +188,81 @@ const plantingRow = async (db: GardenDb, id: PlantingId) => {
 
 type PlantingWithReferences = Awaited<ReturnType<typeof plantingRow>>;
 
-const mapPlanting = (row: PlantingWithReferences, dataQuality: DataQuality) => {
+type PlantingReadRow = typeof planting.$inferSelect & {
+  plant:
+    | (Pick<
+        NonNullable<PlantingWithReferences["plant"]>,
+        "name" | "gardenGuideKey"
+      > &
+        Partial<NonNullable<PlantingWithReferences["plant"]>>)
+    | null;
+  sourceProduct?: PlantingWithReferences["sourceProduct"];
+  location?: PlantingWithReferences["location"];
+  task?: PlantingWithReferences["task"];
+};
+
+const plantingRelationFields = (row: PlantingReadRow) => ({
+  plantId: row.plant?.shortcode
+    ? parseShortcodeFor("plant", row.plant.shortcode)
+    : null,
+  sourceProductId: row.sourceProduct
+    ? parseShortcodeFor("product", row.sourceProduct.shortcode)
+    : null,
+  locationId: row.location
+    ? parseShortcodeFor("location", row.location.shortcode)
+    : null,
+  taskId: row.task ? parseShortcodeFor("task", row.task.shortcode) : null,
+  plantName: row.plant?.name ?? null,
+  sourceProductName: row.sourceProduct?.name ?? null,
+  locationName: row.location?.name ?? null,
+  taskName: row.task?.name ?? null,
+});
+
+const plantingDerivedFields = (row: PlantingReadRow) => {
   const gardenGuideKey = resolveGardenGuideKey(row.plant?.gardenGuideKey);
   const { sow, transplant } = guideWindowsFor(gardenGuideKey);
   const harvest = expectedHarvestFor({
     key: gardenGuideKey,
-    plant: row.plant,
+    plant: row.plant
+      ? {
+          daysFromSowMin: row.plant.daysFromSowMin ?? null,
+          daysFromSowMax: row.plant.daysFromSowMax ?? null,
+          daysFromTransplantMin: row.plant.daysFromTransplantMin ?? null,
+          daysFromTransplantMax: row.plant.daysFromTransplantMax ?? null,
+        }
+      : null,
     sowedOn: row.sowedOn,
     transplantedOn: row.transplantedOn,
   });
-  return plantingOut.parse({
-    ...row,
-    id: parseShortcodeFor("planting", row.shortcode),
-    plantId: row.plant ? parseShortcodeFor("plant", row.plant.shortcode) : null,
-    sourceProductId: row.sourceProduct
-      ? parseShortcodeFor("product", row.sourceProduct.shortcode)
-      : null,
-    locationId: row.location
-      ? parseShortcodeFor("location", row.location.shortcode)
-      : null,
-    taskId: row.task ? parseShortcodeFor("task", row.task.shortcode) : null,
-    plantName: row.plant?.name ?? null,
-    sourceProductName: row.sourceProduct?.name ?? null,
-    locationName: row.location?.name ?? null,
-    taskName: row.task?.name ?? null,
+  return {
     guideSowWindow: sow,
     guideTransplantWindow: transplant,
     expectedHarvestStart: harvest?.start ?? null,
     expectedHarvestEnd: harvest?.end ?? null,
     expectedHarvest: harvest?.summary ?? null,
-    displayName: plantingDisplayName(row.plant),
-    dataQuality,
-  });
+  };
 };
+
+const mapPlantingRead = (
+  row: PlantingReadRow,
+  projection: ListProjection,
+  dataQuality?: DataQuality,
+) => {
+  const result = {
+    ...row,
+    id: parseShortcodeFor("planting", row.shortcode),
+    displayName: plantingDisplayName(row.plant),
+  };
+  if (wantsListGroup(projection, "relations"))
+    Object.assign(result, plantingRelationFields(row));
+  if (wantsListGroup(projection, "derived"))
+    Object.assign(result, plantingDerivedFields(row));
+  if (dataQuality) Object.assign(result, { dataQuality });
+  return result;
+};
+
+const mapPlanting = (row: PlantingWithReferences, dataQuality: DataQuality) =>
+  plantingOut.parse(mapPlantingRead(row, { kind: "full" }, dataQuality));
 
 type GardenEntryWithReferences = typeof gardenEntry.$inferSelect & {
   location: { shortcode: string; name: string };
@@ -251,34 +301,50 @@ const gardenEntryDisplayName = (row: {
   return `${kindLabel} · ${row.observedOn} · ${row.locationName}`;
 };
 
-const mapEntry = (row: GardenEntryWithReferences, dataQuality: DataQuality) =>
-  gardenEntryOut.parse({
+type GardenEntryReadRow = Omit<
+  GardenEntryWithReferences,
+  "plantings" | "images"
+> &
+  Partial<Pick<GardenEntryWithReferences, "plantings" | "images">>;
+
+const mapEntryRead = (
+  row: GardenEntryReadRow,
+  projection: ListProjection,
+  dataQuality?: DataQuality,
+) => {
+  const result = {
     ...row,
     id: parseShortcodeFor("gardenEntry", row.shortcode),
-    locationId: parseShortcodeFor("location", row.location.shortcode),
-    ...(() => {
-      const plantings = row.plantings
-        .flatMap((link) => (link.planting ? [link.planting] : []))
-        .sort((left, right) => left.shortcode.localeCompare(right.shortcode));
-      return {
-        plantingIds: plantings.map((linked) =>
-          parseShortcodeFor("planting", linked.shortcode),
-        ),
-        plantings: plantings.map((linked) => ({
-          id: parseShortcodeFor("planting", linked.shortcode),
-          name: plantingDisplayName(linked.plant),
-        })),
-      };
-    })(),
-    locationName: row.location.name,
     displayName: gardenEntryDisplayName({
       kind: row.kind,
       observedOn: row.observedOn,
       locationName: row.location.name,
     }),
-    images: mapImages(row.images),
-    dataQuality,
-  });
+  };
+  if (wantsListGroup(projection, "relations")) {
+    const plantings = (row.plantings ?? [])
+      .flatMap((link) => (link.planting ? [link.planting] : []))
+      .sort((left, right) => left.shortcode.localeCompare(right.shortcode));
+    Object.assign(result, {
+      locationId: parseShortcodeFor("location", row.location.shortcode),
+      locationName: row.location.name,
+      plantingIds: plantings.map((linked) =>
+        parseShortcodeFor("planting", linked.shortcode),
+      ),
+      plantings: plantings.map((linked) => ({
+        id: parseShortcodeFor("planting", linked.shortcode),
+        name: plantingDisplayName(linked.plant),
+      })),
+    });
+  }
+  if (wantsListGroup(projection, "media"))
+    Object.assign(result, { images: mapImages(row.images ?? []) });
+  if (dataQuality) Object.assign(result, { dataQuality });
+  return result;
+};
+
+const mapEntry = (row: GardenEntryWithReferences, dataQuality: DataQuality) =>
+  gardenEntryOut.parse(mapEntryRead(row, { kind: "full" }, dataQuality));
 
 export const getPlanting = async (db: GardenDb, id: PlantingId) => {
   const row = await plantingRow(db, id);
@@ -728,11 +794,12 @@ export const updateGardenEntry = async (
 
 const plantingScaffold = listScaffold("planting", planting);
 
-export const plantingList = async (
+export const plantingListRead = async (
   db: Database,
   filters: PlantingFilters,
   pagination: PaginationParams,
   sorts: SortParams[] = [],
+  projection: ListProjection = { kind: "full" },
 ) => {
   // Id filters resolve shortcodes first; a requested set that resolves to
   // nothing matches nothing (`eqAnyRequested`), never the whole list.
@@ -764,30 +831,65 @@ export const plantingList = async (
   ]);
   return plantingScaffold.list(
     db,
-    { filters, sorts, pagination },
+    { filters, sorts, pagination, projection },
     {
       where,
-      select: (page) =>
+      select: (page, selected) =>
         unwrapDb(db).query.planting.findMany({
           ...page,
-          with: plantingReferences,
+          with: {
+            plant:
+              wantsListGroup(selected, "derived") ||
+              wantsListGroup(selected, "relations")
+                ? plantingReferences.plant
+                : { columns: { name: true, gardenGuideKey: true } },
+            sourceProduct: wantsListGroup(selected, "relations")
+              ? plantingReferences.sourceProduct
+              : undefined,
+            location: wantsListGroup(selected, "relations")
+              ? plantingReferences.location
+              : undefined,
+            task: wantsListGroup(selected, "relations")
+              ? plantingReferences.task
+              : undefined,
+          },
         }),
-      hydrate: async (rows) => {
-        const dataQualities = await loadDataQualities(
-          db,
-          "planting",
-          rows.map((row) => parseEntityId("planting", row.id)),
-        );
-        return withDisplayImages(db, "planting", rows, (row) =>
-          // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-          mapPlanting(
-            row,
-            dataQualities.get(parseEntityId("planting", row.id))!,
+      hydrate: async (rows, selected) => {
+        const qualities = await loadListGroup(selected, "quality", () =>
+          loadDataQualities(
+            db,
+            "planting",
+            rows.map((row) => parseEntityId("planting", row.id)),
           ),
         );
+        const mapRow = (row: (typeof rows)[number]) =>
+          mapPlantingRead(
+            row,
+            selected,
+            qualities?.get(parseEntityId("planting", row.id)),
+          );
+        const mapped = wantsListGroup(selected, "media")
+          ? await withDisplayImages(db, "planting", rows, mapRow)
+          : rows.map(mapRow);
+        return projectListRows("planting", mapped, selected);
       },
     },
   );
+};
+
+export const plantingList = async (
+  db: Database,
+  filters: PlantingFilters,
+  pagination: PaginationParams,
+  sorts: SortParams[] = [],
+) => {
+  const result = await plantingListRead(db, filters, pagination, sorts, {
+    kind: "full",
+  });
+  return {
+    ...result,
+    data: result.data.map((row) => plantingListItemOut.parse(row)),
+  };
 };
 
 const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry);
@@ -862,11 +964,12 @@ const journalPredicate = async (db: Database, plantingId: PlantingId) => {
   );
 };
 
-export const gardenEntryList = async (
+export const gardenEntryListRead = async (
   db: Database,
   filters: GardenEntryFilters,
   pagination: PaginationParams,
   sorts: SortParams[] = [],
+  projection: ListProjection = { kind: "full" },
 ) => {
   const [locationIds, plantingIds, journalPlantingId] = await Promise.all([
     resolveFilterIds(db, "location", filters.locationId),
@@ -908,41 +1011,71 @@ export const gardenEntryList = async (
   ]);
   return gardenEntryScaffold.list(
     db,
-    { filters, sorts, pagination },
+    { filters, sorts, pagination, projection },
     {
       where,
       // `createdAt desc` is a deliberate stable tiebreak — a `tieBreaker`, not
       // a `resolve` special-case, so it can't swallow a second user-requested
       // sort (see `buildOrderBy`'s doc comment).
       tieBreaker: desc(gardenEntry.createdAt),
-      select: (page) =>
+      select: (page, selected) =>
         unwrapDb(db).query.gardenEntry.findMany({
           ...page,
           with: {
             location: { columns: { shortcode: true, name: true } },
-            images: { with: { image: true } },
+            images: wantsListGroup(selected, "media")
+              ? { with: { image: true } }
+              : undefined,
           },
         }),
-      hydrate: async (rows) => {
-        const [dataQualities, plantingsByEntry] = await Promise.all([
-          loadDataQualities(
-            db,
-            "gardenEntry",
-            rows.map((row) => parseEntityId("gardenEntry", row.id)),
+      hydrate: async (rows, selected) => {
+        const [qualities, plantingsByEntry] = await Promise.all([
+          loadListGroup(selected, "quality", () =>
+            loadDataQualities(
+              db,
+              "gardenEntry",
+              rows.map((row) => parseEntityId("gardenEntry", row.id)),
+            ),
           ),
-          loadEntryPlantings(
-            db,
-            rows.map((row) => row.id),
+          loadListGroup(selected, "relations", () =>
+            loadEntryPlantings(
+              db,
+              rows.map((row) => row.id),
+            ),
           ),
         ]);
-        return withDisplayImages(db, "gardenEntry", rows, (row) =>
-          // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-          mapEntry(
-            { ...row, plantings: plantingsByEntry.get(row.id) ?? [] },
-            dataQualities.get(parseEntityId("gardenEntry", row.id))!,
-          ),
-        );
+        const mapRow = (row: (typeof rows)[number]) =>
+          mapEntryRead(
+            {
+              ...row,
+              plantings: plantingsByEntry?.get(row.id),
+              images: (row.images ?? []).flatMap((entry) =>
+                "image" in entry ? [entry] : [],
+              ),
+            },
+            selected,
+            qualities?.get(parseEntityId("gardenEntry", row.id)),
+          );
+        const mapped = wantsListGroup(selected, "media")
+          ? await withDisplayImages(db, "gardenEntry", rows, mapRow)
+          : rows.map(mapRow);
+        return projectListRows("gardenEntry", mapped, selected);
       },
     },
   );
+};
+
+export const gardenEntryList = async (
+  db: Database,
+  filters: GardenEntryFilters,
+  pagination: PaginationParams,
+  sorts: SortParams[] = [],
+) => {
+  const result = await gardenEntryListRead(db, filters, pagination, sorts, {
+    kind: "full",
+  });
+  return {
+    ...result,
+    data: result.data.map((row) => gardenEntryListItemOut.parse(row)),
+  };
 };

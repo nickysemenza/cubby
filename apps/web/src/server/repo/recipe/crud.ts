@@ -12,6 +12,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import { recipeListItemOut } from "@cubby/schemas/recipe";
 import type {
   RecipeCreateInput,
   RecipeGraphOut,
@@ -34,6 +35,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { match, P } from "ts-pattern";
 
+import { projectListRows } from "~/entities/list-read-schema";
 import { collectSubRecipeIds } from "~/lib/recipe-graph";
 import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -77,6 +79,11 @@ import {
 import { recipeHasImages } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { listScaffold } from "~/server/repo/list";
+import {
+  loadListGroup,
+  type ListProjection,
+  wantsListGroup,
+} from "~/server/repo/list-projection";
 import { deleteByPolicy } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
@@ -133,7 +140,8 @@ import { withDisplayImages } from "~/server/repo/entity-display-image";
 import {
   dbRecipeToAPI,
   dbRecipeToAPIGraph,
-  dbRecipeToListAPI,
+  dbRecipeToAPIShallow,
+  dbRecipeToTopLevel,
   liveMealCountForRecipeSql,
   liveSectionCountForRecipeSql,
 } from "./helpers";
@@ -524,12 +532,13 @@ export const buildRecipeWhere = async (
   ]);
 };
 
-export const recipeList = async (
+export const recipeListRead = async (
   db: Database,
   filters: RecipeFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
+  projection: ListProjection = { kind: "full" },
 ) => {
   const resolveRecipeSort = (s: SortParams): SQL[] | null => {
     const isAsc = s.direction === "asc";
@@ -572,38 +581,78 @@ export const recipeList = async (
   };
   return recipeScaffold.list(
     db,
-    { filters, sorts, pagination, readIntent },
+    { filters, sorts, pagination, readIntent, projection },
     {
       where: await buildRecipeWhere(db, filters),
       resolveSort: resolveRecipeSort,
       tieBreaker: sql`${recipe.name} asc`,
       // List reads fetch flat rows and scalar counts; never full graphs. The
       // thumbnail comes from the display-image resolver, not an images join.
-      select: (page) =>
+      select: (page, selected) =>
         getDb(db).query.recipe.findMany({
           ...page,
           extras: {
-            mealCount: sql<number>`${sql.raw(
-              liveMealCountForRecipeSql('"recipe"."id"'),
-            )}`.as("mealCount"),
-            sectionCount: sql<number>`${sql.raw(
-              liveSectionCountForRecipeSql('"recipe"."id"'),
-            )}`.as("sectionCount"),
+            mealCount: wantsListGroup(selected, "relations")
+              ? sql<number | null>`${sql.raw(
+                  liveMealCountForRecipeSql('"recipe"."id"'),
+                )}`.as("mealCount")
+              : sql<number | null>`NULL::int`.as("mealCount"),
+            sectionCount: wantsListGroup(selected, "derived")
+              ? sql<number | null>`${sql.raw(
+                  liveSectionCountForRecipeSql('"recipe"."id"'),
+                )}`.as("sectionCount")
+              : sql<number | null>`NULL::int`.as("sectionCount"),
           },
         }),
-      hydrate: async (rows) => {
-        const qualities = await loadDataQualities(
-          db,
-          "recipe",
-          rows.map((row) => row.id),
+      hydrate: async (rows, selected) => {
+        const qualities = await loadListGroup(selected, "quality", () =>
+          loadDataQualities(
+            db,
+            "recipe",
+            rows.map((row) => row.id),
+          ),
         );
-        return withDisplayImages(db, "recipe", rows, (row, displayImages) =>
-          // SAFETY: `row` came from `rows`, which `qualities` was loaded for.
-          dbRecipeToListAPI(row, displayImages, qualities.get(row.id)!),
-        );
+        const mapRow = (row: (typeof rows)[number]) => {
+          const result = dbRecipeToTopLevel(row);
+          if (wantsListGroup(selected, "relations"))
+            Object.assign(result, { meals: Number(row.mealCount) });
+          if (wantsListGroup(selected, "derived"))
+            Object.assign(result, {
+              ...dbRecipeToAPIShallow(row),
+              sectionCount: Number(row.sectionCount),
+            });
+          if (qualities)
+            Object.assign(result, { dataQuality: qualities.get(row.id) });
+          return result;
+        };
+        const mapped = wantsListGroup(selected, "media")
+          ? await withDisplayImages(db, "recipe", rows, mapRow)
+          : rows.map(mapRow);
+        return projectListRows("recipe", mapped, selected);
       },
     },
   );
+};
+
+export const recipeList = async (
+  db: Database,
+  filters: RecipeFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
+) => {
+  const result = await recipeListRead(
+    db,
+    filters,
+    sorts,
+    pagination,
+    readIntent,
+    { kind: "full" },
+  );
+  return {
+    ...result,
+    data: result.data.map((row) => recipeListItemOut.parse(row)),
+  };
 };
 
 export type CookbookRef = { id: CookbookId; name: string };

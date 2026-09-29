@@ -6,6 +6,7 @@ import {
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useSearch } from "@tanstack/react-router";
+import { flexRender } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -30,14 +31,22 @@ import type { RowLinkResolver } from "../data-table/columnHelpers";
 import type { ServerListWorkbenchModel } from "../data-table/ListWorkbench";
 import { problemWorklistState } from "../data-table/problem-worklist";
 import { reconcileRowSelection } from "../data-table/row-selection";
+import { createCubbyColumnCollection } from "../data-table/table-features";
 import type { CubbyColumnCollection } from "../data-table/table-features";
+import {
+  attachCubbyColumnMeta,
+  type CubbyColumnMeta,
+} from "../data-table/table-meta";
 import type { GroupConfig } from "../data-table/useGroupedList";
 import { useTableConfig } from "../data-table/useTableConfig";
 import type {
   TableStateReturn,
   useTableState,
 } from "../data-table/useTableState";
+import { DeferredListValue } from "../entity-list/deferred-list-value";
+import { listColumnReadFields } from "../entity-list/list-column-read-fields";
 import type { RuntimeFilterOptions } from "./filter-option-types";
+import type { ListGroupState } from "./progressive-list";
 import {
   type DeletableConfig,
   useContractDeletable,
@@ -129,6 +138,8 @@ export interface UseEntityListOptions<
   TRow extends BaseListRow = TData,
 > {
   entity: BrowserRoutedEntity;
+  /** Fields required by an alternate renderer in addition to visible columns. */
+  additionalReadFields?: readonly string[];
   /** The descriptor-bound plan that supplies this table's exact row type. */
   queryOptions: ListQueryOptionsFn<TFilters, TRow>;
   buildFilters?: (tableState: TableStateReturn) => TFilters;
@@ -144,6 +155,7 @@ export interface UseEntityListOptions<
   /** Runtime roster options; must be referentially stable. */
   filterOptions?: RuntimeFilterOptions;
   getMappings?: (item: TRow) => UnitMapping[];
+  mappingsReadFields?: readonly string[];
   tableStateOptions?: Parameters<typeof useTableState>[0];
   bulkActions?: BulkActionsConfig<TData>;
   /** Presentation-only Inspect action for one checked canonical row. */
@@ -163,6 +175,7 @@ export interface UseEntityListOptions<
    */
   subject?: {
     entity: Entity;
+    readFields?: readonly string[];
     resolve: (row: TData) => EntityActionSubject | null;
   };
   initialColumnVisibility?: Record<string, boolean>;
@@ -204,6 +217,14 @@ export interface UseEntityListReturn<
   requestDelete: (item: TData) => void;
   totalCount: number | undefined;
   sums: Record<string, number> | undefined;
+  summaryState?: ListGroupState;
+  enrichmentFailures?: import("./progressive-list").ListEnrichmentFailure[];
+  retryEnrichment?: (
+    pageIndex: number,
+    group: import("./progressive-list").ListReadGroup,
+  ) => Promise<void>;
+  retrySummary?: () => void;
+  enrichmentState?: (id: string, field: string) => ListGroupState | undefined;
   inspection: ReturnType<typeof useEntityPreview>;
 }
 
@@ -262,6 +283,31 @@ function buildMappingsMap<TRow extends BaseListRow>(
   );
 }
 
+function listReadColumnId(column: { id?: string }): string {
+  if (column.id) return column.id;
+  const accessor =
+    "accessorKey" in column
+      ? z.string().safeParse(column.accessorKey)
+      : undefined;
+  return accessor?.success ? accessor.data : "";
+}
+
+const columnReadFieldsSchema = z.object({
+  readFields: z.array(z.string()).optional(),
+});
+function listReadColumnFields(
+  entity: BrowserRoutedEntity,
+  column: { id?: string; meta?: unknown },
+): string[] {
+  const metadata = columnReadFieldsSchema.safeParse(column.meta);
+  return [
+    ...new Set([
+      ...listColumnReadFields(entity, listReadColumnId(column)),
+      ...(metadata.success ? (metadata.data.readFields ?? []) : []),
+    ]),
+  ];
+}
+
 export function useEntityList<
   TData extends BaseListRow,
   TFilters extends object,
@@ -276,6 +322,7 @@ export function useEntityList<
   options: TreeEntityListOptions<TData, TFilters, TRow>,
 ): UseEntityListReturn<TData, TFilters, TRow>;
 
+// oxlint-disable-next-line complexity -- The shared list owner also guards deferred mappings and subject actions through the existing lifecycle.
 export function useEntityList<
   TData extends BaseListRow,
   TFilters extends object,
@@ -283,12 +330,14 @@ export function useEntityList<
 >({
   entity,
   queryOptions,
+  additionalReadFields,
   buildFilters,
   scopeFilters,
   columns: customColumns,
   filters,
   filterOptions,
   getMappings,
+  mappingsReadFields,
   tableStateOptions,
   bulkActions,
   onInspectRow,
@@ -402,11 +451,35 @@ export function useEntityList<
     entityListDocumentTitle(entity, routeSearch, presentationState.urlSync),
   );
 
+  const [visibleReadFields, setVisibleReadFields] = useState(() =>
+    customColumns
+      .visit((column) =>
+        initialColumnVisibility?.[listReadColumnId(column)] === false
+          ? []
+          : listReadColumnFields(entity, column),
+      )
+      .flat(),
+  );
+  const requestedReadFields = useMemo(
+    () => [
+      ...visibleReadFields,
+      ...(additionalReadFields ?? []),
+      ...(subject?.readFields ?? []),
+      ...(mappingsReadFields ?? []),
+    ],
+    [
+      additionalReadFields,
+      mappingsReadFields,
+      subject?.readFields,
+      visibleReadFields,
+    ],
+  );
   const infiniteResult = useInfiniteTableList<TFilters, TRow>({
     queryOptions,
     buildFilters: effectiveBuildFilters,
     tableState,
     groupBy: groupByField,
+    visibleFields: requestedReadFields,
   });
 
   const {
@@ -443,9 +516,20 @@ export function useEntityList<
     [totalCount, sums],
   );
 
+  const enrichmentState = infiniteResult.enrichmentState;
   const mappingsMap = useMemo(
-    () => buildMappingsMap(data, getMappings, hasUnitMappings),
-    [data, getMappings, hasUnitMappings],
+    () =>
+      buildMappingsMap(
+        data.filter((row) =>
+          (mappingsReadFields ?? []).every((field) => {
+            const state = enrichmentState(row.id, field);
+            return !state || state.state === "ready";
+          }),
+        ),
+        getMappings,
+        hasUnitMappings,
+      ),
+    [data, getMappings, hasUnitMappings, enrichmentState, mappingsReadFields],
   );
 
   const shouldUseMappings = hasUnitMappings && getMappings;
@@ -472,7 +556,15 @@ export function useEntityList<
     hiddenFilterColumns,
     expandable: tree?.expandable,
     rowLink: tree?.rowLink,
-    subject: subject?.resolve,
+    subject: subject
+      ? (row) =>
+          (subject.readFields ?? []).every((field) => {
+            const state = enrichmentState(row.id, field);
+            return !state || state.state === "ready";
+          })
+            ? subject.resolve(row)
+            : null
+      : undefined,
     rowActionGuard: rowActionsGuard,
   });
   const {
@@ -481,6 +573,65 @@ export function useEntityList<
     setColumnVisibility,
     rowContentVersion,
   } = presentation;
+
+  useEffect(() => {
+    const fields = allColumns
+      .visit((column) =>
+        columnVisibility[listReadColumnId(column)] === false
+          ? []
+          : listReadColumnFields(entity, column),
+      )
+      .flat();
+    setVisibleReadFields((current) =>
+      JSON.stringify(current) === JSON.stringify(fields) ? current : fields,
+    );
+  }, [allColumns, columnVisibility, entity]);
+
+  const deferredFieldKey = JSON.stringify(infiniteResult.deferredFields);
+  const progressiveColumns = useMemo(() => {
+    const deferredFields = new Set(
+      z.array(z.string()).parse(JSON.parse(deferredFieldKey)),
+    );
+    if (deferredFields.size === 0) return allColumns;
+    return createCubbyColumnCollection<TData>((add) =>
+      allColumns.visit((column) => {
+        const fields = listReadColumnFields(entity, column);
+        if (!fields.some((field) => deferredFields.has(field))) {
+          add(column);
+          return;
+        }
+        // SAFETY: the column and its metadata carry the same table row type.
+        const meta = column.meta as CubbyColumnMeta<TData> | undefined;
+        const stateFor = (row: TData) =>
+          fields
+            .map((field) => enrichmentState(row.id, field))
+            .find((state) => state && state.state !== "ready");
+        add({
+          ...column,
+          meta: meta
+            ? attachCubbyColumnMeta<TData>({
+                ...meta,
+                entityRefs: meta.entityRefs
+                  ? (row) => (stateFor(row) ? [] : meta.entityRefs!(row))
+                  : undefined,
+              })
+            : undefined,
+          cell: (info) => {
+            const state = stateFor(info.row.original);
+            return (
+              <DeferredListValue state={state}>
+                {flexRender(column.cell, info)}
+              </DeferredListValue>
+            );
+          },
+        });
+      }),
+    );
+  }, [allColumns, entity, enrichmentState, deferredFieldKey]);
+  const progressiveContentVersion = useMemo(
+    () => [rowContentVersion, infiniteResult.enrichmentVersion],
+    [rowContentVersion, infiniteResult.enrichmentVersion],
+  );
 
   // Row identity is independent of whether selection happens to be enabled.
   // Index ids transfer virtualizer measurements and row state to the wrong
@@ -534,7 +685,7 @@ export function useEntityList<
     : undefined;
   const table = useTableConfig({
     data: tableData,
-    columns: allColumns,
+    columns: progressiveColumns,
     tableState,
     totalCount: tableData.length,
     manualPagination: true,
@@ -552,7 +703,7 @@ export function useEntityList<
     onColumnVisibilityChange: setColumnVisibility,
     scrollRestorationId: entity,
     serverTotals,
-    rowContentVersion,
+    rowContentVersion: progressiveContentVersion,
   });
 
   // "Select all N matching": pull every remaining page into memory (bulk
@@ -630,6 +781,11 @@ export function useEntityList<
     // "0 …" in the eyebrow before the real count arrives.
     totalCount: isLoading ? undefined : totalCount,
     sums,
+    summaryState: infiniteResult.summaryState,
+    enrichmentFailures: infiniteResult.enrichmentFailures,
+    retryEnrichment: infiniteResult.retryEnrichment,
+    retrySummary: infiniteResult.retrySummary,
+    enrichmentState: infiniteResult.enrichmentState,
     inspection,
   };
 }

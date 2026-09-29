@@ -2,7 +2,6 @@ import type { DataQuality } from "@cubby/schemas/data-quality";
 import { type ProductId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   inventoryDisplayName,
-  type inventoryListItemOut,
   type inventoryWithLocationAndProductOut,
 } from "@cubby/schemas/inventory";
 import type { EffectiveInventoryOwnership } from "@cubby/schemas/inventory-ownership";
@@ -51,10 +50,10 @@ const unresolvedOwnership = (
   matchesInheritedOwner: false,
 });
 
-const inventoryEntryBaseFields = (
+export const inventoryEntryBaseFields = <Q extends DataQuality | undefined>(
   entry: InventoryEntryBaseDB,
   valuation: number | null,
-  dataQuality: DataQuality,
+  dataQuality: Q,
   ownership: EffectiveInventoryOwnership = unresolvedOwnership(entry),
 ) => ({
   id: parseShortcodeFor("inventory", entry.shortcode),
@@ -149,18 +148,12 @@ export const dbInventoryEntryToAPI: (
   };
 };
 
-export const dbInventoryEntryToListAPI: (
+export const dbInventoryEntryListValues = <Q extends DataQuality | undefined>(
   inventoryentry: InventoryEntryListDB,
   valuation: number | null,
   pricing: ProductPricing,
-  dataQuality: DataQuality,
+  dataQuality: Q,
   ownership?: EffectiveInventoryOwnership,
-) => Omit<z.infer<typeof inventoryListItemOut>, "displayImages"> = (
-  inventoryentry,
-  valuation,
-  pricing,
-  dataQuality,
-  ownership,
 ) => {
   const { product, location } = inventoryentry;
 
@@ -187,3 +180,18 @@ export const dbInventoryEntryToListAPI: (
     }),
   };
 };
+
+export const dbInventoryEntryToListAPI = (
+  inventoryentry: InventoryEntryListDB,
+  valuation: number | null,
+  pricing: ProductPricing,
+  dataQuality: DataQuality,
+  ownership?: EffectiveInventoryOwnership,
+) =>
+  dbInventoryEntryListValues(
+    inventoryentry,
+    valuation,
+    pricing,
+    dataQuality,
+    ownership,
+  );

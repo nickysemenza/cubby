@@ -38,7 +38,7 @@ import {
   normalizeStartOperationError,
   type OperationStage,
 } from "~/server/start-operation.server";
-import { getRequestId } from "~/server/tracing";
+import { getRequestId, withTrace } from "~/server/tracing";
 
 interface HttpApiPorts {
   auth: {
@@ -271,57 +271,73 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
 
   const authenticate = async (request: ApiRequest) => {
     const url = new URL(request.url);
-    let actor: RequestActor | null = null;
-    if (request.headers.has("x-api-key")) {
-      const key = request.headers.get("x-api-key");
-      const verification = key
-        ? await ports.auth.verifyApiKey({ body: { key, configId: "http-api" } })
-        : null;
-      if (verification?.valid && verification.key?.configId === "http-api")
-        actor = {
-          userId: userId.parse(verification.key.referenceId),
-          sessionId: null,
-          channel: "api",
-        };
-    } else {
-      const sessionResult = await authenticateHttpSession({
-        headers: request.headers,
-        getSession: ports.auth.getSession,
-      });
-      const session = sessionResult.response;
-      if (session && request.headers.has("authorization")) {
-        request.sessionAuthToken =
-          sessionResult.headers.get("set-auth-token") ?? undefined;
+    const actor = await withTrace("http.api.authenticate", async (span) => {
+      span.setAttribute(
+        "cubby.auth.method",
+        request.headers.has("x-api-key")
+          ? "api-key"
+          : request.headers.has("authorization")
+            ? "bearer"
+            : "session",
+      );
+      let actor: RequestActor | null = null;
+      if (request.headers.has("x-api-key")) {
+        const key = request.headers.get("x-api-key");
+        const verification = key
+          ? await ports.auth.verifyApiKey({
+              body: { key, configId: "http-api" },
+            })
+          : null;
+        if (verification?.valid && verification.key?.configId === "http-api")
+          actor = {
+            userId: userId.parse(verification.key.referenceId),
+            sessionId: null,
+            channel: "api",
+          };
+      } else {
+        const sessionResult = await authenticateHttpSession({
+          headers: request.headers,
+          getSession: ports.auth.getSession,
+        });
+        const session = sessionResult.response;
+        if (session && request.headers.has("authorization")) {
+          request.sessionAuthToken =
+            sessionResult.headers.get("set-auth-token") ?? undefined;
+        }
+        request.sessionDataCookies = sessionDataCookiesFrom(
+          sessionResult.headers,
+        );
+        if (session)
+          actor = {
+            userId: userId.parse(session.user.id),
+            sessionId: session.session.id,
+            channel: "api",
+          };
       }
-      request.sessionDataCookies = sessionDataCookiesFrom(
-        sessionResult.headers,
-      );
-      if (session)
-        actor = {
-          userId: userId.parse(session.user.id),
-          sessionId: session.session.id,
-          channel: "api",
-        };
-    }
-    if (!actor)
-      throw failure(
-        "UNAUTHORIZED",
-        "Valid API key, bearer token, or session required",
-      );
-    if (
-      !hasExplicitCredential(request) &&
-      request.method !== "GET" &&
-      request.headers.get("origin") !== url.origin
-    )
-      throw failure("FORBIDDEN", "Same-origin request required");
+      span.setAttribute("cubby.auth.authenticated", actor !== null);
+      if (!actor)
+        throw failure(
+          "UNAUTHORIZED",
+          "Valid API key, bearer token, or session required",
+        );
+      if (
+        !hasExplicitCredential(request) &&
+        request.method !== "GET" &&
+        request.headers.get("origin") !== url.origin
+      )
+        throw failure("FORBIDDEN", "Same-origin request required");
+      return actor;
+    });
     const diagnostics = diagnosticContexts.get(request);
     if (diagnostics) diagnostics.authenticated = true;
     const headers = new Headers(request.headers);
     headers.set("origin", url.origin);
-    request.apiContext = await ports.context({
-      headers,
-      actor,
-    });
+    request.apiContext = await withTrace("http.api.context", () =>
+      ports.context({
+        headers,
+        actor,
+      }),
+    );
   };
 
   const implement = (route: AppRoute) => {

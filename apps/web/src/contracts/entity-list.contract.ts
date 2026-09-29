@@ -5,10 +5,35 @@ import {
   type EntityListInputByEntity,
   type EntityListResultByEntity,
   listEntities,
+  entityListBaseInputSchema,
+  entityListBaseOutputSchema,
+  entityListEnrichmentInputSchema,
+  entityListEnrichmentOutputSchema,
+  entityListSummaryInputSchema,
+  entityListSummaryOutputSchema,
   type ListEntity,
 } from "~/entities/generated/entity-lists.gen";
 
 export const entityListContract = defineContract("entity", {
+  listBase: query({
+    input: entityListBaseInputSchema,
+    output: entityListBaseOutputSchema,
+    native: "Progressive standard entity lists",
+    observability: { entities: listEntities },
+  }),
+  listEnrichment: query({
+    input: entityListEnrichmentInputSchema,
+    output: entityListEnrichmentOutputSchema,
+    transport: "post",
+    native: "Deferred list fields",
+    observability: { entities: listEntities },
+  }),
+  listSummary: query({
+    input: entityListSummaryInputSchema,
+    output: entityListSummaryOutputSchema,
+    native: "Full-filter list totals",
+    observability: { entities: listEntities },
+  }),
   list: query({
     // Type-only carriers: the per-entity runtime schemas live in the generated
     // list bindings and are applied by the browser `parse` policy and the

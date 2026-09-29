@@ -3,8 +3,8 @@ context platform=ios timeout=240000
 open com.nickysemenza.cubby
 wait "label=Find" 60000
 click "label=Find"
-wait "role=SearchField label=\"Search Cubby\"" 30000
-fill "role=SearchField label=\"Search Cubby\"" "Synthetic Atlas Lantern"
+wait "role=SearchField label=\"Search Cubby\" editable=true" 30000
+fill "role=SearchField label=\"Search Cubby\" editable=true" "Synthetic Atlas Lantern" --delay-ms 80
 wait "id=search.result.${PRODUCT_ID}" 30000
 click "id=search.result.${PRODUCT_ID}"
 wait "id=detail.product.edit" 30000
@@ -14,3 +14,30 @@ fill 300 300 "Synthetic Atlas Lantern Updated"
 press 350 100
 wait "id=detail.product.edit" 30000
 wait text "Synthetic Atlas Lantern Updated" 30000
+
+click "label=Library id=BackButton"
+wait text "Browse catalog" 30000
+click "label=\"Browse catalog\""
+scroll down --until "id=browse.catalog.product" --settle
+wait "id=browse.catalog.product" 30000
+click "id=browse.catalog.product label=Products"
+wait "id=browse.product.list" 30000
+wait "id=browse.product.row.${PRODUCT_ID}" 30000
+click "label=\"List controls\""
+click "label=View"
+click "label=Cards"
+wait "id=browse.product.cards.${PRODUCT_ID}" 30000
+click "label=\"List controls\""
+click "label=View"
+click "label=Compact"
+wait "id=browse.product.compact.${PRODUCT_ID}" 30000
+click "label=\"List controls\""
+click "label=View"
+click "label=List"
+click "label=\"List controls\""
+click "role=Button label=Search"
+wait "role=SearchField" 30000
+fill "role=SearchField editable=true" "Synthetic no matching product" --delay-ms 80
+wait text "No matching Products" 30000
+fill "role=SearchField editable=true" "Synthetic Atlas Lantern Updated" --delay-ms 80
+wait "id=browse.product.row.${PRODUCT_ID}" 30000

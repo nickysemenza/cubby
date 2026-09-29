@@ -7,7 +7,17 @@ import {
   type Element,
 } from "@xmldom/xmldom";
 
+import { withTrace } from "~/server/tracing";
+
 import { parseCalDavEvent } from "./caldav-ics";
+import {
+  CALDAV_BASE,
+  CALDAV_METHODS,
+  CALDAV_ALLOW,
+  calDavTarget,
+  calDavProtocolResponse,
+  type CalDavTarget,
+} from "./caldav-protocol";
 import {
   CALDAV_COLLECTIONS,
   CalDavError,
@@ -19,11 +29,6 @@ import { etagMatches } from "./contracts";
 
 const DAV = "DAV:";
 const CALDAV = "urn:ietf:params:xml:ns:caldav";
-const BASE = "/api/caldav";
-// Calendar.app omits DELETE preconditions. Keep deletion in Cubby until a
-// future protocol change explicitly chooses its stale-client semantics.
-const METHODS = ["OPTIONS", "PROPFIND", "REPORT", "GET", "HEAD", "PUT"];
-const ALLOW = METHODS.join(", ");
 const XML_HEADERS = {
   "Content-Type": "application/xml; charset=utf-8",
   "Cache-Control": "no-store",
@@ -32,10 +37,6 @@ const dom = new DOMImplementation();
 const serializer = new XMLSerializer();
 type Property = { namespace: string; name: string };
 type Selection = { mode: "all" | "names" | "selected"; properties: Property[] };
-type Target =
-  | { root: "base" | "principal" | "home" }
-  | { root: "collection"; collection: CalDavCollection }
-  | { root: "resource"; collection: CalDavCollection; filename: string };
 type Props = (document: Document) => Element[];
 const ALL: Selection = { mode: "all", properties: [] };
 function element(
@@ -95,8 +96,8 @@ function multistatus(entries: Element[]): Response {
 }
 function hrefFor(collection?: CalDavCollection, filename?: string): string {
   return collection
-    ? `${BASE}/calendars/me/${collection}/${filename ? encodeURIComponent(filename) : ""}`
-    : `${BASE}/`;
+    ? `${CALDAV_BASE}/calendars/me/${collection}/${filename ? encodeURIComponent(filename) : ""}`
+    : `${CALDAV_BASE}/`;
 }
 function statusResponse(href: string): Element {
   const document = dom.createDocument(DAV, "D:response", null);
@@ -185,7 +186,7 @@ function collectionProps(collection: CalDavCollection): Props {
           "read",
           "write-content",
           "bind",
-          ...(METHODS.includes("DELETE") ? ["unbind"] : []),
+          ...(CALDAV_METHODS.includes("DELETE") ? ["unbind"] : []),
         ].map(privilege),
       ),
       append(
@@ -220,9 +221,13 @@ function principalProperties(document: Document): Element[] {
     );
   return [
     element(document, DAV, "D:displayname", "Cubby"),
-    hrefProperty(DAV, "D:current-user-principal", `${BASE}/principals/me/`),
-    hrefProperty(DAV, "D:principal-URL", `${BASE}/principals/me/`),
-    hrefProperty(CALDAV, "C:calendar-home-set", `${BASE}/calendars/me/`),
+    hrefProperty(
+      DAV,
+      "D:current-user-principal",
+      `${CALDAV_BASE}/principals/me/`,
+    ),
+    hrefProperty(DAV, "D:principal-URL", `${CALDAV_BASE}/principals/me/`),
+    hrefProperty(CALDAV, "C:calendar-home-set", `${CALDAV_BASE}/calendars/me/`),
   ];
 }
 function parseXml(body: string): Element {
@@ -363,45 +368,6 @@ function queryRange(
     throw new CalDavError(400, "Invalid time range", "valid-filter");
   return { start, end };
 }
-function path(url: URL): Target | null {
-  const suffix =
-    url.pathname.startsWith(`${BASE}/`) || url.pathname === BASE
-      ? url.pathname.slice(BASE.length).replace(/\/+$/, "") || "/"
-      : null;
-  if (suffix === "/") return { root: "base" };
-  if (suffix === "/principals/me") return { root: "principal" };
-  if (suffix === "/calendars/me") return { root: "home" };
-  if (suffix === null) return null;
-  const match =
-    /^\/calendars\/me\/(tasks|completed-tasks|meals)(?:\/([^/]+))?$/.exec(
-      suffix,
-    );
-  if (!match) return null;
-  const collection = match[1];
-  if (
-    collection !== "tasks" &&
-    collection !== "completed-tasks" &&
-    collection !== "meals"
-  )
-    return null;
-  if (!match[2]) return { root: "collection", collection };
-  let filename: string;
-  try {
-    filename = decodeURIComponent(match[2]);
-  } catch (error) {
-    if (error instanceof URIError)
-      throw new CalDavError(400, "Invalid resource filename");
-    throw error;
-  }
-  if (
-    filename.includes("/") ||
-    filename.includes("\\") ||
-    Array.from(filename).some((character) => character.charCodeAt(0) < 32) ||
-    filename.length > 255
-  )
-    throw new CalDavError(400, "Invalid resource filename");
-  return { collection, filename, root: "resource" };
-}
 async function requestBody(request: Request): Promise<string> {
   if (Number(request.headers.get("content-length") ?? 0) > 1_000_000)
     throw new CalDavError(413, "Payload too large");
@@ -437,7 +403,7 @@ async function requestBody(request: Request): Promise<string> {
 }
 async function propfind(
   request: Request,
-  target: Target,
+  target: CalDavTarget,
   backend: CalDavBackend,
 ): Promise<Response> {
   const depth = request.headers.get("depth") ?? "infinity";
@@ -476,7 +442,7 @@ async function propfind(
       ]);
     case "principal":
       return multistatus([
-        entry(`${BASE}/principals/me/`, (document) => [
+        entry(`${CALDAV_BASE}/principals/me/`, (document) => [
           ...principalProperties(document),
           append(
             element(document, DAV, "D:resourcetype"),
@@ -486,7 +452,7 @@ async function propfind(
       ]);
     case "home":
       return multistatus([
-        entry(`${BASE}/calendars/me/`, (document) => [
+        entry(`${CALDAV_BASE}/calendars/me/`, (document) => [
           append(
             element(document, DAV, "D:resourcetype"),
             element(document, DAV, "D:collection"),
@@ -506,18 +472,22 @@ async function propfind(
       return multistatus([
         entry(hrefFor(target.collection), collectionProps(target.collection)),
         ...(depth === "1"
-          ? backend
-              .list(target.collection)
-              .map((resource) =>
-                entry(
-                  hrefFor(target.collection, resource.filename),
-                  resourceProps(resource),
-                ),
+          ? (
+              await withTrace("caldav.lookup", async () =>
+                backend.list(target.collection),
               )
+            ).map((resource) =>
+              entry(
+                hrefFor(target.collection, resource.filename),
+                resourceProps(resource),
+              ),
+            )
           : []),
       ]);
     case "resource": {
-      const resource = backend.get(target.collection, target.filename);
+      const resource = await withTrace("caldav.lookup", async () =>
+        backend.get(target.collection, target.filename),
+      );
       if (!resource) throw new CalDavError(404, "Resource does not exist");
       return multistatus([
         entry(
@@ -530,7 +500,7 @@ async function propfind(
 }
 async function report(
   request: Request,
-  target: Target,
+  target: CalDavTarget,
   backend: CalDavBackend,
 ): Promise<Response> {
   if (target.root !== "collection")
@@ -561,43 +531,51 @@ async function report(
     );
   if (query)
     return multistatus(
-      backend.list(target.collection, queryRange(root)).map(entry),
+      (
+        await withTrace("caldav.lookup", async () =>
+          backend.list(target.collection, queryRange(root)),
+        )
+      ).map(entry),
     );
   const hrefs = children(root).filter((node) => is(node, DAV, "href"));
   if (!hrefs.length)
     throw new CalDavError(400, "Multiget requires resource hrefs");
   return multistatus(
-    hrefs.map((node) => {
-      const href = node.textContent?.trim() ?? "";
-      // A malformed href (unparseable URL, invalid percent-encoding) is a
-      // per-resource client error, not a whole-request failure — RFC 4791
-      // §7.9 reports it as a 404 status element for that href alone.
-      let candidate: Target | null;
-      try {
-        const url = new URL(href, request.url);
-        if (url.origin !== new URL(request.url).origin)
+    await withTrace("caldav.lookup", async () =>
+      hrefs.map((node) => {
+        const href = node.textContent?.trim() ?? "";
+        // A malformed href (unparseable URL, invalid percent-encoding) is a
+        // per-resource client error, not a whole-request failure — RFC 4791
+        // §7.9 reports it as a 404 status element for that href alone.
+        let candidate: CalDavTarget | null;
+        try {
+          const url = new URL(href, request.url);
+          if (url.origin !== new URL(request.url).origin)
+            return statusResponse(href);
+          candidate = calDavTarget(url);
+        } catch {
           return statusResponse(href);
-        candidate = path(url);
-      } catch {
-        return statusResponse(href);
-      }
-      if (
-        candidate?.root !== "resource" ||
-        candidate.collection !== target.collection
-      )
-        return statusResponse(href);
-      const resource = backend.get(candidate.collection, candidate.filename);
-      return resource ? entry(resource) : statusResponse(href);
-    }),
+        }
+        if (
+          candidate?.root !== "resource" ||
+          candidate.collection !== target.collection
+        )
+          return statusResponse(href);
+        const resource = backend.get(candidate.collection, candidate.filename);
+        return resource ? entry(resource) : statusResponse(href);
+      }),
+    ),
   );
 }
-function read(
+async function read(
   request: Request,
-  target: Target,
+  target: CalDavTarget,
   backend: CalDavBackend,
-): Response {
+): Promise<Response> {
   if (target.root !== "resource") throw new CalDavError(404, "Not found");
-  const resource = backend.get(target.collection, target.filename);
+  const resource = await withTrace("caldav.lookup", async () =>
+    backend.get(target.collection, target.filename),
+  );
   if (!resource) throw new CalDavError(404, "Not found");
   const headers = {
     "Content-Type": "text/calendar; charset=utf-8",
@@ -612,7 +590,7 @@ function read(
 }
 async function write(
   request: Request,
-  target: Target,
+  target: CalDavTarget,
   backend: CalDavBackend,
   actorId: UserId,
 ): Promise<Response> {
@@ -652,22 +630,10 @@ export function createCalDavHandler(
       const url = new URL(request.url);
       if (url.protocol !== "https:")
         throw new CalDavError(400, "HTTPS is required");
-      if (
-        url.pathname === "/.well-known/caldav" ||
-        url.pathname === "/.well-known/caldav/"
-      )
-        return Response.redirect(new URL(`${BASE}/`, url.origin), 308);
-      const target = path(url);
+      const early = calDavProtocolResponse(request);
+      if (early) return early;
+      const target = calDavTarget(url);
       if (!target) throw new CalDavError(404, "Not found");
-      if (request.method === "OPTIONS")
-        return new Response(null, {
-          status: 204,
-          headers: {
-            DAV: "1, calendar-access",
-            Allow: ALLOW,
-            "MS-Author-Via": "DAV",
-          },
-        });
       const actorId = await backend.authenticate(
         request.headers.get("authorization"),
       );
@@ -679,14 +645,14 @@ export function createCalDavHandler(
             "Cache-Control": "no-store",
           },
         });
-      if (!METHODS.includes(request.method))
+      if (!CALDAV_METHODS.includes(request.method))
         return new Response(
           request.method === "DELETE"
             ? "Delete events in Cubby."
             : "Method not allowed",
           {
             status: 405,
-            headers: { Allow: ALLOW },
+            headers: { Allow: CALDAV_ALLOW },
           },
         );
       if (!backend.ready())
@@ -701,13 +667,13 @@ export function createCalDavHandler(
           return await report(request, target, backend);
         case "GET":
         case "HEAD":
-          return read(request, target, backend);
+          return await read(request, target, backend);
         case "PUT":
           return await write(request, target, backend, userId.parse(actorId));
         default:
           return new Response("Method not allowed", {
             status: 405,
-            headers: { Allow: ALLOW },
+            headers: { Allow: CALDAV_ALLOW },
           });
       }
     } catch (error) {

@@ -25,9 +25,11 @@ import {
   createGardenEntry,
   createPlanting,
   gardenEntryList,
+  gardenEntryListRead,
   getGardenEntry,
   getPlanting,
   plantingList,
+  plantingListRead,
   updateGardenEntry,
   updatePlanting,
 } from ".";
@@ -169,6 +171,8 @@ export const plantingRepository = defineRepository("planting", {
     getPlanting(ctx.db, await plantings.one(ctx.db, shortcode)),
   list: (ctx, filters, sorts, pagination) =>
     plantingList(ctx.db, filters, pagination, sorts),
+  listRead: (ctx, filters, sorts, pagination, projection) =>
+    plantingListRead(ctx.db, filters, pagination, sorts, projection),
   create: asActor(createPlanting),
   update: async (ctx, shortcode, data) => {
     const id = await plantings.one(ctx.db, shortcode);
@@ -218,6 +222,8 @@ export const gardenEntryRepository = defineRepository("gardenEntry", {
     getGardenEntry(ctx.db, await entries.one(ctx.db, shortcode)),
   list: (ctx, filters, sorts, pagination) =>
     gardenEntryList(ctx.db, filters, pagination, sorts),
+  listRead: (ctx, filters, sorts, pagination, projection) =>
+    gardenEntryListRead(ctx.db, filters, pagination, sorts, projection),
   create: asActor(createGardenEntry),
   update: async (ctx, shortcode, data) => {
     const id = await entries.one(ctx.db, shortcode);

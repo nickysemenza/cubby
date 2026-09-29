@@ -78,7 +78,9 @@ struct EntityShelfView: View {
             imageURL: row.imageURL,
             symbol: descriptor.sfSymbol,
             density: density,
-            selected: isSelected(row)
+            selected: isSelected(row),
+            loadingDetails: !row.pendingFields.isEmpty,
+            failedDetails: !row.failedFields.isEmpty
         )
 
         #if os(macOS)
@@ -135,6 +137,8 @@ struct EntityCard: View {
     let symbol: String
     let density: ListPresentationChoice
     var selected = false
+    var loadingDetails = false
+    var failedDetails = false
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -160,6 +164,12 @@ struct EntityCard: View {
                     .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
             }
+            if loadingDetails || failedDetails {
+                Text(loadingDetails ? "Loading details…" : "Some details unavailable")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(density == .compact ? 6 : FieldGuideTokens.Space.sm)
@@ -180,12 +190,15 @@ struct EntityCard: View {
     }
 
     private var accessibilityLabel: String {
-        [title, subtitle, identifier]
-            .compactMap { value in
-                guard let value, !value.isEmpty else { return nil }
-                return value
-            }
-            .joined(separator: ", ")
+        [
+            title, subtitle, identifier, loadingDetails ? "Loading details" : nil,
+            failedDetails ? "Some details unavailable" : nil,
+        ]
+        .compactMap { value in
+            guard let value, !value.isEmpty else { return nil }
+            return value
+        }
+        .joined(separator: ", ")
     }
 }
 

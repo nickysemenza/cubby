@@ -26,6 +26,7 @@ import type {
   SplitExpenseInput,
 } from "@cubby/schemas/purchase";
 import {
+  purchaseListItemOut,
   RECONCILIATION_TOLERANCE,
   reconcilePurchase,
 } from "@cubby/schemas/purchase";
@@ -45,6 +46,7 @@ import {
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import { projectListRows } from "~/entities/list-read-schema";
 import { purchaseLabel } from "~/lib/purchase-label";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -109,6 +111,12 @@ import {
 } from "~/server/repo/financial-transaction-allocations";
 import { displayableImageSql } from "~/server/repo/image-displayability";
 import { listScaffold } from "~/server/repo/list";
+import {
+  listGroupFields,
+  loadListGroup,
+  wantsListGroup,
+  type ListProjection,
+} from "~/server/repo/list-projection";
 import {
   finalizeMerge,
   repointEdge,
@@ -605,27 +613,54 @@ const resolvePurchaseSort = (sort: SortParams) => {
   return null;
 };
 
-export const purchaseList = async (
+export const purchaseListRead = async (
   db: Database,
   filters: PurchaseFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
-): Promise<{
-  data: PurchaseListItemOut[];
-  count: number;
-  sums?: { expenseTotal: number; expenseCount: number };
-}> => {
-  const where = await buildPurchaseWhereClause(db, filters);
-  const pagePromise = purchaseScaffold.list(
+  projection: ListProjection = { kind: "full" },
+) => {
+  const {
+    defaultProjectShortcode,
+    vendorShortcode,
+    vendorAccountShortcode,
+    vendorOrderUrlTemplate,
+    vendorLogoKey,
+    expenseCount,
+    unpricedExpenseCount,
+    expenseTotal,
+    settleableExpenseTotal,
+    settleableUnpricedExpenseCount,
+    documentCount,
+    ...core
+  } = purchaseColumns;
+  return purchaseScaffold.list(
     db,
-    { filters, sorts, pagination, readIntent },
+    { filters, sorts, pagination, readIntent, projection },
     {
-      where,
+      where: await buildPurchaseWhereClause(db, filters),
       resolveSort: resolvePurchaseSort,
       select: (page) =>
         getDb(db)
-          .select(purchaseColumns)
+          .select({
+            ...core,
+            ...listGroupFields(projection, "relations", () => ({
+              defaultProjectShortcode,
+              vendorShortcode,
+              vendorAccountShortcode,
+              vendorOrderUrlTemplate,
+            })),
+            ...listGroupFields(projection, "media", () => ({ vendorLogoKey })),
+            ...listGroupFields(projection, "derived", () => ({
+              expenseCount,
+              unpricedExpenseCount,
+              expenseTotal,
+              settleableExpenseTotal,
+              settleableUnpricedExpenseCount,
+              documentCount,
+            })),
+          })
           .from(purchase)
           .where(page.where)
           .orderBy(...page.orderBy)
@@ -633,24 +668,92 @@ export const purchaseList = async (
           .offset(page.offset),
       hydrate: async (rows) => {
         const ids = rows.map((row) => row.id);
-        const [financialByPurchase, dataQualities] = await Promise.all([
-          loadPurchaseFinancialAggregates(db, ids),
-          loadDataQualities(db, "purchase", ids),
-        ]);
-        return withDisplayImages(db, "purchase", rows, (row) =>
-          dbPurchaseToAPI(
-            row,
-            dataQualities.get(row.id)!,
-            [],
-            financialByPurchase.get(row.id),
+        const [financials, qualities] = await Promise.all([
+          loadListGroup(projection, "derived", () =>
+            loadPurchaseFinancialAggregates(db, ids),
           ),
-        );
+          loadListGroup(projection, "quality", () =>
+            loadDataQualities(db, "purchase", ids),
+          ),
+        ]);
+        const paired = rows.map((row) => {
+          const financial =
+            financials?.get(row.id) ?? emptyPurchaseFinancialAggregate();
+          return {
+            id: row.id,
+            out: {
+              ...row,
+              id: parseShortcodeFor("purchase", row.shortcode),
+              displayName: purchaseLabel({
+                orderId: row.orderId,
+                displayLabel: row.displayLabel,
+                vendorName: row.vendorName,
+                date: row.date,
+              }),
+              ...listGroupFields(projection, "relations", () => ({
+                vendorId: parseShortcodeFor("vendor", row.vendorShortcode!),
+                vendorAccountId: row.vendorAccountShortcode
+                  ? parseShortcodeFor(
+                      "vendorAccount",
+                      row.vendorAccountShortcode,
+                    )
+                  : null,
+                defaultProjectId: row.defaultProjectShortcode
+                  ? parseShortcodeFor("project", row.defaultProjectShortcode)
+                  : null,
+                orderUrl: purchaseOrderUrl({
+                  orderUrlTemplate: row.vendorOrderUrlTemplate ?? null,
+                  orderId: row.orderId,
+                }),
+              })),
+              ...listGroupFields(projection, "media", () => ({
+                images: [],
+                vendorLogo: row.vendorLogoKey
+                  ? { url: getR2PublicUrl(row.vendorLogoKey) }
+                  : null,
+              })),
+              ...listGroupFields(projection, "derived", () => ({
+                reconciliation: reconcilePurchase({
+                  statedTotal: row.statedTotal,
+                  expenseTotal: Number(row.expenseTotal),
+                  expenseCount: Number(row.expenseCount),
+                  unpricedExpenseCount: Number(row.unpricedExpenseCount),
+                  postedRefundTotal: financial.postedRefundTotal,
+                }),
+                financialReconciliation: calculateFinancialReconciliation({
+                  settleableExpenseTotal: row.settleableExpenseTotal!,
+                  settleableUnpricedExpenseCount:
+                    row.settleableUnpricedExpenseCount!,
+                  ...financial,
+                }),
+              })),
+              ...listGroupFields(projection, "quality", () => ({
+                dataQuality: qualities!.get(row.id)!,
+              })),
+            },
+          };
+        });
+        const values = wantsListGroup(projection, "media")
+          ? await withDisplayImages(
+              db,
+              "purchase",
+              paired,
+              (entry) => entry.out,
+            )
+          : paired.map((entry) => entry.out);
+        return projectListRows("purchase", values, projection);
       },
     },
   );
-  if (readIntent !== "page") return pagePromise;
-  // Filter purchases first; each live ledger row contributes once, regardless of other joins.
-  const totalsPromise = getDb(db)
+};
+
+export const purchaseListSummary = async (
+  db: Database,
+  filters: PurchaseFilters,
+) => {
+  const where = await buildPurchaseWhereClause(db, filters);
+  // Each live ledger row contributes once, including credits, across the full filtered set.
+  const [totals] = await getDb(db)
     .select({
       expenseTotal: sql<number>`COALESCE(sum(${expense.cost}::numeric), 0)::double precision`,
       expenseCount: sql<number>`count(*)::int`,
@@ -665,14 +768,33 @@ export const purchaseList = async (
         ),
       ),
     );
-  const [page, [totals]] = await Promise.all([pagePromise, totalsPromise]);
   return {
-    ...page,
-    sums: {
-      expenseTotal: Number(totals?.expenseTotal ?? 0),
-      expenseCount: Number(totals?.expenseCount ?? 0),
-    },
+    expenseTotal: Number(totals?.expenseTotal ?? 0),
+    expenseCount: Number(totals?.expenseCount ?? 0),
   };
+};
+
+export const purchaseList = async (
+  db: Database,
+  filters: PurchaseFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
+): Promise<{
+  data: PurchaseListItemOut[];
+  count: number;
+  sums?: { expenseTotal: number; expenseCount: number };
+}> => {
+  const [page, sums] = await Promise.all([
+    purchaseListRead(db, filters, sorts, pagination, readIntent),
+    readIntent === "page" ? purchaseListSummary(db, filters) : undefined,
+  ]);
+  const result = {
+    ...page,
+    data: page.data.map((row) => purchaseListItemOut.parse(row)),
+  };
+  if (sums) Object.assign(result, { sums });
+  return result;
 };
 
 export const getPurchaseByID = async (

@@ -11,6 +11,7 @@ import {
 import type { ImageOut } from "@cubby/schemas/image";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
+import { locationListItemOut } from "@cubby/schemas/location";
 import type {
   InfLocation,
   LocationCreateInput,
@@ -38,6 +39,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
+import { projectListRows } from "~/entities/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -89,6 +91,11 @@ import {
   loadLiveInventoryValuations,
 } from "~/server/repo/inventory/valuation";
 import { listScaffold } from "~/server/repo/list";
+import {
+  loadListGroup,
+  wantsListGroup,
+  type ListProjection,
+} from "~/server/repo/list-projection";
 import { parseLocationType } from "~/server/repo/location/parse-type";
 import { loadProductPricing } from "~/server/repo/product/pricing";
 import { deleteByPolicy } from "~/server/repo/removal";
@@ -104,7 +111,11 @@ import {
   LOCATION_DESCRIPTION_FEATURE_ID,
   locationAiDescriptionSql,
 } from "./ai-description";
-import { buildLocationWithChildren, dbLocationToListAPI } from "./helpers";
+import {
+  buildLocationWithChildren,
+  dbLocationToAPI,
+  dbLocationToListAPI,
+} from "./helpers";
 import { getHomeLocation } from "./home";
 import type {
   LocationFilters,
@@ -812,11 +823,12 @@ const LOCATION_GROUPING = generatedEntitySort.location.grouping;
 if (!LOCATION_GROUPING)
   throw new Error("location entity declares no list-grouping contract.");
 
-export const locationList = async (
+export const locationListRead = async (
   db: Database,
   filters: LocationFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  projection: ListProjection,
   groupBy?: string,
   readIntent: ListReadIntent = "page",
 ) => {
@@ -824,7 +836,12 @@ export const locationList = async (
   // One computed valuation per inventory entry serves the list's valuation
   // sort, its rows' entry valuations, and the whole-tree rollup.
   const entryValuations =
-    readIntent === "count" ? undefined : await loadLiveInventoryValuations(db);
+    readIntent === "count" ||
+    (!wantsListGroup(projection, "relations") &&
+      !wantsListGroup(projection, "derived") &&
+      !sorts.some((sort) => sort.orderBy === "valuation"))
+      ? undefined
+      : await loadLiveInventoryValuations(db);
   const directValuation = sorts.some((sort) => sort.orderBy === "valuation")
     ? await loadDirectValuationSql(db, entryValuations)
     : undefined;
@@ -893,7 +910,24 @@ export const locationList = async (
     rows: () =>
       getDb(db).query.location.findMany({
         where: whereClause,
-        ...relations.location.list,
+        extras: relations.location.list.extras,
+        with: {
+          parent: wantsListGroup(projection, "relations")
+            ? relations.location.list.with.parent
+            : undefined,
+          product: wantsListGroup(projection, "relations")
+            ? relations.location.list.with.product
+            : undefined,
+          children: wantsListGroup(projection, "relations")
+            ? relations.location.list.with.children
+            : undefined,
+          inventoryEntries: wantsListGroup(projection, "relations")
+            ? relations.location.list.with.inventoryEntries
+            : undefined,
+          images: wantsListGroup(projection, "media")
+            ? relations.location.list.with.images
+            : undefined,
+        },
         orderBy: orderByClause,
         limit: take,
         offset: skip,
@@ -904,40 +938,56 @@ export const locationList = async (
     return { data: [], count: totalCount };
   }
 
-  // One batched pricing load for the whole page (never per-row): flatten every
-  // live inventory entry's product across the page and price them together, then
-  // thread the map into dbLocationToListAPI.
-  const pageProducts = results.flatMap((row) =>
+  const hydratedResults = results.map((row) => ({
+    ...row,
+    product: row.product && "category" in row.product ? row.product : null,
+    inventoryEntries: (row.inventoryEntries ?? []).flatMap((entry) =>
+      "product" in entry ? [entry] : [],
+    ),
+    images: (row.images ?? []).flatMap((entry) =>
+      "image" in entry ? [entry] : [],
+    ),
+  }));
+  const pageProducts = hydratedResults.flatMap((row) =>
     row.inventoryEntries.map((entry) => entry.product),
   );
   const [pricingByProductId, valuations, dataQualities] = await Promise.all([
-    loadProductPricing(db, pageProducts),
-    // One whole-tree compute per page, not per row: valuation is a rollup over
-    // the WHOLE subtree beneath each location, which a page-scoped query
-    // cannot produce on its own.
-    computeLocationValuations(db, entryValuations),
-    loadDataQualities(
-      db,
-      "location",
-      results.map((row) => row.id),
+    loadListGroup(projection, "relations", () =>
+      loadProductPricing(db, pageProducts),
+    ),
+    loadListGroup(projection, "derived", () =>
+      computeLocationValuations(db, entryValuations),
+    ),
+    loadListGroup(projection, "quality", () =>
+      loadDataQualities(
+        db,
+        "location",
+        results.map((row) => row.id),
+      ),
     ),
   ]);
-  const valuedResults = results.map((row) => ({
+  const valuedResults = hydratedResults.map((row) => ({
     ...row,
+    children: row.children ?? [],
+    parent: row.parent ?? null,
     inventoryEntries: attachInventoryValuations(
-      row.inventoryEntries,
+      row.inventoryEntries ?? [],
       entryValuations ?? new Map(),
     ),
   }));
-  const items = await withDisplayImages(db, "location", valuedResults, (row) =>
-    dbLocationToListAPI(
-      row,
-      pricingByProductId,
-      valuations,
-      // SAFETY: `row` came from `results`, which `dataQualities` was loaded for.
-      dataQualities.get(row.id)!,
-    ),
-  );
+  const mapRow = (row: (typeof valuedResults)[number]) =>
+    wantsListGroup(projection, "relations")
+      ? dbLocationToListAPI(
+          row,
+          pricingByProductId ?? new Map(),
+          valuations,
+          dataQualities?.get(row.id),
+        )
+      : dbLocationToAPI(row, valuations, dataQualities?.get(row.id));
+  const mapped = wantsListGroup(projection, "media")
+    ? await withDisplayImages(db, "location", valuedResults, mapRow)
+    : valuedResults.map(mapRow);
+  const items = projectListRows("location", mapped, projection);
   const result = {
     data: items,
     count: totalCount,
@@ -1409,4 +1459,27 @@ export const getLocationById = async (
     valuations,
     dataQualities,
   );
+};
+
+export const locationList = async (
+  db: Database,
+  filters: LocationFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  groupBy?: string,
+  readIntent: ListReadIntent = "page",
+) => {
+  const page = await locationListRead(
+    db,
+    filters,
+    sorts,
+    pagination,
+    { kind: "full" },
+    groupBy,
+    readIntent,
+  );
+  return {
+    ...page,
+    data: page.data.map((row) => locationListItemOut.parse(row)),
+  };
 };

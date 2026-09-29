@@ -132,6 +132,19 @@ struct EntityListView: View {
             )
         )
         .onChange(of: searchText) { _, value in applySearchText(value) }
+        .onChange(
+            of: model.map {
+                visibleEnrichment($0).errors + [visibleEnrichment($0).summaryError].compactMap { $0 }
+            } ?? []
+        ) { previous, errors in
+            for message in errors where !previous.contains(message) {
+                Diagnostics.report(
+                    NSError(
+                        domain: "EntityListEnrichment", code: 1,
+                        userInfo: [NSLocalizedDescriptionKey: message]),
+                    context: "Browse \(key.rawValue)")
+            }
+        }
         .toolbar { toolbarContent }
         .task(id: key) {
             if model == nil {
@@ -376,6 +389,7 @@ struct EntityListView: View {
                 }
             case .loaded:
                 VStack {
+                    if hasBanner(model) { banner(model) }
                     if let meta = model.summaryMeta { listSummary(meta: meta, shown: 0) }
                     ContentUnavailableView {
                         Label(
@@ -415,6 +429,7 @@ struct EntityListView: View {
                     }
                 case .loaded:
                     VStack {
+                        if hasBanner(model) { banner(model) }
                         if let meta = search.summaryMeta { listSummary(meta: meta, shown: 0) }
                         ContentUnavailableView(
                             "No matching \(descriptor.plural)", systemImage: "magnifyingglass")
@@ -468,10 +483,28 @@ struct EntityListView: View {
 
     private func hasBanner(_ model: GenericEntityListModel) -> Bool {
         model.refreshError != nil || model.searchModel?.refreshError != nil
+            || !visibleEnrichment(model).errors.isEmpty
+            || visibleEnrichment(model).summaryError != nil
+            || (!descriptor.presentation.listTotals.isEmpty && visibleEnrichment(model).isLoadingSummary)
+    }
+
+    private func visibleEnrichment(_ model: GenericEntityListModel) -> EntityListEnrichmentModel {
+        model.isSearching ? (model.searchModel?.enrichment ?? model.enrichment) : model.enrichment
     }
 
     @ViewBuilder
     private func banner(_ model: GenericEntityListModel) -> some View {
+        let enrichment = visibleEnrichment(model)
+        if !enrichment.errors.isEmpty || enrichment.summaryError != nil {
+            VStack(alignment: .leading) {
+                ForEach(enrichment.errors, id: \.self) { Text($0).foregroundStyle(.secondary) }
+                if let error = enrichment.summaryError { Text(error).foregroundStyle(.secondary) }
+                Button("Retry details") { enrichment.retry() }
+            }
+        }
+        if enrichment.isLoadingSummary && !descriptor.presentation.listTotals.isEmpty {
+            ProgressView("Loading totals")
+        }
         if let error = model.refreshError {
             HStack {
                 Text(error).foregroundStyle(.secondary)
@@ -637,6 +670,8 @@ struct EntityRowView: View {
                     .accessibilityHidden(true)
             } else if let imageURL = presentation.imageURL {
                 Thumb(url: imageURL, size: thumbnailSize, symbol: entitySymbol(for: key))
+            } else if row.pendingFields.contains("displayImages") {
+                Thumb(url: nil, size: thumbnailSize, symbol: entitySymbol(for: key))
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(presentation.title)
@@ -648,6 +683,15 @@ struct EntityRowView: View {
                         .font(.caption)
                         .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         .lineLimit(2)
+                }
+                if !row.pendingFields.isEmpty {
+                    Text("Loading details…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if !row.failedFields.isEmpty {
+                    Text("Some details unavailable")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 if photoMode {
                     Text(presentation.shortcode)
@@ -663,9 +707,11 @@ struct EntityRowView: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            photoMode
+            (photoMode
                 ? "\(presentation.accessibilityText), \(presentation.shortcode)"
                 : presentation.accessibilityText)
+                + (row.pendingFields.isEmpty ? "" : ", Loading details")
+                + (row.failedFields.isEmpty ? "" : ", Some details unavailable"))
     }
 }
 

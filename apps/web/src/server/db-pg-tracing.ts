@@ -2,7 +2,12 @@ import pg from "pg";
 
 import { databaseStatementForTrace } from "~/lib/db-query-telemetry";
 
-import { beginDatabaseAcquire, beginDatabaseQuery } from "./db-observability";
+import {
+  beginDatabaseAcquire,
+  beginDatabaseQuery,
+  beginDatabaseClientQueue,
+  nextDatabaseAcquireOrdinal,
+} from "./db-observability";
 import { TraceNames, withTrace } from "./tracing";
 
 export type RequestDbRole = "strong" | "bounded-stale";
@@ -253,12 +258,30 @@ const traceQuery = (
  * per client so pg never sees a second one in flight. Callback and stream
  * queries are not chained; nothing in the app issues them concurrently.
  */
-const serializeQueries = (run: QueryBridge): QueryBridge => {
+const serializeQueries = (
+  run: QueryBridge,
+  role: RequestDbRole,
+): QueryBridge => {
   let tail: Promise<unknown> = Promise.resolve();
   const implementation: PgQueryImplementation = (...args) => {
     if (isCallbackQuery(args)) return run(...args);
     if (isStreamQuery(args)) return run(...args);
-    const response = tail.then(() => run(...args));
+    const predecessor = tail;
+    const ready = withTrace("db.client_queue", async (span) => {
+      span.setAttribute("cubby.db.binding_role", role);
+      const startedAt = performance.now();
+      const finishQueue = beginDatabaseClientQueue(startedAt);
+      try {
+        await predecessor;
+      } finally {
+        finishQueue();
+        span.setAttribute(
+          "db.client_queue.duration_ms",
+          Math.round(performance.now() - startedAt),
+        );
+      }
+    });
+    const response = ready.then(() => run(...args));
     tail = response.catch(() => undefined);
     return response;
   };
@@ -322,6 +345,7 @@ const traceClient = <T extends pg.ClientBase>(
   // Serialize outside the span so it times execution, not the wait.
   client.query = serializeQueries(
     traceQuery(rawQuery, () => transactionState.get(client) ?? false, role),
+    role,
   );
   tracedClients.add(client);
   return client;
@@ -331,13 +355,32 @@ export const tracePool = (pool: pg.Pool, role: RequestDbRole): pg.Pool => {
   const rawQuery = queryBridge(pool.query.bind(pool));
   const rawConnect = connectBridge(pool.connect.bind(pool));
 
+  let acquireOrdinal = 0;
   const acquire = (inTransaction: boolean): Promise<pg.PoolClient> =>
     withTrace(TraceNames.db("acquire"), async (span) => {
-      span.setAttribute("db.acquire.transaction", inTransaction);
+      span.setAttributes({
+        "db.acquire.transaction": inTransaction,
+        "cubby.db.binding_role": role,
+        "db.acquire.ordinal":
+          nextDatabaseAcquireOrdinal() ?? acquireOrdinal + 1,
+        "db.acquire.pool_ordinal": ++acquireOrdinal,
+        "db.pool.total_count": pool.totalCount,
+        "db.pool.idle_count": pool.idleCount,
+        "db.pool.waiting_count": pool.waitingCount,
+      });
       const startedAt = performance.now();
       const finishAcquire = beginDatabaseAcquire(startedAt);
       try {
         const client = await rawConnect();
+        span.setAttribute(
+          "db.acquire.client_reused",
+          tracedClients.has(client),
+        );
+        span.setAttributes({
+          "db.pool.after.total_count": pool.totalCount,
+          "db.pool.after.idle_count": pool.idleCount,
+          "db.pool.after.waiting_count": pool.waitingCount,
+        });
         const durationMs = Math.round(performance.now() - startedAt);
         span.setAttribute("db.acquire.duration_ms", durationMs);
         if (durationMs > 500) {

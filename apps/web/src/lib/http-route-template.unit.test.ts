@@ -53,6 +53,25 @@ describe("httpRouteTemplate", () => {
     );
   });
 
+  it("parameterizes CalDAV discovery, collections, and resource filenames", () => {
+    expect(httpRouteTemplate("/.well-known/caldav/")).toBe(
+      "/.well-known/caldav",
+    );
+    expect(httpRouteTemplate("/api/caldav/")).toBe("/api/caldav");
+    expect(httpRouteTemplate("/api/caldav/principals/me/")).toBe(
+      "/api/caldav/principals/:principal",
+    );
+    expect(httpRouteTemplate("/api/caldav/calendars/me/")).toBe(
+      "/api/caldav/calendars/:principal",
+    );
+    expect(
+      httpRouteTemplate("/api/caldav/calendars/me/tasks/private.ics"),
+    ).toBe("/api/caldav/calendars/:principal/:collection/:resource");
+    expect(httpRouteTemplate("/api/caldav/calendars/me/meals/")).toBe(
+      "/api/caldav/calendars/:principal/:collection",
+    );
+  });
+
   it("never exports calendar credentials", () => {
     expect(httpRouteTemplate("/api/calendar/secret-token/private-feed")).toBe(
       "/api/calendar/:token/:feed",

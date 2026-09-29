@@ -140,7 +140,7 @@ export const EMPTY_PROJECT_SUBTREE_ROLLUP: ProjectSubtreeRollup = {
  * object rather than a positional list: it already carried seven arguments,
  * three of which are same-typed id arrays, and the date window made eight.
  */
-const dbProjectToAPI = ({
+const dbProjectToAPI = <Q extends DataQuality | undefined>({
   row,
   ownRollup,
   subtreeRollup,
@@ -165,8 +165,8 @@ const dbProjectToAPI = ({
   childProjectIds: string[];
   rowsById: ReadonlyMap<ProjectId, ProjectParentRow>;
   rowsByShortcode: ReadonlyMap<string, ProjectParentRow>;
-  dataQuality: DataQuality;
-}): ProjectOut => {
+  dataQuality: Q;
+}): Omit<ProjectOut, "dataQuality"> & { dataQuality: Q } => {
   const resolved = resolveInheritedProjectSettings(row, rowsById);
   const fallback = resolveInheritedProjectSettings(
     { ...row, locationsMode: "inherit", defaultTrade: null },
@@ -264,7 +264,7 @@ const dbProjectToAPI = ({
  * Apply the repository's canonical empty fallbacks and parent/child/dependency
  * lookups to a project row. Every read path gets the same hydrated shape.
  */
-export const hydrateProjectRow = (
+export const hydrateProjectRow = <Q extends DataQuality | undefined>(
   row: ProjectRow,
   context: {
     ownRollups: Map<ProjectId, ProjectOwnRollup>;
@@ -280,8 +280,8 @@ export const hydrateProjectRow = (
     blockedBy: Map<ProjectId, ProjectId[]>;
     blocking: Map<ProjectId, ProjectId[]>;
   },
-  dataQuality: DataQuality,
-): ProjectOut => {
+  dataQuality: Q,
+): Omit<ProjectOut, "dataQuality"> & { dataQuality: Q } => {
   const toShortcode = (id: ProjectId) => context.shortcodeById.get(id) ?? "";
   return dbProjectToAPI({
     row,

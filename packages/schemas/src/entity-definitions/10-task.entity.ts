@@ -52,6 +52,26 @@ export default defineEntity({
       ],
     },
     list: {
+      read: {
+        relations: [
+          "projectId",
+          "subjectProductId",
+          "parentTaskId",
+          "projectName",
+          "subjectProductName",
+          "parentTaskName",
+          "blockedByIds",
+          "blockingIds",
+        ],
+        derived: [
+          "fieldResolutions",
+          "subtaskCount",
+          "doneSubtaskCount",
+          "trade",
+        ],
+        media: ["images", "displayImages"],
+        quality: ["dataQuality"],
+      },
       viewOverrides: [
         "table",
         { kind: "slot", id: "agenda", label: "Next" },

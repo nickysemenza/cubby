@@ -2,7 +2,9 @@ import type { UserId } from "@cubby/schemas/identifiers";
 
 import { enqueueBackgroundTask } from "~/server/background-tasks/publish";
 import { getCalendarFeedNamespace, getExecutionCtx } from "~/server/cf-env";
+import { withTrace } from "~/server/tracing";
 
+import { calDavProtocolResponse } from "./caldav-protocol";
 import type { CalendarFeedState, CalendarCredentialState } from "./contracts";
 
 type CalendarFeedStub = ReturnType<Env["CALENDAR_FEED"]["getByName"]>;
@@ -81,12 +83,20 @@ export async function externalCalendarFeedStateFor(
 }
 
 export async function handleCalDavRequest(request: Request): Promise<Response> {
+  const early = calDavProtocolResponse(request);
+  if (early) return early;
   const namespace = getCalendarFeedNamespace();
   if (!namespace)
     return new Response("Calendar requires the Cloudflare Worker runtime", {
       status: 503,
     });
-  return namespace.getByName(new URL(request.url).hostname).fetch(request);
+  return withTrace("caldav.forward", async (span) => {
+    const response = await namespace
+      .getByName(new URL(request.url).hostname)
+      .fetch(request);
+    span.setAttribute("http.response.status_code", response.status);
+    return response;
+  });
 }
 
 /** Delays between dirty-mark attempts; the RPC is idempotent (`markDirty` only sets a flag). */

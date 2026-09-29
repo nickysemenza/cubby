@@ -24,7 +24,9 @@ public final class EntityListSearchModel {
     public typealias Sleeper = @Sendable (_ nanoseconds: UInt64) async throws -> Void
 
     public private(set) var query = ""
-    public private(set) var rows: [EntityRow] = []
+    private var coreRows: [EntityRow] = []
+    public var rows: [EntityRow] { enrichment?.project(coreRows) ?? coreRows }
+    public let enrichment: EntityListEnrichmentModel?
     public private(set) var meta: ListPageMeta?
     public private(set) var page = 1
     public private(set) var phase: Phase = .idle
@@ -39,6 +41,13 @@ public final class EntityListSearchModel {
     /// Metadata is only presented as current while its last refresh succeeded.
     public var summaryMeta: ListPageMeta? {
         guard phase == .loaded, refreshError == nil else { return nil }
+        guard var meta else { return nil }
+        if enrichment?.isLoadingSummary == true || enrichment?.summaryError != nil {
+            meta.sums = nil
+            return meta
+        }
+        guard let sums = enrichment?.sums else { return meta }
+        meta.sums = .init(additionalProperties: sums)
         return meta
     }
 
@@ -49,12 +58,14 @@ public final class EntityListSearchModel {
     private var requestGeneration = 0
 
     public init(
+        descriptor: EntityDescriptor? = nil,
         debounceNanoseconds: UInt64 = 250_000_000,
         sleeper: @escaping Sleeper = { nanoseconds in
             try await Task.sleep(nanoseconds: nanoseconds)
         },
         loader: @escaping PageLoader
     ) {
+        self.enrichment = descriptor.map { EntityListEnrichmentModel(descriptor: $0) }
         self.debounceNanoseconds = debounceNanoseconds
         self.sleeper = sleeper
         self.loader = loader
@@ -69,12 +80,14 @@ public final class EntityListSearchModel {
         requestTask?.cancel()
         requestTask = nil
         requestGeneration += 1
+        coreRows = rows
+        enrichment?.invalidate()
         query = normalized
         refreshError = nil
         nextPageError = nil
 
         guard !normalized.isEmpty else {
-            rows = []
+            coreRows = []
             meta = nil
             page = 1
             phase = .idle
@@ -84,7 +97,7 @@ public final class EntityListSearchModel {
         // The screen identifies the visible list as this query's result. Do not leave an older
         // query's rows visible during debounce/loading, especially for chooser flows where a tap
         // has a side effect.
-        rows = []
+        coreRows = []
         meta = nil
         page = 1
         startSearch(query: normalized)
@@ -96,6 +109,8 @@ public final class EntityListSearchModel {
         guard !query.isEmpty else { return }
         requestTask?.cancel()
         requestGeneration += 1
+        coreRows = rows
+        enrichment?.invalidate()
         refreshError = nil
         nextPageError = nil
         startSearch(query: query)
@@ -109,6 +124,8 @@ public final class EntityListSearchModel {
         guard !query.isEmpty else { return }
         requestTask?.cancel()
         requestGeneration += 1
+        coreRows = rows
+        enrichment?.invalidate()
         refreshError = nil
         nextPageError = nil
         startSearch(query: query)
@@ -147,6 +164,8 @@ public final class EntityListSearchModel {
         requestTask?.cancel()
         requestTask = nil
         requestGeneration += 1
+        coreRows = rows
+        enrichment?.invalidate()
         let generation = requestGeneration
         refreshError = nil
         nextPageError = nil
@@ -154,9 +173,10 @@ public final class EntityListSearchModel {
         do {
             let result = try await loader(query, 1)
             guard generation == requestGeneration, !Task.isCancelled else { return }
-            rows = result.items
+            coreRows = result.items
             meta = result.meta
             page = 1
+            enrichment?.accept(result, replacing: true)
             phase = .loaded
         } catch is CancellationError {
             guard generation == requestGeneration else { return }
@@ -188,9 +208,10 @@ public final class EntityListSearchModel {
                 return
             }
             var ids = Set(rows.map(\.id))
-            rows.append(contentsOf: result.items.filter { ids.insert($0.id).inserted })
+            coreRows.append(contentsOf: result.items.filter { ids.insert($0.id).inserted })
             page = nextPage
             meta = result.meta
+            enrichment?.accept(result, replacing: false)
             phase = .loaded
         } catch is CancellationError {
             guard generation == requestGeneration else { return }
@@ -210,9 +231,10 @@ public final class EntityListSearchModel {
             guard generation == requestGeneration, self.query == query, !Task.isCancelled else {
                 return
             }
-            rows = result.items
+            coreRows = result.items
             meta = result.meta
             page = 1
+            enrichment?.accept(result, replacing: true)
             phase = .loaded
         } catch is CancellationError {
             // A newer query owns the visible state.

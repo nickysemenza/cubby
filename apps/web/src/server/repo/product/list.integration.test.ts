@@ -1,6 +1,6 @@
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { and, inArray, sql } from "drizzle-orm";
-import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
+import { TEST_ACTOR, withTestDb, countTestDbQueries } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { product } from "~/server/db/schema";
@@ -16,6 +16,7 @@ import {
 } from "~/server/repo/repo.fixtures";
 
 import { productList } from ".";
+import { listProductsRead, productListSummary } from "./crud";
 import { loadProductPriceSum, loadProductPricing } from "./pricing";
 import { loadProductQuantityLedgers } from "./quantity-ledger";
 
@@ -282,5 +283,189 @@ describe("product list price footer", () => {
     expect(after.get(leaf.entityId)?.derivedPrice).toBe(10);
     expect(after.get(other.entityId)?.effectivePrice).toBe(2.25);
     expect(await loadProductPriceSum(ctx.db, filtered)).toBeCloseTo(12.25, 2);
+  });
+});
+
+// Failures: the base page can accidentally retain hidden enrichment SQL or
+// expose FK UUIDs; patch IDs can bypass the authoritative filters; deferred
+// pricing/ledger/USDA can drift from legacy full rows; summary can total only
+// the loaded page or exclude real negative Expense lines.
+describe("product list staged projections", () => {
+  const ctx = withTestDb();
+
+  it("reads the same filtered page with two base queries and no deferred or private fields", async () => {
+    const ingredient = await createIngredient(
+      ctx.db,
+      { name: "Staged ingredient" },
+      ctx.actor,
+    );
+    const [first, second] = await Promise.all([
+      createProductFixture(
+        ctx.db,
+        makeProductInput({
+          name: "Staged A",
+          ingredientId: ingredient.id,
+          price: 12,
+        }),
+        ctx.actor,
+      ),
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Staged B", price: 25 }),
+        ctx.actor,
+      ),
+    ]);
+    const filters = { ids: [first.id, second.id], nameFilter: "Staged" };
+    const sorts = [{ orderBy: "name", direction: "asc" as const }];
+    const pagination = { pageIndex: 0, pageSize: 1 };
+    const full = await productList(ctx.db, filters, sorts, pagination);
+    const { result: base, queryCount } = await countTestDbQueries(() =>
+      listProductsRead(
+        ctx.db,
+        filters,
+        sorts,
+        pagination,
+        undefined,
+        "page",
+        undefined,
+        { kind: "base" },
+      ),
+    );
+    expect(base.count).toBe(full.count);
+    expect(base.data.map((row) => row.id)).toEqual(
+      full.data.map((row) => row.id),
+    );
+    expect(base.data[0]).toMatchObject({
+      id: first.id,
+      name: "Staged A",
+      manufacturer: full.data[0]!.manufacturer,
+    });
+    expect(queryCount).toBe(2);
+    const idOnly = await listProductsRead(
+      ctx.db,
+      { ids: [second.id] },
+      sorts,
+      { pageIndex: 0, pageSize: 50 },
+      undefined,
+      "page",
+      undefined,
+      { kind: "base" },
+    );
+    expect(idOnly.data.map((row) => row.id)).toEqual([second.id]);
+    expect(idOnly.count).toBe(1);
+
+    for (const field of [
+      "ingredientId",
+      "categoryId",
+      "growsPlantId",
+      "price",
+      "pricing",
+      "food",
+      "dataQuality",
+      "inventoryEntry",
+      "displayImages",
+      "unitMappings",
+      "sums",
+    ])
+      expect(base.data[0]).not.toHaveProperty(field);
+    expect(base).not.toHaveProperty("sums");
+  });
+
+  it("restricts derived patches through existing filters and preserves full price and ledger arithmetic", async () => {
+    const included = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Staged derived", price: 17 }),
+      ctx.actor,
+    );
+    const excluded = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Other derived", price: 31 }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "Staged purchase",
+          productId: included.id,
+          cost: 30,
+          productQuantity: 3,
+        }),
+      ),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "Staged refund",
+          productId: included.id,
+          cost: -10,
+          productQuantity: -1,
+        }),
+      ),
+      ctx.actor,
+    );
+    const filters = { ids: [included.id, excluded.id], nameFilter: "Staged" };
+    const pagination = { pageIndex: 0, pageSize: 50 };
+    const full = await productList(ctx.db, filters, [], pagination);
+    const enrichment = await listProductsRead(
+      ctx.db,
+      filters,
+      [],
+      pagination,
+      undefined,
+      "page",
+      undefined,
+      { kind: "enrichment", groups: ["derived"] },
+    );
+    expect(enrichment.data).toHaveLength(1);
+    expect(enrichment.data[0]).toMatchObject({
+      id: included.id,
+      price: full.data[0]!.price,
+      pricing: full.data[0]!.pricing,
+      quantityLedger: full.data[0]!.quantityLedger,
+      onHandUnits: full.data[0]!.onHandUnits,
+      quantityVariance: full.data[0]!.quantityVariance,
+      expenseTotal: 20,
+    });
+    expect(enrichment.data[0]).not.toHaveProperty("displayImages");
+    expect(enrichment.data[0]).not.toHaveProperty("dataQuality");
+    expect(enrichment).not.toHaveProperty("sums");
+  });
+
+  it("returns full-filter summaries independently of a partial base page", async () => {
+    const [first, second] = await Promise.all([
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Staged summary A", price: 3 }),
+        ctx.actor,
+      ),
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Staged summary B", price: 7 }),
+        ctx.actor,
+      ),
+    ]);
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "Staged credit",
+          productId: second.id,
+          cost: -5,
+          productQuantity: -1,
+        }),
+      ),
+      ctx.actor,
+    );
+    const filters = { ids: [first.id, second.id] };
+    const full = await productList(ctx.db, filters, [], {
+      pageIndex: 0,
+      pageSize: 1,
+    });
+    const summary = await productListSummary(ctx.db, filters);
+    expect(summary).toEqual(full.sums);
+    expect(summary).toEqual({ price: 10, expenseTotal: -5 });
   });
 });

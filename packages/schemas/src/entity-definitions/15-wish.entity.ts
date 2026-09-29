@@ -38,6 +38,12 @@ export default defineEntity({
       ],
     },
     list: {
+      read: {
+        relations: ["candidates"],
+        derived: ["candidateCount", "priceRange"],
+        media: ["displayImages"],
+        quality: ["dataQuality"],
+      },
       actionOverrides: ["markPurchased", "delete"],
       totalOverrides: [
         {

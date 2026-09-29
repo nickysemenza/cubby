@@ -1,7 +1,7 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -35,7 +35,11 @@ import {
   withListEntityMedia,
   withUniversalEntityMedia,
 } from "./entity-display-image";
-import { IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION } from "./image-processing";
+import {
+  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+  loadImageRepresentations,
+} from "./image-processing";
+import { hydrateImageReadProjection } from "./image-read-projection";
 import {
   createIngredientFixture,
   createInventoryFixture,
@@ -113,6 +117,106 @@ describe("entity display image resolver", () => {
       size: 100,
       ...overrides,
     });
+
+  it("does not reload resolved display representations for duplicate nested references", async () => {
+    const owner = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic representation reuse" }),
+      ctx.actor,
+    );
+    const photo = await makeImage();
+    await insertEntityAttachments(ctx.db, {
+      entityId: owner.entityId,
+      imageId: photo.id,
+      sortOrder: 0,
+    });
+    const stale = {
+      id: photo.shortcode,
+      url: getR2PublicUrl(photo.key),
+      representations: expectedRepresentations("images/stale.jpg"),
+    };
+    const measured = await countTestDbQueries(() =>
+      withDisplayImages(ctx.db, "product", [{ id: owner.entityId }], (row) => ({
+        id: row.id,
+        nested: [stale, { photo: stale }],
+      })),
+    );
+
+    expect(measured.result).toEqual([
+      {
+        id: owner.entityId,
+        nested: [
+          expectedDisplayImage(photo),
+          { photo: expectedDisplayImage(photo) },
+        ],
+        displayImages: [expectedDisplayImage(photo)],
+      },
+    ]);
+    expect(measured.queryCount).toBe(1);
+  });
+
+  it("hydrates missing nested image codes once while preserving trusted preloads and tombstones", async () => {
+    const preloadedPhoto = await makeImage();
+    const missingPhoto = await makeImage();
+    const deletedPhoto = await makeImage();
+    await getDb(ctx.db)
+      .update(image)
+      .set({ deletedAt: new Date() })
+      .where(eq(image.id, deletedPhoto.id));
+    const preloaded = await loadImageRepresentations(ctx.db, [
+      preloadedPhoto.shortcode,
+    ]);
+    const rawPhoto = {
+      id: missingPhoto.shortcode,
+      url: getR2PublicUrl(missingPhoto.key),
+      representations: expectedRepresentations("images/stale.jpg"),
+    };
+    const rawDeleted = {
+      id: deletedPhoto.shortcode,
+      url: getR2PublicUrl(deletedPhoto.key),
+    };
+    const observedAt = new Date("2026-01-01T00:00:00Z");
+    const complete = [expectedDisplayImage(preloadedPhoto)];
+    const reused = await countTestDbQueries(() =>
+      hydrateImageReadProjection(ctx.db, complete, preloaded),
+    );
+    expect(reused.result).toEqual(complete);
+    expect(reused.queryCount).toBe(0);
+
+    const measured = await countTestDbQueries(() =>
+      hydrateImageReadProjection(
+        ctx.db,
+        {
+          images: complete,
+          nested: [rawPhoto, { photo: rawPhoto }, rawDeleted],
+          observedAt,
+        },
+        preloaded,
+      ),
+    );
+    expect(measured.result).toEqual({
+      images: complete,
+      nested: [
+        expectedDisplayImage(missingPhoto),
+        { photo: expectedDisplayImage(missingPhoto) },
+        rawDeleted,
+      ],
+      observedAt,
+    });
+    expect(measured.result.observedAt).toBe(observedAt);
+    expect(measured.queryCount).toBe(1);
+    expect(preloaded.size).toBe(1);
+    expect(rawPhoto.representations).toEqual(
+      expectedRepresentations("images/stale.jpg"),
+    );
+
+    const empty: unknown[] = [];
+    const emptyRead = await countTestDbQueries(() =>
+      hydrateImageReadProjection(ctx.db, empty, preloaded),
+    );
+    expect(emptyRead.result).toBe(empty);
+    expect(emptyRead.queryCount).toBe(0);
+  });
 
   it("uses a linked product image for a device without image storage", async () => {
     const hardware = await createProductFixture(

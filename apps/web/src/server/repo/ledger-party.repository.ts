@@ -16,6 +16,7 @@ import {
   LEDGER_PARTY_DELETE_EDGE_POLICY,
   LEDGER_PARTY_MERGE_EDGE_POLICY,
   listLedgerParties,
+  listLedgerPartiesRead,
   mergeLedgerParties,
   updateLedgerParty,
 } from "./ledger-party";
@@ -46,6 +47,8 @@ export const ledgerPartyRepository = defineRepository("ledgerParty", {
   },
   get: onDb(getLedgerPartyByShortcode),
   list: listOn(listLedgerParties),
+  listRead: (ctx, filters, sorts, pagination, projection) =>
+    listLedgerPartiesRead(ctx.db, filters, sorts, pagination, projection),
   create: asActor(createLedgerParty),
   update: asActor(updateLedgerParty),
   delete: asActor(deleteLedgerParties),

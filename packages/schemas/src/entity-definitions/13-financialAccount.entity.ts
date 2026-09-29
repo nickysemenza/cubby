@@ -19,6 +19,19 @@ export default defineEntity({
   table: "FinancialAccount",
   identifiers: { brand: "FinancialAccountId", shortcode: "FAC-" },
   presentation: {
+    list: {
+      read: {
+        relations: [
+          "providerVendorId",
+          "ledgerPartyId",
+          "providerVendorName",
+          "ledgerPartyName",
+        ],
+        derived: ["transactionCount"],
+        media: ["displayImages"],
+        quality: ["dataQuality"],
+      },
+    },
     titleField: "name",
     domain: "finance",
     description: "Accounts that provide settlement evidence.",

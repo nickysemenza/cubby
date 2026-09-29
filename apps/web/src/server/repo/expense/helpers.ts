@@ -348,10 +348,10 @@ const expenseProjectName = (row: ExpenseRow) =>
     ? resolveLiveJoinName(row.project)
     : row.effectiveProjectName;
 
-export const dbExpenseToAPI = (
+export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
   row: ExpenseRow,
-  dataQuality: DataQuality,
-): ExpenseOut => {
+  dataQuality: Q,
+): Omit<ExpenseOut, "dataQuality"> & { dataQuality: Q } => {
   // A soft-deleted Purchase reads as no Purchase at all — the same rule
   // `resolveLiveJoinName` applies to project/product below, so a deleted parent
   // renders blank rather than as live data.

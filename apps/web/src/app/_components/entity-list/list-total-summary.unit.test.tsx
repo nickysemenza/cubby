@@ -15,6 +15,21 @@ const totals = [
 ] as const;
 
 describe("ListTotalSummary", () => {
+  it("distinguishes deferred totals from unavailable totals and shows raw failures", () => {
+    const { rerender } = render(
+      <ListTotalSummary totals={totals} state={{ state: "loading" }} />,
+    );
+    expect(screen.getAllByText("Loading…")).toHaveLength(3);
+    rerender(
+      <ListTotalSummary
+        totals={totals}
+        state={{ state: "error", error: "Synthetic summary failure" }}
+      />,
+    );
+    expect(screen.getByText("Synthetic summary failure")).toBeVisible();
+    expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
+  });
+
   it("shows full-filter zero and signed totals, including a complete range", () => {
     render(
       <ListTotalSummary

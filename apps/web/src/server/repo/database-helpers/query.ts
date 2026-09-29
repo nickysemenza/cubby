@@ -15,6 +15,7 @@ import {
   asc,
   eq,
   getTableColumns,
+  getTableName,
   ilike,
   inArray,
   isNotNull,
@@ -32,6 +33,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { TraceNames, withTrace } from "~/server/tracing";
 
+import { traceListPage, traceListCount } from "../list-read-tracing";
 import { unwrapDb } from "./core";
 
 export function buildSearchConditions(
@@ -182,7 +184,8 @@ export const countWhere = (
   db: Database | DrizzleTransaction,
   table: PgTable,
   where?: SQL,
-): Promise<number> => unwrapDb(db).$count(table, where);
+): Promise<number> =>
+  traceListCount(() => unwrapDb(db).$count(table, where), getTableName(table));
 
 /**
  * Build ORDER BY clauses from a normalized sort stack (see `normalizeSorts`).
@@ -299,8 +302,11 @@ export async function executeListQueryWithCount<T>(
           };
     const [data, count] =
       plan.kind === "count"
-        ? [[], await plan.count()]
-        : await Promise.all([plan.rows(), plan.count()]);
+        ? [[], await traceListCount(plan.count)]
+        : await Promise.all([
+            traceListPage(plan.rows),
+            traceListCount(plan.count),
+          ]);
     span.setAttributes({
       "db.result_count": data.length,
       "db.total_count": count,

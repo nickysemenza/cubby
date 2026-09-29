@@ -14,6 +14,7 @@
 import superjson from "superjson";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import { seedProductPrerequisite } from "./e2e-fixtures";
 import { createProduct } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
@@ -104,8 +105,8 @@ test("core entity list, detail, and mutation ride named browser operations", asy
     `entity.mutate should carry the create:\n${report()}`,
   ).not.toHaveLength(0);
   expect(
-    matching("entity.list", '"pageIndex"'),
-    `entity.list should carry the product page:\n${report()}`,
+    matching("entity.listBase", '"pageIndex"'),
+    `entity.listBase should carry the product page:\n${report()}`,
   ).not.toHaveLength(0);
   const detailRequests = matching("entity.detail", '"entity":"product"');
   expect(
@@ -138,7 +139,7 @@ test("core entity list, detail, and mutation ride named browser operations", asy
         entity: "product",
       }),
       expect.objectContaining({
-        operation: "entity.list",
+        operation: "entity.listBase",
         kind: "query",
         entity: "product",
       }),
@@ -165,7 +166,7 @@ test("server error references remain usable on desktop", async ({
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/");
   await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
-    if (route.request().headers()["x-cubby-operation"] !== "entity.list") {
+    if (route.request().headers()["x-cubby-operation"] !== "entity.listBase") {
       await route.continue();
       return;
     }
@@ -192,7 +193,7 @@ test("server error references remain usable on desktop", async ({
     .click();
   const dialog = page.getByRole("dialog", { name: "Technical details" });
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText("entity.list / dispatch");
+  await expect(dialog).toContainText("entity.listBase / dispatch");
   await expect(
     dialog.getByRole("link", { name: "View in Sentry" }),
   ).toHaveAttribute(
@@ -211,4 +212,103 @@ test("server error references remain usable on desktop", async ({
   );
   await expect(dialog.getByRole("button", { name: "Copied" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("error-desktop.png") });
+});
+
+// The real browser must remain usable while an independent field read hangs;
+// releasing a failed group must not replace its already visible base records.
+test("base list keeps row identity, selection and card space while enrichment fails", async ({
+  page,
+}) => {
+  const name = `Progressive fixture ${Date.now()}`;
+  await page.goto("/");
+  const product = await seedProductPrerequisite(page, { name });
+  let failEnrichment = true;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let requested!: () => void;
+  const started = new Promise<void>((resolve) => {
+    requested = resolve;
+  });
+  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+    if (
+      route.request().headers()["x-cubby-operation"] !== "entity.listEnrichment"
+    ) {
+      await route.continue();
+      return;
+    }
+    if (!failEnrichment) {
+      await route.continue();
+      return;
+    }
+    const payload = superjson.deserialize<{
+      input: { entity: string; ids: string[]; groups: string[] };
+    }>(JSON.parse(route.request().postData() ?? "{}"));
+    requested();
+    await held;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        superjson.serialize({
+          ok: true,
+          data: {
+            entity: payload.input.entity,
+            groups: payload.input.groups.map((id) => ({
+              id,
+              state: "error",
+              error: {
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Synthetic deferred lookup failure",
+              },
+            })),
+            missingIds: [],
+          },
+        }),
+      ),
+    });
+  });
+  try {
+    await page.goto(`/products?name=${encodeURIComponent(name)}&view=table`);
+    await started;
+    const identity = page.getByRole("link", { name, exact: true }).first();
+    await expect(identity).toBeVisible();
+    await expect(identity).toHaveAttribute("href", `/products/${product.id}`);
+    const row = page.getByRole("row").filter({ has: identity });
+    await expect(row.getByLabel("Loading field").first()).toBeVisible();
+    const checkbox = row.getByRole("checkbox", { name: "Select row" });
+    await checkbox.click();
+    await expect(checkbox).toBeChecked();
+    await page.getByRole("button", { name: "Cards view", exact: true }).click();
+    const card = page
+      .locator("[data-entity-card]")
+      .filter({ has: page.getByRole("link", { name, exact: true }) });
+    await expect(card.getByLabel("Loading media").first()).toBeVisible();
+    const before = await card.boundingBox();
+    release();
+    await expect(
+      card
+        .getByText("Synthetic deferred lookup failure", { exact: true })
+        .first(),
+    ).toBeVisible();
+    failEnrichment = false;
+    await page
+      .getByRole("button", { name: "Retry media", exact: true })
+      .first()
+      .click();
+    await expect(card.getByLabel("Loading media")).toHaveCount(0);
+    await expect(
+      card.getByText("Synthetic deferred lookup failure", { exact: true }),
+    ).toHaveCount(0);
+    const after = await card.boundingBox();
+    expect(after?.width).toBe(before?.width);
+    expect(after?.height).toBe(before?.height);
+    await expect(card.getByRole("link", { name, exact: true })).toHaveAttribute(
+      "href",
+      `/products/${product.id}`,
+    );
+  } finally {
+    release();
+  }
 });

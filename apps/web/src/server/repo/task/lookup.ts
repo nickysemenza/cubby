@@ -5,6 +5,7 @@ import type {
   PresenceFilter,
   SortParams,
 } from "@cubby/schemas/pagination";
+import { taskListItemOut } from "@cubby/schemas/project";
 import type { TaskFilters } from "@cubby/schemas/project";
 import {
   and,
@@ -20,6 +21,7 @@ import {
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import { projectListRows } from "~/entities/list-read-schema";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { product, task } from "~/server/db/schema";
@@ -37,6 +39,11 @@ import {
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list";
+import {
+  loadListGroup,
+  wantsListGroup,
+  type ListProjection,
+} from "~/server/repo/list-projection";
 import { matchingEmbeddedProjectIds } from "~/server/repo/project/dashboard-shared";
 import {
   collectDescendantIds,
@@ -314,11 +321,12 @@ export const buildTaskWhere = async (
   ]);
 };
 
-export const taskList = async (
+export const taskListRead = async (
   db: Database,
   filters: TaskFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  projection: ListProjection,
   readIntent: ListReadIntent = "page",
 ) => {
   const resolved = await resolveTaskFilterReferences(db, filters);
@@ -328,38 +336,97 @@ export const taskList = async (
   ]);
   return taskScaffold.list(
     db,
-    { filters, sorts, pagination, readIntent },
+    { filters, sorts, pagination, readIntent, projection },
     {
       where: whereClause,
       count: () => countWhere(db, task, countWhereClause),
       resolveSort: resolveTaskSort,
-      select: (page) =>
-        getDb(db).query.task.findMany({
+      select: (page) => {
+        const declared = relations.task.withProject.with;
+        const references =
+          wantsListGroup(projection, "relations") ||
+          wantsListGroup(projection, "derived");
+        return getDb(db).query.task.findMany({
           ...page,
-          ...relations.task.withProject,
-        }),
+          with: {
+            project: references ? declared.project : undefined,
+            subjectProduct: references ? declared.subjectProduct : undefined,
+            parentTask: references ? declared.parentTask : undefined,
+            images: wantsListGroup(projection, "media")
+              ? declared.images
+              : undefined,
+          },
+        });
+      },
       hydrate: async (rows) => {
+        if (projection.kind === "base")
+          return projectListRows(
+            "task",
+            rows.map((row) => ({ ...row, id: row.shortcode })),
+            projection,
+          );
         const ids = rows.map((r) => r.id);
         const [deps, subtaskCounts, dataQualities, hydratedRows] =
           await Promise.all([
-            taskDependencyIds(db, ids),
-            taskSubtaskCounts(db, ids),
-            loadDataQualities(db, "task", ids),
-            hydrateTaskInheritanceRows(db, rows),
+            loadListGroup(projection, "relations", () =>
+              taskDependencyIds(db, ids),
+            ),
+            loadListGroup(projection, "derived", () =>
+              taskSubtaskCounts(db, ids),
+            ),
+            loadListGroup(projection, "quality", () =>
+              loadDataQualities(db, "task", ids),
+            ),
+            loadListGroup(projection, ["relations", "derived"], () =>
+              hydrateTaskInheritanceRows(db, rows),
+            ),
           ]);
-        return withDisplayImages(db, "task", hydratedRows, (row) => {
-          const counts = subtaskCounts.get(row.id);
+        const mapRow = (row: (typeof rows)[number]) => {
+          const counts = subtaskCounts?.get(row.id);
           return dbTaskToAPI(
-            row,
-            deps.blockedBy.get(row.id) ?? [],
-            deps.blocking.get(row.id) ?? [],
+            {
+              ...row,
+              project: row.project ?? null,
+              subjectProduct: row.subjectProduct ?? null,
+              images:
+                row.images?.map((image) => {
+                  if (!("image" in image))
+                    throw new Error("Task media relation was not loaded");
+                  return image;
+                }) ?? [],
+            },
+            deps?.blockedBy.get(row.id) ?? [],
+            deps?.blocking.get(row.id) ?? [],
             counts?.count ?? 0,
             counts?.doneCount ?? 0,
             // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-            dataQualities.get(row.id)!,
+            dataQualities?.get(row.id),
           );
-        });
+        };
+        const selectedRows = hydratedRows ?? rows;
+        const mapped = wantsListGroup(projection, "media")
+          ? await withDisplayImages(db, "task", selectedRows, mapRow)
+          : selectedRows.map(mapRow);
+        return projectListRows("task", mapped, projection);
       },
     },
   );
+};
+
+export const taskList = async (
+  db: Database,
+  filters: TaskFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
+) => {
+  const page = await taskListRead(
+    db,
+    filters,
+    sorts,
+    pagination,
+    { kind: "full" },
+    readIntent,
+  );
+  return { ...page, data: page.data.map((row) => taskListItemOut.parse(row)) };
 };

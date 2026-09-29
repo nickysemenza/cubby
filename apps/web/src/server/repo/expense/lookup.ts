@@ -1,10 +1,8 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import type {
-  ExpenseFilters,
-  ExpenseListItemOut,
-} from "@cubby/schemas/project";
+import { expenseListItemOut } from "@cubby/schemas/project";
+import type { ExpenseFilters } from "@cubby/schemas/project";
 import {
   and,
   gt,
@@ -20,6 +18,7 @@ import {
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import { projectListRows } from "~/entities/list-read-schema";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { expense, purchase } from "~/server/db/schema";
@@ -36,6 +35,11 @@ import {
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { type ListPage, listScaffold } from "~/server/repo/list";
+import {
+  loadListGroup,
+  wantsListGroup,
+  type ListProjection,
+} from "~/server/repo/list-projection";
 import { disposalPurchaseIds } from "~/server/repo/product/ownership";
 import { matchingEmbeddedProjectIds } from "~/server/repo/project/dashboard-shared";
 import {
@@ -467,79 +471,151 @@ const resolveExpenseSort = (sort: SortParams) => {
   return null;
 };
 
+export const expenseListRead = async (
+  db: Database,
+  filters: ExpenseFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  projection: ListProjection,
+  readIntent: ListReadIntent = "page",
+) => {
+  const where = await buildExpenseWhereClause(db, filters);
+  const page = expenseScaffold.list(
+    db,
+    { filters, sorts, pagination, readIntent, projection },
+    {
+      where,
+      resolveSort: resolveExpenseSort,
+      select: (listPage) => selectExpensePage(db, listPage, projection),
+      hydrate: (rows) => hydrateExpenseRows(db, rows, projection),
+    },
+  );
+  if (readIntent !== "page" || projection.kind !== "full") return page;
+  const [result, [sum]] = await Promise.all([
+    page,
+    expenseListSums(db, where).then((sums) => [sums]),
+  ]);
+  return { ...result, sums: { cost: sum?.cost ?? 0 } };
+};
+
+const selectExpensePage = (
+  db: Database,
+  page: ListPage,
+  projection: ListProjection,
+) => {
+  const references = wantsListGroup(projection, "relations");
+  const derived = wantsListGroup(projection, "derived");
+  const media = wantsListGroup(projection, "media");
+  const declared = relations.expense.withProject.with;
+  return getDb(db).query.expense.findMany({
+    ...page,
+    extras: derived ? expenseInheritanceReadExtras() : undefined,
+    with: {
+      project: references || derived ? declared.project : undefined,
+      product: references ? declared.product : undefined,
+      purchase: references || derived || media ? declared.purchase : undefined,
+      attributions: references ? declared.attributions : undefined,
+      sourceClaims: references ? declared.sourceClaims : undefined,
+    },
+  });
+};
+
+const hydrateExpenseRows = async (
+  db: Database,
+  rows: Awaited<ReturnType<typeof selectExpensePage>>,
+  projection: ListProjection,
+) => {
+  if (projection.kind === "base")
+    return projectListRows(
+      "expense",
+      rows.map((row) => ({ ...row, id: row.shortcode })),
+      projection,
+    );
+  const [allocations, dataQualities] = await Promise.all([
+    loadListGroup(projection, "relations", () =>
+      loadExpenseProjectAllocations(
+        db,
+        rows.map((row) => row.id),
+      ),
+    ),
+    loadListGroup(projection, "quality", () =>
+      loadDataQualities(
+        db,
+        "expense",
+        rows.map((row) => row.id),
+      ),
+    ),
+  ]);
+  const allocationsByExpense = new Map<
+    (typeof rows)[number]["id"],
+    NonNullable<typeof allocations>
+  >();
+  for (const allocation of allocations ?? []) {
+    const existing = allocationsByExpense.get(allocation.expenseId) ?? [];
+    existing.push(allocation);
+    allocationsByExpense.set(allocation.expenseId, existing);
+  }
+
+  const selectedRows = rows.map((row) => {
+    const purchase = row.purchase;
+    if (purchase && !("vendor" in purchase))
+      throw new Error("Expense vendor relation was not loaded");
+    const attributions =
+      row.attributions?.map((value) => {
+        if (!("ledgerParty" in value))
+          throw new Error("Expense attribution relation was not loaded");
+        return value;
+      }) ?? [];
+    return {
+      ...row,
+      project: row.project ?? null,
+      product: row.product ?? null,
+      purchase: purchase ?? null,
+      attributions,
+      sourceClaims: row.sourceClaims ?? [],
+      projectAllocations: allocationsByExpense.get(row.id) ?? [],
+    };
+  });
+  const mapRow = (row: (typeof selectedRows)[number]) =>
+    dbExpenseToAPI(row, dataQualities?.get(row.id));
+  const mapped = wantsListGroup(projection, "media")
+    ? await withDisplayImages(db, "expense", selectedRows, mapRow)
+    : selectedRows.map(mapRow);
+  return projectListRows("expense", mapped, projection);
+};
+
 export const expenseList = async (
   db: Database,
   filters: ExpenseFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
-): Promise<{
-  data: ExpenseListItemOut[];
-  count: number;
-  sums?: { cost: number };
-}> => {
-  const where = await buildExpenseWhereClause(db, filters);
-  const page = expenseScaffold.list(
+) => {
+  const page = await expenseListRead(
     db,
-    { filters, sorts, pagination, readIntent },
-    {
-      where,
-      resolveSort: resolveExpenseSort,
-      select: (listPage) => selectExpensePage(db, listPage),
-      hydrate: (rows) => hydrateExpenseRows(db, rows),
-    },
+    filters,
+    sorts,
+    pagination,
+    { kind: "full" },
+    readIntent,
   );
-  if (readIntent !== "page") return page;
-  const [result, [sum]] = await Promise.all([
-    page,
-    getDb(db)
-      .select({ cost: sql<number>`coalesce(sum(${expense.cost}), 0)::float` })
-      .from(expense)
-      .where(where),
-  ]);
-  return { ...result, sums: { cost: sum?.cost ?? 0 } };
-};
-
-const selectExpensePage = (db: Database, page: ListPage) =>
-  getDb(db).query.expense.findMany({
+  return {
     ...page,
-    extras: expenseInheritanceReadExtras(),
-    ...relations.expense.withProject,
-  });
-
-const hydrateExpenseRows = async (
+    data: page.data.map((row) => expenseListItemOut.parse(row)),
+    sums: "sums" in page ? page.sums : undefined,
+  };
+};
+export const expenseListSummary = async (
   db: Database,
-  rows: Awaited<ReturnType<typeof selectExpensePage>>,
-): Promise<ExpenseListItemOut[]> => {
-  const [allocations, dataQualities] = await Promise.all([
-    loadExpenseProjectAllocations(
-      db,
-      rows.map((row) => row.id),
-    ),
-    loadDataQualities(
-      db,
-      "expense",
-      rows.map((row) => row.id),
-    ),
-  ]);
-  const allocationsByExpense = new Map<
-    (typeof rows)[number]["id"],
-    typeof allocations
-  >();
-  for (const allocation of allocations) {
-    const existing = allocationsByExpense.get(allocation.expenseId) ?? [];
-    existing.push(allocation);
-    allocationsByExpense.set(allocation.expenseId, existing);
-  }
-
-  return withDisplayImages(
-    db,
-    "expense",
-    rows.map((row) => ({
-      ...row,
-      projectAllocations: allocationsByExpense.get(row.id) ?? [],
-    })),
-    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-    (row) => dbExpenseToAPI(row, dataQualities.get(row.id)!),
-  );
+  filters: ExpenseFilters,
+) => {
+  const where = await buildExpenseWhereClause(db, filters);
+  return expenseListSums(db, where);
+};
+const expenseListSums = async (db: Database, where: SQL | undefined) => {
+  const [sum] = await getDb(db)
+    .select({ cost: sql<number>`coalesce(sum(${expense.cost}),0)::float` })
+    .from(expense)
+    .where(where);
+  return { cost: sum?.cost ?? 0 };
 };

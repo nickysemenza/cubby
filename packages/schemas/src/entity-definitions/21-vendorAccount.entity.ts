@@ -21,6 +21,18 @@ export default defineEntity({
   table: "VendorAccount",
   identifiers: { brand: "VendorAccountId", shortcode: "VACCT-" },
   presentation: {
+    list: {
+      read: {
+        derived: ["lastRunAt", "lastSuccessAt"],
+        relations: [
+          "vendorId",
+          "ledgerPartyId",
+          "vendorName",
+          "ledgerPartyName",
+        ],
+        media: ["displayImages"],
+      },
+    },
     titleField: "label",
     domain: "finance",
     description: "A member's vendor orders and optional browser connection.",

@@ -47,7 +47,7 @@ import type {
  * Transform a location DB record to API format.
  * Handles shortcode branding, type parsing, and image extraction.
  */
-export const dbLocationToAPI = (
+export const dbLocationToAPI = <Q extends DataQuality | undefined>(
   locationData: RowWithOptionalAliasesAndTags<typeof location.$inferSelect> & {
     aiDescription?: string | null;
     product?: LocationIdentityProductRow | null;
@@ -57,8 +57,8 @@ export const dbLocationToAPI = (
     }>;
   },
   valuations: ReadonlyMap<LocationId, LocationValuation> | undefined,
-  dataQuality: DataQuality,
-): LocationOut => {
+  dataQuality: Q,
+): Omit<LocationOut, "dataQuality"> & { dataQuality: Q } => {
   return {
     id: parseShortcodeFor("location", locationData.shortcode),
     lastBulkInventory: locationData.lastBulkInventory,
@@ -84,12 +84,14 @@ const dbLocationToListRef = (
   type: parseLocationType(locationData.type),
 });
 
-export const dbLocationToListAPI = (
+export const dbLocationToListAPI = <Q extends DataQuality | undefined>(
   locationData: LocationListDB,
   pricingByProductId: ReadonlyMap<ProductId, ProductPricing>,
   valuations: ReadonlyMap<LocationId, LocationValuation> | undefined,
-  dataQuality: DataQuality,
-): Omit<LocationListItemOut, "displayImages"> => ({
+  dataQuality: Q,
+): Omit<LocationListItemOut, "displayImages" | "dataQuality"> & {
+  dataQuality: Q;
+} => ({
   ...dbLocationToAPI(locationData, valuations, dataQuality),
   parent:
     locationData.parent && isNotDeleted(locationData.parent)

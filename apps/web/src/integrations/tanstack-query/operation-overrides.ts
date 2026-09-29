@@ -92,6 +92,10 @@ function productWriteTags(
 
 export const operationOverrides = {
   entityList: {
+    listBase: {
+      cache: (input) =>
+        stableIndexEntities.has(input.entity) ? "browse" : undefined,
+    },
     list: {
       parse: (result, input) =>
         getEntityListOutputSchema(input.entity).parse(result),

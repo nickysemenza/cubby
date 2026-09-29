@@ -16,6 +16,8 @@ import {
   getInventoryEntryByShortcode,
   INVENTORY_DELETE_EDGE_POLICY,
   inventoryentryList,
+  inventoryentryListRead,
+  inventoryentryListSummary,
   updateInventoryEntry,
 } from "./crud";
 
@@ -38,6 +40,9 @@ export const inventoryRepository = defineRepository("inventory", {
   lifecycle: { delete: INVENTORY_DELETE_EDGE_POLICY },
   get: onDb(getInventoryEntryByShortcode),
   list: listOn(inventoryentryList),
+  listRead: (ctx, filters, sorts, pagination, projection) =>
+    inventoryentryListRead(ctx.db, filters, sorts, pagination, projection),
+  listSummary: (ctx, filters) => inventoryentryListSummary(ctx.db, filters),
   create: async (ctx, data) => {
     const [productId, locationId, ownerLedgerPartyId] = await Promise.all([
       productShortcodes.one(ctx.db, data.productId),

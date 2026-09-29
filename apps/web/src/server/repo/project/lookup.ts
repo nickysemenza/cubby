@@ -4,15 +4,14 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import { projectListItemOut } from "@cubby/schemas/project";
 import { MAX_PROJECT_TREE_DEPTH } from "@cubby/schemas/project";
-import type {
-  ProjectFilters,
-  ProjectOptionsOut,
-  ProjectListItemOut,
-} from "@cubby/schemas/project";
+import type { ProjectFilters, ProjectOptionsOut } from "@cubby/schemas/project";
 import { parseShortcode } from "@cubby/shared";
 import { and, asc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
+import { z } from "zod";
 
+import { projectListRows } from "~/entities/list-read-schema";
 import type { Database } from "~/server/db";
 import { entityAttachment, image, project } from "~/server/db/schema";
 import { loadDataQualities } from "~/server/repo/data-quality";
@@ -31,6 +30,11 @@ import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { listScaffold } from "~/server/repo/list";
+import {
+  loadListGroup,
+  wantsListGroup,
+  type ListProjection,
+} from "~/server/repo/list-projection";
 import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
 import {
   effectiveProjectLocationsSql,
@@ -334,17 +338,14 @@ export const projectListSums = async (
   return { costEstimate: Number(row?.costEstimate ?? 0) };
 };
 
-export const projectList = async (
+export const projectListRead = async (
   db: Database,
   filters: ProjectFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  projection: ListProjection,
   readIntent: ListReadIntent = "page",
-): Promise<{
-  data: ProjectListItemOut[];
-  count: number;
-  sums?: { costEstimate: number };
-}> => {
+) => {
   const { tree, whereClause, orderByArray } = await buildProjectListQuery(
     db,
     filters,
@@ -370,28 +371,101 @@ export const projectList = async (
         }),
       count: () => countWhere(db, project, whereClause),
     }),
-    readIntent === "sample"
-      ? Promise.resolve({ costEstimate: 0 })
+    projection.kind !== "full" || readIntent === "sample"
+      ? Promise.resolve(undefined)
       : projectListSums(db, whereClause),
-    tree ?? loadProjectTree(db),
+    wantsListGroup(projection, "relations") ||
+    wantsListGroup(projection, "derived")
+      ? (tree ?? loadProjectTree(db))
+      : Promise.resolve(undefined),
   ]);
 
+  if (projection.kind === "base")
+    return {
+      data: projectListRows(
+        "project",
+        rows.map((row) => ({ ...row, id: row.shortcode })),
+        projection,
+      ),
+      count,
+    };
   const ids = rows.map((r) => r.id);
 
   const [projectContext, deps, dataQualities] = await Promise.all([
-    loadProjectSubtreeRollups(db, ids, loadedTree),
-    projectDependencyIds(db, ids),
-    loadDataQualities(db, "project", ids),
+    loadListGroup(projection, "derived", () =>
+      loadProjectSubtreeRollups(db, ids, loadedTree),
+    ),
+    loadListGroup(projection, "relations", () => projectDependencyIds(db, ids)),
+    loadListGroup(projection, "quality", () =>
+      loadDataQualities(db, "project", ids),
+    ),
   ]);
 
-  const data = await withDisplayImages(
-    db,
-    "project",
-    await withProjectExternalUrls(db, rows),
-    (row) =>
-      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-      hydrateProjectRow(row, projectContext, deps, dataQualities.get(row.id)!),
-  );
+  const selectedRows = wantsListGroup(projection, "relations")
+    ? await withProjectExternalUrls(db, rows)
+    : rows;
+  const context =
+    projectContext ??
+    (loadedTree
+      ? {
+          ...loadedTree,
+          ownRollups: new Map(),
+          subtreeRollups: new Map(),
+          dateWindows: new Map(),
+        }
+      : undefined);
+  const mapRow = (row: (typeof selectedRows)[number]) =>
+    context
+      ? hydrateProjectRow(
+          {
+            ...row,
+            googleDriveFolderUrl:
+              "googleDriveFolderUrl" in row
+                ? z.string().nullable().parse(row.googleDriveFolderUrl)
+                : null,
+            notionPageUrl:
+              "notionPageUrl" in row
+                ? z.string().nullable().parse(row.notionPageUrl)
+                : null,
+          },
+          context,
+          deps ?? { blockedBy: new Map(), blocking: new Map() },
+          dataQualities?.get(row.id),
+        )
+      : {
+          ...row,
+          id: parseShortcodeFor("project", row.shortcode),
+          dataQuality: dataQualities?.get(row.id),
+        };
+  const mapped = wantsListGroup(projection, "media")
+    ? await withDisplayImages(db, "project", selectedRows, mapRow)
+    : selectedRows.map(mapRow);
+  const data = projectListRows("project", mapped, projection);
 
   return { data, count, sums: readIntent === "page" ? sums : undefined };
 };
+
+export const projectList = async (
+  db: Database,
+  filters: ProjectFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
+) => {
+  const page = await projectListRead(
+    db,
+    filters,
+    sorts,
+    pagination,
+    { kind: "full" },
+    readIntent,
+  );
+  return {
+    ...page,
+    data: page.data.map((row) => projectListItemOut.parse(row)),
+  };
+};
+export const projectListSummary = async (
+  db: Database,
+  filters: ProjectFilters,
+) => projectListSums(db, await buildProjectWhere(db, filters));

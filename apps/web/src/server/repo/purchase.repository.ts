@@ -23,6 +23,8 @@ import {
   PURCHASE_DELETE_EDGE_POLICY,
   PURCHASE_MERGE_EDGE_POLICY,
   purchaseList,
+  purchaseListRead,
+  purchaseListSummary,
   updatePurchase,
 } from "./purchase";
 
@@ -35,6 +37,9 @@ export const purchaseRepository = defineRepository("purchase", {
   },
   get: onDb(getPurchaseByShortcode),
   list: listOn(purchaseList),
+  listRead: (ctx, filters, sorts, pagination, projection) =>
+    purchaseListRead(ctx.db, filters, sorts, pagination, "page", projection),
+  listSummary: (ctx, filters) => purchaseListSummary(ctx.db, filters),
   create: asActor(createPurchase),
   update: asActor(updatePurchase),
   // The detached expenses and transactions re-project without the purchase.

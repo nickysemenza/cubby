@@ -69,6 +69,12 @@ export default defineEntity({
     icons: { phosphor: "Leaf", sfSymbol: "leaf.circle", emoji: "🌿" },
     detail: {},
     list: {
+      read: {
+        relations: ["ingredientId", "ingredientName"],
+        derived: ["guideSowWindow", "guideTransplantWindow", "routes"],
+        media: ["displayImages"],
+        quality: ["dataQuality"],
+      },
       links: [{ label: "Garden workbench", path: "/garden-workbench" }],
     },
   },

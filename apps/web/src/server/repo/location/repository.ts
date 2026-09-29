@@ -15,6 +15,7 @@ import {
   getLocationById,
   LOCATION_DELETE_EDGE_POLICY,
   locationList,
+  locationListRead,
   updateLocation,
   updateLocationAiDescription,
 } from "./crud";
@@ -33,6 +34,8 @@ export const locationRepository = defineRepository("location", {
   get: onDb(getLocationByShortcode),
   list: (ctx, filters, sorts, pagination, groupBy) =>
     locationList(ctx.db, filters, sorts, pagination, groupBy),
+  listRead: (ctx, filters, sorts, pagination, projection, groupBy) =>
+    locationListRead(ctx.db, filters, sorts, pagination, projection, groupBy),
   create: async (ctx, data) => {
     const output = await createLocation(ctx.db, data, ctx.actorContext);
     const entityId = await locationShortcodes.one(ctx.db, output.id);

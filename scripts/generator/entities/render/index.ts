@@ -474,7 +474,7 @@ export const renderEntityArtifacts = (
             descriptor.searchable === true
               ? `z.object(${key}ListFilterFields).extend({searchQuery:z.string().trim().min(1).max(100).optional()})`
               : `z.object(${key}ListFilterFields)`
-          };`,
+          }.extend({ids:z.array(z.string()).max(500).optional()});`,
     )
     .join("\n");
   const listFilterSchemaBindings = browserCrudEntitySpecs
@@ -490,6 +490,50 @@ export const renderEntityArtifacts = (
         `export const ${key}ListItem = withEntityListMedia(${key}ListOutputSchema);`,
     )
     .join("\n");
+  const listReadSchemas = browserCrudEntitySpecs
+    .map(
+      ({ key, inspector }) =>
+        `  ${JSON.stringify(key)}: compileListReadSchema(${key}ListItem, ${compactLiteral(inspector.list.read)}, ${compactLiteral(inspector.list.read.dependencies)}),`,
+    )
+    .join("\n");
+  const listBaseItemSchemas = browserCrudEntitySpecs
+    .map(({ key, inspector }) => {
+      const read = inspector.list.read;
+      const fields = [
+        ...read.media,
+        ...read.quality,
+        ...read.relations,
+        ...read.derived,
+      ];
+      return `export const ${key}ListBaseItem = z.object(${key}ListItem.shape).omit(${compactLiteral(Object.fromEntries(fields.map((field) => [field, true])))});`;
+    })
+    .join("\n");
+  const listBaseVariants = browserCrudEntitySpecs
+    .map(
+      ({ key }) =>
+        `z.object({entity:z.literal(${JSON.stringify(key)}),data:z.array(${key}ListBaseItem),meta:entityListMetaSchema.omit({sums:true}),groups:z.array(entityListGroupSchema)})`,
+    )
+    .join(",\n");
+  const listEnrichmentVariants = browserCrudEntitySpecs
+    .map(
+      ({
+        key,
+      }) => `z.object({entity:z.literal(${JSON.stringify(key)}),groups:z.array(z.discriminatedUnion("state",[
+    z.object({id:z.enum(["media","quality","relations","derived"]),state:z.literal("ready"),data:z.array(z.object(${key}ListItem.shape).partial().required({id:true}))}),
+    z.object({id:z.enum(["media","quality","relations","derived"]),state:z.literal("error"),error:publicStartOperationErrorSchema})
+  ])),missingIds:z.array(z.string())})`,
+    )
+    .join(",\n");
+  const progressiveListSchemas = `
+export const entityListGroupSchema = z.object({id:z.enum(["media","quality","relations","derived"]),fields:z.array(z.string())});
+export const entityListBaseInputSchema = entityListInputSchema;
+${listBaseItemSchemas}
+export const entityListBaseOutputSchema = z.discriminatedUnion("entity", [${listBaseVariants}]);
+export const entityListEnrichmentInputSchema = z.object({entity:z.enum(listEntities),ids:z.array(z.string().min(1)).max(500),groups:z.array(z.enum(["media","quality","relations","derived"])).max(4)});
+export const entityListEnrichmentOutputSchema = z.discriminatedUnion("entity",[${listEnrichmentVariants}]);
+export const entityListSummaryInputSchema = entityListInputSchema;
+export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntities),sums:z.record(z.string(),z.number()).optional()});
+`;
   const listOutputSchemas = browserCrudEntitySpecs
     .map(
       ({ key }) =>
@@ -1329,6 +1373,8 @@ export const renderEntityArtifacts = (
         "// Generated schema aliases retain deterministic import order.\n" +
         `${listRuntimeOutputImports}\n${listFilterFieldImports}\n` +
         'import { withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
+        'import { compileListReadSchema } from "../list-read-fields";\n' +
+        'import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";\n' +
         'import { MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { FilterPatch } from "../filters";\n' +
         'import { z } from "zod";\n\n' +
@@ -1343,6 +1389,8 @@ export const renderEntityArtifacts = (
         `const ENTITY_LIST_FILTER_SCHEMAS = {\n${listFilterSchemaBindings}\n} as const;\n\n` +
         `export const entityListInputSchema = z.discriminatedUnion("entity", [\n  ${listInputVariants}\n]);\n\n` +
         `${listItemSchemas}\n\n` +
+        `export const ENTITY_LIST_READ_SCHEMAS = {\n${listReadSchemas}\n} as const;\n\n` +
+        progressiveListSchemas +
         "const ENTITY_LIST_OUTPUT_SCHEMAS = {\n" +
         `${listOutputSchemas}\n` +
         "} as const;\n\n" +

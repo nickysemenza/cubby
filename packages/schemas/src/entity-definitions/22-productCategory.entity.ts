@@ -26,6 +26,13 @@ export default defineEntity({
     icons: { phosphor: "Tag", sfSymbol: "tag", emoji: "🏷️" },
     detail: {},
     list: {
+      read: {
+        relations: ["parentId", "parentName", "path"],
+        derived: ["fieldResolutions", "productCount"],
+        media: ["displayImages"],
+        quality: ["dataQuality"],
+        dependencies: { derived: ["relations"] },
+      },
       viewOverrides: [
         "table",
         { kind: "slot", id: "hierarchy", label: "Hierarchy" },

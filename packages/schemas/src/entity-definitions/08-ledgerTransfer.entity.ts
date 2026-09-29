@@ -23,6 +23,20 @@ export default defineEntity({
   // Ledger transfers have no name field; `fromPartyName` is the most
   // identifying human-readable value a transfer carries.
   presentation: {
+    list: {
+      read: {
+        relations: [
+          "fromPartyId",
+          "toPartyId",
+          "toPartyName",
+          "sourceClaims",
+          "evidenceTransactionIds",
+        ],
+        media: ["displayImages"],
+        quality: ["dataQuality"],
+        derived: ["classification"],
+      },
+    },
     titleField: "fromPartyName",
     domain: "finance",
     description: "Transfers recorded between ledger parties.",
