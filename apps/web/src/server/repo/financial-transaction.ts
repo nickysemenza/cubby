@@ -21,7 +21,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
-import { capitalize, uniq } from "es-toolkit";
+import { capitalize, sortBy, uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -669,9 +669,15 @@ export async function updateFinancialTransaction(
     if (data.sourceRefs !== undefined)
       await replaceSettlementRefs(tx, id, data.sourceRefs);
     const beforeState = { ...before, sourceRefs: beforeSourceRefs };
+    // Stored references have no order; compare in the canonical order
+    // `settlementRefsFor` reads them in, so a reordered resubmission is no diff.
+    const canonicalRefs = sortBy(sourceRefs, [
+      (ref) => ref.source,
+      (ref) => ref.externalId,
+    ]);
     const changes = computeChanges(
       beforeState,
-      { ...beforeState, ...values, sourceRefs },
+      { ...beforeState, ...values, sourceRefs: canonicalRefs },
       [...entityFieldModels.financialTransaction.audit],
     );
     if (changes)
