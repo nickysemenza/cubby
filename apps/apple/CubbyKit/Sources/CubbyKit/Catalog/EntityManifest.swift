@@ -130,6 +130,7 @@ public enum EntityDetailSlotID: String, CaseIterable, Codable, Sendable {
     case expenseSettlement = "expense.settlement"
     case imageAssociations = "image.associations"
     case ingredientNutritionProduct = "ingredient.nutrition-product"
+    case ingredientRecipeUsages = "ingredient.recipe-usages"
     case ledgerPartyWardrobe = "ledgerParty.wardrobe"
     case locationAiDescription = "location.ai-description"
     case locationContentsValuation = "location.contents-valuation"

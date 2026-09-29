@@ -1,8 +1,10 @@
 import type { RecipeUsage } from "@cubby/schemas/recipe";
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
+import { Button } from "~/components/ui/button";
 import {
   Table,
   TableBody,
@@ -16,7 +18,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { computeParseDrift, type ParseDrift } from "~/lib/parse-drift";
+import {
+  computeParseDrift,
+  hasDrift,
+  type ParseDrift,
+} from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
 
 import {
@@ -26,7 +32,7 @@ import {
 import { formatAmounts } from "../inventory/format-amount";
 import { DriftIndicator } from "../parse-drift-indicator";
 
-type UsageRow = RecipeUsage & {
+export type UsageRow = RecipeUsage & {
   // Re-parsing the stored raw line with the *current* parser, compared field-by-field
   // against what's persisted. Non-null fields are stale and would change on re-parse.
   drift: ParseDrift;
@@ -46,11 +52,18 @@ export function RecipeUsagesTable({
   usages,
   ingredientName,
   aliases,
+  onReparse,
 }: {
   usages: RecipeUsage[];
   ingredientName: string;
   aliases?: string[];
+  /**
+   * Offers a per-usage "Re-parse" on a drifted line, applying its fresh parse.
+   * Omitted, drift stays read-only.
+   */
+  onReparse?: (usage: UsageRow) => Promise<void>;
 }) {
+  const [reparsingId, setReparsingId] = useState<string | null>(null);
   const rows = useMemo<UsageRow[]>(() => {
     const knownNames = [ingredientName, ...(aliases ?? [])];
     // One batch WASM call for the whole table instead of one per row — output
@@ -172,6 +185,23 @@ export function RecipeUsagesTable({
                       before={ingredientName}
                       after={row.drift.name}
                     />
+                  )}
+                  {onReparse && hasDrift(row.drift) && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 shrink-0 gap-1 px-1 text-xs"
+                      disabled={reparsingId !== null}
+                      onClick={() => {
+                        setReparsingId(row.id);
+                        void onReparse(row).finally(() => setReparsingId(null));
+                      }}
+                      title="Re-parse this line with the current parser and apply"
+                    >
+                      <ArrowClockwiseIcon className="size-3" />
+                      Re-parse
+                    </Button>
                   )}
                 </span>
               ) : (

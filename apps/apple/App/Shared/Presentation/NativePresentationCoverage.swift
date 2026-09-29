@@ -129,6 +129,7 @@ enum NativePresentationCoverage {
             .productRuns,
             .recipeWorkflow,
             .ingredientNutritionProduct,
+            .ingredientRecipeUsages,
             .cookbookToc,
             .cookbookImportProgress,
             .locationContentsValuation,

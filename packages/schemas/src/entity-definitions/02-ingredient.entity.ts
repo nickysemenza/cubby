@@ -28,6 +28,7 @@ export default defineEntity({
           "Who ate it is per-portion meal data; the Meals table on this page shows each meal and its eaters.",
       },
       additionalSectionOverrides: [
+        { kind: "slot", id: "recipe-usages", title: "Recipe lines" },
         { kind: "slot", id: "nutrition-product", title: "Nutrition" },
       ],
     },

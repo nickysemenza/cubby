@@ -114,6 +114,11 @@ export const detailSlots = {
         default: m.IngredientNutritionProduct,
       })),
     ),
+    "recipe-usages": slot(() =>
+      import("~/app/ingredients/slots").then((m) => ({
+        default: m.IngredientRecipeUsages,
+      })),
+    ),
   },
   cookbook: {
     toc: slot(() =>
