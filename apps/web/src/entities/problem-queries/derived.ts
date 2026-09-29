@@ -337,12 +337,13 @@ export const derivedProblemQueries = [
     executionLane: "upc",
     continuation: {
       kind: "none",
-      reason: "External UPC matches are advisory proposals, not product rows.",
+      reason:
+        "External UPC matches are advisory proposals, not product rows, and the count snapshot skips this lane.",
     },
     freshness: { kind: "external", provider: "UPC provider cache" },
     title: "Products with better UPC data",
     description:
-      "Cached external UPC proposals that improve a product's current identifiers.",
+      "Cached external UPC proposals that improve a product's current identifiers. Loaded on the Problems page only; the navbar count never calls the provider.",
     emptyMessage: "No better UPC proposals are available.",
     source: {
       kind: "derived",

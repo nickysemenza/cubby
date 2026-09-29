@@ -7,7 +7,7 @@ import * as Sentry from "@sentry/tanstackstart-react";
 import { DurableObject } from "cloudflare:workers";
 
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
-import type { findProblemCountsSnapshot } from "~/server/services/problems.service";
+import type { findProblemCounts } from "~/server/services/problems.service";
 
 import { databaseFreshness } from "./state";
 
@@ -18,15 +18,12 @@ const MAX_SNAPSHOT_AGE_MS = 24 * 60 * 60_000;
 // workerd does not initialize the WASM-backed problem implementation at boot.
 const loadProblemCountsService = () =>
   import("~/server/services/problems.service") as Promise<{
-    findProblemCountsSnapshot: typeof findProblemCountsSnapshot;
+    findProblemCounts: typeof findProblemCounts;
   }>;
-
-type SnapshotQuality = "complete" | "degraded";
 
 type SnapshotRow = {
   counts_json: string;
   computed_at: number;
-  quality: SnapshotQuality;
 };
 
 /** One timestamp per database environment, shared by every household client. */
@@ -155,11 +152,10 @@ export class DatabaseFreshnessDurableObject extends DurableObject<Env> {
   private readSnapshot(): {
     counts: ProblemsCount;
     computedAt: number;
-    quality: SnapshotQuality;
   } | null {
     const row = this.ctx.storage.sql
       .exec<SnapshotRow>(
-        "SELECT counts_json, computed_at, quality FROM problem_counts WHERE id = 1",
+        "SELECT counts_json, computed_at FROM problem_counts WHERE id = 1",
       )
       .toArray()[0];
     if (!row) return null;
@@ -178,7 +174,6 @@ export class DatabaseFreshnessDurableObject extends DurableObject<Env> {
     return {
       counts: parsed.data,
       computedAt: row.computed_at,
-      quality: row.quality,
     };
   }
 
@@ -187,20 +182,16 @@ export class DatabaseFreshnessDurableObject extends DurableObject<Env> {
       "UPDATE freshness SET refresh_due_at = NULL WHERE id = 1",
     );
     const coveredSequence = this.readRefreshState().write_sequence;
-    const result = await this.computeProblemCounts();
-    const previous = this.readSnapshot();
-    if (!(result.quality === "degraded" && previous?.quality === "complete")) {
-      this.ctx.storage.sql.exec(
-        "INSERT INTO problem_counts (id, counts_json, computed_at, covered_sequence, quality) VALUES (1, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET counts_json = excluded.counts_json, computed_at = excluded.computed_at, covered_sequence = excluded.covered_sequence, quality = excluded.quality",
-        JSON.stringify(problemsCountSchema.parse(result.counts)),
-        Date.now(),
-        coveredSequence,
-        result.quality,
-      );
-    }
-    if (result.quality === "degraded") {
-      await this.scheduleRefresh(Date.now() + REFRESH_DELAY_MS);
-    }
+    const counts = await this.computeProblemCounts();
+    // The `quality` column predates counts that no longer depend on an
+    // external provider; it stays in the table (SQLite cannot drop its CHECK)
+    // and is always 'complete'.
+    this.ctx.storage.sql.exec(
+      "INSERT INTO problem_counts (id, counts_json, computed_at, covered_sequence, quality) VALUES (1, ?, ?, ?, 'complete') ON CONFLICT(id) DO UPDATE SET counts_json = excluded.counts_json, computed_at = excluded.computed_at, covered_sequence = excluded.covered_sequence, quality = excluded.quality",
+      JSON.stringify(problemsCountSchema.parse(counts)),
+      Date.now(),
+      coveredSequence,
+    );
   }
 
   private async computeProblemCounts() {
@@ -219,7 +210,7 @@ export class DatabaseFreshnessDurableObject extends DurableObject<Env> {
       { waitUntil: (task) => this.ctx.waitUntil(task) },
       () =>
         withRequestDbClient(connectionString, () =>
-          service.findProblemCountsSnapshot(db, createUpcLookupClient()),
+          service.findProblemCounts(db, createUpcLookupClient()),
         ),
       this.env.APP_ORIGIN,
     );

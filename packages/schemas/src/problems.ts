@@ -798,9 +798,12 @@ export const problemDetectors = {
     productWithTitleDerivableSizeSchema,
   ),
   // --- upc lane ---
+  // COVERAGE, not defect: the proposals come from an external provider, so the
+  // count snapshot skips this lane and the navbar badge must not include it.
+  // The Problems page still loads it (`getUpc`) and lists the rows.
   productsWithBetterUpcData: detector(
     "upc",
-    "defect",
+    "coverage",
     productWithBetterUpcDataSchema,
   ),
   // --- tracker lane ---

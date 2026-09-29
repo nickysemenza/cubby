@@ -1497,6 +1497,9 @@ const DECLARED_SECTIONS = [
     label: "UPC Updates",
     select: (p) => p.productsWithBetterUpcData ?? [],
     problemKeys: ["productsWithBetterUpcData"],
+    // No meter: proposals come from an external provider and are advisory, so
+    // the section is a coverage list that stays out of the defect badge.
+    coverage: { keys: ["productsWithBetterUpcData"] },
     icon: DownloadIcon,
     renderItem: (product) => {
       const { proposed } = product;

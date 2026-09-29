@@ -1517,26 +1517,19 @@ export const findUpcProblems = async (
  * sample. Entity-backed Problems select the explicit count intent, so list
  * predicates and exact totals stay canonical without constructing card SQL;
  * derived Problems use their dedicated count adapters.
+ *
+ * The `upc` lane is skipped: its detector calls an external provider, so a
+ * count would make the badge depend on that provider"s health. Its `byType`
+ * key stays 0 and the Problems page loads the section on its own.
  */
 export const findProblemCounts = async (
   db: Database,
   upcLookupClient: UpcLookupBatchPort,
-): Promise<ProblemsCount> =>
-  (await findProblemCountsSnapshot(db, upcLookupClient)).counts;
-
-export type ProblemCountsSnapshotResult = {
-  counts: ProblemsCount;
-  quality: "complete" | "degraded";
-};
-
-/** Count every Problem while preserving external-provider health for snapshots. */
-export const findProblemCountsSnapshot = async (
-  db: Database,
-  upcLookupClient: UpcLookupBatchPort,
-): Promise<ProblemCountsSnapshotResult> => {
+): Promise<ProblemsCount> => {
   const declarations = problemQueryDeclarations();
   const tasks: Record<string, () => ReturnType<typeof executeProblem>> = {};
   for (const definition of declarations) {
+    if (definition.executionLane === "upc") continue;
     tasks[definition.key] = async () =>
       executeProblem(db, definition.key, {
         mode: "count",
@@ -1561,15 +1554,9 @@ export const findProblemCountsSnapshot = async (
       0,
     );
   return {
-    counts: {
-      total: totalFor("defect"),
-      coverageTotal: totalFor("coverage"),
-      byType,
-    },
-    quality:
-      results.productsWithBetterUpcData?.status.state === "unavailable"
-        ? "degraded"
-        : "complete",
+    total: totalFor("defect"),
+    coverageTotal: totalFor("coverage"),
+    byType,
   };
 };
 
