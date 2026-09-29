@@ -648,20 +648,33 @@ describe("createEdgeUsdaDataSource", () => {
  * prevented is someone reading `fdc_id DESC` as a typo and "fixing" it, which a
  * shape assertion catches and a mocked result set never would.
  */
-type QueryRecordingEnvironment = { env: EdgeBindings; queries: string[] };
+type QueryRecordingEnvironment = {
+  env: EdgeBindings;
+  queries: string[];
+  /** The MATCH argument of each name-filtered data/count query, in order. */
+  matchArgs: string[];
+};
 
-function makeQueryRecordingEnv(): QueryRecordingEnvironment {
+function makeQueryRecordingEnv(
+  countFor: (matchArg: string | undefined) => number = () => 0,
+): QueryRecordingEnvironment {
   const queries: string[] = [];
+  const matchArgs: string[] = [];
   const db = {
     prepare(query: string) {
       queries.push(query);
+      let matchArg: string | undefined;
       const statement = {
-        bind() {
+        bind(...values: unknown[]) {
+          if (query.includes(" MATCH ?")) {
+            matchArg = String(values[0]);
+            matchArgs.push(matchArg);
+          }
           return statement;
         },
         async first() {
           if (query.includes("usda_edge_meta")) return { value: "vtest" };
-          if (query.includes("count(*)")) return { count: 0 };
+          if (query.includes("count(*)")) return { count: countFor(matchArg) };
           return null;
         },
         async all() {
@@ -680,6 +693,7 @@ function makeQueryRecordingEnv(): QueryRecordingEnvironment {
   return {
     env: toEdgeBindings(db, { get: async () => null }),
     queries,
+    matchArgs,
   };
 }
 
@@ -725,7 +739,7 @@ describe("name filter → FTS MATCH", () => {
   it("issues a MATCH for a hyphenated name", async () => {
     const { env, queries } = makeQueryRecordingEnv();
     await createEdgeUsdaDataSource(env).listFoods({
-      nameFilter: "all-purpose flour",
+      nameFilter: "all-purpose",
       orderBy: "description",
       direction: "asc",
       pageIndex: 0,
@@ -733,6 +747,50 @@ describe("name filter → FTS MATCH", () => {
     });
 
     expect(queries.filter((q) => q.includes(" MATCH ?"))).toHaveLength(2);
+  });
+
+  it("retries with the weighted-OR fallback only when AND finds nothing", async () => {
+    const { env, matchArgs } = makeQueryRecordingEnv();
+    await createEdgeUsdaDataSource(env).listFoods({
+      nameFilter: "chicken breast ground raw",
+      orderBy: "relevance",
+      direction: "asc",
+      pageIndex: 0,
+      pageSize: 10,
+    });
+
+    // data + count for AND, then data + count for the fallback.
+    expect(matchArgs).toHaveLength(4);
+    expect(matchArgs[0]).toBe('"chicken" "breast" "ground" "raw"*');
+    expect(matchArgs[2]).toContain(" OR ");
+    expect(matchArgs[3]).toBe(matchArgs[2]);
+  });
+
+  it("keeps the AND result when it has rows", async () => {
+    const { env, matchArgs } = makeQueryRecordingEnv(() => 3);
+    await createEdgeUsdaDataSource(env).listFoods({
+      nameFilter: "chicken breast ground raw",
+      orderBy: "relevance",
+      direction: "asc",
+      pageIndex: 0,
+      pageSize: 10,
+    });
+
+    expect(matchArgs).toHaveLength(2);
+  });
+
+  it("does not run a fallback for a page past the end of a non-empty AND result", async () => {
+    // Zero rows on page 3 is paging, not a miss: count says AND matched.
+    const { env, matchArgs } = makeQueryRecordingEnv(() => 3);
+    await createEdgeUsdaDataSource(env).listFoods({
+      nameFilter: "chicken breast ground raw",
+      orderBy: "relevance",
+      direction: "asc",
+      pageIndex: 2,
+      pageSize: 10,
+    });
+
+    expect(matchArgs).toHaveLength(2);
   });
 
   it("skips the FTS join when the filter tokenizes to nothing", async () => {

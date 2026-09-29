@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { toFtsQuery } from "./fts-query";
+import { toFtsFallbackQuery, toFtsQuery } from "./fts-query";
 
 // Runs the generated MATCH strings against a real FTS5 table built with the
 // same tokenizer as the D1 edge index (scripts/build-edge-artifacts.ts), so a
@@ -26,6 +26,9 @@ describe("toFtsQuery against FTS5", () => {
       [2, "Wheat flour, whole-grain"],
       [3, "Macaroni & cheese dinner, prepared"],
       [4, "Chicken, broilers or fryers, breast, meat only, raw"],
+      [5, "Chicken flavored instant noodles"],
+      [6, "Beef, ground, raw"],
+      [7, "Chicken breast, ground, cooked"],
     ] as const) {
       insert.run(id, "sr_legacy_food", description, "", "", "");
     }
@@ -83,4 +86,35 @@ describe("toFtsQuery against FTS5", () => {
       "Macaroni & cheese dinner, prepared",
     ]);
   });
+
+  // A recipe-style query names more than the USDA description carries, so the
+  // implicit AND returns nothing; the fallback keeps a majority of the terms.
+  it("AND finds nothing for a query with a term the record lacks", () => {
+    expect(match(toFtsQuery("chicken breast ground raw"))).toEqual([]);
+  });
+
+  it("fallback returns records covering most terms, best fit first", () => {
+    expect(match(toFtsFallbackQuery("chicken breast ground raw"))).toEqual([
+      "Chicken breast, ground, cooked",
+      "Chicken, broilers or fryers, breast, meat only, raw",
+    ]);
+  });
+
+  it("fallback does not flood with rows matching a single term", () => {
+    const rows = match(toFtsFallbackQuery("chicken breast ground raw"));
+    expect(rows).not.toContain("Chicken flavored instant noodles");
+    expect(rows).not.toContain("Beef, ground, raw");
+  });
+
+  it("has no fallback for one or two terms", () => {
+    expect(toFtsFallbackQuery("chicken")).toBe("");
+    expect(toFtsFallbackQuery("chicken zzz")).toBe("");
+  });
+
+  it.each(["chicken OR beef raw", 'flour " (wheat) NOT', "a-b c:d e&f"])(
+    "fallback does not throw for %j",
+    (input) => {
+      expect(() => match(toFtsFallbackQuery(input))).not.toThrow();
+    },
+  );
 });
