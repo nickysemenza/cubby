@@ -966,8 +966,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/location/entity-adapter",
-        export: "locationEntityAdapter",
+        module: "~/server/repo/location/repository",
+        export: "locationRepository",
       },
       search: "document",
     },

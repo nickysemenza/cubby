@@ -45,7 +45,6 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { bulkPatchEntities, patchEntityRows } from "~/server/repo/entity-patch";
 import { replaceExpenseAttributionRole } from "~/server/repo/expense-attribution";
 import {
@@ -63,6 +62,7 @@ import {
   renameChargeOrderId,
 } from "~/server/repo/purchase";
 import { deleteByPolicy } from "~/server/repo/removal";
+import { createEntityCrud } from "~/server/repo/repository";
 import {
   resolveAllOrThrow,
   resolveAllPresent,

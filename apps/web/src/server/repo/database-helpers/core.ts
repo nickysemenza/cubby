@@ -69,7 +69,7 @@ export const withTransaction = async <T>(
  *   really does own it, already has the span.
  *
  * Use this for a repo write that must be atomic but may also be one step of a
- * larger caller-owned transaction (see `entity-crud-factory`'s `update`).
+ * larger caller-owned transaction (see `createEntityCrud`'s `update` in `repo/repository.ts`).
  */
 export const withTransactionOn = async <T>(
   db: Database | DrizzleTransaction,

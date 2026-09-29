@@ -559,8 +559,8 @@ export default defineEntity({
     mcpNames: { overrides: { list: "search_ingredients" } },
     ports: {
       repository: {
-        module: "~/server/repo/ingredient/entity-adapter",
-        export: "ingredientEntityAdapter",
+        module: "~/server/repo/ingredient/repository",
+        export: "ingredientRepository",
       },
       search: "document",
     },

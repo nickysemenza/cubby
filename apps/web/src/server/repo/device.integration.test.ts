@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   createDevice,
-  deviceRepository,
   getDeviceByID,
   updateDevice,
 } from "~/server/repo/device";
@@ -19,6 +18,7 @@ import {
   createProductFixture,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 
 describe("device", () => {
   const ctx = withTestDb();
@@ -92,7 +92,7 @@ describe("device", () => {
     expect(updated.output.remotePaused).toBe(true);
     expect(updated.output.appVersion).toBe("1.1");
 
-    await deviceRepository.delete(ctx.db, [created.output.id], ctx.actor);
+    await deleteThroughKernel(ctx.db, ctx.actor, "device", [created.output.id]);
     expect(
       await getDeviceByID(ctx.db, created.entityId).catch(() => null),
     ).toBeNull();

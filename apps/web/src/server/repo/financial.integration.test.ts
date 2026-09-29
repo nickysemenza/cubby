@@ -12,19 +12,19 @@ import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { deleteThroughKernel } from "~/server/testing/entity-kernel";
+
 import { getDb } from "./database-helpers";
 import { createExpense } from "./expense";
 import { getFilterOptions } from "./filter-options";
 import {
   createFinancialAccount,
-  financialAccountRepository,
   listFinancialAccounts,
   updateFinancialAccount,
 } from "./financial-account";
 import { previewFinancialStatementImport } from "./financial-statement-preview";
 import {
   createFinancialTransaction,
-  financialTransactionRepository,
   financialTransactionSourceOptions,
   listFinancialTransactions,
   updateFinancialTransaction,
@@ -188,7 +188,9 @@ describe("financial repositories — critical invariants", () => {
         ctx.actor,
       )
     ).output;
-    await financialAccountRepository.delete(ctx.db, [retired.id], ctx.actor);
+    await deleteThroughKernel(ctx.db, ctx.actor, "financialAccount", [
+      retired.id,
+    ]);
 
     const txn = (accountId: string, sources: string[], amount: number) =>
       createFinancialTransaction(
@@ -243,7 +245,9 @@ describe("financial repositories — critical invariants", () => {
     // The id is the shortcode the filter brands, not the uuid.
     expect(accounts[0]?.id).toMatch(/^FAC-/);
 
-    await financialTransactionRepository.delete(ctx.db, [doomed.id], ctx.actor);
+    await deleteThroughKernel(ctx.db, ctx.actor, "financialTransaction", [
+      doomed.id,
+    ]);
     expect(await financialTransactionSourceOptions(ctx.db)).toEqual([
       { source: "monarch", count: 3 },
       { source: "amazon-order-export", count: 1 },
@@ -748,7 +752,7 @@ describe("financial repositories — critical invariants", () => {
     );
 
     await expect(
-      financialAccountRepository.delete(ctx.db, [acct.id], ctx.actor),
+      deleteThroughKernel(ctx.db, ctx.actor, "financialAccount", [acct.id]),
     ).rejects.toMatchObject({
       reason: "ENTITY_DELETE_BLOCKED",
     });
@@ -768,7 +772,7 @@ describe("financial repositories — critical invariants", () => {
       ctx.actor,
     );
     await expect(
-      financialAccountRepository.delete(ctx.db, [acct.id], ctx.actor),
+      deleteThroughKernel(ctx.db, ctx.actor, "financialAccount", [acct.id]),
     ).resolves.toBeDefined();
   });
 
@@ -820,7 +824,7 @@ describe("financial repositories — critical invariants", () => {
       )
     ).output;
     await expect(
-      financialAccountRepository.delete(ctx.db, [a.id], ctx.actor),
+      deleteThroughKernel(ctx.db, ctx.actor, "financialAccount", [a.id]),
     ).rejects.toMatchObject({
       reason: "ENTITY_DELETE_BLOCKED",
     });
@@ -1170,11 +1174,9 @@ describe("financial repositories — critical invariants", () => {
         ctx.actor,
       )
     ).output;
-    await financialTransactionRepository.delete(
-      ctx.db,
-      [deletedRefund.id],
-      ctx.actor,
-    );
+    await deleteThroughKernel(ctx.db, ctx.actor, "financialTransaction", [
+      deletedRefund.id,
+    ]);
     const adjustedReconciliation = (
       await getPurchaseByID(ctx.db, adjusted.uuid)
     ).financialReconciliation;
@@ -1226,11 +1228,9 @@ describe("financial repositories — critical invariants", () => {
         ctx.actor,
       )
     ).output;
-    await financialTransactionRepository.delete(
-      ctx.db,
-      [deleted.id],
-      ctx.actor,
-    );
+    await deleteThroughKernel(ctx.db, ctx.actor, "financialTransaction", [
+      deleted.id,
+    ]);
     const result = await getPurchaseByID(ctx.db, mismatch.uuid);
     expect(result.expenseTotal).toBe(10);
     expect(result.financialReconciliation).toMatchObject({
@@ -1435,7 +1435,7 @@ describe("financial repositories — critical invariants", () => {
     }
 
     // Soft-deleting frees the pair for a replacement account.
-    await financialAccountRepository.delete(ctx.db, [a.id], ctx.actor);
+    await deleteThroughKernel(ctx.db, ctx.actor, "financialAccount", [a.id]);
     await expect(storedValue("Credit A new", memberA)).resolves.toBeDefined();
     expect(shared.ledgerPartyId).toBeNull();
   });

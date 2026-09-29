@@ -1145,8 +1145,8 @@ export default defineEntity({
     mcpNames: { overrides: { delete: "delete_recipe" } },
     ports: {
       repository: {
-        module: "~/server/repo/recipe/entity-adapter",
-        export: "recipeEntityAdapter",
+        module: "~/server/repo/recipe/repository",
+        export: "recipeRepository",
       },
       search: "document",
     },

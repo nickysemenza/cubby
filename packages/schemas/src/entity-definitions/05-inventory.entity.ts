@@ -710,8 +710,8 @@ export default defineEntity({
     },
     ports: {
       repository: {
-        module: "~/server/repo/inventory/entity-adapter",
-        export: "inventoryEntityAdapter",
+        module: "~/server/repo/inventory/repository",
+        export: "inventoryRepository",
       },
       search: "document",
     },

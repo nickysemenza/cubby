@@ -46,12 +46,12 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { applyInventoryOwnershipInTransaction } from "~/server/repo/inventory/ownership-mutations";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge/core";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { policyDelete } from "~/server/repo/removal";
+import { createEntityReader } from "~/server/repo/repository";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 

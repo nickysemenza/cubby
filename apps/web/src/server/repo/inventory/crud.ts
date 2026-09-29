@@ -45,7 +45,6 @@ import {
   updateLiveAndReturn,
 } from "~/server/repo/database-helpers";
 import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { isGlobalUnknownLocation } from "~/server/repo/location";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
 import {
@@ -54,6 +53,7 @@ import {
 } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { deleteByPolicy } from "~/server/repo/removal";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   lexicalEligibility,
   lexicalRelevance,

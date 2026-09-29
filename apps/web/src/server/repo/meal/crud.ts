@@ -38,11 +38,11 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { deleteByPolicy } from "~/server/repo/removal";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   resolveAllOrThrow,
   resolveAllPresent,

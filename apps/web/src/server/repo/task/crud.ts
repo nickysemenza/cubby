@@ -47,7 +47,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { bulkPatchEntities, patchEntityRows } from "~/server/repo/entity-patch";
 import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
 /**
@@ -59,6 +58,7 @@ import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validatio
  * rows) inside the same transaction as the column update.
  */
 import { policyDelete } from "~/server/repo/removal";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   type EntityRef,
   lookupShortcodes,

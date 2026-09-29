@@ -29,7 +29,6 @@ import {
   financialTransaction,
   financialTransactionAllocation,
 } from "~/server/db/schema";
-import { entityRepository } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
@@ -45,7 +44,6 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import {
   assertSettlementRefsAvailable,
   replaceSettlementRefs,
@@ -68,6 +66,13 @@ import { listScaffold } from "~/server/repo/list-scaffold";
 import { enrichFinancialTransactionsWithVendorInference } from "~/server/repo/merchant-vendor-inference";
 import { cents } from "~/server/repo/money";
 import { relatedWhereConditions } from "~/server/repo/related-view";
+import {
+  asActor,
+  defineRepository,
+  listOn,
+  onDb,
+} from "~/server/repo/repository";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -795,14 +800,14 @@ export async function financialTransactionSourceOptions(
   }));
 }
 
-export const financialTransactionRepository = entityRepository(
+export const financialTransactionRepository = defineRepository(
   "financialTransaction",
   {
     lifecycle: { delete: FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY },
-    get: getFinancialTransactionByShortcode,
-    list: listFinancialTransactions,
-    create: createFinancialTransaction,
-    update: updateFinancialTransaction,
+    get: onDb(getFinancialTransactionByShortcode),
+    list: listOn(listFinancialTransactions),
+    create: asActor(createFinancialTransaction),
+    update: asActor(updateFinancialTransaction),
     deleteHooks: {
       beforeDelete: refuseTransferEvidence,
       afterDelete: touchAllocatedPurchases,

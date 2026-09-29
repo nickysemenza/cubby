@@ -1311,8 +1311,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/purchase.entity-adapter",
-        export: "purchaseEntityAdapter",
+        module: "~/server/repo/purchase.repository",
+        export: "purchaseRepository",
       },
       search: "document",
     },

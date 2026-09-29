@@ -433,8 +433,8 @@ export default defineEntity({
     mcpNames: { plural: "ledger_parties" },
     ports: {
       repository: {
-        module: "~/server/repo/ledger-party.entity-adapter",
-        export: "ledgerPartyEntityAdapter",
+        module: "~/server/repo/ledger-party.repository",
+        export: "ledgerPartyRepository",
       },
     },
   },

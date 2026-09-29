@@ -1,3 +1,15 @@
+import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
+import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
+import { expenseCreateInput } from "@cubby/schemas/project";
+import { purchaseCreateInput } from "@cubby/schemas/purchase";
+import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
+import { and, eq } from "drizzle-orm";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
+import { z } from "zod";
+
+import { entityIdentity } from "~/server/db/entity-identity-schema";
+import { entityExternalId } from "~/server/db/schema";
 /**
  * `EntityExternalId` (one table for every outside identifier). Failure modes
  * pinned here, each a regression a money or identity path would carry:
@@ -13,18 +25,7 @@
  * - re-importing a statement export writes anything;
  * - re-importing a Notion recipe page mints a second recipe.
  */
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
-import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
-import { expenseCreateInput } from "@cubby/schemas/project";
-import { purchaseCreateInput } from "@cubby/schemas/purchase";
-import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
-import { and, eq } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
-import { z } from "zod";
-
-import { entityIdentity } from "~/server/db/entity-identity-schema";
-import { entityExternalId } from "~/server/db/schema";
+import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 
 import { loadDataQualities } from "./data-quality";
 import { getDb } from "./database-helpers";
@@ -32,7 +33,6 @@ import { createExpense } from "./expense";
 import { createFinancialAccount } from "./financial-account";
 import {
   createFinancialTransaction,
-  financialTransactionRepository,
   updateFinancialTransaction,
 } from "./financial-transaction";
 import { updateProduct } from "./product";
@@ -105,7 +105,9 @@ describe("EntityExternalId", () => {
     const account = await mkAccount("Delete Visa");
     const ref = { source: "monarch", externalId: "mon-deleted-1" };
     const first = await mkTransaction(account.id, [ref]);
-    await financialTransactionRepository.delete(ctx.db, [first.id], ctx.actor);
+    await deleteThroughKernel(ctx.db, ctx.actor, "financialTransaction", [
+      first.id,
+    ]);
     // The deleted transaction's reference went with it...
     expect(await refRows(first.id)).toEqual([
       expect.objectContaining({ ...ref, deletedAt: expect.any(Date) }),

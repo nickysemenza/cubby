@@ -38,11 +38,11 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { resolveOrCreateIngredients } from "~/server/repo/ingredient/crud";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge";
 import { applyMergePolicy } from "~/server/repo/removal";
+import { createEntityCrud } from "~/server/repo/repository";
 import {
   lookupEntityReferences,
   resolveOrThrow,

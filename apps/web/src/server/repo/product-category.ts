@@ -27,7 +27,6 @@ import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { product, productCategory } from "~/server/db/schema";
-import { entityRepository } from "~/server/entity-kernel/adapter";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
@@ -35,8 +34,14 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { listScaffold } from "~/server/repo/list-scaffold";
+import {
+  asActor,
+  defineRepository,
+  listOn,
+  onDb,
+} from "~/server/repo/repository";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   lookupEntityReferences,
   resolveOrThrow,
@@ -618,11 +623,11 @@ export async function loadCategorySummaries(
   );
 }
 
-export const productCategoryRepository = entityRepository("productCategory", {
+export const productCategoryRepository = defineRepository("productCategory", {
   lifecycle: { delete: PRODUCT_CATEGORY_DELETE_EDGE_POLICY },
-  get: getProductCategoryByShortcode,
-  list: listProductCategories,
-  create: createProductCategory,
-  update: updateProductCategory,
+  get: onDb(getProductCategoryByShortcode),
+  list: listOn(listProductCategories),
+  create: asActor(createProductCategory),
+  update: asActor(updateProductCategory),
   deleteHooks: { beforeDelete: refuseBoundCategories },
 });

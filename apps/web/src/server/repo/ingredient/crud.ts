@@ -29,9 +29,9 @@ import {
   updateAndReturn,
   withTransactionOn,
 } from "~/server/repo/database-helpers";
-import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { patchEntityRows } from "~/server/repo/entity-patch";
 import { markProductConversionCoverageInputStale } from "~/server/repo/product/conversion-coverage";
+import { createEntityCrud } from "~/server/repo/repository";
 import {
   findOrCreateWithShortcode,
   insertWithShortcode,

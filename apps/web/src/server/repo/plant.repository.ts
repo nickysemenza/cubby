@@ -1,12 +1,14 @@
 import { plantOut } from "@cubby/schemas/plant";
 import { z } from "zod";
 
-import {
-  defineEntityAdapter,
-  entityMutationReferences,
-} from "~/server/entity-kernel/adapter";
+import { entityMutationReferences } from "~/server/entity-kernel/adapter";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
-import { policyDelete } from "~/server/repo/removal";
+import {
+  asActor,
+  defineRepository,
+  listOn,
+  onDb,
+} from "~/server/repo/repository";
 
 import {
   createPlant,
@@ -30,32 +32,19 @@ const plantMergeSummary = z.object({
   productEdgesRepointed: z.number().int().nonnegative(),
 });
 
-export const plantEntityAdapter = defineEntityAdapter({
-  entity: "plant",
+export const plantRepository = defineRepository("plant", {
   lifecycle: {
     delete: PLANT_DELETE_EDGE_POLICY,
     merge: PLANT_MERGE_EDGE_POLICY,
   },
-  repository: {
-    get: (ctx, id) => getPlantByShortcode(ctx.db, id),
-    list: (ctx, filters, sorts, pagination) =>
-      listPlants(ctx.db, filters, sorts, pagination),
-    create: (ctx, data) => createPlant(ctx.db, data, ctx.actorContext),
-    update: (ctx, id, data) => updatePlant(ctx.db, id, data, ctx.actorContext),
-    delete: async (ctx, ids) => {
-      await policyDelete("plant", PLANT_DELETE_EDGE_POLICY)(
-        ctx.db,
-        ids,
-        ctx.actorContext,
-      );
-      return { deletedReferences: entityMutationReferences("plant", ids) };
-    },
-    bulkUpdate: async (ctx, ids, data) => {
-      // A household catalogue is small; one audited update per plant is fine.
-      for (const id of ids)
-        await updatePlant(ctx.db, id, data, ctx.actorContext);
-      return { updatedReferences: entityMutationReferences("plant", ids) };
-    },
+  get: onDb(getPlantByShortcode),
+  list: listOn(listPlants),
+  create: asActor(createPlant),
+  update: asActor(updatePlant),
+  bulkUpdate: async (ctx, ids, data) => {
+    // A household catalogue is small; one audited update per plant is fine.
+    for (const id of ids) await updatePlant(ctx.db, id, data, ctx.actorContext);
+    return { updatedReferences: entityMutationReferences("plant", ids) };
   },
   merge: {
     input: mergeInput,

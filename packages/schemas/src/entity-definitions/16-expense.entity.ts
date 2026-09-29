@@ -1480,8 +1480,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/expense/entity-adapter",
-        export: "expenseEntityAdapter",
+        module: "~/server/repo/expense/repository",
+        export: "expenseRepository",
       },
       search: "document",
     },

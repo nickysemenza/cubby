@@ -22,7 +22,6 @@ import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { device, imageSighting } from "~/server/db/schema";
-import { entityRepository } from "~/server/entity-kernel/adapter";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
@@ -31,9 +30,15 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { currentMemberLedgerParty } from "~/server/repo/member-login";
+import {
+  asActor,
+  defineRepository,
+  listOn,
+  onDb,
+} from "~/server/repo/repository";
+import { createEntityCrud } from "~/server/repo/repository";
 import {
   lookupEntityReferences,
   resolveOrThrow,
@@ -249,12 +254,12 @@ const deleteDeviceSightings = async (
     await deriveAndStoreImageCapture(tx, parseEntityId("image", imageId));
 };
 
-export const deviceRepository = entityRepository("device", {
+export const deviceRepository = defineRepository("device", {
   lifecycle: { delete: DEVICE_DELETE_EDGE_POLICY },
-  get: getDeviceByShortcode,
-  list: listDevices,
-  create: createDevice,
-  update: updateDevice,
+  get: onDb(getDeviceByShortcode),
+  list: listOn(listDevices),
+  create: asActor(createDevice),
+  update: asActor(updateDevice),
   deleteHooks: {
     overrides: { "ImageSighting.deviceId": deleteDeviceSightings },
   },

@@ -892,8 +892,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/image.entity-adapter",
-        export: "imageEntityAdapter",
+        module: "~/server/repo/image.repository",
+        export: "imageRepository",
       },
     },
   },

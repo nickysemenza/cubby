@@ -2534,8 +2534,8 @@ export default defineEntity({
     mcpNames: { overrides: { list: "search_products" } },
     ports: {
       repository: {
-        module: "~/server/repo/product/entity-adapter",
-        export: "productEntityAdapter",
+        module: "~/server/repo/product/repository",
+        export: "productRepository",
       },
       timeline: {
         module: "~/server/repo/product/movement-timeline",

@@ -17,7 +17,7 @@ import {
   updateGardenEntry,
   updatePlanting,
 } from "~/server/repo/garden";
-import { plantingEntityAdapter } from "~/server/repo/garden/entity-adapters";
+import { plantingRepository } from "~/server/repo/garden/repository";
 import { createLocation } from "~/server/repo/location";
 import {
   createPlantFixture,
@@ -28,7 +28,7 @@ import {
 import { getSearchDocumentEmbeddingText } from "~/server/repo/search-document";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { createTask } from "~/server/repo/task/crud";
-import { taskEntityAdapter } from "~/server/repo/task/entity-adapter";
+import { taskRepository } from "~/server/repo/task/repository";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 describe("garden workflows", () => {
@@ -421,7 +421,7 @@ describe("garden workflows", () => {
       TEST_ACTOR,
     );
 
-    const result = await plantingEntityAdapter.repository.delete(
+    const result = await plantingRepository.repository.delete!(
       kernelContext(ctx.db),
       [target.id],
     );
@@ -489,7 +489,7 @@ describe("garden workflows", () => {
       TEST_ACTOR,
     );
 
-    const result = await taskEntityAdapter.repository.delete(
+    const result = await taskRepository.repository.delete!(
       kernelContext(ctx.db),
       [task.output.id],
     );
@@ -675,7 +675,7 @@ describe("garden workflows", () => {
     expect(ids.has(inactive.id)).toBe(false);
   });
 
-  it("plantingEntityAdapter.repository.bulkUpdate patches status and finishedOn together and clears locationId with an explicit null", async () => {
+  it("plantingRepository.repository.bulkUpdate patches status and finishedOn together and clears locationId with an explicit null", async () => {
     const crop = await createPlantFixture(
       ctx.db,
       { name: "Bulk update crop" },
@@ -693,7 +693,7 @@ describe("garden workflows", () => {
       TEST_ACTOR,
     );
 
-    await plantingEntityAdapter.repository.bulkUpdate(
+    await plantingRepository.repository.bulkUpdate!(
       kernelContext(ctx.db),
       [first.id, second.id],
       { status: "finished", finishedOn: "2026-08-01", locationId: null },

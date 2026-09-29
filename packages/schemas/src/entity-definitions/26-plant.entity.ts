@@ -476,8 +476,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/plant.entity-adapter",
-        export: "plantEntityAdapter",
+        module: "~/server/repo/plant.repository",
+        export: "plantRepository",
       },
     },
   },

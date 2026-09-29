@@ -30,7 +30,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
 /**
  * Project CRUD operations.
@@ -42,6 +41,7 @@ import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validatio
  * orphaning live tasks/expenses before hard-deleting the dependency edges.
  */
 import { policyDelete } from "~/server/repo/removal";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   resolveAllOrThrow,
   resolveOrThrow,

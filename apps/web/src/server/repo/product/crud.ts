@@ -102,7 +102,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { ensureExternalSources } from "~/server/repo/entity-external-ids";
@@ -139,6 +138,7 @@ import {
   relatedWhereConditions,
 } from "~/server/repo/related-view";
 import { deleteByPolicy } from "~/server/repo/removal";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   resolveAllOrThrow,
   resolveAllPresent,

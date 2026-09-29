@@ -13,13 +13,11 @@ import {
   commitStatementCsv,
   previewStatementCsv,
 } from "~/server/statement-csv-import";
+import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 
 import { getDb } from "./database-helpers";
 import { createFinancialAccount } from "./financial-account";
-import {
-  createFinancialTransaction,
-  financialTransactionRepository,
-} from "./financial-transaction";
+import { createFinancialTransaction } from "./financial-transaction";
 import {
   deleteStatementRows,
   listStatementImports,
@@ -299,11 +297,9 @@ describe("statement row ledger", () => {
     });
 
     // A soft-deleted transaction is not evidence.
-    await financialTransactionRepository.delete(
-      ctx.db,
-      [transaction.id],
-      ctx.actor,
-    );
+    await deleteThroughKernel(ctx.db, ctx.actor, "financialTransaction", [
+      transaction.id,
+    ]);
     const afterDelete = (await listStatementRows(ctx.db, {})).data[0];
     expect(afterDelete).toMatchObject({
       matchState: "unmatched",

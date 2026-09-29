@@ -1,6 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type { EntityId } from "@cubby/schemas/identifiers";
 import type {
   ListGroupSummary,
@@ -9,7 +8,6 @@ import type {
 } from "@cubby/schemas/pagination";
 import { type output as ZodOutput, type ZodSchema, z } from "zod";
 
-import { deferPublications } from "~/server/background-tasks/publish";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
@@ -19,12 +17,6 @@ import {
   type EntitySchemaBindingMap,
 } from "~/server/generated/entity-bindings.gen";
 import type { MealMutationHooks } from "~/server/repo/meal/crud";
-import {
-  type DeleteHooks,
-  executeDeleteWithEffects,
-  policyDelete,
-  type RemovableEntity,
-} from "~/server/repo/removal";
 import type { TaskMutationHooks } from "~/server/repo/task/crud";
 import {
   type MutationSideEffectEntity,
@@ -80,8 +72,7 @@ export const entityMutationReferences = <E extends EntitySchemaBindingEntity>(
 
 /**
  * `deletedReferences` for a delete that also detached images: the entity's
- * own ids plus whatever image shortcodes came off it. Reused across every
- * adapter whose delete detaches images rather than writing it out twice.
+ * own ids plus whatever image shortcodes came off it.
  */
 export const deletedWithImages = <E extends EntitySchemaBindingEntity>(
   entity: E,
@@ -91,62 +82,6 @@ export const deletedWithImages = <E extends EntitySchemaBindingEntity>(
   ...entityMutationReferences(entity, shortcodes),
   ...entityMutationReferences("image", imageShortcodes),
 ];
-
-/**
- * What a standard repository object declares beside its `(db, input, actor)`
- * methods; the generated binding module builds its kernel adapter.
- */
-export interface StandardRepositoryOptions<
-  E extends EntitySchemaBindingEntity,
-> {
-  lifecycle: EntityLifecycleContract;
-  /** `false` when writes have no dependents to refresh. */
-  sideEffects?: boolean;
-  /** Named entity-specific effects around the policy-driven delete. */
-  deleteHooks?: DeleteHooks<Extract<E, RemovableEntity>>;
-}
-
-/**
- * Declare a standard repository object. Its `delete` is the entity's declared
- * `lifecycle.delete` policy (`deleteByPolicy`) plus `deleteHooks`.
- */
-export const entityRepository = <
-  E extends EntitySchemaBindingEntity,
-  T extends StandardRepositoryOptions<E>,
->(
-  entity: E,
-  repository: T,
-): T &
-  StandardRepositoryOptions<E> & {
-    delete: ReturnType<typeof policyDelete<Extract<E, RemovableEntity>>>;
-  } => ({
-  ...repository,
-  delete: policyDelete(
-    // SAFETY: only an auditable entity declares a delete; the generated
-    // adapter never calls `delete` for one whose manifest delete is null.
-    entity as Extract<E, RemovableEntity>,
-    repository.lifecycle.delete,
-    repository.deleteHooks,
-  ),
-});
-
-/** A standard repository delete's return, reported as kernel references. */
-export const standardDeleteResult = <E extends EntitySchemaBindingEntity>(
-  entity: E,
-  ids: readonly string[],
-  result: {
-    deleted?: number;
-    detachedImageKeys?: string[];
-    deletedImageShortcodes?: readonly string[];
-  } | void,
-): EntityKernelDeleteResult => ({
-  deletedReferences: deletedWithImages(
-    entity,
-    ids,
-    result?.deletedImageShortcodes ?? [],
-  ),
-  detachedImageKeys: result?.detachedImageKeys,
-});
 
 /** A bulk patch's kernel result, after its one side-effect fan-out. */
 export const bulkUpdatedWithSideEffects = async <
@@ -173,7 +108,7 @@ export const bulkUpdatedWithSideEffects = async <
   };
 };
 
-interface EntityKernelDeleteResult {
+export interface EntityKernelDeleteResult {
   deletedReferences: EntityMutationReference[];
   detachedImageKeys?: string[];
   affectedEdges?: Array<{
@@ -185,10 +120,11 @@ interface EntityKernelDeleteResult {
 
 /**
  * A bulk patch is one repository call, not N kernel updates: the repository
- * owns the transaction and the per-entity side-effect fan-out, exactly as
- * `delete` does.
+ * owns the per-entity side-effect fan-out, exactly as `delete` does.
  */
-interface EntityKernelBulkUpdateResult<E extends EntitySchemaBindingEntity> {
+export interface EntityKernelBulkUpdateResult<
+  E extends EntitySchemaBindingEntity,
+> {
   updatedReferences: EntityMutationReference<E>[];
   detachedImageKeys?: string[];
 }
@@ -235,53 +171,12 @@ export interface EntitySortContract {
   groupable?: readonly [string, ...string[]];
 }
 
-/**
- * Every entity that declares `model.sort` gets its `EntitySortContract` for
- * free from the generated roster, so `defineEntityAdapter` callers no longer
- * hand-list `sort: { fields: xSortableFields, default: "..." }`. An empty
- * generated `groupable` becomes `undefined` here (not `[]`) so the kernel's
- * `binding.sort.groupable ?? binding.sort.fields` fallback in
- * `entity-operations.ts` still treats every sortable field as groupable —
- * exactly today's behavior for entities with no declared `groupable`.
- */
-const derivedEntitySort = (entity: string): EntitySortContract => {
-  // SAFETY: `generatedEntitySort` is keyed by `Entity`, but this helper takes
-  // any kernel entity string so callers need no per-call literal narrowing;
-  // the lookup below on the next line handles an absent key explicitly.
-  const declared = (
-    generatedEntitySort as Record<
-      string,
-      {
-        fields: readonly [string, ...string[]];
-        default: string;
-        direction: "asc" | "desc";
-        groupable: readonly string[];
-      }
-    >
-  )[entity];
-  if (declared === undefined)
-    throw new Error(
-      `${entity} has no generated model.sort; pass sort explicitly to defineEntityAdapter.`,
-    );
-  return {
-    fields: declared.fields,
-    default: declared.default,
-    direction: declared.direction,
-    // SAFETY: the length check on the line above confirms at least one
-    // element, matching the non-empty tuple this asserts.
-    groupable:
-      declared.groupable.length > 0
-        ? (declared.groupable as readonly [string, ...string[]])
-        : undefined,
-  };
-};
-
 export interface EntityLifecycleContract {
   delete: Record<string, OperationDisposition>;
   merge?: Record<string, OperationDisposition>;
 }
 
-interface EntityRepositoryWriteResult<
+export interface EntityRepositoryWriteResult<
   E extends EntitySchemaBindingEntity,
   S extends EntityBindingSchemas,
 > {
@@ -294,47 +189,11 @@ interface EntityRepositoryWriteResult<
 
 type PresentSchemaOutput<S> = ZodOutput<Extract<S, ZodSchema>>;
 
-type EntityCreateRepository<
-  E extends EntitySchemaBindingEntity,
-  S extends EntityBindingSchemas,
-> =
-  SchemaOutput<S["createInput"]> extends never
-    ? { create?: never }
-    : {
-        create(
-          ctx: EntityKernelContext,
-          data: PresentSchemaOutput<S["createInput"]>,
-        ): Promise<EntityRepositoryWriteResult<E, S>>;
-      };
-
-type EntityUpdateRepository<
-  E extends EntitySchemaBindingEntity,
-  S extends EntityBindingSchemas,
-> =
-  SchemaOutput<S["updateInput"]> extends never
-    ? { update?: never }
-    : {
-        update(
-          ctx: EntityKernelContext,
-          id: ZodOutput<S["id"]>,
-          data: PresentSchemaOutput<S["updateInput"]>,
-        ): Promise<EntityRepositoryWriteResult<E, S>>;
-      };
-
-type EntityBulkUpdateRepository<
-  E extends EntitySchemaBindingEntity,
-  S extends EntityBindingSchemas,
-> =
-  SchemaOutput<S["bulkUpdateInput"]> extends never
-    ? { bulkUpdate?: never }
-    : {
-        bulkUpdate(
-          ctx: EntityKernelContext,
-          ids: ZodOutput<S["id"]>[],
-          data: PresentSchemaOutput<S["bulkUpdateInput"]>,
-        ): Promise<EntityKernelBulkUpdateResult<E>>;
-      };
-
+/**
+ * The kernel's view of a repository (`defineRepository` in
+ * `repo/repository.ts`). A write method is absent when the declaration does
+ * not grant that action; the kernel refuses the command.
+ */
 export type EntityRepository<
   E extends EntitySchemaBindingEntity,
   S extends EntityBindingSchemas = SchemasFor<E>,
@@ -355,13 +214,25 @@ export type EntityRepository<
     sums?: Record<string, number>;
     groups?: ListGroupSummary[];
   }>;
-  delete(
+  create?(
+    ctx: EntityKernelContext,
+    data: PresentSchemaOutput<S["createInput"]>,
+  ): Promise<EntityRepositoryWriteResult<E, S>>;
+  update?(
+    ctx: EntityKernelContext,
+    id: ZodOutput<S["id"]>,
+    data: PresentSchemaOutput<S["updateInput"]>,
+  ): Promise<EntityRepositoryWriteResult<E, S>>;
+  bulkUpdate?(
+    ctx: EntityKernelContext,
+    ids: ZodOutput<S["id"]>[],
+    data: PresentSchemaOutput<S["bulkUpdateInput"]>,
+  ): Promise<EntityKernelBulkUpdateResult<E>>;
+  delete?(
     ctx: EntityKernelContext,
     ids: ZodOutput<S["id"]>[],
   ): Promise<EntityKernelDeleteResult>;
-} & EntityCreateRepository<E, S> &
-  EntityUpdateRepository<E, S> &
-  EntityBulkUpdateRepository<E, S>;
+};
 
 export interface EntityMergePort<
   E extends EntitySchemaBindingEntity,
@@ -394,88 +265,4 @@ export interface EntityKernelCoreBinding<
   sort: EntitySortContract;
   lifecycle: EntityLifecycleContract;
   repository: EntityRepository<E, S>;
-}
-
-export function defineEntityAdapter<
-  const E extends EntitySchemaBindingEntity,
-  SMergeInput extends ZodSchema = z.ZodNever,
-  SMergeOutput extends ZodSchema = z.ZodNever,
-  TMergeItem = never,
-  TMergeSummary = never,
->(config: {
-  entity: E;
-  sideEffects?: boolean;
-  /** Omit to derive from the entity's declared `model.sort` roster. */
-  sort?: EntitySortContract;
-  lifecycle: EntityLifecycleContract;
-  repository: EntityRepository<E>;
-  merge?: EntityMergePort<
-    E,
-    SMergeInput,
-    SMergeOutput,
-    TMergeItem,
-    TMergeSummary
-  >;
-}) {
-  const merge = config.merge;
-  const mergeOperation = merge
-    ? {
-        execute: async <TInput>(ctx: EntityKernelContext, input: TInput) => {
-          const result = await merge.execute(ctx, merge.input.parse(input));
-          const output = merge.output.parse(result.output);
-          return {
-            ...result,
-            item: merge.item(output),
-            mergeSummary: merge.summary(output),
-          };
-        },
-      }
-    : null;
-  return {
-    ...config,
-    repository: {
-      ...config.repository,
-      delete: async (
-        ctx: EntityKernelContext,
-        ids: ZodOutput<SchemasFor<E>["id"]>[],
-      ) => {
-        // Same rule as writeWithProjections: every DB touch inside the delete
-        // transaction goes through the transaction-bound context (a pool-bound
-        // service UPDATE on a row this transaction holds — a fork the delete
-        // just locked — waits forever), and queue publications wait for the
-        // commit.
-        const deferred = deferPublications();
-        const { result, affectedEdges } = await executeDeleteWithEffects(
-          ctx.db,
-          config.entity,
-          ids,
-          config.lifecycle.delete,
-          (transactionDb) =>
-            config.repository.delete(
-              {
-                ...ctx,
-                db: transactionDb,
-                services: {
-                  ...ctx.services,
-                  recipeCosting: ctx.services.recipeCosting.bindTo(
-                    transactionDb,
-                    deferred.publish,
-                  ),
-                },
-              },
-              ids,
-            ),
-        );
-        await deferred.flush(ctx.db);
-        return {
-          ...result,
-          affectedEdges,
-        };
-      },
-    },
-    sideEffects: config.sideEffects ?? true,
-    sort: config.sort ?? derivedEntitySort(config.entity),
-    schemas: ENTITY_SCHEMA_BINDINGS[config.entity],
-    mergeOperation,
-  };
 }

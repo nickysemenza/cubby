@@ -27,7 +27,6 @@ import {
   financialTransaction,
   ledgerTransfer,
 } from "~/server/db/schema";
-import { entityRepository } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
@@ -37,7 +36,6 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { lockLedgerPartiesForReference } from "~/server/repo/ledger-party-reference";
 import {
   assertExplicitSourceClaimsForAmountChange,
@@ -45,6 +43,13 @@ import {
 } from "~/server/repo/ledger-source-claim";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { cents } from "~/server/repo/money";
+import {
+  asActor,
+  defineRepository,
+  listOn,
+  onDb,
+} from "~/server/repo/repository";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -504,11 +509,11 @@ const listLedgerTransfers = async (
     },
   );
 
-export const ledgerTransferRepository = entityRepository("ledgerTransfer", {
+export const ledgerTransferRepository = defineRepository("ledgerTransfer", {
   sideEffects: false,
   lifecycle: { delete: LEDGER_TRANSFER_DELETE_EDGE_POLICY },
-  get: getLedgerTransferByShortcode,
-  list: listLedgerTransfers,
-  create: createLedgerTransfer,
-  update: updateLedgerTransfer,
+  get: onDb(getLedgerTransferByShortcode),
+  list: listOn(listLedgerTransfers),
+  create: asActor(createLedgerTransfer),
+  update: asActor(updateLedgerTransfer),
 });

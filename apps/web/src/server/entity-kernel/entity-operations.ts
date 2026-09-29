@@ -525,11 +525,22 @@ export const defineEntityOperations = <
   ),
   delete: bindWorkflow(
     workflow<EntityKernelContext, string[]>(`${binding.entity}.delete`)
-      .call("ids", async (_, { input }) =>
-        input.map((id) => parseSchema<S["id"], string>(binding.schemas.id, id)),
-      )
-      .commit("deleted", async ({ context }, { ids }) =>
-        binding.repository.delete(context, ids),
+      .call("validated", async (_, { input }) => {
+        const run = binding.repository.delete;
+        if (!run)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            `${ENTITY_LABEL[binding.entity]} does not support delete`,
+          );
+        return {
+          run,
+          ids: input.map((id) =>
+            parseSchema<S["id"], string>(binding.schemas.id, id),
+          ),
+        };
+      })
+      .commit("deleted", async ({ context }, { validated }) =>
+        validated.run(context, validated.ids),
       )
       .effect("receipt", async (_, { deleted }) => {
         if (!deleted.affectedEdges)

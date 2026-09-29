@@ -142,8 +142,8 @@ export default defineEntity({
     mcpNames: null,
     ports: {
       repository: {
-        module: "~/server/repo/example/entity-adapter",
-        export: "exampleEntityAdapter",
+        module: "~/server/repo/example/repository",
+        export: "exampleRepository",
       },
       references: {
         label: { module: "~/entities/entities", export: "entityLabel" },
@@ -544,10 +544,9 @@ Every `fields` entry not named in `computed` must be a `model.fields` key; a
 correlated subquery or rollup resolved in the repository, such as a vendor's
 live purchase count or a product's expected-quantity variance. The generator
 emits the roster as `generatedEntitySort` in
-`packages/schemas/src/generated/entity-sort.gen.ts`, and the kernel's
-`defineEntityAdapter` derives its `EntitySortContract` from that map when a
-binding omits `sort` explicitly, so an entity adapter no longer hand-lists its
-own `sort: { fields: xSortableFields, default: "..." }`. The compiler enforces
+`packages/schemas/src/generated/entity-sort.gen.ts`, and `defineRepository`
+derives the kernel's `EntitySortContract` from that map, so no repository
+hand-lists its own sort roster. The compiler enforces
 `default ∈ fields`, `groupable ⊆ fields`, and `computed ⊆ fields`. The same
 roster narrows the `/api/v1` list route (`sort` refined to `fields`, `groupBy`
 an enum of `groupable`, or of `fields` when `groupable` is empty), so a
@@ -904,7 +903,16 @@ precedence rule.
    the generated factories. Keep domain refinements and relationship
    projections explicit. A physical change still requires a compatible
    migration; generation does not apply production DDL.
-3. Add a kernel repository adapter for the capabilities the spec declares.
+3. Declare its repository with `defineRepository(entity, { get, list, … })`
+   (`apps/web/src/server/repo/repository.ts`) and point
+   `extensions.ports.repository` at the export; the generator binds it to
+   the kernel. Methods take the kernel context (`(ctx, …)`); the declared
+   actions gate which ones the kernel exposes (`capabilities.lifecycle:
+"readOnly"` exposes get/list/search), and `delete` defaults to the
+   declared `lifecycle.delete` policy plus `deleteHooks`. The kernel owns the
+   write transaction: a repository writes through `ctx.db` and never opens a
+   transaction on another handle. A declared `capabilities.resolve` needs no
+   code: `resolveEntity` serves it from `entity-kernel/resolve.ts`.
 4. Set `route.basePath` for the generic pages (`listOverride: null`
    hand-writes the list route module; detail is always generic, with
    specialized UI in detail slots); add workflow extensions where needed.
