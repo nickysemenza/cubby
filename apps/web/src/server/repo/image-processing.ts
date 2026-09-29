@@ -812,7 +812,11 @@ export async function findImageProcessingDispatchRepairs(
 export async function retryFailedImageProcessingJobs(
   db: Database,
   limit: number,
-  options?: { imageId?: ImageId; submissionId?: string },
+  options?: {
+    imageId?: ImageId;
+    submissionId?: string;
+    kinds?: readonly ImageProcessingJobKind[];
+  },
 ): Promise<string[]> {
   return await withTransaction(db, async (tx) => {
     const rows = await tx
@@ -834,6 +838,9 @@ export async function retryFailedImageProcessingJobs(
           eq(imageProcessingJob.state, "failed"),
           options?.imageId
             ? eq(imageProcessingJob.imageId, options.imageId)
+            : undefined,
+          options?.kinds
+            ? inArray(imageProcessingJob.kind, [...options.kinds])
             : undefined,
           or(
             and(

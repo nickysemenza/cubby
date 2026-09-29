@@ -11,6 +11,8 @@ import {
   classifyImageProvenanceOutSchema,
   backfillImageMetadataInputSchema,
   backfillImageMetadataOutSchema,
+  backfillImageSearchInputSchema,
+  backfillImageSearchOutSchema,
 } from "@cubby/schemas/maintenance";
 import { z } from "zod";
 
@@ -67,5 +69,10 @@ export const maintenanceContract = defineContract("maintenance", {
     input: backfillImageMetadataInputSchema,
     output: backfillImageMetadataOutSchema,
     invalidates: ["image"],
+  }),
+  backfillImageSearch: mutation({
+    input: backfillImageSearchInputSchema,
+    output: backfillImageSearchOutSchema,
+    invalidates: ["maintenance"],
   }),
 });
