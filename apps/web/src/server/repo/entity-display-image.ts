@@ -706,11 +706,15 @@ export async function withDisplayImages<Row extends { id: string }, Out>(
   // Mappers that parse their row against the list schema take the images as
   // an argument so the parse sees them; the spread below covers the rest.
   toOut: (row: Row, displayImages: DisplayImageSummary[]) => Out,
+  // Only the authoritative resolver's result from this read may be reused.
+  preloaded?: ReadonlyMap<string, DisplayImageSummary[]>,
 ): Promise<Array<Out & { displayImages: DisplayImageSummary[] }>> {
-  const lists = await resolveEntityDisplayImageLists(
-    db,
-    rows.map((row) => ({ entityKind, entityId: row.id })),
-  );
+  const lists =
+    preloaded ??
+    (await resolveEntityDisplayImageLists(
+      db,
+      rows.map((row) => ({ entityKind, entityId: row.id })),
+    ));
   return hydrateImageReadProjection(
     db,
     rows.map((row) => {

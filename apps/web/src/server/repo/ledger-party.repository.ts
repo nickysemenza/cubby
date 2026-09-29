@@ -6,6 +6,7 @@ import {
   asActor,
   defineRepository,
   listOn,
+  listReadOn,
   onDb,
 } from "~/server/repo/repository";
 
@@ -47,8 +48,7 @@ export const ledgerPartyRepository = defineRepository("ledgerParty", {
   },
   get: onDb(getLedgerPartyByShortcode),
   list: listOn(listLedgerParties),
-  listRead: (ctx, filters, sorts, pagination, projection) =>
-    listLedgerPartiesRead(ctx.db, filters, sorts, pagination, projection),
+  listRead: listReadOn(listLedgerPartiesRead),
   create: asActor(createLedgerParty),
   update: asActor(updateLedgerParty),
   delete: asActor(deleteLedgerParties),

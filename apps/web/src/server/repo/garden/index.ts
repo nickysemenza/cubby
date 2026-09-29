@@ -37,7 +37,6 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
-import { projectListRows } from "~/entities/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   entityLink,
@@ -73,10 +72,10 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { linkValues, liveLinks, ofLinkKind } from "~/server/repo/entity-links";
 import { listScaffold } from "~/server/repo/list";
 import {
+  hydrateListRead,
   loadListGroup,
   type ListProjection,
   wantsListGroup,
@@ -88,6 +87,8 @@ import {
   resolveLiveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
+import { parseCompleteListRead } from "../list-read-adapters";
 
 type GardenDb = Database | DrizzleTransaction;
 
@@ -854,25 +855,12 @@ export const plantingListRead = async (
               : undefined,
           },
         }),
-      hydrate: async (rows, selected) => {
-        const qualities = await loadListGroup(selected, "quality", () =>
-          loadDataQualities(
-            db,
-            "planting",
-            rows.map((row) => parseEntityId("planting", row.id)),
-          ),
-        );
-        const mapRow = (row: (typeof rows)[number]) =>
-          mapPlantingRead(
-            row,
-            selected,
-            qualities?.get(parseEntityId("planting", row.id)),
-          );
-        const mapped = wantsListGroup(selected, "media")
-          ? await withDisplayImages(db, "planting", rows, mapRow)
-          : rows.map(mapRow);
-        return projectListRows("planting", mapped, selected);
-      },
+      hydrate: (rows, selected) =>
+        hydrateListRead(db, "planting", rows, selected, {
+          media: true,
+          load: async () => undefined,
+          mapRow: (row, { quality }) => mapPlantingRead(row, selected, quality),
+        }),
     },
   );
 };
@@ -886,10 +874,7 @@ export const plantingList = async (
   const result = await plantingListRead(db, filters, pagination, sorts, {
     kind: "full",
   });
-  return {
-    ...result,
-    data: result.data.map((row) => plantingListItemOut.parse(row)),
-  };
+  return parseCompleteListRead(plantingListItemOut, Promise.resolve(result));
 };
 
 const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry);
@@ -1028,39 +1013,29 @@ export const gardenEntryListRead = async (
               : undefined,
           },
         }),
-      hydrate: async (rows, selected) => {
-        const [qualities, plantingsByEntry] = await Promise.all([
-          loadListGroup(selected, "quality", () =>
-            loadDataQualities(
-              db,
-              "gardenEntry",
-              rows.map((row) => parseEntityId("gardenEntry", row.id)),
-            ),
-          ),
-          loadListGroup(selected, "relations", () =>
-            loadEntryPlantings(
-              db,
-              rows.map((row) => row.id),
-            ),
-          ),
-        ]);
-        const mapRow = (row: (typeof rows)[number]) =>
-          mapEntryRead(
-            {
-              ...row,
-              plantings: plantingsByEntry?.get(row.id),
-              images: (row.images ?? []).flatMap((entry) =>
-                "image" in entry ? [entry] : [],
+      hydrate: (rows, selected) =>
+        hydrateListRead(db, "gardenEntry", rows, selected, {
+          media: true,
+          load: () =>
+            loadListGroup(selected, "relations", () =>
+              loadEntryPlantings(
+                db,
+                rows.map((row) => row.id),
               ),
-            },
-            selected,
-            qualities?.get(parseEntityId("gardenEntry", row.id)),
-          );
-        const mapped = wantsListGroup(selected, "media")
-          ? await withDisplayImages(db, "gardenEntry", rows, mapRow)
-          : rows.map(mapRow);
-        return projectListRows("gardenEntry", mapped, selected);
-      },
+            ),
+          mapRow: (row, { loaded: plantingsByEntry, quality }) =>
+            mapEntryRead(
+              {
+                ...row,
+                plantings: plantingsByEntry?.get(row.id),
+                images: (row.images ?? []).flatMap((entry) =>
+                  "image" in entry ? [entry] : [],
+                ),
+              },
+              selected,
+              quality,
+            ),
+        }),
     },
   );
 };
@@ -1074,8 +1049,5 @@ export const gardenEntryList = async (
   const result = await gardenEntryListRead(db, filters, pagination, sorts, {
     kind: "full",
   });
-  return {
-    ...result,
-    data: result.data.map((row) => gardenEntryListItemOut.parse(row)),
-  };
+  return parseCompleteListRead(gardenEntryListItemOut, Promise.resolve(result));
 };

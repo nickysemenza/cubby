@@ -2,6 +2,7 @@ import {
   asActor,
   defineRepository,
   listOn,
+  listReadOn,
   onDb,
 } from "~/server/repo/repository";
 
@@ -18,8 +19,7 @@ export const projectRepository = defineRepository("project", {
   lifecycle: { delete: PROJECT_DELETE_EDGE_POLICY },
   get: onDb(getProjectByShortcode),
   list: listOn(projectList),
-  listRead: (ctx, filters, sorts, pagination, projection) =>
-    projectListRead(ctx.db, filters, sorts, pagination, projection),
+  listRead: listReadOn(projectListRead),
   listSummary: (ctx, filters) => projectListSummary(ctx.db, filters),
   create: asActor(createProject),
   update: asActor(updateProject),

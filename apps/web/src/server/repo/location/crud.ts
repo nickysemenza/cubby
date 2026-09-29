@@ -107,6 +107,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { hydrateImageReadProjection } from "../image-read-projection";
+import { parseCompleteListRead } from "../list-read-adapters";
 import {
   LOCATION_DESCRIPTION_FEATURE_ID,
   locationAiDescriptionSql,
@@ -1478,8 +1479,5 @@ export const locationList = async (
     groupBy,
     readIntent,
   );
-  return {
-    ...page,
-    data: page.data.map((row) => locationListItemOut.parse(row)),
-  };
+  return parseCompleteListRead(locationListItemOut, Promise.resolve(page));
 };

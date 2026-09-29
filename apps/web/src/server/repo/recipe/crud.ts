@@ -35,7 +35,6 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { match, P } from "ts-pattern";
 
-import { projectListRows } from "~/entities/list-read-schema";
 import { collectSubRecipeIds } from "~/lib/recipe-graph";
 import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -80,7 +79,7 @@ import { recipeHasImages } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { listScaffold } from "~/server/repo/list";
 import {
-  loadListGroup,
+  hydrateListRead,
   type ListProjection,
   wantsListGroup,
 } from "~/server/repo/list-projection";
@@ -95,6 +94,8 @@ import {
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+
+import { parseCompleteListRead } from "../list-read-adapters";
 
 export const RECIPE_DELETE_EDGE_POLICY = {
   "RecipeSection.recipeId": {
@@ -134,8 +135,6 @@ export const RECIPE_DELETE_EDGE_POLICY = {
       "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
   },
 } as const satisfies IncomingEdgePolicy<"recipe", OperationDisposition>;
-
-import { withDisplayImages } from "~/server/repo/entity-display-image";
 
 import {
   dbRecipeToAPI,
@@ -604,32 +603,22 @@ export const recipeListRead = async (
               : sql<number | null>`NULL::int`.as("sectionCount"),
           },
         }),
-      hydrate: async (rows, selected) => {
-        const qualities = await loadListGroup(selected, "quality", () =>
-          loadDataQualities(
-            db,
-            "recipe",
-            rows.map((row) => row.id),
-          ),
-        );
-        const mapRow = (row: (typeof rows)[number]) => {
-          const result = dbRecipeToTopLevel(row);
-          if (wantsListGroup(selected, "relations"))
-            Object.assign(result, { meals: Number(row.mealCount) });
-          if (wantsListGroup(selected, "derived"))
-            Object.assign(result, {
-              ...dbRecipeToAPIShallow(row),
-              sectionCount: Number(row.sectionCount),
-            });
-          if (qualities)
-            Object.assign(result, { dataQuality: qualities.get(row.id) });
-          return result;
-        };
-        const mapped = wantsListGroup(selected, "media")
-          ? await withDisplayImages(db, "recipe", rows, mapRow)
-          : rows.map(mapRow);
-        return projectListRows("recipe", mapped, selected);
-      },
+      hydrate: (rows, selected) =>
+        hydrateListRead(db, "recipe", rows, selected, {
+          media: true,
+          load: async () => undefined,
+          mapRow: (row) => {
+            const result = dbRecipeToTopLevel(row);
+            if (wantsListGroup(selected, "relations"))
+              Object.assign(result, { meals: Number(row.mealCount) });
+            if (wantsListGroup(selected, "derived"))
+              Object.assign(result, {
+                ...dbRecipeToAPIShallow(row),
+                sectionCount: Number(row.sectionCount),
+              });
+            return result;
+          },
+        }),
     },
   );
 };
@@ -649,10 +638,7 @@ export const recipeList = async (
     readIntent,
     { kind: "full" },
   );
-  return {
-    ...result,
-    data: result.data.map((row) => recipeListItemOut.parse(row)),
-  };
+  return parseCompleteListRead(recipeListItemOut, Promise.resolve(result));
 };
 
 export type CookbookRef = { id: CookbookId; name: string };

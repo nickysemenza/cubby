@@ -20,7 +20,6 @@ import { ledgerTransferOut } from "@cubby/schemas/ledger-transfer";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import { projectListRows } from "~/entities/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -45,7 +44,7 @@ import {
 import { listScaffold } from "~/server/repo/list";
 import {
   listGroupFields,
-  loadListGroup,
+  hydrateListRead,
   type ListProjection,
 } from "~/server/repo/list-projection";
 import { cents } from "~/server/repo/money";
@@ -53,6 +52,7 @@ import {
   asActor,
   defineRepository,
   listOn,
+  listReadOn,
   onDb,
 } from "~/server/repo/repository";
 import { createEntityReader } from "~/server/repo/repository";
@@ -62,6 +62,8 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
+import { completeListReader } from "./list-read-adapters";
 
 const LEDGER_TRANSFER_DELETE_EDGE_POLICY = {
   "FinancialTransaction.ledgerTransferId": {
@@ -219,17 +221,10 @@ const hydrateTransfersRead = async (
   db: Database,
   rows: Awaited<ReturnType<typeof selectTransfersRead>>,
   projection: ListProjection,
-) => {
-  const qualities = await loadListGroup(projection, "quality", () =>
-    loadDataQualities(
-      db,
-      "ledgerTransfer",
-      rows.map((row) => row.id),
-    ),
-  );
-  return projectListRows(
-    "ledgerTransfer",
-    rows.map((row) => ({
+) =>
+  hydrateListRead(db, "ledgerTransfer", rows, projection, {
+    load: async () => undefined,
+    mapRow: (row) => ({
       ...row,
       id: parseShortcodeFor("ledgerTransfer", row.shortcode),
       ...listGroupFields(projection, "relations", () => ({
@@ -254,13 +249,8 @@ const hydrateTransfersRead = async (
                 ? "household_distribution"
                 : "reimbursement",
       })),
-      ...listGroupFields(projection, "quality", () => ({
-        dataQuality: qualities!.get(row.id)!,
-      })),
-    })),
-    projection,
-  );
-};
+    }),
+  });
 
 const getById = async (
   db: Database | DrizzleTransaction,
@@ -594,26 +584,17 @@ export const listLedgerTransfersRead = async (
     },
   );
 
-const listLedgerTransfers = async (
-  db: Database,
-  filters: LedgerTransferFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-) => {
-  const result = await listLedgerTransfersRead(db, filters, sorts, pagination);
-  return {
-    ...result,
-    data: result.data.map((row) => ledgerTransferOut.parse(row)),
-  };
-};
+const listLedgerTransfers = completeListReader(
+  ledgerTransferOut,
+  listLedgerTransfersRead,
+);
 
 export const ledgerTransferRepository = defineRepository("ledgerTransfer", {
   sideEffects: false,
   lifecycle: { delete: LEDGER_TRANSFER_DELETE_EDGE_POLICY },
   get: onDb(getLedgerTransferByShortcode),
   list: listOn(listLedgerTransfers),
-  listRead: (ctx, filters, sorts, pagination, projection) =>
-    listLedgerTransfersRead(ctx.db, filters, sorts, pagination, projection),
+  listRead: listReadOn(listLedgerTransfersRead),
   create: asActor(createLedgerTransfer),
   update: asActor(updateLedgerTransfer),
 });

@@ -46,7 +46,6 @@ import {
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
-import { projectListRows } from "~/entities/list-read-schema";
 import { purchaseLabel } from "~/lib/purchase-label";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -92,7 +91,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { repointLinkEnd } from "~/server/repo/entity-links";
 import {
   assertQuantitySignMatchesCost,
@@ -113,8 +111,8 @@ import { displayableImageSql } from "~/server/repo/image-displayability";
 import { listScaffold } from "~/server/repo/list";
 import {
   listGroupFields,
+  hydrateListRead,
   loadListGroup,
-  wantsListGroup,
   type ListProjection,
 } from "~/server/repo/list-projection";
 import {
@@ -666,22 +664,20 @@ export const purchaseListRead = async (
           .orderBy(...page.orderBy)
           .limit(page.limit)
           .offset(page.offset),
-      hydrate: async (rows) => {
-        const ids = rows.map((row) => row.id);
-        const [financials, qualities] = await Promise.all([
-          loadListGroup(projection, "derived", () =>
-            loadPurchaseFinancialAggregates(db, ids),
-          ),
-          loadListGroup(projection, "quality", () =>
-            loadDataQualities(db, "purchase", ids),
-          ),
-        ]);
-        const paired = rows.map((row) => {
-          const financial =
-            financials?.get(row.id) ?? emptyPurchaseFinancialAggregate();
-          return {
-            id: row.id,
-            out: {
+      hydrate: (rows) =>
+        hydrateListRead(db, "purchase", rows, projection, {
+          media: true,
+          load: () =>
+            loadListGroup(projection, "derived", () =>
+              loadPurchaseFinancialAggregates(
+                db,
+                rows.map((row) => row.id),
+              ),
+            ),
+          mapRow: (row, { loaded: financials }) => {
+            const financial =
+              financials?.get(row.id) ?? emptyPurchaseFinancialAggregate();
+            return {
               ...row,
               id: parseShortcodeFor("purchase", row.shortcode),
               displayName: purchaseLabel({
@@ -727,22 +723,9 @@ export const purchaseListRead = async (
                   ...financial,
                 }),
               })),
-              ...listGroupFields(projection, "quality", () => ({
-                dataQuality: qualities!.get(row.id)!,
-              })),
-            },
-          };
-        });
-        const values = wantsListGroup(projection, "media")
-          ? await withDisplayImages(
-              db,
-              "purchase",
-              paired,
-              (entry) => entry.out,
-            )
-          : paired.map((entry) => entry.out);
-        return projectListRows("purchase", values, projection);
-      },
+            };
+          },
+        }),
     },
   );
 };

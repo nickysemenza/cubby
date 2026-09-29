@@ -36,11 +36,7 @@ import {
   ENTITY_NOT_FOUND_REASON,
   type EntityId,
 } from "@cubby/schemas/identifiers";
-import type {
-  ListGroupSummary,
-  PaginationParams,
-  SortParams,
-} from "@cubby/schemas/pagination";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { AnyColumn, InferSelectModel } from "drizzle-orm";
 import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { type output as ZodOutput, type ZodSchema, z } from "zod";
@@ -81,6 +77,8 @@ import {
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
+
+import type { ListProjection, ListReadPage } from "./list-projection";
 
 /* -------------------------------------------------------------------------- */
 /* Reads                                                                       */
@@ -290,6 +288,26 @@ export const listOn =
   ): TResult =>
     fn(ctx.db, filters, sorts, pagination);
 
+/** Non-grouping staged reads receive projection, never the kernel's trailing groupBy as readIntent. */
+export const listReadOn =
+  <TFilters, TResult>(
+    fn: (
+      db: Database,
+      filters: TFilters,
+      sorts: SortParams[],
+      pagination: PaginationParams,
+      projection: ListProjection,
+    ) => TResult,
+  ) =>
+  (
+    ctx: EntityKernelContext,
+    filters: TFilters,
+    sorts: SortParams[],
+    pagination: PaginationParams,
+    projection: ListProjection,
+  ): TResult =>
+    fn(ctx.db, filters, sorts, pagination, projection);
+
 /** A `(db, …args, actor)` repository write as a kernel method `(ctx, …args)`. */
 export const asActor =
   <TArgs extends readonly unknown[], TResult>(
@@ -388,12 +406,7 @@ type EntityRepositoryListFn<E extends KernelEntity> = (
   sorts: SortParams[],
   pagination: PaginationParams,
   groupBy?: string,
-) => Promise<{
-  data: ZodOutput<SchemasFor<E>["repositoryList"]>[];
-  count: number;
-  sums?: Record<string, number>;
-  groups?: ListGroupSummary[];
-}>;
+) => Promise<ListReadPage<ZodOutput<SchemasFor<E>["repositoryList"]>>>;
 
 const sortFor = (entity: string): EntitySortContract => {
   // SAFETY: `generatedEntitySort` is keyed by `Entity`; a kernel entity

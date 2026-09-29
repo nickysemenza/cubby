@@ -1,5 +1,10 @@
 import { bulkUpdatedWithSideEffects } from "~/server/entity-kernel/adapter";
-import { defineRepository, listOn, onDb } from "~/server/repo/repository";
+import {
+  defineRepository,
+  listOn,
+  listReadOn,
+  onDb,
+} from "~/server/repo/repository";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
 
 import {
@@ -16,8 +21,7 @@ export const expenseRepository = defineRepository("expense", {
   lifecycle: { delete: EXPENSE_DELETE_EDGE_POLICY },
   get: onDb(getExpenseByShortcode),
   list: listOn(expenseList),
-  listRead: (ctx, filters, sorts, pagination, projection) =>
-    expenseListRead(ctx.db, filters, sorts, pagination, projection),
+  listRead: listReadOn(expenseListRead),
   listSummary: (ctx, filters) => expenseListSummary(ctx.db, filters),
   create: async (ctx, data) => {
     const result = await createExpense(ctx.db, data, ctx.actorContext);

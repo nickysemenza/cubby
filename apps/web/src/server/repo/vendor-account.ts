@@ -16,7 +16,6 @@ import type {
 import { vendorAccountOut } from "@cubby/schemas/vendor-account";
 import { and, eq, inArray, max, sql } from "drizzle-orm";
 
-import { projectListRows } from "~/entities/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { ledgerParty, run, vendorAccount } from "~/server/db/schema";
@@ -29,6 +28,7 @@ import {
 import { patchEntityRows } from "~/server/repo/entity-patch";
 import { listScaffold } from "~/server/repo/list";
 import {
+  hydrateListRead,
   loadListGroup,
   type ListProjection,
   type ListReadRow,
@@ -38,6 +38,7 @@ import {
   asActor,
   defineRepository,
   listOn,
+  listReadOn,
   onDb,
 } from "~/server/repo/repository";
 import { createEntityReader } from "~/server/repo/repository";
@@ -46,6 +47,8 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
+import { completeListReader } from "./list-read-adapters";
 
 const VENDOR_ACCOUNT_DELETE_EDGE_POLICY = {
   "Purchase.vendorAccountId": {
@@ -122,33 +125,33 @@ const hydrateRead = async (
   rows: VendorAccountRow[],
   projection: ListProjection,
 ): Promise<ListReadRow[]> => {
-  const [vendors, parties, activity] = await Promise.all([
-    loadListGroup(projection, "relations", () =>
-      lookupEntityReferences(
-        db,
-        "vendor",
-        rows.map((row) => row.vendorId),
-        { includeDeleted: true },
-      ),
-    ),
-    loadListGroup(projection, "relations", () =>
-      lookupEntityReferences(
-        db,
-        "ledgerParty",
-        rows.map((row) => row.ledgerPartyId),
-        { includeDeleted: true },
-      ),
-    ),
-    loadListGroup(projection, "derived", () =>
-      loadRunActivity(
-        db,
-        rows.map((row) => row.id),
-      ),
-    ),
-  ]);
-  return projectListRows(
-    "vendorAccount",
-    rows.map((row) => {
+  return hydrateListRead(db, "vendorAccount", rows, projection, {
+    load: () =>
+      Promise.all([
+        loadListGroup(projection, "relations", () =>
+          lookupEntityReferences(
+            db,
+            "vendor",
+            rows.map((row) => row.vendorId),
+            { includeDeleted: true },
+          ),
+        ),
+        loadListGroup(projection, "relations", () =>
+          lookupEntityReferences(
+            db,
+            "ledgerParty",
+            rows.map((row) => row.ledgerPartyId),
+            { includeDeleted: true },
+          ),
+        ),
+        loadListGroup(projection, "derived", () =>
+          loadRunActivity(
+            db,
+            rows.map((row) => row.id),
+          ),
+        ),
+      ]),
+    mapRow: (row, { loaded: [vendors, parties, activity] }) => {
       const vendor = vendors?.get(row.vendorId);
       const party = parties?.get(row.ledgerPartyId);
       const result = {
@@ -168,11 +171,9 @@ const hydrateRead = async (
           ledgerPartyName: party?.name,
         });
       return result;
-    }),
-    projection,
-  );
+    },
+  });
 };
-
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: VendorAccountRow[],
@@ -213,20 +214,10 @@ export const listVendorAccountsRead = (
     },
   );
 
-const listVendorAccounts = async (
-  db: Database,
-  filters: VendorAccountFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-) => {
-  const result = await listVendorAccountsRead(db, filters, sorts, pagination, {
-    kind: "full",
-  });
-  return {
-    ...result,
-    data: result.data.map((row) => vendorAccountOut.parse(row)),
-  };
-};
+const listVendorAccounts = completeListReader(
+  vendorAccountOut,
+  listVendorAccountsRead,
+);
 
 const reader = createEntityReader<
   VendorAccountRow,
@@ -337,8 +328,7 @@ export const vendorAccountRepository = defineRepository("vendorAccount", {
   lifecycle: { delete: VENDOR_ACCOUNT_DELETE_EDGE_POLICY },
   get: onDb(getVendorAccountByShortcode),
   list: listOn(listVendorAccounts),
-  listRead: (ctx, filters, sorts, pagination, projection) =>
-    listVendorAccountsRead(ctx.db, filters, sorts, pagination, projection),
+  listRead: listReadOn(listVendorAccountsRead),
   create: asActor(createVendorAccount),
   update: asActor(updateVendorAccount),
 });

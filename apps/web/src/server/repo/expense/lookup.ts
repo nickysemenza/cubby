@@ -2,10 +2,7 @@ import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { expenseListItemOut } from "@cubby/schemas/project";
-import type {
-  ExpenseFilters,
-  ExpenseListItemOut,
-} from "@cubby/schemas/project";
+import type { ExpenseFilters } from "@cubby/schemas/project";
 import {
   and,
   gt,
@@ -61,6 +58,7 @@ import {
   expenseAllocationExistsSql,
   loadExpenseProjectAllocations,
 } from "../expense-project-allocation";
+import { completeListReader } from "../list-read-adapters";
 import { dbExpenseToAPI } from "./helpers";
 
 const effectiveTrade = effectiveExpenseTradeSql('"Expense"');
@@ -587,30 +585,10 @@ const hydrateExpenseRows = async (
   return projectListRows("expense", mapped, projection);
 };
 
-export const expenseList = async (
-  db: Database,
-  filters: ExpenseFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-): Promise<{
-  data: ExpenseListItemOut[];
-  count: number;
-  sums?: { cost: number };
-}> => {
-  const page = await expenseListRead(
-    db,
-    filters,
-    sorts,
-    pagination,
-    { kind: "full" },
-    readIntent,
-  );
-  return {
-    ...page,
-    data: page.data.map((row) => expenseListItemOut.parse(row)),
-  };
-};
+export const expenseList = completeListReader(
+  expenseListItemOut,
+  expenseListRead,
+);
 export const expenseListSummary = async (
   db: Database,
   filters: ExpenseFilters,

@@ -2,7 +2,12 @@ import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
-import { defineRepository, listOn, onDb } from "~/server/repo/repository";
+import {
+  defineRepository,
+  listOn,
+  listReadOn,
+  onDb,
+} from "~/server/repo/repository";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import {
   mutationEvents,
@@ -40,8 +45,7 @@ export const inventoryRepository = defineRepository("inventory", {
   lifecycle: { delete: INVENTORY_DELETE_EDGE_POLICY },
   get: onDb(getInventoryEntryByShortcode),
   list: listOn(inventoryentryList),
-  listRead: (ctx, filters, sorts, pagination, projection) =>
-    inventoryentryListRead(ctx.db, filters, sorts, pagination, projection),
+  listRead: listReadOn(inventoryentryListRead),
   listSummary: (ctx, filters) => inventoryentryListSummary(ctx.db, filters),
   create: async (ctx, data) => {
     const [productId, locationId, ownerLedgerPartyId] = await Promise.all([

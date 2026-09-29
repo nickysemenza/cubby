@@ -9,6 +9,7 @@ import {
   asActor,
   defineRepository,
   listOn,
+  listReadOn,
   onDb,
 } from "~/server/repo/repository";
 import {
@@ -46,8 +47,7 @@ export const plantRepository = defineRepository("plant", {
   },
   get: onDb(getPlantByShortcode),
   list: listOn(listPlants),
-  listRead: (ctx, filters, sorts, pagination, projection) =>
-    listPlantsRead(ctx.db, filters, sorts, pagination, projection),
+  listRead: listReadOn(listPlantsRead),
   create: asActor(createPlant),
   update: asActor(updatePlant),
   bulkUpdate: async (ctx, ids, data) => {

@@ -41,6 +41,7 @@ import {
   effectiveTaskProjectSql,
 } from "~/server/repo/task-project-inheritance";
 
+import { completeListReader } from "../list-read-adapters";
 import { projectContentDates, projectDependencyIds } from "./analytics";
 import {
   computeAttentionItems,
@@ -445,26 +446,10 @@ export const projectListRead = async (
   return { data, count, sums: readIntent === "page" ? sums : undefined };
 };
 
-export const projectList = async (
-  db: Database,
-  filters: ProjectFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-) => {
-  const page = await projectListRead(
-    db,
-    filters,
-    sorts,
-    pagination,
-    { kind: "full" },
-    readIntent,
-  );
-  return {
-    ...page,
-    data: page.data.map((row) => projectListItemOut.parse(row)),
-  };
-};
+export const projectList = completeListReader(
+  projectListItemOut,
+  projectListRead,
+);
 export const projectListSummary = async (
   db: Database,
   filters: ProjectFilters,

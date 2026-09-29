@@ -37,7 +37,6 @@ import {
   sql,
 } from "drizzle-orm";
 
-import { projectListRows } from "~/entities/list-read-schema";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { entityAttachment, image, purchase, vendor } from "~/server/db/schema";
@@ -62,7 +61,7 @@ import {
 import { listScaffold } from "~/server/repo/list";
 import {
   listGroupFields,
-  loadListGroup,
+  hydrateListRead,
   wantsListGroup,
   type ListProjection,
 } from "~/server/repo/list-projection";
@@ -516,17 +515,10 @@ export const vendorListRead = async (
             );
         return query;
       },
-      hydrate: async (rows) => {
-        const qualities = await loadListGroup(projection, "quality", () =>
-          loadDataQualities(
-            db,
-            "vendor",
-            rows.map((row) => row.id),
-          ),
-        );
-        return projectListRows(
-          "vendor",
-          rows.map((row) => ({
+      hydrate: (rows) =>
+        hydrateListRead(db, "vendor", rows, projection, {
+          load: async () => undefined,
+          mapRow: (row) => ({
             ...row,
             id: parseShortcodeFor("vendor", row.shortcode),
             orderEvidence: vendorOrderEvidence
@@ -536,13 +528,8 @@ export const vendorListRead = async (
             ...listGroupFields(projection, "media", () => ({
               logo: vendorLogoToAPI(row.logo ?? null),
             })),
-            ...listGroupFields(projection, "quality", () => ({
-              dataQuality: qualities!.get(row.id)!,
-            })),
-          })),
-          projection,
-        );
-      },
+          }),
+        }),
     },
   );
 };

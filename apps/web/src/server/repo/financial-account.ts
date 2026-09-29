@@ -18,7 +18,6 @@ import {
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, asc, desc, eq, type SQL, sql } from "drizzle-orm";
 
-import { projectListRows } from "~/entities/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -42,18 +41,21 @@ import { lockLedgerPartiesForReference } from "~/server/repo/ledger-party-refere
 import { listScaffold } from "~/server/repo/list";
 import {
   listGroupFields,
-  loadListGroup,
+  hydrateListRead,
   type ListProjection,
 } from "~/server/repo/list-projection";
 import {
   asActor,
   defineRepository,
   listOn,
+  listReadOn,
   onDb,
 } from "~/server/repo/repository";
 import { createEntityReader } from "~/server/repo/repository";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
+import { completeListReader } from "./list-read-adapters";
 
 export const FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY = {
   "FinancialTransaction.accountId": {
@@ -178,17 +180,10 @@ const hydrateAccountsRead = async (
   db: Database,
   rows: Awaited<ReturnType<typeof selectAccountsRead>>,
   projection: ListProjection,
-) => {
-  const qualities = await loadListGroup(projection, "quality", () =>
-    loadDataQualities(
-      db,
-      "financialAccount",
-      rows.map((row) => row.id),
-    ),
-  );
-  return projectListRows(
-    "financialAccount",
-    rows.map((row) => ({
+) =>
+  hydrateListRead(db, "financialAccount", rows, projection, {
+    load: async () => undefined,
+    mapRow: (row) => ({
       ...row,
       id: parseShortcodeFor("financialAccount", row.shortcode),
       ...listGroupFields(projection, "relations", () => ({
@@ -199,13 +194,8 @@ const hydrateAccountsRead = async (
           ? parseShortcodeFor("vendor", row.providerVendorShortcode)
           : null,
       })),
-      ...listGroupFields(projection, "quality", () => ({
-        dataQuality: qualities!.get(row.id)!,
-      })),
-    })),
-    projection,
-  );
-};
+    }),
+  });
 
 const aliasCondition = (
   sources: string[] | undefined,
@@ -293,23 +283,10 @@ export const listFinancialAccountsRead = (
     },
   );
 
-export const listFinancialAccounts = async (
-  db: Database,
-  filters: FinancialAccountFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-) => {
-  const result = await listFinancialAccountsRead(
-    db,
-    filters,
-    sorts,
-    pagination,
-  );
-  return {
-    ...result,
-    data: result.data.map((row) => financialAccountOut.parse(row)),
-  };
-};
+export const listFinancialAccounts = completeListReader(
+  financialAccountOut,
+  listFinancialAccountsRead,
+);
 
 const financialAccountReader = createEntityReader<
   FinancialAccountRow,
@@ -585,8 +562,7 @@ export const financialAccountRepository = defineRepository("financialAccount", {
   lifecycle: { delete: FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY },
   get: onDb(getFinancialAccountByShortcode),
   list: listOn(listFinancialAccounts),
-  listRead: (ctx, filters, sorts, pagination, projection) =>
-    listFinancialAccountsRead(ctx.db, filters, sorts, pagination, projection),
+  listRead: listReadOn(listFinancialAccountsRead),
   create: asActor(createFinancialAccount),
   update: asActor(updateFinancialAccount),
 });

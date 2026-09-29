@@ -70,6 +70,7 @@ import {
 } from "~/server/repo/search-lexical";
 import { resolveFilterIds } from "~/server/repo/shortcode-resolver";
 
+import { completeListReader } from "../list-read-adapters";
 import {
   inventoryEntryBaseFields,
   dbInventoryEntryListValues,
@@ -556,26 +557,10 @@ export const inventoryentryListSummary = async (
   const value = Number(result.valuationSum ?? 0);
   return { valuation: Number.isNaN(value) ? 0 : value };
 };
-export const inventoryentryList = async (
-  db: Database,
-  filters: InventoryFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-) => {
-  const page = await inventoryentryListRead(
-    db,
-    filters,
-    sorts,
-    pagination,
-    { kind: "full" },
-    readIntent,
-  );
-  return {
-    ...page,
-    data: page.data.map((row) => inventoryListItemOut.parse(row)),
-  };
-};
+export const inventoryentryList = completeListReader(
+  inventoryListItemOut,
+  inventoryentryListRead,
+);
 
 type InventoryRow = typeof inventoryEntry.$inferSelect;
 

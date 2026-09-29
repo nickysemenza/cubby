@@ -7,7 +7,12 @@ import {
 import { z } from "zod";
 
 import { entityMutationReferences } from "~/server/entity-kernel/adapter";
-import { asActor, defineRepository, listOn } from "~/server/repo/repository";
+import {
+  asActor,
+  defineRepository,
+  listOn,
+  listReadOn,
+} from "~/server/repo/repository";
 import {
   bindShortcodeResolver,
   resolveLiveShortcode,
@@ -47,8 +52,7 @@ export const ingredientRepository = defineRepository("ingredient", {
       : null;
   },
   list: listOn(ingredientList),
-  listRead: (ctx, filters, sorts, pagination, projection) =>
-    ingredientListRead(ctx.db, filters, sorts, pagination, projection),
+  listRead: listReadOn(ingredientListRead),
   create: asActor(createIngredient),
   update: async (ctx, shortcode, data) => {
     const entityId = await ingredientShortcodes.one(ctx.db, shortcode);

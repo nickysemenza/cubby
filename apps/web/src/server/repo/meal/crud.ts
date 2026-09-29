@@ -15,7 +15,6 @@ import { mealTypeValues } from "@cubby/schemas/meal-classification";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, gte, inArray, lte, or, type SQL, sql } from "drizzle-orm";
 
-import { projectListRows } from "~/entities/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -40,10 +39,9 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list";
 import {
-  loadListGroup,
+  hydrateListRead,
   type ListProjection,
   wantsListGroup,
 } from "~/server/repo/list-projection";
@@ -56,6 +54,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { parseCompleteListRead } from "../list-read-adapters";
 import {
   dbMealToAPI,
   dbMealListReadProjection,
@@ -300,36 +299,26 @@ export const mealListRead = async (
               : undefined,
           },
         }),
-      hydrate: async (rows, selected) => {
-        const qualities = await loadListGroup(selected, "quality", () =>
-          loadDataQualities(
-            db,
-            "meal",
-            rows.map((row) => row.id),
-          ),
-        );
-        const mapRow = (row: (typeof rows)[number]) => {
-          const result = dbMealListReadProjection(
-            {
-              ...row,
-              recipes: (row.recipes ?? []).flatMap((entry) =>
-                "recipe" in entry ? [entry] : [],
-              ),
-              images: (row.images ?? []).flatMap((entry) =>
-                "image" in entry ? [entry] : [],
-              ),
-            },
-            selected,
-          );
-          if (qualities)
-            Object.assign(result, { dataQuality: qualities.get(row.id) });
-          return result;
-        };
-        const mapped = wantsListGroup(selected, "media")
-          ? await withDisplayImages(db, "meal", rows, mapRow)
-          : rows.map(mapRow);
-        return projectListRows("meal", mapped, selected);
-      },
+      hydrate: (rows, selected) =>
+        hydrateListRead(db, "meal", rows, selected, {
+          media: true,
+          load: async () => undefined,
+          mapRow: (row) => {
+            const result = dbMealListReadProjection(
+              {
+                ...row,
+                recipes: (row.recipes ?? []).flatMap((entry) =>
+                  "recipe" in entry ? [entry] : [],
+                ),
+                images: (row.images ?? []).flatMap((entry) =>
+                  "image" in entry ? [entry] : [],
+                ),
+              },
+              selected,
+            );
+            return result;
+          },
+        }),
     },
   );
 };
@@ -349,10 +338,7 @@ export const mealList = async (
     readIntent,
     { kind: "full" },
   );
-  return {
-    ...result,
-    data: result.data.map((row) => mealListItemOut.parse(row)),
-  };
+  return parseCompleteListRead(mealListItemOut, Promise.resolve(result));
 };
 
 export const createMealWithEntityId = async (

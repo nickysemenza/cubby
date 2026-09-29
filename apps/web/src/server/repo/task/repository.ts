@@ -3,6 +3,7 @@ import {
   asActor,
   defineRepository,
   listOn,
+  listReadOn,
   onDb,
 } from "~/server/repo/repository";
 
@@ -20,8 +21,7 @@ export const taskRepository = defineRepository("task", {
   lifecycle: { delete: TASK_DELETE_EDGE_POLICY },
   get: onDb(getTaskByShortcode),
   list: listOn(taskList),
-  listRead: (ctx, filters, sorts, pagination, projection) =>
-    taskListRead(ctx.db, filters, sorts, pagination, projection),
+  listRead: listReadOn(taskListRead),
   create: asActor(createTask),
   update: (ctx, id, data) =>
     updateTask(ctx.db, id, data, ctx.actorContext, ctx.caldavHooks?.task),

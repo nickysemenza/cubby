@@ -19,12 +19,10 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
-import { projectListRows } from "~/entities/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { device, imageSighting } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   buildPartialUpdateValues,
   notDeleted,
@@ -33,6 +31,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { listScaffold } from "~/server/repo/list";
 import {
+  hydrateListRead,
   loadListGroup,
   type ListProjection,
   type ListReadRow,
@@ -43,6 +42,7 @@ import {
   asActor,
   defineRepository,
   listOn,
+  listReadOn,
   onDb,
 } from "~/server/repo/repository";
 import { createEntityCrud } from "~/server/repo/repository";
@@ -52,6 +52,8 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { deriveAndStoreImageCapture } from "~/server/services/image-capture-derivation";
+
+import { completeListReader } from "./list-read-adapters";
 
 /** `ImageSighting.deviceId` cascades: a sighting reported by a device is
  * meaningless once that device is gone. `AuditLog.deviceId` and
@@ -86,32 +88,25 @@ const hydrateRead = async (
   rows: DeviceRow[],
   projection: ListProjection,
 ): Promise<ListReadRow[]> => {
-  const [parties, products, qualities] = await Promise.all([
-    loadListGroup(projection, "relations", () =>
-      lookupEntityReferences(
-        db,
-        "ledgerParty",
-        rows.map((row) => row.ledgerPartyId),
-      ),
-    ),
-    loadListGroup(projection, "relations", () =>
-      lookupEntityReferences(
-        db,
-        "product",
-        rows.map((row) => row.productId),
-      ),
-    ),
-    loadListGroup(projection, "quality", () =>
-      loadDataQualities(
-        db,
-        "device",
-        rows.map((row) => row.id),
-      ),
-    ),
-  ]);
-  return projectListRows(
-    "device",
-    rows.map((row) => {
+  return hydrateListRead(db, "device", rows, projection, {
+    load: () =>
+      Promise.all([
+        loadListGroup(projection, "relations", () =>
+          lookupEntityReferences(
+            db,
+            "ledgerParty",
+            rows.map((row) => row.ledgerPartyId),
+          ),
+        ),
+        loadListGroup(projection, "relations", () =>
+          lookupEntityReferences(
+            db,
+            "product",
+            rows.map((row) => row.productId),
+          ),
+        ),
+      ]),
+    mapRow: (row, { loaded: [parties, products] }) => {
       const party = row.ledgerPartyId ? parties?.get(row.ledgerPartyId) : null;
       const hardware = row.productId ? products?.get(row.productId) : null;
       const result = { ...row, id: parseShortcodeFor("device", row.shortcode) };
@@ -122,14 +117,10 @@ const hydrateRead = async (
           ledgerPartyName: party?.name ?? null,
           productName: hardware?.name ?? null,
         });
-      if (qualities)
-        Object.assign(result, { dataQuality: qualities.get(row.id) });
       return result;
-    }),
-    projection,
-  );
+    },
+  });
 };
-
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: DeviceRow[],
@@ -156,17 +147,7 @@ export const listDevicesRead = (
     },
   );
 
-export const listDevices = async (
-  db: Database,
-  filters: DeviceFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-) => {
-  const result = await listDevicesRead(db, filters, sorts, pagination, {
-    kind: "full",
-  });
-  return { ...result, data: result.data.map((row) => deviceOut.parse(row)) };
-};
+export const listDevices = completeListReader(deviceOut, listDevicesRead);
 
 const fetchById = async (
   db: Database | DrizzleTransaction,
@@ -301,8 +282,7 @@ export const deviceRepository = defineRepository("device", {
   lifecycle: { delete: DEVICE_DELETE_EDGE_POLICY },
   get: onDb(getDeviceByShortcode),
   list: listOn(listDevices),
-  listRead: (ctx, filters, sorts, pagination, projection) =>
-    listDevicesRead(ctx.db, filters, sorts, pagination, projection),
+  listRead: listReadOn(listDevicesRead),
   create: asActor(createDevice),
   update: asActor(updateDevice),
   deleteHooks: {

@@ -41,6 +41,13 @@ const swiftMethod = (entity: string, action: string) =>
   `resources_${entity.replace(/-/gu, "_")}_${action}`;
 const swiftOperation = (entity: string, action: string) =>
   `Operations.Resources_${entity.replace(/-/gu, "_")}_${action}`;
+const swiftComponentAlias = (component: string, id: string) => {
+  if (!/^[A-Z][A-Za-z0-9]*$/u.test(component))
+    throw new Error(
+      `${id}: #/components/schemas/${component} has no APITypes.swift alias, so its CubbyClient method must be hand-written`,
+    );
+  return component;
+};
 
 // Every query parameter of a list/timeline route is one of these wire kinds;
 // the generated arm converts the wire string(s) into the typed query property.
@@ -354,6 +361,20 @@ export const renderEntityOperations = (
   generatedOperationIds: ReadonlySet<string>,
   nativeOperations: readonly string[],
 ): EntityArtifacts => {
+  const progressiveRoute = swiftRoutes.find(
+    (entry) => entry.id === "entity.listBase",
+  );
+  if (progressiveRoute === undefined)
+    throw new Error("entity.listBase must be a native operation");
+  const progressiveInput = passthroughOperation.parse(
+    document.paths[progressiveRoute.route]?.[progressiveRoute.method.slice(1)],
+  ).requestBody;
+  if (progressiveInput === undefined)
+    throw new Error("entity.listBase must have a structured input body");
+  const progressiveInputAlias = swiftComponentAlias(
+    progressiveInput,
+    progressiveRoute.id,
+  );
   const bodyHas = (entity: string, property: string) =>
     updateBodyHas(document, components, swiftRoutes, entity, property);
   const routeOf = (id: string) =>
@@ -611,7 +632,7 @@ extension EntityDescriptor {
     /// Reverses the resource query's generated filter flattening for the shared structured POST.
     func progressiveListInput(
         page: Int, pageSize: Int, sort: String?, filters: EntityFilterState
-    ) throws -> EntityListBaseInput {
+    ) throws -> ${progressiveInputAlias} {
         var result: [String: JSONValue] = [:]
         switch key {
 ${progressiveCases}
@@ -814,13 +835,6 @@ export const renderClientOperations = (
   swiftRoutes: readonly SwiftRoute[],
   generatedOperationIds: ReadonlySet<string>,
 ): EntityArtifacts => {
-  const aliasName = (component: string, id: string) => {
-    if (!/^[A-Z][A-Za-z0-9]*$/u.test(component))
-      throw new Error(
-        `${id}: #/components/schemas/${component} has no APITypes.swift alias, so its CubbyClient method must be hand-written`,
-      );
-    return component;
-  };
   const methods = Object.entries(CLIENT_PASSTHROUGH_METHODS)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([id, { method, doc }]) => {
@@ -845,11 +859,11 @@ export const renderClientOperations = (
           ([method]) => `.${method}` === route.method,
         )?.[1],
       );
-      const output = aliasName(operation.responses["200"], id);
+      const output = swiftComponentAlias(operation.responses["200"], id);
       const body =
         operation.requestBody === undefined
           ? null
-          : aliasName(operation.requestBody, id);
+          : swiftComponentAlias(operation.requestBody, id);
       const hasQuery = route.queryParameters.length > 0;
       const swiftId = id.replaceAll(".", "_");
       // swift-openapi-generator's namespace for an operation: the id with its

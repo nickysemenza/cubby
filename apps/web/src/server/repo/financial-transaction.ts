@@ -92,6 +92,8 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { parseCompleteListRead } from "./list-read-adapters";
+
 /** "This transaction settles at least one Purchase" — allocation-aware. */
 const hasAnyAllocation = () => sql`EXISTS (
   SELECT 1 FROM "FinancialTransactionAllocation" fta
@@ -469,10 +471,10 @@ export const listFinancialTransactions = async (
     pagination,
     readIntent,
   );
-  return {
-    ...result,
-    data: result.data.map((row) => financialTransactionOut.parse(row)),
-  };
+  return parseCompleteListRead(
+    financialTransactionOut,
+    Promise.resolve(result),
+  );
 };
 
 const financialTransactionReader = createEntityReader<

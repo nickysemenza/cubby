@@ -51,6 +51,7 @@ import {
 } from "~/server/repo/project/subtree";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 
+import { completeListReader } from "../list-read-adapters";
 import {
   effectiveTaskProjectSql,
   effectiveTaskSubjectProductSql,
@@ -413,20 +414,4 @@ export const taskListRead = async (
   );
 };
 
-export const taskList = async (
-  db: Database,
-  filters: TaskFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-) => {
-  const page = await taskListRead(
-    db,
-    filters,
-    sorts,
-    pagination,
-    { kind: "full" },
-    readIntent,
-  );
-  return { ...page, data: page.data.map((row) => taskListItemOut.parse(row)) };
-};
+export const taskList = completeListReader(taskListItemOut, taskListRead);

@@ -20,7 +20,6 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
-import { projectListRows } from "~/entities/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { ingredient, plant } from "~/server/db/schema";
@@ -32,7 +31,6 @@ import {
   resolveGardenGuideKey,
 } from "~/server/garden-guides/windows";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   buildPartialUpdateValues,
   notDeleted,
@@ -42,6 +40,7 @@ import {
 import { resolveOrCreateIngredients } from "~/server/repo/ingredient/crud";
 import { listScaffold } from "~/server/repo/list";
 import {
+  hydrateListRead,
   loadListGroup,
   type ListProjection,
   type ListReadRow,
@@ -55,6 +54,8 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
+import { completeListReader } from "./list-read-adapters";
 
 /** A plant keeps its garden history and seed stock; both block a delete. */
 export const PLANT_DELETE_EDGE_POLICY = {
@@ -93,25 +94,16 @@ const hydrateRead = async (
   rows: PlantRow[],
   projection: ListProjection,
 ): Promise<ListReadRow[]> => {
-  const [ingredients, qualities] = await Promise.all([
-    loadListGroup(projection, "relations", () =>
-      lookupEntityReferences(
-        db,
-        "ingredient",
-        rows.map((row) => row.ingredientId),
+  return hydrateListRead(db, "plant", rows, projection, {
+    load: () =>
+      loadListGroup(projection, "relations", () =>
+        lookupEntityReferences(
+          db,
+          "ingredient",
+          rows.map((row) => row.ingredientId),
+        ),
       ),
-    ),
-    loadListGroup(projection, "quality", () =>
-      loadDataQualities(
-        db,
-        "plant",
-        rows.map((row) => row.id),
-      ),
-    ),
-  ]);
-  return projectListRows(
-    "plant",
-    rows.map((row) => {
+    mapRow: (row, { loaded: ingredients }) => {
       const key = resolveGardenGuideKey(row.gardenGuideKey);
       const linked = row.ingredientId
         ? ingredients?.get(row.ingredientId)
@@ -136,14 +128,10 @@ const hydrateRead = async (
           guideTransplantWindow: windows.transplant,
           routes: plantRoutesFor(key, new Date().getUTCMonth() + 1),
         });
-      if (qualities)
-        Object.assign(result, { dataQuality: qualities.get(row.id) });
       return result;
-    }),
-    projection,
-  );
+    },
+  });
 };
-
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: PlantRow[],
@@ -178,17 +166,7 @@ export const listPlantsRead = (
     },
   );
 
-export const listPlants = async (
-  db: Database,
-  filters: PlantFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-) => {
-  const result = await listPlantsRead(db, filters, sorts, pagination, {
-    kind: "full",
-  });
-  return { ...result, data: result.data.map((row) => plantOut.parse(row)) };
-};
+export const listPlants = completeListReader(plantOut, listPlantsRead);
 
 const fetchById = async (
   db: Database | DrizzleTransaction,

@@ -1,8 +1,31 @@
-import type { projectListRows } from "~/entities/list-read-schema";
+import {
+  type DataQuality,
+  type ScoredEntity,
+  scoredEntities,
+} from "@cubby/schemas/data-quality";
+import type { DisplayImageSummary } from "@cubby/schemas/display-images";
+import { parseEntityId } from "@cubby/schemas/identifiers";
+import type { ListGroupSummary } from "@cubby/schemas/pagination";
 
+import type { ListEntity } from "~/entities/generated/entity-lists.gen";
+import { projectListRows } from "~/entities/list-read-schema";
+import type { Database, DrizzleTransaction } from "~/server/db";
+
+import { loadDataQualities } from "./data-quality";
+import {
+  resolveEntityDisplayImageLists,
+  withDisplayImages,
+} from "./entity-display-image";
 import { traceListGroup } from "./list-read-tracing";
 
 export type ListReadRow = ReturnType<typeof projectListRows>[number];
+
+export interface ListReadPage<T = ListReadRow> {
+  data: T[];
+  count: number;
+  sums?: Record<string, number>;
+  groups?: ListGroupSummary[];
+}
 
 export type ListEnrichmentGroup = "quality" | "media" | "relations" | "derived";
 
@@ -39,6 +62,61 @@ export const listGroupFields = <T extends object>(
     return build();
   return {};
 };
+
+const scored = new Set<string>(scoredEntities);
+const isScored = (entity: string): entity is ScoredEntity => scored.has(entity);
+
+/** Domain loaders stay explicit; quality runs alongside them before mapping. */
+export async function hydrateListRead<Row extends { id: string }, Loaded>(
+  db: Database | DrizzleTransaction,
+  entity: ListEntity,
+  rows: readonly Row[],
+  projection: ListProjection,
+  options: {
+    media?: boolean;
+    load: () => Promise<Loaded>;
+    mapRow: (
+      row: Row,
+      context: {
+        loaded: Loaded;
+        quality: DataQuality | undefined;
+        displayImages: DisplayImageSummary[];
+      },
+    ) => ListReadRow;
+  },
+): Promise<ListReadRow[]> {
+  const media = options.media && wantsListGroup(projection, "media");
+  const [qualities, loaded, displayLists] = await Promise.all([
+    isScored(entity)
+      ? loadListGroup(projection, "quality", () =>
+          loadDataQualities(
+            db,
+            entity,
+            rows.map((row) => parseEntityId(entity, row.id)),
+          ),
+        )
+      : undefined,
+    options.load(),
+    media
+      ? traceListGroup("media", () =>
+          resolveEntityDisplayImageLists(
+            db,
+            rows.map((row) => ({ entityKind: entity, entityId: row.id })),
+          ),
+        )
+      : undefined,
+  ]);
+  const qualityById: ReadonlyMap<string, DataQuality> | undefined = qualities;
+  const mapRow = (row: Row, displayImages: DisplayImageSummary[] = []) => {
+    const quality = qualityById?.get(row.id);
+    const value = options.mapRow(row, { loaded, quality, displayImages });
+    return qualities ? { ...value, dataQuality: quality } : value;
+  };
+  const mapped = media
+    ? await withDisplayImages(db, entity, rows, mapRow, displayLists)
+    : rows.map((row) => mapRow(row));
+  return projectListRows(entity, mapped, projection);
+}
 
 /** Dependencies precede consumers, even when several consumers share them. */
 export function expandListGroups(
