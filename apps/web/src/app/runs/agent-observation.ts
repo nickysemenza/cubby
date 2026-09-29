@@ -201,13 +201,18 @@ export function photoReviewPollInterval({
   runStatus: string;
   agentLive: boolean;
   data:
-    | { images: ReadonlyArray<{ cutout: string; describe: string }> }
+    | {
+        images: ReadonlyArray<{
+          cutout: string | null;
+          describe: string | null;
+        }>;
+      }
     | undefined;
 }): number | false {
-  const workersPending = data?.images.some(
-    (image) =>
-      WORKER_PENDING_STATES.includes(image.cutout) ||
-      WORKER_PENDING_STATES.includes(image.describe),
+  const workersPending = data?.images.some((image) =>
+    WORKER_PENDING_STATES.some(
+      (state) => image.cutout === state || image.describe === state,
+    ),
   );
   if (workersPending)
     return LIVE_RUN_STATUSES.has(runStatus) && !agentLive ? 3_000 : 15_000;
