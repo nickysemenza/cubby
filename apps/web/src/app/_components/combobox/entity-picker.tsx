@@ -7,6 +7,7 @@ import * as React from "react";
 
 import { Spinner } from "~/components/ui/spinner";
 import { entityLabel } from "~/entities/entities";
+import { badgeToneTextClass } from "~/lib/status-tone";
 import { cn } from "~/lib/utils";
 
 import type {
@@ -16,10 +17,10 @@ import type {
 } from "./combobox-types";
 
 const statusToneClass = {
-  neutral: "text-muted-foreground",
-  positive: "text-positive",
-  warning: "text-warning-ink",
-  destructive: "text-destructive",
+  neutral: badgeToneTextClass.secondary,
+  positive: badgeToneTextClass.positive,
+  warning: badgeToneTextClass.warning,
+  destructive: badgeToneTextClass.destructive,
 } as const;
 
 const ENTITY_CODE = {

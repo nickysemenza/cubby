@@ -7,14 +7,15 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Kbd } from "~/components/ui/kbd";
+import { badgeToneTextClass, statusTone } from "~/lib/status-tone";
 import { cn } from "~/lib/utils";
 
-/** Confidence → text color. One map (semantic text-warning-ink for medium, not a
- * raw text-yellow-600) shared by every AI-suggestion surface. */
+/** Confidence → text color, from the shared status tone so every AI-suggestion
+ * surface agrees. */
 export const confidenceColor = {
-  high: "text-positive",
-  medium: "text-warning-ink",
-  low: "text-destructive",
+  high: badgeToneTextClass[statusTone("confidence", "high")],
+  medium: badgeToneTextClass[statusTone("confidence", "medium")],
+  low: badgeToneTextClass[statusTone("confidence", "low")],
 } satisfies Record<Confidence, string>;
 
 /**

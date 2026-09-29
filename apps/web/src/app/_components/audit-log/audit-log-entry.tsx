@@ -303,10 +303,7 @@ function LedgerAuditEntry({
                 omitted={summary.omitted}
               />
             ) : (
-              <Badge
-                variant="secondary"
-                className={cn("text-2xs", action.className)}
-              >
+              <Badge variant={action.variant} className="text-2xs">
                 {action.label}
               </Badge>
             )}
@@ -425,10 +422,7 @@ export function AuditLogEntryComponent({
                   </>
                 )}
 
-                <Badge
-                  variant="secondary"
-                  className={cn("text-xs", action.className)}
-                >
+                <Badge variant={action.variant} className="text-xs">
                   {action.label}
                 </Badge>
 

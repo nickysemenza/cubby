@@ -25,6 +25,7 @@ import type {
   EntityEditRecord,
 } from "~/entities/editing/types";
 import { entities } from "~/entities/entities";
+import { statusTone } from "~/lib/status-tone";
 
 import {
   mealKindBadgeVariant,
@@ -35,10 +36,7 @@ import {
   capitalize,
   PROJECT_STATUS_LABELS,
 } from "../projects/project-formatting";
-import {
-  TASK_STATUS_LABELS,
-  taskStatusBadgeVariant,
-} from "../tasks/task-options";
+import { TASK_STATUS_LABELS } from "../tasks/task-options";
 import { KIND_ICONS } from "./calendar-icons";
 import { itemSpanLabel } from "./calendar-span";
 
@@ -162,7 +160,7 @@ const calendarKindRegistry = {
         .join(" · "),
     richBadge: (item) => ({
       label: TASK_STATUS_LABELS[item.status],
-      variant: taskStatusBadgeVariant[item.status],
+      variant: statusTone("task", item.status),
     }),
     edit: (item) => ({
       mode: "editable",

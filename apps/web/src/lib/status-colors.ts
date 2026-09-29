@@ -11,97 +11,39 @@ import { ShieldWarningIcon } from "@phosphor-icons/react/dist/csr/ShieldWarning"
 import type { Icon } from "@phosphor-icons/react/lib";
 import { z } from "zod";
 
+import type { BadgeVariant } from "~/components/ui/badge";
+
+import { statusTone } from "./status-tone";
+
 interface StatusBadgeProps {
   label: string;
-  /** Tailwind classes for bg + text using theme tokens. */
-  className: string;
+  variant: BadgeVariant;
   /** Optional icon for status displays. */
   icon?: Icon;
 }
 
-const auditStatus = new Map<string, StatusBadgeProps>([
-  [
-    "create",
-    {
-      label: "Created",
-      className: "bg-secondary text-secondary-foreground",
-    },
-  ],
-  [
-    "update",
-    {
-      label: "Updated",
-      className: "bg-slate/20 text-slate",
-    },
-  ],
-  [
-    "delete",
-    {
-      label: "Deleted",
-      className: "bg-destructive/15 text-destructive",
-    },
-  ],
+const AUDIT_LABELS = new Map([
+  ["create", "Created"],
+  ["update", "Updated"],
+  ["delete", "Deleted"],
 ]);
 
 /**
  * Project + task statuses (the two DB-backed enums in `@cubby/schemas/project`)
- * mapped onto Cubby's warm theme tokens. Both domains share this one map since
- * their status enums are disjoint except for the three states they hold in
- * common (not_started/in_progress/done) — Avoids raw Tailwind palette colors
- * so the chips stay tonally consistent with the rest of the app. Human-facing
+ * mapped onto an icon and label; the tone comes from `statusTone`. Both domains
+ * share this one map since their status enums are disjoint except for the
+ * states they hold in common (not_started/in_progress/done). Human-facing
  * labels for these raw enum values live in `~/app/projects/shared.tsx`
  * (`PROJECT_STATUS_LABELS`/`TASK_STATUS_LABELS`) — this map is presentation
- * (icon/color) only.
+ * (icon) only.
  */
 const projectStatus = new Map([
-  [
-    "done",
-    {
-      label: "Done",
-      className: "bg-secondary text-secondary-foreground",
-      icon: CheckCircleIcon,
-    },
-  ],
-  [
-    "in_progress",
-    {
-      label: "In progress",
-      className: "bg-primary/15 text-primary",
-      icon: ClockIcon,
-    },
-  ],
-  [
-    "blocked",
-    {
-      label: "Blocked",
-      className: "bg-destructive/15 text-destructive",
-      icon: ShieldWarningIcon,
-    },
-  ],
-  [
-    "planning",
-    {
-      label: "Planning",
-      className: "bg-plum/20 text-plum",
-      icon: ListChecksIcon,
-    },
-  ],
-  [
-    "not_started",
-    {
-      label: "Not started",
-      className: "bg-muted text-muted-foreground",
-      icon: CircleIcon,
-    },
-  ],
-  [
-    "later",
-    {
-      label: "Later",
-      className: "bg-warning/30 text-accent-foreground",
-      icon: ClockIcon,
-    },
-  ],
+  ["done", { label: "Done", icon: CheckCircleIcon }],
+  ["in_progress", { label: "In progress", icon: ClockIcon }],
+  ["blocked", { label: "Blocked", icon: ShieldWarningIcon }],
+  ["planning", { label: "Planning", icon: ListChecksIcon }],
+  ["not_started", { label: "Not started", icon: CircleIcon }],
+  ["later", { label: "Later", icon: ClockIcon }],
 ] as const);
 
 const trackerStatusSchema = z.union([projectStatusSchema, taskStatusSchema]);
@@ -127,7 +69,10 @@ export function getStatusChartColor(value: string | null | undefined): string {
 }
 
 const statusLookups = {
-  audit: (value: string) => auditStatus.get(value),
+  audit: (value: string) => {
+    const label = AUDIT_LABELS.get(value);
+    return label === undefined ? undefined : { label };
+  },
   project: (value: string) => {
     const parsed = trackerStatusSchema.safeParse(value);
     return parsed.success ? projectStatus.get(parsed.data) : undefined;
@@ -137,20 +82,22 @@ const statusLookups = {
 type StatusDomain = keyof typeof statusLookups;
 
 /**
- * Get badge styling for a status value within a domain.
- * Falls back to a neutral slate chip when the value is unknown.
+ * Get the label, icon, and Badge variant for a status value within a domain.
+ * Falls back to a neutral chip when the value is unknown.
  */
 export function getStatusBadgeProps(
   domain: StatusDomain,
   value: string | null | undefined,
 ): StatusBadgeProps {
+  // The "project" domain also renders task statuses; a value only tasks have
+  // (blocked, later) takes the task tone.
+  const variant =
+    domain === "project" && !projectStatusSchema.safeParse(value).success
+      ? statusTone("task", value)
+      : statusTone(domain, value);
   const found = value ? statusLookups[domain](value) : undefined;
-  if (found) return found;
-  return {
-    label: value ?? "Unknown",
-    className: "bg-slate/20 text-slate",
-    icon: CircleIcon,
-  };
+  if (found) return { ...found, variant };
+  return { label: value ?? "Unknown", variant: "slate", icon: CircleIcon };
 }
 
 // -- Cost-type colors (monochrome ink ladder + ultramarine accent) --
