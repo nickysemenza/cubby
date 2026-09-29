@@ -95,9 +95,9 @@ describe("entity kernel bindings", () => {
       [...ENTITY_KERNEL_ENTITIES].sort(),
     );
     expect(Object.keys(ENTITY_SCHEMA_BINDINGS).sort()).toEqual(
-      [...ENTITY_KERNEL_ENTITIES, "cookbook"].sort(),
+      [...ENTITY_KERNEL_ENTITIES].sort(),
     );
-    // Cookbook's existing read contract has no generic mutation repository.
+    // Cookbook is a read-only kernel entity: no mutation command exists.
     const cookbook = ENTITY_SCHEMA_BINDINGS.cookbook;
     expect(cookbook.createInput).toBeNull();
     expect(cookbook.updateInput).toBeNull();

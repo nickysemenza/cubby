@@ -371,7 +371,7 @@ export default defineEntity({
     // Born only from an EPUB import and deleted with its recipes by that
     // import workflow; the kernel serves its reads.
     lifecycle: "readOnly",
-    mcp: ["list"],
+    mcp: ["get", "list"],
     dataQuality: {
       checks: [
         {
@@ -395,7 +395,10 @@ export default defineEntity({
   },
   extensions: {
     ports: {
-      repository: null,
+      repository: {
+        module: "~/server/repo/cookbook.repository",
+        export: "cookbookRepository",
+      },
       search: "document",
     },
   },

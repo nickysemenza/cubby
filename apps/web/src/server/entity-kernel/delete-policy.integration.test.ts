@@ -112,6 +112,7 @@ import {
   setAtPath,
 } from "~/server/entity-kernel/reference-universe.fixtures";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
+import { generatedEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
 import {
   databaseForTransaction,
   getDb,
@@ -153,8 +154,14 @@ type EdgeCase = {
   disposition: OperationDisposition;
 };
 
+// A read-only kernel entity (cookbook) deletes through its own workflow, not
+// the kernel, so it is outside this kernel-delete sweep.
 const deletableEntities = ENTITY_KERNEL_ENTITIES.filter(
-  (entity) => entityManifest[entity].lifecycle.delete !== null,
+  (entity) =>
+    entityManifest[entity].lifecycle.delete !== null &&
+    generatedEntityKernelContractCases[entity].actions.some(
+      (action) => action === "delete",
+    ),
 );
 
 const edgeOf = (entity: EntityKernelEntity, edge: string): IncomingEdge =>
