@@ -1748,6 +1748,22 @@ const DECLARED_SECTIONS = [
     }),
   }),
   section({
+    id: "provisional-financial-accounts",
+    label: "Provisional accounts",
+    select: (p) => p.provisionalFinancialAccounts,
+    problemKeys: ["provisionalFinancialAccounts"],
+    // No meter: receipts keep minting provisional accounts, so there is no
+    // denominator this is a fraction of.
+    coverage: { keys: ["provisionalFinancialAccounts"] },
+    entity: "financialAccount",
+    renderItem: (item) => ({
+      title: item.name,
+      subtitle: `${item.transactionCount} transaction${item.transactionCount === 1 ? "" : "s"} · no provider alias or statement reference`,
+      route: entityDetailLink("financialAccount", item.id),
+      editLabel: "Link account",
+    }),
+  }),
+  section({
     id: "financial-transaction-allocation-defects",
     label: "Broken settlement allocations",
     select: (p) => p.financialTransactionAllocationDefects,

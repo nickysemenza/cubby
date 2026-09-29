@@ -429,6 +429,30 @@ export const derivedProblemQueries = [
     },
   }),
   defineProblem({
+    key: "provisionalFinancialAccounts",
+    problemClass: PROBLEM_CLASS.provisionalFinancialAccounts,
+    executionLane: "fast",
+    continuation: {
+      kind: "none",
+      reason: "Each result is one provisional account.",
+    },
+    freshness: { kind: "live" },
+    title: "Provisional financial accounts",
+    description:
+      "Accounts minted from a receipt that no provider export has claimed: no source alias and no statement-referenced transaction.",
+    emptyMessage: "Every provisional account is tied to a provider account.",
+    source: {
+      kind: "derived",
+      diagnostic: "provisional-financial-accounts",
+      grain: "row",
+      inputs: [{ entity: "financialAccount", filters: [] }],
+      operations: [
+        { label: "Find provisional accounts with no source alias" },
+        { label: "Exclude accounts with a statement-referenced transaction" },
+      ],
+    },
+  }),
+  defineProblem({
     key: "invalidFinancialJson",
     problemClass: PROBLEM_CLASS.invalidFinancialJson,
     executionLane: "fast",

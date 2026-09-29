@@ -1113,6 +1113,12 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
             "duplicate-financial-account-source-aliases",
             allProblemsSchema.shape.duplicateFinancialAccountSourceAliases,
           ),
+        provisionalFinancialAccounts: () =>
+          diagnosticItems(
+            db,
+            "provisional-financial-accounts",
+            allProblemsSchema.shape.provisionalFinancialAccounts,
+          ),
         invalidFinancialJson: () =>
           diagnosticItems(
             db,
@@ -1159,6 +1165,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       r.duplicateFinancialTransactionSourceRefs.items,
     duplicateFinancialAccountSourceAliases:
       r.duplicateFinancialAccountSourceAliases.items,
+    provisionalFinancialAccounts: r.provisionalFinancialAccounts.items,
     invalidFinancialJson: r.invalidFinancialJson.items,
     incompleteStatementImports: r.incompleteStatementImports.items,
     referentialLivenessViolations: r.referentialLivenessViolations.items,
@@ -1519,7 +1526,7 @@ export const findUpcProblems = async (
  * derived Problems use their dedicated count adapters.
  *
  * The `upc` lane is skipped: its detector calls an external provider, so a
- * count would make the badge depend on that provider"s health. Its `byType`
+ * count would make the badge depend on that provider's health. Its `byType`
  * key stays 0 and the Problems page loads the section on its own.
  */
 export const findProblemCounts = async (

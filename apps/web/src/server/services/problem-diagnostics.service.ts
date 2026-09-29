@@ -38,6 +38,7 @@ import {
   findParentRecipesWithDeletedSubRecipes,
   findPartiallyImportedCookbooks,
   findProductsWithoutUnitMappings,
+  findProvisionalFinancialAccounts,
   findWeightSoldProducts,
   findProductsWithUpcGaps,
   findReferentialLivenessViolations,
@@ -358,6 +359,12 @@ export const diagnosticAdapters = {
       healthyCount(
         (await findDuplicateFinancialAccountSourceAliases(db)).length,
       ),
+  },
+  "provisional-financial-accounts": {
+    sample: (db, _options, limit) =>
+      healthySample(findProvisionalFinancialAccounts(db), limit),
+    count: async (db) =>
+      healthyCount((await findProvisionalFinancialAccounts(db)).length),
   },
   "invalid-financial-json": {
     sample: (db, _options, limit) =>

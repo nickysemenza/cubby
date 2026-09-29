@@ -53,6 +53,7 @@ export {
   findDuplicateFinancialTransactionSourceRefs,
   findIncompleteStatementImports,
   findInvalidFinancialJson,
+  findProvisionalFinancialAccounts,
   loadAllocationDefectPresenters,
 } from "./detectors-financial";
 export {
