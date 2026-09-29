@@ -177,6 +177,12 @@ export default defineEntity({
           detail: true,
           width: "sm",
           mobile: { slot: "meta", priority: 20 },
+          // Read-only, so no select control declares the roster.
+          valueOptions: [
+            { value: "PENDING", label: "Pending", color: "var(--slate)" },
+            { value: "UPLOADED", label: "Uploaded", color: "var(--positive)" },
+            { value: "FAILED", label: "Failed", color: "var(--destructive)" },
+          ],
         },
         validation: {
           read: z.enum(generatedImageStatusValues),

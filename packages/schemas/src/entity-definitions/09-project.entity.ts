@@ -816,7 +816,7 @@ export default defineEntity({
           { value: "1y", label: "Last 12 months" },
         ],
         expandRef: {
-          module: "~/app/expenses/expense-options",
+          module: "~/entities/filter-behavior",
           export: "resolveDateRange",
         },
         urlOnly: true,

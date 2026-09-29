@@ -75,6 +75,7 @@ export type FilterDescriptor = Readonly<{
         label: string;
         meta?: boolean;
         color?: string;
+        expand?: Readonly<Record<string, string | number | boolean>>;
       }>[]
     | null;
   optionsRef: SourceRef | null;
@@ -225,6 +226,13 @@ export type EntityField = Readonly<{
       interactive?: boolean;
     }> | null;
     listHidden: boolean;
+    valueOptions:
+      | readonly Readonly<{
+          value: string;
+          label: string;
+          color?: string;
+        }>[]
+      | null;
     preview: boolean;
   }>;
   validation: Readonly<{

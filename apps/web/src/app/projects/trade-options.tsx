@@ -93,8 +93,8 @@ export function TradeIcon({
 
 /**
  * `{value,label,icon}` options for the trade filter/inline-edit select — shared
- * by tasks and expenses. Not `buildSelectOptions` because that helper carries
- * no icon; the glyph mirrors `TradeBadge` so the select and the chip match.
+ * by tasks and expenses. The glyph mirrors `TradeBadge` so the select and the
+ * chip match.
  */
 export const tradeOptions: FilterableComboboxItem[] = tradeValues.map(
   (value) => {

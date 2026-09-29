@@ -246,7 +246,14 @@ describe("generated filter contracts", () => {
       expect(new Set(contract.urlKeys).size).toBe(contract.urlKeys.length);
       expect(
         contract.rangeExpanders.every((entry) => {
-          const columnId = entry.slice(0, entry.indexOf(":~/"));
+          // A column id may itself contain ":" (`related:product.tasks`); the
+          // suffix is a `:~/module#export` ref or the literal `:presets`.
+          const columnId = entry.slice(
+            0,
+            entry.includes(":~/")
+              ? entry.indexOf(":~/")
+              : entry.lastIndexOf(":"),
+          );
           return specs.some(
             (spec) =>
               spec.columnId === columnId &&

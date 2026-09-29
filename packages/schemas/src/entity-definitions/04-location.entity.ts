@@ -675,16 +675,32 @@ export default defineEntity({
         wire: { kind: "range", from: "valuationMin", to: "valuationMax" },
         placeholder: "Filter valuation...",
         options: [
-          { value: "positive", label: "Positive basis" },
-          { value: "zero", label: "Zero basis" },
-          { value: "negative", label: "Credit / negative" },
-          { value: "gte100", label: "$100 and up" },
-          { value: "gte500", label: "$500 and up" },
+          {
+            value: "positive",
+            label: "Positive basis",
+            expand: { valuationMin: 0.01 },
+          },
+          {
+            value: "zero",
+            label: "Zero basis",
+            expand: { valuationMin: 0, valuationMax: 0 },
+          },
+          {
+            value: "negative",
+            label: "Credit / negative",
+            expand: { valuationMax: -0.01 },
+          },
+          {
+            value: "gte100",
+            label: "$100 and up",
+            expand: { valuationMin: 100 },
+          },
+          {
+            value: "gte500",
+            label: "$500 and up",
+            expand: { valuationMin: 500 },
+          },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveLocationValuation",
-        },
       },
       {
         columnId: "related:location.ingredients",

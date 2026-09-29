@@ -731,28 +731,44 @@ export default defineEntity({
         kind: "range",
         placeholder: "Filter recipe cost...",
         options: [
-          { value: "under10", label: "Under $10" },
-          { value: "10to25", label: "$10–$25" },
-          { value: "25plus", label: "$25 and up" },
+          {
+            value: "under10",
+            label: "Under $10",
+            expand: { costTotalMax: 10 },
+          },
+          {
+            value: "10to25",
+            label: "$10–$25",
+            expand: { costTotalMin: 10, costTotalMax: 25 },
+          },
+          {
+            value: "25plus",
+            label: "$25 and up",
+            expand: { costTotalMin: 25 },
+          },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveRecipeCost",
-        },
       },
       {
         columnId: "caloriesTotal",
         kind: "range",
         placeholder: "Filter calories...",
         options: [
-          { value: "under500", label: "Under 500 cal" },
-          { value: "500to1000", label: "500–1,000 cal" },
-          { value: "1000plus", label: "1,000+ cal" },
+          {
+            value: "under500",
+            label: "Under 500 cal",
+            expand: { caloriesTotalMax: 500 },
+          },
+          {
+            value: "500to1000",
+            label: "500–1,000 cal",
+            expand: { caloriesTotalMin: 500, caloriesTotalMax: 1000 },
+          },
+          {
+            value: "1000plus",
+            label: "1,000+ cal",
+            expand: { caloriesTotalMin: 1000 },
+          },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveCalories",
-        },
       },
       {
         columnId: "totalMinutes",
@@ -761,14 +777,22 @@ export default defineEntity({
         deriveSchema: true,
         stored: true,
         options: [
-          { value: "under30", label: "Under 30 min" },
-          { value: "30to60", label: "30–60 min" },
-          { value: "60plus", label: "Over an hour" },
+          {
+            value: "under30",
+            label: "Under 30 min",
+            expand: { totalMinutesMax: 30 },
+          },
+          {
+            value: "30to60",
+            label: "30–60 min",
+            expand: { totalMinutesMin: 30, totalMinutesMax: 60 },
+          },
+          {
+            value: "60plus",
+            label: "Over an hour",
+            expand: { totalMinutesMin: 60 },
+          },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveRecipeTotalTime",
-        },
       },
       {
         columnId: "related:recipe.ingredients",

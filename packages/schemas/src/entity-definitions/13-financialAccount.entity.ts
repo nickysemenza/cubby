@@ -63,6 +63,27 @@ export default defineEntity({
           list: true,
           detail: true,
           renderer: { detail: "financial-account-identity" },
+          // Labels for `identity.kind`; a bare `replaceAll("_", " ")` would
+          // read `stored_value` as "stored value".
+          valueOptions: [
+            {
+              value: "credit_card",
+              label: "Credit card",
+              color: "var(--slate)",
+            },
+            {
+              value: "bank_account",
+              label: "Bank account",
+              color: "var(--slate)",
+            },
+            {
+              value: "stored_value",
+              label: "Gift card or store credit",
+              color: "var(--slate)",
+            },
+            { value: "cash", label: "Cash", color: "var(--slate)" },
+            { value: "other", label: "Other", color: "var(--slate)" },
+          ],
         },
         validation: {
           read: financialAccountIdentity,

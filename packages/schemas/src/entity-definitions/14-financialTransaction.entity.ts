@@ -713,15 +713,19 @@ export default defineEntity({
         stored: true,
         range: { finite: true },
         options: [
-          { value: "gte1000", label: "$1,000 and up" },
-          { value: "gte250", label: "$250 and up" },
-          { value: "gte50", label: "$50 and up" },
-          { value: "credits", label: "Credits (≤ $0)" },
+          {
+            value: "gte1000",
+            label: "$1,000 and up",
+            expand: { amountMin: 1000 },
+          },
+          { value: "gte250", label: "$250 and up", expand: { amountMin: 250 } },
+          { value: "gte50", label: "$50 and up", expand: { amountMin: 50 } },
+          {
+            value: "credits",
+            label: "Credits (≤ $0)",
+            expand: { amountMax: 0 },
+          },
         ],
-        expandRef: {
-          module: "~/app/finance/financial-transaction-options",
-          export: "resolveAmountFilter",
-        },
       },
       {
         columnId: "amountMin",

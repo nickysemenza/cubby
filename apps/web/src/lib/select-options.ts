@@ -54,18 +54,6 @@ export function colorizeSelectOptions<T extends FilterableComboboxItem>(
 }
 
 /**
- * Builds `{value,label}` options for a filter/inline-edit select from a fixed
- * enum's values plus a label lookup. Shared by task/expense status/category
- * option lists so the mapping isn't hand-rolled per enum.
- */
-export function buildSelectOptions<T extends string>(
-  values: readonly T[],
-  labels: Record<T, string>,
-): Array<FilterableComboboxItem & { value: T }> {
-  return values.map((value) => ({ value, label: labels[value] }));
-}
-
-/**
  * Roster for a *presence* column — one that reports whether some other field is
  * filled ("Has UPC"), rather than storing a decision of its own.
  *

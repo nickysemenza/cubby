@@ -19,7 +19,10 @@ import {
 } from "./editing/select-options";
 import { readRecordField } from "./entity-references";
 
-type EnumField = Pick<EntityFieldModel["fields"][number], "key" | "control">;
+type EnumField = Pick<
+  EntityFieldModel["fields"][number],
+  "key" | "control" | "display"
+>;
 
 /** A stored value the roster never declared still needs a tint. */
 const UNKNOWN_ENUM_COLOR = "var(--slate)";
@@ -28,8 +31,9 @@ const optionsCache = new Map<string, EntitySelectOption[]>();
 
 /**
  * The one option roster every enum surface reads — list cell, detail value,
- * hero chip, inline editor, previews. Declared `control.options` merged with
- * the rich `ENTITY_SELECT_OPTIONS` table, colorized; `"edit"` mode drops
+ * hero chip, inline editor, previews. Declared `control.options` (or, for a
+ * value with no select control, `display.valueOptions`) merged with the rich
+ * `ENTITY_SELECT_OPTIONS` table, colorized; `"edit"` mode drops
  * create-only sentinels (`expense.lineKind`'s `"auto"`) because a stored
  * value is never one. Cached per field: manifests are static.
  */
@@ -43,7 +47,7 @@ export function enumFieldOptions(
   const options = presentEntitySelectOptions(
     entity,
     field.key,
-    field.control?.options ?? [],
+    field.control?.options ?? field.display.valueOptions ?? [],
     "edit",
   );
   optionsCache.set(cacheKey, options);

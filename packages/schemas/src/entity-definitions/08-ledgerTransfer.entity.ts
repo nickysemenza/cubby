@@ -193,6 +193,28 @@ export default defineEntity({
         display: {
           detail: true,
           renderer: { detail: "ledger-transfer-classification" },
+          valueOptions: [
+            {
+              value: "internal_move",
+              label: "Internal move",
+              color: "var(--slate)",
+            },
+            {
+              value: "contribution",
+              label: "Contribution",
+              color: "var(--positive)",
+            },
+            {
+              value: "household_distribution",
+              label: "Household distribution",
+              color: "var(--primary)",
+            },
+            {
+              value: "reimbursement",
+              label: "Reimbursement",
+              color: "var(--warning)",
+            },
+          ],
         },
         provenance: {
           kind: "derived",
