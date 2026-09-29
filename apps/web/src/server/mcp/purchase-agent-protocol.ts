@@ -1,6 +1,7 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import { type ActorContext, actorInRun } from "@cubby/schemas/context";
 import { runEntityId } from "@cubby/schemas/identifiers";
+import type { CubbyMcpMutationAction } from "@cubby/schemas/mcp-tools";
 import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import { parseShortcode } from "@cubby/shared";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -20,17 +21,22 @@ import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 import type { ToolExtra } from "./tools/tool-registration";
 
-const purchaseAgentRunExecutionEnvelope = z.object({
-  _runExecution: purchaseImportRunExecution.optional(),
-});
+/**
+ * Writers that enforce the purchase agent's run protocol themselves (stable
+ * operation ids, replay, target checks) and so run without the generic
+ * per-call human approval. Batch actions govern each item the same way.
+ */
+const SELF_GOVERNED_ACTIONS = new Set<string>([
+  "purchase_import.prepare",
+  "purchase_import.validate",
+  "purchase_import.commit",
+  "product_enrichment.commit",
+  "photo_run.propose_groups",
+  "photo_run.commit_group",
+] satisfies CubbyMcpMutationAction[]);
 
-export function decoratePurchaseAgentInputSchema<T extends z.ZodObject>(
-  schema: T,
-) {
-  return "_runExecution" in schema.shape
-    ? schema
-    : schema.extend(purchaseAgentRunExecutionEnvelope.shape);
-}
+export const purchaseAgentSelfGoverned = (action: string) =>
+  SELF_GOVERNED_ACTIONS.has(action);
 
 const sha256 = async (value: string): Promise<string> => {
   const digest = await crypto.subtle.digest(

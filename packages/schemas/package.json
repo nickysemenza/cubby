@@ -83,6 +83,7 @@
     "./meal-shared": "./src/meal-shared.ts",
     "./mcp": "./src/mcp.ts",
     "./mcp-detail": "./src/mcp-detail.ts",
+    "./mcp-tools": "./src/generated/mcp-tool-names.gen.ts",
     "./oauth": "./src/oauth.ts",
     "./problems": "./src/problems.ts",
     "./recipe": "./src/recipe.ts",

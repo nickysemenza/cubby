@@ -1,5 +1,14 @@
+import { problemsTypeSliceOut } from "@cubby/schemas/mcp";
+import {
+  allProblemsMcpSchema,
+  assembleAllProblems,
+  referentialLivenessViolationsMcpOut,
+} from "@cubby/schemas/problems";
+import { z } from "zod";
+
 import { integrityProblemsContract } from "~/contracts/entity-integrity.contract";
 import {
+  problemReportWantsCounts,
   problemsContract,
   problemsStreamsContract,
 } from "~/contracts/problems.contract";
@@ -71,7 +80,76 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
       },
       context.actorContext,
     ),
+  report: async (context, input) => {
+    if (problemReportWantsCounts(input)) return readProblemCounts(context);
+    const detectors = await problemDetectors();
+    if (input.type !== undefined) {
+      const { expectedProblemKeys, problemQuery } =
+        await import("~/entities/problem-registry");
+      const key = z.enum(expectedProblemKeys).safeParse(input.type);
+      if (!key.success)
+        return {
+          error: `Unknown problem type '${input.type}'`,
+          availableTypes: expectedProblemKeys,
+        };
+      const definition = problemQuery(key.data);
+      if (!definition) throw new Error("Problem query registry is incomplete");
+      return pageProblemTypeSlice(
+        await detectors.findProblemByType(
+          context.db,
+          definition.key,
+          context.upcLookupClient,
+          context.usdaClient,
+        ),
+        input,
+      );
+    }
+    const [fast, coverage, upc, tracker, views] = await Promise.all([
+      detectors.findFastProblems(context.db),
+      detectors.findCoverageProblems(context.db, context.usdaClient),
+      detectors.findUpcProblems(context.db, context.upcLookupClient),
+      detectors.findTrackerProblems(context.db),
+      import("~/server/services/problem-views.service").then((views) =>
+        views.findViewProblems(context.db),
+      ),
+    ]);
+    return allProblemsMcpSchema.parse(
+      assembleAllProblems({ fast, coverage, upc, tracker, views }),
+    );
+  },
 });
+
+function projectProblemTypeSlice(
+  slice: z.output<typeof problemsTypeSliceOut>,
+): z.output<typeof problemsTypeSliceOut> {
+  switch (slice.type) {
+    case "referentialLivenessViolations":
+      return problemsTypeSliceOut.parse({
+        ...slice,
+        items: referentialLivenessViolationsMcpOut.parse(slice.items),
+      });
+    default:
+      return slice;
+  }
+}
+
+/** One page of a problem-type report, with internal diagnostic ids projected out. */
+export function pageProblemTypeSlice(
+  value: unknown,
+  page: { pageIndex: number; pageSize: number },
+) {
+  const slice = projectProblemTypeSlice(problemsTypeSliceOut.parse(value));
+  const start = page.pageIndex * page.pageSize;
+  return {
+    ...slice,
+    items: slice.items.slice(start, start + page.pageSize),
+    meta: {
+      pageIndex: page.pageIndex,
+      pageSize: page.pageSize,
+      totalCount: slice.total,
+    },
+  };
+}
 
 export const integrityProblemsHandlers = implementOperationDomain(
   integrityProblemsContract,

@@ -14,7 +14,10 @@ import { TraceNames, withTrace } from "~/server/tracing";
 
 import { getRegisteredTool } from "./tool-catalog";
 import { installToolCallProtocolHandler } from "./tool-protocol";
-import { getToolEntityExtractor } from "./tool-registration";
+import {
+  getToolActionNames,
+  getToolEntityExtractor,
+} from "./tool-registration";
 
 const telemetryExtraSchema = z.strictObject({
   identity: mcpTelemetryIdentitySchema,
@@ -57,6 +60,24 @@ function observedToolName(request: CallToolRequest): string | undefined {
 }
 
 /**
+ * `${tool}.${action}` when the call names one of the tool's actions, for the
+ * trace span; the bare tool name otherwise. `McpToolCall.toolName` keeps the
+ * tool name so the usage dashboard joins it to the live catalog.
+ */
+function observedCallName(
+  server: McpServer,
+  toolName: string,
+  request: CallToolRequest,
+): string {
+  const action = z
+    .object({ action: z.string() })
+    .safeParse(request.params.arguments).data?.action;
+  return action && getToolActionNames(server, toolName)?.has(action)
+    ? `${toolName}.${action}`
+    : toolName;
+}
+
+/**
  * Which entity a call acted on, for `McpToolCall.entityKind`.
  *
  * The extractor belongs to the tool's typed registration. Its result is
@@ -85,7 +106,10 @@ function toolCallEntity(
 export function installToolCallTelemetryHandler(server: McpServer): void {
   installToolCallProtocolHandler(server, async (dispatch, request, extra) => {
     const toolName = observedToolName(request);
-    const spanName = TraceNames.mcp(toolName ?? "unknown");
+    const callName = toolName
+      ? observedCallName(server, toolName, request)
+      : undefined;
+    const spanName = TraceNames.mcp(callName ?? "unknown");
     return withTrace(spanName, async (span) => {
       const startedAt = performance.now();
       const telemetry = telemetryExtraSchema.safeParse(
@@ -97,7 +121,7 @@ export function installToolCallTelemetryHandler(server: McpServer): void {
       span.setAttributes({
         "rpc.system": "mcp",
         "rpc.method": "tools/call",
-        "mcp.tool.name": toolName ?? "unknown",
+        "mcp.tool.name": callName ?? "unknown",
         "mcp.tool.registered": registeredAtCall,
       });
 
@@ -137,7 +161,7 @@ export function installToolCallTelemetryHandler(server: McpServer): void {
             });
           } catch (error) {
             console.error("[MCP telemetry] failed to record tool call", {
-              toolName,
+              toolName: callName,
               error,
             });
           }

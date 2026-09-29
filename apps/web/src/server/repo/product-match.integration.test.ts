@@ -437,13 +437,18 @@ describe("product match queue", () => {
   });
 });
 
-describe("propose_product_match tool", () => {
+describe("product_enrichment.propose_match", () => {
   const ctx = withTestDb();
 
   const call = (args: Parameters<typeof callMcpTool>[2]) =>
-    callMcpTool(createMcpServer(), "propose_product_match", args, {
-      db: ctx.db,
-    });
+    callMcpTool(
+      createMcpServer(),
+      "product_enrichment",
+      { action: "propose_match", ...args },
+      {
+        db: ctx.db,
+      },
+    );
 
   const twoProducts = async () =>
     await Promise.all([

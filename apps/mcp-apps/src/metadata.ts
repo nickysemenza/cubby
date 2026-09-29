@@ -1,6 +1,6 @@
 /** The one MCP App resource Cubby serves. */
 export const USDA_PICKER = {
-  toolName: "search_usda_foods",
+  toolName: "usda_food",
   uri: "ui://cubby/usda-picker.html",
   name: "USDA Food Picker",
   description:

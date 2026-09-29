@@ -915,7 +915,7 @@ export const validatePurchaseImportOut = z.object({
     z.object({
       stableOrderId: stableImportItemId,
       outcome: z.enum(["replayed", "raw_evidence_drift", "semantic_drift"]),
-      diff: z.unknown().nullable(),
+      diff: z.json().nullable(),
     }),
   ),
 });
@@ -1011,7 +1011,7 @@ export const importOperationStatusOut = z.object({
   operationId: importOperationId,
   kind: z.string(),
   state: z.enum(["started", "paused_approval", "completed", "failed"]),
-  result: z.unknown().nullable(),
+  result: z.json().nullable(),
   error: z.string().nullable(),
   startedAt: z.iso.datetime(),
   completedAt: z.iso.datetime().nullable(),

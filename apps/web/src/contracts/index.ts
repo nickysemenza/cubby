@@ -11,6 +11,7 @@ export { collectionContract } from "./collection.contract";
 export { oauthContract } from "./connected-apps.contract";
 export { cookbookContract } from "./cookbook.contract";
 export { dashboardContract } from "./dashboard.contract";
+export { dataQualityContract } from "./data-quality.contract";
 export { entityDetailContract } from "./entity-detail.contract";
 export { entityFilterOptionsContract } from "./entity-filter-options.contract";
 export { entityGraphContract } from "./entity-graph.contract";

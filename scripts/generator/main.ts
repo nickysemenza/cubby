@@ -138,9 +138,12 @@ const main = async () => {
   const { renderHttpApiArtifacts } = await import("./http-api/openapi.ts");
   const { renderApplePreviewFixtures } =
     await import("../../apps/web/scripts/apple-preview-fixtures.ts");
+  const { renderMcpToolArtifacts } =
+    await import("./start-operations/mcp-tools.ts");
   const resources = httpResourcesFor(entities);
   const startOperations = await renderStartOperationArtifacts(resources);
   await settle(startOperations.artifacts);
+  await settle(await renderMcpToolArtifacts());
   await settle(
     await renderHttpApiArtifacts(
       resources,

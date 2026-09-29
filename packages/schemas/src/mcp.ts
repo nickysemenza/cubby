@@ -227,7 +227,7 @@ export const recipeCostingExplainMcpOut = z.union([
 
 export const problemsTypeSliceOut = z.object({
   type: z.string(),
-  items: z.array(z.unknown()),
+  items: z.array(z.json()),
   total: z.number().int(),
   meta: paginatedMetaSchema
     .extend({ pageSize: z.number().int().positive().max(100) })

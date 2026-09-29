@@ -1,14 +1,15 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProjectShortcode } from "@cubby/schemas/identifiers";
-import type {
-  createFileUploadInput,
-  getImageByIdSchema,
-  imageAttachExistingInput,
-  imageBrowserListInput,
-  importImageFromUrlSchema,
-  mcpAttachFileInput,
+import {
+  attachableImageEntity,
+  type createFileUploadInput,
+  type getImageByIdSchema,
+  type imageAttachExistingInput,
+  type imageBrowserListInput,
+  type importImageFromUrlSchema,
+  type mcpAttachFileInput,
 } from "@cubby/schemas/image";
-import type { AppErrorReason } from "@cubby/shared";
+import { type AppErrorReason, parseShortcode } from "@cubby/shared";
 import type { z } from "zod";
 
 import { imageUploadContract } from "~/contracts/image-upload.contract";
@@ -249,8 +250,14 @@ export const imageHandlers = implementOperationDomain(imageContract, {
       throw new Error("Updated image could not be reloaded");
     return refreshed;
   },
-  attachExisting: (context, input) =>
-    attachExistingImageWorkflow(context.db, context.actorContext, input),
+  attachExisting: (context, input) => {
+    const parsed = parseShortcode(input.targetId);
+    if (!attachableImageEntity.safeParse(parsed?.type).success)
+      throw new Error(
+        `${input.targetId} is not a gallery attachment target; expected ${attachableImageEntity.options.join(", ")}.`,
+      );
+    return attachExistingImageWorkflow(context.db, context.actorContext, input);
+  },
   delete: async (context, input) => {
     const result = await executeEntity(context, {
       action: "delete",
@@ -308,5 +315,19 @@ export const imageUploadHandlers = implementOperationDomain(
         "IMAGE_CULL_FAILED",
         "Failed to cull pending images",
       ),
+    createFileUpload: (context, input) =>
+      createFileUploadWorkflow(context.db, input),
+    attachFile: (context, input) => {
+      const parsed = parseShortcode(input.entityId);
+      const attachable = attachableImageEntity.safeParse(parsed?.type);
+      if (!attachable.success)
+        throw new Error(
+          `${input.entityId} names a ${parsed?.type ?? "unknown"}; files attach to a ${attachableImageEntity.options.join(", ")}.`,
+        );
+      return attachFileWorkflow(context.db, {
+        ...input,
+        entityKind: attachable.data,
+      });
+    },
   },
 );

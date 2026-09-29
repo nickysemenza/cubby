@@ -4,13 +4,12 @@ import { fromAny } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 import { type JSONType, z } from "zod";
 
-import * as contracts from "~/contracts";
 import { withErrorReporting } from "~/server/errors/report-error";
 
-import { callMcpTool } from "./mcp-test-utils";
+import { callMcpTool, registerTestTool } from "./mcp-test-utils";
 import { McpOperationContext } from "./operation-context";
 import { listMcpToolCatalog } from "./server";
-import { registerMcpTool, stripMockFromJsonSchema } from "./tools/_shared";
+import { stripMockFromJsonSchema } from "./tools/tool-json-schema";
 
 type JsonObject = Extract<JSONType, { [key: string]: JSONType }>;
 
@@ -186,16 +185,20 @@ describe("MCP catalog schemas", () => {
       z.object({ items: z.array(z.string()) }),
     ]);
     const server = new McpServer({ name: "test", version: "1.0.0" });
-    registerMcpTool(server, {
+    registerTestTool(server, {
       name: "union_out",
-      description: "returns a union",
-      inputSchema: z.object({}),
-      outputSchema: output,
-      annotations: { readOnlyHint: true },
-      handler: async () => ({ total: 3 }),
+      kind: "query",
+      input: z.object({}),
+      output,
+      run: async () => ({ total: 3 }),
     });
 
-    const result = await callMcpTool(server, "union_out", {}, {});
+    const result = await callMcpTool(
+      server,
+      "union_out",
+      { action: "run" },
+      {},
+    );
     expect(result.isError).not.toBe(true);
     expect(result.structuredContent).toEqual({ total: 3 });
   });
@@ -203,13 +206,12 @@ describe("MCP catalog schemas", () => {
   it("keeps legacy refusal codes in error metadata outside success-only structured content", async () => {
     const server = new McpServer({ name: "test", version: "1.0.0" });
     const capture = vi.fn(() => "unexpected-capture");
-    registerMcpTool(server, {
+    registerTestTool(server, {
       name: "legacy_refusal",
-      description: "Refuses invalid input",
-      inputSchema: z.object({}),
-      outputSchema: z.object({ ok: z.boolean() }),
-      annotations: { readOnlyHint: true },
-      handler: async () => {
+      kind: "query",
+      input: z.object({}),
+      output: z.object({ ok: z.boolean() }),
+      run: async () => {
         throw Object.assign(
           new Error("Invalid identifier", {
             cause: { reason: "INVALID_INPUT" },
@@ -219,7 +221,7 @@ describe("MCP catalog schemas", () => {
       },
     });
     const result = await withErrorReporting(
-      () => callMcpTool(server, "legacy_refusal", {}, {}),
+      () => callMcpTool(server, "legacy_refusal", { action: "run" }, {}),
       undefined,
       capture,
     );
@@ -230,7 +232,7 @@ describe("MCP catalog schemas", () => {
         code: "BAD_REQUEST",
         reason: "INVALID_INPUT",
         message: "Invalid identifier",
-        diagnostics: { operation: "legacy_refusal", stage: "run" },
+        diagnostics: { operation: "legacy_refusal.run", stage: "run" },
       },
     });
     expect(capture).not.toHaveBeenCalled();
@@ -239,70 +241,76 @@ describe("MCP catalog schemas", () => {
   it("marks calendar state dirty only after a successful mutating tool", async () => {
     const server = new McpServer({ name: "test", version: "1.0.0" });
     const markCalendarDirty = vi.fn();
-    registerMcpTool(
+    registerTestTool(
       server,
       {
         name: "calendar_affecting_write",
-        description: "writes",
-        inputSchema: z.object({}),
-        outputSchema: z.object({ ok: z.boolean() }),
-        annotations: { readOnlyHint: false },
-        handler: async () => ({ ok: true }),
+        kind: "mutation",
+        input: z.object({}),
+        output: z.object({ ok: z.boolean() }),
+        run: async () => ({ ok: true }),
       },
       { markCalendarDirty },
     );
-    await callMcpTool(server, "calendar_affecting_write", {}, {});
+    await callMcpTool(
+      server,
+      "calendar_affecting_write",
+      { action: "run" },
+      {},
+    );
     expect(markCalendarDirty).toHaveBeenCalledWith(
-      "mcp.calendar_affecting_write",
+      "mcp.calendar_affecting_write.run",
     );
 
     const readServer = new McpServer({ name: "test", version: "1.0.0" });
-    registerMcpTool(
+    registerTestTool(
       readServer,
       {
         name: "calendar_read",
-        description: "reads",
-        inputSchema: z.object({}),
-        outputSchema: z.object({ ok: z.boolean() }),
-        annotations: { readOnlyHint: true },
-        handler: async () => ({ ok: true }),
+        kind: "query",
+        input: z.object({}),
+        output: z.object({ ok: z.boolean() }),
+        run: async () => ({ ok: true }),
       },
       { markCalendarDirty },
     );
-    await callMcpTool(readServer, "calendar_read", {}, {});
+    await callMcpTool(readServer, "calendar_read", { action: "run" }, {});
     expect(markCalendarDirty).toHaveBeenCalledTimes(1);
 
     const failingServer = new McpServer({ name: "test", version: "1.0.0" });
-    registerMcpTool(
+    registerTestTool(
       failingServer,
       {
         name: "calendar_failed_write",
-        description: "fails before writing",
-        inputSchema: z.object({}),
-        outputSchema: z.object({ ok: z.boolean() }),
-        annotations: { readOnlyHint: false },
-        handler: async () => {
+        kind: "mutation",
+        input: z.object({}),
+        output: z.object({ ok: z.boolean() }),
+        run: async () => {
           throw new Error("write failed");
         },
       },
       { markCalendarDirty },
     );
-    await callMcpTool(failingServer, "calendar_failed_write", {}, {});
+    await callMcpTool(
+      failingServer,
+      "calendar_failed_write",
+      { action: "run" },
+      {},
+    );
     expect(markCalendarDirty).toHaveBeenCalledTimes(1);
   });
 
   it("records a possible write when output validation fails after the handler", async () => {
     const server = new McpServer({ name: "test", version: "1.0.0" });
     const recordDatabaseWrite = vi.fn(async () => {});
-    registerMcpTool(
+    registerTestTool(
       server,
       {
         name: "write_with_invalid_output",
-        description: "writes before returning an invalid response",
-        inputSchema: z.object({}),
-        outputSchema: z.object({ ok: z.boolean() }),
-        annotations: { readOnlyHint: false },
-        handler: async () =>
+        kind: "mutation",
+        input: z.object({}),
+        output: z.object({ ok: z.boolean() }),
+        run: async () =>
           fromAny<{ ok: boolean }, { ok: string }>({ ok: "invalid" }),
       },
       { markCalendarDirty: vi.fn(), recordDatabaseWrite },
@@ -311,13 +319,13 @@ describe("MCP catalog schemas", () => {
     const result = await callMcpTool(
       server,
       "write_with_invalid_output",
-      {},
+      { action: "run" },
       {},
     );
 
     expect(result.isError).toBe(true);
     expect(recordDatabaseWrite).toHaveBeenCalledWith(
-      "mcp.write_with_invalid_output",
+      "mcp.write_with_invalid_output.run",
     );
   });
 
@@ -327,19 +335,18 @@ describe("MCP catalog schemas", () => {
     const prepare = vi
       .spyOn(operationContext, "prepare")
       .mockResolvedValue(fromAny({ requestContext: {}, entityKernel: {} }));
-    registerMcpTool(server, {
+    registerTestTool(server, {
       name: "freshness_scoped_read",
-      description: "reads",
-      inputSchema: z.object({}),
-      outputSchema: z.object({ ok: z.boolean() }),
-      annotations: { readOnlyHint: true },
-      handler: async () => ({ ok: true }),
+      kind: "query",
+      input: z.object({}),
+      output: z.object({ ok: z.boolean() }),
+      run: async () => ({ ok: true }),
     });
 
     await callMcpTool(
       server,
       "freshness_scoped_read",
-      {},
+      { action: "run" },
       {},
       {
         operationContext,
@@ -348,7 +355,7 @@ describe("MCP catalog schemas", () => {
     await callMcpTool(
       server,
       "freshness_scoped_read",
-      {},
+      { action: "run" },
       {},
       {
         operationContext,
@@ -360,41 +367,15 @@ describe("MCP catalog schemas", () => {
     expect(prepare).toHaveBeenNthCalledWith(2, "context");
   });
 
-  it("publishes every mcp-flagged contract operation as a tool", async () => {
-    const { tools } = await listMcpToolCatalog();
-    const published = new Map(tools.map((tool) => [tool.name, tool]));
-    const flagged = Object.values(contracts).flatMap((contract) =>
-      Object.values(contract.ops).flatMap((op) =>
-        op.kind !== "subscription" && op.mcp
-          ? [{ kind: op.kind, ...op.mcp }]
-          : [],
-      ),
-    );
-
-    expect(flagged.length).toBeGreaterThan(0);
-    for (const op of flagged) {
-      expect([...published.keys()]).toContain(op.name);
-      const tool = published.get(op.name);
-      expect(tool?.description).toBe(op.description);
-      expect(tool?.annotations?.readOnlyHint).toBe(op.kind === "query");
-    }
-  });
-
   it("publishes concrete, mock-free input and output schemas for the live catalog", async () => {
     const { tools } = await listMcpToolCatalog();
-    const noArgumentInputs = new Set([
-      "list_cookbooks",
-      "get_recipe_tags",
-      "list_actionable_tasks",
-      "get_task_summary",
-    ]);
-    const looseOutputs = new Set(["list_problems"]);
+    const looseOutputs = new Set(["activity"]);
     const emptyProperties = <TSchema>(schema: TSchema) => {
       const properties = schemaProperties(schema);
       return properties !== undefined && Object.keys(properties).length === 0;
     };
 
-    expect(tools.length).toBeGreaterThan(50);
+    expect(tools.length).toBe(21);
     expect(
       tools.filter((tool) => !tool.outputSchema).map((tool) => tool.name),
     ).toEqual([]);
@@ -410,10 +391,9 @@ describe("MCP catalog schemas", () => {
       tools
         .filter(
           (tool) =>
-            !noArgumentInputs.has(tool.name) &&
-            (emptyProperties(tool.inputSchema) ||
-              tool.inputSchema === undefined ||
-              schemaProperties(tool.inputSchema) === undefined),
+            emptyProperties(tool.inputSchema) ||
+            tool.inputSchema === undefined ||
+            schemaProperties(tool.inputSchema) === undefined,
         )
         .map((tool) => tool.name),
     ).toEqual([]);
@@ -430,41 +410,40 @@ describe("MCP catalog schemas", () => {
 
   it("keeps public entity-id fields self-describing in the published schemas", async () => {
     const uuidExceptions = new Set([
-      "entity.command.ids",
-      "entity.command.data.externalIds[].id",
-      "entity.command.data.sections[].id",
-      "entity.command.data.sections[].ingredients[].id",
-      "entity.command.data.sections[].instructions[].id",
-      "entity.command.data.unitMappings[].id",
-      // entity_batch items are the same create/update commands as `entity`,
-      // so they carry the same child-row ids (the ones an update edits in place).
-      "entity_batch.items[].data.externalIds[].id",
-      "entity_batch.items[].data.sections[].id",
-      "entity_batch.items[].data.sections[].ingredients[].id",
-      "entity_batch.items[].data.sections[].instructions[].id",
-      "entity_batch.items[].data.unitMappings[].id",
-      "update_meal_recipe.id",
-      "patch_recipe_line.lineId",
-      "remove_meal_recipe.id",
-      "save_meal_recipe_preparation.mealRecipeId",
-      "update_statement_rows.selector.externalIds",
-      "update_statement_rows.data.supersededByExternalId",
-      "delete_statement_rows.selector.externalIds",
+      // delete/bulkUpdate take one kind's ids; the kernel checks each against
+      // that kind's shortcode, since one flat `ids` serves every kind.
+      "entity.ids",
+      "entity.data.externalIds[].id",
+      "entity.data.sections[].id",
+      "entity.data.sections[].ingredients[].id",
+      "entity.data.sections[].instructions[].id",
+      "entity.data.unitMappings[].id",
+      // entity.commands items are the same create/update commands, so they
+      // carry the same child-row ids (the ones an update edits in place).
+      "entity.commands[].data.externalIds[].id",
+      "entity.commands[].data.sections[].id",
+      "entity.commands[].data.sections[].ingredients[].id",
+      "entity.commands[].data.sections[].instructions[].id",
+      "entity.commands[].data.unitMappings[].id",
+      // meal_recipe update/remove take the meal-recipe row id, and
+      // save_preparation its mealRecipeId: the row has no shortcode.
+      "meal_recipe.id",
+      "meal_recipe.mealRecipeId",
+      "recipe_import.lineId",
+      "statement_rows.selector.externalIds",
+      "statement_rows.data.supersededByExternalId",
       // Stable source/workflow identifiers are opaque import evidence keys,
       // not Cubby entity UUIDs or public shortcodes.
-      "prepare_purchase_import.orders[].stableOrderId",
-      "prepare_purchase_import.orders[].itemOperationId",
-      "prepare_purchase_import.orders[].lineIds",
-      "commit_purchase_import.prepareOperationId",
-      "commit_purchase_import.resolutions[].stableOrderId",
-      "commit_purchase_import.resolutions[].stableLineId",
-      "validate_purchase_import.prepareOperationId",
-      "validate_purchase_import.resolutions[].stableOrderId",
-      "validate_purchase_import.resolutions[].stableLineId",
+      "purchase_import.orders[].stableOrderId",
+      "purchase_import.orders[].itemOperationId",
+      "purchase_import.orders[].lineIds",
+      "purchase_import.prepareOperationId",
+      "purchase_import.resolutions[].stableOrderId",
+      "purchase_import.resolutions[].stableLineId",
       // Run-scoped evidence ids address immutable operational captures, not
       // public Cubby entities.
-      "commit_product_enrichment.changes.identifiers[].evidenceId",
-      "commit_product_enrichment.changes.image.evidenceId",
+      "product_enrichment.changes.identifiers[].evidenceId",
+      "product_enrichment.changes.image.evidenceId",
     ]);
     const freeTextIds = new Set([
       "orderId",

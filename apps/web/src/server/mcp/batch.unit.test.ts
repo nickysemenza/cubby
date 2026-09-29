@@ -4,8 +4,7 @@ import { z } from "zod";
 
 import { withErrorReporting } from "~/server/errors/report-error";
 
-import { callMcpTool } from "./mcp-test-utils";
-import { registerBatchTool, WRITE_CLOSED } from "./tools/_shared";
+import { callMcpTool, registerTestTool } from "./mcp-test-utils";
 
 const itemInputSchema = z.object({
   id: z.string(),
@@ -44,14 +43,15 @@ const batchResultSchema = z.object({
 
 function createBatchServer(): McpServer {
   const server = new McpServer({ name: "batch-test", version: "1.0.0" });
-  registerBatchTool(server, {
+  registerTestTool(server, {
     name: "process_items",
-    description: "Process fixture items",
-    itemInputSchema,
-    itemOutputSchema,
-    projectReference: (item) => item.id,
-    annotations: WRITE_CLOSED,
-    run: async (item) => {
+    kind: "mutation",
+    input: itemInputSchema,
+    output: itemOutputSchema,
+    spec: {
+      batch: { reference: (item) => itemOutputSchema.parse(item).id },
+    },
+    run: async (_context, item) => {
       if (item.fail) throw new Error(`Cannot process ${item.id}`);
       return { id: `result-${item.id}`, value: item.id.length };
     },
@@ -59,7 +59,7 @@ function createBatchServer(): McpServer {
   return server;
 }
 
-describe("registerBatchTool", () => {
+describe("MCP batch actions", () => {
   it("preserves distinct capture references through the MCP batch output schema", async () => {
     const capture = vi.fn(() => crypto.randomUUID());
     const response = await withErrorReporting(
@@ -68,6 +68,7 @@ describe("registerBatchTool", () => {
           createBatchServer(),
           "process_items",
           {
+            action: "run",
             items: [
               { id: "first", fail: true },
               { id: "second", fail: true },
@@ -115,6 +116,7 @@ describe("registerBatchTool", () => {
       createBatchServer(),
       "process_items",
       {
+        action: "run",
         items: [{ id: "a" }, { id: "blocked", fail: true }, { id: "ccc" }],
       },
       {},
@@ -142,7 +144,7 @@ describe("registerBatchTool", () => {
     const response = await callMcpTool(
       createBatchServer(),
       "process_items",
-      { items: [{ id: "abcd" }], resultDetail: "full" },
+      { action: "run", items: [{ id: "abcd" }], resultDetail: "full" },
       {},
     );
 

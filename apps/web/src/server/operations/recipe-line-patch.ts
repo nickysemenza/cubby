@@ -1,41 +1,21 @@
-import { positiveAmount } from "@cubby/schemas/codec";
+import type { RecipeShortcode } from "@cubby/schemas/identifiers";
 import type {
   recipeOut,
   recipeIngredientInput,
   recipeUpdateData,
 } from "@cubby/schemas/recipe";
-import { z } from "zod";
+import type { z } from "zod";
 
+import type { recipeLinePatchFields } from "~/contracts/recipe.contract";
+import {
+  type EntityKernelContext,
+  executeEntity,
+} from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
-
-import { idParam } from "./tool-input";
 
 type RecipeDetail = z.infer<typeof recipeOut>;
 type LineInput = z.infer<typeof recipeIngredientInput>;
 type SectionsUpdate = NonNullable<z.infer<typeof recipeUpdateData>["sections"]>;
-
-export const recipeLinePatchFields = z
-  .object({
-    amounts: z
-      .array(positiveAmount)
-      .min(1)
-      .optional()
-      .describe('Replacement amounts, e.g. [{ value: 150, unit: "g" }]'),
-    ingredientId: idParam("ingredient")
-      .optional()
-      .describe("Point the line at this ingredient instead"),
-    subRecipeId: idParam("recipe")
-      .optional()
-      .describe("Point the line at this sub-recipe instead"),
-    rawLine: z.string().optional().describe("Replacement source line text"),
-    modifier: z.string().optional().describe("Replacement prep modifier"),
-  })
-  .refine((patch) => !(patch.ingredientId && patch.subRecipeId), {
-    message: "Give ingredientId or subRecipeId, not both",
-  })
-  .refine((patch) => Object.values(patch).some((v) => v !== undefined), {
-    message: "Give at least one field to change",
-  });
 export type RecipeLinePatch = z.infer<typeof recipeLinePatchFields>;
 
 const lineAsInput = (
@@ -136,5 +116,42 @@ export function buildRecipeLinePatch(
         : { id: candidate.id },
     ),
     line: patched,
+  };
+}
+
+/** Read the recipe, write the one-line `sections` update, and report the patched line. */
+export async function patchRecipeLine(
+  context: EntityKernelContext,
+  input: { recipeId: RecipeShortcode; lineId: string; patch: RecipeLinePatch },
+) {
+  const detail = await executeEntity(context, {
+    action: "get",
+    entity: "recipe",
+    id: input.recipeId,
+    missing: "error",
+  });
+  if (detail.action !== "get" || detail.entity !== "recipe" || !detail.item)
+    throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
+  const { sections, line } = buildRecipeLinePatch(
+    detail.item,
+    input.lineId,
+    input.patch,
+  );
+  await executeEntity(context, {
+    action: "update",
+    entity: "recipe",
+    id: input.recipeId,
+    data: { sections },
+  });
+  return {
+    recipeId: input.recipeId,
+    line: {
+      type: line.type,
+      ingredientId: line.ingredientId,
+      subRecipeId: line.recipeId,
+      amounts: line.amounts,
+      rawLine: line.rawLine,
+      modifier: line.modifier,
+    },
   };
 }

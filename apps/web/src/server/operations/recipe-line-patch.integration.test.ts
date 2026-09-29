@@ -1,5 +1,4 @@
 import { testUserId } from "@cubby/schemas/testing";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -7,14 +6,13 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
+import { callMcpTool, kernelRequestContext } from "~/server/mcp/mcp-test-utils";
+import { createMcpServer } from "~/server/mcp/server";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import { ingredientRef, makeRecipeInput } from "~/server/repo/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { callMcpTool } from "../mcp-test-utils";
-import { registerRecipeTools } from "./recipe.tools";
-
-describe("patch_recipe_line", () => {
+describe("recipe_import.patch_line", () => {
   const ctx = withTestDb();
 
   it("changes one line and leaves every other line, section and instruction in place", async () => {
@@ -63,17 +61,17 @@ describe("patch_recipe_line", () => {
     const before = created.item;
     const onionLine = before.sections[0]!.ingredients[0]!;
 
-    const server = new McpServer({ name: "test", version: "1.0.0" });
-    registerRecipeTools(server);
+    const server = createMcpServer();
     const result = await callMcpTool(
       server,
-      "patch_recipe_line",
+      "recipe_import",
       {
+        action: "patch_line",
         recipeId: before.id,
         lineId: onionLine.id,
         patch: { amounts: [{ value: 150, unit: "g" }] },
       },
-      {},
+      kernelRequestContext(entityKernel),
       { entityKernel },
     );
     expect(result.isError).not.toBe(true);
@@ -113,13 +111,14 @@ describe("patch_recipe_line", () => {
 
     const repointed = await callMcpTool(
       server,
-      "patch_recipe_line",
+      "recipe_import",
       {
+        action: "patch_line",
         recipeId: before.id,
         lineId: before.sections[1]!.ingredients[0]!.id,
         patch: { ingredientId: salt!.shortcode },
       },
-      {},
+      kernelRequestContext(entityKernel),
       { entityKernel },
     );
     expect(repointed.isError).not.toBe(true);
@@ -147,17 +146,17 @@ describe("patch_recipe_line", () => {
       entity: "recipe",
       data: makeRecipeInput({ name: "Line patch empty" }),
     });
-    const server = new McpServer({ name: "test", version: "1.0.0" });
-    registerRecipeTools(server);
+    const server = createMcpServer();
     const result = await callMcpTool(
       server,
-      "patch_recipe_line",
+      "recipe_import",
       {
+        action: "patch_line",
         recipeId: created.item.id,
         lineId: "00000000-0000-4000-8000-000000000000",
         patch: { amounts: [{ value: 1, unit: "g" }] },
       },
-      {},
+      kernelRequestContext(entityKernel),
       { entityKernel },
     );
     expect(result.isError).toBe(true);

@@ -96,14 +96,20 @@ export const mealAddRecipeInput = z.object({
     .describe("Sort order within the meal"),
 });
 
+// mealRecipe.id is a declared exception to shortcode-only ids: the meal-recipe
+// join row has no shortcode, so agents address it by this raw id.
+const mealRecipeOccurrenceId = mealRecipeId.describe(
+  "Meal-recipe ID (the `id` inside a meal's recipes[], NOT the recipe id)",
+);
+
 export const mealUpdateRecipeInput = z.object({
-  id: mealRecipeId,
-  scale: mealScale.optional(),
-  sortOrder: z.number().int().nullable().optional(),
+  id: mealRecipeOccurrenceId,
+  scale: mealScale.optional().describe("New scale multiplier (e.g. 1.5)"),
+  sortOrder: z.number().int().nullable().optional().describe("New sort order"),
 });
 
 export const mealRecipeIdInput = z.object({
-  id: mealRecipeId,
+  id: mealRecipeOccurrenceId,
 });
 
 export const mealFilterFields = {

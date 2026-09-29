@@ -129,7 +129,10 @@ export const productApplyUpcInput = z.object({
 
 export const productFindOrCreateByUPCInput = z.object({
   upc,
-  defaultName: z.string().optional(),
+  defaultName: z
+    .string()
+    .optional()
+    .describe("Fallback name if not found in any database"),
 });
 
 /**

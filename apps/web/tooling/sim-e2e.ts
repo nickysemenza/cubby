@@ -797,15 +797,13 @@ async function runHeadlessPhotoScenario(
     const proposalPool = new Pool({ connectionString: databaseURL });
     try {
       const [
-        { callMcpTool },
-        { McpServer },
-        { registerPhotoImportTools },
+        { callMcpTool, kernelRequestContext },
+        { createMcpServer },
         scenario,
         testing,
       ] = await Promise.all([
         import("~/server/mcp/mcp-test-utils"),
-        import("@modelcontextprotocol/sdk/server/mcp.js"),
-        import("~/server/mcp/tools/photo-import.tools"),
+        import("~/server/mcp/server"),
         import("./scenarios/context"),
         import("@cubby/schemas/testing"),
       ]);
@@ -814,16 +812,11 @@ async function runHeadlessPhotoScenario(
         db,
         testing.testUserId(userId),
       );
-      const server = new McpServer({
-        name: "photo-import-sim",
-        version: "1.0",
-      });
-      registerPhotoImportTools(server);
       const proposed = await callMcpTool(
-        server,
-        "propose_photo_groups",
-        { runId: runID, groups },
-        {},
+        createMcpServer(),
+        "photo_run",
+        { action: "propose_groups", runId: runID, groups },
+        kernelRequestContext(kernel),
         { entityKernel: kernel },
       );
       if (proposed.isError)

@@ -2,7 +2,6 @@ import { productCreateInput } from "@cubby/schemas/product";
 import { testUserId } from "@cubby/schemas/testing";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { wishCreateInput } from "@cubby/schemas/wish";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -12,12 +11,26 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
-import { listMcpToolCatalog } from "~/server/mcp/server";
+import { createMcpServer, listMcpToolCatalog } from "~/server/mcp/server";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { callMcpTool } from "./mcp-test-utils";
-import { registerEntityTools } from "./tools/entity.tools";
+import { callMcpTool, kernelRequestContext } from "./mcp-test-utils";
 import type { ToolArguments } from "./tools/tool-registration";
+
+/** One kernel command through the published tools: reads go to entity_read. */
+const callKernel = (
+  command: ToolArguments,
+  entityKernel: Parameters<typeof kernelRequestContext>[0],
+) =>
+  callMcpTool(
+    createMcpServer(),
+    ["get", "list", "search"].includes(String(command.action))
+      ? "entity_read"
+      : "entity",
+    command,
+    kernelRequestContext(entityKernel),
+    { entityKernel },
+  );
 
 // A scored entity's write summary carries its data-quality coverage beside
 // the identity; a get summary does not (`response-projection.ts`).
@@ -66,18 +79,17 @@ describe("MCP entity kernel boundary", () => {
 
   it("annotates read-only tools from the registry", async () => {
     // The registry's own annotations are the invariant, in both directions:
-    // no tool that writes (`find_or_create_product_by_upc` mints a Product
-    // despite its `find_` prefix) and no read-only tool left out because its
-    // name lacks a list_/get_ prefix (`explain_recipe_costing`).
+    // no tool that writes (`upc.find_or_create` mints a Product) and no
+    // read-only tool left out (`recipe_insights`, whose costing reads).
     const catalog = await listMcpToolCatalog();
     const readOnlyNames = catalog.tools
       .filter((tool) => tool.annotations?.readOnlyHint === true)
       .map((tool) => tool.name)
       .sort();
-    expect(readOnlyNames).toContain("get_entities");
-    expect(readOnlyNames).toContain("explain_recipe_costing");
+    expect(readOnlyNames).toContain("entity_read");
+    expect(readOnlyNames).toContain("recipe_insights");
     expect(readOnlyNames).not.toContain("entity");
-    expect(readOnlyNames).not.toContain("find_or_create_product_by_upc");
+    expect(readOnlyNames).not.toContain("upc");
   });
 
   it("executes generated create, partial update, bulk marking, and delete definitions", async () => {
@@ -174,11 +186,8 @@ describe("MCP entity kernel boundary", () => {
         auth: { userId: testUserId("test-user-id") },
       }),
     );
-    const callEntity = (command: ToolArguments, tool = "entity") => {
-      const server = new McpServer({ name: "test", version: "1.0.0" });
-      registerEntityTools(server);
-      return callMcpTool(server, tool, { command }, {}, { entityKernel });
-    };
+    const callEntity = (command: ToolArguments) =>
+      callKernel(command, entityKernel);
 
     const created = await callEntity({
       action: "create",
@@ -202,27 +211,21 @@ describe("MCP entity kernel boundary", () => {
       other.structuredContent,
     ).item;
 
-    const fetched = await callEntity(
-      {
-        action: "get",
-        entity: "wish",
-        id: createdWish.id,
-      },
-      "get_entities",
-    );
+    const fetched = await callEntity({
+      action: "get",
+      entity: "wish",
+      id: createdWish.id,
+    });
     expect(fetched.isError).not.toBe(true);
     expect(
       wishSummaryResultSchema.parse(fetched.structuredContent).item.name,
     ).toBe("MCP kernel boundary wish");
 
-    const filtered = await callEntity(
-      {
-        action: "list",
-        entity: "vendor",
-        filters: { ids: [otherVendor.id] },
-      },
-      "get_entities",
-    );
+    const filtered = await callEntity({
+      action: "list",
+      entity: "vendor",
+      filters: { ids: [otherVendor.id] },
+    });
     expect(filtered.isError).not.toBe(true);
     expect(listSummarySchema.parse(filtered.structuredContent)).toMatchObject({
       items: [{ id: otherVendor.id, name: "MCP list filter vendor" }],
@@ -237,16 +240,14 @@ describe("MCP entity kernel boundary", () => {
     expect(wrongPrefix.isError).toBe(true);
   });
 
-  it("keeps a product unit mapping's row id across `entity get product`, so resending it updates in place", async () => {
-    const server = new McpServer({ name: "test", version: "1.0.0" });
-    registerEntityTools(server);
+  it("keeps a product unit mapping's row id across `entity_read.get` product, so resending it updates in place", async () => {
     const entityKernel = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, {
         auth: { userId: testUserId("test-user-id") },
       }),
     );
-    const callEntity = (command: ToolArguments, tool = "entity") =>
-      callMcpTool(server, tool, { command }, {}, { entityKernel });
+    const callEntity = (command: ToolArguments) =>
+      callKernel(command, entityKernel);
 
     const created = await callEntity({
       action: "create",
@@ -267,10 +268,12 @@ describe("MCP entity kernel boundary", () => {
     expect(created.isError).not.toBe(true);
     const productId = idResultSchema.parse(created.structuredContent).item.id;
 
-    const fetched = await callEntity(
-      { action: "get", entity: "product", id: productId, resultDetail: "full" },
-      "get_entities",
-    );
+    const fetched = await callEntity({
+      action: "get",
+      entity: "product",
+      id: productId,
+      resultDetail: "full",
+    });
     expect(fetched.isError).not.toBe(true);
     const fetchedItem = productGetResultSchema.parse(
       fetched.structuredContent,
@@ -303,10 +306,12 @@ describe("MCP entity kernel boundary", () => {
     });
     expect(updated.isError).not.toBe(true);
 
-    const refetched = await callEntity(
-      { action: "get", entity: "product", id: productId, resultDetail: "full" },
-      "get_entities",
-    );
+    const refetched = await callEntity({
+      action: "get",
+      entity: "product",
+      id: productId,
+      resultDetail: "full",
+    });
     const refetchedItem = productGetResultSchema.parse(
       refetched.structuredContent,
     ).item;

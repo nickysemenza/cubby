@@ -55,7 +55,7 @@ export function sdkOutputSchema(schema: z.core.$ZodType): z.ZodType {
   return schema instanceof z.ZodObject ? schema : z.looseObject({});
 }
 
-function safeToJsonSchema(
+export function safeToJsonSchema(
   schema: z.core.$ZodType,
   io: "input" | "output",
 ): JsonObject {

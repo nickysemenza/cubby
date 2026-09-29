@@ -13,7 +13,22 @@ import { recipeMcpOut } from "@cubby/schemas/recipe";
 import { foodSummary } from "@cubby/usda-schemas";
 import { z } from "zod";
 
-import { resolveProductPricing } from "~/server/repo/product/pricing";
+/**
+ * MCP token-budget projections, applied as an action's `project` in
+ * `mcp-tools.ts`. Pure — contract modules may import only schema code — so the
+ * generator loads them with the tool declarations.
+ */
+
+/** `resolveProductPricing(price)` without an Expense aggregate: the explicit override or nothing. */
+const pricingFromExplicitPrice = (price: number | null) => ({
+  derivedPrice: null,
+  effectivePrice: price,
+  source: price === null ? ("none" as const) : ("explicit" as const),
+  knownExpenseCount: 0,
+  unknownExpenseCount: 0,
+  knownUnitCount: 0,
+  partial: false,
+});
 
 function parseAs<TSchema extends z.ZodType, TInput>(
   schema: TSchema,
@@ -47,7 +62,7 @@ export function slimProduct<TInput>(row: TInput) {
   const itemImages = product.images ?? [];
   const labelImages = product.labelImages ?? [];
   const cover = itemImages.find(isDisplayableImageFile) ?? null;
-  const pricing = product.pricing ?? resolveProductPricing(product.price);
+  const pricing = product.pricing ?? pricingFromExplicitPrice(product.price);
   return productMcpOut.parse({
     id: product.id,
     name: product.name,
@@ -369,4 +384,21 @@ export function respondList<TInput, TOutput>(
   project: (row: TInput) => TOutput,
 ): ProjectedList<TOutput> {
   return { items: result.map(project) };
+}
+
+/**
+ * `{ items }` — the root every MCP list output wraps its array in. A bare array
+ * root has no JSON Schema `properties`, and the MCP SDK re-validates
+ * `structuredContent` against the declared output schema, so a tool whose root
+ * is an array fails every call. Takes the member's own schema instance.
+ */
+export function mcpItemsEnvelope<Items extends z.ZodTypeAny>(items: Items) {
+  return z.object({ items });
+}
+
+/** `{ results }` — the same envelope for a per-input-name result list. */
+export function mcpResultsEnvelope<Results extends z.ZodTypeAny>(
+  results: Results,
+) {
+  return z.object({ results });
 }

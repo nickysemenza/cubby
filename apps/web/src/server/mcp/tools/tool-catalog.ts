@@ -1,12 +1,19 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
+import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
+import type {
+  ServerNotification,
+  ServerRequest,
+  ToolAnnotations,
+} from "@modelcontextprotocol/sdk/types.js";
 import {
   ListToolsRequestSchema,
   ListToolsResultSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { z } from "zod";
+import { type JSONType, z } from "zod";
 
 import { advertisedJsonSchema } from "./tool-json-schema";
+
+type JsonObject = Extract<JSONType, { [key: string]: JSONType }>;
 
 export type SdkRegisteredTool = {
   title?: string;
@@ -81,6 +88,29 @@ export function listDeclaredToolSchemas(
     }));
 }
 
+const declaredInputJsonSchemas = new WeakMap<
+  McpServer,
+  Map<string, JsonObject>
+>();
+
+/**
+ * The published input JSON Schema of a multi-action tool. Its SDK-registered
+ * input is a loose `{ action }` object (the per-action schemas are parsed by
+ * the tool itself), so the precise document is declared here instead.
+ */
+export function declareToolInputJsonSchema(
+  server: McpServer,
+  name: string,
+  schema: JsonObject,
+): void {
+  const existing = declaredInputJsonSchemas.get(server);
+  if (existing) {
+    existing.set(name, schema);
+    return;
+  }
+  declaredInputJsonSchemas.set(server, new Map([[name, schema]]));
+}
+
 /** Keeps the precise output contract when the SDK needs an object fallback. */
 export function declareToolOutputSchema(
   server: McpServer,
@@ -95,28 +125,64 @@ export function declareToolOutputSchema(
   declaredOutputSchemas.set(server, new Map([[name, outputSchema]]));
 }
 
-/** Installs the catalog adapter that strips fixture-only JSON Schema metadata. */
-export function installMockStrippedListToolsHandler(server: McpServer): void {
+/**
+ * Per-caller view of one tool: a replacement description and input schema,
+ * `null` to hide the tool, or undefined to publish it unchanged.
+ */
+export type ToolCatalogView = (
+  name: string,
+) => { description: string; inputSchema: JsonObject } | null | undefined;
+
+/**
+ * Installs the catalog adapter that strips fixture-only JSON Schema metadata.
+ * `narrow` may return a view for the calling principal (the purchase agent
+ * sees only its run's actions).
+ */
+export function installMockStrippedListToolsHandler(
+  server: McpServer,
+  narrow?: (
+    extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
+  ) => Promise<ToolCatalogView | undefined>,
+): void {
   const registeredTools = getRegisteredTools(server);
 
-  server.server.setRequestHandler(ListToolsRequestSchema, () =>
-    ListToolsResultSchema.parse({
-      tools: listDeclaredToolSchemas(server).map(
+  server.server.setRequestHandler(ListToolsRequestSchema, async (_, extra) => {
+    const view = narrow ? await narrow(extra) : undefined;
+    return ListToolsResultSchema.parse({
+      tools: listDeclaredToolSchemas(server).flatMap(
         ({ name, inputSchema, outputSchema }) => {
           const tool = registeredTools[name];
-          return {
-            name,
-            title: tool?.title,
-            description: tool?.description,
-            inputSchema: advertisedJsonSchema(name, inputSchema, "input"),
-            annotations: tool?.annotations,
-            outputSchema: outputSchema
-              ? advertisedJsonSchema(name, outputSchema, "output")
-              : undefined,
-            _meta: tool?._meta,
-          };
+          const narrowed = view ? view(name) : undefined;
+          if (narrowed === null) return [];
+          return [
+            {
+              name,
+              title: tool?.title,
+              description: narrowed?.description ?? tool?.description,
+              inputSchema:
+                narrowed?.inputSchema ??
+                declaredInputJsonSchemas.get(server)?.get(name) ??
+                advertisedJsonSchema(name, inputSchema, "input"),
+              annotations: tool?.annotations,
+              outputSchema: outputSchema
+                ? outputJsonSchema(name, outputSchema)
+                : undefined,
+              _meta: tool?._meta,
+            },
+          ];
         },
       ),
-    }),
-  );
+    });
+  });
+}
+
+const outputJsonSchemas = new WeakMap<z.core.$ZodType, JsonObject>();
+
+/** Output schemas are static per isolate; the largest serializes to megabytes. */
+function outputJsonSchema(name: string, schema: z.core.$ZodType): JsonObject {
+  const cached = outputJsonSchemas.get(schema);
+  if (cached) return cached;
+  const json = advertisedJsonSchema(name, schema, "output");
+  outputJsonSchemas.set(schema, json);
+  return json;
 }
