@@ -10667,6 +10667,18 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "input": {
+          "name": "input",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "progress": {
+          "name": "progress",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -10880,7 +10892,7 @@
         },
         "Run_purpose_check": {
           "name": "Run_purpose_check",
-          "value": "\"Run\".\"purpose\" IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'ai_action', 'background', 'file_import', 'legacy')"
+          "value": "\"Run\".\"purpose\" IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'background', 'file_import', 'mail_search')"
         },
         "Run_photo_inventory_no_vendor_check": {
           "name": "Run_photo_inventory_no_vendor_check",
@@ -11664,142 +11676,6 @@
           "value": "\"ImportSourceClaim\".\"kind\" IN ('browser_order', 'mail_message', 'mail_attachment', 'receipt_photo', 'vendor_export')"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.RunMutation": {
-      "name": "RunMutation",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "runId": {
-          "name": "runId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "targetKind": {
-          "name": "targetKind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "targetId": {
-          "name": "targetId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "mutationKind": {
-          "name": "mutationKind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "fields": {
-          "name": "fields",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "postFingerprint": {
-          "name": "postFingerprint",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "auditLogId": {
-          "name": "auditLogId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "RunMutation_run_idx": {
-          "name": "RunMutation_run_idx",
-          "columns": [
-            {
-              "expression": "runId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "RunMutation_target_idx": {
-          "name": "RunMutation_target_idx",
-          "columns": [
-            {
-              "expression": "targetKind",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "targetId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "RunMutation_runId_Run_id_fk": {
-          "name": "RunMutation_runId_Run_id_fk",
-          "tableFrom": "RunMutation",
-          "tableTo": "Run",
-          "columnsFrom": [
-            "runId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "RunMutation_target_fk": {
-          "name": "RunMutation_target_fk",
-          "tableFrom": "RunMutation",
-          "tableTo": "Entity",
-          "columnsFrom": [
-            "targetId",
-            "targetKind"
-          ],
-          "columnsTo": [
-            "id",
-            "kind"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.RunOperation": {
@@ -13693,131 +13569,6 @@
           "tableTo": "LedgerParty",
           "columnsFrom": [
             "ledgerPartyId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.VendorMailSearchJob": {
-      "name": "VendorMailSearchJob",
-      "schema": "",
-      "columns": {
-        "runId": {
-          "name": "runId",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "after": {
-          "name": "after",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "pageToken": {
-          "name": "pageToken",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "searchTerms": {
-          "name": "searchTerms",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'"
-        },
-        "pagesScanned": {
-          "name": "pagesScanned",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'queued'"
-        },
-        "searched": {
-          "name": "searched",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "skipped": {
-          "name": "skipped",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "reviewable": {
-          "name": "reviewable",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "nextPageToken": {
-          "name": "nextPageToken",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "error": {
-          "name": "error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "startedAt": {
-          "name": "startedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "finishedAt": {
-          "name": "finishedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "VendorMailSearchJob_runId_Run_id_fk": {
-          "name": "VendorMailSearchJob_runId_Run_id_fk",
-          "tableFrom": "VendorMailSearchJob",
-          "tableTo": "Run",
-          "columnsFrom": [
-            "runId"
           ],
           "columnsTo": [
             "id"
@@ -16917,15 +16668,15 @@
           "primaryKey": false,
           "notNull": false
         },
-        "entityKind": {
-          "name": "entityKind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "entityId": {
           "name": "entityId",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "entityKind": {
+          "name": "entityKind",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -17386,11 +17137,17 @@
           "method": "btree",
           "with": {}
         },
-        "AuditLog_runId_idx": {
-          "name": "AuditLog_runId_idx",
+        "AuditLog_runId_entityKind_idx": {
+          "name": "AuditLog_runId_entityKind_idx",
           "columns": [
             {
               "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entityKind",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
