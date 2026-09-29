@@ -40,7 +40,10 @@ export async function suggestUsdaFoodsForProduct(
     await products.one(db, productCode),
   );
   if (!source)
-    throw createAppError("NOT_FOUND", `Product not found: ${productCode}`);
+    throw createAppError(
+      "PRODUCT_NOT_FOUND",
+      `Product not found: ${productCode}`,
+    );
   const candidates: UsdaProductSuggestions["candidates"] = [];
   const seen = new Set<number>();
   const add = (
