@@ -34,7 +34,7 @@ struct ImageEntityDetailView: View {
                         preferredAnalysis: processing.preferred,
                         history: processing.entries,
                         totalAnalyses: processing.total, jobs: jobs.runs, totalJobs: jobs.total,
-                            showingAllAnalyses: $showingAllAnalyses, showingAllJobs: $showingAllJobs)
+                        showingAllAnalyses: $showingAllAnalyses, showingAllJobs: $showingAllJobs)
                     if developerOverlays {
                         Section("Developer overlays") {
                             DevOverlayText(ImageDiagnostics.compareCaption(diagnostics))
@@ -114,7 +114,7 @@ struct ImageEntityDetailView: View {
     private func load() async {
         error = nil
         do {
-            async let detail = appModel.client.imageDetail(id)
+            async let detail = appModel.client.imageDetail(.init(id: id.rawValue))
             async let analyses = processing.load(id: id, client: appModel.client)
             async let jobLoad = jobs.load(id: id, client: appModel.client)
             self.detail = try await detail
@@ -203,7 +203,8 @@ private struct PhotoTab: View {
                 ForEach(Array(sightings.enumerated()), id: \.offset) { _, sighting in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(
-                            "\(sighting.ownerName ?? "Unknown owner") · \(sighting.deviceName ?? "Unknown device")")
+                            "\(sighting.ownerName ?? "Unknown owner") · \(sighting.deviceName ?? "Unknown device")"
+                        )
                         Text(
                             (sighting.capturedAt ?? sighting.observedAt)
                                 .formatted(date: .abbreviated, time: .omitted)
@@ -325,10 +326,10 @@ private final class ImageProcessingHistoryModel {
         defer { loading = false }
         do {
             let page = try await client.imageAnalyses(
-                id, cursor: reset ? nil : nextCursor, limit: reset ? 10 : 20)
+                .init(id: id.rawValue, cursor: reset ? nil : nextCursor, limit: reset ? 10 : 20))
             if reset {
                 do {
-                    currentAnalyses = try await client.imageProcessingStatus(id).analyses
+                    currentAnalyses = try await client.imageProcessingStatus(.init(id: id.rawValue)).analyses
                 } catch {
                     Diagnostics.report(error, context: "photos.imageProcessingStatus")
                 }

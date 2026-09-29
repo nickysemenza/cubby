@@ -438,14 +438,14 @@ struct LocationGalleryListView: View {
                         Picker("Type", selection: $type) {
                             Text("All").tag("all")
                             ForEach(
-                                Array(Set(model.locations.compactMap { $0._type?.rawValue })).sorted(),
+                                Array(Set(model.locations.compactMap { $0._type.rawValue })).sorted(),
                                 id: \.self
                             ) {
                                 Text($0.capitalized).tag($0)
                             }
                         }
                         ForEach(
-                            model.locations.filter { type == "all" || $0._type?.rawValue == type }, id: \.id
+                            model.locations.filter { type == "all" || $0._type.rawValue == type }, id: \.id
                         ) { node in
                             NavigationLink(value: Route.entityDetail(.location, id: node.id.rawValue)) {
                                 HStack {

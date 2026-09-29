@@ -92,7 +92,7 @@ struct AuditEntryRow: View {
 
     private var record: RecordSelection? {
         guard entry.action != .delete,
-            let key = EntityKey(rawValue: entry.entityType.rawValue),
+            let key = EntityKey(rawValue: entry.entityKind.rawValue),
             let id = entry.canonicalEntityId ?? entry.entityId
         else { return nil }
         return RecordSelection(key: key, id: id)
@@ -119,9 +119,9 @@ struct AuditEntryRow: View {
             Image(systemName: entry.action == .delete ? "trash" : "clock.arrow.circlepath")
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 3) {
-                Text(entry.entityName ?? entry.entityType.rawValue.capitalized)
+                Text(entry.entityName ?? entry.entityKind.rawValue.capitalized)
                     .font(.subheadline.weight(.medium))
-                Text("\(entry.action.rawValue.capitalized) · \(entry.entityType.rawValue)")
+                Text("\(entry.action.rawValue.capitalized) · \(entry.entityKind.rawValue)")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
@@ -780,7 +780,7 @@ private func formattedDueDate(_ raw: String) -> String {
                 ],
                 entries: [
                     AuditLogEntryOut(
-                        entryKey: "synthetic-change", entityType: .product,
+                        entryKey: "synthetic-change", entityKind: .product,
                         entityId: "PRD-2345", entityName: "Sample Product", action: .update,
                         userId: "synthetic-user", channel: .web, createdAt: .now)
                 ])

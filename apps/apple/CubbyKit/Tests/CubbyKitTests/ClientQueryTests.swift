@@ -153,7 +153,7 @@ struct ClientQueryTests {
         survivor["displayName"] = "Sample Product at Workshop"
         let response = try JSONSerialization.data(withJSONObject: [
             "items": [survivor],
-            "sideEffects": ["backgroundBatches": []],
+            "sideEffects": [:],
         ])
         let seen = Mutex<(path: String, body: [String: JSONValue])?>(nil)
         QueryStub.handler.withLock { handler in
@@ -184,9 +184,9 @@ struct ClientQueryTests {
                 ]))
     }
 
-    @Test func searchRepeatsTheArrayKeyForEachEntityType() async throws {
+    @Test func searchRepeatsTheArrayKeyForEachEntityKind() async throws {
         // An empty result page: only the outgoing request matters here, and `search-find.json`
-        // (built for `SearchHitTests`'s lenient decode of an unknown `entityType`) would fail the
+        // (built for `SearchHitTests`'s lenient decode of an unknown `entityKind`) would fail the
         // real typed decode this call makes.
         let request = try await capture(returning: Data("[]".utf8)) { client in
             _ = try await client.search("sample", kinds: [.product, .location], limit: 5)
@@ -195,7 +195,7 @@ struct ClientQueryTests {
         #expect(items.contains(URLQueryItem(name: "query", value: "sample")))
         #expect(items.contains(URLQueryItem(name: "limit", value: "5")))
         // One repeated key, not a single JSON-array-encoded value.
-        #expect(items.filter { $0.name == "entityTypes" }.map(\.value) == ["product", "location"])
+        #expect(items.filter { $0.name == "entityKinds" }.map(\.value) == ["product", "location"])
         #expect(!items.contains { $0.value?.contains("[") == true })
     }
 }

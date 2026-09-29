@@ -15,11 +15,11 @@ struct SearchHitTests {
         #expect(hits[1].typeHint == "box")
     }
 
-    /// `entityType` is a raw string on the wire, so a kind the catalog has not declared still
+    /// `entityKind` is a raw string on the wire, so a kind the catalog has not declared still
     /// decodes; it surfaces as `key == nil` and `SearchModel` drops it instead of failing the page.
     @Test func unknownKindIsNil() throws {
         let hits = try Fixtures.decode([SearchHit].self, from: "search-find.json")
-        #expect(hits[2].entityType == "widget")
+        #expect(hits[2].entityKind == "widget")
         #expect(hits[2].key == nil)
     }
 }

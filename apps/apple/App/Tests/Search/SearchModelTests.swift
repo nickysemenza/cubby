@@ -67,13 +67,13 @@ struct SearchModelTests {
     @Test(.timeLimit(.minutes(1)))
     func changingScopeInvalidatesVisibleResultsImmediatelyAndUsesTheLatestScope() async throws {
         defer { SearchModelStub.handler.withLock { $0 = nil } }
-        let entityTypes = Mutex<[String]>([])
+        let entityKinds = Mutex<[String]>([])
         SearchModelStub.handler.withLock { handler in
             handler = { request in
-                entityTypes.withLock { values in
+                entityKinds.withLock { values in
                     values =
                         URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?
-                        .queryItems?.filter { $0.name == "entityTypes" }.compactMap(\.value) ?? []
+                        .queryItems?.filter { $0.name == "entityKinds" }.compactMap(\.value) ?? []
                 }
                 return (200, Self.searchPayload(title: "scoped"))
             }
@@ -87,7 +87,7 @@ struct SearchModelTests {
         let finished = await waitUntil { Self.resultTitle(in: model.phase) == "scoped" }
 
         #expect(finished)
-        #expect(entityTypes.withLock { $0 } == ["product"])
+        #expect(entityKinds.withLock { $0 } == ["product"])
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -160,7 +160,7 @@ struct SearchModelTests {
     nonisolated private static func searchPayload(title: String) -> Data {
         let object: [[String: Any]] = [
             [
-                "id": "PRD-2345", "entityType": "product", "title": title,
+                "id": "PRD-2345", "entityKind": "product", "title": title,
                 "subtitle": NSNull(), "typeHint": NSNull(), "imageUrl": NSNull(), "matchKind": "prefix",
                 "matchField": "title", "matchReason": "", "matchTerms": [title],
             ]

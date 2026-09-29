@@ -90,7 +90,7 @@ final class StubRecountService: RecountService, Sendable {
     func resolveStrays(to target: LocationCode, moves: [StrayMove]) async throws -> ResolveScanStraysOut {
         record(.resolve(target))
         return ResolveScanStraysOut(
-            moved: moves.count, skipped: [], sideEffects: .init(backgroundBatches: []))
+            moved: moves.count, skipped: [], sideEffects: .init())
     }
 }
 
