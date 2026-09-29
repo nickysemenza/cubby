@@ -100,9 +100,9 @@ struct OrderMailDetailSlot: View {
             switch scope {
             case .vendor(let vendorID, let ledgerPartyID):
                 worklist = try await appModel.client.vendorOrderMail(
-                    vendorID: vendorID, ledgerPartyID: ledgerPartyID)
+                    .init(vendorId: vendorID, ledgerPartyId: ledgerPartyID))
             case .purchase(let purchaseID):
-                worklist = try await appModel.client.purchaseOrderMail(purchaseID)
+                worklist = try await appModel.client.purchaseOrderMail(.init(purchaseId: purchaseID))
             }
             error = nil
         } catch {

@@ -31,7 +31,7 @@ final class StubScanService: ScanService, Sendable {
     }
 
     func resolveStrays(to target: LocationCode, moves: [StrayMove]) async throws -> ResolveScanStraysOut {
-        ResolveScanStraysOut(moved: moves.count, skipped: [], sideEffects: .init(backgroundBatches: []))
+        ResolveScanStraysOut(moved: moves.count, skipped: [], sideEffects: .init())
     }
 
     static func result(
@@ -43,7 +43,7 @@ final class StubScanService: ScanService, Sendable {
             product: .init(
                 id: ProductCode(id), name: name, created: false, manufacturer: nil, hasPrice: true),
             strays: strays,
-            sideEffects: .init(backgroundBatches: [])
+            sideEffects: .init()
         )
     }
 }

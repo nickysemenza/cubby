@@ -1,7 +1,7 @@
 [
   {
     "id": "PRD-2345",
-    "entityType": "product",
+    "entityKind": "product",
     "title": "Sample Product",
     "subtitle": "Sample Manufacturer",
     "typeHint": null,
@@ -15,7 +15,7 @@
   },
   {
     "id": "LOC-5678",
-    "entityType": "location",
+    "entityKind": "location",
     "title": "Bin 1",
     "subtitle": "Home › Garage › Shelf A",
     "typeHint": "box",
@@ -29,7 +29,7 @@
   },
   {
     "id": "WDG-2345",
-    "entityType": "widget",
+    "entityKind": "widget",
     "title": "Sample Widget",
     "subtitle": null,
     "typeHint": null,

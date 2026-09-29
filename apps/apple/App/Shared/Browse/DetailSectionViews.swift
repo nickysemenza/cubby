@@ -516,7 +516,7 @@ struct EntityJournalEntryRow: View {
                     }
                 }
             }
-            if let note = row.raw["note"]?.stringValue, !note.isEmpty {
+            if let note = row.raw["notes"]?.stringValue, !note.isEmpty {
                 Text(note).font(.fieldGuideBody).fixedSize(horizontal: false, vertical: true)
             }
             if let amount = row.raw["harvestAmount"]?.stringValue, !amount.isEmpty {

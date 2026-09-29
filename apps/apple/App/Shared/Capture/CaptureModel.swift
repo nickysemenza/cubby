@@ -94,8 +94,7 @@ final class CaptureModel {
             tree = fresh
             missingBins = (fresh[anchor]?.childNodes ?? []).filter { child in
                 !seenBins.contains(child.id)
-                    && (child._type == nil || child._type == .box || child._type == .bag
-                        || child._type == .planter)
+                    && (child._type == .box || child._type == .bag || child._type == .planter)
             }
             missingError = nil
         } catch {

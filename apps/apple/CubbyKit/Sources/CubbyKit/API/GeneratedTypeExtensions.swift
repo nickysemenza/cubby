@@ -39,25 +39,25 @@ extension Amount {
 
 extension EntityRef: Identifiable {
     public init(entity: EntityKey, id: String) {
-        self.init(entityType: entity, entityId: id)
+        self.init(entityKind: entity, entityId: id)
     }
 
     public init(_ root: EntityGraphRoot) {
-        self.init(entityType: root.entityType, entityId: root.entityId)
+        self.init(entityKind: root.entityKind, entityId: root.entityId)
     }
 
-    public var entity: EntityKey { entityType }
+    public var entity: EntityKey { entityKind }
     public var id: String { entityId }
-    public var stableKey: String { "\(entityType.rawValue):\(entityId)" }
+    public var stableKey: String { "\(entityKind.rawValue):\(entityId)" }
 
     var graphRootInput: EntityGraphRootInput {
-        .init(entityType: entityType, entityId: entityId)
+        .init(entityKind: entityKind, entityId: entityId)
     }
 }
 
 extension EntityGraphRoot {
     public init(_ reference: EntityRef) {
-        self.init(entityType: reference.entityType, entityId: reference.entityId)
+        self.init(entityKind: reference.entityKind, entityId: reference.entityId)
     }
 }
 
@@ -65,12 +65,12 @@ extension EntityGraphNode: Identifiable {
     /// Fixtures and previews build nodes from a reference; the wire carries the parts.
     public init(reference: EntityRef, label: String, metadata: [String: String] = [:], imageURL: URL? = nil) {
         self.init(
-            entityType: reference.entityType, entityId: reference.entityId, label: label,
+            entityKind: reference.entityKind, entityId: reference.entityId, label: label,
             metadata: .init(additionalProperties: metadata),
             image: imageURL.map { .init(url: $0.absoluteString) })
     }
 
-    public var reference: EntityRef { EntityRef(entityType: entityType, entityId: entityId) }
+    public var reference: EntityRef { EntityRef(entityKind: entityKind, entityId: entityId) }
     public var id: String { reference.stableKey }
     public var imageURL: URL? { image.flatMap { URL(string: $0.url) } }
 }
@@ -125,9 +125,9 @@ extension ScanStrayOut: Identifiable {
 // MARK: - Search
 
 extension SearchHit {
-    /// `entityType` is the raw searchable-entity name; `nil` for a kind the catalog does not
+    /// `entityKind` is the raw searchable-entity name; `nil` for a kind the catalog does not
     /// declare, which `SearchModel` drops rather than renders.
-    public var key: EntityKey? { EntityKey(rawValue: entityType) }
+    public var key: EntityKey? { EntityKey(rawValue: entityKind) }
     public var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
 
     /// The server's caps on a `search.find` query.
@@ -238,13 +238,13 @@ extension DashboardCountsOut {
 // MARK: - Images
 
 extension InitiateUploadWithoutEntity {
-    /// `image.uploadImage`'s `entityType` names the owning table for storage placement; an entity
+    /// `image.uploadImage`'s `entityKind` names the owning table for storage placement; an entity
     /// outside its enum uploads untyped. `EntityImage`'s raw values are `EntityKey.rawValue`
     /// upper-cased, so the case is derived rather than hand-listed (a hand-listed switch once
     /// dropped `gardenEntry`).
     public init(filename: String, size: Int, format: ImageEncoding.Format, entity: EntityKey) {
         self.init(filename: filename, size: size, contentType: format == .png ? .imagePng : .imageJpeg)
-        entityType = EntityImage(rawValue: entity.rawValue.uppercased())
+        entityKind = EntityImage(rawValue: entity.rawValue.uppercased())
     }
 }
 
@@ -260,9 +260,9 @@ extension ImageWithEntity {
 }
 
 extension ImageAssociation: Identifiable {
-    public var id: String { "\(entityType.rawValue):\(entityId):\(role.rawValue)" }
+    public var id: String { "\(entityKind.rawValue):\(entityId):\(role.rawValue)" }
     /// The catalog key, when the association's entity is one the catalog knows.
-    public var key: EntityKey? { EntityKey(rawValue: entityType.rawValue) }
+    public var key: EntityKey? { EntityKey(rawValue: entityKind.rawValue) }
 }
 
 extension PhotoLocalAnalysis {

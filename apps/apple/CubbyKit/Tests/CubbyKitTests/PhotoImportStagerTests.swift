@@ -138,7 +138,7 @@ struct PhotoImportStagerTests {
         }
         return """
             {"items": [{"imageId": "\(imageID)", "status": "\(status)", \
-            "associations": [{"entityType": "product", "entityId": "PRD-0001", \
+            "associations": [{"entityKind": "product", "entityId": "PRD-0001", \
             "entityName": "Sample", "role": "attachment"}]}], "missing": [\(missingJSON)]}
             """
     }

@@ -32,7 +32,7 @@ struct RecordPathView: View {
                 ForEach(Array(nodes.dropFirst().enumerated()), id: \.offset) { indexed in
                     if indexed.offset > 0 { Text("→").foregroundStyle(.secondary) }
                     NavigationLink(
-                        value: Route.entityDetail(indexed.element.entityType, id: indexed.element.entityId)
+                        value: Route.entityDetail(indexed.element.entityKind, id: indexed.element.entityId)
                     ) {
                         Text(indexed.element.label).lineLimit(1)
                     }
@@ -60,7 +60,7 @@ struct ConnectedSectionView: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 NavigationLink(
                                     value: Route.entityDetail(
-                                        item.target.entityType, id: item.target.entityId)
+                                        item.target.entityKind, id: item.target.entityId)
                                 ) {
                                     Text(item.target.label).font(.body.weight(.medium))
                                 }

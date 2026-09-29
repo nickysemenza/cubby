@@ -602,14 +602,19 @@ extension JSONValue {
 
 /**
  * `CubbyClient` methods that are exactly one generated call: the operation
- * takes no path or query parameters, its JSON body (if any) is the method's
- * only argument, and its 200 body is the result. Keyed by operation id; the
- * value is the public method name call sites use and an optional doc line.
- * Anything that maps, converts, branches or unwraps stays hand-written in
- * `CubbyClient.swift`.
+ * takes no path parameters, its JSON body or its query object (never both) is
+ * the method's only argument, and its 200 body is the result. A query object
+ * is the generated `Operations.<Id>.Input.Query`, aliased as
+ * `<Method>Query` in the same file so a call site writes
+ * `client.runAiUsage(.init(runId: id))` without importing `CubbyAPI`. Keyed by
+ * operation id; the value is the public method name call sites use and an
+ * optional doc line. Anything that maps, converts, branches or unwraps stays
+ * hand-written in `CubbyClient.swift`.
  */
 const CLIENT_PASSTHROUGH_METHODS = {
+  "activity.detail": { method: "activityDetail", doc: null },
   "activity.devices": { method: "activityDevices", doc: null },
+  "activity.events": { method: "activityEvents", doc: null },
   "dashboard.counts": { method: "dashboardCounts", doc: null },
   "inventory.confirmOwnership": {
     method: "confirmInventoryOwnership",
@@ -619,7 +624,16 @@ const CLIENT_PASSTHROUGH_METHODS = {
     method: "setInventoryOwnership",
     doc: "Applies a stored ownership choice to all or part of one inventory row. A partial quantity may split the row; callers must refresh the returned entry ids rather than assuming the original row is the only record changed.",
   },
+  "image.detail": { method: "imageDetail", doc: null },
+  "imageProcessing.analyses": { method: "imageAnalyses", doc: null },
+  "imageProcessing.status": { method: "imageProcessingStatus", doc: null },
+  "photoImport.candidates": { method: "photoProductCandidates", doc: null },
+  "photoImport.chooseExisting": {
+    method: "choosePhotoGroupProduct",
+    doc: null,
+  },
   "photoImport.commit": { method: "commitPhotoImport", doc: null },
+  "photoImport.discardGroup": { method: "discardPhotoGroup", doc: null },
   "photoImport.createRun": {
     method: "createPhotoRun",
     doc: "Starts a native-tagged photo-inventory run (`PhotoImportRunUploader`'s bulk-upload entry point). Distinct from the manifest-based `stage`/`commit` pair: a run has no per-photo destination, only ordered positions finalized in chunks.",
@@ -628,19 +642,29 @@ const CLIENT_PASSTHROUGH_METHODS = {
     method: "finalizePhotoRun",
     doc: "Finalizes one chunk (≤100 images) of a bulk upload into `input.runId`. Idempotent: a retry after a transport error replays safely, since a previously finalized image comes back in `alreadyFinalized` rather than erroring.",
   },
+  "photoImport.reconcile": {
+    method: "reconcilePhotoImport",
+    doc: "Waits for any in-flight commit touching these rows, then returns one transactionally consistent status and direct-association snapshot.",
+  },
+  "photoImport.review": { method: "photoRunReview", doc: null },
   "photoImport.stage": { method: "stagePhotoImport", doc: null },
+  "photoImport.startGrouping": { method: "startPhotoGrouping", doc: null },
   "photoImport.updateDraft": { method: "updatePhotoGroupDraft", doc: null },
   "problems.getCounts": { method: "problemCounts", doc: null },
   "purchaseImport.initiateRunEvidenceUpload": {
     method: "initiateRunEvidenceUpload",
     doc: "Stages immutable browser/manual evidence for one explicit targeted-import scope. The server allocates R2 directly; this must never use the shared Image/Document pathways.",
   },
+  "purchase.orderMail": { method: "purchaseOrderMail", doc: null },
+  "run.aiUsage": { method: "runAiUsage", doc: null },
+  "run.workSnapshot": { method: "runWorkSnapshot", doc: null },
   "statementRow.commitCsv": { method: "commitStatementCsv", doc: null },
   "statementRow.previewCsv": { method: "previewStatementCsv", doc: null },
   "task.todayBriefing": {
     method: "todayBriefing",
     doc: "The complete ranked task briefing, including summary counts outside the visible prefix.",
   },
+  "vendor.orderMail": { method: "vendorOrderMail", doc: null },
 } as const satisfies Readonly<
   Record<string, Readonly<{ method: string; doc: string | null }>>
 >;
@@ -702,9 +726,13 @@ export const renderClientOperations = (
         throw new Error(
           `${id} is a CubbyClient pass-through but not a native operation`,
         );
-      if (route.pathParameters.length > 0 || route.queryParameters.length > 0)
+      if (route.pathParameters.length > 0)
         throw new Error(
-          `${id} takes path or query parameters; its CubbyClient method must be hand-written`,
+          `${id} takes path parameters; its CubbyClient method must be hand-written`,
+        );
+      if (route.queryParameters.length > 0 && route.hasBody)
+        throw new Error(
+          `${id} takes both a body and query parameters; its CubbyClient method must be hand-written`,
         );
       const item = Object.entries(document.paths).find(
         ([path]) => path === route.route,
@@ -715,15 +743,31 @@ export const renderClientOperations = (
         )?.[1],
       );
       const output = aliasName(operation.responses["200"], id);
-      const input =
+      const body =
         operation.requestBody === undefined
           ? null
           : aliasName(operation.requestBody, id);
-      const call = `api.${id.replaceAll(".", "_")}(${input === null ? "" : "body: .json(input)"})`;
+      const hasQuery = route.queryParameters.length > 0;
+      const swiftId = id.replaceAll(".", "_");
+      // swift-openapi-generator's namespace for an operation: the id with its
+      // first letter capitalised (`run_aiUsage` -> `Operations.Run_aiUsage`).
+      const queryAlias = `${method[0]!.toUpperCase()}${method.slice(1)}Query`;
+      const queryType = `Operations.${swiftId[0]!.toUpperCase()}${swiftId.slice(1)}.Input.Query`;
+      const parameter =
+        body !== null
+          ? `_ input: ${body}`
+          : hasQuery
+            ? `_ query: ${queryAlias}`
+            : "";
+      const argument =
+        body !== null ? "body: .json(input)" : hasQuery ? "query: query" : "";
       return [
+        ...(hasQuery
+          ? [`    public typealias ${queryAlias} = ${queryType}`]
+          : []),
         ...(doc === null ? [] : swiftDocLines(doc, "    ")),
-        `    public func ${method}(${input === null ? "" : `_ input: ${input}`}) async throws -> ${output} {`,
-        `        try await perform { try await ${call}.ok.body.json }`,
+        `    public func ${method}(${parameter}) async throws -> ${output} {`,
+        `        try await perform { try await api.${swiftId}(${argument}).ok.body.json }`,
         "    }",
       ].join("\n");
     });

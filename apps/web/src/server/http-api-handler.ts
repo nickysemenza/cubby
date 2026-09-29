@@ -21,6 +21,7 @@ import {
 import { type HttpMetadata, httpMetadataSchema } from "~/lib/http-api/router";
 import { httpRoutes } from "~/lib/http-api/routes";
 import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
+import { appleClientUpdateRequired } from "~/server/apple-client-gate";
 import { withErrorReporting } from "~/server/errors/report-error";
 import {
   authenticateHttpSession,
@@ -494,6 +495,19 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
   return async function handleHttpOperation(
     incoming: Request,
   ): Promise<Response> {
+    const outdated = appleClientUpdateRequired(incoming.headers);
+    if (outdated)
+      return Response.json(
+        errorBody(
+          "UPGRADE_REQUIRED",
+          `Cubby ${outdated.current} is too old for this server (minimum ${outdated.minimum}). Update Cubby from TestFlight.`,
+          { reason: "CLIENT_UPDATE_REQUIRED" },
+        ),
+        {
+          status: StatusCodes.UPGRADE_REQUIRED,
+          headers: { "Cache-Control": "no-store" },
+        },
+      );
     const request = await nativeRequest(incoming);
     const pathname = new URL(request.url).pathname;
     const matching = methods.filter((entry) => entry.pattern.test(pathname));

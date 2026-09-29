@@ -19,12 +19,12 @@ final class RunReviewModel {
 
     func refresh(runID: String, client: CubbyClient) async {
         do {
-            async let usageRequest = client.runAiUsage(runID)
-            let next = try await client.runWorkSnapshot(runID)
+            async let usageRequest = client.runAiUsage(.init(runId: runID, limit: 1))
+            let next = try await client.runWorkSnapshot(.init(runId: runID))
             snapshot = next
             error = nil
             if next.purpose == .photoInventory {
-                review = try await client.photoRunReview(runID)
+                review = try await client.photoRunReview(.init(runId: runID))
             }
             do {
                 usage = try await usageRequest
@@ -247,7 +247,8 @@ struct RunReviewView: View {
                 Button("Discard proposal", role: .destructive) {
                     Task {
                         await model.act(runID: runID, client: appModel.client) {
-                            _ = try await appModel.client.discardPhotoGroup(runID: runID, groupKey: group)
+                            _ = try await appModel.client.discardPhotoGroup(
+                                .init(runId: runID, groupKey: group))
                         }
                     }
                 }
@@ -361,7 +362,7 @@ struct RunReviewView: View {
                         Button {
                             Task {
                                 await model.act(runID: runID, client: appModel.client) {
-                                    try await appModel.client.startPhotoGrouping(runID)
+                                    _ = try await appModel.client.startPhotoGrouping(.init(runId: runID))
                                 }
                             }
                         } label: {
@@ -651,7 +652,7 @@ struct RunReviewView: View {
         else { return }
         autoStartAttempted = true
         await model.act(runID: runID, client: appModel.client) {
-            try await appModel.client.startPhotoGrouping(runID)
+            _ = try await appModel.client.startPhotoGrouping(.init(runId: runID))
         }
     }
 
@@ -1000,7 +1001,7 @@ private struct PhotoCandidateSelectionView: View {
         defer { loading = false }
         do {
             candidates = try await appModel.client.photoProductCandidates(
-                runID: runID, groupKey: group.groupKey
+                .init(runId: runID, groupKey: group.groupKey)
             ).candidates
         } catch {
             Diagnostics.report(error, context: "Find photo product matches")
@@ -1013,7 +1014,7 @@ private struct PhotoCandidateSelectionView: View {
         defer { choosing = false }
         do {
             _ = try await appModel.client.choosePhotoGroupProduct(
-                runID: runID, groupKey: group.groupKey, productID: productID)
+                .init(runId: runID, groupKey: group.groupKey, productId: productID))
             onChosen()
             dismiss()
         } catch {

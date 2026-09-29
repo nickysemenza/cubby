@@ -35,6 +35,21 @@ beforeEach(() => {
 });
 
 describe("HTTP boundary", () => {
+  it("answers an outdated native app with a structured update-required error before authenticating", async () => {
+    const response = await request("recipes", {
+      headers: { "user-agent": "cubby-apple/1.0 (ios; none)" },
+    });
+    expect(response.status).toBe(426);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({
+      code: "UPGRADE_REQUIRED",
+      reason: "CLIENT_UPDATE_REQUIRED",
+      message: expect.stringContaining("TestFlight"),
+    });
+    expect(ports.getSession).not.toHaveBeenCalled();
+    expect(ports.dispatch).not.toHaveBeenCalled();
+  });
+
   it("distinguishes authenticated adapter failures from auth-provider failures", async () => {
     ports.context.mockRejectedValueOnce(
       new Error("Context service unavailable"),

@@ -47,7 +47,7 @@ struct EntityEditorDraftTests {
         state.request(isDirty: entry.draft != initial, isSaving: false) { dismissed = true }
         #expect(dismissed)
 
-        entry.draft["note"] = .string("Aphids on the lower leaves")
+        entry.draft["notes"] = .string("Aphids on the lower leaves")
         dismissed = false
         state.request(isDirty: entry.draft != initial, isSaving: false) { dismissed = true }
         #expect(!dismissed)
