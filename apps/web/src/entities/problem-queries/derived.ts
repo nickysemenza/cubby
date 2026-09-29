@@ -337,12 +337,13 @@ export const derivedProblemQueries = [
     executionLane: "upc",
     continuation: {
       kind: "none",
-      reason: "External UPC matches are advisory proposals, not product rows.",
+      reason:
+        "External UPC matches are advisory proposals, not product rows, and the count snapshot skips this lane.",
     },
     freshness: { kind: "external", provider: "UPC provider cache" },
     title: "Products with better UPC data",
     description:
-      "Cached external UPC proposals that improve a product's current identifiers.",
+      "Cached external UPC proposals that improve a product's current identifiers. Loaded on the Problems page only; the navbar count never calls the provider.",
     emptyMessage: "No better UPC proposals are available.",
     source: {
       kind: "derived",
@@ -424,6 +425,30 @@ export const derivedProblemQueries = [
       operations: [
         { label: "Normalize account source aliases" },
         { label: "Group repeated aliases" },
+      ],
+    },
+  }),
+  defineProblem({
+    key: "provisionalFinancialAccounts",
+    problemClass: PROBLEM_CLASS.provisionalFinancialAccounts,
+    executionLane: "fast",
+    continuation: {
+      kind: "none",
+      reason: "Each result is one provisional account.",
+    },
+    freshness: { kind: "live" },
+    title: "Provisional financial accounts",
+    description:
+      "Accounts minted from a receipt that no provider export has claimed: no source alias and no statement-referenced transaction.",
+    emptyMessage: "Every provisional account is tied to a provider account.",
+    source: {
+      kind: "derived",
+      diagnostic: "provisional-financial-accounts",
+      grain: "row",
+      inputs: [{ entity: "financialAccount", filters: [] }],
+      operations: [
+        { label: "Find provisional accounts with no source alias" },
+        { label: "Exclude accounts with a statement-referenced transaction" },
       ],
     },
   }),

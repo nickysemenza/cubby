@@ -239,6 +239,43 @@ export async function findDuplicateFinancialAccountSourceAliases(
 }
 
 /**
+ * A provisional account that no provider export has claimed: minted from a
+ * receipt, with no `sourceAliases` and no live transaction carrying a
+ * settlement reference. The fix is linking it to the real statement account,
+ * so it is coverage — new receipts keep minting these.
+ */
+export async function findProvisionalFinancialAccounts(
+  db: Database,
+): Promise<ProblemItem<"provisionalFinancialAccounts">[]> {
+  const result = await getDb(db).execute<{
+    id: string;
+    name: string;
+    transactionCount: number;
+  }>(sql`
+    SELECT fa.shortcode AS id, fa.name AS name,
+      (SELECT count(*)::int FROM "FinancialTransaction" ft
+        WHERE ft."accountId" = fa.id AND ft."deletedAt" IS NULL) AS "transactionCount"
+    FROM "FinancialAccount" fa
+    WHERE fa."deletedAt" IS NULL
+      AND fa."provisional" = true
+      AND CASE WHEN jsonb_typeof(fa."sourceAliases") = 'array'
+            THEN jsonb_array_length(fa."sourceAliases") ELSE 0 END = 0
+      AND NOT EXISTS (
+        SELECT 1 FROM "FinancialTransaction" ft2
+        JOIN "EntityExternalId" fx
+          ON fx."entityId" = ft2."id" AND fx."kind" = 'settlement_ref' AND fx."deletedAt" IS NULL
+        WHERE ft2."accountId" = fa.id AND ft2."deletedAt" IS NULL
+      )
+    ORDER BY fa.name, fa.shortcode
+  `);
+  return result.rows.map((row) => ({
+    id: parseShortcodeFor("financialAccount", row.id),
+    name: row.name,
+    transactionCount: Number(row.transactionCount),
+  }));
+}
+
+/**
  * Provider exports whose stored rows fall short of what the client declared —
  * a chunked ingest that stopped partway, which otherwise looks exactly like a
  * complete import that happened to be short.

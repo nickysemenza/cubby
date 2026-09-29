@@ -81,6 +81,8 @@ import {
 import { byManufacturer, CodeChip, createdAgoDetail } from "./render-helpers";
 import {
   DuplicateProductMergeFix,
+  DuplicateAccountAliasFix,
+  DuplicateTransactionRefFix,
   DuplicateVendorMergeFix,
   OrphanedDeleteFix,
 } from "./tier2-fixes";
@@ -1497,6 +1499,9 @@ const DECLARED_SECTIONS = [
     label: "UPC Updates",
     select: (p) => p.productsWithBetterUpcData ?? [],
     problemKeys: ["productsWithBetterUpcData"],
+    // No meter: proposals come from an external provider and are advisory, so
+    // the section is a coverage list that stays out of the defect badge.
+    coverage: { keys: ["productsWithBetterUpcData"] },
     icon: DownloadIcon,
     renderItem: (product) => {
       const { proposed } = product;
@@ -1722,6 +1727,12 @@ const DECLARED_SECTIONS = [
           item.transactionIds,
         ),
       ],
+      inlineFix: {
+        label: "Choose keeper",
+        render: (close) => (
+          <DuplicateTransactionRefFix variant={item} close={close} />
+        ),
+      },
     }),
   }),
   section({
@@ -1742,6 +1753,28 @@ const DECLARED_SECTIONS = [
           item.accountIds,
         ),
       ],
+      inlineFix: {
+        label: "Choose keeper",
+        render: (close) => (
+          <DuplicateAccountAliasFix variant={item} close={close} />
+        ),
+      },
+    }),
+  }),
+  section({
+    id: "provisional-financial-accounts",
+    label: "Provisional accounts",
+    select: (p) => p.provisionalFinancialAccounts,
+    problemKeys: ["provisionalFinancialAccounts"],
+    // No meter: receipts keep minting provisional accounts, so there is no
+    // denominator this is a fraction of.
+    coverage: { keys: ["provisionalFinancialAccounts"] },
+    entity: "financialAccount",
+    renderItem: (item) => ({
+      title: item.name,
+      subtitle: `${item.transactionCount} transaction${item.transactionCount === 1 ? "" : "s"} · no provider alias or statement reference`,
+      route: entityDetailLink("financialAccount", item.id),
+      editLabel: "Link account",
     }),
   }),
   section({

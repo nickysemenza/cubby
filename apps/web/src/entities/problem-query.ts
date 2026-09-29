@@ -21,6 +21,7 @@ type ProblemOperation = {
 };
 
 type ProblemGrain =
+  | "row"
   | "group"
   | "pair"
   | "edge"
@@ -46,6 +47,7 @@ export type DiagnosticKey =
   | "duplicate-spend-candidates"
   | "duplicate-financial-transaction-source-refs"
   | "duplicate-financial-account-source-aliases"
+  | "provisional-financial-accounts"
   | "invalid-financial-json"
   | "incomplete-statement-imports"
   | "title-derivable-unit-size"

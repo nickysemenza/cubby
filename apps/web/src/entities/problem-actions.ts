@@ -109,6 +109,30 @@ const problemActionCapabilities = {
   duplicateVendors: [
     action({ id: "merge", label: "Merge", scope: "item", target: "item" }),
   ],
+  duplicateFinancialTransactionSourceRefs: [
+    action({
+      id: "choose-keeper",
+      label: "Choose keeper",
+      scope: "item",
+      target: "item",
+    }),
+  ],
+  duplicateFinancialAccountSourceAliases: [
+    action({
+      id: "choose-keeper",
+      label: "Choose keeper",
+      scope: "item",
+      target: "item",
+    }),
+  ],
+  provisionalFinancialAccounts: [
+    action({
+      id: "link-account",
+      label: "Link account",
+      scope: "item",
+      target: "item",
+    }),
+  ],
   vendorsWithoutLogos: [
     action({
       id: "fetch-logo",
