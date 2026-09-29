@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertDevDatabaseUrl } from "./dev-db-guard";
+import { assertDevDatabaseUrl } from "./state";
 
 describe("assertDevDatabaseUrl", () => {
   const cases: [name: string, url: string | undefined][] = [

@@ -2,17 +2,17 @@ import { Client } from "pg";
 import type { ExecutionContext } from "@cloudflare/workers-types";
 import { z } from "zod";
 
-import worker from "../src/cf-server";
-import { assertDevDatabaseUrl } from "./dev-db-guard";
+import worker from "../../src/cf-server";
+import { assertDevDatabaseUrl } from "./state";
 import {
   DEV_USER_EMAIL,
   DEV_USER_PASSWORD,
   LOCAL_FIXTURE_VERSION,
-} from "./dev-db-identity";
-import { handleLocalStorageRequest, type LocalStorageEnv } from "./local-r2";
+} from "./state";
+import { handleLocalStorageRequest, type LocalStorageEnv } from "./storage";
 
 // Durable Objects, Workflows, and RPC exports remain the production classes.
-export * from "../src/cf-server";
+export * from "../../src/cf-server";
 
 type LocalDevEnv = Env &
   LocalStorageEnv & {

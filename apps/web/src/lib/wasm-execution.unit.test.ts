@@ -1,5 +1,5 @@
 import { SpanStatusCode, trace } from "@opentelemetry/api";
-import { tracing } from "@opentelemetry/sdk-node";
+import * as tracing from "@opentelemetry/sdk-trace-base";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { recordWasmExec, reset, snapshot } from "~/lib/perf/perf-store";
