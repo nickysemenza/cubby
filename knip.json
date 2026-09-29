@@ -5,6 +5,7 @@
     // `scripts/**` glob so knip still reports a genuinely orphaned script.
     ".": {
       "entry": [
+        "neon.ts!",
         "scripts/apple.ts!",
         "scripts/test-services.ts!",
         "scripts/check-security-audit.ts!",
@@ -12,10 +13,17 @@
         "scripts/ensure-wasm.ts!",
         "scripts/generator/main.ts!"
       ],
-      "project": ["scripts/**/*.ts!"],
+      "project": ["neon.ts!", "scripts/**/*.ts!"],
       // Invoked as child commands beyond Knip's script parser; agent-device is
       // spawned by the simulator runner in apps/web/tooling/sim-e2e.ts.
-      "ignoreDependencies": ["vitest", "vite", "concurrently", "agent-device"],
+      // neon-env is installed for interactive branch environment commands.
+      "ignoreDependencies": [
+        "vitest",
+        "vite",
+        "concurrently",
+        "agent-device",
+        "@neon/env"
+      ],
       // xcode-select: scripts/apple-check.sh (the `apple` Nx target) uses it
       // to detect a machine without Xcode (so it can skip, not fail). pkill:
       // apple.ts quits the running Mac app before relaunching. container: the

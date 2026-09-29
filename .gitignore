@@ -129,3 +129,4 @@ artifacts/flue-model-eval/
 /apps/apple/App/Shared/Previews/Fixtures/
 # UniFFI bindings, written by apps/apple/scripts/build-rust.sh.
 /apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift
+.neon
