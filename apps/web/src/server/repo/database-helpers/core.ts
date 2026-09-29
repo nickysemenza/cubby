@@ -1,3 +1,5 @@
+import type { PgTransactionConfig } from "drizzle-orm/pg-core";
+
 import {
   Database,
   type DrizzleClient,
@@ -5,6 +7,69 @@ import {
 } from "~/server/db";
 import type { DatabaseClient } from "~/server/db/database";
 import { TraceNames, withTrace } from "~/server/tracing";
+
+/** Work that must not happen unless the enclosing transaction commits. */
+export type AfterCommitEffect = (committedDb: Database) => Promise<void>;
+
+/**
+ * After-commit effects of each open {@link withTransaction}, keyed by both its
+ * `DrizzleTransaction` and every `Database` facade over it.
+ *
+ * Contract: an effect enrolled through {@link runAfterCommit} on a
+ * transaction-bound handle runs only once the OUTERMOST `withTransaction`
+ * commits, with that transaction's root `Database`. A nested boundary is a
+ * savepoint, not a commit: on release its effects move to the parent; on
+ * rollback they are dropped with its rows. Queue publications and R2 deletes
+ * go through here, so a unit nested in a caller's transaction (the MCP
+ * purchase-agent call, a kernel write inside a workflow) neither wakes a
+ * consumer before its rows are visible nor destroys bytes for rows a later
+ * rollback restores. A transaction opened with a raw `.transaction()` instead
+ * of `withTransaction` has no queue, so its effects run immediately.
+ */
+const afterCommitQueues = new WeakMap<object, AfterCommitEffect[]>();
+
+/**
+ * Run `effect` now on a pool-bound handle; on a handle inside a
+ * {@link withTransaction}, hold it until the outermost commit.
+ */
+export const runAfterCommit = async (
+  db: Database,
+  effect: AfterCommitEffect,
+): Promise<void> => {
+  const pending = afterCommitQueues.get(db);
+  if (pending) {
+    pending.push(effect);
+    return;
+  }
+  await effect(db);
+};
+
+/** Every effect is attempted; the transaction already committed either way. */
+const flushAfterCommit = async (
+  db: Database,
+  effects: readonly AfterCommitEffect[],
+): Promise<void> => {
+  const failures: unknown[] = [];
+  for (const effect of effects) {
+    try {
+      await effect(db);
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length === 1)
+    throw new Error(
+      "Transaction committed, but an after-commit effect failed",
+      {
+        cause: failures[0],
+      },
+    );
+  if (failures.length > 1)
+    throw new AggregateError(
+      failures,
+      `Transaction committed, but ${failures.length} after-commit effects failed`,
+    );
+};
 
 /**
  * Get the underlying Drizzle client from the request-scoped Database handle.
@@ -47,10 +112,19 @@ export const unwrapDb = (
 export const withTransaction = async <T>(
   db: Database,
   fn: (tx: DrizzleTransaction) => Promise<T>,
+  config?: PgTransactionConfig,
 ): Promise<T> => {
-  return withTrace(TraceNames.db("transaction"), async () => {
-    return await getDb(db).transaction(fn);
+  const pending: AfterCommitEffect[] = [];
+  const result = await withTrace(TraceNames.db("transaction"), async () => {
+    return await getDb(db).transaction((tx) => {
+      afterCommitQueues.set(tx, pending);
+      return fn(tx);
+    }, config);
   });
+  const parent = afterCommitQueues.get(db);
+  if (parent) parent.push(...pending);
+  else await flushAfterCommit(db, pending);
+  return result;
 };
 
 /**
@@ -89,14 +163,19 @@ export const databaseForTransaction = (tx: DrizzleTransaction): Database => {
   // SAFETY: the repository-only Database facade exposes the same schema-bound
   // Drizzle methods as DatabaseClient; nested transactions become savepoints.
   const client = tx as DatabaseClient;
-  return new Database(() => ({
+  const database = new Database(() => ({
     client,
     withConnection: (fn) => fn(client),
   }));
+  const pending = afterCommitQueues.get(tx);
+  if (pending) afterCommitQueues.set(database, pending);
+  return database;
 };
 
 /** {@link withTransaction} whose callback receives a transaction-backed `Database`. */
 export const withTransactionDatabase = async <T>(
   db: Database,
   fn: (transactionDb: Database) => Promise<T>,
-): Promise<T> => withTransaction(db, (tx) => fn(databaseForTransaction(tx)));
+  config?: PgTransactionConfig,
+): Promise<T> =>
+  withTransaction(db, (tx) => fn(databaseForTransaction(tx)), config);

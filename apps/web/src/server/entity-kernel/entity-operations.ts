@@ -20,6 +20,7 @@ import { z } from "zod";
 import { deferPublications } from "~/server/background-tasks/publish";
 import { createAppError } from "~/server/errors/app-error";
 import { withTransactionDatabase } from "~/server/repo/database-helpers";
+import { runAfterCommit } from "~/server/repo/database-helpers/core";
 import {
   withListEntityMedia,
   withUniversalEntityMedia,
@@ -252,6 +253,16 @@ const writeWithProjections = async <
   return result;
 };
 
+/**
+ * An R2 delete has no rollback. When this kernel unit runs inside a caller's
+ * transaction (the MCP purchase-agent call), its commit is only a savepoint
+ * release, so the delete waits for the outermost commit.
+ */
+const deleteDetachedObjects = (
+  context: EntityKernelContext,
+  keys: string[] | undefined,
+) => runAfterCommit(context.db, () => deleteStoredObjects(keys ?? []));
+
 /** Post-commit effects: embedding tasks, AI refreshes, the problem-count mark. */
 const runSideEffects = async <
   E extends EntityKernelEntity,
@@ -450,8 +461,8 @@ export const defineEntityOperations = <
           (writeContext) => validated.run(writeContext, validated.data),
         ),
       )
-      .effect("storage", async (_, { created }) =>
-        deleteStoredObjects(created.detachedImageKeys ?? []),
+      .effect("storage", async ({ context }, { created }) =>
+        deleteDetachedObjects(context, created.detachedImageKeys),
       )
       .effect("sideEffects", async ({ context }, { created }) =>
         runSideEffects(
@@ -505,8 +516,8 @@ export const defineEntityOperations = <
             validated.run(writeContext, validated.id, validated.data),
         ),
       )
-      .effect("storage", async (_, { updated }) =>
-        deleteStoredObjects(updated.detachedImageKeys ?? []),
+      .effect("storage", async ({ context }, { updated }) =>
+        deleteDetachedObjects(context, updated.detachedImageKeys),
       )
       .effect("sideEffects", async ({ context }, { updated }) =>
         runSideEffects(
@@ -555,8 +566,8 @@ export const defineEntityOperations = <
           );
         return { ...deleted, affectedEdges: deleted.affectedEdges };
       })
-      .effect("storage", async (_, { receipt }) =>
-        deleteStoredObjects(receipt.detachedImageKeys ?? []),
+      .effect("storage", async ({ context }, { receipt }) =>
+        deleteDetachedObjects(context, receipt.detachedImageKeys),
       )
       .output(({ receipt }) =>
         entityBrowserMutationResultSchema.parse({
@@ -594,8 +605,8 @@ export const defineEntityOperations = <
       .commit("updated", async ({ context }, { validated }) =>
         validated.run(context, validated.ids, validated.data),
       )
-      .effect("storage", async (_, { updated }) =>
-        deleteStoredObjects(updated.detachedImageKeys ?? []),
+      .effect("storage", async ({ context }, { updated }) =>
+        deleteDetachedObjects(context, updated.detachedImageKeys),
       )
       .output(({ updated }) =>
         entityBrowserMutationResultSchema.parse({
