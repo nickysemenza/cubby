@@ -74,21 +74,16 @@ import {
   categoryFeatureSql,
 } from "~/server/repo/product-category-sql";
 import { loadProductOwnershipTimelines } from "~/server/repo/product/ownership";
-import type { EntityRelationMutationAdapter } from "~/server/repo/relation-mutation-adapter";
+import { linkRelationAdapter } from "~/server/repo/relation-mutation-adapter";
 import {
   emptyPreflight,
   loadRelationProducts,
   planRelationAttach,
-  planRelationDetach,
   type RelationPlan,
   type RelationPreflight,
   relationImpact,
   throwRelationRefusal,
 } from "~/server/repo/relation-preflight";
-import {
-  resolveAllOrThrow,
-  resolveOrThrow,
-} from "~/server/repo/shortcode-resolver";
 import {
   effectiveTaskProjectSql,
   effectiveTaskTradeSql,
@@ -869,42 +864,30 @@ export async function attachProjectResources(
   });
 }
 
-export const projectResourcesRelationAdapter = {
-  async list(db, ownerShortcode) {
-    return listProjectResources(
+export const projectResourcesRelationAdapter = linkRelationAdapter<
+  "projectTool",
+  { id: string },
+  ProjectResourceOut
+>("projectTool", {
+  label: PROJECT_RESOURCE_EDGE.label,
+  describe: {
+    attach: "Resource uses this attach would create.",
+    detach: "Resource uses this detach would remove.",
+  },
+  list: (db, projectId) => listProjectResources(db, projectId),
+  preflight: { detach: preflightDetachProjectResources },
+  // Tool timelines need more than the preflight: see `findToolTimelineConflicts`.
+  previewAttach: (db, projectId, productIds) =>
+    previewAttachProjectResources(db, projectId, productIds),
+  attach: (db, projectId, targets, actor) =>
+    attachProjectResources(
       db,
-      await resolveOrThrow(db, "project", ownerShortcode),
-    );
-  },
-  async preview(db, action, ownerId, targetIds) {
-    const projectId = parseEntityId("project", ownerId);
-    const productIds = targetIds.map((id) => parseEntityId("product", id));
-    return action === "attach"
-      ? previewAttachProjectResources(db, projectId, productIds)
-      : planRelationDetach(
-          await preflightDetachProjectResources(
-            getDb(db),
-            projectId,
-            productIds,
-          ),
-          {
-            ...PROJECT_RESOURCE_EDGE,
-            description: "Resource uses this detach would remove.",
-          },
-        );
-  },
-  async execute(ctx, action, ownerShortcode, items) {
-    const projectId = await resolveOrThrow(ctx.db, "project", ownerShortcode);
-    const productIds = await resolveAllOrThrow(
-      ctx.db,
-      "product",
-      items.map(({ id }) => id),
-    );
-    return action === "attach"
-      ? attachProjectResources(ctx.db, projectId, productIds, ctx.actorContext)
-      : detachProjectResources(ctx.db, projectId, productIds, ctx.actorContext);
-  },
-} satisfies EntityRelationMutationAdapter<{ id: string }, ProjectResourceOut>;
+      projectId,
+      targets.map(({ id }) => id),
+      actor,
+    ),
+  detach: detachProjectResources,
+});
 
 export async function detachProjectResources(
   db: Database,
