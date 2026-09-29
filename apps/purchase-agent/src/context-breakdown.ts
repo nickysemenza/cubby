@@ -4,6 +4,11 @@
  * characters, then scales those sizes to the provider-reported input tokens.
  * Only sizes and tool names leave this module — never request or response text.
  */
+import type {
+  ContextBreakdown,
+  ContextCall,
+  ContextSections,
+} from "@cubby/schemas/context-breakdown";
 import { z } from "zod";
 
 /** Character weight for one image; base64 length says nothing about tokens. */
@@ -15,28 +20,7 @@ const MAX_CALLS_PER_SCOPE = 256;
 const MAX_SCOPES = 64;
 const CHARS_PER_ESTIMATED_TOKEN = 4;
 
-export type ContextSections = {
-  instructions: number;
-  agentToolSchemas: number;
-  mcpToolSchemas: number;
-  conversation: number;
-  /** Keyed by the tool name the model called (MCP names keep their prefix). */
-  toolResults: Record<string, number>;
-};
-
-type ContextCall = {
-  model?: string;
-  /** Reported input tokens, including cached ones. */
-  inputTokens: number;
-  cachedTokens: number;
-  /** True when the provider reported no usage and tokens are chars / 4. */
-  estimated: boolean;
-  /** Token counts that sum exactly to `inputTokens`. */
-  sections: ContextSections;
-};
-
-/** Persisted on each Flue response's metadata as `contextBreakdown`. */
-export type ContextBreakdown = { v: 1; calls: ContextCall[] };
+export type { ContextBreakdown, ContextSections };
 
 export type ReportedUsage = { inputTokens: number; cachedTokens: number };
 

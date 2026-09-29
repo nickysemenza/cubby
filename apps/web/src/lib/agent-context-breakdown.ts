@@ -1,34 +1,10 @@
+import {
+  contextBreakdownSchema,
+  type ContextCall,
+} from "@cubby/schemas/context-breakdown";
 import type { FlueConversationMessage } from "@flue/sdk";
-import { z } from "zod";
 
-/**
- * Per-model-call context breakdown the purchase agent attaches to each Flue
- * response's metadata as `contextBreakdown` (apps/purchase-agent/src/
- * context-breakdown.ts). Section values are tokens scaled from request sizes
- * so they sum to the call's reported input tokens.
- */
-const tokenCount = z.number().int().nonnegative();
-
-const contextCallSchema = z.object({
-  model: z.string().optional(),
-  inputTokens: tokenCount,
-  cachedTokens: tokenCount,
-  estimated: z.boolean(),
-  sections: z.object({
-    instructions: tokenCount,
-    agentToolSchemas: tokenCount,
-    mcpToolSchemas: tokenCount,
-    conversation: tokenCount,
-    toolResults: z.record(z.string(), tokenCount),
-  }),
-});
-
-const contextBreakdownSchema = z.object({
-  v: z.literal(1),
-  calls: z.array(contextCallSchema),
-});
-
-export type ContextCall = z.infer<typeof contextCallSchema>;
+export type { ContextCall };
 
 type MessageWithMetadata = Pick<
   FlueConversationMessage,

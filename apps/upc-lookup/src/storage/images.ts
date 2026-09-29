@@ -5,6 +5,11 @@ import {
   responseBodyWithLimit,
   sanitizeExternalUrl,
 } from "@cubby/shared/external-fetch";
+import {
+  ALLOWED_IMAGE_TYPES,
+  isAllowedImageType,
+} from "@cubby/shared/image-types";
+
 export interface ImageUploadEnv {
   IMAGES: Pick<R2Bucket, "put">;
 }
@@ -12,30 +17,6 @@ export interface ImageUploadEnv {
 export interface ImageCleanupEnv {
   IMAGES: Pick<R2Bucket, "delete">;
 }
-
-type AllowedImageType =
-  | "image/jpeg"
-  | "image/png"
-  | "image/gif"
-  | "image/webp"
-  | "image/heic"
-  | "image/heif";
-
-const ALLOWED_IMAGE_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-] as const;
-const ALLOWED_IMAGE_TYPE_SET: ReadonlySet<string> = new Set(
-  ALLOWED_IMAGE_TYPES,
-);
-
-const isAllowedImageType = (
-  contentType: string,
-): contentType is AllowedImageType => ALLOWED_IMAGE_TYPE_SET.has(contentType);
 
 const IMAGE_EXTENSIONS = ["jpg", "png", "gif", "webp", "heic", "heif"] as const;
 
