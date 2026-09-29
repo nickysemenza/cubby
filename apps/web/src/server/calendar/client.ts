@@ -1,6 +1,11 @@
 import type { UserId } from "@cubby/schemas/identifiers";
+import { BACKGROUND_TASK_MESSAGE_VERSION } from "@cubby/schemas/queue-messages";
 
-import { getCalendarFeedNamespace, getExecutionCtx } from "~/server/cf-env";
+import {
+  getBackgroundQueue,
+  getCalendarFeedNamespace,
+  getExecutionCtx,
+} from "~/server/cf-env";
 
 import type { CalendarFeedState, CalendarCredentialState } from "./contracts";
 
@@ -93,6 +98,45 @@ const DIRTY_MARK_RETRY_DELAYS_MS = [250, 750];
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Db-less sender: this runs from a `waitUntil` with no request `Database` in
+ * scope, and the task carries everything its handler needs. Without a queue
+ * binding (plain Node) there is no calendar Durable Object either, so there is
+ * nothing to fall back to.
+ */
+async function enqueueMarkDirtyFallback(
+  origin: string,
+  reason: string,
+): Promise<void> {
+  const queue = getBackgroundQueue();
+  if (!queue) return;
+  try {
+    await queue.sendBatch([
+      {
+        body: {
+          version: BACKGROUND_TASK_MESSAGE_VERSION,
+          queueType: "background",
+          task: {
+            kind: "calendar-feed.mark-dirty",
+            requestedAt: new Date().toISOString(),
+            origin,
+            reason,
+          },
+        },
+      },
+    ]);
+  } catch (error) {
+    // SILENT: the last resort — the in-request retries and the queue both
+    // failed inside a committed `waitUntil`, so there is no caller left to
+    // report to. The feed stays stale until the next write re-marks it.
+    console.error(
+      "[calendar-feed] failed to enqueue mark-dirty fallback",
+      { reason },
+      error,
+    );
+  }
+}
+
 export function scheduleCalendarFeedDirty(
   reason: string,
   options: { origin?: string } = {},
@@ -104,10 +148,9 @@ export function scheduleCalendarFeedDirty(
   // after the response is already committed — there is no result channel
   // left to report into. `markDirty` only sets a flag on the target Durable
   // Object, so retrying it a few times (short backoff, still inside the same
-  // `waitUntil`) is safe and absorbs a transient RPC failure without needing
-  // a durable queue message; a failure that survives every retry still
-  // leaves the feed stale until the next write successfully re-marks it
-  // dirty (known gap, see docs/todos.md).
+  // `waitUntil`) is safe and absorbs a transient RPC failure; a failure that
+  // survives every retry hands the same idempotent mark to the durable queue
+  // (`calendar-feed.mark-dirty`) instead of leaving the feed stale.
   const task = (async () => {
     const state = await calendarFeedStateFor(origin);
     for (const [attempt, retryDelay] of [
@@ -124,6 +167,7 @@ export function scheduleCalendarFeedDirty(
             { reason, attempt },
             error,
           );
+          await enqueueMarkDirtyFallback(origin, reason);
           return;
         }
         // SILENT: not the last attempt — logged above only if every retry
