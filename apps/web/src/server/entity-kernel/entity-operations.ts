@@ -14,6 +14,7 @@ import {
   normalizeSorts,
   type PaginationParams,
 } from "@cubby/schemas/pagination";
+import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
 import { deferPublications } from "~/server/background-tasks/publish";
@@ -78,14 +79,19 @@ const listRestrictedToIds = async <
   requested: PaginationParams,
   ids: readonly string[],
 ) => {
-  const wanted = new Set(ids);
+  // Codes are accepted in any casing (`parseShortcode` canonicalizes).
+  const wanted = new Set(ids.map((id) => parseShortcode(id)?.shortcode ?? id));
+  // A repository on the list scaffold applies `ids` itself, so the scan
+  // below reads one page; any other still pages its own rows.
+  const restriction = { ids: [...wanted] };
+  const restricted = Object.assign({}, filters, restriction);
   const matching: z.output<S["repositoryList"]>[] = [];
   let pageIndex = 0;
   let totalCount = 0;
   do {
     const page = await binding.repository.list(
       context,
-      filters,
+      restricted,
       sorts,
       { pageIndex, pageSize: LIST_ID_SCAN_PAGE_SIZE },
       groupBy,

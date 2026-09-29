@@ -321,6 +321,9 @@ const isScoredEntity = (entity: string): entity is ScoredEntity =>
 const listSearchSchema = z
   .object({ searchQuery: z.string().trim().min(1).max(100).optional() })
   .passthrough();
+const listIdsSchema = z
+  .object({ ids: z.array(z.string()).optional() })
+  .passthrough();
 const searchQueryFromFilters = <Filters extends object>(
   filters: Filters | undefined,
 ) => listSearchSchema.parse(filters ?? {}).searchQuery;
@@ -367,6 +370,11 @@ export function listScaffold<
           // The declared related-view filters (`related-<key>`, `<prefix>Id`,
           // `<prefix>PresenceFilter`, `<prefix>Search`) for every list.
           ...relatedWhereConditions(entity, filters, table.id),
+          // The kernel's `filters.ids` restriction, by canonical shortcode.
+          shortcodeSetCondition(
+            sql`${table.shortcode}`,
+            listIdsSchema.parse(filters).ids,
+          ),
           ...(searchable
             ? [
                 lexicalEligibility(
