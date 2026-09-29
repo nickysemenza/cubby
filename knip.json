@@ -10,7 +10,16 @@
         "scripts/check-security-audit.ts!",
         "scripts/ensure-apple-ffi.ts!",
         "scripts/ensure-wasm.ts!",
-        "scripts/generator/main.ts!"
+        "scripts/generator/main.ts!",
+        // Reached from hooks, CI, or package scripts rather than an import
+        // (production mode does not read those): .husky/commit-msg,
+        // ci.yaml, and the Nx targets.
+        "scripts/check-outward-text.ts!",
+        "scripts/ci-change-scope.ts!",
+        "scripts/ci-flakes.ts!",
+        "scripts/dev-db.ts!",
+        "scripts/stamp-source-mtimes.ts!",
+        "scripts/generator/ensure.ts!"
       ],
       "project": ["scripts/**/*.ts!"],
       // Invoked as child commands beyond Knip's script parser; agent-device is
@@ -43,13 +52,24 @@
         "src/**/*.live-eval.ts!",
         "tests/**/*.{ts,tsx}!",
         "scripts/check-client-bundle.ts!",
+        "scripts/e2e-affected.ts!",
         "scripts/apple-preview-fixtures.ts!",
         "tooling/**/*.{ts,tsx}!",
         "tooling/e2e-db-watchdog.mjs!",
         "drizzle.config.ts!",
         "instrument.server.mjs!"
       ],
-      "project": ["src/**/*.{ts,tsx}!", "scripts/**/*.{ts,mjs}!"],
+      // Test seams (fixtures, mocks, harnesses) are reached only from tests;
+      // production mode leaves them out of the file graph.
+      "project": [
+        "src/**/*.{ts,tsx}!",
+        "scripts/**/*.{ts,mjs}!",
+        "!src/**/*.fixtures.{ts,tsx}!",
+        "!src/**/*-test-helpers.{ts,tsx}!",
+        "!src/lib/test/**!",
+        "!src/server/testing/**!",
+        "!src/server/repo/database-helpers/mock-db.ts!"
+      ],
       "paths": {
         "~/*": ["./src/*"],
         "tooling/*": ["./tooling/*"]
@@ -107,6 +127,7 @@
     "apps/usda-api": {
       "entry": [
         "src/worker.ts!",
+        "src/db/import-usda.ts!",
         "src/**/*.test.ts!",
         "scripts/**/*.ts!",
         "drizzle.config.ts!"
