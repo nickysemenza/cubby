@@ -243,6 +243,8 @@ export default defineEntity({
     sort: {
       fields: ["name", "recipeCount", "createdAt", "updatedAt"],
       computed: ["recipeCount"],
+      // A shelf reads alphabetically, not by import date.
+      defaultOverride: "name",
     },
     output: [
       "shortcode",
