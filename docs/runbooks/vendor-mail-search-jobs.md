@@ -6,10 +6,9 @@ table of its own: the request lives in `Run.input` and the page-by-page walk in
 `mailSearchRunProgress` in `packages/schemas/src/run-fields.ts`. The code is
 `server/purchase-import/gmail/search-job.ts`.
 
-The 2026-09 consolidation migration (`0002_cleanup`) folded the former
-`VendorMailSearchJob` table into these columns, so no expand step applies to
-Gmail search state any more; the schema change ships as a committed migration
-like every other ([domain rules](../agents/domain-rules.md#production-changes)).
+The former `VendorMailSearchJob` table was folded into these columns in the
+2026-09 consolidation, so no expand step applies to Gmail search state any
+more; a schema change ships as a committed migration like every other ([domain rules](../agents/domain-rules.md#production-changes)).
 
 ## Shape
 

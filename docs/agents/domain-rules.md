@@ -12,10 +12,7 @@ committed migrations in `apps/web/drizzle/`: `pnpm db:generate` writes them
 --target=production` applies them with `PRODUCTION_DIRECT_DATABASE_URL`.
 Migrations are the one committed generated artifact and are immutable once
 merged — the runner refuses bookkeeping that is not a prefix of the journal.
-A transform is a custom migration (`drizzle-kit generate --custom`); while
-unmerged it may be recomposed from `drizzle/transform/NN-<slice>.sql`
-fragments with `tooling/db-compose-migration.ts --tag <tag>`, which also
-points its snapshot at the current `schema.ts`. CI `db:check` fails when `schema.ts` has no migration or the
+A data transform is a custom migration (`drizzle-kit generate --custom`). CI `db:check` fails when `schema.ts` has no migration or the
 migrations build a catalog different from `schema.ts`; `tooling/db-catalog.ts`
 reads the same catalog from production. Before a
 `DROP COLUMN`, remove the `schema.ts` declaration and DEPLOY first — the

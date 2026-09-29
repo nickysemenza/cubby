@@ -44,9 +44,6 @@
         "tests/**/*.{ts,tsx}!",
         "scripts/check-client-bundle.ts!",
         "scripts/apple-preview-fixtures.ts!",
-        // One-shot cutover tools, run by hand from the runbook.
-        "scripts/order-mail-attachments-to-r2.ts!",
-        "scripts/verify-consolidation-cutover.ts!",
         "tooling/**/*.{ts,tsx}!",
         "tooling/e2e-db-watchdog.mjs!",
         "drizzle.config.ts!",

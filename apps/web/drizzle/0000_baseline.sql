@@ -1,10 +1,5 @@
 -- The gin_trgm_ops indexes below need pg_trgm's operator classes.
 CREATE EXTENSION IF NOT EXISTS pg_trgm;--> statement-breakpoint
-CREATE TYPE "public"."ImageRenderStatus" AS ENUM('unverified', 'verified', 'failed');--> statement-breakpoint
-CREATE TYPE "public"."ImageStatus" AS ENUM('PENDING', 'UPLOADED', 'FAILED');--> statement-breakpoint
-CREATE TYPE "public"."ImageStorageStatus" AS ENUM('unverified', 'available', 'missing', 'metadata_mismatch');--> statement-breakpoint
-CREATE TYPE "public"."InventoryPlacement" AS ENUM('stock', 'installed');--> statement-breakpoint
-CREATE TYPE "public"."RecipeSource" AS ENUM('Book', 'Website', 'Other', 'Notion');--> statement-breakpoint
 CREATE TABLE "account" (
 	"id" text PRIMARY KEY NOT NULL,
 	"account_id" text NOT NULL,
@@ -60,8 +55,8 @@ CREATE TABLE "AiUsage" (
 	"durationMs" integer NOT NULL,
 	"cacheStatus" text,
 	"applicationCacheStatus" text,
-	"entityKind" text,
 	"entityId" uuid,
+	"entityKind" text,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"deletedAt" timestamp
 );
@@ -100,8 +95,8 @@ CREATE TABLE "AppSettings" (
 --> statement-breakpoint
 CREATE TABLE "AuditLog" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"entityType" text NOT NULL,
 	"entityId" uuid NOT NULL,
+	"entityKind" text NOT NULL,
 	"action" text NOT NULL,
 	"changes" jsonb,
 	"userId" text NOT NULL,
@@ -111,23 +106,6 @@ CREATE TABLE "AuditLog" (
 	"runId" uuid,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "AuditLog_channel_check" CHECK ("AuditLog"."channel" IN ('web', 'api', 'mcp', 'caldav', 'system'))
-);
---> statement-breakpoint
-CREATE TABLE "Cookbook" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"shortcode" text NOT NULL,
-	"name" text NOT NULL,
-	"author" text[] DEFAULT '{}'::text[] NOT NULL,
-	"subjects" text[] DEFAULT '{}'::text[] NOT NULL,
-	"sourceLabel" text NOT NULL,
-	"rawJson" jsonb NOT NULL,
-	"report" jsonb,
-	"sourceRecipeCount" integer DEFAULT 0 NOT NULL,
-	"productId" uuid,
-	"importedAt" timestamp DEFAULT now() NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp
 );
 --> statement-breakpoint
 CREATE TABLE "DataException" (
@@ -142,28 +120,10 @@ CREATE TABLE "DataException" (
 	"updatedAt" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "Device" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"shortcode" text NOT NULL,
-	"installationId" text NOT NULL,
-	"name" text NOT NULL,
-	"platform" text NOT NULL,
-	"appVersion" text,
-	"osVersion" text,
-	"lastSeenAt" timestamp,
-	"automaticWork" boolean DEFAULT true NOT NULL,
-	"remotePaused" boolean DEFAULT false NOT NULL,
-	"ledgerPartyId" uuid,
-	"productId" uuid,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp,
-	CONSTRAINT "Device_platform_check" CHECK ("Device"."platform" IN ('ios', 'macos'))
-);
---> statement-breakpoint
 CREATE TABLE "EntityAttachment" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"subjectEntityId" uuid NOT NULL,
+	"entityId" uuid NOT NULL,
+	"entityKind" text NOT NULL,
 	"imageId" uuid NOT NULL,
 	"role" text DEFAULT 'attachment' NOT NULL,
 	"sortOrder" integer DEFAULT 0 NOT NULL,
@@ -174,13 +134,15 @@ CREATE TABLE "EntityAttachment" (
 	"updatedAt" timestamp DEFAULT now() NOT NULL,
 	"deletedAt" timestamp,
 	CONSTRAINT "EntityAttachment_role_check" CHECK ("EntityAttachment"."role" IN ('attachment', 'cover', 'logo')),
-	CONSTRAINT "EntityAttachment_purpose_check" CHECK ("EntityAttachment"."purpose" IS NULL OR "EntityAttachment"."purpose" IN ('item', 'label'))
+	CONSTRAINT "EntityAttachment_purpose_check" CHECK ("EntityAttachment"."purpose" IS NULL OR "EntityAttachment"."purpose" IN ('item', 'label')),
+	CONSTRAINT "EntityAttachment_purpose_kind_check" CHECK ("EntityAttachment"."purpose" IS NULL OR "EntityAttachment"."entityKind" = 'product'),
+	CONSTRAINT "EntityAttachment_documentKind_kind_check" CHECK ("EntityAttachment"."documentKind" IS NULL OR "EntityAttachment"."entityKind" = 'purchase')
 );
 --> statement-breakpoint
 CREATE TABLE "EntityEmbedding" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"entityType" text NOT NULL,
 	"entityId" uuid NOT NULL,
+	"entityKind" text NOT NULL,
 	"embeddingText" text NOT NULL,
 	"embeddingHash" text NOT NULL,
 	"provider" text NOT NULL,
@@ -189,6 +151,23 @@ CREATE TABLE "EntityEmbedding" (
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL,
 	"deletedAt" timestamp
+);
+--> statement-breakpoint
+CREATE TABLE "EntityExternalId" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"entityId" uuid NOT NULL,
+	"entityKind" text NOT NULL,
+	"source" text NOT NULL,
+	"kind" text NOT NULL,
+	"externalId" text NOT NULL,
+	"url" text,
+	"isPrimary" boolean,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp,
+	CONSTRAINT "EntityExternalId_kind_check" CHECK (("entityKind", "kind") IN (('product', 'asin'), ('product', 'retailer_sku'), ('product', 'internet_number'), ('product', 'item_number'), ('product', 'catalog_number'), ('product', 'gtin_14'), ('product', 'legacy_unspecified'), ('financialTransaction', 'settlement_ref'), ('expense', 'page'), ('task', 'page'), ('project', 'page'), ('recipe', 'page'), ('project', 'folder'))),
+	CONSTRAINT "EntityExternalId_primary_check" CHECK (CASE WHEN "kind" IN ('asin', 'retailer_sku', 'internet_number', 'item_number', 'catalog_number', 'gtin_14', 'legacy_unspecified', 'page', 'folder') THEN "isPrimary" IS NOT NULL ELSE "isPrimary" IS NULL END),
+	CONSTRAINT "EntityExternalId_gtin_check" CHECK ("EntityExternalId"."kind" <> 'gtin_14' OR "EntityExternalId"."externalId" ~ '^[0-9]{14}$')
 );
 --> statement-breakpoint
 CREATE TABLE "Entity" (
@@ -200,39 +179,27 @@ CREATE TABLE "Entity" (
 	"mergedIntoId" uuid,
 	CONSTRAINT "Entity_id_shortcode_key" UNIQUE("id","shortcode"),
 	CONSTRAINT "Entity_id_kind_key" UNIQUE("id","kind"),
-	CONSTRAINT "Entity_kind_check" CHECK ("Entity"."kind" IN ('product', 'recipe', 'ingredient', 'cookbook', 'location', 'inventory', 'meal', 'ledgerParty', 'ledgerTransfer', 'project', 'task', 'vendor', 'purchase', 'financialAccount', 'financialTransaction', 'wish', 'expense', 'image', 'planting', 'gardenEntry', 'vendorAccount', 'productCategory', 'run', 'device', 'imageSighting', 'plant')),
-	CONSTRAINT "Entity_shortcode_prefix_check" CHECK ("Entity"."shortcode" IS NULL OR CASE "Entity"."kind" WHEN 'product' THEN "Entity"."shortcode" LIKE 'PRD-%' WHEN 'recipe' THEN "Entity"."shortcode" LIKE 'RCP-%' WHEN 'ingredient' THEN "Entity"."shortcode" LIKE 'ING-%' WHEN 'cookbook' THEN "Entity"."shortcode" LIKE 'CKB-%' WHEN 'location' THEN "Entity"."shortcode" LIKE 'LOC-%' WHEN 'inventory' THEN "Entity"."shortcode" LIKE 'INV-%' WHEN 'meal' THEN "Entity"."shortcode" LIKE 'MEL-%' WHEN 'ledgerParty' THEN "Entity"."shortcode" LIKE 'LPY-%' WHEN 'ledgerTransfer' THEN "Entity"."shortcode" LIKE 'LTR-%' WHEN 'project' THEN "Entity"."shortcode" LIKE 'PRJ-%' WHEN 'task' THEN "Entity"."shortcode" LIKE 'TSK-%' WHEN 'vendor' THEN "Entity"."shortcode" LIKE 'VEN-%' WHEN 'purchase' THEN "Entity"."shortcode" LIKE 'PUR-%' WHEN 'financialAccount' THEN "Entity"."shortcode" LIKE 'FAC-%' WHEN 'financialTransaction' THEN "Entity"."shortcode" LIKE 'FTX-%' WHEN 'wish' THEN "Entity"."shortcode" LIKE 'WSH-%' WHEN 'expense' THEN "Entity"."shortcode" LIKE 'EXP-%' WHEN 'image' THEN "Entity"."shortcode" LIKE 'IMG-%' WHEN 'planting' THEN "Entity"."shortcode" LIKE 'PLT-%' WHEN 'gardenEntry' THEN "Entity"."shortcode" LIKE 'GDE-%' WHEN 'vendorAccount' THEN "Entity"."shortcode" LIKE 'VACCT-%' WHEN 'productCategory' THEN "Entity"."shortcode" LIKE 'CAT-%' WHEN 'run' THEN "Entity"."shortcode" LIKE 'RUN-%' WHEN 'device' THEN "Entity"."shortcode" LIKE 'DEV-%' WHEN 'imageSighting' THEN "Entity"."shortcode" LIKE 'IMS-%' WHEN 'plant' THEN "Entity"."shortcode" LIKE 'PLANT-%' ELSE false END),
+	CONSTRAINT "Entity_kind_check" CHECK ("Entity"."kind" IN ('product', 'recipe', 'ingredient', 'cookbook', 'location', 'inventory', 'meal', 'ledgerParty', 'ledgerTransfer', 'project', 'task', 'vendor', 'purchase', 'financialAccount', 'financialTransaction', 'wish', 'expense', 'image', 'planting', 'gardenEntry', 'vendorAccount', 'productCategory', 'run', 'device', 'plant')),
+	CONSTRAINT "Entity_shortcode_prefix_check" CHECK ("Entity"."shortcode" IS NULL OR CASE "Entity"."kind" WHEN 'product' THEN "Entity"."shortcode" LIKE 'PRD-%' WHEN 'recipe' THEN "Entity"."shortcode" LIKE 'RCP-%' WHEN 'ingredient' THEN "Entity"."shortcode" LIKE 'ING-%' WHEN 'cookbook' THEN "Entity"."shortcode" LIKE 'CKB-%' WHEN 'location' THEN "Entity"."shortcode" LIKE 'LOC-%' WHEN 'inventory' THEN "Entity"."shortcode" LIKE 'INV-%' WHEN 'meal' THEN "Entity"."shortcode" LIKE 'MEL-%' WHEN 'ledgerParty' THEN "Entity"."shortcode" LIKE 'LPY-%' WHEN 'ledgerTransfer' THEN "Entity"."shortcode" LIKE 'LTR-%' WHEN 'project' THEN "Entity"."shortcode" LIKE 'PRJ-%' WHEN 'task' THEN "Entity"."shortcode" LIKE 'TSK-%' WHEN 'vendor' THEN "Entity"."shortcode" LIKE 'VEN-%' WHEN 'purchase' THEN "Entity"."shortcode" LIKE 'PUR-%' WHEN 'financialAccount' THEN "Entity"."shortcode" LIKE 'FAC-%' WHEN 'financialTransaction' THEN "Entity"."shortcode" LIKE 'FTX-%' WHEN 'wish' THEN "Entity"."shortcode" LIKE 'WSH-%' WHEN 'expense' THEN "Entity"."shortcode" LIKE 'EXP-%' WHEN 'image' THEN "Entity"."shortcode" LIKE 'IMG-%' WHEN 'planting' THEN "Entity"."shortcode" LIKE 'PLT-%' WHEN 'gardenEntry' THEN "Entity"."shortcode" LIKE 'GDE-%' WHEN 'vendorAccount' THEN "Entity"."shortcode" LIKE 'VACCT-%' WHEN 'productCategory' THEN "Entity"."shortcode" LIKE 'CAT-%' WHEN 'run' THEN "Entity"."shortcode" LIKE 'RUN-%' WHEN 'device' THEN "Entity"."shortcode" LIKE 'DEV-%' WHEN 'plant' THEN "Entity"."shortcode" LIKE 'PLANT-%' ELSE false END),
 	CONSTRAINT "Entity_merge_not_self_check" CHECK ("Entity"."mergedIntoId" IS NULL OR "Entity"."mergedIntoId" <> "Entity"."id"),
 	CONSTRAINT "Entity_merged_is_deleted_check" CHECK ("Entity"."mergedIntoId" IS NULL OR "Entity"."deletedAt" IS NOT NULL),
 	CONSTRAINT "Entity_live_has_shortcode_check" CHECK ("Entity"."deletedAt" IS NOT NULL OR "Entity"."shortcode" IS NOT NULL)
 );
 --> statement-breakpoint
-CREATE TABLE "Expense" (
+CREATE TABLE "EntityLink" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"shortcode" text NOT NULL,
-	"name" text NOT NULL,
-	"cost" double precision,
-	"date" date,
-	"lineKind" text DEFAULT 'principal' NOT NULL,
-	"lineBasis" text DEFAULT 'item_line' NOT NULL,
-	"costType" text NOT NULL,
-	"trade" text,
-	"url" text,
-	"notes" text,
-	"future" boolean DEFAULT false NOT NULL,
-	"projectId" uuid,
-	"productId" uuid,
-	"productQuantity" double precision,
-	"purchaseId" uuid,
-	"notionPageId" text,
+	"kind" text NOT NULL,
+	"fromEntityId" uuid NOT NULL,
+	"fromKind" text NOT NULL,
+	"toEntityId" uuid NOT NULL,
+	"toKind" text NOT NULL,
+	"quantity" integer,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL,
 	"deletedAt" timestamp,
-	CONSTRAINT "Expense_date_cost_check" CHECK ("Expense"."date" IS NOT NULL OR ("Expense"."cost" IS NOT NULL AND "Expense"."cost" = 0)),
-	CONSTRAINT "Expense_live_charge_assignment_check" CHECK ("Expense"."deletedAt" IS NOT NULL OR "Expense"."lineKind" = 'principal' OR ("Expense"."projectId" IS NULL AND "Expense"."purchaseId" IS NOT NULL)),
-	CONSTRAINT "Expense_cost_whole_cent_check" CHECK ("Expense"."cost" IS NULL OR abs("Expense"."cost" * 100 - round("Expense"."cost" * 100)) < 0.0000001),
-	CONSTRAINT "Expense_productQuantity_check" CHECK ("Expense"."productQuantity" IS NULL OR ("Expense"."productId" IS NOT NULL AND ("Expense"."productQuantity" <> 0 OR ("Expense"."cost" IS NOT NULL AND "Expense"."cost" < 0)))),
-	CONSTRAINT "Expense_lineKind_productId_check" CHECK ("Expense"."lineKind" = 'principal' OR "Expense"."productId" IS NULL)
+	CONSTRAINT "EntityLink_kind_check" CHECK (("kind", "fromKind", "toKind") IN (('wishCandidate', 'wish', 'product'), ('purchaseProduct', 'purchase', 'product'), ('projectTool', 'project', 'product'), ('gardenEntryPlanting', 'gardenEntry', 'planting'), ('productComponent', 'product', 'product'), ('taskDependency', 'task', 'task'), ('projectDependency', 'project', 'project'))),
+	CONSTRAINT "EntityLink_quantity_check" CHECK (CASE WHEN "kind" IN ('productComponent') THEN "quantity" IS NOT NULL AND "quantity" >= 1 ELSE "quantity" IS NULL END),
+	CONSTRAINT "EntityLink_no_self_check" CHECK ("kind" NOT IN ('productComponent', 'taskDependency', 'projectDependency') OR "fromEntityId" <> "toEntityId")
 );
 --> statement-breakpoint
 CREATE TABLE "ExpenseAttribution" (
@@ -248,44 +215,12 @@ CREATE TABLE "ExpenseAttribution" (
 	CONSTRAINT "ExpenseAttribution_weight_check" CHECK ("ExpenseAttribution"."weight" > 0 AND "ExpenseAttribution"."weight" <= 9007199254740991)
 );
 --> statement-breakpoint
-CREATE TABLE "FinancialAccount" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"shortcode" text NOT NULL,
-	"name" text NOT NULL,
-	"identity" jsonb NOT NULL,
-	"provisional" boolean DEFAULT false NOT NULL,
-	"sourceAliases" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"cardNumbers" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"providerVendorId" uuid,
-	"ledgerPartyId" uuid,
-	"inventoryOwnerDefaultEnabled" boolean DEFAULT false NOT NULL,
-	"notes" text,
+CREATE TABLE "ExternalSource" (
+	"slug" text PRIMARY KEY NOT NULL,
+	"label" text NOT NULL,
+	"vendorId" uuid,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp,
-	CONSTRAINT "FinancialAccount_providerVendor_stored_value_check" CHECK ("FinancialAccount"."providerVendorId" IS NULL OR "FinancialAccount"."identity"->>'kind' = 'stored_value')
-);
---> statement-breakpoint
-CREATE TABLE "FinancialTransaction" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"shortcode" text NOT NULL,
-	"accountId" uuid NOT NULL,
-	"ledgerTransferId" uuid,
-	"kind" text NOT NULL,
-	"status" text NOT NULL,
-	"amount" double precision NOT NULL,
-	"transactionDate" date,
-	"postedDate" date,
-	"merchant" text,
-	"rawDescription" text,
-	"sourceCategory" text,
-	"sourceRefs" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"notes" text,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp,
-	CONSTRAINT "FinancialTransaction_amount_whole_cent_check" CHECK ("FinancialTransaction"."amount" <> 0 AND abs("FinancialTransaction"."amount" * 100 - round("FinancialTransaction"."amount" * 100)) < 0.0000001),
-	CONSTRAINT "FinancialTransaction_posted_date_check" CHECK ("FinancialTransaction"."status" <> 'posted' OR "FinancialTransaction"."postedDate" IS NOT NULL)
+	CONSTRAINT "ExternalSource_slug_check" CHECK ("ExternalSource"."slug" ~ '^[a-z0-9]+(-[a-z0-9]+)*$')
 );
 --> statement-breakpoint
 CREATE TABLE "FinancialTransactionAllocation" (
@@ -297,66 +232,6 @@ CREATE TABLE "FinancialTransactionAllocation" (
 	"updatedAt" timestamp DEFAULT now() NOT NULL,
 	"deletedAt" timestamp,
 	CONSTRAINT "FinancialTransactionAllocation_amount_whole_cent_check" CHECK ("FinancialTransactionAllocation"."amount" <> 0 AND abs("FinancialTransactionAllocation"."amount" * 100 - round("FinancialTransactionAllocation"."amount" * 100)) < 0.0000001)
-);
---> statement-breakpoint
-CREATE TABLE "GardenEntry" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"shortcode" text NOT NULL,
-	"locationId" uuid NOT NULL,
-	"kind" text DEFAULT 'note' NOT NULL,
-	"observedOn" date NOT NULL,
-	"note" text,
-	"harvestAmount" text,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp
-);
---> statement-breakpoint
-CREATE TABLE "GardenEntryPlanting" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"gardenEntryId" uuid NOT NULL,
-	"plantingId" uuid NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp
-);
---> statement-breakpoint
-CREATE TABLE "Image" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"shortcode" text NOT NULL,
-	"key" text NOT NULL,
-	"filename" text NOT NULL,
-	"size" integer NOT NULL,
-	"contentType" text NOT NULL,
-	"status" "ImageStatus" DEFAULT 'PENDING' NOT NULL,
-	"width" integer,
-	"height" integer,
-	"perceptualHash" text,
-	"sourceFingerprint" jsonb,
-	"detectedContentType" text,
-	"sha256" text,
-	"renderStatus" "ImageRenderStatus",
-	"storageStatus" "ImageStorageStatus",
-	"source" text DEFAULT 'unknown' NOT NULL,
-	"sourcePageUrl" text,
-	"sourceAssetUrl" text,
-	"sourceName" text,
-	"useOriginal" boolean DEFAULT false NOT NULL,
-	"verifiedAt" timestamp,
-	"capturedAt" timestamp,
-	"capturedAtOffsetMinutes" integer,
-	"captureLocation" jsonb,
-	"capturePlaceName" text,
-	"captureDeviceLabel" text,
-	"capturedByPartyId" uuid,
-	"captureAttribution" text DEFAULT 'none' NOT NULL,
-	"provenanceEvidence" jsonb,
-	"metadataRevision" integer,
-	"embeddedMetadata" jsonb,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp,
-	CONSTRAINT "Image_perceptualHash_format_check" CHECK ("Image"."perceptualHash" IS NULL OR "Image"."perceptualHash" ~ '^[0-9a-f]{16}$')
 );
 --> statement-breakpoint
 CREATE TABLE "ImageDerivative" (
@@ -473,7 +348,6 @@ CREATE TABLE "ImageProcessingSubmissionJob" (
 --> statement-breakpoint
 CREATE TABLE "ImageSighting" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"shortcode" text NOT NULL,
 	"imageId" uuid NOT NULL,
 	"ledgerPartyId" uuid NOT NULL,
 	"deviceId" uuid NOT NULL,
@@ -569,36 +443,6 @@ CREATE TABLE "ImportSourceClaim" (
 	CONSTRAINT "ImportSourceClaim_kind_check" CHECK ("ImportSourceClaim"."kind" IN ('browser_order', 'mail_message', 'mail_attachment', 'receipt_photo', 'vendor_export'))
 );
 --> statement-breakpoint
-CREATE TABLE "Ingredient" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"shortcode" text NOT NULL,
-	"name" text NOT NULL,
-	"aliases" text[] DEFAULT '{}'::text[] NOT NULL,
-	"naKinds" text[] DEFAULT '{}'::text[] NOT NULL,
-	"usuallyOnHand" boolean DEFAULT false NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp,
-	"recipeId" uuid
-);
---> statement-breakpoint
-CREATE TABLE "InventoryEntry" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"shortcode" text NOT NULL,
-	"productId" uuid NOT NULL,
-	"amount" jsonb NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp,
-	"locationId" uuid NOT NULL,
-	"valuation" real,
-	"verifiedAt" timestamp,
-	"placement" "InventoryPlacement" DEFAULT 'stock' NOT NULL,
-	"ownershipMode" text DEFAULT 'inherit' NOT NULL,
-	"ownerLedgerPartyId" uuid,
-	CONSTRAINT "InventoryEntry_ownership_valid" CHECK (("InventoryEntry"."ownershipMode" = 'person' AND "InventoryEntry"."ownerLedgerPartyId" IS NOT NULL) OR ("InventoryEntry"."ownershipMode" IN ('inherit', 'unassigned') AND "InventoryEntry"."ownerLedgerPartyId" IS NULL))
-);
---> statement-breakpoint
 CREATE TABLE "jwks" (
 	"id" text PRIMARY KEY NOT NULL,
 	"public_key" text NOT NULL,
@@ -607,20 +451,6 @@ CREATE TABLE "jwks" (
 	"expires_at" timestamp,
 	"alg" text,
 	"crv" text
-);
---> statement-breakpoint
-CREATE TABLE "LedgerParty" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"shortcode" text NOT NULL,
-	"name" text NOT NULL,
-	"kind" text NOT NULL,
-	"notes" text,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp,
-	"userId" text,
-	CONSTRAINT "LedgerParty_kind_check" CHECK ("LedgerParty"."kind" IN ('member', 'guest', 'household')),
-	CONSTRAINT "LedgerParty_user_member_check" CHECK ("LedgerParty"."userId" IS NULL OR "LedgerParty"."kind" = 'member')
 );
 --> statement-breakpoint
 CREATE TABLE "LedgerSourceClaim" (
@@ -650,37 +480,6 @@ CREATE TABLE "LedgerSourceClaim" (
             AND abs((("LedgerSourceClaim"."normalizedEvidence"->>'amount')::double precision) - "LedgerSourceClaim"."targetAmountAtClaim") >= 0.0000001)))
 );
 --> statement-breakpoint
-CREATE TABLE "LedgerTransfer" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"shortcode" text NOT NULL,
-	"fromPartyId" uuid NOT NULL,
-	"toPartyId" uuid NOT NULL,
-	"amount" double precision NOT NULL,
-	"date" date NOT NULL,
-	"notes" text,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp,
-	CONSTRAINT "LedgerTransfer_amount_whole_cent_check" CHECK ("LedgerTransfer"."amount" > 0 AND abs("LedgerTransfer"."amount" * 100 - round("LedgerTransfer"."amount" * 100)) < 0.0000001)
-);
---> statement-breakpoint
-CREATE TABLE "Location" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"shortcode" text NOT NULL,
-	"name" text NOT NULL,
-	"aliases" text[] DEFAULT '{}'::text[] NOT NULL,
-	"tags" text[] DEFAULT '{}'::text[] NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp,
-	"lastBulkInventory" timestamp,
-	"parentId" uuid,
-	"productId" uuid,
-	"type" text,
-	"notes" text,
-	"aiDescription" text
-);
---> statement-breakpoint
 CREATE TABLE "MailboxCursor" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"ledgerPartyId" uuid NOT NULL,
@@ -697,25 +496,12 @@ CREATE TABLE "McpToolCall" (
 	"outcome" text NOT NULL,
 	"registeredAtCall" boolean NOT NULL,
 	"surface" text NOT NULL,
-	"entity" text,
+	"entityKind" text,
 	"release" text NOT NULL,
 	"occurredAt" timestamp NOT NULL,
 	"ingestedAt" timestamp DEFAULT now() NOT NULL,
 	"userId" text NOT NULL,
 	"clientId" text
-);
---> statement-breakpoint
-CREATE TABLE "Meal" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"shortcode" text NOT NULL,
-	"date" date NOT NULL,
-	"name" text,
-	"sortOrder" integer,
-	"mealType" text,
-	"mealKind" text DEFAULT 'cooked' NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp
 );
 --> statement-breakpoint
 CREATE TABLE "MealFoodEntry" (
@@ -725,30 +511,21 @@ CREATE TABLE "MealFoodEntry" (
 	"sourceKind" text NOT NULL,
 	"ingredientId" uuid,
 	"productId" uuid,
-	"amount" jsonb,
+	"amountValue" double precision,
+	"amountUnit" text,
 	"name" text,
 	"nutrients" jsonb,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL,
 	"deletedAt" timestamp,
 	CONSTRAINT "MealFoodEntry_amount_check" CHECK (
-  "MealFoodEntry"."amount" IS NULL OR COALESCE((
-    jsonb_typeof("MealFoodEntry"."amount") = 'object'
-    AND "MealFoodEntry"."amount" ? 'value'
-    AND "MealFoodEntry"."amount" ? 'unit'
-    AND "MealFoodEntry"."amount" - 'value' - 'unit' = '{}'::jsonb
-    AND CASE
-      WHEN jsonb_typeof("MealFoodEntry"."amount"->'value') = 'number' THEN
-        ("MealFoodEntry"."amount"->>'value')::numeric > 0
-        AND ("MealFoodEntry"."amount"->>'value')::numeric < 'Infinity'::numeric
-      ELSE false
-    END
-    AND jsonb_typeof("MealFoodEntry"."amount"->'unit') = 'string'
-    AND length(trim("MealFoodEntry"."amount"->>'unit')) > 0
-    AND "MealFoodEntry"."amount"->>'unit' = trim("MealFoodEntry"."amount"->>'unit')
-  ), false)
+  ("MealFoodEntry"."amountValue" IS NULL AND "MealFoodEntry"."amountUnit" IS NULL) OR (
+    "MealFoodEntry"."amountValue" IS NOT NULL AND "MealFoodEntry"."amountUnit" IS NOT NULL
+    AND "MealFoodEntry"."amountValue" > 0 AND "MealFoodEntry"."amountValue" < 'Infinity'::double precision
+    AND length(trim("MealFoodEntry"."amountUnit")) > 0 AND "MealFoodEntry"."amountUnit" = trim("MealFoodEntry"."amountUnit")
+  )
 ),
-	CONSTRAINT "MealFoodEntry_source_check" CHECK (("MealFoodEntry"."sourceKind" = 'ingredient' AND "MealFoodEntry"."ingredientId" IS NOT NULL AND "MealFoodEntry"."productId" IS NULL AND "MealFoodEntry"."amount" IS NOT NULL AND "MealFoodEntry"."name" IS NULL AND "MealFoodEntry"."nutrients" IS NULL) OR ("MealFoodEntry"."sourceKind" = 'product' AND "MealFoodEntry"."ingredientId" IS NULL AND "MealFoodEntry"."productId" IS NOT NULL AND "MealFoodEntry"."amount" IS NOT NULL AND "MealFoodEntry"."name" IS NULL AND "MealFoodEntry"."nutrients" IS NULL) OR ("MealFoodEntry"."sourceKind" = 'manual' AND "MealFoodEntry"."ingredientId" IS NULL AND "MealFoodEntry"."productId" IS NULL AND length(trim("MealFoodEntry"."name")) > 0 AND "MealFoodEntry"."name" IS NOT NULL AND "MealFoodEntry"."nutrients" IS NOT NULL AND jsonb_typeof("MealFoodEntry"."nutrients") = 'object' AND "MealFoodEntry"."nutrients" <> '{}'::jsonb))
+	CONSTRAINT "MealFoodEntry_source_check" CHECK (("MealFoodEntry"."sourceKind" = 'ingredient' AND "MealFoodEntry"."ingredientId" IS NOT NULL AND "MealFoodEntry"."productId" IS NULL AND "MealFoodEntry"."amountValue" IS NOT NULL AND "MealFoodEntry"."name" IS NULL AND "MealFoodEntry"."nutrients" IS NULL) OR ("MealFoodEntry"."sourceKind" = 'product' AND "MealFoodEntry"."ingredientId" IS NULL AND "MealFoodEntry"."productId" IS NOT NULL AND "MealFoodEntry"."amountValue" IS NOT NULL AND "MealFoodEntry"."name" IS NULL AND "MealFoodEntry"."nutrients" IS NULL) OR ("MealFoodEntry"."sourceKind" = 'manual' AND "MealFoodEntry"."ingredientId" IS NULL AND "MealFoodEntry"."productId" IS NULL AND length(trim("MealFoodEntry"."name")) > 0 AND "MealFoodEntry"."name" IS NOT NULL AND "MealFoodEntry"."nutrients" IS NOT NULL AND jsonb_typeof("MealFoodEntry"."nutrients") = 'object' AND "MealFoodEntry"."nutrients" <> '{}'::jsonb))
 );
 --> statement-breakpoint
 CREATE TABLE "MealRecipe" (
@@ -771,27 +548,18 @@ CREATE TABLE "MealRecipePortion" (
 	"mealRecipeId" uuid NOT NULL,
 	"mealId" uuid NOT NULL,
 	"ledgerPartyId" uuid NOT NULL,
-	"amount" jsonb NOT NULL,
+	"amountValue" double precision NOT NULL,
+	"amountUnit" text NOT NULL,
 	"confirmedAt" timestamp,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL,
 	"deletedAt" timestamp,
 	CONSTRAINT "MealRecipePortion_amount_check" CHECK (
-  "MealRecipePortion"."amount" IS NULL OR COALESCE((
-    jsonb_typeof("MealRecipePortion"."amount") = 'object'
-    AND "MealRecipePortion"."amount" ? 'value'
-    AND "MealRecipePortion"."amount" ? 'unit'
-    AND "MealRecipePortion"."amount" - 'value' - 'unit' = '{}'::jsonb
-    AND CASE
-      WHEN jsonb_typeof("MealRecipePortion"."amount"->'value') = 'number' THEN
-        ("MealRecipePortion"."amount"->>'value')::numeric > 0
-        AND ("MealRecipePortion"."amount"->>'value')::numeric < 'Infinity'::numeric
-      ELSE false
-    END
-    AND jsonb_typeof("MealRecipePortion"."amount"->'unit') = 'string'
-    AND length(trim("MealRecipePortion"."amount"->>'unit')) > 0
-    AND "MealRecipePortion"."amount"->>'unit' = trim("MealRecipePortion"."amount"->>'unit')
-  ), false)
+  ("MealRecipePortion"."amountValue" IS NULL AND "MealRecipePortion"."amountUnit" IS NULL) OR (
+    "MealRecipePortion"."amountValue" IS NOT NULL AND "MealRecipePortion"."amountUnit" IS NOT NULL
+    AND "MealRecipePortion"."amountValue" > 0 AND "MealRecipePortion"."amountValue" < 'Infinity'::double precision
+    AND length(trim("MealRecipePortion"."amountUnit")) > 0 AND "MealRecipePortion"."amountUnit" = trim("MealRecipePortion"."amountUnit")
+  )
 )
 );
 --> statement-breakpoint
@@ -956,7 +724,7 @@ CREATE TABLE "OrderMailAttachment" (
 	"filename" text NOT NULL,
 	"mimeType" text NOT NULL,
 	"checksum" text NOT NULL,
-	"pendingDataBase64Url" text,
+	"pendingObjectKey" text,
 	"imageId" uuid,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL
@@ -1024,6 +792,589 @@ CREATE TABLE "PhotoGroupProposal" (
 	"updatedAt" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "PhotoGroupProposal_state_check" CHECK ("PhotoGroupProposal"."state" IN ('proposed', 'committed', 'discarded')),
 	CONSTRAINT "PhotoGroupProposal_product_kind_check" CHECK ("PhotoGroupProposal"."productKind" IN ('existing', 'create'))
+);
+--> statement-breakpoint
+CREATE TABLE "ProductConversionCoverage" (
+	"productId" uuid PRIMARY KEY NOT NULL,
+	"coverageTier" text NOT NULL,
+	"coveredKinds" text[] DEFAULT '{}'::text[] NOT NULL,
+	"applicableKinds" text[] DEFAULT '{}'::text[] NOT NULL,
+	"islandCount" integer DEFAULT 0 NOT NULL,
+	"status" text DEFAULT 'ready' NOT NULL,
+	"engineVersion" text NOT NULL,
+	"computedAt" timestamp NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "ProductMatchCandidate" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"productAId" uuid NOT NULL,
+	"productBId" uuid NOT NULL,
+	"source" text NOT NULL,
+	"state" text NOT NULL,
+	"evidence" text,
+	"sourceUrls" text[] DEFAULT ARRAY[]::text[] NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "ProductMatchCandidate_canonical_pair_check" CHECK ("ProductMatchCandidate"."productAId" < "ProductMatchCandidate"."productBId"),
+	CONSTRAINT "ProductMatchCandidate_source_check" CHECK ("ProductMatchCandidate"."source" IN ('agent', 'detector')),
+	CONSTRAINT "ProductMatchCandidate_state_check" CHECK ("ProductMatchCandidate"."state" IN ('open', 'dismissed'))
+);
+--> statement-breakpoint
+CREATE TABLE "ProductUnitMapping" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"productId" uuid NOT NULL,
+	"aValue" double precision NOT NULL,
+	"aUnit" text NOT NULL,
+	"bValue" double precision NOT NULL,
+	"bUnit" text NOT NULL,
+	"source" text,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp
+);
+--> statement-breakpoint
+CREATE TABLE "PurchasePaymentEvidence" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"purchaseId" uuid NOT NULL,
+	"sourceClaimId" uuid NOT NULL,
+	"amount" double precision NOT NULL,
+	"chargedAt" timestamp,
+	"cardLastFour" text,
+	"description" text,
+	"evidenceIndex" integer NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "RecipeSection" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"recipeId" uuid NOT NULL,
+	"name" text,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp,
+	"instructions" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"sortOrder" integer
+);
+--> statement-breakpoint
+CREATE TABLE "RecipeSectionIngredient" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"recipeSectionId" uuid NOT NULL,
+	"ingredientId" uuid NOT NULL,
+	"amounts" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"rawLine" text,
+	"modifier" text,
+	"sortOrder" integer,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp
+);
+--> statement-breakpoint
+CREATE TABLE "RunApproval" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"runId" uuid NOT NULL,
+	"operationId" text NOT NULL,
+	"operationKind" text NOT NULL,
+	"args" jsonb NOT NULL,
+	"argsFingerprint" text NOT NULL,
+	"targetFingerprint" text NOT NULL,
+	"evidenceFingerprint" text NOT NULL,
+	"state" text DEFAULT 'pending' NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"decidedByUserId" text,
+	"decidedAt" timestamp,
+	"rejectedAt" timestamp,
+	"consumedAt" timestamp,
+	"invalidatedAt" timestamp,
+	CONSTRAINT "RunApproval_state_check" CHECK ("RunApproval"."state" IN ('pending', 'granted', 'rejected', 'consumed', 'invalidated'))
+);
+--> statement-breakpoint
+CREATE TABLE "RunControlEvent" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"runId" uuid NOT NULL,
+	"action" text NOT NULL,
+	"controllerUserId" text NOT NULL,
+	"controllerName" text NOT NULL,
+	"controllerEmail" text NOT NULL,
+	"controllerLedgerPartyId" uuid NOT NULL,
+	"controllerLedgerPartyShortcode" text NOT NULL,
+	"controllerLedgerPartyName" text NOT NULL,
+	"controllerLedgerPartyKind" text NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "RunControlEvent_action_check" CHECK ("RunControlEvent"."action" IN ('prompt', 'abort', 'pause', 'resume', 'cancel', 'approve', 'reject', 'retry', 'retry_dispatch', 'upload_evidence', 'no_evidence_available', 'escalate_sol'))
+);
+--> statement-breakpoint
+CREATE TABLE "RunEvidence" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"runId" uuid NOT NULL,
+	"targetId" uuid NOT NULL,
+	"kind" text NOT NULL,
+	"objectKey" text NOT NULL,
+	"checksum" text NOT NULL,
+	"mediaType" text NOT NULL,
+	"byteSize" integer,
+	"sourceMetadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "RunEvidence_kind_check" CHECK ("RunEvidence"."kind" IN ('browser_capture', 'gmail_attachment', 'manual_upload'))
+);
+--> statement-breakpoint
+CREATE TABLE "RunFinding" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"runId" uuid,
+	"ledgerPartyId" uuid NOT NULL,
+	"entityId" uuid NOT NULL,
+	"entityKind" text NOT NULL,
+	"kind" text NOT NULL,
+	"summary" text NOT NULL,
+	"proposedFix" jsonb,
+	"evidenceFingerprint" text NOT NULL,
+	"autoApplied" boolean DEFAULT false NOT NULL,
+	"probability" real,
+	"status" text DEFAULT 'open' NOT NULL,
+	"resolvedAt" timestamp,
+	"expiresAt" timestamp,
+	"resolvedByUserId" text,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "RunFinding_status_check" CHECK ("RunFinding"."status" IN ('open', 'applied', 'dismissed')),
+	CONSTRAINT "RunFinding_entityKind_check" CHECK ("RunFinding"."entityKind" IN ('purchase', 'expense', 'product', 'run'))
+);
+--> statement-breakpoint
+CREATE TABLE "RunOperation" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"executor" jsonb,
+	"runId" uuid NOT NULL,
+	"operationId" text NOT NULL,
+	"kind" text NOT NULL,
+	"inputFingerprint" text NOT NULL,
+	"state" text DEFAULT 'started' NOT NULL,
+	"result" jsonb,
+	"error" text,
+	"startedAt" timestamp DEFAULT now() NOT NULL,
+	"completedAt" timestamp,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "RunOperation_state_check" CHECK ("RunOperation"."state" IN ('started', 'paused_approval', 'completed', 'failed'))
+);
+--> statement-breakpoint
+CREATE TABLE "RunOrderCandidate" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"runId" uuid NOT NULL,
+	"orderId" text NOT NULL,
+	"orderUrl" text,
+	"orderedAt" date,
+	"state" text DEFAULT 'pending' NOT NULL,
+	"listedAt" timestamp DEFAULT now() NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "RunOrderCandidate_state_check" CHECK ("RunOrderCandidate"."state" IN ('pending', 'covered', 'imported', 'skipped'))
+);
+--> statement-breakpoint
+CREATE TABLE "RunProgress" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"runId" uuid NOT NULL,
+	"eventId" text NOT NULL,
+	"phase" text NOT NULL,
+	"currentItem" text,
+	"awaitingApproval" boolean DEFAULT false NOT NULL,
+	"detail" text,
+	"createdAt" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "RunTarget" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"runId" uuid NOT NULL,
+	"entityId" uuid NOT NULL,
+	"entityKind" text NOT NULL,
+	"position" integer,
+	"vendorAccountId" uuid,
+	"sourceKind" text,
+	"sourceExternalKey" text,
+	"state" text DEFAULT 'pending' NOT NULL,
+	"targetFingerprint" text NOT NULL,
+	"evidenceFingerprint" text,
+	"outcome" text,
+	"warning" text,
+	"diff" jsonb,
+	"preparedAt" timestamp,
+	"completedAt" timestamp,
+	"deviceWorkState" text,
+	"deviceWorkAttempts" integer DEFAULT 0 NOT NULL,
+	"deviceWorkError" text,
+	"deviceWorkDeviceId" uuid,
+	"deviceWorkUpdatedAt" timestamp,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "RunTarget_entityKind_check" CHECK ("RunTarget"."entityKind" IN ('purchase', 'product', 'image')),
+	CONSTRAINT "RunTarget_state_check" CHECK ("RunTarget"."state" IN ('pending', 'prepared', 'completed', 'skipped', 'unresolved', 'needs_evidence', 'unavailable')),
+	CONSTRAINT "RunTarget_outcome_check" CHECK ("RunTarget"."outcome" IS NULL OR "RunTarget"."outcome" IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped', 'attached')),
+	CONSTRAINT "RunTarget_deviceWorkState_check" CHECK ("RunTarget"."deviceWorkState" IS NULL OR "RunTarget"."deviceWorkState" IN ('queued', 'running', 'paused', 'failed', 'completed'))
+);
+--> statement-breakpoint
+CREATE TABLE "SearchDocument" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"entityId" uuid NOT NULL,
+	"entityKind" text NOT NULL,
+	"title" text NOT NULL,
+	"subtitle" text,
+	"typeHint" text,
+	"aliases" text[] DEFAULT ARRAY[]::text[] NOT NULL,
+	"keywords" text[] DEFAULT ARRAY[]::text[] NOT NULL,
+	"body" text NOT NULL,
+	"semanticText" text NOT NULL,
+	"normalizedText" text NOT NULL,
+	"searchVector" "tsvector" NOT NULL,
+	"sourceHash" text NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp
+);
+--> statement-breakpoint
+CREATE TABLE "session" (
+	"id" text PRIMARY KEY NOT NULL,
+	"expires_at" timestamp NOT NULL,
+	"token" text NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp NOT NULL,
+	"ip_address" text,
+	"user_agent" text,
+	"user_id" text NOT NULL,
+	CONSTRAINT "session_token_unique" UNIQUE("token")
+);
+--> statement-breakpoint
+CREATE TABLE "StatementImport" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"source" text NOT NULL,
+	"label" text NOT NULL,
+	"fingerprint" text NOT NULL,
+	"dateKind" text DEFAULT 'unknown' NOT NULL,
+	"rowCountDeclared" integer,
+	"notes" text,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp,
+	CONSTRAINT "StatementImport_source_slug_check" CHECK ("StatementImport"."source" ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND "StatementImport"."source" = lower(trim("StatementImport"."source"))),
+	CONSTRAINT "StatementImport_dateKind_check" CHECK ("StatementImport"."dateKind" IN ('posted', 'transaction', 'unknown')),
+	CONSTRAINT "StatementImport_rowCountDeclared_check" CHECK ("StatementImport"."rowCountDeclared" IS NULL OR "StatementImport"."rowCountDeclared" >= 0)
+);
+--> statement-breakpoint
+CREATE TABLE "StatementRow" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"batchId" uuid NOT NULL,
+	"source" text NOT NULL,
+	"externalId" text NOT NULL,
+	"accountDescriptor" text NOT NULL,
+	"statementDate" date NOT NULL,
+	"amount" double precision NOT NULL,
+	"providerAmount" double precision NOT NULL,
+	"merchant" text,
+	"rawDescription" text NOT NULL,
+	"sourceCategory" text,
+	"providerStatus" text,
+	"providerNotes" text,
+	"accountId" uuid,
+	"disposition" text DEFAULT 'open' NOT NULL,
+	"dispositionReason" text,
+	"dispositionNote" text,
+	"supersededByRowId" uuid,
+	"notes" text,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp,
+	CONSTRAINT "StatementRow_source_slug_check" CHECK ("StatementRow"."source" ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND "StatementRow"."source" = lower(trim("StatementRow"."source"))),
+	CONSTRAINT "StatementRow_amount_whole_cent_check" CHECK ("StatementRow"."amount" <> 0 AND abs("StatementRow"."amount" * 100 - round("StatementRow"."amount" * 100)) < 0.0000001),
+	CONSTRAINT "StatementRow_providerAmount_whole_cent_check" CHECK ("StatementRow"."providerAmount" <> 0 AND abs("StatementRow"."providerAmount" * 100 - round("StatementRow"."providerAmount" * 100)) < 0.0000001),
+	CONSTRAINT "StatementRow_providerStatus_check" CHECK ("StatementRow"."providerStatus" IS NULL OR "StatementRow"."providerStatus" IN ('posted', 'pending')),
+	CONSTRAINT "StatementRow_disposition_check" CHECK (("StatementRow"."disposition" = 'open' AND "StatementRow"."dispositionReason" IS NULL AND "StatementRow"."dispositionNote" IS NULL)
+          OR ("StatementRow"."disposition" = 'ignored' AND "StatementRow"."dispositionReason" IS NOT NULL AND "StatementRow"."dispositionNote" IS NOT NULL)),
+	CONSTRAINT "StatementRow_dispositionReason_check" CHECK ("StatementRow"."dispositionReason" IS NULL OR "StatementRow"."dispositionReason" IN
+          ('not_modeled', 'not_a_purchase', 'duplicate_of_other_source', 'pre_cubby', 'other')),
+	CONSTRAINT "StatementRow_externalId_format_check" CHECK ("StatementRow"."externalId" ~ '^v1:[0-9a-f]{64}$')
+);
+--> statement-breakpoint
+CREATE TABLE "SuggestionDismissal" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"entityId" uuid NOT NULL,
+	"entityKind" text NOT NULL,
+	"suggestionKind" text NOT NULL,
+	"candidateKey" text NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp
+);
+--> statement-breakpoint
+CREATE TABLE "UpcLookupCache" (
+	"upc" text PRIMARY KEY NOT NULL,
+	"manufacturer" text,
+	"brand" text,
+	"priceDollars" double precision,
+	"imageUrl" text,
+	"status" text DEFAULT 'ready' NOT NULL,
+	"fetchedAt" timestamp NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "user" (
+	"id" text PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"email" text NOT NULL,
+	"email_verified" boolean DEFAULT false NOT NULL,
+	"image" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "user_email_unique" UNIQUE("email")
+);
+--> statement-breakpoint
+CREATE TABLE "verification" (
+	"id" text PRIMARY KEY NOT NULL,
+	"identifier" text NOT NULL,
+	"value" text NOT NULL,
+	"expires_at" timestamp NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "Cookbook" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"shortcode" text NOT NULL,
+	"name" text NOT NULL,
+	"author" text[] DEFAULT '{}'::text[] NOT NULL,
+	"subjects" text[] DEFAULT '{}'::text[] NOT NULL,
+	"sourceLabel" text NOT NULL,
+	"rawJson" jsonb NOT NULL,
+	"report" jsonb,
+	"productId" uuid,
+	"importedAt" timestamp DEFAULT now() NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp
+);
+--> statement-breakpoint
+CREATE TABLE "Device" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"shortcode" text NOT NULL,
+	"installationId" text NOT NULL,
+	"name" text NOT NULL,
+	"platform" text NOT NULL,
+	"appVersion" text,
+	"osVersion" text,
+	"lastSeenAt" timestamp,
+	"automaticWork" boolean DEFAULT true NOT NULL,
+	"remotePaused" boolean DEFAULT false NOT NULL,
+	"ledgerPartyId" uuid,
+	"productId" uuid,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp,
+	CONSTRAINT "Device_platform_check" CHECK ("Device"."platform" IN ('ios', 'macos'))
+);
+--> statement-breakpoint
+CREATE TABLE "Expense" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"shortcode" text NOT NULL,
+	"name" text NOT NULL,
+	"cost" double precision,
+	"date" date,
+	"lineKind" text DEFAULT 'principal' NOT NULL,
+	"lineBasis" text DEFAULT 'item_line' NOT NULL,
+	"costType" text NOT NULL,
+	"trade" text,
+	"url" text,
+	"notes" text,
+	"future" boolean DEFAULT false NOT NULL,
+	"projectId" uuid,
+	"productId" uuid,
+	"productQuantity" double precision,
+	"purchaseId" uuid,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp,
+	CONSTRAINT "Expense_date_cost_check" CHECK ("Expense"."date" IS NOT NULL OR ("Expense"."cost" IS NOT NULL AND "Expense"."cost" = 0)),
+	CONSTRAINT "Expense_live_charge_assignment_check" CHECK ("Expense"."deletedAt" IS NOT NULL OR "Expense"."lineKind" = 'principal' OR ("Expense"."projectId" IS NULL AND "Expense"."purchaseId" IS NOT NULL)),
+	CONSTRAINT "Expense_cost_whole_cent_check" CHECK ("Expense"."cost" IS NULL OR abs("Expense"."cost" * 100 - round("Expense"."cost" * 100)) < 0.0000001),
+	CONSTRAINT "Expense_productQuantity_check" CHECK ("Expense"."productQuantity" IS NULL OR ("Expense"."productId" IS NOT NULL AND ("Expense"."productQuantity" <> 0 OR ("Expense"."cost" IS NOT NULL AND "Expense"."cost" < 0)))),
+	CONSTRAINT "Expense_lineKind_productId_check" CHECK ("Expense"."lineKind" = 'principal' OR "Expense"."productId" IS NULL)
+);
+--> statement-breakpoint
+CREATE TABLE "FinancialAccount" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"shortcode" text NOT NULL,
+	"name" text NOT NULL,
+	"identity" jsonb NOT NULL,
+	"provisional" boolean DEFAULT false NOT NULL,
+	"sourceAliases" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"cardNumbers" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"providerVendorId" uuid,
+	"ledgerPartyId" uuid,
+	"inventoryOwnerDefaultEnabled" boolean DEFAULT false NOT NULL,
+	"notes" text,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp,
+	CONSTRAINT "FinancialAccount_providerVendor_stored_value_check" CHECK ("FinancialAccount"."providerVendorId" IS NULL OR "FinancialAccount"."identity"->>'kind' = 'stored_value')
+);
+--> statement-breakpoint
+CREATE TABLE "FinancialTransaction" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"shortcode" text NOT NULL,
+	"accountId" uuid NOT NULL,
+	"ledgerTransferId" uuid,
+	"kind" text NOT NULL,
+	"status" text NOT NULL,
+	"amount" double precision NOT NULL,
+	"transactionDate" date,
+	"postedDate" date,
+	"merchant" text,
+	"rawDescription" text,
+	"sourceCategory" text,
+	"notes" text,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp,
+	CONSTRAINT "FinancialTransaction_amount_whole_cent_check" CHECK ("FinancialTransaction"."amount" <> 0 AND abs("FinancialTransaction"."amount" * 100 - round("FinancialTransaction"."amount" * 100)) < 0.0000001),
+	CONSTRAINT "FinancialTransaction_posted_date_check" CHECK ("FinancialTransaction"."status" <> 'posted' OR "FinancialTransaction"."postedDate" IS NOT NULL)
+);
+--> statement-breakpoint
+CREATE TABLE "GardenEntry" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"shortcode" text NOT NULL,
+	"locationId" uuid NOT NULL,
+	"kind" text DEFAULT 'note' NOT NULL,
+	"observedOn" date NOT NULL,
+	"notes" text,
+	"harvestAmount" text,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp
+);
+--> statement-breakpoint
+CREATE TABLE "Image" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"shortcode" text NOT NULL,
+	"key" text NOT NULL,
+	"filename" text NOT NULL,
+	"size" integer NOT NULL,
+	"contentType" text NOT NULL,
+	"status" text DEFAULT 'PENDING' NOT NULL,
+	"width" integer,
+	"height" integer,
+	"perceptualHash" text,
+	"sourceFingerprint" jsonb,
+	"detectedContentType" text,
+	"sha256" text,
+	"renderStatus" text,
+	"storageStatus" text,
+	"source" text DEFAULT 'unknown' NOT NULL,
+	"sourcePageUrl" text,
+	"sourceAssetUrl" text,
+	"sourceName" text,
+	"useOriginal" boolean DEFAULT false NOT NULL,
+	"verifiedAt" timestamp,
+	"capturedAt" timestamp,
+	"capturedAtOffsetMinutes" integer,
+	"captureLocation" jsonb,
+	"capturePlaceName" text,
+	"captureDeviceLabel" text,
+	"capturedByPartyId" uuid,
+	"captureAttribution" text DEFAULT 'none' NOT NULL,
+	"provenanceEvidence" jsonb,
+	"metadataRevision" integer,
+	"embeddedMetadata" jsonb,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp,
+	CONSTRAINT "Image_status_check" CHECK ("Image"."status" IN ('PENDING', 'UPLOADED', 'FAILED')),
+	CONSTRAINT "Image_renderStatus_check" CHECK ("Image"."renderStatus" IN ('unverified', 'verified', 'failed')),
+	CONSTRAINT "Image_storageStatus_check" CHECK ("Image"."storageStatus" IN ('unverified', 'available', 'missing', 'metadata_mismatch')),
+	CONSTRAINT "Image_perceptualHash_format_check" CHECK ("Image"."perceptualHash" IS NULL OR "Image"."perceptualHash" ~ '^[0-9a-f]{16}$')
+);
+--> statement-breakpoint
+CREATE TABLE "Ingredient" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"shortcode" text NOT NULL,
+	"name" text NOT NULL,
+	"aliases" text[] DEFAULT '{}'::text[] NOT NULL,
+	"naKinds" text[] DEFAULT '{}'::text[] NOT NULL,
+	"usuallyOnHand" boolean DEFAULT false NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp,
+	"recipeId" uuid
+);
+--> statement-breakpoint
+CREATE TABLE "InventoryEntry" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"shortcode" text NOT NULL,
+	"productId" uuid NOT NULL,
+	"amountValue" double precision NOT NULL,
+	"amountUnit" text NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp,
+	"locationId" uuid NOT NULL,
+	"verifiedAt" timestamp,
+	"placement" text DEFAULT 'stock' NOT NULL,
+	"ownershipMode" text DEFAULT 'inherit' NOT NULL,
+	"ownerLedgerPartyId" uuid,
+	CONSTRAINT "InventoryEntry_placement_check" CHECK ("InventoryEntry"."placement" IN ('stock', 'installed')),
+	CONSTRAINT "InventoryEntry_ownership_valid" CHECK (("InventoryEntry"."ownershipMode" = 'person' AND "InventoryEntry"."ownerLedgerPartyId" IS NOT NULL) OR ("InventoryEntry"."ownershipMode" IN ('inherit', 'unassigned') AND "InventoryEntry"."ownerLedgerPartyId" IS NULL))
+);
+--> statement-breakpoint
+CREATE TABLE "LedgerParty" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"shortcode" text NOT NULL,
+	"name" text NOT NULL,
+	"kind" text NOT NULL,
+	"notes" text,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp,
+	"userId" text,
+	CONSTRAINT "LedgerParty_kind_check" CHECK ("LedgerParty"."kind" IN ('member', 'guest', 'household')),
+	CONSTRAINT "LedgerParty_user_member_check" CHECK ("LedgerParty"."userId" IS NULL OR "LedgerParty"."kind" = 'member')
+);
+--> statement-breakpoint
+CREATE TABLE "LedgerTransfer" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"shortcode" text NOT NULL,
+	"fromPartyId" uuid NOT NULL,
+	"toPartyId" uuid NOT NULL,
+	"amount" double precision NOT NULL,
+	"date" date NOT NULL,
+	"notes" text,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp,
+	CONSTRAINT "LedgerTransfer_amount_whole_cent_check" CHECK ("LedgerTransfer"."amount" > 0 AND abs("LedgerTransfer"."amount" * 100 - round("LedgerTransfer"."amount" * 100)) < 0.0000001)
+);
+--> statement-breakpoint
+CREATE TABLE "Location" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"shortcode" text NOT NULL,
+	"name" text NOT NULL,
+	"aliases" text[] DEFAULT '{}'::text[] NOT NULL,
+	"tags" text[] DEFAULT '{}'::text[] NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp,
+	"lastBulkInventory" timestamp,
+	"parentId" uuid,
+	"productId" uuid,
+	"type" text NOT NULL,
+	"notes" text,
+	CONSTRAINT "Location_furniture_product_check" CHECK ("Location"."type" <> 'furniture' OR "Location"."productId" IS NOT NULL)
+);
+--> statement-breakpoint
+CREATE TABLE "Meal" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"shortcode" text NOT NULL,
+	"date" date NOT NULL,
+	"name" text,
+	"sortOrder" integer,
+	"mealType" text,
+	"mealKind" text DEFAULT 'cooked' NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp
 );
 --> statement-breakpoint
 CREATE TABLE "Plant" (
@@ -1104,70 +1455,6 @@ CREATE TABLE "ProductCategory" (
 	CONSTRAINT "ProductCategory_feature_check" CHECK ("ProductCategory"."feature" IS NULL OR "ProductCategory"."feature" IN ('food', 'books', 'tools', 'tool-consumables', 'tool-accessories', 'storage', 'hardware', 'electronics', 'software', 'household', 'supplies', 'apparel'))
 );
 --> statement-breakpoint
-CREATE TABLE "ProductComponent" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"parentProductId" uuid NOT NULL,
-	"componentProductId" uuid NOT NULL,
-	"quantity" integer DEFAULT 1 NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp,
-	CONSTRAINT "ProductComponent_quantity_check" CHECK ("ProductComponent"."quantity" >= 1),
-	CONSTRAINT "ProductComponent_not_self_check" CHECK ("ProductComponent"."parentProductId" <> "ProductComponent"."componentProductId")
-);
---> statement-breakpoint
-CREATE TABLE "ProductConversionCoverage" (
-	"productId" uuid PRIMARY KEY NOT NULL,
-	"coverageTier" text NOT NULL,
-	"coveredKinds" text[] DEFAULT '{}'::text[] NOT NULL,
-	"applicableKinds" text[] DEFAULT '{}'::text[] NOT NULL,
-	"islandCount" integer DEFAULT 0 NOT NULL,
-	"status" text DEFAULT 'ready' NOT NULL,
-	"engineVersion" text NOT NULL,
-	"computedAt" timestamp NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "ProductExternalId" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"productId" uuid NOT NULL,
-	"source" text NOT NULL,
-	"kind" text DEFAULT 'legacy_unspecified' NOT NULL,
-	"externalId" text NOT NULL,
-	"url" text,
-	"isPrimary" boolean DEFAULT true NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp,
-	CONSTRAINT "ProductExternalId_source_slug_check" CHECK ("ProductExternalId"."source" ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND "ProductExternalId"."source" = lower(trim("ProductExternalId"."source"))),
-	CONSTRAINT "ProductExternalId_gtin_digits_check" CHECK ("ProductExternalId"."source" <> 'gtin' OR "ProductExternalId"."externalId" ~ '^[0-9]{14}$')
-);
---> statement-breakpoint
-CREATE TABLE "ProductMatchCandidate" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"productAId" uuid NOT NULL,
-	"productBId" uuid NOT NULL,
-	"source" text NOT NULL,
-	"state" text NOT NULL,
-	"evidence" text,
-	"sourceUrls" text[] DEFAULT ARRAY[]::text[] NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "ProductMatchCandidate_canonical_pair_check" CHECK ("ProductMatchCandidate"."productAId" < "ProductMatchCandidate"."productBId"),
-	CONSTRAINT "ProductMatchCandidate_source_check" CHECK ("ProductMatchCandidate"."source" IN ('agent', 'detector')),
-	CONSTRAINT "ProductMatchCandidate_state_check" CHECK ("ProductMatchCandidate"."state" IN ('open', 'dismissed'))
-);
---> statement-breakpoint
-CREATE TABLE "ProductUnitMappings" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"productId" uuid NOT NULL,
-	"a" jsonb NOT NULL,
-	"b" jsonb NOT NULL,
-	"source" text,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp
-);
---> statement-breakpoint
 CREATE TABLE "Project" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"shortcode" text NOT NULL,
@@ -1183,27 +1470,6 @@ CREATE TABLE "Project" (
 	"endDate" date,
 	"icon" text,
 	"notes" text,
-	"googleDriveFolderUrl" text,
-	"notionPageUrl" text,
-	"notionPageId" text,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp
-);
---> statement-breakpoint
-CREATE TABLE "ProjectDependency" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"projectId" uuid NOT NULL,
-	"blockedByProjectId" uuid NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "ProjectDependency_no_self_check" CHECK ("ProjectDependency"."projectId" <> "ProjectDependency"."blockedByProjectId")
-);
---> statement-breakpoint
-CREATE TABLE "ProjectToolUsage" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"projectId" uuid NOT NULL,
-	"productId" uuid NOT NULL,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL,
 	"deletedAt" timestamp
@@ -1228,28 +1494,6 @@ CREATE TABLE "Purchase" (
 	CONSTRAINT "Purchase_statedTotal_whole_cent_check" CHECK ("Purchase"."statedTotal" IS NULL OR abs("Purchase"."statedTotal" * 100 - round("Purchase"."statedTotal" * 100)) < 0.0000001)
 );
 --> statement-breakpoint
-CREATE TABLE "PurchasePaymentEvidence" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"purchaseId" uuid NOT NULL,
-	"sourceClaimId" uuid NOT NULL,
-	"amount" double precision NOT NULL,
-	"chargedAt" timestamp,
-	"cardLastFour" text,
-	"description" text,
-	"evidenceIndex" integer NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "PurchaseProduct" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"purchaseId" uuid NOT NULL,
-	"productId" uuid NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp
-);
---> statement-breakpoint
 CREATE TABLE "Recipe" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"shortcode" text NOT NULL,
@@ -1257,43 +1501,21 @@ CREATE TABLE "Recipe" (
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL,
 	"deletedAt" timestamp,
-	"SourceType" "RecipeSource",
-	"SourceData" text,
+	"sourceType" text,
+	"sourceUrl" text,
+	"sourceLabel" text,
 	"cookbookId" uuid,
 	"forkedFromRecipeId" uuid,
 	"yield" jsonb,
 	"servings" integer,
-	"tags" text[],
+	"tags" text[] DEFAULT '{}'::text[] NOT NULL,
 	"notes" text,
 	"totals" jsonb,
 	"totalsComputedAt" timestamp,
 	"activeMinutes" integer,
 	"totalMinutes" integer,
-	"meta" jsonb
-);
---> statement-breakpoint
-CREATE TABLE "RecipeSection" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"recipeId" uuid NOT NULL,
-	"name" text,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp,
-	"instructions" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"sortOrder" integer
-);
---> statement-breakpoint
-CREATE TABLE "RecipeSectionIngredient" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"recipeSectionId" uuid NOT NULL,
-	"ingredientId" uuid NOT NULL,
-	"amounts" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"rawLine" text,
-	"modifier" text,
-	"sortOrder" integer,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp
+	"meta" jsonb,
+	CONSTRAINT "Recipe_sourceType_check" CHECK ("sourceType" IS NULL OR "sourceType" IN ('Book', 'Website', 'Other', 'Notion'))
 );
 --> statement-breakpoint
 CREATE TABLE "Run" (
@@ -1339,259 +1561,14 @@ CREATE TABLE "Run" (
 	"oauthClientId" text,
 	"deviceId" uuid,
 	"clientKey" text,
+	"input" jsonb,
+	"progress" jsonb,
 	CONSTRAINT "Run_trigger_check" CHECK ("Run"."trigger" IN ('foreground', 'discovery', 'manual', 'backfill', 'ephemeral')),
 	CONSTRAINT "Run_import_party_check" CHECK ("Run"."purpose" NOT IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory') OR ("Run"."ledgerPartyId" IS NOT NULL AND "Run"."actorLedgerPartyShortcode" IS NOT NULL)),
 	CONSTRAINT "Run_channel_check" CHECK ("Run"."channel" IN ('web', 'api', 'mcp', 'caldav', 'system')),
 	CONSTRAINT "Run_status_check" CHECK ("Run"."status" IN ('running', 'paused_auth', 'paused_offline', 'paused_approval', 'needs_review', 'completed', 'failed', 'dispatch_failed')),
-	CONSTRAINT "Run_purpose_check" CHECK ("Run"."purpose" IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'ai_action', 'background', 'file_import', 'legacy')),
+	CONSTRAINT "Run_purpose_check" CHECK ("Run"."purpose" IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'background', 'file_import', 'mail_search')),
 	CONSTRAINT "Run_photo_inventory_no_vendor_check" CHECK ("Run"."purpose" <> 'photo_inventory' OR "Run"."vendorAccountId" IS NULL)
-);
---> statement-breakpoint
-CREATE TABLE "RunApproval" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"runId" uuid NOT NULL,
-	"operationId" text NOT NULL,
-	"operationKind" text NOT NULL,
-	"args" jsonb NOT NULL,
-	"argsFingerprint" text NOT NULL,
-	"targetFingerprint" text NOT NULL,
-	"evidenceFingerprint" text NOT NULL,
-	"state" text DEFAULT 'pending' NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"decidedByUserId" text,
-	"decidedAt" timestamp,
-	"rejectedAt" timestamp,
-	"consumedAt" timestamp,
-	"invalidatedAt" timestamp,
-	CONSTRAINT "RunApproval_state_check" CHECK ("RunApproval"."state" IN ('pending', 'granted', 'rejected', 'consumed', 'invalidated'))
-);
---> statement-breakpoint
-CREATE TABLE "RunControlEvent" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"runId" uuid NOT NULL,
-	"action" text NOT NULL,
-	"controllerUserId" text NOT NULL,
-	"controllerName" text NOT NULL,
-	"controllerEmail" text NOT NULL,
-	"controllerLedgerPartyId" uuid NOT NULL,
-	"controllerLedgerPartyShortcode" text NOT NULL,
-	"controllerLedgerPartyName" text NOT NULL,
-	"controllerLedgerPartyKind" text NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "RunControlEvent_action_check" CHECK ("RunControlEvent"."action" IN ('prompt', 'abort', 'pause', 'resume', 'cancel', 'approve', 'reject', 'retry', 'retry_dispatch', 'upload_evidence', 'no_evidence_available', 'escalate_sol'))
-);
---> statement-breakpoint
-CREATE TABLE "RunEvidence" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"runId" uuid NOT NULL,
-	"targetId" uuid NOT NULL,
-	"kind" text NOT NULL,
-	"objectKey" text NOT NULL,
-	"checksum" text NOT NULL,
-	"mediaType" text NOT NULL,
-	"byteSize" integer,
-	"sourceMetadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "RunEvidence_kind_check" CHECK ("RunEvidence"."kind" IN ('browser_capture', 'gmail_attachment', 'manual_upload'))
-);
---> statement-breakpoint
-CREATE TABLE "RunFinding" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"runId" uuid,
-	"ledgerPartyId" uuid NOT NULL,
-	"targetKind" text NOT NULL,
-	"targetId" uuid NOT NULL,
-	"kind" text NOT NULL,
-	"summary" text NOT NULL,
-	"proposedFix" jsonb,
-	"evidenceFingerprint" text NOT NULL,
-	"autoApplied" boolean DEFAULT false NOT NULL,
-	"probability" real,
-	"status" text DEFAULT 'open' NOT NULL,
-	"resolvedAt" timestamp,
-	"expiresAt" timestamp,
-	"resolvedByUserId" text,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "RunFinding_status_check" CHECK ("RunFinding"."status" IN ('open', 'applied', 'dismissed')),
-	CONSTRAINT "RunFinding_target_check" CHECK ("RunFinding"."targetKind" IN ('purchase', 'expense', 'product', 'run'))
-);
---> statement-breakpoint
-CREATE TABLE "RunMutation" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"runId" uuid NOT NULL,
-	"targetKind" text NOT NULL,
-	"targetId" uuid NOT NULL,
-	"mutationKind" text NOT NULL,
-	"fields" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"postFingerprint" text NOT NULL,
-	"auditLogId" uuid,
-	"createdAt" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "RunOperation" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"executor" jsonb,
-	"runId" uuid NOT NULL,
-	"operationId" text NOT NULL,
-	"kind" text NOT NULL,
-	"inputFingerprint" text NOT NULL,
-	"state" text DEFAULT 'started' NOT NULL,
-	"result" jsonb,
-	"error" text,
-	"startedAt" timestamp DEFAULT now() NOT NULL,
-	"completedAt" timestamp,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "RunOperation_state_check" CHECK ("RunOperation"."state" IN ('started', 'paused_approval', 'completed', 'failed'))
-);
---> statement-breakpoint
-CREATE TABLE "RunOrderCandidate" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"runId" uuid NOT NULL,
-	"orderId" text NOT NULL,
-	"orderUrl" text,
-	"orderedAt" date,
-	"state" text DEFAULT 'pending' NOT NULL,
-	"listedAt" timestamp DEFAULT now() NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "RunOrderCandidate_state_check" CHECK ("RunOrderCandidate"."state" IN ('pending', 'covered', 'imported', 'skipped'))
-);
---> statement-breakpoint
-CREATE TABLE "RunProgress" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"runId" uuid NOT NULL,
-	"eventId" text NOT NULL,
-	"phase" text NOT NULL,
-	"currentItem" text,
-	"awaitingApproval" boolean DEFAULT false NOT NULL,
-	"detail" text,
-	"createdAt" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "RunTarget" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"runId" uuid NOT NULL,
-	"purchaseId" uuid,
-	"productId" uuid,
-	"imageId" uuid,
-	"position" integer,
-	"vendorAccountId" uuid,
-	"sourceKind" text,
-	"sourceExternalKey" text,
-	"state" text DEFAULT 'pending' NOT NULL,
-	"targetFingerprint" text NOT NULL,
-	"evidenceFingerprint" text,
-	"outcome" text,
-	"warning" text,
-	"diff" jsonb,
-	"preparedAt" timestamp,
-	"completedAt" timestamp,
-	"deviceWorkState" text,
-	"deviceWorkAttempts" integer DEFAULT 0 NOT NULL,
-	"deviceWorkError" text,
-	"deviceWorkDeviceId" uuid,
-	"deviceWorkUpdatedAt" timestamp,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "RunTarget_exactly_one_target_check" CHECK ((("RunTarget"."purchaseId" IS NOT NULL)::int + ("RunTarget"."productId" IS NOT NULL)::int + ("RunTarget"."imageId" IS NOT NULL)::int) = 1),
-	CONSTRAINT "RunTarget_state_check" CHECK ("RunTarget"."state" IN ('pending', 'prepared', 'completed', 'skipped', 'unresolved', 'needs_evidence', 'unavailable')),
-	CONSTRAINT "RunTarget_outcome_check" CHECK ("RunTarget"."outcome" IS NULL OR "RunTarget"."outcome" IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped', 'attached')),
-	CONSTRAINT "RunTarget_deviceWorkState_check" CHECK ("RunTarget"."deviceWorkState" IS NULL OR "RunTarget"."deviceWorkState" IN ('queued', 'running', 'paused', 'failed', 'completed'))
-);
---> statement-breakpoint
-CREATE TABLE "SearchDocument" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"entityType" text NOT NULL,
-	"entityId" uuid NOT NULL,
-	"shortcode" text NOT NULL,
-	"title" text NOT NULL,
-	"subtitle" text,
-	"typeHint" text,
-	"aliases" text[] DEFAULT ARRAY[]::text[] NOT NULL,
-	"keywords" text[] DEFAULT ARRAY[]::text[] NOT NULL,
-	"body" text NOT NULL,
-	"semanticText" text NOT NULL,
-	"normalizedText" text NOT NULL,
-	"searchVector" "tsvector" NOT NULL,
-	"sourceHash" text NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp
-);
---> statement-breakpoint
-CREATE TABLE "session" (
-	"id" text PRIMARY KEY NOT NULL,
-	"expires_at" timestamp NOT NULL,
-	"token" text NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp NOT NULL,
-	"ip_address" text,
-	"user_agent" text,
-	"user_id" text NOT NULL,
-	CONSTRAINT "session_token_unique" UNIQUE("token")
-);
---> statement-breakpoint
-CREATE TABLE "StatementImport" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"source" text NOT NULL,
-	"label" text NOT NULL,
-	"fingerprint" text NOT NULL,
-	"dateKind" text DEFAULT 'unknown' NOT NULL,
-	"rowCountDeclared" integer,
-	"notes" text,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp,
-	CONSTRAINT "StatementImport_source_slug_check" CHECK ("StatementImport"."source" ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND "StatementImport"."source" = lower(trim("StatementImport"."source"))),
-	CONSTRAINT "StatementImport_dateKind_check" CHECK ("StatementImport"."dateKind" IN ('posted', 'transaction', 'unknown')),
-	CONSTRAINT "StatementImport_rowCountDeclared_check" CHECK ("StatementImport"."rowCountDeclared" IS NULL OR "StatementImport"."rowCountDeclared" >= 0)
-);
---> statement-breakpoint
-CREATE TABLE "StatementRow" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"batchId" uuid NOT NULL,
-	"source" text NOT NULL,
-	"externalId" text NOT NULL,
-	"accountDescriptor" text NOT NULL,
-	"statementDate" date NOT NULL,
-	"amount" double precision NOT NULL,
-	"providerAmount" double precision NOT NULL,
-	"merchant" text,
-	"rawDescription" text NOT NULL,
-	"sourceCategory" text,
-	"providerStatus" text,
-	"providerNotes" text,
-	"accountId" uuid,
-	"disposition" text DEFAULT 'open' NOT NULL,
-	"dispositionReason" text,
-	"dispositionNote" text,
-	"supersededByRowId" uuid,
-	"notes" text,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp,
-	CONSTRAINT "StatementRow_source_slug_check" CHECK ("StatementRow"."source" ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND "StatementRow"."source" = lower(trim("StatementRow"."source"))),
-	CONSTRAINT "StatementRow_amount_whole_cent_check" CHECK ("StatementRow"."amount" <> 0 AND abs("StatementRow"."amount" * 100 - round("StatementRow"."amount" * 100)) < 0.0000001),
-	CONSTRAINT "StatementRow_providerAmount_whole_cent_check" CHECK ("StatementRow"."providerAmount" <> 0 AND abs("StatementRow"."providerAmount" * 100 - round("StatementRow"."providerAmount" * 100)) < 0.0000001),
-	CONSTRAINT "StatementRow_providerStatus_check" CHECK ("StatementRow"."providerStatus" IS NULL OR "StatementRow"."providerStatus" IN ('posted', 'pending')),
-	CONSTRAINT "StatementRow_disposition_check" CHECK (("StatementRow"."disposition" = 'open' AND "StatementRow"."dispositionReason" IS NULL AND "StatementRow"."dispositionNote" IS NULL)
-          OR ("StatementRow"."disposition" = 'ignored' AND "StatementRow"."dispositionReason" IS NOT NULL AND "StatementRow"."dispositionNote" IS NOT NULL)),
-	CONSTRAINT "StatementRow_dispositionReason_check" CHECK ("StatementRow"."dispositionReason" IS NULL OR "StatementRow"."dispositionReason" IN
-          ('not_modeled', 'not_a_purchase', 'duplicate_of_other_source', 'pre_cubby', 'other')),
-	CONSTRAINT "StatementRow_externalId_format_check" CHECK ("StatementRow"."externalId" ~ '^v1:[0-9a-f]{64}$')
-);
---> statement-breakpoint
-CREATE TABLE "SuggestionDismissal" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"sourceEntityType" text NOT NULL,
-	"sourceEntityId" uuid NOT NULL,
-	"suggestionKind" text NOT NULL,
-	"candidateKey" text NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp
 );
 --> statement-breakpoint
 CREATE TABLE "Task" (
@@ -1608,40 +1585,9 @@ CREATE TABLE "Task" (
 	"dueEndDate" date,
 	"trade" text,
 	"sortOrder" double precision,
-	"notionPageId" text,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL,
 	"deletedAt" timestamp
-);
---> statement-breakpoint
-CREATE TABLE "TaskDependency" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"taskId" uuid NOT NULL,
-	"blockedByTaskId" uuid NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "TaskDependency_no_self_check" CHECK ("TaskDependency"."taskId" <> "TaskDependency"."blockedByTaskId")
-);
---> statement-breakpoint
-CREATE TABLE "UpcLookupCache" (
-	"upc" text PRIMARY KEY NOT NULL,
-	"manufacturer" text,
-	"brand" text,
-	"priceDollars" double precision,
-	"imageUrl" text,
-	"status" text DEFAULT 'ready' NOT NULL,
-	"fetchedAt" timestamp NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "user" (
-	"id" text PRIMARY KEY NOT NULL,
-	"name" text NOT NULL,
-	"email" text NOT NULL,
-	"email_verified" boolean DEFAULT false NOT NULL,
-	"image" text,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "user_email_unique" UNIQUE("email")
 );
 --> statement-breakpoint
 CREATE TABLE "Vendor" (
@@ -1674,40 +1620,11 @@ CREATE TABLE "VendorAccount" (
 	"status" text DEFAULT 'active' NOT NULL,
 	"browser" text DEFAULT 'chrome' NOT NULL,
 	"cursor" jsonb DEFAULT '{"newestOrderAt":null,"orderIdsOnNewestDate":[],"backfillBeforeOrderAt":null,"earliestAvailableOrderAt":null}'::jsonb NOT NULL,
-	"lastRunAt" timestamp,
-	"lastSuccessAt" timestamp,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL,
 	"deletedAt" timestamp,
 	CONSTRAINT "VendorAccount_status_check" CHECK ("VendorAccount"."status" IN ('active', 'paused_auth', 'paused_offline', 'disabled')),
 	CONSTRAINT "VendorAccount_browser_check" CHECK ("VendorAccount"."browser" IN ('chrome', 'safari'))
-);
---> statement-breakpoint
-CREATE TABLE "VendorMailSearchJob" (
-	"runId" uuid PRIMARY KEY NOT NULL,
-	"after" text NOT NULL,
-	"pageToken" text,
-	"searchTerms" text[] DEFAULT '{}' NOT NULL,
-	"pagesScanned" integer DEFAULT 0 NOT NULL,
-	"status" text DEFAULT 'queued' NOT NULL,
-	"searched" integer DEFAULT 0 NOT NULL,
-	"skipped" integer DEFAULT 0 NOT NULL,
-	"reviewable" integer DEFAULT 0 NOT NULL,
-	"nextPageToken" text,
-	"error" text,
-	"startedAt" timestamp,
-	"finishedAt" timestamp,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "verification" (
-	"id" text PRIMARY KEY NOT NULL,
-	"identifier" text NOT NULL,
-	"value" text NOT NULL,
-	"expires_at" timestamp NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "Wish" (
@@ -1721,15 +1638,6 @@ CREATE TABLE "Wish" (
 	"deletedAt" timestamp
 );
 --> statement-breakpoint
-CREATE TABLE "WishCandidate" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"wishId" uuid NOT NULL,
-	"productId" uuid NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp
-);
---> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "AiAnalysis" ADD CONSTRAINT "AiAnalysis_entity_fk" FOREIGN KEY ("entityId","entityKind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "AiUsage" ADD CONSTRAINT "AiUsage_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -1738,37 +1646,21 @@ ALTER TABLE "apikey" ADD CONSTRAINT "apikey_reference_id_user_id_fk" FOREIGN KEY
 ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_deviceId_Device_id_fk" FOREIGN KEY ("deviceId") REFERENCES "public"."Device"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_entity_fk" FOREIGN KEY ("entityId","entityType") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Cookbook" ADD CONSTRAINT "Cookbook_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Cookbook" ADD CONSTRAINT "Cookbook_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_entity_fk" FOREIGN KEY ("entityId","entityKind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "DataException" ADD CONSTRAINT "DataException_entity_fk" FOREIGN KEY ("entityId","entityKind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Device" ADD CONSTRAINT "Device_ledgerPartyId_LedgerParty_id_fk" FOREIGN KEY ("ledgerPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Device" ADD CONSTRAINT "Device_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Device" ADD CONSTRAINT "Device_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "EntityAttachment" ADD CONSTRAINT "EntityAttachment_subjectEntityId_Entity_id_fk" FOREIGN KEY ("subjectEntityId") REFERENCES "public"."Entity"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "EntityAttachment" ADD CONSTRAINT "EntityAttachment_imageId_Image_id_fk" FOREIGN KEY ("imageId") REFERENCES "public"."Image"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "EntityEmbedding" ADD CONSTRAINT "EntityEmbedding_entity_fk" FOREIGN KEY ("entityId","entityType") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "EntityAttachment" ADD CONSTRAINT "EntityAttachment_entity_fk" FOREIGN KEY ("entityId","entityKind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "EntityEmbedding" ADD CONSTRAINT "EntityEmbedding_entity_fk" FOREIGN KEY ("entityId","entityKind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "EntityExternalId" ADD CONSTRAINT "EntityExternalId_source_ExternalSource_slug_fk" FOREIGN KEY ("source") REFERENCES "public"."ExternalSource"("slug") ON DELETE no action ON UPDATE cascade;--> statement-breakpoint
+ALTER TABLE "EntityExternalId" ADD CONSTRAINT "EntityExternalId_entity_fk" FOREIGN KEY ("entityId","entityKind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Entity" ADD CONSTRAINT "Entity_mergedIntoId_Entity_id_fk" FOREIGN KEY ("mergedIntoId") REFERENCES "public"."Entity"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Expense" ADD CONSTRAINT "Expense_projectId_Project_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."Project"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Expense" ADD CONSTRAINT "Expense_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Expense" ADD CONSTRAINT "Expense_purchaseId_Purchase_id_fk" FOREIGN KEY ("purchaseId") REFERENCES "public"."Purchase"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Expense" ADD CONSTRAINT "Expense_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "EntityLink" ADD CONSTRAINT "EntityLink_from_fk" FOREIGN KEY ("fromEntityId","fromKind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "EntityLink" ADD CONSTRAINT "EntityLink_to_fk" FOREIGN KEY ("toEntityId","toKind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ExpenseAttribution" ADD CONSTRAINT "ExpenseAttribution_expenseId_Expense_id_fk" FOREIGN KEY ("expenseId") REFERENCES "public"."Expense"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ExpenseAttribution" ADD CONSTRAINT "ExpenseAttribution_ledgerPartyId_LedgerParty_id_fk" FOREIGN KEY ("ledgerPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "FinancialAccount" ADD CONSTRAINT "FinancialAccount_providerVendorId_Vendor_id_fk" FOREIGN KEY ("providerVendorId") REFERENCES "public"."Vendor"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "FinancialAccount" ADD CONSTRAINT "FinancialAccount_ledgerPartyId_LedgerParty_id_fk" FOREIGN KEY ("ledgerPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "FinancialAccount" ADD CONSTRAINT "FinancialAccount_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "FinancialTransaction" ADD CONSTRAINT "FinancialTransaction_accountId_FinancialAccount_id_fk" FOREIGN KEY ("accountId") REFERENCES "public"."FinancialAccount"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "FinancialTransaction" ADD CONSTRAINT "FinancialTransaction_ledgerTransferId_LedgerTransfer_id_fk" FOREIGN KEY ("ledgerTransferId") REFERENCES "public"."LedgerTransfer"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "FinancialTransaction" ADD CONSTRAINT "FinancialTransaction_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ExternalSource" ADD CONSTRAINT "ExternalSource_vendorId_Vendor_id_fk" FOREIGN KEY ("vendorId") REFERENCES "public"."Vendor"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "FinancialTransactionAllocation" ADD CONSTRAINT "FinancialTransactionAllocation_transactionId_FinancialTransaction_id_fk" FOREIGN KEY ("transactionId") REFERENCES "public"."FinancialTransaction"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "FinancialTransactionAllocation" ADD CONSTRAINT "FinancialTransactionAllocation_purchaseId_Purchase_id_fk" FOREIGN KEY ("purchaseId") REFERENCES "public"."Purchase"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "GardenEntry" ADD CONSTRAINT "GardenEntry_locationId_Location_id_fk" FOREIGN KEY ("locationId") REFERENCES "public"."Location"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "GardenEntry" ADD CONSTRAINT "GardenEntry_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "GardenEntryPlanting" ADD CONSTRAINT "GardenEntryPlanting_gardenEntryId_GardenEntry_id_fk" FOREIGN KEY ("gardenEntryId") REFERENCES "public"."GardenEntry"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "GardenEntryPlanting" ADD CONSTRAINT "GardenEntryPlanting_plantingId_Planting_id_fk" FOREIGN KEY ("plantingId") REFERENCES "public"."Planting"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Image" ADD CONSTRAINT "Image_capturedByPartyId_LedgerParty_id_fk" FOREIGN KEY ("capturedByPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Image" ADD CONSTRAINT "Image_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ImageDerivative" ADD CONSTRAINT "ImageDerivative_imageId_Image_id_fk" FOREIGN KEY ("imageId") REFERENCES "public"."Image"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ImageDescriptionCorrection" ADD CONSTRAINT "ImageDescriptionCorrection_imageId_Image_id_fk" FOREIGN KEY ("imageId") REFERENCES "public"."Image"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ImageProcessingAttempt" ADD CONSTRAINT "ImageProcessingAttempt_jobId_ImageProcessingJob_id_fk" FOREIGN KEY ("jobId") REFERENCES "public"."ImageProcessingJob"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1780,10 +1672,9 @@ ALTER TABLE "ImageProcessingJob" ADD CONSTRAINT "ImageProcessingJob_submissionId
 ALTER TABLE "ImageProcessingJob" ADD CONSTRAINT "ImageProcessingJob_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ImageProcessingSubmissionJob" ADD CONSTRAINT "ImageProcessingSubmissionJob_submissionId_ImageProcessingSubmission_id_fk" FOREIGN KEY ("submissionId") REFERENCES "public"."ImageProcessingSubmission"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ImageProcessingSubmissionJob" ADD CONSTRAINT "ImageProcessingSubmissionJob_jobId_ImageProcessingJob_id_fk" FOREIGN KEY ("jobId") REFERENCES "public"."ImageProcessingJob"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ImageSighting" ADD CONSTRAINT "ImageSighting_imageId_Image_id_fk" FOREIGN KEY ("imageId") REFERENCES "public"."Image"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ImageSighting" ADD CONSTRAINT "ImageSighting_imageId_Image_id_fk" FOREIGN KEY ("imageId") REFERENCES "public"."Image"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ImageSighting" ADD CONSTRAINT "ImageSighting_ledgerPartyId_LedgerParty_id_fk" FOREIGN KEY ("ledgerPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ImageSighting" ADD CONSTRAINT "ImageSighting_deviceId_Device_id_fk" FOREIGN KEY ("deviceId") REFERENCES "public"."Device"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ImageSighting" ADD CONSTRAINT "ImageSighting_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ImportHunt" ADD CONSTRAINT "ImportHunt_ledgerPartyId_LedgerParty_id_fk" FOREIGN KEY ("ledgerPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ImportHunt" ADD CONSTRAINT "ImportHunt_financialTransactionId_FinancialTransaction_id_fk" FOREIGN KEY ("financialTransactionId") REFERENCES "public"."FinancialTransaction"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ImportHunt" ADD CONSTRAINT "ImportHunt_vendorId_Vendor_id_fk" FOREIGN KEY ("vendorId") REFERENCES "public"."Vendor"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -1799,25 +1690,11 @@ ALTER TABLE "ImportSourceClaim" ADD CONSTRAINT "ImportSourceClaim_vendorAccountI
 ALTER TABLE "ImportSourceClaim" ADD CONSTRAINT "ImportSourceClaim_purchaseId_Purchase_id_fk" FOREIGN KEY ("purchaseId") REFERENCES "public"."Purchase"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ImportSourceClaim" ADD CONSTRAINT "ImportSourceClaim_firstRunId_Run_id_fk" FOREIGN KEY ("firstRunId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ImportSourceClaim" ADD CONSTRAINT "ImportSourceClaim_lastRunId_Run_id_fk" FOREIGN KEY ("lastRunId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Ingredient" ADD CONSTRAINT "Ingredient_recipeId_Recipe_id_fk" FOREIGN KEY ("recipeId") REFERENCES "public"."Recipe"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Ingredient" ADD CONSTRAINT "Ingredient_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "InventoryEntry" ADD CONSTRAINT "InventoryEntry_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "InventoryEntry" ADD CONSTRAINT "InventoryEntry_locationId_Location_id_fk" FOREIGN KEY ("locationId") REFERENCES "public"."Location"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "InventoryEntry" ADD CONSTRAINT "InventoryEntry_ownerLedgerPartyId_LedgerParty_id_fk" FOREIGN KEY ("ownerLedgerPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "InventoryEntry" ADD CONSTRAINT "InventoryEntry_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "LedgerParty" ADD CONSTRAINT "LedgerParty_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "LedgerParty" ADD CONSTRAINT "LedgerParty_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "LedgerSourceClaim" ADD CONSTRAINT "LedgerSourceClaim_expenseId_Expense_id_fk" FOREIGN KEY ("expenseId") REFERENCES "public"."Expense"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "LedgerSourceClaim" ADD CONSTRAINT "LedgerSourceClaim_ledgerTransferId_LedgerTransfer_id_fk" FOREIGN KEY ("ledgerTransferId") REFERENCES "public"."LedgerTransfer"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "LedgerTransfer" ADD CONSTRAINT "LedgerTransfer_fromPartyId_LedgerParty_id_fk" FOREIGN KEY ("fromPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "LedgerTransfer" ADD CONSTRAINT "LedgerTransfer_toPartyId_LedgerParty_id_fk" FOREIGN KEY ("toPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "LedgerTransfer" ADD CONSTRAINT "LedgerTransfer_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Location" ADD CONSTRAINT "Location_parentId_Location_id_fk" FOREIGN KEY ("parentId") REFERENCES "public"."Location"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Location" ADD CONSTRAINT "Location_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Location" ADD CONSTRAINT "Location_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "LedgerSourceClaim" ADD CONSTRAINT "LedgerSourceClaim_source_ExternalSource_slug_fk" FOREIGN KEY ("source") REFERENCES "public"."ExternalSource"("slug") ON DELETE no action ON UPDATE cascade;--> statement-breakpoint
 ALTER TABLE "MailboxCursor" ADD CONSTRAINT "MailboxCursor_ledgerPartyId_LedgerParty_id_fk" FOREIGN KEY ("ledgerPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "McpToolCall" ADD CONSTRAINT "McpToolCall_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "Meal" ADD CONSTRAINT "Meal_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "MealFoodEntry" ADD CONSTRAINT "MealFoodEntry_mealId_Meal_id_fk" FOREIGN KEY ("mealId") REFERENCES "public"."Meal"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "MealFoodEntry" ADD CONSTRAINT "MealFoodEntry_ledgerPartyId_LedgerParty_id_fk" FOREIGN KEY ("ledgerPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "MealFoodEntry" ADD CONSTRAINT "MealFoodEntry_ingredientId_Ingredient_id_fk" FOREIGN KEY ("ingredientId") REFERENCES "public"."Ingredient"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -1855,6 +1732,73 @@ ALTER TABLE "PhotoGroupProposal" ADD CONSTRAINT "PhotoGroupProposal_productId_Pr
 ALTER TABLE "PhotoGroupProposal" ADD CONSTRAINT "PhotoGroupProposal_inventoryLocationId_Location_id_fk" FOREIGN KEY ("inventoryLocationId") REFERENCES "public"."Location"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "PhotoGroupProposal" ADD CONSTRAINT "PhotoGroupProposal_inventoryOwnerPartyId_LedgerParty_id_fk" FOREIGN KEY ("inventoryOwnerPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "PhotoGroupProposal" ADD CONSTRAINT "PhotoGroupProposal_productCreateCategoryId_fk" FOREIGN KEY ("productCreateCategoryId") REFERENCES "public"."ProductCategory"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ProductConversionCoverage" ADD CONSTRAINT "ProductConversionCoverage_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ProductMatchCandidate" ADD CONSTRAINT "ProductMatchCandidate_productAId_Product_id_fk" FOREIGN KEY ("productAId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ProductMatchCandidate" ADD CONSTRAINT "ProductMatchCandidate_productBId_Product_id_fk" FOREIGN KEY ("productBId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ProductUnitMapping" ADD CONSTRAINT "ProductUnitMapping_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "PurchasePaymentEvidence" ADD CONSTRAINT "PurchasePaymentEvidence_purchaseId_Purchase_id_fk" FOREIGN KEY ("purchaseId") REFERENCES "public"."Purchase"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "PurchasePaymentEvidence" ADD CONSTRAINT "PurchasePaymentEvidence_sourceClaimId_ImportSourceClaim_id_fk" FOREIGN KEY ("sourceClaimId") REFERENCES "public"."ImportSourceClaim"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RecipeSection" ADD CONSTRAINT "RecipeSection_recipeId_Recipe_id_fk" FOREIGN KEY ("recipeId") REFERENCES "public"."Recipe"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RecipeSectionIngredient" ADD CONSTRAINT "RecipeSectionIngredient_recipeSectionId_RecipeSection_id_fk" FOREIGN KEY ("recipeSectionId") REFERENCES "public"."RecipeSection"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RecipeSectionIngredient" ADD CONSTRAINT "RecipeSectionIngredient_ingredientId_Ingredient_id_fk" FOREIGN KEY ("ingredientId") REFERENCES "public"."Ingredient"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RunApproval" ADD CONSTRAINT "RunApproval_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RunApproval" ADD CONSTRAINT "RunApproval_decidedByUserId_user_id_fk" FOREIGN KEY ("decidedByUserId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RunControlEvent" ADD CONSTRAINT "RunControlEvent_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RunEvidence" ADD CONSTRAINT "RunEvidence_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RunEvidence" ADD CONSTRAINT "RunEvidence_targetId_RunTarget_id_fk" FOREIGN KEY ("targetId") REFERENCES "public"."RunTarget"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RunFinding" ADD CONSTRAINT "RunFinding_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RunFinding" ADD CONSTRAINT "RunFinding_ledgerPartyId_LedgerParty_id_fk" FOREIGN KEY ("ledgerPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RunFinding" ADD CONSTRAINT "RunFinding_resolvedByUserId_user_id_fk" FOREIGN KEY ("resolvedByUserId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RunFinding" ADD CONSTRAINT "RunFinding_entity_fk" FOREIGN KEY ("entityId","entityKind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RunOperation" ADD CONSTRAINT "RunOperation_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RunOrderCandidate" ADD CONSTRAINT "RunOrderCandidate_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RunProgress" ADD CONSTRAINT "RunProgress_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RunTarget" ADD CONSTRAINT "RunTarget_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RunTarget" ADD CONSTRAINT "RunTarget_vendorAccountId_VendorAccount_id_fk" FOREIGN KEY ("vendorAccountId") REFERENCES "public"."VendorAccount"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RunTarget" ADD CONSTRAINT "RunTarget_deviceWorkDeviceId_Device_id_fk" FOREIGN KEY ("deviceWorkDeviceId") REFERENCES "public"."Device"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "RunTarget" ADD CONSTRAINT "RunTarget_entity_fk" FOREIGN KEY ("entityId","entityKind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "SearchDocument" ADD CONSTRAINT "SearchDocument_entity_fk" FOREIGN KEY ("entityId","entityKind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "session" ADD CONSTRAINT "session_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "StatementImport" ADD CONSTRAINT "StatementImport_source_ExternalSource_slug_fk" FOREIGN KEY ("source") REFERENCES "public"."ExternalSource"("slug") ON DELETE no action ON UPDATE cascade;--> statement-breakpoint
+ALTER TABLE "StatementRow" ADD CONSTRAINT "StatementRow_batchId_StatementImport_id_fk" FOREIGN KEY ("batchId") REFERENCES "public"."StatementImport"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "StatementRow" ADD CONSTRAINT "StatementRow_source_ExternalSource_slug_fk" FOREIGN KEY ("source") REFERENCES "public"."ExternalSource"("slug") ON DELETE no action ON UPDATE cascade;--> statement-breakpoint
+ALTER TABLE "StatementRow" ADD CONSTRAINT "StatementRow_accountId_FinancialAccount_id_fk" FOREIGN KEY ("accountId") REFERENCES "public"."FinancialAccount"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "StatementRow" ADD CONSTRAINT "StatementRow_supersededByRowId_StatementRow_id_fk" FOREIGN KEY ("supersededByRowId") REFERENCES "public"."StatementRow"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "SuggestionDismissal" ADD CONSTRAINT "SuggestionDismissal_entity_fk" FOREIGN KEY ("entityId","entityKind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Cookbook" ADD CONSTRAINT "Cookbook_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Cookbook" ADD CONSTRAINT "Cookbook_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Device" ADD CONSTRAINT "Device_ledgerPartyId_LedgerParty_id_fk" FOREIGN KEY ("ledgerPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Device" ADD CONSTRAINT "Device_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Device" ADD CONSTRAINT "Device_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Expense" ADD CONSTRAINT "Expense_projectId_Project_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."Project"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Expense" ADD CONSTRAINT "Expense_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Expense" ADD CONSTRAINT "Expense_purchaseId_Purchase_id_fk" FOREIGN KEY ("purchaseId") REFERENCES "public"."Purchase"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Expense" ADD CONSTRAINT "Expense_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "FinancialAccount" ADD CONSTRAINT "FinancialAccount_providerVendorId_Vendor_id_fk" FOREIGN KEY ("providerVendorId") REFERENCES "public"."Vendor"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "FinancialAccount" ADD CONSTRAINT "FinancialAccount_ledgerPartyId_LedgerParty_id_fk" FOREIGN KEY ("ledgerPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "FinancialAccount" ADD CONSTRAINT "FinancialAccount_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "FinancialTransaction" ADD CONSTRAINT "FinancialTransaction_accountId_FinancialAccount_id_fk" FOREIGN KEY ("accountId") REFERENCES "public"."FinancialAccount"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "FinancialTransaction" ADD CONSTRAINT "FinancialTransaction_ledgerTransferId_LedgerTransfer_id_fk" FOREIGN KEY ("ledgerTransferId") REFERENCES "public"."LedgerTransfer"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "FinancialTransaction" ADD CONSTRAINT "FinancialTransaction_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "GardenEntry" ADD CONSTRAINT "GardenEntry_locationId_Location_id_fk" FOREIGN KEY ("locationId") REFERENCES "public"."Location"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "GardenEntry" ADD CONSTRAINT "GardenEntry_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Image" ADD CONSTRAINT "Image_capturedByPartyId_LedgerParty_id_fk" FOREIGN KEY ("capturedByPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Image" ADD CONSTRAINT "Image_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Ingredient" ADD CONSTRAINT "Ingredient_recipeId_Recipe_id_fk" FOREIGN KEY ("recipeId") REFERENCES "public"."Recipe"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Ingredient" ADD CONSTRAINT "Ingredient_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "InventoryEntry" ADD CONSTRAINT "InventoryEntry_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "InventoryEntry" ADD CONSTRAINT "InventoryEntry_locationId_Location_id_fk" FOREIGN KEY ("locationId") REFERENCES "public"."Location"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "InventoryEntry" ADD CONSTRAINT "InventoryEntry_ownerLedgerPartyId_LedgerParty_id_fk" FOREIGN KEY ("ownerLedgerPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "InventoryEntry" ADD CONSTRAINT "InventoryEntry_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "LedgerParty" ADD CONSTRAINT "LedgerParty_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "LedgerParty" ADD CONSTRAINT "LedgerParty_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "LedgerTransfer" ADD CONSTRAINT "LedgerTransfer_fromPartyId_LedgerParty_id_fk" FOREIGN KEY ("fromPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "LedgerTransfer" ADD CONSTRAINT "LedgerTransfer_toPartyId_LedgerParty_id_fk" FOREIGN KEY ("toPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "LedgerTransfer" ADD CONSTRAINT "LedgerTransfer_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Location" ADD CONSTRAINT "Location_parentId_Location_id_fk" FOREIGN KEY ("parentId") REFERENCES "public"."Location"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Location" ADD CONSTRAINT "Location_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Location" ADD CONSTRAINT "Location_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "Meal" ADD CONSTRAINT "Meal_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Plant" ADD CONSTRAINT "Plant_ingredientId_Ingredient_id_fk" FOREIGN KEY ("ingredientId") REFERENCES "public"."Ingredient"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Plant" ADD CONSTRAINT "Plant_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Planting" ADD CONSTRAINT "Planting_plantId_Plant_id_fk" FOREIGN KEY ("plantId") REFERENCES "public"."Plant"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -1868,79 +1812,31 @@ ALTER TABLE "Product" ADD CONSTRAINT "Product_categoryId_ProductCategory_id_fk" 
 ALTER TABLE "Product" ADD CONSTRAINT "Product_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ProductCategory" ADD CONSTRAINT "ProductCategory_parentId_ProductCategory_id_fk" FOREIGN KEY ("parentId") REFERENCES "public"."ProductCategory"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ProductCategory" ADD CONSTRAINT "ProductCategory_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ProductComponent" ADD CONSTRAINT "ProductComponent_parentProductId_Product_id_fk" FOREIGN KEY ("parentProductId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ProductComponent" ADD CONSTRAINT "ProductComponent_componentProductId_Product_id_fk" FOREIGN KEY ("componentProductId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ProductConversionCoverage" ADD CONSTRAINT "ProductConversionCoverage_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ProductExternalId" ADD CONSTRAINT "ProductExternalId_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ProductMatchCandidate" ADD CONSTRAINT "ProductMatchCandidate_productAId_Product_id_fk" FOREIGN KEY ("productAId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ProductMatchCandidate" ADD CONSTRAINT "ProductMatchCandidate_productBId_Product_id_fk" FOREIGN KEY ("productBId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ProductUnitMappings" ADD CONSTRAINT "ProductUnitMappings_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Project" ADD CONSTRAINT "Project_parentProjectId_Project_id_fk" FOREIGN KEY ("parentProjectId") REFERENCES "public"."Project"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Project" ADD CONSTRAINT "Project_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ProjectDependency" ADD CONSTRAINT "ProjectDependency_projectId_Project_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."Project"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ProjectDependency" ADD CONSTRAINT "ProjectDependency_blockedByProjectId_Project_id_fk" FOREIGN KEY ("blockedByProjectId") REFERENCES "public"."Project"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ProjectToolUsage" ADD CONSTRAINT "ProjectToolUsage_projectId_Project_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."Project"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ProjectToolUsage" ADD CONSTRAINT "ProjectToolUsage_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Purchase" ADD CONSTRAINT "Purchase_vendorId_Vendor_id_fk" FOREIGN KEY ("vendorId") REFERENCES "public"."Vendor"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Purchase" ADD CONSTRAINT "Purchase_vendorAccountId_VendorAccount_id_fk" FOREIGN KEY ("vendorAccountId") REFERENCES "public"."VendorAccount"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Purchase" ADD CONSTRAINT "Purchase_defaultProjectId_Project_id_fk" FOREIGN KEY ("defaultProjectId") REFERENCES "public"."Project"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Purchase" ADD CONSTRAINT "Purchase_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Purchase" ADD CONSTRAINT "Purchase_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "PurchasePaymentEvidence" ADD CONSTRAINT "PurchasePaymentEvidence_purchaseId_Purchase_id_fk" FOREIGN KEY ("purchaseId") REFERENCES "public"."Purchase"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "PurchasePaymentEvidence" ADD CONSTRAINT "PurchasePaymentEvidence_sourceClaimId_ImportSourceClaim_id_fk" FOREIGN KEY ("sourceClaimId") REFERENCES "public"."ImportSourceClaim"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "PurchaseProduct" ADD CONSTRAINT "PurchaseProduct_purchaseId_Purchase_id_fk" FOREIGN KEY ("purchaseId") REFERENCES "public"."Purchase"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "PurchaseProduct" ADD CONSTRAINT "PurchaseProduct_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Recipe" ADD CONSTRAINT "Recipe_cookbookId_Cookbook_id_fk" FOREIGN KEY ("cookbookId") REFERENCES "public"."Cookbook"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Recipe" ADD CONSTRAINT "Recipe_forkedFromRecipeId_Recipe_id_fk" FOREIGN KEY ("forkedFromRecipeId") REFERENCES "public"."Recipe"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Recipe" ADD CONSTRAINT "Recipe_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RecipeSection" ADD CONSTRAINT "RecipeSection_recipeId_Recipe_id_fk" FOREIGN KEY ("recipeId") REFERENCES "public"."Recipe"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RecipeSectionIngredient" ADD CONSTRAINT "RecipeSectionIngredient_recipeSectionId_RecipeSection_id_fk" FOREIGN KEY ("recipeSectionId") REFERENCES "public"."RecipeSection"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RecipeSectionIngredient" ADD CONSTRAINT "RecipeSectionIngredient_ingredientId_Ingredient_id_fk" FOREIGN KEY ("ingredientId") REFERENCES "public"."Ingredient"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Run" ADD CONSTRAINT "Run_ledgerPartyId_LedgerParty_id_fk" FOREIGN KEY ("ledgerPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Run" ADD CONSTRAINT "Run_vendorAccountId_VendorAccount_id_fk" FOREIGN KEY ("vendorAccountId") REFERENCES "public"."VendorAccount"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Run" ADD CONSTRAINT "Run_vendorId_Vendor_id_fk" FOREIGN KEY ("vendorId") REFERENCES "public"."Vendor"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Run" ADD CONSTRAINT "Run_actorUserId_user_id_fk" FOREIGN KEY ("actorUserId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Run" ADD CONSTRAINT "Run_predecessorRunId_Run_id_fk" FOREIGN KEY ("predecessorRunId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Run" ADD CONSTRAINT "Run_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunApproval" ADD CONSTRAINT "RunApproval_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunApproval" ADD CONSTRAINT "RunApproval_decidedByUserId_user_id_fk" FOREIGN KEY ("decidedByUserId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunControlEvent" ADD CONSTRAINT "RunControlEvent_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunEvidence" ADD CONSTRAINT "RunEvidence_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunEvidence" ADD CONSTRAINT "RunEvidence_targetId_RunTarget_id_fk" FOREIGN KEY ("targetId") REFERENCES "public"."RunTarget"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunFinding" ADD CONSTRAINT "RunFinding_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunFinding" ADD CONSTRAINT "RunFinding_ledgerPartyId_LedgerParty_id_fk" FOREIGN KEY ("ledgerPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunFinding" ADD CONSTRAINT "RunFinding_resolvedByUserId_user_id_fk" FOREIGN KEY ("resolvedByUserId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunFinding" ADD CONSTRAINT "RunFinding_target_fk" FOREIGN KEY ("targetId","targetKind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunMutation" ADD CONSTRAINT "RunMutation_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunMutation" ADD CONSTRAINT "RunMutation_target_fk" FOREIGN KEY ("targetId","targetKind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunOperation" ADD CONSTRAINT "RunOperation_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunOrderCandidate" ADD CONSTRAINT "RunOrderCandidate_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunProgress" ADD CONSTRAINT "RunProgress_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunTarget" ADD CONSTRAINT "RunTarget_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunTarget" ADD CONSTRAINT "RunTarget_purchaseId_Purchase_id_fk" FOREIGN KEY ("purchaseId") REFERENCES "public"."Purchase"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunTarget" ADD CONSTRAINT "RunTarget_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunTarget" ADD CONSTRAINT "RunTarget_imageId_Image_id_fk" FOREIGN KEY ("imageId") REFERENCES "public"."Image"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunTarget" ADD CONSTRAINT "RunTarget_vendorAccountId_VendorAccount_id_fk" FOREIGN KEY ("vendorAccountId") REFERENCES "public"."VendorAccount"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "RunTarget" ADD CONSTRAINT "RunTarget_deviceWorkDeviceId_Device_id_fk" FOREIGN KEY ("deviceWorkDeviceId") REFERENCES "public"."Device"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "SearchDocument" ADD CONSTRAINT "SearchDocument_entity_fk" FOREIGN KEY ("entityId","entityType") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "session" ADD CONSTRAINT "session_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "StatementRow" ADD CONSTRAINT "StatementRow_batchId_StatementImport_id_fk" FOREIGN KEY ("batchId") REFERENCES "public"."StatementImport"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "StatementRow" ADD CONSTRAINT "StatementRow_accountId_FinancialAccount_id_fk" FOREIGN KEY ("accountId") REFERENCES "public"."FinancialAccount"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "StatementRow" ADD CONSTRAINT "StatementRow_supersededByRowId_StatementRow_id_fk" FOREIGN KEY ("supersededByRowId") REFERENCES "public"."StatementRow"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Task" ADD CONSTRAINT "Task_projectId_Project_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."Project"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Task" ADD CONSTRAINT "Task_subjectProductId_Product_id_fk" FOREIGN KEY ("subjectProductId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Task" ADD CONSTRAINT "Task_parentTaskId_Task_id_fk" FOREIGN KEY ("parentTaskId") REFERENCES "public"."Task"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Task" ADD CONSTRAINT "Task_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "TaskDependency" ADD CONSTRAINT "TaskDependency_taskId_Task_id_fk" FOREIGN KEY ("taskId") REFERENCES "public"."Task"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "TaskDependency" ADD CONSTRAINT "TaskDependency_blockedByTaskId_Task_id_fk" FOREIGN KEY ("blockedByTaskId") REFERENCES "public"."Task"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Vendor" ADD CONSTRAINT "Vendor_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "VendorAccount" ADD CONSTRAINT "VendorAccount_vendorId_Vendor_id_fk" FOREIGN KEY ("vendorId") REFERENCES "public"."Vendor"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "VendorAccount" ADD CONSTRAINT "VendorAccount_ledgerPartyId_LedgerParty_id_fk" FOREIGN KEY ("ledgerPartyId") REFERENCES "public"."LedgerParty"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "VendorAccount" ADD CONSTRAINT "VendorAccount_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "VendorMailSearchJob" ADD CONSTRAINT "VendorMailSearchJob_runId_Run_id_fk" FOREIGN KEY ("runId") REFERENCES "public"."Run"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "Wish" ADD CONSTRAINT "Wish_entity_identity_fk" FOREIGN KEY ("id","shortcode") REFERENCES "public"."Entity"("id","shortcode") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "WishCandidate" ADD CONSTRAINT "WishCandidate_wishId_Wish_id_fk" FOREIGN KEY ("wishId") REFERENCES "public"."Wish"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "WishCandidate" ADD CONSTRAINT "WishCandidate_productId_Product_id_fk" FOREIGN KEY ("productId") REFERENCES "public"."Product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "AiAnalysis_active_key" ON "AiAnalysis" USING btree ("entityKind","entityId","feature","model","promptVersion","inputFingerprint",coalesce("provider", ''),coalesce("resultSchemaRevision", 0)) WHERE "AiAnalysis"."deletedAt" IS NULL;--> statement-breakpoint
 CREATE INDEX "AiAnalysis_entity_idx" ON "AiAnalysis" USING btree ("entityKind","entityId");--> statement-breakpoint
 CREATE INDEX "AiAnalysis_feature_idx" ON "AiAnalysis" USING btree ("feature");--> statement-breakpoint
@@ -1949,71 +1845,32 @@ CREATE INDEX "AiUsage_model_createdAt_idx" ON "AiUsage" USING btree ("model","cr
 CREATE INDEX "AiUsage_entity_idx" ON "AiUsage" USING btree ("entityKind","entityId");--> statement-breakpoint
 CREATE INDEX "AiUsage_job_idx" ON "AiUsage" USING btree ("jobKind","jobId");--> statement-breakpoint
 CREATE INDEX "AiUsage_run_idx" ON "AiUsage" USING btree ("runId");--> statement-breakpoint
-CREATE INDEX "AuditLog_createdAt_id_idx" ON "AuditLog" USING btree ("createdAt" DESC NULLS LAST,"id" DESC NULLS LAST);--> statement-breakpoint
-CREATE INDEX "AuditLog_runId_idx" ON "AuditLog" USING btree ("runId") WHERE "AuditLog"."runId" IS NOT NULL;--> statement-breakpoint
-CREATE INDEX "AuditLog_entityType_entityId_createdAt_idx" ON "AuditLog" USING btree ("entityType","entityId","createdAt" DESC NULLS LAST);--> statement-breakpoint
-CREATE UNIQUE INDEX "Cookbook_shortcode_unique" ON "Cookbook" USING btree ("shortcode");--> statement-breakpoint
-CREATE UNIQUE INDEX "Cookbook_name_key" ON "Cookbook" USING btree ("name") WHERE "Cookbook"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "Cookbook_createdAt_idx" ON "Cookbook" USING btree ("createdAt");--> statement-breakpoint
-CREATE INDEX "Cookbook_productId_idx" ON "Cookbook" USING btree ("productId");--> statement-breakpoint
-CREATE INDEX "Cookbook_name_gin_idx" ON "Cookbook" USING gin ("name" gin_trgm_ops);--> statement-breakpoint
+CREATE INDEX "AuditLog_createdAt_id_idx" ON "AuditLog" USING btree ("createdAt" DESC NULLS FIRST,"id" DESC NULLS FIRST);--> statement-breakpoint
+CREATE INDEX "AuditLog_runId_entityKind_idx" ON "AuditLog" USING btree ("runId","entityKind") WHERE "AuditLog"."runId" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "AuditLog_entityKind_entityId_createdAt_idx" ON "AuditLog" USING btree ("entityKind","entityId","createdAt" DESC NULLS LAST);--> statement-breakpoint
 CREATE UNIQUE INDEX "DataException_entity_check_key" ON "DataException" USING btree ("entityId","check");--> statement-breakpoint
-CREATE UNIQUE INDEX "Device_shortcode_unique" ON "Device" USING btree ("shortcode");--> statement-breakpoint
-CREATE UNIQUE INDEX "Device_installationId_key" ON "Device" USING btree ("installationId") WHERE "Device"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "Device_ledgerPartyId_idx" ON "Device" USING btree ("ledgerPartyId");--> statement-breakpoint
-CREATE INDEX "Device_productId_idx" ON "Device" USING btree ("productId");--> statement-breakpoint
-CREATE UNIQUE INDEX "EntityAttachment_subject_image_key" ON "EntityAttachment" USING btree ("subjectEntityId","imageId") WHERE "EntityAttachment"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "EntityAttachment_subject_singular_role_key" ON "EntityAttachment" USING btree ("subjectEntityId","role") WHERE "EntityAttachment"."role" IN ('cover', 'logo') AND "EntityAttachment"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "EntityAttachment_subject_idempotency_key" ON "EntityAttachment" USING btree ("subjectEntityId","idempotencyKey") WHERE "EntityAttachment"."idempotencyKey" IS NOT NULL AND "EntityAttachment"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "EntityAttachment_subject_order_idx" ON "EntityAttachment" USING btree ("subjectEntityId","sortOrder");--> statement-breakpoint
+CREATE UNIQUE INDEX "EntityAttachment_entity_image_key" ON "EntityAttachment" USING btree ("entityId","imageId") WHERE "EntityAttachment"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "EntityAttachment_entity_singular_role_key" ON "EntityAttachment" USING btree ("entityId","role") WHERE "EntityAttachment"."role" IN ('cover', 'logo') AND "EntityAttachment"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "EntityAttachment_entity_idempotency_key" ON "EntityAttachment" USING btree ("entityId","idempotencyKey") WHERE "EntityAttachment"."idempotencyKey" IS NOT NULL AND "EntityAttachment"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "EntityAttachment_entity_order_idx" ON "EntityAttachment" USING btree ("entityId","sortOrder");--> statement-breakpoint
 CREATE INDEX "EntityAttachment_imageId_idx" ON "EntityAttachment" USING btree ("imageId");--> statement-breakpoint
-CREATE UNIQUE INDEX "EntityEmbedding_entity_model_key" ON "EntityEmbedding" USING btree ("entityType","entityId","provider","model","dimensions") WHERE "EntityEmbedding"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "EntityEmbedding_entity_idx" ON "EntityEmbedding" USING btree ("entityType","entityId");--> statement-breakpoint
+CREATE UNIQUE INDEX "EntityEmbedding_entity_model_key" ON "EntityEmbedding" USING btree ("entityKind","entityId","provider","model","dimensions") WHERE "EntityEmbedding"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "EntityEmbedding_entity_idx" ON "EntityEmbedding" USING btree ("entityKind","entityId");--> statement-breakpoint
 CREATE INDEX "EntityEmbedding_model_idx" ON "EntityEmbedding" USING btree ("provider","model","dimensions");--> statement-breakpoint
+CREATE UNIQUE INDEX "EntityExternalId_source_kind_externalId_key" ON "EntityExternalId" USING btree ("source","kind","externalId") WHERE "EntityExternalId"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "EntityExternalId_entity_source_kind_primary_key" ON "EntityExternalId" USING btree ("entityId","source","kind") WHERE "EntityExternalId"."isPrimary" AND "EntityExternalId"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "EntityExternalId_entityId_idx" ON "EntityExternalId" USING btree ("entityId");--> statement-breakpoint
 CREATE UNIQUE INDEX "Entity_shortcode_unique" ON "Entity" USING btree ("shortcode");--> statement-breakpoint
 CREATE INDEX "Entity_mergedIntoId_idx" ON "Entity" USING btree ("mergedIntoId");--> statement-breakpoint
-CREATE UNIQUE INDEX "Expense_shortcode_unique" ON "Expense" USING btree ("shortcode");--> statement-breakpoint
-CREATE UNIQUE INDEX "Expense_notionPageId_key" ON "Expense" USING btree ("notionPageId") WHERE "Expense"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "Expense_projectId_idx" ON "Expense" USING btree ("projectId");--> statement-breakpoint
-CREATE INDEX "Expense_productId_idx" ON "Expense" USING btree ("productId");--> statement-breakpoint
-CREATE INDEX "Expense_date_idx" ON "Expense" USING btree ("date");--> statement-breakpoint
-CREATE INDEX "Expense_costType_idx" ON "Expense" USING btree ("costType");--> statement-breakpoint
-CREATE INDEX "Expense_lineKind_idx" ON "Expense" USING btree ("lineKind");--> statement-breakpoint
-CREATE INDEX "Expense_name_gin_idx" ON "Expense" USING gin ("name" gin_trgm_ops);--> statement-breakpoint
-CREATE INDEX "Expense_purchaseId_idx" ON "Expense" USING btree ("purchaseId");--> statement-breakpoint
+CREATE UNIQUE INDEX "EntityLink_kind_from_to_key" ON "EntityLink" USING btree ("kind","fromEntityId","toEntityId") WHERE "EntityLink"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "EntityLink_to_kind_idx" ON "EntityLink" USING btree ("toEntityId","kind") WHERE "EntityLink"."deletedAt" IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "ExpenseAttribution_expenseId_role_ledgerPartyId_key" ON "ExpenseAttribution" USING btree ("expenseId","role","ledgerPartyId") WHERE "ExpenseAttribution"."deletedAt" IS NULL AND "ExpenseAttribution"."ledgerPartyId" IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "ExpenseAttribution_expenseId_role_unattributed_key" ON "ExpenseAttribution" USING btree ("expenseId","role") WHERE "ExpenseAttribution"."deletedAt" IS NULL AND "ExpenseAttribution"."ledgerPartyId" IS NULL;--> statement-breakpoint
 CREATE INDEX "ExpenseAttribution_expenseId_idx" ON "ExpenseAttribution" USING btree ("expenseId");--> statement-breakpoint
 CREATE INDEX "ExpenseAttribution_ledgerPartyId_idx" ON "ExpenseAttribution" USING btree ("ledgerPartyId");--> statement-breakpoint
-CREATE UNIQUE INDEX "FinancialAccount_shortcode_unique" ON "FinancialAccount" USING btree ("shortcode");--> statement-breakpoint
-CREATE INDEX "FinancialAccount_name_idx" ON "FinancialAccount" USING btree ("name");--> statement-breakpoint
-CREATE INDEX "FinancialAccount_provisional_idx" ON "FinancialAccount" USING btree ("provisional");--> statement-breakpoint
-CREATE INDEX "FinancialAccount_ledgerPartyId_idx" ON "FinancialAccount" USING btree ("ledgerPartyId");--> statement-breakpoint
-CREATE UNIQUE INDEX "FinancialAccount_provider_owner_key" ON "FinancialAccount" USING btree ("providerVendorId","ledgerPartyId") WHERE "FinancialAccount"."providerVendorId" IS NOT NULL AND "FinancialAccount"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "FinancialTransaction_shortcode_unique" ON "FinancialTransaction" USING btree ("shortcode");--> statement-breakpoint
-CREATE INDEX "FinancialTransaction_accountId_idx" ON "FinancialTransaction" USING btree ("accountId");--> statement-breakpoint
-CREATE INDEX "FinancialTransaction_ledgerTransferId_idx" ON "FinancialTransaction" USING btree ("ledgerTransferId");--> statement-breakpoint
-CREATE UNIQUE INDEX "FinancialTransaction_ledgerTransferId_positive_evidence_key" ON "FinancialTransaction" USING btree ("ledgerTransferId") WHERE "FinancialTransaction"."deletedAt" IS NULL AND "FinancialTransaction"."ledgerTransferId" IS NOT NULL AND "FinancialTransaction"."amount" > 0;--> statement-breakpoint
-CREATE UNIQUE INDEX "FinancialTransaction_ledgerTransferId_negative_evidence_key" ON "FinancialTransaction" USING btree ("ledgerTransferId") WHERE "FinancialTransaction"."deletedAt" IS NULL AND "FinancialTransaction"."ledgerTransferId" IS NOT NULL AND "FinancialTransaction"."amount" < 0;--> statement-breakpoint
-CREATE INDEX "FinancialTransaction_kind_idx" ON "FinancialTransaction" USING btree ("kind");--> statement-breakpoint
-CREATE INDEX "FinancialTransaction_status_idx" ON "FinancialTransaction" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "FinancialTransaction_transactionDate_idx" ON "FinancialTransaction" USING btree ("transactionDate");--> statement-breakpoint
-CREATE INDEX "FinancialTransaction_postedDate_idx" ON "FinancialTransaction" USING btree ("postedDate");--> statement-breakpoint
-CREATE INDEX "FinancialTransaction_sourceRefs_gin_idx" ON "FinancialTransaction" USING gin ("sourceRefs");--> statement-breakpoint
 CREATE UNIQUE INDEX "FinancialTransactionAllocation_transactionId_purchaseId_key" ON "FinancialTransactionAllocation" USING btree ("transactionId","purchaseId") WHERE "FinancialTransactionAllocation"."deletedAt" IS NULL;--> statement-breakpoint
 CREATE INDEX "FinancialTransactionAllocation_transactionId_idx" ON "FinancialTransactionAllocation" USING btree ("transactionId");--> statement-breakpoint
 CREATE INDEX "FinancialTransactionAllocation_purchaseId_idx" ON "FinancialTransactionAllocation" USING btree ("purchaseId");--> statement-breakpoint
-CREATE UNIQUE INDEX "GardenEntry_shortcode_unique" ON "GardenEntry" USING btree ("shortcode");--> statement-breakpoint
-CREATE INDEX "GardenEntry_locationId_idx" ON "GardenEntry" USING btree ("locationId");--> statement-breakpoint
-CREATE INDEX "GardenEntry_observedOn_idx" ON "GardenEntry" USING btree ("observedOn");--> statement-breakpoint
-CREATE UNIQUE INDEX "GardenEntryPlanting_gardenEntryId_plantingId_key" ON "GardenEntryPlanting" USING btree ("gardenEntryId","plantingId") WHERE "GardenEntryPlanting"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "GardenEntryPlanting_gardenEntryId_idx" ON "GardenEntryPlanting" USING btree ("gardenEntryId");--> statement-breakpoint
-CREATE INDEX "GardenEntryPlanting_plantingId_idx" ON "GardenEntryPlanting" USING btree ("plantingId");--> statement-breakpoint
-CREATE UNIQUE INDEX "Image_shortcode_unique" ON "Image" USING btree ("shortcode");--> statement-breakpoint
-CREATE UNIQUE INDEX "Image_key_key" ON "Image" USING btree ("key") WHERE "Image"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "Image_createdAt_idx" ON "Image" USING btree ("createdAt");--> statement-breakpoint
-CREATE INDEX "Image_status_idx" ON "Image" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "Image_capturedByPartyId_idx" ON "Image" USING btree ("capturedByPartyId");--> statement-breakpoint
 CREATE UNIQUE INDEX "ImageDerivative_image_purpose_source_revision_key" ON "ImageDerivative" USING btree ("imageId","purpose","sourceContentHash","processorRevision") WHERE "ImageDerivative"."deletedAt" IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "ImageDerivative_storage_key_key" ON "ImageDerivative" USING btree ("key") WHERE "ImageDerivative"."deletedAt" IS NULL;--> statement-breakpoint
 CREATE INDEX "ImageDerivative_image_idx" ON "ImageDerivative" USING btree ("imageId");--> statement-breakpoint
@@ -2028,13 +1885,11 @@ CREATE INDEX "ImageProcessingEvent_job_time_idx" ON "ImageProcessingEvent" USING
 CREATE UNIQUE INDEX "ImageProcessingJob_publicId_key" ON "ImageProcessingJob" USING btree ("publicId");--> statement-breakpoint
 CREATE UNIQUE INDEX "ImageProcessingJob_identity_key" ON "ImageProcessingJob" USING btree ("imageId","kind","sourceContentHash","processorRevision");--> statement-breakpoint
 CREATE INDEX "ImageProcessingJob_dispatch_idx" ON "ImageProcessingJob" USING btree ("state","nextAttemptAt");--> statement-breakpoint
-CREATE INDEX "ImageProcessingJob_image_idx" ON "ImageProcessingJob" USING btree ("imageId");--> statement-breakpoint
 CREATE INDEX "ImageProcessingJob_runId_idx" ON "ImageProcessingJob" USING btree ("runId") WHERE "ImageProcessingJob"."runId" IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "ImageProcessingOrphan_key_key" ON "ImageProcessingOrphan" USING btree ("key");--> statement-breakpoint
 CREATE INDEX "ImageProcessingOrphan_createdAt_idx" ON "ImageProcessingOrphan" USING btree ("createdAt");--> statement-breakpoint
 CREATE UNIQUE INDEX "ImageProcessingSubmission_publicId_key" ON "ImageProcessingSubmission" USING btree ("publicId");--> statement-breakpoint
 CREATE UNIQUE INDEX "ImageProcessingSubmissionJob_membership_key" ON "ImageProcessingSubmissionJob" USING btree ("submissionId","jobId");--> statement-breakpoint
-CREATE UNIQUE INDEX "ImageSighting_shortcode_unique" ON "ImageSighting" USING btree ("shortcode");--> statement-breakpoint
 CREATE UNIQUE INDEX "ImageSighting_image_party_asset_key" ON "ImageSighting" USING btree ("imageId","ledgerPartyId","assetKey") WHERE "ImageSighting"."deletedAt" IS NULL;--> statement-breakpoint
 CREATE INDEX "ImageSighting_imageId_idx" ON "ImageSighting" USING btree ("imageId");--> statement-breakpoint
 CREATE INDEX "ImageSighting_ledgerPartyId_idx" ON "ImageSighting" USING btree ("ledgerPartyId");--> statement-breakpoint
@@ -2050,52 +1905,16 @@ CREATE UNIQUE INDEX "ImportPreparedOrder_run_stable_order_key" ON "ImportPrepare
 CREATE INDEX "ImportPreparedOrder_prepare_operation_idx" ON "ImportPreparedOrder" USING btree ("runId","prepareOperationId");--> statement-breakpoint
 CREATE UNIQUE INDEX "ImportSourceClaim_source_key" ON "ImportSourceClaim" USING btree ("ledgerPartyId","kind","externalKey");--> statement-breakpoint
 CREATE INDEX "ImportSourceClaim_purchase_idx" ON "ImportSourceClaim" USING btree ("purchaseId");--> statement-breakpoint
-CREATE UNIQUE INDEX "Ingredient_shortcode_unique" ON "Ingredient" USING btree ("shortcode");--> statement-breakpoint
-CREATE UNIQUE INDEX "Ingredient_name_key" ON "Ingredient" USING btree (lower("name")) WHERE "Ingredient"."deletedAt" IS NULL AND "Ingredient"."recipeId" IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "Ingredient_recipeId_key" ON "Ingredient" USING btree ("recipeId") WHERE "Ingredient"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "Ingredient_recipeId_idx" ON "Ingredient" USING btree ("recipeId");--> statement-breakpoint
-CREATE INDEX "Ingredient_createdAt_idx" ON "Ingredient" USING btree ("createdAt");--> statement-breakpoint
-CREATE INDEX "Ingredient_name_gin_idx" ON "Ingredient" USING gin ("name" gin_trgm_ops);--> statement-breakpoint
-CREATE INDEX "Ingredient_name_active_idx" ON "Ingredient" USING btree ("name") WHERE "Ingredient"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "InventoryEntry_shortcode_unique" ON "InventoryEntry" USING btree ("shortcode");--> statement-breakpoint
-CREATE UNIQUE INDEX "InventoryEntry_productId_locationId_key" ON "InventoryEntry" USING btree ("productId","locationId","placement","ownershipMode",coalesce("ownerLedgerPartyId", '00000000-0000-0000-0000-000000000000'::uuid)) WHERE "InventoryEntry"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "InventoryEntry_owner_idx" ON "InventoryEntry" USING btree ("ownerLedgerPartyId");--> statement-breakpoint
-CREATE INDEX "InventoryEntry_productId_idx" ON "InventoryEntry" USING btree ("productId");--> statement-breakpoint
-CREATE INDEX "InventoryEntry_locationId_idx" ON "InventoryEntry" USING btree ("locationId");--> statement-breakpoint
-CREATE INDEX "InventoryEntry_createdAt_idx" ON "InventoryEntry" USING btree ("createdAt");--> statement-breakpoint
-CREATE UNIQUE INDEX "LedgerParty_shortcode_unique" ON "LedgerParty" USING btree ("shortcode");--> statement-breakpoint
-CREATE INDEX "LedgerParty_kind_idx" ON "LedgerParty" USING btree ("kind");--> statement-breakpoint
-CREATE UNIQUE INDEX "LedgerParty_household_singleton_key" ON "LedgerParty" USING btree ("kind") WHERE "LedgerParty"."deletedAt" IS NULL AND "LedgerParty"."kind" = 'household';--> statement-breakpoint
-CREATE UNIQUE INDEX "LedgerParty_member_user_key" ON "LedgerParty" USING btree ("userId") WHERE "LedgerParty"."deletedAt" IS NULL AND "LedgerParty"."userId" IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "LedgerSourceClaim_source_sourceKey_key" ON "LedgerSourceClaim" USING btree ("source","sourceKey");--> statement-breakpoint
 CREATE INDEX "LedgerSourceClaim_expenseId_idx" ON "LedgerSourceClaim" USING btree ("expenseId");--> statement-breakpoint
 CREATE INDEX "LedgerSourceClaim_ledgerTransferId_idx" ON "LedgerSourceClaim" USING btree ("ledgerTransferId");--> statement-breakpoint
-CREATE UNIQUE INDEX "LedgerTransfer_shortcode_unique" ON "LedgerTransfer" USING btree ("shortcode");--> statement-breakpoint
-CREATE INDEX "LedgerTransfer_fromPartyId_idx" ON "LedgerTransfer" USING btree ("fromPartyId");--> statement-breakpoint
-CREATE INDEX "LedgerTransfer_toPartyId_idx" ON "LedgerTransfer" USING btree ("toPartyId");--> statement-breakpoint
-CREATE INDEX "LedgerTransfer_date_idx" ON "LedgerTransfer" USING btree ("date");--> statement-breakpoint
-CREATE UNIQUE INDEX "Location_shortcode_unique" ON "Location" USING btree ("shortcode");--> statement-breakpoint
-CREATE UNIQUE INDEX "Location_name_key" ON "Location" USING btree (lower("name")) WHERE "Location"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "Location_name_idx" ON "Location" USING btree ("name");--> statement-breakpoint
-CREATE INDEX "Location_tags_idx" ON "Location" USING gin ("tags");--> statement-breakpoint
-CREATE INDEX "Location_type_idx" ON "Location" USING btree ("type");--> statement-breakpoint
-CREATE INDEX "Location_productId_idx" ON "Location" USING btree ("productId");--> statement-breakpoint
-CREATE INDEX "Location_parentId_idx" ON "Location" USING btree ("parentId");--> statement-breakpoint
-CREATE INDEX "Location_createdAt_idx" ON "Location" USING btree ("createdAt");--> statement-breakpoint
-CREATE INDEX "Location_lastBulkInventory_idx" ON "Location" USING btree ("lastBulkInventory");--> statement-breakpoint
-CREATE INDEX "Location_name_gin_idx" ON "Location" USING gin ("name" gin_trgm_ops);--> statement-breakpoint
-CREATE INDEX "Location_type_name_idx" ON "Location" USING btree ("type","name");--> statement-breakpoint
-CREATE INDEX "Location_name_active_idx" ON "Location" USING btree ("name") WHERE "Location"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "Location_type_active_idx" ON "Location" USING btree ("type") WHERE "Location"."deletedAt" IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "MailboxCursor_party_provider_key" ON "MailboxCursor" USING btree ("ledgerPartyId","provider");--> statement-breakpoint
 CREATE INDEX "McpToolCall_tool_occurredAt_idx" ON "McpToolCall" USING btree ("toolName","occurredAt" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "McpToolCall_user_occurredAt_idx" ON "McpToolCall" USING btree ("userId","occurredAt" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "McpToolCall_client_occurredAt_idx" ON "McpToolCall" USING btree ("clientId","occurredAt" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "McpToolCall_outcome_idx" ON "McpToolCall" USING btree ("outcome");--> statement-breakpoint
 CREATE INDEX "McpToolCall_release_idx" ON "McpToolCall" USING btree ("release");--> statement-breakpoint
-CREATE INDEX "McpToolCall_entity_occurredAt_idx" ON "McpToolCall" USING btree ("entity","occurredAt" DESC NULLS LAST);--> statement-breakpoint
-CREATE UNIQUE INDEX "Meal_shortcode_unique" ON "Meal" USING btree ("shortcode");--> statement-breakpoint
-CREATE INDEX "Meal_date_active_idx" ON "Meal" USING btree ("date") WHERE "Meal"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "McpToolCall_entity_occurredAt_idx" ON "McpToolCall" USING btree ("entityKind","occurredAt" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "MealFoodEntry_mealId_idx" ON "MealFoodEntry" USING btree ("mealId");--> statement-breakpoint
 CREATE INDEX "MealFoodEntry_ledgerPartyId_idx" ON "MealFoodEntry" USING btree ("ledgerPartyId");--> statement-breakpoint
 CREATE INDEX "MealFoodEntry_ingredientId_idx" ON "MealFoodEntry" USING btree ("ingredientId");--> statement-breakpoint
@@ -2135,100 +1954,25 @@ CREATE INDEX "passkey_credential_id_idx" ON "passkey" USING btree ("credential_i
 CREATE UNIQUE INDEX "PhotoGroupProposal_run_group_key" ON "PhotoGroupProposal" USING btree ("runId","groupKey");--> statement-breakpoint
 CREATE INDEX "PhotoGroupProposal_product_idx" ON "PhotoGroupProposal" USING btree ("productId");--> statement-breakpoint
 CREATE INDEX "PhotoGroupProposal_location_idx" ON "PhotoGroupProposal" USING btree ("inventoryLocationId");--> statement-breakpoint
-CREATE UNIQUE INDEX "Plant_shortcode_unique" ON "Plant" USING btree ("shortcode");--> statement-breakpoint
-CREATE INDEX "Plant_ingredientId_idx" ON "Plant" USING btree ("ingredientId");--> statement-breakpoint
-CREATE INDEX "Plant_gardenGuideKey_idx" ON "Plant" USING btree ("gardenGuideKey");--> statement-breakpoint
-CREATE UNIQUE INDEX "Planting_shortcode_unique" ON "Planting" USING btree ("shortcode");--> statement-breakpoint
-CREATE INDEX "Planting_plantId_idx" ON "Planting" USING btree ("plantId");--> statement-breakpoint
-CREATE INDEX "Planting_sourceProductId_idx" ON "Planting" USING btree ("sourceProductId");--> statement-breakpoint
-CREATE INDEX "Planting_locationId_idx" ON "Planting" USING btree ("locationId");--> statement-breakpoint
-CREATE INDEX "Planting_taskId_idx" ON "Planting" USING btree ("taskId");--> statement-breakpoint
-CREATE INDEX "Planting_status_idx" ON "Planting" USING btree ("status");--> statement-breakpoint
-CREATE UNIQUE INDEX "Product_shortcode_unique" ON "Product" USING btree ("shortcode");--> statement-breakpoint
-CREATE INDEX "Product_categoryId_idx" ON "Product" USING btree ("categoryId");--> statement-breakpoint
-CREATE UNIQUE INDEX "Product_name_manufacturer_key" ON "Product" USING btree ("name","manufacturer") WHERE "Product"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "Product_ingredientId_idx" ON "Product" USING btree ("ingredientId");--> statement-breakpoint
-CREATE INDEX "Product_growsPlantId_idx" ON "Product" USING btree ("growsPlantId");--> statement-breakpoint
-CREATE INDEX "Product_createdAt_idx" ON "Product" USING btree ("createdAt");--> statement-breakpoint
-CREATE INDEX "Product_name_idx" ON "Product" USING btree ("name");--> statement-breakpoint
-CREATE INDEX "Product_name_gin_idx" ON "Product" USING gin ("name" gin_trgm_ops);--> statement-breakpoint
-CREATE INDEX "Product_manufacturer_gin_idx" ON "Product" USING gin ("manufacturer" gin_trgm_ops);--> statement-breakpoint
-CREATE INDEX "Product_name_manufacturer_idx" ON "Product" USING btree ("name","manufacturer");--> statement-breakpoint
-CREATE INDEX "Product_name_active_idx" ON "Product" USING btree ("name") WHERE "Product"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "Product_manufacturer_active_idx" ON "Product" USING btree ("manufacturer") WHERE "Product"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "ProductCategory_shortcode_unique" ON "ProductCategory" USING btree ("shortcode");--> statement-breakpoint
-CREATE UNIQUE INDEX "ProductCategory_parent_name_key" ON "ProductCategory" USING btree ("parentId","name") WHERE "ProductCategory"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "ProductCategory_feature_live_unique" ON "ProductCategory" USING btree ("feature") WHERE "ProductCategory"."deletedAt" IS NULL AND "ProductCategory"."feature" IS NOT NULL;--> statement-breakpoint
-CREATE INDEX "ProductCategory_parentId_idx" ON "ProductCategory" USING btree ("parentId");--> statement-breakpoint
-CREATE INDEX "ProductCategory_feature_idx" ON "ProductCategory" USING btree ("feature");--> statement-breakpoint
-CREATE UNIQUE INDEX "ProductComponent_parentProductId_componentProductId_key" ON "ProductComponent" USING btree ("parentProductId","componentProductId") WHERE "ProductComponent"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "ProductComponent_parentProductId_idx" ON "ProductComponent" USING btree ("parentProductId");--> statement-breakpoint
-CREATE INDEX "ProductComponent_componentProductId_idx" ON "ProductComponent" USING btree ("componentProductId");--> statement-breakpoint
 CREATE INDEX "ProductConversionCoverage_tier_idx" ON "ProductConversionCoverage" USING btree ("coverageTier");--> statement-breakpoint
 CREATE INDEX "ProductConversionCoverage_island_idx" ON "ProductConversionCoverage" USING btree ("islandCount");--> statement-breakpoint
 CREATE INDEX "ProductConversionCoverage_status_idx" ON "ProductConversionCoverage" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "ProductExternalId_productId_idx" ON "ProductExternalId" USING btree ("productId");--> statement-breakpoint
-CREATE UNIQUE INDEX "ProductExternalId_product_source_kind_primary_key" ON "ProductExternalId" USING btree ("productId","source","kind") WHERE "ProductExternalId"."isPrimary" AND "ProductExternalId"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "ProductExternalId_source_kind_externalId_key" ON "ProductExternalId" USING btree ("source","kind","externalId") WHERE "ProductExternalId"."deletedAt" IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "ProductMatchCandidate_pair_key" ON "ProductMatchCandidate" USING btree ("productAId","productBId");--> statement-breakpoint
 CREATE INDEX "ProductMatchCandidate_productB_idx" ON "ProductMatchCandidate" USING btree ("productBId");--> statement-breakpoint
-CREATE INDEX "ProductUnitMappings_productId_idx" ON "ProductUnitMappings" USING btree ("productId");--> statement-breakpoint
-CREATE UNIQUE INDEX "Project_shortcode_unique" ON "Project" USING btree ("shortcode");--> statement-breakpoint
-CREATE UNIQUE INDEX "Project_notionPageId_key" ON "Project" USING btree ("notionPageId") WHERE "Project"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "Project_status_idx" ON "Project" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "Project_kind_idx" ON "Project" USING btree ("kind");--> statement-breakpoint
-CREATE INDEX "Project_startDate_idx" ON "Project" USING btree ("startDate");--> statement-breakpoint
-CREATE INDEX "Project_parentProjectId_idx" ON "Project" USING btree ("parentProjectId");--> statement-breakpoint
-CREATE INDEX "Project_name_gin_idx" ON "Project" USING gin ("name" gin_trgm_ops);--> statement-breakpoint
-CREATE INDEX "Project_name_active_idx" ON "Project" USING btree ("name") WHERE "Project"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "ProjectDependency_pair_key" ON "ProjectDependency" USING btree ("projectId","blockedByProjectId");--> statement-breakpoint
-CREATE INDEX "ProjectDependency_blockedBy_idx" ON "ProjectDependency" USING btree ("blockedByProjectId");--> statement-breakpoint
-CREATE UNIQUE INDEX "ProjectToolUsage_projectId_productId_key" ON "ProjectToolUsage" USING btree ("projectId","productId") WHERE "ProjectToolUsage"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "ProjectToolUsage_projectId_idx" ON "ProjectToolUsage" USING btree ("projectId");--> statement-breakpoint
-CREATE INDEX "ProjectToolUsage_productId_idx" ON "ProjectToolUsage" USING btree ("productId");--> statement-breakpoint
-CREATE UNIQUE INDEX "Purchase_shortcode_unique" ON "Purchase" USING btree ("shortcode");--> statement-breakpoint
-CREATE UNIQUE INDEX "Purchase_vendorId_orderId_key" ON "Purchase" USING btree ("vendorId","orderId") WHERE "Purchase"."orderId" IS NOT NULL AND "Purchase"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "Purchase_defaultProjectId_idx" ON "Purchase" USING btree ("defaultProjectId");--> statement-breakpoint
-CREATE INDEX "Purchase_vendorId_idx" ON "Purchase" USING btree ("vendorId");--> statement-breakpoint
-CREATE INDEX "Purchase_vendorAccountId_idx" ON "Purchase" USING btree ("vendorAccountId");--> statement-breakpoint
-CREATE INDEX "Purchase_runId_idx" ON "Purchase" USING btree ("runId");--> statement-breakpoint
-CREATE INDEX "Purchase_date_idx" ON "Purchase" USING btree ("date");--> statement-breakpoint
-CREATE INDEX "Purchase_orderId_gin_idx" ON "Purchase" USING gin ("orderId" gin_trgm_ops);--> statement-breakpoint
-CREATE INDEX "Purchase_displayLabel_gin_idx" ON "Purchase" USING gin ("displayLabel" gin_trgm_ops);--> statement-breakpoint
+CREATE INDEX "ProductUnitMapping_productId_idx" ON "ProductUnitMapping" USING btree ("productId");--> statement-breakpoint
 CREATE UNIQUE INDEX "PurchasePaymentEvidence_source_index_key" ON "PurchasePaymentEvidence" USING btree ("sourceClaimId","evidenceIndex");--> statement-breakpoint
 CREATE INDEX "PurchasePaymentEvidence_purchase_idx" ON "PurchasePaymentEvidence" USING btree ("purchaseId");--> statement-breakpoint
-CREATE UNIQUE INDEX "PurchaseProduct_purchaseId_productId_key" ON "PurchaseProduct" USING btree ("purchaseId","productId") WHERE "PurchaseProduct"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "PurchaseProduct_purchaseId_idx" ON "PurchaseProduct" USING btree ("purchaseId");--> statement-breakpoint
-CREATE INDEX "PurchaseProduct_productId_idx" ON "PurchaseProduct" USING btree ("productId");--> statement-breakpoint
-CREATE UNIQUE INDEX "Recipe_shortcode_unique" ON "Recipe" USING btree ("shortcode");--> statement-breakpoint
-CREATE UNIQUE INDEX "Recipe_name_key" ON "Recipe" USING btree ("name") WHERE "Recipe"."deletedAt" IS NULL AND "Recipe"."SourceType" IS DISTINCT FROM 'Book' AND "Recipe"."SourceType" IS DISTINCT FROM 'Notion';--> statement-breakpoint
-CREATE UNIQUE INDEX "Recipe_book_title_key" ON "Recipe" USING btree ("name","SourceData") WHERE "Recipe"."deletedAt" IS NULL AND "Recipe"."SourceType" = 'Book';--> statement-breakpoint
-CREATE UNIQUE INDEX "Recipe_notion_page_key" ON "Recipe" USING btree ("SourceData") WHERE "Recipe"."deletedAt" IS NULL AND "Recipe"."SourceType" = 'Notion';--> statement-breakpoint
-CREATE INDEX "Recipe_SourceType_idx" ON "Recipe" USING btree ("SourceType");--> statement-breakpoint
-CREATE INDEX "Recipe_cookbookId_idx" ON "Recipe" USING btree ("cookbookId");--> statement-breakpoint
-CREATE INDEX "Recipe_forkedFromRecipeId_idx" ON "Recipe" USING btree ("forkedFromRecipeId");--> statement-breakpoint
-CREATE INDEX "Recipe_created_at_desc_idx" ON "Recipe" USING btree ("createdAt" DESC NULLS LAST);--> statement-breakpoint
-CREATE INDEX "Recipe_name_active_idx" ON "Recipe" USING btree ("name") WHERE "Recipe"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "Recipe_totals_stale_idx" ON "Recipe" USING btree ("totalsComputedAt") WHERE "Recipe"."totalsComputedAt" IS NULL;--> statement-breakpoint
 CREATE INDEX "RecipeSection_recipeId_idx" ON "RecipeSection" USING btree ("recipeId");--> statement-breakpoint
 CREATE INDEX "RecipeSection_createdAt_idx" ON "RecipeSection" USING btree ("createdAt");--> statement-breakpoint
 CREATE INDEX "RecipeSectionIngredient_recipeSectionId_idx" ON "RecipeSectionIngredient" USING btree ("recipeSectionId");--> statement-breakpoint
 CREATE INDEX "RecipeSectionIngredient_ingredientId_idx" ON "RecipeSectionIngredient" USING btree ("ingredientId");--> statement-breakpoint
-CREATE UNIQUE INDEX "Run_shortcode_unique" ON "Run" USING btree ("shortcode");--> statement-breakpoint
-CREATE INDEX "Run_party_started_idx" ON "Run" USING btree ("ledgerPartyId","startedAt" DESC NULLS LAST);--> statement-breakpoint
-CREATE INDEX "Run_vendorAccount_started_idx" ON "Run" USING btree ("vendorAccountId","startedAt" DESC NULLS LAST);--> statement-breakpoint
-CREATE UNIQUE INDEX "Run_clientKey_unique" ON "Run" USING btree ("clientKey") WHERE "Run"."clientKey" IS NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "Run_dispatch_event_unique" ON "Run" USING btree ("dispatchEventId") WHERE "Run"."dispatchEventId" IS NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "Run_one_active_vendor_account_key" ON "Run" USING btree ("vendorAccountId") WHERE "Run"."vendorAccountId" IS NOT NULL AND "Run"."status" IN ('running', 'paused_auth', 'paused_offline', 'paused_approval');--> statement-breakpoint
 CREATE UNIQUE INDEX "RunApproval_run_operation_key" ON "RunApproval" USING btree ("runId","operationId");--> statement-breakpoint
 CREATE INDEX "RunApproval_run_state_idx" ON "RunApproval" USING btree ("runId","state");--> statement-breakpoint
 CREATE INDEX "RunControlEvent_run_created_idx" ON "RunControlEvent" USING btree ("runId","createdAt");--> statement-breakpoint
 CREATE UNIQUE INDEX "RunEvidence_object_key_unique" ON "RunEvidence" USING btree ("objectKey");--> statement-breakpoint
 CREATE INDEX "RunEvidence_run_target_idx" ON "RunEvidence" USING btree ("runId","targetId");--> statement-breakpoint
-CREATE UNIQUE INDEX "RunFinding_open_evidence_key" ON "RunFinding" USING btree ("ledgerPartyId","targetKind","targetId","kind","evidenceFingerprint") WHERE "RunFinding"."status" = 'open';--> statement-breakpoint
+CREATE UNIQUE INDEX "RunFinding_open_evidence_key" ON "RunFinding" USING btree ("ledgerPartyId","entityKind","entityId","kind","evidenceFingerprint") WHERE "RunFinding"."status" = 'open';--> statement-breakpoint
 CREATE INDEX "RunFinding_status_idx" ON "RunFinding" USING btree ("status","createdAt" DESC NULLS LAST);--> statement-breakpoint
-CREATE INDEX "RunMutation_run_idx" ON "RunMutation" USING btree ("runId");--> statement-breakpoint
-CREATE INDEX "RunMutation_target_idx" ON "RunMutation" USING btree ("targetKind","targetId");--> statement-breakpoint
 CREATE UNIQUE INDEX "RunOperation_run_operation_key" ON "RunOperation" USING btree ("runId","operationId");--> statement-breakpoint
 CREATE INDEX "RunOperation_run_state_idx" ON "RunOperation" USING btree ("runId","state");--> statement-breakpoint
 CREATE UNIQUE INDEX "RunOrderCandidate_run_order_key" ON "RunOrderCandidate" USING btree ("runId","orderId");--> statement-breakpoint
@@ -2236,15 +1980,10 @@ CREATE INDEX "RunOrderCandidate_run_state_idx" ON "RunOrderCandidate" USING btre
 CREATE UNIQUE INDEX "RunProgress_eventId_unique" ON "RunProgress" USING btree ("eventId");--> statement-breakpoint
 CREATE INDEX "RunProgress_run_created_idx" ON "RunProgress" USING btree ("runId","createdAt" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "RunTarget_run_idx" ON "RunTarget" USING btree ("runId");--> statement-breakpoint
-CREATE INDEX "RunTarget_purchase_idx" ON "RunTarget" USING btree ("purchaseId");--> statement-breakpoint
-CREATE INDEX "RunTarget_product_idx" ON "RunTarget" USING btree ("productId");--> statement-breakpoint
-CREATE INDEX "RunTarget_image_idx" ON "RunTarget" USING btree ("imageId");--> statement-breakpoint
+CREATE INDEX "RunTarget_entity_idx" ON "RunTarget" USING btree ("entityId");--> statement-breakpoint
 CREATE INDEX "RunTarget_deviceWorkDeviceId_idx" ON "RunTarget" USING btree ("deviceWorkDeviceId") WHERE "RunTarget"."deviceWorkDeviceId" IS NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "RunTarget_run_purchase_key" ON "RunTarget" USING btree ("runId","purchaseId") WHERE "RunTarget"."purchaseId" IS NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "RunTarget_run_product_key" ON "RunTarget" USING btree ("runId","productId") WHERE "RunTarget"."productId" IS NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "RunTarget_run_image_key" ON "RunTarget" USING btree ("runId","imageId") WHERE "RunTarget"."imageId" IS NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "SearchDocument_live_entity_key" ON "SearchDocument" USING btree ("entityType","entityId") WHERE "SearchDocument"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "SearchDocument_shortcode_active_idx" ON "SearchDocument" USING btree (lower("shortcode")) WHERE "SearchDocument"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "RunTarget_run_entity_key" ON "RunTarget" USING btree ("runId","entityId");--> statement-breakpoint
+CREATE UNIQUE INDEX "SearchDocument_live_entity_key" ON "SearchDocument" USING btree ("entityKind","entityId") WHERE "SearchDocument"."deletedAt" IS NULL;--> statement-breakpoint
 CREATE INDEX "SearchDocument_title_active_idx" ON "SearchDocument" USING btree (lower("title") text_pattern_ops) WHERE "SearchDocument"."deletedAt" IS NULL;--> statement-breakpoint
 CREATE INDEX "SearchDocument_vector_gin_idx" ON "SearchDocument" USING gin ("searchVector") WHERE "SearchDocument"."deletedAt" IS NULL;--> statement-breakpoint
 CREATE INDEX "SearchDocument_normalized_gist_idx" ON "SearchDocument" USING gist ("normalizedText" gist_trgm_ops) WHERE "SearchDocument"."deletedAt" IS NULL;--> statement-breakpoint
@@ -2252,25 +1991,151 @@ CREATE UNIQUE INDEX "StatementImport_source_fingerprint_key" ON "StatementImport
 CREATE INDEX "StatementImport_source_idx" ON "StatementImport" USING btree ("source");--> statement-breakpoint
 CREATE UNIQUE INDEX "StatementRow_source_externalId_key" ON "StatementRow" USING btree ("source","externalId") WHERE "StatementRow"."deletedAt" IS NULL;--> statement-breakpoint
 CREATE INDEX "StatementRow_batchId_idx" ON "StatementRow" USING btree ("batchId");--> statement-breakpoint
-CREATE INDEX "StatementRow_accountId_idx" ON "StatementRow" USING btree ("accountId");--> statement-breakpoint
 CREATE INDEX "StatementRow_statementDate_idx" ON "StatementRow" USING btree ("statementDate");--> statement-breakpoint
 CREATE INDEX "StatementRow_worklist_idx" ON "StatementRow" USING btree ("statementDate" DESC NULLS LAST) WHERE "StatementRow"."deletedAt" IS NULL AND "StatementRow"."disposition" = 'open' AND "StatementRow"."supersededByRowId" IS NULL;--> statement-breakpoint
 CREATE INDEX "StatementRow_account_date_amount_idx" ON "StatementRow" USING btree ("accountId","statementDate","amount");--> statement-breakpoint
 CREATE INDEX "StatementRow_descriptor_date_amount_idx" ON "StatementRow" USING btree ("source","accountDescriptor","statementDate","providerAmount");--> statement-breakpoint
 CREATE INDEX "StatementRow_rawDescription_gin_idx" ON "StatementRow" USING gin ("rawDescription" gin_trgm_ops);--> statement-breakpoint
-CREATE UNIQUE INDEX "SuggestionDismissal_active_key" ON "SuggestionDismissal" USING btree ("sourceEntityType","sourceEntityId","suggestionKind","candidateKey") WHERE "SuggestionDismissal"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "SuggestionDismissal_source_idx" ON "SuggestionDismissal" USING btree ("sourceEntityType","sourceEntityId");--> statement-breakpoint
-CREATE UNIQUE INDEX "Task_shortcode_unique" ON "Task" USING btree ("shortcode");--> statement-breakpoint
-CREATE UNIQUE INDEX "Task_notionPageId_key" ON "Task" USING btree ("notionPageId") WHERE "Task"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "Task_projectId_idx" ON "Task" USING btree ("projectId");--> statement-breakpoint
-CREATE INDEX "Task_subjectProductId_idx" ON "Task" USING btree ("subjectProductId");--> statement-breakpoint
-CREATE INDEX "Task_status_idx" ON "Task" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "Task_dueDate_idx" ON "Task" USING btree ("dueDate");--> statement-breakpoint
-CREATE INDEX "Task_parentTaskId_idx" ON "Task" USING btree ("parentTaskId");--> statement-breakpoint
-CREATE UNIQUE INDEX "TaskDependency_pair_key" ON "TaskDependency" USING btree ("taskId","blockedByTaskId");--> statement-breakpoint
-CREATE INDEX "TaskDependency_blockedBy_idx" ON "TaskDependency" USING btree ("blockedByTaskId");--> statement-breakpoint
+CREATE UNIQUE INDEX "SuggestionDismissal_active_key" ON "SuggestionDismissal" USING btree ("entityKind","entityId","suggestionKind","candidateKey") WHERE "SuggestionDismissal"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "SuggestionDismissal_source_idx" ON "SuggestionDismissal" USING btree ("entityKind","entityId");--> statement-breakpoint
 CREATE INDEX "UpcLookupCache_fetchedAt_idx" ON "UpcLookupCache" USING btree ("fetchedAt");--> statement-breakpoint
 CREATE INDEX "UpcLookupCache_status_idx" ON "UpcLookupCache" USING btree ("status");--> statement-breakpoint
+CREATE UNIQUE INDEX "Cookbook_shortcode_unique" ON "Cookbook" USING btree ("shortcode");--> statement-breakpoint
+CREATE UNIQUE INDEX "Cookbook_name_key" ON "Cookbook" USING btree ("name") WHERE "Cookbook"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "Cookbook_createdAt_idx" ON "Cookbook" USING btree ("createdAt");--> statement-breakpoint
+CREATE INDEX "Cookbook_name_gin_idx" ON "Cookbook" USING gin ("name" gin_trgm_ops);--> statement-breakpoint
+CREATE INDEX "Cookbook_productId_idx" ON "Cookbook" USING btree ("productId");--> statement-breakpoint
+CREATE UNIQUE INDEX "Device_shortcode_unique" ON "Device" USING btree ("shortcode");--> statement-breakpoint
+CREATE UNIQUE INDEX "Device_installationId_key" ON "Device" USING btree ("installationId") WHERE "Device"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "Device_ledgerPartyId_idx" ON "Device" USING btree ("ledgerPartyId");--> statement-breakpoint
+CREATE INDEX "Device_productId_idx" ON "Device" USING btree ("productId");--> statement-breakpoint
+CREATE UNIQUE INDEX "Expense_shortcode_unique" ON "Expense" USING btree ("shortcode");--> statement-breakpoint
+CREATE INDEX "Expense_date_idx" ON "Expense" USING btree ("date");--> statement-breakpoint
+CREATE INDEX "Expense_costType_idx" ON "Expense" USING btree ("costType");--> statement-breakpoint
+CREATE INDEX "Expense_lineKind_idx" ON "Expense" USING btree ("lineKind");--> statement-breakpoint
+CREATE INDEX "Expense_name_gin_idx" ON "Expense" USING gin ("name" gin_trgm_ops);--> statement-breakpoint
+CREATE INDEX "Expense_projectId_idx" ON "Expense" USING btree ("projectId");--> statement-breakpoint
+CREATE INDEX "Expense_productId_idx" ON "Expense" USING btree ("productId");--> statement-breakpoint
+CREATE INDEX "Expense_purchaseId_idx" ON "Expense" USING btree ("purchaseId");--> statement-breakpoint
+CREATE UNIQUE INDEX "FinancialAccount_shortcode_unique" ON "FinancialAccount" USING btree ("shortcode");--> statement-breakpoint
+CREATE INDEX "FinancialAccount_name_idx" ON "FinancialAccount" USING btree ("name");--> statement-breakpoint
+CREATE INDEX "FinancialAccount_provisional_idx" ON "FinancialAccount" USING btree ("provisional");--> statement-breakpoint
+CREATE UNIQUE INDEX "FinancialAccount_provider_owner_key" ON "FinancialAccount" USING btree ("providerVendorId","ledgerPartyId") WHERE "FinancialAccount"."providerVendorId" IS NOT NULL AND "FinancialAccount"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "FinancialAccount_ledgerPartyId_idx" ON "FinancialAccount" USING btree ("ledgerPartyId");--> statement-breakpoint
+CREATE UNIQUE INDEX "FinancialTransaction_shortcode_unique" ON "FinancialTransaction" USING btree ("shortcode");--> statement-breakpoint
+CREATE UNIQUE INDEX "FinancialTransaction_ledgerTransferId_positive_evidence_key" ON "FinancialTransaction" USING btree ("ledgerTransferId") WHERE "FinancialTransaction"."deletedAt" IS NULL AND "FinancialTransaction"."ledgerTransferId" IS NOT NULL AND "FinancialTransaction"."amount" > 0;--> statement-breakpoint
+CREATE UNIQUE INDEX "FinancialTransaction_ledgerTransferId_negative_evidence_key" ON "FinancialTransaction" USING btree ("ledgerTransferId") WHERE "FinancialTransaction"."deletedAt" IS NULL AND "FinancialTransaction"."ledgerTransferId" IS NOT NULL AND "FinancialTransaction"."amount" < 0;--> statement-breakpoint
+CREATE INDEX "FinancialTransaction_kind_idx" ON "FinancialTransaction" USING btree ("kind");--> statement-breakpoint
+CREATE INDEX "FinancialTransaction_status_idx" ON "FinancialTransaction" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "FinancialTransaction_transactionDate_idx" ON "FinancialTransaction" USING btree ("transactionDate");--> statement-breakpoint
+CREATE INDEX "FinancialTransaction_postedDate_idx" ON "FinancialTransaction" USING btree ("postedDate");--> statement-breakpoint
+CREATE INDEX "FinancialTransaction_accountId_idx" ON "FinancialTransaction" USING btree ("accountId");--> statement-breakpoint
+CREATE INDEX "FinancialTransaction_ledgerTransferId_idx" ON "FinancialTransaction" USING btree ("ledgerTransferId");--> statement-breakpoint
+CREATE UNIQUE INDEX "GardenEntry_shortcode_unique" ON "GardenEntry" USING btree ("shortcode");--> statement-breakpoint
+CREATE INDEX "GardenEntry_observedOn_idx" ON "GardenEntry" USING btree ("observedOn");--> statement-breakpoint
+CREATE INDEX "GardenEntry_locationId_idx" ON "GardenEntry" USING btree ("locationId");--> statement-breakpoint
+CREATE UNIQUE INDEX "Image_shortcode_unique" ON "Image" USING btree ("shortcode");--> statement-breakpoint
+CREATE UNIQUE INDEX "Image_key_key" ON "Image" USING btree ("key") WHERE "Image"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "Image_createdAt_idx" ON "Image" USING btree ("createdAt");--> statement-breakpoint
+CREATE INDEX "Image_status_idx" ON "Image" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "Image_capturedByPartyId_idx" ON "Image" USING btree ("capturedByPartyId");--> statement-breakpoint
+CREATE UNIQUE INDEX "Ingredient_shortcode_unique" ON "Ingredient" USING btree ("shortcode");--> statement-breakpoint
+CREATE UNIQUE INDEX "Ingredient_name_key" ON "Ingredient" USING btree (lower("name")) WHERE "Ingredient"."deletedAt" IS NULL AND "Ingredient"."recipeId" IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "Ingredient_recipeId_key" ON "Ingredient" USING btree ("recipeId") WHERE "Ingredient"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "Ingredient_createdAt_idx" ON "Ingredient" USING btree ("createdAt");--> statement-breakpoint
+CREATE INDEX "Ingredient_name_gin_idx" ON "Ingredient" USING gin ("name" gin_trgm_ops);--> statement-breakpoint
+CREATE INDEX "Ingredient_name_active_idx" ON "Ingredient" USING btree ("name") WHERE "Ingredient"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "Ingredient_recipeId_idx" ON "Ingredient" USING btree ("recipeId");--> statement-breakpoint
+CREATE UNIQUE INDEX "InventoryEntry_shortcode_unique" ON "InventoryEntry" USING btree ("shortcode");--> statement-breakpoint
+CREATE UNIQUE INDEX "InventoryEntry_productId_locationId_key" ON "InventoryEntry" USING btree ("productId","locationId","placement","ownershipMode",coalesce("ownerLedgerPartyId", '00000000-0000-0000-0000-000000000000'::uuid)) WHERE "InventoryEntry"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "InventoryEntry_owner_idx" ON "InventoryEntry" USING btree ("ownerLedgerPartyId");--> statement-breakpoint
+CREATE INDEX "InventoryEntry_createdAt_idx" ON "InventoryEntry" USING btree ("createdAt");--> statement-breakpoint
+CREATE INDEX "InventoryEntry_productId_idx" ON "InventoryEntry" USING btree ("productId");--> statement-breakpoint
+CREATE INDEX "InventoryEntry_locationId_idx" ON "InventoryEntry" USING btree ("locationId");--> statement-breakpoint
+CREATE UNIQUE INDEX "LedgerParty_shortcode_unique" ON "LedgerParty" USING btree ("shortcode");--> statement-breakpoint
+CREATE INDEX "LedgerParty_kind_idx" ON "LedgerParty" USING btree ("kind");--> statement-breakpoint
+CREATE UNIQUE INDEX "LedgerParty_household_singleton_key" ON "LedgerParty" USING btree ("kind") WHERE "LedgerParty"."deletedAt" IS NULL AND "LedgerParty"."kind" = 'household';--> statement-breakpoint
+CREATE UNIQUE INDEX "LedgerParty_member_user_key" ON "LedgerParty" USING btree ("userId") WHERE "LedgerParty"."deletedAt" IS NULL AND "LedgerParty"."userId" IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "LedgerTransfer_shortcode_unique" ON "LedgerTransfer" USING btree ("shortcode");--> statement-breakpoint
+CREATE INDEX "LedgerTransfer_date_idx" ON "LedgerTransfer" USING btree ("date");--> statement-breakpoint
+CREATE INDEX "LedgerTransfer_fromPartyId_idx" ON "LedgerTransfer" USING btree ("fromPartyId");--> statement-breakpoint
+CREATE INDEX "LedgerTransfer_toPartyId_idx" ON "LedgerTransfer" USING btree ("toPartyId");--> statement-breakpoint
+CREATE UNIQUE INDEX "Location_shortcode_unique" ON "Location" USING btree ("shortcode");--> statement-breakpoint
+CREATE UNIQUE INDEX "Location_name_key" ON "Location" USING btree (lower("name")) WHERE "Location"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "Location_name_idx" ON "Location" USING btree ("name");--> statement-breakpoint
+CREATE INDEX "Location_tags_idx" ON "Location" USING gin ("tags");--> statement-breakpoint
+CREATE INDEX "Location_createdAt_idx" ON "Location" USING btree ("createdAt");--> statement-breakpoint
+CREATE INDEX "Location_lastBulkInventory_idx" ON "Location" USING btree ("lastBulkInventory");--> statement-breakpoint
+CREATE INDEX "Location_name_gin_idx" ON "Location" USING gin ("name" gin_trgm_ops);--> statement-breakpoint
+CREATE INDEX "Location_type_name_idx" ON "Location" USING btree ("type","name");--> statement-breakpoint
+CREATE INDEX "Location_name_active_idx" ON "Location" USING btree ("name") WHERE "Location"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "Location_type_active_idx" ON "Location" USING btree ("type") WHERE "Location"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "Location_parentId_idx" ON "Location" USING btree ("parentId");--> statement-breakpoint
+CREATE INDEX "Location_productId_idx" ON "Location" USING btree ("productId");--> statement-breakpoint
+CREATE UNIQUE INDEX "Meal_shortcode_unique" ON "Meal" USING btree ("shortcode");--> statement-breakpoint
+CREATE INDEX "Meal_date_active_idx" ON "Meal" USING btree ("date") WHERE "Meal"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "Plant_shortcode_unique" ON "Plant" USING btree ("shortcode");--> statement-breakpoint
+CREATE INDEX "Plant_gardenGuideKey_idx" ON "Plant" USING btree ("gardenGuideKey");--> statement-breakpoint
+CREATE INDEX "Plant_ingredientId_idx" ON "Plant" USING btree ("ingredientId");--> statement-breakpoint
+CREATE UNIQUE INDEX "Planting_shortcode_unique" ON "Planting" USING btree ("shortcode");--> statement-breakpoint
+CREATE INDEX "Planting_status_idx" ON "Planting" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "Planting_plantId_idx" ON "Planting" USING btree ("plantId");--> statement-breakpoint
+CREATE INDEX "Planting_sourceProductId_idx" ON "Planting" USING btree ("sourceProductId");--> statement-breakpoint
+CREATE INDEX "Planting_locationId_idx" ON "Planting" USING btree ("locationId");--> statement-breakpoint
+CREATE INDEX "Planting_taskId_idx" ON "Planting" USING btree ("taskId");--> statement-breakpoint
+CREATE UNIQUE INDEX "Product_shortcode_unique" ON "Product" USING btree ("shortcode");--> statement-breakpoint
+CREATE UNIQUE INDEX "Product_name_manufacturer_key" ON "Product" USING btree ("name","manufacturer") WHERE "Product"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "Product_createdAt_idx" ON "Product" USING btree ("createdAt");--> statement-breakpoint
+CREATE INDEX "Product_name_gin_idx" ON "Product" USING gin ("name" gin_trgm_ops);--> statement-breakpoint
+CREATE INDEX "Product_manufacturer_gin_idx" ON "Product" USING gin ("manufacturer" gin_trgm_ops);--> statement-breakpoint
+CREATE INDEX "Product_name_manufacturer_idx" ON "Product" USING btree ("name","manufacturer");--> statement-breakpoint
+CREATE INDEX "Product_name_active_idx" ON "Product" USING btree ("name") WHERE "Product"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "Product_manufacturer_active_idx" ON "Product" USING btree ("manufacturer") WHERE "Product"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "Product_ingredientId_idx" ON "Product" USING btree ("ingredientId");--> statement-breakpoint
+CREATE INDEX "Product_growsPlantId_idx" ON "Product" USING btree ("growsPlantId");--> statement-breakpoint
+CREATE INDEX "Product_categoryId_idx" ON "Product" USING btree ("categoryId");--> statement-breakpoint
+CREATE UNIQUE INDEX "ProductCategory_shortcode_unique" ON "ProductCategory" USING btree ("shortcode");--> statement-breakpoint
+CREATE UNIQUE INDEX "ProductCategory_parent_name_key" ON "ProductCategory" USING btree ("parentId","name") WHERE "ProductCategory"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "ProductCategory_feature_live_unique" ON "ProductCategory" USING btree ("feature") WHERE "ProductCategory"."deletedAt" IS NULL AND "ProductCategory"."feature" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "ProductCategory_feature_idx" ON "ProductCategory" USING btree ("feature");--> statement-breakpoint
+CREATE INDEX "ProductCategory_parentId_idx" ON "ProductCategory" USING btree ("parentId");--> statement-breakpoint
+CREATE UNIQUE INDEX "Project_shortcode_unique" ON "Project" USING btree ("shortcode");--> statement-breakpoint
+CREATE INDEX "Project_status_idx" ON "Project" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "Project_kind_idx" ON "Project" USING btree ("kind");--> statement-breakpoint
+CREATE INDEX "Project_startDate_idx" ON "Project" USING btree ("startDate");--> statement-breakpoint
+CREATE INDEX "Project_name_gin_idx" ON "Project" USING gin ("name" gin_trgm_ops);--> statement-breakpoint
+CREATE INDEX "Project_name_active_idx" ON "Project" USING btree ("name") WHERE "Project"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "Project_parentProjectId_idx" ON "Project" USING btree ("parentProjectId");--> statement-breakpoint
+CREATE UNIQUE INDEX "Purchase_shortcode_unique" ON "Purchase" USING btree ("shortcode");--> statement-breakpoint
+CREATE UNIQUE INDEX "Purchase_vendorId_orderId_key" ON "Purchase" USING btree ("vendorId","orderId") WHERE "Purchase"."orderId" IS NOT NULL AND "Purchase"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "Purchase_date_idx" ON "Purchase" USING btree ("date");--> statement-breakpoint
+CREATE INDEX "Purchase_orderId_gin_idx" ON "Purchase" USING gin ("orderId" gin_trgm_ops);--> statement-breakpoint
+CREATE INDEX "Purchase_displayLabel_gin_idx" ON "Purchase" USING gin ("displayLabel" gin_trgm_ops);--> statement-breakpoint
+CREATE INDEX "Purchase_vendorId_idx" ON "Purchase" USING btree ("vendorId");--> statement-breakpoint
+CREATE INDEX "Purchase_vendorAccountId_idx" ON "Purchase" USING btree ("vendorAccountId");--> statement-breakpoint
+CREATE INDEX "Purchase_defaultProjectId_idx" ON "Purchase" USING btree ("defaultProjectId");--> statement-breakpoint
+CREATE INDEX "Purchase_runId_idx" ON "Purchase" USING btree ("runId");--> statement-breakpoint
+CREATE UNIQUE INDEX "Recipe_shortcode_unique" ON "Recipe" USING btree ("shortcode");--> statement-breakpoint
+CREATE UNIQUE INDEX "Recipe_name_key" ON "Recipe" USING btree ("name") WHERE "Recipe"."deletedAt" IS NULL AND "Recipe"."sourceType" IS DISTINCT FROM 'Book' AND "Recipe"."sourceType" IS DISTINCT FROM 'Notion';--> statement-breakpoint
+CREATE UNIQUE INDEX "Recipe_cookbookId_name_key" ON "Recipe" USING btree ("cookbookId","name") WHERE "Recipe"."cookbookId" IS NOT NULL AND "Recipe"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "Recipe_sourceType_idx" ON "Recipe" USING btree ("sourceType");--> statement-breakpoint
+CREATE INDEX "Recipe_created_at_desc_idx" ON "Recipe" USING btree ("createdAt" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "Recipe_name_active_idx" ON "Recipe" USING btree ("name") WHERE "Recipe"."deletedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "Recipe_totals_stale_idx" ON "Recipe" USING btree ("totalsComputedAt") WHERE "Recipe"."totalsComputedAt" IS NULL;--> statement-breakpoint
+CREATE INDEX "Recipe_cookbookId_idx" ON "Recipe" USING btree ("cookbookId");--> statement-breakpoint
+CREATE INDEX "Recipe_forkedFromRecipeId_idx" ON "Recipe" USING btree ("forkedFromRecipeId");--> statement-breakpoint
+CREATE UNIQUE INDEX "Run_shortcode_unique" ON "Run" USING btree ("shortcode");--> statement-breakpoint
+CREATE INDEX "Run_party_started_idx" ON "Run" USING btree ("ledgerPartyId","startedAt" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "Run_vendorAccount_started_idx" ON "Run" USING btree ("vendorAccountId","startedAt" DESC NULLS LAST);--> statement-breakpoint
+CREATE UNIQUE INDEX "Run_clientKey_unique" ON "Run" USING btree ("clientKey") WHERE "Run"."clientKey" IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "Run_dispatch_event_unique" ON "Run" USING btree ("dispatchEventId") WHERE "Run"."dispatchEventId" IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "Run_one_active_vendor_account_key" ON "Run" USING btree ("vendorAccountId") WHERE "Run"."vendorAccountId" IS NOT NULL AND "Run"."status" IN ('running', 'paused_auth', 'paused_offline', 'paused_approval');--> statement-breakpoint
+CREATE UNIQUE INDEX "Task_shortcode_unique" ON "Task" USING btree ("shortcode");--> statement-breakpoint
+CREATE INDEX "Task_status_idx" ON "Task" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "Task_dueDate_idx" ON "Task" USING btree ("dueDate");--> statement-breakpoint
+CREATE INDEX "Task_projectId_idx" ON "Task" USING btree ("projectId");--> statement-breakpoint
+CREATE INDEX "Task_subjectProductId_idx" ON "Task" USING btree ("subjectProductId");--> statement-breakpoint
+CREATE INDEX "Task_parentTaskId_idx" ON "Task" USING btree ("parentTaskId");--> statement-breakpoint
 CREATE UNIQUE INDEX "Vendor_shortcode_unique" ON "Vendor" USING btree ("shortcode");--> statement-breakpoint
 CREATE UNIQUE INDEX "Vendor_name_key" ON "Vendor" USING btree ("name") WHERE "Vendor"."deletedAt" IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "VendorAccount_shortcode_unique" ON "VendorAccount" USING btree ("shortcode");--> statement-breakpoint
@@ -2280,10 +2145,6 @@ CREATE INDEX "VendorAccount_ledgerPartyId_idx" ON "VendorAccount" USING btree ("
 CREATE UNIQUE INDEX "Wish_shortcode_unique" ON "Wish" USING btree ("shortcode");--> statement-breakpoint
 CREATE INDEX "Wish_createdAt_idx" ON "Wish" USING btree ("createdAt");--> statement-breakpoint
 CREATE INDEX "Wish_acquiredAt_idx" ON "Wish" USING btree ("acquiredAt");--> statement-breakpoint
-CREATE UNIQUE INDEX "WishCandidate_wishId_productId_key" ON "WishCandidate" USING btree ("wishId","productId") WHERE "WishCandidate"."deletedAt" IS NULL;--> statement-breakpoint
-CREATE INDEX "WishCandidate_wishId_idx" ON "WishCandidate" USING btree ("wishId");--> statement-breakpoint
-CREATE INDEX "WishCandidate_productId_idx" ON "WishCandidate" USING btree ("productId");--> statement-breakpoint
--- Derived DDL (src/server/db/derived-ddl.ts): entity identity functions and triggers.
 CREATE OR REPLACE FUNCTION "entity_identity_on_insert"() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -2365,14 +2226,6 @@ CREATE OR REPLACE TRIGGER "Entity_identity_soft_delete" AFTER UPDATE OF "deleted
   FOR EACH ROW WHEN (OLD."deletedAt" IS DISTINCT FROM NEW."deletedAt")
   EXECUTE FUNCTION "entity_identity_on_soft_delete"();
 CREATE OR REPLACE TRIGGER "Entity_identity_delete" AFTER DELETE ON "Image"
-  FOR EACH ROW EXECUTE FUNCTION "entity_identity_on_delete"();
-
-CREATE OR REPLACE TRIGGER "Entity_identity_insert" AFTER INSERT ON "ImageSighting"
-  FOR EACH ROW EXECUTE FUNCTION "entity_identity_on_insert"('imageSighting');
-CREATE OR REPLACE TRIGGER "Entity_identity_soft_delete" AFTER UPDATE OF "deletedAt" ON "ImageSighting"
-  FOR EACH ROW WHEN (OLD."deletedAt" IS DISTINCT FROM NEW."deletedAt")
-  EXECUTE FUNCTION "entity_identity_on_soft_delete"();
-CREATE OR REPLACE TRIGGER "Entity_identity_delete" AFTER DELETE ON "ImageSighting"
   FOR EACH ROW EXECUTE FUNCTION "entity_identity_on_delete"();
 
 CREATE OR REPLACE TRIGGER "Entity_identity_insert" AFTER INSERT ON "Ingredient"
@@ -2518,3 +2371,24 @@ CREATE OR REPLACE TRIGGER "Entity_identity_soft_delete" AFTER UPDATE OF "deleted
   EXECUTE FUNCTION "entity_identity_on_soft_delete"();
 CREATE OR REPLACE TRIGGER "Entity_identity_delete" AFTER DELETE ON "Wish"
   FOR EACH ROW EXECUTE FUNCTION "entity_identity_on_delete"();
+
+CREATE OR REPLACE FUNCTION "entity_link_require_live_endpoints"() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM "Entity"
+    WHERE "id" IN (NEW."fromEntityId", NEW."toEntityId")
+      AND "deletedAt" IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'EntityLink % (%) names a deleted entity: % -> %',
+      NEW."id", NEW."kind", NEW."fromEntityId", NEW."toEntityId"
+      USING ERRCODE = '23503', CONSTRAINT = 'EntityLink_live_endpoints_check';
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS "EntityLink_live_endpoints" ON "EntityLink";
+CREATE CONSTRAINT TRIGGER "EntityLink_live_endpoints" AFTER INSERT OR UPDATE ON "EntityLink"
+  FOR EACH ROW WHEN (NEW."deletedAt" IS NULL)
+  EXECUTE FUNCTION "entity_link_require_live_endpoints"();

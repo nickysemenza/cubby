@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -8,7 +6,6 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
-import { z } from "zod";
 
 import { ensureDbExtensions } from "./db-extensions";
 import { assertDevDatabaseUrl } from "./dev-db-guard";
@@ -25,10 +22,7 @@ export const MIGRATIONS_FOLDER = fileURLToPath(
  * era, an edited migration, a push-built schema with no rows) would have
  * migrations re-applied or silently skipped, so refuse it instead.
  */
-async function assertMigrationBookkeeping(
-  db: NodePgDatabase,
-  { adoptPushBuilt }: MigrateOptions,
-): Promise<void> {
+async function assertMigrationBookkeeping(db: NodePgDatabase): Promise<void> {
   const journal = readMigrationFiles({ migrationsFolder: MIGRATIONS_FOLDER });
   const { rows: bookkeeping } = await db.execute<{ exists: boolean }>(
     sql`SELECT to_regclass('drizzle.__drizzle_migrations') IS NOT NULL AS exists`,
@@ -46,10 +40,9 @@ async function assertMigrationBookkeeping(
       JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')`);
     if ((rows[0]?.count ?? 0) === 0) return;
-    if (adoptPushBuilt) return adoptBaseline(db, journal[0]);
     throw new Error(
       "Refusing to migrate: public has tables but drizzle.__drizzle_migrations records no migrations " +
-        "(a push-built database). Record the baseline per the cutover runbook.",
+        "(a push-built database). Rebuild it with `pnpm db:dev:reset`.",
     );
   }
   applied.forEach((row, index) => {
@@ -67,58 +60,9 @@ async function assertMigrationBookkeeping(
   });
 }
 
-/**
- * A local database built by the retired `db:push` from main carries the
- * baseline schema with no bookkeeping. Record 0000 as applied rather than
- * re-running it (every table would already exist); 0001 and later then run
- * normally — 0001 is idempotent and absorbs push-era drift.
- */
-async function adoptBaseline(
-  db: NodePgDatabase,
-  baseline: ReturnType<typeof readMigrationFiles>[number] | undefined,
-): Promise<void> {
-  if (!baseline) throw new Error("drizzle journal has no baseline migration");
-  const snapshot = z
-    .object({ tables: z.record(z.string(), z.object({ name: z.string() })) })
-    .parse(
-      JSON.parse(
-        readFileSync(
-          join(MIGRATIONS_FOLDER, "meta/0000_snapshot.json"),
-          "utf8",
-        ),
-      ),
-    );
-  const expected = Object.values(snapshot.tables).map((table) => table.name);
-  const { rows } = await db.execute<{ name: string }>(sql`
-    SELECT c.relname AS name FROM pg_class c
-    JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')`);
-  const present = new Set(rows.map((row) => row.name));
-  const missing = expected.filter((name) => !present.has(name));
-  if (missing.length > 0)
-    throw new Error(
-      `Refusing to adopt a push-built database missing baseline tables (${missing.join(", ")}); rebuild it with \`pnpm db:dev:reset\`.`,
-    );
-  await db.execute(sql`CREATE SCHEMA IF NOT EXISTS drizzle`);
-  await db.execute(sql`CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
-    id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)`);
-  await db.execute(
-    sql`INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES (${baseline.hash}, ${baseline.folderMillis})`,
-  );
-  console.log("[db-migrate] Adopted a push-built database at the baseline");
-}
-
-interface MigrateOptions {
-  /** Local dev only: record the baseline on a push-built database. */
-  adoptPushBuilt?: boolean;
-}
-
 /** Build or advance a database: extensions, then every pending migration. */
-export async function migrateDatabase(
-  db: NodePgDatabase,
-  options: MigrateOptions = {},
-): Promise<void> {
-  await assertMigrationBookkeeping(db, options);
+export async function migrateDatabase(db: NodePgDatabase): Promise<void> {
+  await assertMigrationBookkeeping(db);
   await ensureDbExtensions(db);
   await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
 }
@@ -158,9 +102,7 @@ async function main(): Promise<void> {
   const { values } = parseArgs({ options: { target: { type: "string" } } });
   const pool = new Pool({ connectionString: resolveTargetUrl(values.target) });
   try {
-    await migrateDatabase(drizzle(pool), {
-      adoptPushBuilt: values.target === "dev",
-    });
+    await migrateDatabase(drizzle(pool));
     console.log(`[db-migrate] ${values.target} database is current`);
   } finally {
     await pool.end();

@@ -23,7 +23,7 @@ export const schemaTemplateInputs = [
  * Hash the template inputs in sorted path order. IntegreSQL's own
  * `hashFiles` concatenates file hashes in fast-glob traversal order, which is
  * not stable across processes once a pattern spans subdirectories
- * (`drizzle/meta`, `drizzle/transform`): the global setup and a test worker
+ * (`drizzle/meta`): the global setup and a test worker
  * then disagree on the template hash and every release 404s.
  */
 export function hashSchemaTemplateInputs(

@@ -316,8 +316,8 @@ before removing it; after `db:dev:down`, run `db:dev:up` before resetting.
 `db:dev:reset` restores a clean corpus. The persistent database is shared by
 local worktrees.
 `db:dev:migrate` applies the committed migrations (`apps/web/drizzle/`); a
-database built by the retired `db:push` is adopted at the baseline (0000 is
-recorded, later migrations run). A branch whose migrations are ahead of main
+database built by the retired `db:push` is refused, so rebuild it once with
+`pnpm db:dev:reset`. A branch whose migrations are ahead of main
 sets `CUBBY_DEV_DB_NAME=cubby_dev_<name>` for `dev:local`, `db:dev:migrate`,
 `db:dev:seed`, and `db:dev:reset` to use its own database in the same
 container; reset then drops only that database.
