@@ -70,20 +70,17 @@ import {
 } from "~/lib/run-target-state";
 
 import {
+  LIVE_RUN_STATUSES,
+  photoReviewPollInterval,
+  useAgentReviewSync,
+} from "./agent-observation";
+import {
   mergeGroups,
   moveImage,
   reviewOutcomeToasts,
   toGroupInput,
   type ProposalEdit,
 } from "./photo-review-model";
-
-/** Statuses during which the agent or the device may still change the run. */
-const LIVE_RUN_STATUSES = new Set([
-  "running",
-  "paused_auth",
-  "paused_offline",
-  "paused_approval",
-]);
 
 function postReview(runId: string, action: ReviewPhotoGroupsAction) {
   if (action.action === "save")
@@ -93,20 +90,28 @@ function postReview(runId: string, action: ReviewPhotoGroupsAction) {
   return photoImport.discardGroup.call({ ...action, runId });
 }
 
-/** Photos and proposals poll while the run is live, like the run itself. */
-export function usePhotoRunReview(runId: string, runStatus: string) {
+/**
+ * Photos and proposals follow the run while it is live. A run with an agent
+ * refreshes from the shared agent stream (see `useAgentReviewSync`) and polls
+ * only as a safety net; one without an agent polls every 3s.
+ */
+export function usePhotoRunReview(
+  runId: string,
+  runStatus: string,
+  hasAgent: boolean,
+) {
+  const agentLive = useAgentReviewSync(
+    runId,
+    hasAgent && LIVE_RUN_STATUSES.has(runStatus),
+  );
   return useQuery({
     ...photoImport.review.queryOptions({ runId }),
     refetchInterval: (query) =>
-      LIVE_RUN_STATUSES.has(runStatus)
-        ? 3_000
-        : query.state.data?.images.some((image) =>
-              ["pending", "waiting_for_device", "leased"].some(
-                (state) => image.cutout === state || image.describe === state,
-              ),
-            )
-          ? 15_000
-          : false,
+      photoReviewPollInterval({
+        runStatus,
+        agentLive,
+        data: query.state.data,
+      }),
   });
 }
 
@@ -1724,15 +1729,17 @@ function ExpenseLinkReview({
 export function PhotoGroupReview({
   runId,
   runStatus,
+  hasAgent,
 }: {
   runId: string;
   runStatus: string;
+  hasAgent: boolean;
 }) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [batchKeys, setBatchKeys] = useState<Set<string>>(() => new Set());
   const [batchQueued, setBatchQueued] = useState(false);
   const queryClient = useQueryClient();
-  const query = usePhotoRunReview(runId, runStatus);
+  const query = usePhotoRunReview(runId, runStatus, hasAgent);
   useEffect(() => {
     if (selectedKey) return;
     const first =

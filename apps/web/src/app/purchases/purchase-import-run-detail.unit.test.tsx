@@ -14,7 +14,23 @@ import type { RunDetail } from "~/contracts/run.contract";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { RunImportWorkflow, RunPhotoBatch } from "./purchase-import-run-detail";
+import {
+  RunImportAgentActive,
+  RunImportAgentStopped,
+  RunImportApprovals,
+  RunImportControls,
+  RunImportDebugLog,
+  RunImportEvidence,
+  RunImportFindings,
+  RunImportPreparedOrders,
+  RunImportProgressActive,
+  RunImportProgressStopped,
+  RunImportPurchases,
+  RunImportStats,
+  RunImportTargets,
+  RunImportTimeline,
+  RunPhotoBatch,
+} from "./purchase-import-run-detail";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 let detailRun: RunDetail;
@@ -166,11 +182,34 @@ const record = fromPartial<RunOut>({
   purpose: "purchase_validation",
 });
 
-describe("RunImportWorkflow", () => {
+// The generic detail page mounts these in the order the Run declaration lists
+// them; each gates its own visibility, so together they are the whole workflow.
+function RunImportSlots({ record }: { record: RunOut }) {
+  return (
+    <>
+      <RunImportControls record={record} />
+      <RunImportStats record={record} />
+      <RunImportProgressActive record={record} />
+      <RunImportAgentActive record={record} />
+      <RunImportPurchases record={record} />
+      <RunImportApprovals record={record} />
+      <RunImportFindings record={record} />
+      <RunImportTargets record={record} />
+      <RunImportEvidence record={record} />
+      <RunImportPreparedOrders record={record} />
+      <RunImportProgressStopped record={record} />
+      <RunImportAgentStopped record={record} />
+      <RunImportTimeline record={record} />
+      <RunImportDebugLog record={record} />
+    </>
+  );
+}
+
+describe("import run slots", () => {
   it("gives a paused retailer run one clear sign-in handoff and resume action", async () => {
     detailRun = { ...run, status: "paused_auth", endedAt: null };
     render(
-      <RunImportWorkflow
+      <RunImportSlots
         record={fromPartial<RunOut>({ ...record, status: "paused_auth" })}
       />,
       { wrapper: harness.wrapper },
@@ -180,6 +219,13 @@ describe("RunImportWorkflow", () => {
       await screen.findByText("Sign in to Fixture vendor"),
     ).toBeInTheDocument();
     expect(screen.getByText(/managed browser tab/)).toBeInTheDocument();
+    // A live run shows the live agent and none of the stopped-run history.
+    expect(
+      screen.getByRole("button", { name: "Send prompt" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/This terminal run is view-only/),
+    ).not.toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: "I've signed in — resume run" }),
     );
@@ -205,7 +251,7 @@ describe("RunImportWorkflow", () => {
       progress: [update],
       latestProgress: { ...update, detail: "Review IMG-4S9Q." },
     };
-    render(<RunImportWorkflow record={record} />, {
+    render(<RunImportSlots record={record} />, {
       wrapper: harness.wrapper,
     });
 
@@ -219,7 +265,7 @@ describe("RunImportWorkflow", () => {
     expect(screen.getAllByRole("link", { name: "IMG-4S9Q" })).toHaveLength(2);
   });
   it("keeps terminal evidence view-only while showing the transcript", async () => {
-    render(<RunImportWorkflow record={record} />, {
+    render(<RunImportSlots record={record} />, {
       wrapper: harness.wrapper,
     });
 
@@ -230,10 +276,21 @@ describe("RunImportWorkflow", () => {
       "extract-1",
     );
     expect(screen.getByText("Orders seen")).toBeInTheDocument();
-    expect(screen.getByText("Targets and outcome")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The selected source and target are frozen for this run.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("Outcome: replayed")).toBeInTheDocument();
     expect(screen.getByText("fixture-order.pdf")).toBeInTheDocument();
-    expect(await screen.findByText("System and Mac log")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(operationCalls.map((call) => call.operation)).toContain(
+        "run.logs",
+      ),
+    );
+    expect(
+      await screen.findByText(/This terminal run is view-only/),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Retry unresolved work" }),
     ).toBeInTheDocument();

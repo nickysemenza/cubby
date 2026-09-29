@@ -6,7 +6,24 @@ import { detailSlotsFor } from "./detail-slots";
 
 // A Run's page is the generic detail; its purpose decides which slots render.
 // AI runs (no vendor, orders or transcript) once had no page at all, so the
-// import workflow must never claim them — nor any run lose progress, usage or changes.
+// import slots must never claim them — nor any run lose progress, usage or changes.
+const IMPORT_SLOTS = [
+  "import-controls",
+  "import-stats",
+  "import-progress-live",
+  "import-agent-live",
+  "import-purchases",
+  "import-approvals",
+  "import-findings",
+  "import-targets",
+  "import-evidence",
+  "import-prepared-orders",
+  "import-progress-stopped",
+  "import-agent-stopped",
+  "import-timeline",
+  "import-debug-log",
+];
+
 describe("Run detail slots", () => {
   const slots = detailSlotsFor("run") ?? {};
   const applying = (purpose: RunOut["purpose"]) =>
@@ -23,10 +40,10 @@ describe("Run detail slots", () => {
     ["mail_search", ["ai-usage", "changes"]],
     ["background", ["ai-usage", "changes"]],
     ["photo_inventory", ["photo-batch", "ai-usage", "changes"]],
-    ["account_sync", ["import-workflow", "ai-usage", "changes"]],
-    ["purchase_validation", ["import-workflow", "ai-usage", "changes"]],
-    ["product_enrichment", ["import-workflow", "ai-usage", "changes"]],
-    ["file_import", ["import-workflow", "ai-usage", "changes"]],
+    ["account_sync", [...IMPORT_SLOTS, "ai-usage", "changes"]],
+    ["purchase_validation", [...IMPORT_SLOTS, "ai-usage", "changes"]],
+    ["product_enrichment", [...IMPORT_SLOTS, "ai-usage", "changes"]],
+    ["file_import", [...IMPORT_SLOTS, "ai-usage", "changes"]],
   ])("a %s run renders %j", (purpose, expected) => {
     expect(applying(purpose)).toEqual(["live-progress", ...expected]);
   });

@@ -24,7 +24,7 @@ enum DetailSlotRegistry {
                         vendorID, row.raw["ledgerPartyId"]?.stringValue)))
         case (.purchase, .purchaseOrderMail):
             return AnyView(OrderMailDetailSlot(scope: .purchase(row.id)))
-        case (.run, .runImportWorkflow)
+        case (.run, .runImportControls)
         where row.raw["purpose"]?.stringValue != "photo_inventory":
             return AnyView(
                 NavigationLink {

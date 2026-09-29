@@ -11,6 +11,7 @@ import { StatusText } from "~/components/ui/status-text";
 import type { RunDetail } from "~/contracts/run.contract";
 import { photoImport } from "~/integrations/tanstack-query/generated/catalog.gen";
 
+import { runHasAgent } from "./agent-observation";
 import { PhotoGroupReview, usePhotoRunReview } from "./photo-group-review";
 
 function PhotoRunProgress({
@@ -130,7 +131,7 @@ function groupingHint(pending: number, analyzing: boolean) {
  * agent's proposed item groups to review and every run photo, rather than an
  * agent transcript. */
 export function PhotoImportRunView({ run }: { run: RunDetail }) {
-  const review = usePhotoRunReview(run.publicId, run.status);
+  const review = usePhotoRunReview(run.publicId, run.status, runHasAgent(run));
   const autoStartAttempted = useRef(false);
   const start = useMutation(photoImport.startGrouping.mutationOptions());
   const pending = run.targets.filter(
@@ -204,7 +205,11 @@ export function PhotoImportRunView({ run }: { run: RunDetail }) {
           </StatusText>
         ) : null}
       </PhotoRunProgress>
-      <PhotoGroupReview runId={run.publicId} runStatus={run.status} />
+      <PhotoGroupReview
+        runId={run.publicId}
+        runStatus={run.status}
+        hasAgent={runHasAgent(run)}
+      />
     </Stack>
   );
 }

@@ -502,6 +502,34 @@ export function FilterBar({
   );
 }
 
+/** The list's grouped-versus-flat choice, carried into the phone Filter sheet. */
+export interface FilterSheetGrouping {
+  grouped: boolean;
+  onChange: (grouped: boolean) => void;
+}
+
+/**
+ * The band has no room for a grouped icon button (seg, search and Filter
+ * only), so grouping is a row of the sheet, above Sort.
+ */
+function GroupedRow({ grouping }: { grouping: FilterSheetGrouping }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={grouping.grouped}
+      className="flex min-h-11 items-center justify-between gap-2 border-b border-border px-1 text-left text-sm"
+      onClick={() => grouping.onChange(!grouping.grouped)}
+    >
+      <span className="font-medium">Grouped</span>
+      {/* The switch's `aria-checked` carries the state for assistive tech. */}
+      <span aria-hidden className="text-muted-foreground">
+        {grouping.grouped ? "On" : "Off"}
+      </span>
+    </button>
+  );
+}
+
 /**
  * The phone workbench band's query tier: search + a `Filter` button carrying
  * a count badge, then a horizontal strip of only the ACTIVE chips (declared
@@ -516,6 +544,7 @@ export function MobileFilterTier<TData extends RowData>({
   onChange,
   searchKey,
   searchPlaceholder,
+  grouping,
 }: {
   table: Table<TData>;
   filters: Filter[];
@@ -523,6 +552,7 @@ export function MobileFilterTier<TData extends RowData>({
   onChange: (filters: Filter[]) => void;
   searchKey?: string;
   searchPlaceholder?: string;
+  grouping?: FilterSheetGrouping | undefined;
 }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [view, setView] = useState<"fields" | "columns" | string>("fields");
@@ -540,7 +570,8 @@ export function MobileFilterTier<TData extends RowData>({
   // The `Filter` sheet is also where phone sort lives — surface the trigger
   // for a sortable-only table even when it declares no filterable fields.
   const hasSort = sortableColumns(table).length > 0;
-  const showFilterTrigger = chipFields.length > 0 || hasSort;
+  const showFilterTrigger =
+    chipFields.length > 0 || hasSort || grouping !== undefined;
 
   const setValues = (field: FilterBarField, values: string[]) => {
     const existing = filtersByField.get(field.key);
@@ -689,6 +720,7 @@ export function MobileFilterTier<TData extends RowData>({
                 </button>
               );
             })}
+            {grouping && <GroupedRow grouping={grouping} />}
             <SortSection table={table} />
             <button
               type="button"

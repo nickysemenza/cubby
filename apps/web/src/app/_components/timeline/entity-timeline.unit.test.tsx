@@ -1,6 +1,6 @@
 import type { EntityTimelineOut } from "@cubby/schemas/entity-timeline";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -222,5 +222,71 @@ describe("EntityTimeline", () => {
     expect(
       screen.queryByRole("button", { name: "Go to next page" }),
     ).toBeNull();
+  });
+
+  // A list page lifts the controls into a second band under the workbench
+  // band; a detail page keeps them in the body.
+  describe("controls placement", () => {
+    it("draws the list controls as one toolbar band with the cohort line, not in the body", async () => {
+      const onControlsChange = vi.fn();
+      render(
+        <EntityTimeline
+          entity="product"
+          operations={operationsFor(withRows)}
+          controlsPlacement="band"
+          onControlsChange={onControlsChange}
+          order="desc"
+          mode="events"
+        />,
+        { wrapper: harness.wrapper },
+      );
+      const band = await screen.findByRole("toolbar", {
+        name: "Timeline controls",
+      });
+      expect(within(band).getByLabelText("From")).toBeVisible();
+      expect(within(band).getByLabelText("To")).toBeVisible();
+      expect(await within(band).findByLabelText("Timeline mode")).toBeVisible();
+      expect(await within(band).findByText("1 record")).toBeVisible();
+      // The body's own order button is gone; the band carries the order seg.
+      expect(screen.queryByRole("button", { name: "Newest first" })).toBeNull();
+      fireEvent.click(within(band).getByRole("button", { name: "Oldest" }));
+      expect(onControlsChange).toHaveBeenCalledWith({ order: "asc" });
+    });
+
+    it("keeps the band on screen while the first read loads", () => {
+      render(
+        <EntityTimeline
+          entity="product"
+          operations={{
+            timeline: entityTimeline.timeline.withTransport(
+              () => new Promise(() => {}),
+            ),
+          }}
+          controlsPlacement="band"
+          onControlsChange={vi.fn()}
+        />,
+        { wrapper: harness.wrapper },
+      );
+      expect(
+        screen.getByRole("toolbar", { name: "Timeline controls" }),
+      ).toBeVisible();
+    });
+
+    it("keeps the controls in the body by default, as a detail page renders them", async () => {
+      render(
+        <EntityTimeline
+          entity="product"
+          ids={["PRD-2222"]}
+          operations={operationsFor(events)}
+        />,
+        { wrapper: harness.wrapper },
+      );
+      expect(
+        await screen.findByRole("button", { name: "Newest first" }),
+      ).toBeVisible();
+      expect(
+        screen.queryByRole("toolbar", { name: "Timeline controls" }),
+      ).toBeNull();
+    });
   });
 });

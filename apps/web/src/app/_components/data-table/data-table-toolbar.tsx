@@ -28,6 +28,7 @@ import { cn } from "~/lib/utils";
 import { isTableLayoutCustomized } from "./column-layout";
 import { DataTableViewOptions } from "./data-table-view-options";
 import { TableSavedViewsMenuItems } from "./DataTableViews";
+import type { FilterSheetGrouping } from "./FilterBar";
 import { LedgerFilters } from "./LedgerFilters";
 import { ProblemWorklistStatus } from "./problem-worklist";
 import type { CubbyTable as Table } from "./table-features";
@@ -66,6 +67,11 @@ interface DataTableToolbarProps<TData extends RowData> {
    * only `RTable` (the table owner) can construct. Ignored for `embedded`.
    */
   actionsMenuExtra?: ReactNode;
+  /**
+   * The list's grouped toggle for the phone band, whose Filter sheet carries
+   * it as a row. Desktop and embedded tables toggle grouping elsewhere.
+   */
+  grouping?: FilterSheetGrouping | undefined;
 }
 
 function SavedViewsSubmenu<TData extends RowData>({
@@ -188,6 +194,7 @@ function QueryTierFieldset<TData extends RowData>({
   actionsMenuExtra,
   bulkActionBar,
   actions,
+  grouping,
 }: {
   table: Table<TData>;
   entity?: Entity;
@@ -202,6 +209,7 @@ function QueryTierFieldset<TData extends RowData>({
   actionsMenuExtra?: ReactNode;
   bulkActionBar?: ReactNode;
   actions?: ReactNode;
+  grouping?: FilterSheetGrouping | undefined;
 }) {
   return (
     <fieldset
@@ -228,6 +236,7 @@ function QueryTierFieldset<TData extends RowData>({
             entity={entity}
             optionHints={filterOptionHints}
             variant={isMobileFilterTier ? "mobile" : "desktop"}
+            grouping={isMobileFilterTier ? grouping : undefined}
           />
         </div>
         {/* The phone band has no `Actions ▾` — its three rows (identity,
@@ -261,6 +270,7 @@ export function DataTableToolbar<TData extends RowData>({
   workbenchUtilityViewport = "all",
   variant = "page",
   actionsMenuExtra,
+  grouping,
 }: DataTableToolbarProps<TData>) {
   const workbenchTarget = usePageWorkbenchTarget();
   const isPage = variant === "page";
@@ -309,6 +319,7 @@ export function DataTableToolbar<TData extends RowData>({
       actionsMenuExtra={actionsMenuExtra}
       bulkActionBar={bulkActionBar}
       actions={actions}
+      grouping={grouping}
     />
   );
 

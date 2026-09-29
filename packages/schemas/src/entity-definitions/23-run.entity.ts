@@ -62,14 +62,35 @@ export default defineEntity({
       },
       hero: {
         chip: "status",
-        // Order counts belong to import runs only; the `import-workflow`
+        // Order counts belong to import runs only; the `import-stats`
         // slot renders them, so AI runs don't show four zeros.
         stats: [],
         breadcrumb: "vendorAccountId",
       },
       additionalSectionOverrides: [
         { kind: "slot", id: "live-progress", title: "Progress" },
-        { kind: "slot", id: "import-workflow", title: "Import" },
+        // Import runs (sync, validation, enrichment, file import) declare
+        // their workflow as slots that each gate their own visibility. A live
+        // run leads with progress and its agent; a stopped run carries the
+        // same two after its evidence.
+        { kind: "slot", id: "import-controls", title: "Controls" },
+        { kind: "slot", id: "import-stats", title: "Order counts" },
+        { kind: "slot", id: "import-progress-live", title: "Run progress" },
+        { kind: "slot", id: "import-agent-live", title: "Live agent" },
+        { kind: "slot", id: "import-purchases", title: "Purchases changed" },
+        { kind: "slot", id: "import-approvals", title: "Approvals" },
+        { kind: "slot", id: "import-findings", title: "Findings" },
+        { kind: "slot", id: "import-targets", title: "Targets and outcome" },
+        { kind: "slot", id: "import-evidence", title: "Run evidence" },
+        {
+          kind: "slot",
+          id: "import-prepared-orders",
+          title: "Prepared orders",
+        },
+        { kind: "slot", id: "import-progress-stopped", title: "Run progress" },
+        { kind: "slot", id: "import-agent-stopped", title: "Agent history" },
+        { kind: "slot", id: "import-timeline", title: "Durable transcript" },
+        { kind: "slot", id: "import-debug-log", title: "System and Mac log" },
         { kind: "slot", id: "photo-batch", title: "Photos", placement: "full" },
         { kind: "slot", id: "ai-usage", title: "AI usage" },
         { kind: "slot", id: "changes", title: "Changes" },
