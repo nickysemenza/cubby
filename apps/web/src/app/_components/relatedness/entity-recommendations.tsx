@@ -15,8 +15,8 @@ import {
   type EntityDisplayImagesQueryOptions,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { RelatedProductRow } from "~/app/_components/relatedness/related-product-row";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -481,13 +481,9 @@ function ProposalTargetLink({
       entityDisplayImageKey({ entityKind: entity, entityId: target.id })
     ] ?? null;
   return entity === "project" ? (
-    <EntityInlineLink
-      entity="project"
-      data={target}
-      displayImage={displayImage}
-    />
+    <EntityRefLink entity="project" data={target} displayImage={displayImage} />
   ) : (
-    <EntityInlineLink
+    <EntityRefLink
       entity="location"
       data={target}
       displayImage={displayImage}

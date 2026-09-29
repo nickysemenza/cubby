@@ -2,6 +2,7 @@ import type { RecipeUsage } from "@cubby/schemas/recipe";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useMemo } from "react";
 
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import {
   Table,
   TableBody,
@@ -22,7 +23,6 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "../entity-media/entity-display-images";
-import { EntityInlineLink } from "../EntityInlineLink";
 import { formatAmounts } from "../inventory/format-amount";
 import { DriftIndicator } from "../parse-drift-indicator";
 
@@ -110,7 +110,7 @@ export function RecipeUsagesTable({
         {rows.map((row) => (
           <TableRow key={row.id}>
             <TableCell className="align-top">
-              <EntityInlineLink
+              <EntityRefLink
                 displayImage={
                   displayImages[
                     entityDisplayImageKey({

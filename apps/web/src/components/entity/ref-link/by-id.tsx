@@ -16,8 +16,8 @@ import {
 } from "~/entities/entity-contracts";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 
-import { EntityInlineLink } from "./EntityInlineLink";
-import { EntityReferenceLink } from "./EntityReferenceLink";
+import { InlineRefLink } from "./inline";
+import { ChipRefLink } from "./leaf";
 
 const isNamedEntity = (
   entity: AuditEntityKind,
@@ -30,39 +30,41 @@ const namedRecordSchema = z.looseObject({
   displayImages: z.array(imageUrlSummary).optional().catch(undefined),
 });
 
-// Entity types this inline link resolves to a name via the detail transport. Inventory &
+// Entity types this link resolves to a name via the detail transport. Inventory &
 // cookbook are intentionally excluded — they render as plain links below.
-const INLINE_LINK_FETCHABLE = [
+const FETCHABLE = [
   "product",
   "location",
   "recipe",
   "ingredient",
 ] as const satisfies readonly Entity[];
-type FetchableInlineEntity = (typeof INLINE_LINK_FETCHABLE)[number];
+type FetchableEntity = (typeof FETCHABLE)[number];
 
-const isFetchableInlineEntity = (
+const isFetchableEntity = (
   entity: AuditEntityKind,
-): entity is FetchableInlineEntity =>
-  INLINE_LINK_FETCHABLE.some((candidate) => candidate === entity);
+): entity is FetchableEntity =>
+  FETCHABLE.some((candidate) => candidate === entity);
 
-interface EntityInlineLinkByIdProps {
+export type ByIdRefLinkProps = {
+  variant: "byId";
   entityKind: AuditEntityKind;
   entityId: string;
   name?: string | null;
   /** Compact mode: truncates long names with max-width */
   compact?: boolean;
-}
+};
 
 /**
- * A "smart" inline link that fetches entity data by ID and renders the appropriate link.
- * Uses React Query caching so multiple links with the same ID won't cause duplicate fetches.
+ * A "smart" link that fetches entity data by ID and renders the appropriate
+ * link. Uses React Query caching so multiple links with the same ID won't
+ * cause duplicate fetches.
  */
-export function EntityInlineLinkById({
+export function ByIdRefLink({
   entityKind,
   entityId,
   name,
   compact,
-}: EntityInlineLinkByIdProps) {
+}: Omit<ByIdRefLinkProps, "variant"> & { variant?: "byId" }) {
   // Resolve the name via the shared entity-detail mapping for every named
   // entity; everything else (inventory, cookbook, or an out-of-union runtime
   // entityKind from a legacy audit row) gets a skipped query so useQuery never
@@ -82,7 +84,7 @@ export function EntityInlineLinkById({
   // Inventory entries have no getByID that returns product info, so there is
   // no name to resolve here — and this component is handed a uuid, not the
   // public shortcode a URL needs. Render unlinked rather than build a uuid URL;
-  // callers that can supply a shortcode should use `EntityInlineLink`.
+  // callers that can supply a shortcode should use the inline variant.
   if (entityKind === "inventory") {
     return <span className="text-sm font-medium">Inventory Entry</span>;
   }
@@ -98,17 +100,15 @@ export function EntityInlineLinkById({
   }
 
   if (name && isNamedEntity(entityKind)) {
-    return (
-      <EntityReferenceLink entity={entityKind} id={entityId} name={name} />
-    );
+    return <ChipRefLink entity={entityKind} id={entityId} name={name} />;
   }
 
-  if (!isFetchableInlineEntity(entityKind) && isNamedEntity(entityKind)) {
+  if (!isFetchableEntity(entityKind) && isNamedEntity(entityKind)) {
     // Every other generated entity names itself through its manifest
     // `titleField`; a bare shortcode link (`PRJ-4UMD`) says nothing to a reader.
     const record = namedRecordSchema.safeParse(query.data);
     return (
-      <EntityReferenceLink
+      <ChipRefLink
         entity={entityKind}
         id={entityId}
         name={
@@ -120,23 +120,25 @@ export function EntityInlineLinkById({
               null
             : null
         }
+        // Absent stays `undefined` so the chip falls back to the surrounding
+        // display-image provider's cover.
         displayImage={
-          record.success ? (record.data.displayImages?.[0] ?? null) : null
+          record.success ? record.data.displayImages?.[0] : undefined
         }
       />
     );
   }
 
-  if (isFetchableInlineEntity(entityKind) && query.isLoading) {
+  if (isFetchableEntity(entityKind) && query.isLoading) {
     return <Spinner className="text-muted-foreground" />;
   }
 
-  if (isFetchableInlineEntity(entityKind) && query.data) {
+  if (isFetchableEntity(entityKind) && query.data) {
     // SAFETY: entityPreviewQueryOptions selects a generated detail operation
     // whose fetchable-entity outputs all carry canonical displayImages.
     const data = query.data as { displayImages: ImageUrlSummary[] };
     return (
-      <EntityInlineLink
+      <InlineRefLink
         displayImage={data.displayImages[0] ?? null}
         entity={entityKind}
         // SAFETY: the preview query options and this discriminant are selected
@@ -152,7 +154,7 @@ export function EntityInlineLinkById({
   return (
     <span className="text-sm text-muted-foreground italic">
       {entityKind}
-      {isFetchableInlineEntity(entityKind) ? " (deleted)" : ""}
+      {isFetchableEntity(entityKind) ? " (deleted)" : ""}
     </span>
   );
 }

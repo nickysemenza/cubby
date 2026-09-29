@@ -12,6 +12,7 @@ import { z } from "zod";
 
 import { formatDate } from "~/app/projects/project-formatting";
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Button } from "~/components/ui/button";
 import type { EntityDetailRoute } from "~/entities/entities";
@@ -23,8 +24,6 @@ import {
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn } from "~/lib/utils";
-
-import { TableLink } from "../table/TableLink";
 
 const ROUTE_PREVIEW_LIMIT = 3;
 const NO_PREVIEW_GROUPS: readonly RelatedPreviewGroup[] = [];
@@ -231,15 +230,16 @@ function SourcePreview({ source }: { source: RelationshipRouteSource }) {
     return <span className={className}>{contents}</span>;
 
   return (
-    <TableLink
+    <EntityRefLink
+      variant="table"
       // SAFETY: isBrowserRoutedEntity narrows this generated manifest key to a detail route.
       to={entities[source.entity].routes.detail as EntityDetailRoute}
       params={entityDetailParams(source.id)}
       className={className}
-      variant="muted"
+      tone="muted"
     >
       {contents}
-    </TableLink>
+    </EntityRefLink>
   );
 }
 
@@ -267,15 +267,16 @@ function EndpointPreview({ endpoint }: { endpoint: RelatedPreviewItem }) {
   }
 
   return (
-    <TableLink
+    <EntityRefLink
+      variant="table"
       // SAFETY: isBrowserRoutedEntity narrows this generated manifest key to a detail route.
       to={entities[endpoint.entity].routes.detail as EntityDetailRoute}
       params={entityDetailParams(endpoint.id)}
       className={className}
-      variant="muted"
+      tone="muted"
     >
       {contents}
-    </TableLink>
+    </EntityRefLink>
   );
 }
 

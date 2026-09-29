@@ -15,8 +15,8 @@ import {
   type EntityDisplayImageMap,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { formatDateRange } from "~/app/projects/shared";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -61,7 +61,7 @@ function ChainNodeLink({
     ] ?? null;
   return match(node.type)
     .with("task", () => (
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={displayImage}
         entity="task"
         data={{ id: node.id, name: node.name }}
@@ -69,7 +69,7 @@ function ChainNodeLink({
       />
     ))
     .with("project", () => (
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={displayImage}
         entity="project"
         data={{ id: node.id, name: node.name }}
@@ -131,7 +131,7 @@ function TaskRows({
           <TableRow key={t.id}>
             <TableCell>
               <Row align="center" gap="xs" className="min-w-0">
-                <EntityInlineLink
+                <EntityRefLink
                   displayImage={
                     displayImages[
                       entityDisplayImageKey({
@@ -156,7 +156,7 @@ function TaskRows({
             </TableCell>
             <TableCell>
               {t.projectId && t.projectName && t.projectId ? (
-                <EntityInlineLink
+                <EntityRefLink
                   displayImage={
                     displayImages[
                       entityDisplayImageKey({
@@ -290,7 +290,7 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
             {data.blocked.map((bt) => (
               <Stack key={bt.task.id} gap="xs">
                 <Row gap="sm" align="center">
-                  <EntityInlineLink
+                  <EntityRefLink
                     displayImage={
                       displayImages[
                         entityDisplayImageKey({

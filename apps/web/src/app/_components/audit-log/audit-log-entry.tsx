@@ -6,6 +6,7 @@ import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";
 import { sortBy } from "es-toolkit";
 import { useState } from "react";
 
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import {
@@ -29,7 +30,6 @@ import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
 
 import { HoverableTimestamp } from "../HoverableTimestamp";
-import { AuditEntityLink } from "./audit-entity-link";
 
 type AuditChanges = NonNullable<AuditLogEntry["changes"]>;
 type AuditJsonObject = { [key: string]: AuditJsonValue };
@@ -280,7 +280,8 @@ function LedgerAuditEntry({
         >
           <Row align="center" gap="sm" className="min-w-0">
             {showEntityLink && entry.entityId ? (
-              <AuditEntityLink
+              <EntityRefLink
+                variant="audit"
                 entityKind={entry.entityKind}
                 entityId={entry.entityId}
                 name={entry.entityName}
@@ -406,7 +407,8 @@ export function AuditLogEntryComponent({
             <div className="min-w-0 flex-1">
               <Row align="center" gap="sm" wrap>
                 {showEntityLink && entry.entityId ? (
-                  <AuditEntityLink
+                  <EntityRefLink
+                    variant="audit"
                     entityKind={entry.entityKind}
                     entityId={entry.entityId}
                     name={entry.entityName}

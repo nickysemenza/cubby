@@ -11,6 +11,10 @@ import { mapValues } from "es-toolkit";
 import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
 
+import {
+  EntityRefLink,
+  dottedEntityLink,
+} from "~/components/entity/entity-ref-link";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
@@ -36,7 +40,6 @@ import {
   createCubbyColumnHelper,
   useCubbyTable,
 } from "../data-table/table-features";
-import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { CopyCorpusButton } from "./copy-corpus-button";
@@ -232,24 +235,26 @@ export const RecipeIngredientList: React.FC<{
               <div className="truncate" title={name}>
                 {match(row)
                   .with({ type: "ingredient" }, (r) => (
-                    <EntityPreviewLink
+                    <EntityRefLink
+                      variant="preview"
                       displayImage={null}
                       entity="ingredient"
                       id={r.ingredient.id}
                       className={dottedEntityLink}
                     >
                       {name}
-                    </EntityPreviewLink>
+                    </EntityRefLink>
                   ))
                   .with({ type: "recipe" }, (r) => (
-                    <EntityPreviewLink
+                    <EntityRefLink
+                      variant="preview"
                       displayImage={null}
                       entity="recipe"
                       id={r.recipe.id}
                       className={dottedEntityLink}
                     >
                       {name}
-                    </EntityPreviewLink>
+                    </EntityRefLink>
                   ))
                   .exhaustive()}
                 <IngredientModifier modifier={row.modifier} />

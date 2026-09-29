@@ -9,9 +9,9 @@ import { format } from "date-fns";
 
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import { useEntityDisplayImage } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { formatDateRange } from "~/app/projects/project-formatting";
 import { TradeBadge } from "~/app/projects/shared";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -282,7 +282,7 @@ export function TaskCard({
               className="max-w-40 min-w-0"
               title={task.projectName ?? undefined}
             >
-              <EntityInlineLink
+              <EntityRefLink
                 displayImage={projectImage}
                 entity="project"
                 truncate

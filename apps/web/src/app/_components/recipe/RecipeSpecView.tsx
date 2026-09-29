@@ -2,13 +2,16 @@ import { uniq } from "es-toolkit";
 import { Fragment, memo, useMemo, useState } from "react";
 
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
+import {
+  EntityRefLink,
+  dottedEntityLink,
+} from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
 import { cn } from "~/lib/utils";
 import { renderValueOrMissing } from "~/misc/result";
 
-import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
   buildDisplayQuantities,
   gramMapFromCosting,
@@ -197,7 +200,8 @@ function SpecRow({
           </span>
         )}
         {ref ? (
-          <EntityPreviewLink
+          <EntityRefLink
+            variant="preview"
             displayImage={
               row.kind === "subrecipe"
                 ? recipeTreeDisplayImage(row.child.recipe)
@@ -208,7 +212,7 @@ function SpecRow({
             className={dottedEntityLink}
           >
             {name}
-          </EntityPreviewLink>
+          </EntityRefLink>
         ) : (
           name
         )}
@@ -292,7 +296,8 @@ function SpecNode({
     <Stack gap="xs">
       {!isRoot && (
         <div className="mb-1 flex flex-wrap items-center gap-x-2 eyebrow">
-          <EntityPreviewLink
+          <EntityRefLink
+            variant="preview"
             displayImage={recipeTreeDisplayImage(node.recipe)}
             entity="recipe"
             id={node.recipe.id}
@@ -301,7 +306,7 @@ function SpecNode({
             <span style={{ color: depthRule(node.depth) }}>
               {node.recipe.name}
             </span>
-          </EntityPreviewLink>
+          </EntityRefLink>
           {node.recipe.yield?.value ? (
             <span className="text-slate">
               · yields {formatYield(node.recipe.yield)}

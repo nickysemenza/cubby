@@ -5,6 +5,7 @@ import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Button } from "~/components/ui/button";
 import {
@@ -14,8 +15,6 @@ import {
 } from "~/entities/entities";
 import type { EntityDetailRoute } from "~/entities/entities";
 import { cn } from "~/lib/utils";
-
-import { TableLink } from "../table/TableLink";
 
 /** The maximum number of entity rows an Expand all request may reveal. */
 const RELATIONSHIP_EXPAND_LIMIT = 500;
@@ -148,7 +147,8 @@ function EntityRow({
           size="row"
         />
         {isBrowserRoutedEntity(item.entity) ? (
-          <TableLink
+          <EntityRefLink
+            variant="table"
             to={
               // SAFETY: `isBrowserRoutedEntity` proves this entity has a detail
               // route; the generated manifest loses that key correlation when
@@ -158,10 +158,10 @@ function EntityRow({
             }
             params={routeParams(item)}
             className="min-w-0 truncate"
-            variant="muted"
+            tone="muted"
           >
             {item.label}
-          </TableLink>
+          </EntityRefLink>
         ) : (
           <span className="min-w-0 truncate text-muted-foreground">
             {item.label}

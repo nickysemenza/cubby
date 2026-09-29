@@ -530,7 +530,7 @@ export function StatementRowList() {
             enableSorting: false,
             meta: { className: "w-28" },
             // This narrow projection only carries the transaction shortcode, not
-            // the displayName required by EntityInlineLink.
+            // the displayName required by EntityRefLink.
             cell: (info) => {
               const transactionId = info.getValue();
               if (!transactionId) return <NoneValue />;

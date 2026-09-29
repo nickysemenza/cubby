@@ -12,8 +12,8 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { CELL_RAIL_BUTTON_CLASS } from "~/app/_components/data-table/cell-frame";
-import { EntityInlineLinkById } from "~/app/_components/EntityInlineLinkById";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -151,7 +151,7 @@ export function ExplanationEntityLink({
 }) {
   const auditable = auditEntitySchema.safeParse(entity);
   return auditable.success ? (
-    <EntityInlineLinkById entityKind={auditable.data} entityId={id} />
+    <EntityRefLink variant="byId" entityKind={auditable.data} entityId={id} />
   ) : (
     <span className="font-mono text-xs">{id}</span>
   );

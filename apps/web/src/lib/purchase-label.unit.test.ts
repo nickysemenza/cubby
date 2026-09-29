@@ -8,7 +8,7 @@ import {
 
 /**
  * `Purchase` has no `name` column, so every surface that renders a charge
- * (`EntityInlineLink`, the hover preview, the embedded charges table) leans on
+ * (`EntityRefLink`, the hover preview, the embedded charges table) leans on
  * this one ladder. Each rung is pinned here: drift in any of them would make the
  * same charge read differently in three places.
  */

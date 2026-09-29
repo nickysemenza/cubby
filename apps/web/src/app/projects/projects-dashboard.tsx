@@ -23,10 +23,10 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import type { PreviewPresentation } from "~/app/_components/hooks/useEntityPreview";
 import { ProjectMark } from "~/app/projects/project-mark";
 import type { ProjectPortfolioAnalyticsViewProps } from "~/app/projects/project-portfolio-analytics-view";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { DashboardSectionLoading } from "~/components/feedback/loading-skeletons";
 import { Grid, Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -446,7 +446,7 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
             </Link>
             {task.projectName && task.projectId && (
               <span className="max-w-40 min-w-0 text-xs text-muted-foreground">
-                <EntityInlineLink
+                <EntityRefLink
                   displayImage={
                     projectImages[
                       entityDisplayImageKey({

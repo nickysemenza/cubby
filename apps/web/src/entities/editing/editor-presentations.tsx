@@ -19,7 +19,6 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import type { PendingImage } from "~/app/_components/PendingImageUpload";
 import {
   SelectField as FinanceSelectField,
@@ -29,6 +28,7 @@ import {
   FinancialTransactionFormFields,
   type FinancialTransactionFormValues,
 } from "~/app/finance/financial-transaction-form";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { AliasesField } from "~/components/forms/aliases-field";
 import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -182,7 +182,7 @@ function IngredientDuplicateNameHint({ form }: EntityEditorFieldsProps) {
       </Description>
       <Row gap="xs" wrap>
         {matches.map((m) => (
-          <EntityInlineLink
+          <EntityRefLink
             displayImage={
               displayImages[
                 entityDisplayImageKey({

@@ -9,7 +9,7 @@ import { parsePlainDate } from "./plain-date";
  * date)` (see `packages/schemas/src/purchase.ts`), while `displayLabel` carries
  * optional human-entered context from the original ledger. ~40% of charges
  * never got an order id from the vendor at all. Every surface that renders one
- * (`EntityInlineLink`, the hover preview, an embedded charges table) therefore
+ * (`EntityRefLink`, the hover preview, an embedded charges table) therefore
  * needs the same fallback ladder, or the same charge reads differently in three
  * places.
  *

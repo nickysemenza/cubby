@@ -4,6 +4,7 @@ import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle"
 import { Fragment, useMemo } from "react";
 import type { ReadonlyDeep } from "type-fest";
 
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { badgeVariants } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -14,7 +15,6 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "../entity-media/entity-display-images";
-import { EntityInlineLink } from "../EntityInlineLink";
 import { formatAmounts } from "../inventory/format-amount";
 import { CopyCorpusButton } from "./copy-corpus-button";
 import { parseIngredientLines } from "./recipe-form/ingredient-line-utils";
@@ -119,7 +119,7 @@ export function ParsedIngredientTable({
                 <TableCell className="align-top whitespace-normal">
                   <Row as="span" wrap align="center" gap="xs">
                     {match ? (
-                      <EntityInlineLink
+                      <EntityRefLink
                         displayImage={
                           displayImages[
                             entityDisplayImageKey({

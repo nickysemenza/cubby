@@ -25,8 +25,7 @@ import {
   type CubbyFilterFn as FilterFn,
 } from "~/app/_components/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
-import { OrderIdLink } from "~/app/_components/OrderIdLink";
-import { TableLink } from "~/app/_components/table/TableLink";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { VendorCell } from "~/components/entity/vendor-cell";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
@@ -134,13 +133,14 @@ export function expenseVendorColumn(
                   date: expense.purchaseDate,
                 });
                 return (
-                  <TableLink
+                  <EntityRefLink
+                    variant="table"
                     to={entities.purchase.routes.detail}
                     params={entityDetailParams(expense.purchaseId)}
                     className="block truncate"
                   >
                     <span title={label}>{label}</span>
-                  </TableLink>
+                  </EntityRefLink>
                 );
               }
               return v ? (
@@ -191,7 +191,8 @@ export function expenseOrderIdColumn(
           >
             <FunnelIcon className="size-3.5" />
           </Link>
-          <OrderIdLink
+          <EntityRefLink
+            variant="order"
             orderUrl={expense.orderUrl}
             orderId={v}
             vendorName={expense.vendor}

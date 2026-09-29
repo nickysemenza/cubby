@@ -10,7 +10,7 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -127,7 +127,7 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
             stated total, and every Expense at once. Its canonical identity comes
             from Purchase, including the purchase date (not this Expense's ledger
             date), so the shared purchase-label ladder stays truthful. */}
-        <EntityInlineLink
+        <EntityRefLink
           displayImage={
             displayImages[
               entityDisplayImageKey({
@@ -159,7 +159,7 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
         <Stack gap="tight">
           {others.map((line) => (
             <Row key={line.id} align="center" justify="between" gap="sm">
-              <EntityInlineLink
+              <EntityRefLink
                 displayImage={
                   displayImages[
                     entityDisplayImageKey({

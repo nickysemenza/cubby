@@ -22,10 +22,10 @@ import {
 } from "react";
 import { z } from "zod";
 
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { runHref } from "~/app/purchases/purchase-import-links";
 import { usePhotoRunReview } from "~/app/runs/photo-group-review";
 import { PhotoImportRunView } from "~/app/runs/photo-run-detail";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Section, Stack } from "~/components/layout";
 import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
@@ -1340,7 +1340,7 @@ function RunContent({ run }: { run: RunDetail }) {
           {run.affectedPurchases.length > 0 ? (
             <Stack gap="sm">
               {run.affectedPurchases.map((purchase) => (
-                <EntityInlineLink
+                <EntityRefLink
                   key={purchase.shortcode}
                   entity="purchase"
                   data={{

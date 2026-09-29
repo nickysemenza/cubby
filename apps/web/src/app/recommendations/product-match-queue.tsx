@@ -16,10 +16,10 @@ import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
 import { ProductVariantEvidence } from "~/app/_components/product-variant-evidence";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -277,7 +277,7 @@ function MatchSide({
         )}
       </div>
       <div className="min-w-0">
-        <EntityInlineLink
+        <EntityRefLink
           entity="product"
           data={{ id: side.id, name: side.name }}
           displayImage={displayImage}

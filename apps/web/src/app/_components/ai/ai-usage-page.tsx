@@ -3,7 +3,7 @@ import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
-import { EntityInlineLinkById } from "~/app/_components/EntityInlineLinkById";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Grid, Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -157,7 +157,7 @@ export function UsageEntityLink({
   }
 
   // AiUsage.entityId is recorded from queue/side-effect payloads that carry
-  // private uuids, while EntityInlineLinkById expects a public shortcode.
+  // private uuids, while EntityRefLink (byId) expects a public shortcode.
   // Never send a uuid into that boundary.
   if (parseShortcode(row.entityId)?.type !== row.entityKind) {
     return (
@@ -168,7 +168,8 @@ export function UsageEntityLink({
   }
 
   return (
-    <EntityInlineLinkById
+    <EntityRefLink
+      variant="byId"
       entityKind={row.entityKind}
       entityId={row.entityId}
       compact

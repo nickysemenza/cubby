@@ -15,12 +15,12 @@ import {
   type EntityDisplayImageMap,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { flattenUniquePageItems } from "~/app/_components/hooks/infinite-page-utils";
 import {
   ScheduleGrid,
   type ScheduleRow,
 } from "~/app/_components/schedule/schedule-grid";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Button } from "~/components/ui/button";
 import { entityDetailParams, entities } from "~/entities/entities";
 import { compileEntityListInput, entityListFor } from "~/entities/entity-list";
@@ -180,7 +180,7 @@ function ProjectScheduleSurface({
       const count = entry.blockedByIds.length + entry.blockingIds.length;
       return (
         <span className="flex w-full min-w-0 items-center gap-1">
-          <EntityInlineLink
+          <EntityRefLink
             entity={entry.entity}
             data={{ id: entry.id, name: entry.name }}
             displayImage={

@@ -4,6 +4,7 @@ import {
   type NutrientsPer100,
 } from "@cubby/usda-schemas";
 
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { costPerNutrient, proteinPer100Kcal } from "~/lib/nutrition-intel";
@@ -15,7 +16,6 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "../entity-media/entity-display-images";
-import { EntityInlineLink } from "../EntityInlineLink";
 
 /**
  * Basis-units-per-each — the amount a per-each `price` needs to become a
@@ -152,7 +152,7 @@ export function NutrientDensityStats({
       ) : needsWeightMapping && canSeeStoredMappings ? (
         <Description>
           Needs a {missingMappingKind} mapping on{" "}
-          <EntityInlineLink
+          <EntityRefLink
             displayImage={
               displayImages[
                 entityDisplayImageKey({

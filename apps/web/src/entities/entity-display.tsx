@@ -45,7 +45,6 @@ import {
   type MobileColumnMeta,
 } from "~/app/_components/data-table/table-meta";
 import { EntityDisplayImagesProvider } from "~/app/_components/entity-media/entity-display-images";
-import { EntityReferenceLink } from "~/app/_components/EntityReferenceLink";
 import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
@@ -53,9 +52,9 @@ import {
   renderScalarValue,
   type ScalarDisplayValue,
 } from "~/components/common/scalar-value";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Checkbox } from "~/components/ui/checkbox";
-import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { formatCurrency } from "~/lib/utils";
 
@@ -349,7 +348,14 @@ function referenceLink(entity: string, item: ReferenceItem): ReactNode {
   const routed = referenceMediaEntity(entity);
   if (routed === null)
     return <span className="font-mono text-xs">{item.name ?? item.id}</span>;
-  return <EntityReferenceLink entity={routed} id={item.id} name={item.name} />;
+  return (
+    <EntityRefLink
+      variant="chip"
+      entity={routed}
+      id={item.id}
+      name={item.name}
+    />
+  );
 }
 
 /** Reference fields link to the target's detail route; everything else
@@ -481,7 +487,8 @@ function cohortFilterAction<TRecord extends object>(
   const recordId = explainedRecordSchema.safeParse(record);
   if (countFilter !== null && recordId.success) {
     return (
-      <EntityFilterLink
+      <EntityRefLink
+        variant="filter"
         to={countFilter.to}
         search={{ [countFilter.urlKey]: recordId.data.id }}
         label={`Show all ${countFilter.plural}`}
@@ -495,7 +502,8 @@ function cohortFilterAction<TRecord extends object>(
   const plural = entityPluralLabel(entity).toLocaleLowerCase();
   const label = field.label.toLocaleLowerCase();
   const linkTo = (value: string, text: string) => (
-    <EntityFilterLink
+    <EntityRefLink
+      variant="filter"
       key={value}
       to={entities[entity].routes.list}
       search={{ [descriptor.urlKey]: value }}
@@ -1400,15 +1408,16 @@ export function createEntityDisplayColumns<TRecord extends object>(
               )
                 return rendered;
               return (
-                <EntityFilterLink
-                  variant="value"
+                <EntityRefLink
+                  variant="filter"
+                  display="value"
                   to={countFilter.to}
                   search={{ [countFilter.urlKey]: recordId.data.id }}
                   label={`Show ${value.raw} ${countFilter.plural}`}
                   className="tabular-nums"
                 >
                   {rendered}
-                </EntityFilterLink>
+                </EntityRefLink>
               );
             },
           },

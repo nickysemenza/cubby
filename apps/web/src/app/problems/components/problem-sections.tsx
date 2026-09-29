@@ -33,7 +33,6 @@ import { groupBy } from "es-toolkit";
 import type { ReactNode } from "react";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { mealDateLabel } from "~/app/meals/meal-format";
 import { attentionEvidence } from "~/app/projects/attention-presentation";
 import { formatDateWithYear } from "~/app/projects/project-formatting";
@@ -41,6 +40,7 @@ import {
   ReconciliationStatus,
   reconciliationDelta,
 } from "~/app/purchases/purchase-reconciliation";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -1587,7 +1587,8 @@ const DECLARED_SECTIONS = [
             ? [
                 <Row key="order" align="center" gap="xs">
                   <CodeChip>{purchase.orderId}</CodeChip>
-                  <OrderIdLink
+                  <EntityRefLink
+                    variant="order"
                     orderUrl={purchase.orderUrl}
                     orderId={purchase.orderId}
                     vendorName={purchase.vendorName}

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -18,7 +19,6 @@ import {
 } from "~/entities/field-provenance";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 
-import { TableLink } from "../table/TableLink";
 import { TableCellWorkbench } from "./table-cell-workbench";
 
 type RelationWorkbenchOperations = Pick<typeof entityGraph, "graph">;
@@ -95,7 +95,8 @@ function RelatedRecords({
                     size="row"
                   />
                   {isBrowserRoutedEntity(item.entityKind) ? (
-                    <TableLink
+                    <EntityRefLink
+                      variant="table"
                       // SAFETY: the browser-routed guard establishes that this entity has a detail route.
                       to={
                         browserEntityDefinition(item.entityKind).routes
@@ -105,7 +106,7 @@ function RelatedRecords({
                       className="min-w-0 truncate"
                     >
                       {label}
-                    </TableLink>
+                    </EntityRefLink>
                   ) : (
                     <span className="min-w-0 truncate">{label}</span>
                   )}
