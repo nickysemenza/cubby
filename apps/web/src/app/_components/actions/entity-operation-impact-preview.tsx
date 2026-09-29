@@ -160,6 +160,57 @@ export function DeleteImpactPreview({
   );
 }
 
+/** Rows beyond this get no per-row query: one `connections` call each adds up. */
+const MAX_PREVIEWED_DELETE_TARGETS = 5;
+
+/**
+ * Delete impact for one or several rows in one block. A single row reads as
+ * `DeleteImpactPreview` does; a selection lists each row's name over its own
+ * incoming connections, capped so a large selection does not fan out queries.
+ */
+export function DeleteImpactPreviewList({
+  targets,
+  operations,
+}: {
+  targets: readonly { id: string; label: ReactNode }[];
+  operations?: ImpactPreviewOperations;
+}) {
+  const [only, ...rest] = targets;
+  if (!only) return null;
+  if (rest.length === 0)
+    return <DeleteImpactPreview id={only.id} operations={operations} />;
+  const shown = targets.slice(0, MAX_PREVIEWED_DELETE_TARGETS);
+  const hidden = targets.length - shown.length;
+  return (
+    <Stack gap="sm" className="min-w-0 border-t border-border pt-2">
+      <p className="text-xs font-medium text-muted-foreground">
+        Connections affected
+      </p>
+      {shown.map((target) => (
+        <ImpactRow
+          key={target.id}
+          id={target.id}
+          operation="delete"
+          operations={operations}
+          heading={
+            <p className="min-w-0 truncate text-xs font-medium">
+              {target.label}
+            </p>
+          }
+        />
+      ))}
+      {hidden > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Connections for {hidden} more selected rows are not previewed.
+        </p>
+      )}
+      <p className="text-xs text-muted-foreground">
+        This preview is advisory; the delete re-checks before it runs.
+      </p>
+    </Stack>
+  );
+}
+
 /** Impact preview for several merge losers at once, with one shared note. */
 export function MergeImpactPreview({
   losers,
