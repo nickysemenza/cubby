@@ -102,7 +102,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { ensureExternalSources } from "~/server/repo/entity-external-ids";
@@ -123,7 +122,7 @@ import {
   loadInventoryValuations,
 } from "~/server/repo/inventory/valuation";
 import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
 import {
   resolveProductCategory,
@@ -134,11 +133,9 @@ import {
   categoryFeatureSql,
 } from "~/server/repo/product-category-sql";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
-import {
-  relatedSortExpression,
-  relatedWhereConditions,
-} from "~/server/repo/related-view";
+import { relatedSortExpression } from "~/server/repo/related-view";
 import { deleteByPolicy } from "~/server/repo/removal";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -837,7 +834,6 @@ export const buildProductWhere = async (
       AND pei."deletedAt" IS NULL))`;
 
   const classificationConditions = () => [
-    ...relatedWhereConditions("product", filters, product.id),
     requestedIngredientCodes.length > 0 && selectedIngredientIds.length === 0
       ? sql`false`
       : or(

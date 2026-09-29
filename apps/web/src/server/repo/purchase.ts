@@ -108,7 +108,7 @@ import {
   transactionIdsAllocatedTo,
 } from "~/server/repo/financial-transaction-allocations";
 import { displayableImageSql } from "~/server/repo/image-displayability";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import {
   finalizeMerge,
   repointEdge,
@@ -121,7 +121,6 @@ import {
   loadPurchaseFinancialAggregates,
   type PurchaseFinancialAggregate,
 } from "~/server/repo/purchase-financial-aggregates";
-import { relatedWhereConditions } from "~/server/repo/related-view";
 /** Purchase repository: one vendor event per row; Expense is the authoritative spend ledger. */
 import { deleteByPolicy } from "~/server/repo/removal";
 import { cascadeRemoval } from "~/server/repo/removal";
@@ -575,7 +574,6 @@ export const buildPurchaseWhereClause = async (
   // filters — applied by `purchaseScaffold.where` before the conditions below.
   return purchaseScaffold.where(filters, [
     vendorCondition,
-    ...relatedWhereConditions("purchase", filters, purchase.id),
     eqAny(purchase.orderId, filters.orderId),
     presenceCondition(purchase.orderId, filters.orderIdPresenceFilter),
     expenseStatusCondition(filters.expenseStatus),

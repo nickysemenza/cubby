@@ -1316,8 +1316,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/project/entity-adapter",
-        export: "projectEntityAdapter",
+        module: "~/server/repo/project/repository",
+        export: "projectRepository",
       },
       search: "document",
     },

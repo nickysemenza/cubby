@@ -4,7 +4,6 @@ import { entityManifest } from "@cubby/schemas/entity-manifest";
 
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { generatedEntityKernelEntities } from "~/server/generated/entity-kernel-entities.gen";
-import { COOKBOOK_DELETE_EDGE_POLICY } from "~/server/repo/cookbook";
 
 export interface EntityLifecycleRegistryEntry {
   entity: Entity;
@@ -13,12 +12,13 @@ export interface EntityLifecycleRegistryEntry {
 }
 
 /**
- * Runtime lifecycle policies come from the compiled kernel bindings. The only
- * workflow-owned lifecycle operation is declared alongside its specialized
- * repository policy; entity literals remain authoritative for operation owner.
+ * Runtime lifecycle policies come from the compiled kernel bindings; a
+ * read-only entity's repository still declares the policy its own workflow
+ * deletes under (cookbook). Entity literals remain authoritative for the
+ * operation owner.
  */
-export const ENTITY_LIFECYCLE_REGISTRY: EntityLifecycleRegistryEntry[] = [
-  ...generatedEntityKernelEntities.flatMap((entity) => {
+export const ENTITY_LIFECYCLE_REGISTRY: EntityLifecycleRegistryEntry[] =
+  generatedEntityKernelEntities.flatMap((entity) => {
     const lifecycle = ENTITY_KERNEL_BINDINGS[entity].lifecycle;
     return [
       // An immutable entity (`capabilities.delete: null`) binds an adapter
@@ -36,10 +36,4 @@ export const ENTITY_LIFECYCLE_REGISTRY: EntityLifecycleRegistryEntry[] = [
           ]
         : []),
     ];
-  }),
-  {
-    entity: "cookbook",
-    operation: "delete",
-    policy: COOKBOOK_DELETE_EDGE_POLICY,
-  },
-];
+  });

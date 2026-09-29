@@ -2495,6 +2495,13 @@ export default defineEntity({
     bulkUpdate: { fields: ["stockTracked"] },
     merge: true,
     operationOwners: { delete: "kernel", merge: "kernel" },
+    // Receipt lines name products loosely; a miss is the caller's decision
+    // (create, merge, or pick a candidate), never an automatic row.
+    resolve: {
+      match: ["name", "aliases"],
+      createMissing: false,
+      candidates: 3,
+    },
     mcp: [
       "get",
       "list",
@@ -2527,8 +2534,8 @@ export default defineEntity({
     mcpNames: { overrides: { list: "search_products" } },
     ports: {
       repository: {
-        module: "~/server/repo/product/entity-adapter",
-        export: "productEntityAdapter",
+        module: "~/server/repo/product/repository",
+        export: "productRepository",
       },
       timeline: {
         module: "~/server/repo/product/movement-timeline",

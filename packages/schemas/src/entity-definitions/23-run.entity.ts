@@ -788,6 +788,8 @@ export default defineEntity({
     bulkUpdate: null,
     merge: false,
     operationOwners: { delete: null, merge: null },
+    // The run service and import writers own every write.
+    lifecycle: "readOnly",
     mcp: ["get", "list"],
   },
   extensions: {

@@ -7,17 +7,14 @@ import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { entityLink, planting } from "~/server/db/schema";
-import {
-  bulkUpdatedWithSideEffects,
-  defineEntityAdapter,
-  deletedWithImages,
-} from "~/server/entity-kernel/adapter";
+import { bulkUpdatedWithSideEffects } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { diffUnorderedIdSet, logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { liveLinks } from "~/server/repo/entity-links";
 import { bulkPatchEntities } from "~/server/repo/entity-patch";
 import { deleteByPolicy } from "~/server/repo/removal";
+import { asActor, defineRepository } from "~/server/repo/repository";
 import {
   bindShortcodeResolver,
   resolveLiveShortcode,
@@ -166,103 +163,67 @@ const auditEntryPlantingSets = async (
   );
 };
 
-export const plantingEntityAdapter = defineEntityAdapter({
-  entity: "planting",
+export const plantingRepository = defineRepository("planting", {
   lifecycle: { delete: PLANTING_DELETE_EDGE_POLICY },
-  repository: {
-    get: async (ctx, shortcode) =>
-      getPlanting(ctx.db, await plantings.one(ctx.db, shortcode)),
-    list: (ctx, filters, sorts, pagination) =>
-      plantingList(ctx.db, filters, pagination, sorts),
-    create: async (ctx, data) => {
-      const output = await createPlanting(ctx.db, data, ctx.actorContext);
-      return { output, entityId: await plantings.one(ctx.db, output.id) };
-    },
-    update: async (ctx, shortcode, data) => {
-      const id = await plantings.one(ctx.db, shortcode);
-      const { planting: output, detachedImageKeys } = await updatePlanting(
-        ctx.db,
-        id,
-        data,
-        ctx.actorContext,
-      );
-      return { output, entityId: id, detachedImageKeys };
-    },
-    delete: async (ctx, shortcodes) => {
-      const ids = await plantings.all(ctx.db, shortcodes);
-      const affectedEntryIds = uniq(
-        (await entryPlantingSets(ctx.db, ids)).map((row) => row.gardenEntryId),
-      );
-      const { detachedImageKeys, deletedImageShortcodes } =
-        await deleteByPolicy(ctx.db, {
-          entity: "planting",
-          policy: PLANTING_DELETE_EDGE_POLICY,
-          ids,
-          actor: ctx.actorContext,
-          beforeDelete: (tx, removed) =>
-            auditEntryPlantingSets(tx, removed, ctx.actorContext),
-        });
-      await refreshDerivedSearchRefs(
-        ctx.db,
-        affectedEntryIds.map((entityId) => ({
-          entityKind: "gardenEntry" as const,
-          entityId,
-        })),
-        "planting.delete.detachGardenEntries",
-      );
-      return {
-        deletedReferences: deletedWithImages(
-          "planting",
-          shortcodes,
-          deletedImageShortcodes,
-        ),
-        detachedImageKeys,
-      };
-    },
-    bulkUpdate: async (ctx, ids, data) =>
-      bulkUpdatedWithSideEffects(
-        ctx,
-        "planting",
-        await updatePlantingsInBulk(ctx.db, ids, data, ctx.actorContext),
-      ),
+  get: async (ctx, shortcode) =>
+    getPlanting(ctx.db, await plantings.one(ctx.db, shortcode)),
+  list: (ctx, filters, sorts, pagination) =>
+    plantingList(ctx.db, filters, pagination, sorts),
+  create: asActor(createPlanting),
+  update: async (ctx, shortcode, data) => {
+    const id = await plantings.one(ctx.db, shortcode);
+    const { planting: output, detachedImageKeys } = await updatePlanting(
+      ctx.db,
+      id,
+      data,
+      ctx.actorContext,
+    );
+    return { output, entityId: id, detachedImageKeys };
   },
+  // The detached entries are read before the delete removes their links.
+  delete: async (ctx, shortcodes) => {
+    const ids = await plantings.all(ctx.db, shortcodes);
+    const affectedEntryIds = uniq(
+      (await entryPlantingSets(ctx.db, ids)).map((row) => row.gardenEntryId),
+    );
+    const result = await deleteByPolicy(ctx.db, {
+      entity: "planting",
+      policy: PLANTING_DELETE_EDGE_POLICY,
+      ids,
+      actor: ctx.actorContext,
+      beforeDelete: (tx, removed) =>
+        auditEntryPlantingSets(tx, removed, ctx.actorContext),
+    });
+    await refreshDerivedSearchRefs(
+      ctx.db,
+      affectedEntryIds.map((entityId) => ({
+        entityKind: "gardenEntry" as const,
+        entityId,
+      })),
+      "planting.delete.detachGardenEntries",
+    );
+    return result;
+  },
+  bulkUpdate: async (ctx, ids, data) =>
+    bulkUpdatedWithSideEffects(
+      ctx,
+      "planting",
+      await updatePlantingsInBulk(ctx.db, ids, data, ctx.actorContext),
+    ),
 });
 
-export const gardenEntryEntityAdapter = defineEntityAdapter({
-  entity: "gardenEntry",
+export const gardenEntryRepository = defineRepository("gardenEntry", {
   lifecycle: { delete: GARDEN_ENTRY_DELETE_EDGE_POLICY },
-  repository: {
-    get: async (ctx, shortcode) =>
-      getGardenEntry(ctx.db, await entries.one(ctx.db, shortcode)),
-    list: (ctx, filters, sorts, pagination) =>
-      gardenEntryList(ctx.db, filters, pagination, sorts),
-    create: async (ctx, data) => {
-      const output = await createGardenEntry(ctx.db, data, ctx.actorContext);
-      return { output, entityId: await entries.one(ctx.db, output.id) };
-    },
-    update: async (ctx, shortcode, data) => {
-      const id = await entries.one(ctx.db, shortcode);
-      return {
-        output: await updateGardenEntry(ctx.db, id, data, ctx.actorContext),
-        entityId: id,
-      };
-    },
-    delete: async (ctx, shortcodes) => {
-      const { detachedImageKeys, deletedImageShortcodes } =
-        await deleteByPolicy(ctx.db, {
-          entity: "gardenEntry",
-          policy: GARDEN_ENTRY_DELETE_EDGE_POLICY,
-          shortcodes,
-          actor: ctx.actorContext,
-        });
-      return {
-        deletedReferences: deletedWithImages(
-          "gardenEntry",
-          shortcodes,
-          deletedImageShortcodes,
-        ),
-        detachedImageKeys,
-      };
-    },
+  get: async (ctx, shortcode) =>
+    getGardenEntry(ctx.db, await entries.one(ctx.db, shortcode)),
+  list: (ctx, filters, sorts, pagination) =>
+    gardenEntryList(ctx.db, filters, pagination, sorts),
+  create: asActor(createGardenEntry),
+  update: async (ctx, shortcode, data) => {
+    const id = await entries.one(ctx.db, shortcode);
+    return {
+      output: await updateGardenEntry(ctx.db, id, data, ctx.actorContext),
+      entityId: id,
+    };
   },
 });

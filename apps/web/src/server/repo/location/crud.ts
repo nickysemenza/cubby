@@ -88,10 +88,9 @@ import {
   attachInventoryValuations,
   loadLiveInventoryValuations,
 } from "~/server/repo/inventory/valuation";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import { parseLocationType } from "~/server/repo/location/parse-type";
 import { loadProductPricing } from "~/server/repo/product/pricing";
-import { relatedWhereConditions } from "~/server/repo/related-view";
 import { deleteByPolicy } from "~/server/repo/removal";
 import {
   resolveAllPresent,
@@ -766,7 +765,6 @@ export const buildLocationWhere = async (
   // `locationScaffold.where` before the conditions below. The description is
   // computed from AiAnalysis, so its presence filter is written here.
   return locationScaffold.where(filters, [
-    ...relatedWhereConditions("location", filters, location.id),
     parentCondition,
     productCondition,
     idSetPresence(

@@ -853,8 +853,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/meal/entity-adapter",
-        export: "mealEntityAdapter",
+        module: "~/server/repo/meal/repository",
+        export: "mealRepository",
       },
       search: "document",
     },

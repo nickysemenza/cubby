@@ -39,6 +39,7 @@ import {
   generatedEntityKernelEntities,
   generatedMergeEntityKernelEntities,
   generatedMcpEntityActionEntities,
+  generatedResolveEntityKernelEntities,
   generatedSearchEntityKernelEntities,
 } from "~/server/generated/entity-kernel-entities.gen";
 import {
@@ -163,6 +164,21 @@ const deleteCommandSchema = z.object({
 const bulkUpdateCommandSchema = generatedEntityBulkUpdateCommandSchema(
   uniqueEntityIdsSchema,
 );
+
+const resolvableEntitySchema = z.enum(generatedResolveEntityKernelEntities);
+
+/**
+ * `capabilities.resolve`: names → live rows; `create: true` inserts the
+ * misses (refused when the declaration says `createMissing: false`). Served
+ * by `resolveEntity`, beside `entityCommandSchema` rather than in it, so the
+ * transports' exhaustive command/result unions opt in explicitly.
+ */
+export const entityResolveCommandSchema = z.object({
+  action: z.literal("resolve"),
+  entity: resolvableEntitySchema,
+  names: z.array(z.string().max(500)).min(1).max(500),
+  create: z.boolean().default(false),
+});
 
 /** Strictly serializable commands exposed by the generic browser transport. */
 export const entityBrowserMutationCommandSchema = z.union([
@@ -305,6 +321,27 @@ export const entityBulkUpdateResultSchema = z.object({
 });
 export const entityRelationMutationResultSchema =
   generatedEntityRelationMutationResultSchema;
+
+export type EntityResolveCommand = z.input<typeof entityResolveCommandSchema>;
+
+export const entityResolveResultSchema = z.object({
+  action: z.literal("resolve"),
+  entity: resolvableEntitySchema,
+  /** One item per non-blank requested name, in request order. */
+  items: z.array(
+    z.object({
+      name: z.string(),
+      /** The matched or created row; null for an unresolved miss. */
+      id: z.string().nullable(),
+      /** An existing row matched the name or one of its declared aliases. */
+      matched: z.boolean(),
+      created: z.boolean(),
+      /** Further exact matches, or a miss's closest contains-matches. */
+      candidates: z.array(z.object({ id: z.string(), name: z.string() })),
+    }),
+  ),
+  sideEffects: mutationSideEffectsSchema,
+});
 
 /** Strict wire result for browser mutations. */
 export const entityBrowserMutationResultSchema = z.union([

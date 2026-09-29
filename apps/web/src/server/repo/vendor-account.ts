@@ -19,16 +19,21 @@ import { and, eq, inArray, max, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { ledgerParty, run, vendorAccount } from "~/server/db/schema";
-import { entityRepository } from "~/server/entity-kernel/adapter";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   notDeleted,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { patchEntityRows } from "~/server/repo/entity-patch";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
+import {
+  asActor,
+  defineRepository,
+  listOn,
+  onDb,
+} from "~/server/repo/repository";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   lookupEntityReferences,
   resolveOrThrow,
@@ -279,10 +284,10 @@ async function updateVendorAccount(
   return { output: await reader.getByID(db, id), entityId: id };
 }
 
-export const vendorAccountRepository = entityRepository("vendorAccount", {
+export const vendorAccountRepository = defineRepository("vendorAccount", {
   lifecycle: { delete: VENDOR_ACCOUNT_DELETE_EDGE_POLICY },
-  get: getVendorAccountByShortcode,
-  list: listVendorAccounts,
-  create: createVendorAccount,
-  update: updateVendorAccount,
+  get: onDb(getVendorAccountByShortcode),
+  list: listOn(listVendorAccounts),
+  create: asActor(createVendorAccount),
+  update: asActor(updateVendorAccount),
 });

@@ -85,4 +85,54 @@ describe("entity kernel write transaction", () => {
       );
     },
   );
+
+  it("rolls a repository write back when its follow-up in the same write fails", async () => {
+    const created = await executeEntity(context(), {
+      action: "create",
+      entity: "ingredient",
+      data: {
+        name: "Kernel-owned transaction",
+        aliases: [],
+        naKinds: [],
+        usuallyOnHand: false,
+      },
+    });
+    if (created.action !== "create") throw new Error("expected create");
+
+    // The ingredient repository re-costs dependent recipes after its row
+    // write, through the transaction-bound service the kernel hands it. A
+    // failure there must undo the row write: the kernel, not the repository,
+    // owns the one transaction both statements run in.
+    const base = context();
+    const failing = {
+      ...base,
+      services: {
+        recipeCosting: fromPartial<typeof base.services.recipeCosting>({
+          bindTo: () =>
+            fromPartial<typeof base.services.recipeCosting>({
+              recomputeForIngredient: async () => {
+                throw new Error("synthetic recompute failure");
+              },
+            }),
+        }),
+      },
+    };
+    await expect(
+      executeEntity(failing, {
+        action: "update",
+        entity: "ingredient",
+        id: parseShortcodeFor("ingredient", created.item.id),
+        data: { name: "Kernel-owned transaction (renamed)" },
+      }),
+    ).rejects.toThrow("synthetic recompute failure");
+
+    const after = await executeEntity(context(), {
+      action: "get",
+      entity: "ingredient",
+      id: created.item.id,
+      missing: "error",
+    });
+    if (after.action !== "get") throw new Error("expected get");
+    expect(after.item).toMatchObject({ name: "Kernel-owned transaction" });
+  });
 });

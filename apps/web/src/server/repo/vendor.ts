@@ -58,7 +58,7 @@ import {
   displayableImageSql,
   displayableImageWhere,
 } from "~/server/repo/image-displayability";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import {
   finalizeMerge,
   planSlotCollisions,
@@ -66,7 +66,6 @@ import {
   resolveMergeTargets,
 } from "~/server/repo/merge";
 import { foldChargeInto } from "~/server/repo/purchase";
-import { relatedWhereConditions } from "~/server/repo/related-view";
 import { applyMergePolicy, policyDelete } from "~/server/repo/removal";
 import {
   resolveLiveShortcode,
@@ -450,7 +449,6 @@ export const buildVendorWhereClause = (filters: VendorFilters) =>
       : filters.logoPresenceFilter === "none"
         ? sql`NOT ${vendorHasDisplayableLogo}`
         : undefined,
-    ...relatedWhereConditions("vendor", filters, vendor.id),
   ]);
 
 const resolveVendorSort = (sort: SortParams) => {

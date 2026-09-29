@@ -1192,6 +1192,22 @@ const buildMetadataSchemas = () => {
     .strict();
 
   /**
+   * The kernel `resolve` action: names → live rows, matched case-insensitively
+   * on the declared stored text columns (`text-array` columns by element).
+   * `createMissing: false` refuses `create: true`; `candidates` is how many
+   * contains-matches a miss offers; `scope` pins stored columns to NULL (an
+   * ingredient resolves among standalone rows, never a recipe's own).
+   */
+  const entityResolveMetadataSchema = z
+    .object({
+      match: z.array(nonEmptyString()).min(1),
+      createMissing: z.boolean({ error: "must be a boolean" }),
+      candidates: z.number().int().positive().optional(),
+      scope: z.array(nonEmptyString()).optional().default([]),
+    })
+    .strict();
+
+  /**
    * Image policy deliberately lives beside the entity declaration.  Storage,
    * display fallbacks and import routes are separate facts: a displayed image
    * must never become an implicit attachment or identity assertion.
@@ -1480,6 +1496,12 @@ const buildMetadataSchemas = () => {
         .nullable()
         .optional()
         .default(null),
+      /**
+       * `readOnly`: the kernel serves get/list/search only, whatever the
+       * other capabilities say; writes stay with the entity's own workflows.
+       */
+      lifecycle: z.enum(["mutable", "readOnly"]).optional().default("mutable"),
+      resolve: entityResolveMetadataSchema.nullable().optional().default(null),
       /**
        * Data-quality checks: the compiler synthesizes the `dataQuality` and
        * `dataGaps` model fields, the `dataStatus`/`dataGap` filter descriptors

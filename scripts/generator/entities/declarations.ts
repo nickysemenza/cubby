@@ -373,7 +373,11 @@ export type CompiledEntity = Readonly<{
     softDelete: boolean;
     delete: DeclarationValue | null;
     merge: boolean;
+    /** `capabilities.lifecycle: "readOnly"` — the kernel serves reads only. */
+    readOnly: boolean;
   }>;
+  /** `capabilities.resolve`, or null when the entity has no resolve action. */
+  resolve: EntityDeclarationMetadata["capabilities"]["resolve"];
   mcpActions: readonly string[];
   operationOwners: Readonly<{
     delete: OperationOwner;

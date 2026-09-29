@@ -26,7 +26,6 @@ import {
   ledgerParty,
   vendor,
 } from "~/server/db/schema";
-import { entityRepository } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
@@ -37,11 +36,16 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { lockLedgerPartiesForReference } from "~/server/repo/ledger-party-reference";
-import { listScaffold } from "~/server/repo/list-scaffold";
-import { relatedWhereConditions } from "~/server/repo/related-view";
+import { listScaffold } from "~/server/repo/list";
+import {
+  asActor,
+  defineRepository,
+  listOn,
+  onDb,
+} from "~/server/repo/repository";
+import { createEntityReader } from "~/server/repo/repository";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -163,7 +167,6 @@ export const buildFinancialAccountWhere = (filters: FinancialAccountFilters) =>
   // `name` (text) and `provisional` (boolean) are declared stored filters —
   // applied by `.where` before the conditions below.
   financialAccountScaffold.where(filters, [
-    ...relatedWhereConditions("financialAccount", filters, financialAccount.id),
     // `matchesStringValues`, NOT sql`expr = ANY(${arr})`: drizzle expands a
     // JS array in a template into a row constructor (`ANY(($1, $2))`), which
     // postgres rejects.
@@ -495,10 +498,10 @@ export async function updateFinancialAccount(
   };
 }
 
-export const financialAccountRepository = entityRepository("financialAccount", {
+export const financialAccountRepository = defineRepository("financialAccount", {
   lifecycle: { delete: FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY },
-  get: getFinancialAccountByShortcode,
-  list: listFinancialAccounts,
-  create: createFinancialAccount,
-  update: updateFinancialAccount,
+  get: onDb(getFinancialAccountByShortcode),
+  list: listOn(listFinancialAccounts),
+  create: asActor(createFinancialAccount),
+  update: asActor(updateFinancialAccount),
 });

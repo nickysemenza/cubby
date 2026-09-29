@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { auditLog, imageSighting } from "~/server/db/schema";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { getDb } from "~/server/repo/database-helpers";
-import { createDevice, deviceRepository } from "~/server/repo/device";
+import { createDevice } from "~/server/repo/device";
 import { resolveEntityIdentity } from "~/server/repo/entity-identity";
 import { getImageById, listImageSightings } from "~/server/repo/image";
 import { recordImageSightings } from "~/server/repo/image-sighting";
@@ -20,6 +20,7 @@ import {
 import { setMemberLoginParty } from "~/server/repo/member-login";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
 import { resolveShortcode } from "~/server/repo/shortcode-resolver";
+import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 
 describe("image-sighting", () => {
   const ctx = withTestDb();
@@ -302,7 +303,7 @@ describe("image-sighting", () => {
     expect(derived.captureAttribution).toBe("derived");
     expect(derived.capturedByPartyId).toBe(ana);
 
-    await deviceRepository.delete(ctx.db, [anaPhone], ctx.actor);
+    await deleteThroughKernel(ctx.db, ctx.actor, "device", [anaPhone]);
 
     expect(await sightingRows(image.id)).toHaveLength(0);
     const reverted = await getImageById(ctx.db, image.id);

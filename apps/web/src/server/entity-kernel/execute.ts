@@ -10,13 +10,17 @@ import {
   ENTITY_KERNEL_BINDINGS,
   ENTITY_KERNEL_OPERATIONS,
 } from "~/server/generated/entity-kernel-bindings.gen";
+import { generatedEntityResolveCapabilities } from "~/server/generated/entity-kernel-entities.gen";
 import {
   executeGeneratedRelationMutation,
   listGeneratedRelation,
 } from "~/server/generated/entity-relation-bindings.gen";
+import { withTransactionDatabase } from "~/server/repo/database-helpers";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   isMutationSideEffectRef,
+  type MutationSideEffectEvent,
+  refreshProjectionsForEvent,
   runMutationSideEffects,
 } from "~/server/services/mutation-side-effects";
 import {
@@ -33,8 +37,12 @@ import {
   type EntityResultFor,
   entityCommandSchema,
   entityBrowserMutationResultSchema,
+  type EntityResolveCommand,
+  entityResolveCommandSchema,
+  entityResolveResultSchema,
   type entityQueryResultSchema,
 } from "./contracts";
+import { resolveNames } from "./resolve";
 
 const executeSearch = async (
   ctx: EntityKernelContext,
@@ -101,6 +109,74 @@ const executeMerge = bindWorkflow(
       }),
     ),
 );
+
+/**
+ * The kernel `resolve` action over the declared `capabilities.resolve`. A
+ * creating resolve runs in one kernel-owned transaction with the created
+ * rows' projections; their post-commit effects follow the commit.
+ */
+export const resolveEntity = async (
+  ctx: EntityKernelContext,
+  rawCommand: EntityResolveCommand,
+): Promise<z.infer<typeof entityResolveResultSchema>> => {
+  const command = entityResolveCommandSchema.parse(rawCommand);
+  const { entity } = command;
+  const requests = command.names.map((name) => ({ name }));
+  if (
+    command.create &&
+    !generatedEntityResolveCapabilities[entity].createMissing
+  )
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `${ENTITY_LABEL[entity]} resolve never creates rows; create the missing ${ENTITY_LABEL[entity]} explicitly or pick a candidate.`,
+    );
+  const source = `${entity}.resolve`;
+  const createdEvents = (
+    resolved: Awaited<ReturnType<typeof resolveNames>>,
+  ): MutationSideEffectEvent[] =>
+    ENTITY_KERNEL_BINDINGS[entity].sideEffects
+      ? [
+          ...new Set(
+            resolved.flatMap(({ row }) => (row?.created ? [row.id] : [])),
+          ),
+        ].flatMap((id) => {
+          const ref = parseEntityRef<ShortcodeEntity>(entity, id);
+          return isMutationSideEffectRef(ref)
+            ? [{ action: "created" as const, entity: ref, source }]
+            : [];
+        })
+      : [];
+  const resolved = command.create
+    ? await withTransactionDatabase(ctx.db, async (transactionDb) => {
+        const rows = await resolveNames(transactionDb, entity, requests, {
+          create: true,
+          actor: ctx.actorContext,
+        });
+        for (const event of createdEvents(rows))
+          await refreshProjectionsForEvent(transactionDb, event);
+        return rows;
+      })
+    : await resolveNames(ctx.db, entity, requests, { create: false });
+  for (const event of createdEvents(resolved))
+    await runMutationSideEffects(ctx.db, event, undefined, {
+      projection: "skip",
+    });
+  return entityResolveResultSchema.parse({
+    action: "resolve",
+    entity,
+    items: resolved.map(({ name, row, candidates }) => ({
+      name,
+      id: row?.shortcode ?? null,
+      matched: row !== null && !row.created,
+      created: row?.created ?? false,
+      candidates: candidates.map((candidate) => ({
+        id: candidate.shortcode,
+        name: candidate.name,
+      })),
+    })),
+    sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
+  });
+};
 
 const executeRelationMutation = async (
   ctx: EntityKernelContext,

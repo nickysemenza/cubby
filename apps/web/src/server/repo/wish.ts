@@ -24,7 +24,6 @@ import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { entityLink, product, wish } from "~/server/db/schema";
-import { entityRepository } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
@@ -36,20 +35,25 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import {
   attachLinks,
   liveLinks,
   replaceLinkSet,
 } from "~/server/repo/entity-links";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import {
   effectiveProductPriceSql,
   loadProductPricing,
   resolveProductPricing,
 } from "~/server/repo/product/pricing";
-import { relatedWhereConditions } from "~/server/repo/related-view";
+import {
+  asActor,
+  defineRepository,
+  listOn,
+  onDb,
+} from "~/server/repo/repository";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   resolveLiveShortcodes,
   resolveOrThrow,
@@ -297,7 +301,6 @@ export const buildWishWhere = async (
     // entity's UI work set out to remove, just pointing the other way (the UI
     // sends a filter the server silently ignores). Every other related-view
     // source repo applies both.
-    ...relatedWhereConditions("wish", filters, wish.id),
   ]);
 };
 
@@ -486,10 +489,10 @@ export const updateWish = async (
   return { output: await getWishByID(db, id), entityId: id };
 };
 
-export const wishRepository = entityRepository("wish", {
+export const wishRepository = defineRepository("wish", {
   lifecycle: { delete: WISH_DELETE_EDGE_POLICY },
-  get: getWishByShortcode,
-  list: wishList,
-  create: createWish,
-  update: updateWish,
+  get: onDb(getWishByShortcode),
+  list: listOn(wishList),
+  create: asActor(createWish),
+  update: asActor(updateWish),
 });

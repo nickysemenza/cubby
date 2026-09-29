@@ -25,7 +25,6 @@ import {
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { deleteImages } from "~/server/repo/image";
 import { mergeLedgerParties } from "~/server/repo/ledger-party";
-import { productCategoryRepository } from "~/server/repo/product-category";
 import { mergeProducts } from "~/server/repo/product/merge";
 import {
   createImageFixture,
@@ -35,6 +34,7 @@ import {
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 
 import {
   approvePhotoGroupProposals,
@@ -839,11 +839,9 @@ describe("photo group proposals", () => {
       },
       ctx.actor,
     );
-    await productCategoryRepository.delete(
-      ctx.db,
-      [parseShortcodeFor("productCategory", category.shortcode)],
-      ctx.actor,
-    );
+    await deleteThroughKernel(ctx.db, ctx.actor, "productCategory", [
+      parseShortcodeFor("productCategory", category.shortcode),
+    ]);
 
     const [view] = (await listPhotoGroupProposals(ctx.db, run.shortcode))
       .proposals;

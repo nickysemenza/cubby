@@ -23,6 +23,7 @@ import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { ingredient, plant } from "~/server/db/schema";
+import { resolveNames } from "~/server/entity-kernel/resolve";
 import {
   guideWindowsFor,
   plantDisplayName,
@@ -37,11 +38,11 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { resolveOrCreateIngredients } from "~/server/repo/ingredient/crud";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge";
 import { applyMergePolicy } from "~/server/repo/removal";
+import { createEntityCrud } from "~/server/repo/repository";
 import {
   lookupEntityReferences,
   resolveOrThrow,
@@ -267,10 +268,11 @@ export async function mergePlants(
 }
 
 /**
- * Resolve each `{ name, gardenGuideKey?, ingredientName? }` to a live Plant,
- * matching `name` case-insensitively within the crop (any crop when none is
- * given), and create the misses. `ingredientName` only fills the informational
- * ingredient link of a created Plant, resolving or creating that Ingredient.
+ * Shim over the kernel `resolve` capability kept for the MCP tools; remove
+ * once they call `resolveEntity`. Resolves each `{ name, gardenGuideKey?,
+ * ingredientName? }` within its crop (any crop when none is given) and
+ * creates the misses; `ingredientName` only fills a created Plant's
+ * informational ingredient link, resolving or creating that Ingredient.
  */
 export async function resolveOrCreatePlants(
   db: Database,
@@ -278,66 +280,34 @@ export async function resolveOrCreatePlants(
   actor: ActorContext,
 ): Promise<ResolvePlantsOutput> {
   return withTransaction(db, async (tx) => {
-    const results: ResolvePlantsOutput["plants"] = [];
-    for (const wanted of input.plants) {
-      const [match] = await tx
-        .select({ shortcode: plant.shortcode })
-        .from(plant)
-        .where(
-          and(
-            notDeleted(plant),
-            sql`lower(${plant.name}) = lower(${wanted.name})`,
-            wanted.gardenGuideKey === undefined
-              ? undefined
-              : eq(plant.gardenGuideKey, wanted.gardenGuideKey),
-          ),
-        )
-        .orderBy(plant.createdAt)
-        .limit(1);
-      if (match) {
-        results.push({
-          name: wanted.name,
-          id: parseShortcodeFor("plant", match.shortcode),
-          created: false,
-        });
-        continue;
-      }
-      const ingredientId = wanted.ingredientName
-        ? await resolveIngredientName(tx, wanted.ingredientName)
-        : null;
-      const id = await insertPlant(
-        tx,
-        {
-          name: wanted.name,
-          gardenGuideKey: wanted.gardenGuideKey ?? null,
-          verdict: null,
-          ingredientId: null,
-          latinName: null,
-          breeding: null,
-          daysFromSowMin: null,
-          daysFromSowMax: null,
-          daysFromTransplantMin: null,
-          daysFromTransplantMax: null,
-          notes: null,
-        },
-        ingredientId,
-        actor,
-      );
-      const created = await fetchById(tx, id);
-      results.push({
+    const resolved = await resolveNames(
+      tx,
+      "plant",
+      input.plants.map((wanted) => ({
         name: wanted.name,
-        id: parseShortcodeFor("plant", created!.shortcode),
-        created: true,
-      });
-    }
-    return { plants: results };
+        where:
+          wanted.gardenGuideKey === undefined
+            ? undefined
+            : { gardenGuideKey: wanted.gardenGuideKey },
+        values: async () => ({
+          gardenGuideKey: wanted.gardenGuideKey ?? null,
+          ingredientId: wanted.ingredientName
+            ? (await resolveOrCreateIngredients(tx, [wanted.ingredientName]))[0]
+                ?.entityId
+            : null,
+        }),
+      })),
+      { create: true, actor },
+    );
+    return {
+      plants: resolved.map(({ row }, index) => {
+        if (!row) throw new Error("A creating resolve returned no plant");
+        return {
+          name: input.plants[index]?.name ?? row.name,
+          id: parseShortcodeFor("plant", row.shortcode),
+          created: row.created,
+        };
+      }),
+    };
   });
 }
-
-const resolveIngredientName = async (
-  tx: DrizzleTransaction,
-  name: string,
-): Promise<IngredientId> => {
-  const [resolved] = await resolveOrCreateIngredients(tx, [name]);
-  return resolved!.entityId;
-};

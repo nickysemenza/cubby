@@ -1033,8 +1033,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/task/entity-adapter",
-        export: "taskEntityAdapter",
+        module: "~/server/repo/task/repository",
+        export: "taskRepository",
       },
       search: "document",
     },

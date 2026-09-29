@@ -8,10 +8,10 @@ import { and, eq } from "drizzle-orm";
 import { formatDuration } from "~/lib/format-duration";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { run as runTable } from "~/server/db/schema";
-import { entityRepository } from "~/server/entity-kernel/adapter";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
+import { defineRepository, listOn, onDb } from "~/server/repo/repository";
+import { createEntityReader } from "~/server/repo/repository";
 import { lookupEntityReferences } from "~/server/repo/shortcode-resolver";
 
 /**
@@ -119,12 +119,8 @@ const reader = createEntityReader<
 
 export const getRunByShortcode = reader.getByShortcode;
 
-/**
- * Read-only: the run service and the import writer own every write, and the
- * manifest declares `delete: null`, so the generated adapter refuses one.
- */
-export const runRepository = entityRepository("run", {
-  lifecycle: { delete: {} },
-  get: getRunByShortcode,
-  list: listRuns,
+/** Declared `lifecycle: "readOnly"`: the run service and importers own writes. */
+export const runRepository = defineRepository("run", {
+  get: onDb(getRunByShortcode),
+  list: listOn(listRuns),
 });

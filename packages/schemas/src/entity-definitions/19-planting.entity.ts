@@ -782,8 +782,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/garden/entity-adapters",
-        export: "plantingEntityAdapter",
+        module: "~/server/repo/garden/repository",
+        export: "plantingRepository",
       },
       filters: null,
       timeline: {

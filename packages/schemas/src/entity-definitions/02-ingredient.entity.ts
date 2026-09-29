@@ -524,6 +524,13 @@ export default defineEntity({
     bulkUpdate: { fields: ["usuallyOnHand"] },
     merge: true,
     operationOwners: { delete: "kernel", merge: "kernel" },
+    // Standalone ingredients only: a recipe's own ingredient rows (`recipeId`
+    // set) are never a resolve target.
+    resolve: {
+      match: ["name", "aliases"],
+      createMissing: true,
+      scope: ["recipeId"],
+    },
     mcp: [
       "get",
       "list",
@@ -552,8 +559,8 @@ export default defineEntity({
     mcpNames: { overrides: { list: "search_ingredients" } },
     ports: {
       repository: {
-        module: "~/server/repo/ingredient/entity-adapter",
-        export: "ingredientEntityAdapter",
+        module: "~/server/repo/ingredient/repository",
+        export: "ingredientRepository",
       },
       search: "document",
     },

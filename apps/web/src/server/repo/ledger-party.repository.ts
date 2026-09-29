@@ -1,11 +1,13 @@
 import { ledgerPartyOut } from "@cubby/schemas/ledger-party";
 import { z } from "zod";
 
-import {
-  defineEntityAdapter,
-  entityMutationReferences,
-} from "~/server/entity-kernel/adapter";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
+import {
+  asActor,
+  defineRepository,
+  listOn,
+  onDb,
+} from "~/server/repo/repository";
 
 import {
   createLedgerParty,
@@ -36,27 +38,17 @@ const ledgerPartyMergeSummary = z.object({
   carriedFields: z.array(z.string()),
 });
 
-export const ledgerPartyEntityAdapter = defineEntityAdapter({
-  entity: "ledgerParty",
+export const ledgerPartyRepository = defineRepository("ledgerParty", {
   sideEffects: false,
   lifecycle: {
     delete: LEDGER_PARTY_DELETE_EDGE_POLICY,
     merge: LEDGER_PARTY_MERGE_EDGE_POLICY,
   },
-  repository: {
-    get: (ctx, id) => getLedgerPartyByShortcode(ctx.db, id),
-    list: (ctx, filters, sorts, pagination) =>
-      listLedgerParties(ctx.db, filters, sorts, pagination),
-    create: (ctx, data) => createLedgerParty(ctx.db, data, ctx.actorContext),
-    update: (ctx, id, data) =>
-      updateLedgerParty(ctx.db, id, data, ctx.actorContext),
-    delete: async (ctx, ids) => {
-      await deleteLedgerParties(ctx.db, ids, ctx.actorContext);
-      return {
-        deletedReferences: entityMutationReferences("ledgerParty", ids),
-      };
-    },
-  },
+  get: onDb(getLedgerPartyByShortcode),
+  list: listOn(listLedgerParties),
+  create: asActor(createLedgerParty),
+  update: asActor(updateLedgerParty),
+  delete: asActor(deleteLedgerParties),
   merge: {
     input: mergeInput,
     output: z.object({

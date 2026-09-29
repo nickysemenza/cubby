@@ -2,9 +2,11 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { mergeVendorsInput, mergeVendorsOut } from "@cubby/schemas/vendor";
 
 import {
-  defineEntityAdapter,
-  deletedWithImages,
-} from "~/server/entity-kernel/adapter";
+  asActor,
+  defineRepository,
+  listOn,
+  onDb,
+} from "~/server/repo/repository";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 import {
@@ -18,34 +20,16 @@ import {
   vendorList,
 } from "./vendor";
 
-export const vendorEntityAdapter = defineEntityAdapter({
-  entity: "vendor",
+export const vendorRepository = defineRepository("vendor", {
   lifecycle: {
     delete: VENDOR_DELETE_EDGE_POLICY,
     merge: VENDOR_MERGE_EDGE_POLICY,
   },
-  repository: {
-    get: (ctx, id) => getVendorByShortcode(ctx.db, id),
-    list: (ctx, filters, sorts, pagination) =>
-      vendorList(ctx.db, filters, sorts, pagination),
-    create: (ctx, data) => createVendor(ctx.db, data, ctx.actorContext),
-    update: (ctx, id, data) => updateVendor(ctx.db, id, data, ctx.actorContext),
-    delete: async (ctx, ids) => {
-      const { detachedImageKeys, deletedImageShortcodes } = await deleteVendors(
-        ctx.db,
-        ids,
-        ctx.actorContext,
-      );
-      return {
-        deletedReferences: deletedWithImages(
-          "vendor",
-          ids,
-          deletedImageShortcodes,
-        ),
-        detachedImageKeys,
-      };
-    },
-  },
+  get: onDb(getVendorByShortcode),
+  list: listOn(vendorList),
+  create: asActor(createVendor),
+  update: asActor(updateVendor),
+  delete: asActor(deleteVendors),
   merge: {
     input: mergeVendorsInput,
     output: mergeVendorsOut,

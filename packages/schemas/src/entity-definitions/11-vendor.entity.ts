@@ -851,8 +851,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/vendor.entity-adapter",
-        export: "vendorEntityAdapter",
+        module: "~/server/repo/vendor.repository",
+        export: "vendorRepository",
       },
       search: "document",
     },

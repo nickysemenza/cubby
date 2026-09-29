@@ -507,8 +507,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/garden/entity-adapters",
-        export: "gardenEntryEntityAdapter",
+        module: "~/server/repo/garden/repository",
+        export: "gardenEntryRepository",
       },
       filters: null,
     },

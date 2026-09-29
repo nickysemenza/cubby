@@ -14,6 +14,7 @@ import {
   normalizeSorts,
   type PaginationParams,
 } from "@cubby/schemas/pagination";
+import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
 import { deferPublications } from "~/server/background-tasks/publish";
@@ -78,14 +79,19 @@ const listRestrictedToIds = async <
   requested: PaginationParams,
   ids: readonly string[],
 ) => {
-  const wanted = new Set(ids);
+  // Codes are accepted in any casing (`parseShortcode` canonicalizes).
+  const wanted = new Set(ids.map((id) => parseShortcode(id)?.shortcode ?? id));
+  // A repository on the list scaffold applies `ids` itself, so the scan
+  // below reads one page; any other still pages its own rows.
+  const restriction = { ids: [...wanted] };
+  const restricted = Object.assign({}, filters, restriction);
   const matching: z.output<S["repositoryList"]>[] = [];
   let pageIndex = 0;
   let totalCount = 0;
   do {
     const page = await binding.repository.list(
       context,
-      filters,
+      restricted,
       sorts,
       { pageIndex, pageSize: LIST_ID_SCAN_PAGE_SIZE },
       groupBy,
@@ -525,11 +531,22 @@ export const defineEntityOperations = <
   ),
   delete: bindWorkflow(
     workflow<EntityKernelContext, string[]>(`${binding.entity}.delete`)
-      .call("ids", async (_, { input }) =>
-        input.map((id) => parseSchema<S["id"], string>(binding.schemas.id, id)),
-      )
-      .commit("deleted", async ({ context }, { ids }) =>
-        binding.repository.delete(context, ids),
+      .call("validated", async (_, { input }) => {
+        const run = binding.repository.delete;
+        if (!run)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            `${ENTITY_LABEL[binding.entity]} does not support delete`,
+          );
+        return {
+          run,
+          ids: input.map((id) =>
+            parseSchema<S["id"], string>(binding.schemas.id, id),
+          ),
+        };
+      })
+      .commit("deleted", async ({ context }, { validated }) =>
+        validated.run(context, validated.ids),
       )
       .effect("receipt", async (_, { deleted }) => {
         if (!deleted.affectedEdges)

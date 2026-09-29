@@ -46,12 +46,11 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { applyInventoryOwnershipInTransaction } from "~/server/repo/inventory/ownership-mutations";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge/core";
-import { relatedWhereConditions } from "~/server/repo/related-view";
 import { policyDelete } from "~/server/repo/removal";
+import { createEntityReader } from "~/server/repo/repository";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -310,9 +309,7 @@ export const getLedgerPartyByShortcode = reader.getByShortcode;
 
 /** The complete WHERE for this entity's list; `search` and `kind` are declared. */
 export const buildLedgerPartyWhere = (filters: LedgerPartyFilters) =>
-  scaffold.where(filters, [
-    ...relatedWhereConditions("ledgerParty", filters, ledgerParty.id),
-  ]);
+  scaffold.where(filters, []);
 
 export const listLedgerParties = (
   db: Database,

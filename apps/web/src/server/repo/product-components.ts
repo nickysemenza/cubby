@@ -81,20 +81,14 @@ import {
 // shared rather than restated, so a kit's purchase link and the Purchases panel
 // can never disagree about which orders count.
 import { expensePairPredicate } from "~/server/repo/purchase-products";
-import type { EntityRelationMutationAdapter } from "~/server/repo/relation-mutation-adapter";
+import { linkRelationAdapter } from "~/server/repo/relation-mutation-adapter";
 import {
   emptyPreflight,
   loadRelationProducts,
-  planRelationAttach,
-  planRelationDetach,
   type RelationPreflight,
   relationImpact,
   throwRelationRefusal,
 } from "~/server/repo/relation-preflight";
-import {
-  resolveAllOrThrow,
-  resolveOrThrow,
-} from "~/server/repo/shortcode-resolver";
 import type { UsdaFoodBatchPort } from "~/server/services/usda-helpers";
 
 export interface ProductComponentEntry {
@@ -734,71 +728,30 @@ export async function detachProductComponents(
   });
 }
 
-export const productComponentsRelationAdapter = {
-  async list(db, ownerShortcode) {
-    return listProductComponents(
-      db,
-      await resolveOrThrow(db, "product", ownerShortcode),
-    );
-  },
-  // Advisory impact, using the SAME predicate the mutation refuses on. Runs on
-  // the pooled client, outside any transaction.
-  async preview(db, action, ownerId, targetIds) {
-    const parentProductId = parseEntityId("product", ownerId);
-    const componentProductIds = targetIds.map((id) =>
-      parseEntityId("product", id),
-    );
-    const edge = {
-      edgeKey: "EntityLink[productComponent].to",
-      label: "kit components",
-    };
-    return action === "attach"
-      ? planRelationAttach(
-          await preflightAttachComponents(
-            getDb(db),
-            parentProductId,
-            componentProductIds,
-          ),
-          { ...edge, description: "Component links this attach would create." },
-        )
-      : planRelationDetach(
-          await preflightDetachComponents(
-            getDb(db),
-            parentProductId,
-            componentProductIds,
-          ),
-          { ...edge, description: "Component links this detach would remove." },
-        );
-  },
-  async execute(ctx, action, ownerShortcode, items) {
-    const parentProductId = await resolveOrThrow(
-      ctx.db,
-      "product",
-      ownerShortcode,
-    );
-    const componentProductIds = await resolveAllOrThrow(
-      ctx.db,
-      "product",
-      items.map(({ id }) => id),
-    );
-    return action === "attach"
-      ? attachProductComponents(
-          ctx.db,
-          parentProductId,
-          componentProductIds.map((productId, index) => ({
-            productId,
-            quantity: items[index]?.quantity ?? 1,
-          })),
-          ctx.actorContext,
-        )
-      : detachProductComponents(
-          ctx.db,
-          parentProductId,
-          componentProductIds,
-          ctx.actorContext,
-        );
-  },
-} satisfies EntityRelationMutationAdapter<
+export const productComponentsRelationAdapter = linkRelationAdapter<
+  "productComponent",
   { id: string; quantity?: number },
   ProductComponentOut
->;
+>("productComponent", {
+  label: "kit components",
+  describe: {
+    attach: "Component links this attach would create.",
+    detach: "Component links this detach would remove.",
+  },
+  list: listProductComponents,
+  preflight: {
+    attach: preflightAttachComponents,
+    detach: preflightDetachComponents,
+  },
+  attach: (db, parentProductId, targets, actor) =>
+    attachProductComponents(
+      db,
+      parentProductId,
+      targets.map(({ id, item }) => ({
+        productId: id,
+        quantity: item.quantity ?? 1,
+      })),
+      actor,
+    ),
+  detach: detachProductComponents,
+});
