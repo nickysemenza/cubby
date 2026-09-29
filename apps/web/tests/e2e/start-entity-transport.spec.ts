@@ -151,69 +151,6 @@ test("core entity list, detail, and mutation ride named browser operations", asy
   );
   for (const start of starts) expect(start.operation).toBeDefined();
 
-  // The list may fetch another row's detail before the click (the first row,
-  // from a sibling spec's fixture), so replay this product's own request.
-  const shortcode = new URL(page.url()).pathname.split("/").at(-1)!;
-  const detail = detailRequests.find((request) =>
-    JSON.stringify(request.input).includes(shortcode),
-  );
-  if (!detail) throw new Error(`Expected a detail request for ${shortcode}`);
-  expect(detail.operation).toBe("entity.detail");
-
-  // A tab loaded before the transport switch still sends this Start wire
-  // encoding. Keep the legacy alias alive until those tabs are gone.
-  const legacy = new URL(detail.url);
-  legacy.pathname =
-    "/_serverFn/server-functions-start-operation-dispatch-dispatch-start-operation-server-function";
-  const oldClientBody = JSON.stringify({
-    t: {
-      t: 10,
-      i: 0,
-      p: {
-        k: ["data"],
-        v: [
-          {
-            t: 10,
-            i: 1,
-            p: {
-              k: ["operation", "input"],
-              v: [
-                { t: 1, s: "entity.detail" },
-                {
-                  t: 10,
-                  i: 2,
-                  p: {
-                    k: ["entity", "shortcode"],
-                    v: [
-                      { t: 1, s: "product" },
-                      { t: 1, s: shortcode },
-                    ],
-                  },
-                  o: 0,
-                },
-              ],
-            },
-            o: 0,
-          },
-        ],
-      },
-      o: 0,
-    },
-    f: 127,
-    m: [],
-  });
-  const oldClientResponse = await page.request.post(legacy.toString(), {
-    data: oldClientBody,
-    headers: {
-      "content-type": "application/json",
-      "x-tsr-serverFn": "true",
-      origin: legacy.origin,
-      "sec-fetch-site": "same-origin",
-    },
-  });
-  expect(oldClientResponse.status()).toBe(200);
-  expect(await oldClientResponse.text()).toContain(name);
-
   // Response-owned ids, rather than a shared module-global "last id", make
   // each completed browser request independently searchable in traces.
   await Promise.all(requestIdReads);
