@@ -13,7 +13,8 @@ import type {
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import { executeEntity } from "~/server/entity-kernel";
 import { createExpense } from "~/server/repo/expense";
-import { quickCreateProduct } from "~/server/repo/product";
+import { findProductByGtin, quickCreateProduct } from "~/server/repo/product";
+import { resolveProductCategory } from "~/server/repo/product-category";
 import {
   createProductFixture,
   makeExpenseInput,
@@ -266,6 +267,62 @@ describe("findOrCreateByCode", () => {
 
     expect([a.created, b.created].sort()).toEqual([false, true]);
     expect(a.product.id).toBe(b.product.id);
+  });
+
+  describe("ISBN title fallback", () => {
+    const scanIsbn = (canonical: string, title: string) =>
+      findOrCreateByCode(
+        ctx.db,
+        unexpectedUsdaClient(),
+        upcLookupClient(async () =>
+          upcResponse({ name: title, manufacturer: "Example Press" }),
+        ),
+        { kind: "isbn", value: canonical },
+        ctx.actor,
+      );
+    const bookProduct = async (name: string, upc?: string) =>
+      quickCreateProduct(
+        ctx.db,
+        {
+          name,
+          categoryId: (await resolveProductCategory(ctx.db, null, "books"))!,
+          ...(upc && { upc }),
+        },
+        ctx.actor,
+      );
+
+    it("attaches the ISBN to the single un-barcoded book whose title matches", async () => {
+      const canonical = "09780132350884";
+      const shelved = await bookProduct("The Example Handbook");
+
+      const result = await scanIsbn(canonical, "the example  Handbook!");
+
+      expect(result.created).toBe(false);
+      expect(result.product.id).toBe(shelved.id);
+      expect((await findProductByGtin(ctx.db, canonical))?.id).toBe(shelved.id);
+    });
+
+    it("creates a new Product when the title is ambiguous, barcoded, or not a book", async () => {
+      await bookProduct("Twin Title Volume");
+      await bookProduct("Twin Title Volume ");
+      const twin = await scanIsbn("09780131103627", "Twin Title Volume");
+      expect(twin.created).toBe(true);
+
+      await bookProduct("Already Scanned Volume", "012345678905");
+      const barcoded = await scanIsbn(
+        "09780201633610",
+        "Already Scanned Volume",
+      );
+      expect(barcoded.created).toBe(true);
+
+      await quickCreateProduct(
+        ctx.db,
+        { name: "Hammer Guide", manufacturer: "Other Press" },
+        ctx.actor,
+      );
+      const other = await scanIsbn("09780262033848", "Hammer Guide");
+      expect(other.created).toBe(true);
+    });
   });
 
   it("classifies a raw scan: a printed product label resolves by lookup", async () => {
