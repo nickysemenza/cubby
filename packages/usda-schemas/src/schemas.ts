@@ -1,13 +1,10 @@
 import { capitalize } from "@cubby/shared/text-case";
+import { upc } from "@cubby/shared/upc";
 import { z } from "zod";
 
-export const BARCODE_RE = /^\d{8}$|^\d{12,14}$/;
+// Re-exported so importers that also need USDA schemas keep one import.
+export { BARCODE_RE, upc } from "@cubby/shared/upc";
 
-export const upc = z
-  .string()
-  .trim()
-  .regex(BARCODE_RE, "Barcode must be 8, 12, 13, or 14 digits")
-  .describe("EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode");
 // NDB (Nutrient Data Bank) number - USDA-specific identifier
 export const ndb = z.number().max(99999).min(1000).describe("USDA NDB number");
 

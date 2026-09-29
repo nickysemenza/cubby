@@ -4,7 +4,7 @@
  * Used by: Quick-Capture, Bulk-Edit, and Scanner functionality
  */
 
-import { upc as upcSchema } from "@cubby/usda-schemas";
+import { upc as upcSchema } from "@cubby/shared/upc";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";

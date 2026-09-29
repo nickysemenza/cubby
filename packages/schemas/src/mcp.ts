@@ -7,8 +7,8 @@ import {
   ndb,
   nutrientSummary,
   nutrientsPer100,
-  upc,
 } from "@cubby/usda-schemas";
+import { upc } from "@cubby/shared/upc";
 import { recipeAvailabilityListOut } from "./availability";
 import { deletedCountOut } from "./common";
 import { productShortcode } from "./identifiers";

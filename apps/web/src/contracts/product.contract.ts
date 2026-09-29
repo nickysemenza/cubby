@@ -18,7 +18,7 @@ import {
   mergeProductMatchInput,
   productMergePreview,
 } from "@cubby/schemas/recommendations";
-import { upc } from "@cubby/usda-schemas";
+import { upc } from "@cubby/shared/upc";
 import { z } from "zod";
 
 import {

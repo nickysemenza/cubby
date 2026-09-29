@@ -3,7 +3,8 @@ import { productCategoryFeature } from "./product-category-fields";
 import { productCategoryShortcode } from "./identifier-fields";
 import { productTopLevelOut } from "./product-output-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
-import { foodSummary, foodSummaryMcpOut, upc } from "@cubby/usda-schemas";
+import { upc } from "@cubby/shared/upc";
+import { foodSummary, foodSummaryMcpOut } from "@cubby/usda-schemas";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import {

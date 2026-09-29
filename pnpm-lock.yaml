@@ -343,9 +343,6 @@ importers:
       '@cubby/upc-contract':
         specifier: workspace:*
         version: link:../../packages/upc-contract
-      '@cubby/usda-schemas':
-        specifier: workspace:*
-        version: link:../../packages/usda-schemas
       '@cubby/worker-tracing':
         specifier: workspace:*
         version: link:../../packages/worker-tracing
@@ -962,9 +959,9 @@ importers:
 
   packages/upc-contract:
     dependencies:
-      '@cubby/usda-schemas':
+      '@cubby/shared':
         specifier: workspace:*
-        version: link:../usda-schemas
+        version: link:../shared
       zod:
         specifier: 4.6.5
         version: 4.6.5

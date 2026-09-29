@@ -14,7 +14,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@cubby/usda-schemas": "workspace:*",
+    "@cubby/shared": "workspace:*",
     "zod": "^4.6.5"
   },
   "devDependencies": {
