@@ -52,6 +52,16 @@ test("browser Back restores the search query and scroll", async ({
     .toBeCloseTo(scrollBefore, 0);
 });
 
+// A dialog-created entity has no form page: `/new` is generated to redirect
+// to the list's capture dialog, not to fall through to `/locations/$shortcode`.
+test("a dialog entity's /new link opens its create dialog on the list", async ({
+  page,
+}) => {
+  await gotoAuthenticatedPage(page, "/locations/new");
+  await expect(page).toHaveURL(/\/locations\?create=true$/u);
+  await expect(page.getByRole("dialog")).toBeVisible();
+});
+
 test("create dialog validation and parent picker remain reachable", async ({
   page,
 }, testInfo) => {
