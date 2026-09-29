@@ -403,12 +403,12 @@ describe("task kernel — bulkUpdate", () => {
         },
         {
           edge: "EntityLink[taskDependency].from",
-          effect: "hard-delete",
+          effect: "soft-delete",
           changed: 0,
         },
         {
           edge: "EntityLink[taskDependency].to",
-          effect: "hard-delete",
+          effect: "soft-delete",
           changed: 0,
         },
       ]),
