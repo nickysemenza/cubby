@@ -12,7 +12,7 @@ unresolved decisions, investigations, external triggers, and long-term
 directions. **Dormant schema** lists tables and columns that exist but hold
 little or no data, kept on purpose for a later decision. **Next pass** holds the
 follow-ups deferred from the last large refactor. **Deferred: deploy surface** holds work that changes what gets
-deployed. **Operational passes** are household data work, not software
+deployed. **Probably not anytime soon** parks wanted-but-unpulled work. **Operational passes** are household data work, not software
 projects.
 
 Each item lives in one primary section based on its next blocker: an unresolved
@@ -128,9 +128,6 @@ history is the archive. Permanent product constraints live in the
   payment, transfer, income, or purchase solely from the amount's sign. Make
   import coverage count rows already present in overlapping exports, rather
   than treating every unattached row as missing.
-
-- **Accept recipe links from the iOS Share Sheet.** Route incoming recipe URLs
-  into the native recipe flow before retiring the remaining web intake.
 
 - **Backfill image descriptions as a paced, visible sweep.** Product
   classification evidence is built from `image-description` analyses, but
@@ -351,11 +348,6 @@ example vegetable` must not resolve to the weight of an entire linked bag
   free-text unit, optional Product resolution, and durable/consumable semantics;
   derive have/need/buy through the availability engine without reservations or
   automatic inventory decrement.
-
-- **Recurring maintenance tasks.** Add simple every-N-weeks/months recurrence;
-  completing an instance creates the next one, which naturally enters Needs
-  Attention. Cover every completion path with one idempotent transactional rule,
-  not a scheduler or RRULE system.
 
 - **Saved user-created views.** Persist named filter and sort sets using the
   versioned external-state pattern, and render them alongside the
@@ -701,13 +693,6 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   user-selected entitlement; do not add broad access or persistent bookmarks
   for an immediate export.
 
-- **Validate image bytes before AI description.** The image-description path
-  hands a Cloudflare rendition URL to the provider without proving that the
-  response is decodable image content. First confirm the gateway adapter's
-  supported binary input shape, then validate MIME, magic bytes, and bounded
-  size at the outbound boundary so transformation error bodies never reach the
-  model and the durable image job records a truthful failure.
-
 - **Capture exact runtime error shapes before broadening suppression.** The
   remaining client-disconnected cancellation, missing update-result, opaque
   database failure, and pathological LIKE/GLOB reports need sanitized
@@ -827,22 +812,11 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
 - **Meal templates.** Save reusable meal compositions without coupling them to
   recurrence.
 
-- (lead) **React #418 hydration error on `/garden-entries`.**
-  Logged in production on both route loads. The dnd-kit per-request id lead is
-  fixed (headers build their id from `useId()`). The remaining lead:
-  `@tanstack/react-router-ssr-query` 1.167 calls `hydrate(client, undefined)`
-  on the query stream's final `done` read, which query-core logs as "Error
-  reading query stream … reading 'mutations'"; upgrade once it guards `done`,
-  then re-check production.
-
 - **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
   `nutrition.shopping_list` is a plain structured/text tool. The remaining USDA
   Picker template is 352,004 bytes raw / 83,655 gzip and builds in 132 ms on
   the local M3 development machine. Keep it only while refinement and explicit
   selection materially outperform a plain `usda_food.search` result.
-
-- **Recurring meals.** Add a focused recurrence model for meals as its own slice,
-  separate from templates and nutrition goals.
 
 - **Server-backed table intelligence.** Extend exact facet counts and honest
   aggregate summaries from Expenses to one justified server-paginated surface at
@@ -1363,6 +1337,24 @@ productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
 
 ---
 
+## Probably not anytime soon
+
+Parked on purpose: wanted in principle, but nothing in current household use
+pulls them forward. Promote only with a concrete trigger.
+
+- **Accept recipe links from the iOS Share Sheet.** Route incoming recipe URLs
+  into the native recipe flow before retiring the remaining web intake.
+
+- **Recurring maintenance tasks.** Add simple every-N-weeks/months recurrence;
+  completing an instance creates the next one, which naturally enters Needs
+  Attention. Cover every completion path with one idempotent transactional rule,
+  not a scheduler or RRULE system.
+
+- **Recurring meals.** Add a focused recurrence model for meals as its own slice,
+  separate from templates and nutrition goals.
+
+---
+
 ## Dormant schema — revisit
 
 Built but barely used. Each stays until someone decides to use or remove it;
@@ -1399,9 +1391,11 @@ PRs; unordered.
 - **Merge `@cubby/usda-contract` and `@cubby/usda-schemas` into `@cubby/usda`.**
   Always consumed together by web and usda-api; move the `upc` schema out first.
 - **One Cargo workspace for `recipebridge` and `cubby-ffi`.** They keep separate
-  `Cargo.lock` files and only recipebridge runs clippy/tests in CI.
-- **Drop mermaid.** Only `docs/_components/MermaidDiagram.tsx` uses it and it
-  forces the `lodash-es` override; pre-render the docs diagrams.
+  `Cargo.lock` files. Trap: member `[profile.*]` tables are ignored in a
+  workspace and `wasm-pack` takes only `--dev/--profiling/--release`, so
+  recipebridge's `panic = "abort"` would leak into the FFI release build and
+  break UniFFI's `catch_unwind`; set wasm's panic strategy through the `wasm`
+  script's environment instead of a profile.
 - **purchase-agent schemas.** Declare the context-breakdown shape once in
   `@cubby/schemas/purchase-import` (today also in `purchase-agent/src/context-breakdown.ts`)
   and replace valibot with zod if Flue accepts Standard Schema.
@@ -1421,9 +1415,6 @@ PRs; unordered.
   `EntityLink` merge path.
 - **Declare non-entity child tables in the manifest (`children:`)** so their
   DDL is generated like entity tables.
-- **Gate or remove Apple photo diagnostics** (`PhotoDiagnosticsView`,
-  `PhotoMatchDiagnostics`, `PhotoMatchInspection*`, about 1.5k lines).
-
 - **Profile test cost before another pruning pass.** [PR #1273](https://github.com/nickysemenza/cubby/pull/1273) reduced literal
   test declarations but did not show an overall CI speed gain: web node and
   Apple checks ran longer while PostgreSQL ran faster than successful main
