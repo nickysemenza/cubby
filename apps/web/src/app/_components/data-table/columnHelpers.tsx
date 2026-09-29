@@ -69,6 +69,7 @@ import {
 } from "../combobox/with-search-hook";
 import { useEntityDisplayImage } from "../entity-media/entity-display-images";
 import { ImageThumbnail } from "../table/ImageThumbnail";
+import type { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import type { CellClipboardSpec, CellJsonValue } from "./cell-clipboard";
 import {
   amountCellData,
@@ -100,6 +101,8 @@ import {
 } from "./table-meta";
 
 export type { FilterConfig, MobileColumnMeta, MobileSlot } from "./table-meta";
+
+type UnitMapping = Parameters<typeof UnitMappingDisplay>[0]["mappings"][number];
 
 export { multiSelectFilterFn };
 

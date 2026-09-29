@@ -179,7 +179,12 @@ describe("recipe repository helpers", () => {
   });
 
   describe("dbRecipeToListAPI base fields", () => {
-    const listOf = (recipe: typeof baseRecipe) =>
+    const listOf = (
+      recipe: Omit<
+        Parameters<typeof dbRecipeToListAPI>[0],
+        "mealCount" | "sectionCount"
+      >,
+    ) =>
       dbRecipeToListAPI(
         { ...recipe, mealCount: 0, sectionCount: 0 },
         [],

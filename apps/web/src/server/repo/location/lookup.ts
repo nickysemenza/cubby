@@ -13,6 +13,7 @@ import type {
   InfLocation,
   LocationAncestorOut,
   LocationOut,
+  LocationType,
 } from "@cubby/schemas/location";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
