@@ -21,12 +21,8 @@ import {
 } from "~/app/_components/ai/field-suggestion";
 import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
 import { FormFieldResolution } from "~/app/_components/ai/form-field-resolution";
-import {
-  useEntityListSource,
-  type EntitySearchEntity,
-  type SearchProviderProps,
-} from "~/app/_components/combobox/with-search-hook";
-import { WithVendorShortcodeSearch } from "~/app/_components/combobox/with-vendor-search";
+import { requireReferenceEntitySearch } from "~/app/_components/combobox/reference-entity-search";
+import type { SearchProviderProps } from "~/app/_components/combobox/with-search-hook";
 import { PlainDateField, SelectField } from "~/app/_components/form-utils";
 import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
@@ -85,7 +81,7 @@ type BulkEditVariables = { ids: string[]; data: BulkEditDraft };
 type BulkEditResult = { updated: number; sideEffects: MutationSideEffects };
 
 /** A reference field's search provider, keyed by its target entity — the
- * production lookup is {@link referenceEntitySearch}; a test can inject a
+ * production lookup is {@link requireReferenceEntitySearch}; a test can inject a
  * fake instead of mocking the `with-search-hook` module. */
 type SearchProviderFor = (
   referenceEntity: string,
@@ -139,45 +135,6 @@ function bulkFieldDescription(
       ) : null}
       <FieldProvenance provenance={presentation.provenance} />
     </span>
-  );
-}
-
-/**
- * A non-vendor reference field's search provider: a direct
- * `useEntityListSource` call in the render-prop shape `EntityValueField`'s
- * `SearchProvider` prop expects.
- */
-function GenericEntitySearch({
-  entity,
-  scope,
-  children,
-}: { entity: EntitySearchEntity } & SearchProviderProps<string>): ReactNode {
-  const { dialog, ...search } = useEntityListSource(entity, { scope });
-  return (
-    <>
-      {dialog}
-      {children(search)}
-    </>
-  );
-}
-
-/**
- * One reference field's search provider — the vendor picker needs its own
- * shortcode-typed wrapper, matching `referenceEntitySearch` in
- * `entity-primitive-fields.tsx`.
- */
-function referenceEntitySearch(
-  referenceEntity: string,
-): (props: SearchProviderProps<string>) => ReactNode {
-  if (referenceEntity === "vendor") {
-    // SAFETY: `WithVendorShortcodeSearch` is keyed to `VendorShortcode`, a
-    // string-branded type; the caller's id path is a plain string RHF field.
-    return WithVendorShortcodeSearch as never;
-  }
-  return (props) => (
-    // SAFETY: `referenceEntity` is a manifest-declared reference target,
-    // always one of `useEntityListSource`'s supported (non-vendor) entities.
-    <GenericEntitySearch entity={referenceEntity as never} {...props} />
   );
 }
 
@@ -278,7 +235,7 @@ function BulkEditFields({
   entity,
   fieldKeys,
   form,
-  searchProviderFor = referenceEntitySearch,
+  searchProviderFor = requireReferenceEntitySearch,
   modes,
   onModeChange,
   clearCost,
@@ -430,7 +387,7 @@ export function BulkEditDialogBody({
   onSubmit: (data: Readonly<BulkEditDraft>) => Promise<void>;
   isPending: boolean;
   /** Test seam: a fake reference-field search provider, in place of the real
-   * `referenceEntitySearch` lookup — see {@link SearchProviderFor}. */
+   * `requireReferenceEntitySearch` lookup — see {@link SearchProviderFor}. */
   searchProviderFor?: SearchProviderFor;
 }) {
   const form = useForm<FieldValues>();

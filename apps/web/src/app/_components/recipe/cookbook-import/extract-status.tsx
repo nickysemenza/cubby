@@ -6,8 +6,9 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
+import { formatMinutesSeconds } from "~/lib/format-duration";
 
-import { formatDuration, formatMinuteRange, formatUsd } from "./import-helpers";
+import { formatMinuteRange, formatUsd } from "./import-helpers";
 import type { Book } from "./types";
 
 /** The one-line status that sits in the book card's header. */
@@ -117,7 +118,7 @@ export function ExtractProgressPanel({
             {progress.cached} cached · {progress.recipes_so_far} recipe
             {progress.recipes_so_far === 1 ? "" : "s"} ·{" "}
             {formatUsd(progress.cost_so_far_usd)} spent ·{" "}
-            {formatDuration(progress.elapsed_ms)} elapsed
+            {formatMinutesSeconds(progress.elapsed_ms)} elapsed
           </Description>
           <Description size="xs">
             {formatMinuteRange(

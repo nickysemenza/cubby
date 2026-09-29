@@ -7,6 +7,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 
 import { dashboard } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatCount } from "~/lib/utils";
 
 const additionalCountEntities = [
   "ledgerParty",
@@ -53,8 +54,8 @@ export function NavigationCountBadge({
   if (count === undefined) return null;
   return (
     <span className="ml-auto shrink-0 rounded-sm border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-2xs text-muted-foreground tabular-nums">
-      <span aria-hidden="true">{count.toLocaleString()}</span>
-      <span className="sr-only">{count.toLocaleString()} records</span>
+      <span aria-hidden="true">{formatCount(count)}</span>
+      <span className="sr-only">{formatCount(count)} records</span>
     </span>
   );
 }

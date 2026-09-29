@@ -157,3 +157,14 @@ export function referenceEntitySearch(
       );
   }
 }
+
+/** The lookup for a manifest-declared reference target that arrives as a plain
+ * string; a target with no picker is a declaration bug, so it throws. */
+export function requireReferenceEntitySearch(
+  entity: string,
+): (props: SearchProviderProps<string>) => ReactNode {
+  if (!isReferencePickerEntity(entity)) {
+    throw new Error(`No reference picker for ${entity}`);
+  }
+  return referenceEntitySearch(entity);
+}

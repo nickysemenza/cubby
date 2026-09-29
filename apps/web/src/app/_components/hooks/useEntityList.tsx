@@ -19,6 +19,7 @@ import {
   summarizeListState,
 } from "~/entities/filters";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { formatCount } from "~/lib/utils";
 
 import type { EntityActionSubject } from "../actions/entity-actions";
 import {
@@ -571,7 +572,7 @@ export function useEntityList<
       // bulk action silently miss rows.
       if (allRows.length < totalCount) {
         toast.warning(
-          `Selected the first ${allRows.length.toLocaleString()} of ${totalCount.toLocaleString()} — too many to select at once. Narrow the filters to cover the rest.`,
+          `Selected the first ${formatCount(allRows.length)} of ${formatCount(totalCount)} — too many to select at once. Narrow the filters to cover the rest.`,
         );
       }
     } finally {

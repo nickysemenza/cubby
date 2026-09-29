@@ -7,6 +7,7 @@ import {
 } from "@cubby/usda-schemas";
 
 import { Row } from "~/components/layout";
+import { trimAmount } from "~/lib/nutrition-format";
 import { cn } from "~/lib/utils";
 
 // Short table headers — the one per-surface override of the long displayName.
@@ -41,8 +42,6 @@ const COMPACT_CODES: readonly string[] = [
 ];
 
 // Trim trailing-zero decimals: 450.0 → "450", 11.7 → "11.7".
-const trimAmount = (v: number) => Number(v.toFixed(1)).toString();
-
 export function NutrientsSummary({
   nutrients,
   compact = false,

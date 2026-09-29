@@ -25,9 +25,8 @@ import { FormFieldResolution } from "~/app/_components/ai/form-field-resolution"
 import type { EntitySearchScope } from "~/app/_components/combobox/entity-search-hooks";
 import {
   isReferencePickerEntity,
-  referenceEntitySearch as sharedReferenceEntitySearch,
+  requireReferenceEntitySearch,
 } from "~/app/_components/combobox/reference-entity-search";
-import type { SearchProviderProps } from "~/app/_components/combobox/with-search-hook";
 import {
   NullableNumericField,
   PlainDateField,
@@ -566,7 +565,7 @@ function EntityMultiSelectField({
       // always one of the picker's supported entities.
       entity={referenceEntity as never}
       label={field.label}
-      SearchProvider={referenceEntitySearch(referenceEntity)}
+      SearchProvider={requireReferenceEntitySearch(referenceEntity)}
       scope={scope}
     />
   );
@@ -633,16 +632,6 @@ function specializedRendererFor(
   return undefined;
 }
 
-/** Use the same reference providers as inline edits and product forms. */
-function referenceEntitySearch(
-  referenceEntity: string,
-): (props: SearchProviderProps<string>) => ReactNode {
-  if (!isReferencePickerEntity(referenceEntity)) {
-    throw new Error(`No reference picker for ${referenceEntity}`);
-  }
-  return sharedReferenceEntitySearch(referenceEntity);
-}
-
 /** Looks up one named field on `entity`'s model — the lookup `renderIntentField`
  * callers outside this module need before they can pass a `PrimitiveFieldModel`
  * to it. Throws rather than returning `undefined` so the field's presence is a
@@ -706,7 +695,7 @@ function renderSingularReference({
         label={field.label}
         clearable={field.nullable}
         description={<FieldProvenance provenance={field.provenance} />}
-        SearchProvider={referenceEntitySearch(referenceEntity)}
+        SearchProvider={requireReferenceEntitySearch(referenceEntity)}
         scope={scope}
         suggestField={suggestFieldFor(
           Boolean(field.control?.suggest),

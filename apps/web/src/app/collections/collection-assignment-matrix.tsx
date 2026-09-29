@@ -44,7 +44,7 @@ import { EntityIcon, entityDetailLink } from "~/entities/entities";
 import { focusOnMount } from "~/hooks/focus-on-mount";
 import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { IDEMPOTENT_MUTATION_RETRY } from "~/integrations/tanstack-query/query-policy";
-import { cn } from "~/lib/utils";
+import { cn, formatCount } from "~/lib/utils";
 
 import type { CollectionAssignmentSearch } from "./collection-assignment-search";
 import {
@@ -128,8 +128,8 @@ function MobileMatrixPager({
   return (
     <div className="flex items-center justify-between gap-2 px-2 py-2">
       <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-        {rangeStart.toLocaleString()}–{rangeEnd.toLocaleString()} of{" "}
-        {totalCount.toLocaleString()}
+        {formatCount(rangeStart)}–{formatCount(rangeEnd)} of{" "}
+        {formatCount(totalCount)}
       </span>
       <div className="flex items-center gap-2">
         <Button
@@ -621,8 +621,8 @@ export function CollectionAssignmentMatrix({
             ))}
           </NativeSelect>
           <span className="ml-auto font-mono text-2xs text-muted-foreground tabular-nums">
-            {rangeStart.toLocaleString()}–{rangeEnd.toLocaleString()} of{" "}
-            {totalCount.toLocaleString()}
+            {formatCount(rangeStart)}–{formatCount(rangeEnd)} of{" "}
+            {formatCount(totalCount)}
           </span>
           <MatrixPager
             page={page}
@@ -719,9 +719,8 @@ export function CollectionAssignmentMatrix({
               </label>
               <div className="flex items-center justify-between gap-2 font-mono text-2xs text-muted-foreground tabular-nums">
                 <span>
-                  {mobileRangeStart.toLocaleString()}–
-                  {mobileRangeEnd.toLocaleString()} of{" "}
-                  {totalCount.toLocaleString()}
+                  {formatCount(mobileRangeStart)}–{formatCount(mobileRangeEnd)}{" "}
+                  of {formatCount(totalCount)}
                 </span>
                 <span>Direct assignments are editable</span>
               </div>
@@ -968,8 +967,8 @@ export function CollectionAssignmentMatrix({
 
       <div className="hidden items-center justify-between gap-2 border-t border-border pt-1 md:flex">
         <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-          {rangeStart.toLocaleString()}–{rangeEnd.toLocaleString()} of{" "}
-          {totalCount.toLocaleString()}
+          {formatCount(rangeStart)}–{formatCount(rangeEnd)} of{" "}
+          {formatCount(totalCount)}
         </span>
         <MatrixPager
           page={page}
