@@ -1,19 +1,36 @@
+import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { Link } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 import type { z } from "zod";
 
+import type { SearchProviderProps } from "~/app/_components/combobox/with-search-hook";
 import {
   createCurrencyColumn,
   createEditableAmountColumn,
   createImageColumn,
   createSingleEntityInlineLinkColumn,
 } from "~/app/_components/data-table/columnHelpers";
+import type {
+  InventoryEntryBase,
+  InventoryRelatedEntity,
+} from "~/app/_components/data-table/inventory-column-helpers";
+import {
+  InventoryEntriesCell,
+  type InventoryEntriesCellProps,
+} from "~/app/_components/data-table/inventory-entries-cell";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   type CubbyColumnCollection,
+  type CubbyColumnHelper as ColumnHelper,
 } from "~/app/_components/data-table/table-features";
+import {
+  attachCubbyColumnMeta,
+  type FilterConfig,
+  type MobileColumnMeta,
+} from "~/app/_components/data-table/table-meta";
 import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
@@ -283,3 +300,90 @@ export const inventoryListOverride = defineListOverride<
     };
   },
 });
+
+export function createInventoryEntriesColumn<
+  TEntry extends InventoryEntryBase,
+  TEntity extends InventoryRelatedEntity["entity"],
+  K extends PropertyKey,
+  T extends Record<K, TEntry[]>,
+>(
+  columnHelper: ColumnHelper<T>,
+  accessor: K,
+  entity: TEntity,
+  getRelatedEntity: InventoryEntriesCellProps<
+    T,
+    TEntry,
+    TEntity
+  >["getRelatedEntity"],
+  options?: {
+    id?: string;
+    header?: string;
+    className?: string;
+    enableSorting?: boolean;
+    layout?: "stacked" | "inline";
+    mobile?: MobileColumnMeta;
+    filterConfig?: FilterConfig;
+    provenance?: EntityFieldProvenance;
+    /**
+     * When set, rows with entries get a hover-revealed pencil that opens a
+     * quick-edit surface (e.g. the per-entry inventory dialog). A pencil
+     * affordance rather than a whole-cell click target: the entry links inside
+     * the cell must stay navigable, and interactive-inside-interactive nesting
+     * is invalid.
+     */
+    onQuickEdit?: (row: T) => void;
+    /**
+     * Inline edit + clipboard on the 0/1-entry cases: an `EditableEntityCell`
+     * (pencil trigger) lets you move the single entry's location, or create a
+     * new entry at a picked location when there are none. Only meaningful for
+     * entity === "location" + layout === "inline" — ignored otherwise (e.g.
+     * LocationList's Products column, or the "stacked" layout).
+     */
+    inlineEdit?: {
+      /** `useEntityListSource("location", ...)` — injected so unit tests can stub it. */
+      SearchProvider: (
+        props: SearchProviderProps<LocationShortcode>,
+      ) => ReactNode;
+      onMoveEntry: (
+        entry: TEntry,
+        locationId: LocationShortcode,
+      ) => Promise<void>;
+      onCreateEntry: (row: T, locationId: LocationShortcode) => Promise<void>;
+    };
+  },
+) {
+  const layout = options?.layout ?? "inline";
+
+  return columnHelper.accessor((row: T) => row[accessor], {
+    id: options?.id ?? String(accessor),
+    header:
+      options?.header ?? (entity === "location" ? "Locations" : "Products"),
+    enableSorting: options?.enableSorting ?? false,
+    meta: attachCubbyColumnMeta<T>({
+      className: options?.className ?? "min-w-0 w-40 max-w-56",
+      mobile: options?.mobile,
+      filterConfig: options?.filterConfig,
+      provenance: options?.provenance,
+      entityRefs: (row) =>
+        row[accessor].flatMap((entry) => {
+          const related = getRelatedEntity(entry);
+          return related ? [{ entityKind: entity, entityId: related.id }] : [];
+        }),
+    }),
+    cell: (info) => (
+      <InventoryEntriesCell<T, TEntry, TEntity>
+        entries={info.getValue() ?? []}
+        entity={entity}
+        getRelatedEntity={getRelatedEntity}
+        layout={layout}
+        row={info.row.original}
+        onQuickEdit={options?.onQuickEdit}
+        inlineEdit={
+          entity === "location" && layout === "inline"
+            ? options?.inlineEdit
+            : undefined
+        }
+      />
+    ),
+  });
+}

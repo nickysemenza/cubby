@@ -4,19 +4,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
-import {
-  EntityRecommendations,
-  type EntityRecommendationOperations,
-} from "~/app/_components/relatedness/entity-recommendations";
 import { entityDetailLink } from "~/entities/entities";
 import { entityDetailFor } from "~/entities/entity-detail";
 import { inventory } from "~/integrations/tanstack-query/generated/catalog.gen";
-
-interface InventoryPlacementSuggestionProps {
-  inventoryitem: InventoryWithLocationAndProductOut;
-  recommendationOperations?: EntityRecommendationOperations;
-  moveOperation?: typeof inventory.moveEntries;
-}
 
 export function useInventoryPlacementAction({
   inventoryitem,
@@ -61,28 +51,4 @@ export function useInventoryPlacementAction({
       }
     },
   };
-}
-
-/** Inline proposal for stock currently parked in a staging location. */
-export function InventoryPlacementSuggestion({
-  inventoryitem,
-  recommendationOperations,
-  moveOperation = inventory.moveEntries,
-}: InventoryPlacementSuggestionProps) {
-  const placement = useInventoryPlacementAction({
-    inventoryitem,
-    moveOperation,
-  });
-
-  return (
-    <div className="mt-3">
-      <EntityRecommendations
-        source={{ entityKind: "inventory", entityId: inventoryitem.id }}
-        operations={recommendationOperations}
-        compact
-        pending={placement.isPending}
-        onAcceptInventoryPlacement={placement.accept}
-      />
-    </div>
-  );
 }

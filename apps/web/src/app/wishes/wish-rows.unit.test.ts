@@ -1,8 +1,8 @@
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import type { WishCandidateOut, WishListItemOut } from "@cubby/schemas/wish";
+import { wishPriceRange } from "@cubby/schemas/wish-fields";
 import { describe, expect, it } from "vitest";
 
-import { wishPriceRange } from "./wish-price-range";
 import { buildWishRows, wishSubRows } from "./wish-rows";
 
 const wishId = (seed: string) => testShortcode("wish", seed);

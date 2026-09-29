@@ -6,6 +6,9 @@ import {
 } from "@cubby/schemas/nutrition";
 import { TIER1_NUTRIENTS, type NutrientsPer100 } from "@cubby/usda";
 
+/** One decimal place, dropping a trailing `.0` (`12.0` → `12`, `0.25` → `0.3`). */
+export const trimAmount = (v: number) => Number(v.toFixed(1)).toString();
+
 /**
  * Render an estimate without hiding its confidence. Callers own the unit and
  * rounding convention through `formatNumber`; this helper owns the shared

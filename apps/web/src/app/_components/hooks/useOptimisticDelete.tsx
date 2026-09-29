@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { DropdownMenuSeparator } from "~/components/ui/dropdown-menu";
 import type {
   EditableEntity,
@@ -19,14 +18,15 @@ import {
 } from "~/integrations/tanstack-query/operation-cache";
 import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import { removeCachedListItems } from "~/lib/optimistic-list";
-import { pluralWord } from "~/lib/pluralize";
 
 import { VerbMenuItem, verbBulkAction } from "../actions/action-verb-ui";
+import { DeleteEntityDialog } from "../actions/delete-entity-action";
 import { defineEntityAction } from "../actions/entity-action-definition";
 import type {
   EntityActionDefinition,
   EntityActionRow,
 } from "../actions/entity-actions";
+import type { ImpactPreviewOperations } from "../actions/entity-operation-impact-preview";
 import type { BulkAction } from "../data-table/bulk-actions.types";
 import type {
   DeletableConfig,
@@ -58,6 +58,8 @@ interface UseOptimisticDeleteOptions<TData extends { id: string }> {
   extraActions?: (row: TData) => ReactNode;
   /** Testable command boundary; production uses the registered entity command. */
   commandPort?: DeleteCommandPort;
+  /** Test-injectable seam for the confirm dialog's impact preview. */
+  impactPreviewOperations?: ImpactPreviewOperations;
   /**
    * How to name a row in the confirm dialog when `row.name` is null/empty.
    * Without it such a row is listed by its raw UUID, which tells the user
@@ -81,12 +83,9 @@ interface UseOptimisticDeleteReturn<TData extends { id: string }> {
 /**
  * Hook for optimistic delete with cache rollback.
  *
- * Handles:
- * - Optimistic removal from query cache
- * - Rollback on error
- * - Delete bulk action
- * - Delete menu item in row actions
- * - Delete confirmation dialog
+ * Owns only what a list needs on top of the shared `DeleteEntityDialog`:
+ * - Optimistic removal from query cache, and rollback on error
+ * - The delete bulk action and row-menu item that stage targets for the dialog
  *
  * Single-row delete (row menu / swipe action) and bulk delete (selection
  * toolbar) are the same flow over a list of targets — one dialog — rather
@@ -99,6 +98,7 @@ export function useOptimisticDelete<
   deletable,
   extraActions,
   commandPort,
+  impactPreviewOperations,
   emptyLabel,
 }: UseOptimisticDeleteOptions<TData>): UseOptimisticDeleteReturn<TData> {
   const queryClient = useQueryClient();
@@ -295,8 +295,6 @@ export function useOptimisticDelete<
     );
   }, [deletable, extraActions, requestDelete]);
 
-  const targetCount = deleteTargets?.length ?? 0;
-
   const submitDelete = useCallback(async () => {
     if (!deleteTargets || deleteTargets.length === 0) return;
     await mutateDelete({
@@ -306,32 +304,25 @@ export function useOptimisticDelete<
     settleBulkAction({ success: true });
   }, [deleteTargets, mutateDelete, settleBulkAction]);
 
-  // Build delete dialog element
   const deleteDialog = useMemo(
     () =>
       deletable ? (
-        <BulkActionDialog
-          open={deleteTargets !== null}
-          onOpenChange={(open) => {
-            if (open) return;
-            setDeleteTargets(null);
-            settleBulkAction({ success: false });
-          }}
+        <DeleteEntityDialog
+          entityLabel={deletable.entityLabel}
           items={
             deleteTargets?.map((target) => ({
               id: target.id,
               name: target.displayName,
             })) ?? []
           }
-          itemNoun={deletable.entityLabel}
-          action="Delete"
-          variant="destructive"
-          pendingLabel="Deleting..."
-          description={`This will permanently remove ${pluralWord(
-            deletable.entityLabel.toLowerCase(),
-            targetCount || 1,
-          )} from your workspace. This action cannot be undone.`}
-          renderItem={(item) => item.name}
+          // The legacy image delete has no connections graph to preview.
+          previewImpact={registeredDelete}
+          impactPreviewOperations={impactPreviewOperations}
+          onOpenChange={(open) => {
+            if (open) return;
+            setDeleteTargets(null);
+            settleBulkAction({ success: false });
+          }}
           onSubmit={async () => {
             try {
               await submitDelete();
@@ -341,13 +332,14 @@ export function useOptimisticDelete<
             // retry.
             catch {}
           }}
-          isPending={deletable ? isDeletePending : false}
+          isPending={isDeletePending}
         />
       ) : null,
     [
       deletable,
       deleteTargets,
-      targetCount,
+      impactPreviewOperations,
+      registeredDelete,
       settleBulkAction,
       isDeletePending,
       submitDelete,

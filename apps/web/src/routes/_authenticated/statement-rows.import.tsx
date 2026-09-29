@@ -20,6 +20,7 @@ import {
 } from "~/app/finance/statement-csv";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Page } from "~/components/page/Page";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { useHydrationGate } from "~/hooks/useHydrated";
 import {
@@ -28,7 +29,8 @@ import {
   statementRow,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
-import { formatCurrency } from "~/lib/utils";
+import { statusTone } from "~/lib/status-tone";
+import { formatCount, formatCurrency } from "~/lib/utils";
 
 type ParsedImport = ReturnType<typeof parseStatementCsv>;
 type RecordStatementRowsOut = Awaited<
@@ -500,8 +502,8 @@ function StatementImportPage() {
                   {review.fileName}
                 </p>
                 <h2 className="mt-1 text-lg font-semibold">
-                  {review.parsed.recordRows.length.toLocaleString()} source rows
-                  · {review.parsed.source}
+                  {formatCount(review.parsed.recordRows.length)} source rows ·{" "}
+                  {review.parsed.source}
                 </h2>
                 <p className="text-xs text-muted-foreground">
                   {review.preview ? (
@@ -525,7 +527,7 @@ function StatementImportPage() {
                   </p>
                 )}
                 {review.parsed.zeroValueRows > 0 && (
-                  <p className="text-xs text-amber-700">
+                  <p className="text-xs text-warning-ink">
                     {review.parsed.zeroValueRows} zero-value rows cannot be
                     stored as financial statement rows and will be skipped.
                   </p>
@@ -541,7 +543,7 @@ function StatementImportPage() {
                     ? "Choose transaction kinds"
                     : selected.length > 0
                       ? `Save rows and create ${selected.length} reviewed transactions`
-                      : `Save ${review.parsed.recordRows.length.toLocaleString()} source rows`}
+                      : `Save ${formatCount(review.parsed.recordRows.length)} source rows`}
               </Button>
             </div>
             {review.dryRun.signWarning && (
@@ -622,15 +624,11 @@ function StatementImportPage() {
                       <span className="font-mono text-sm tabular-nums">
                         {formatCurrency(row.proposed.amount)}
                       </span>
-                      <span
-                        className={
-                          ready
-                            ? "text-xs text-primary"
-                            : "text-xs text-amber-700"
-                        }
+                      <Badge
+                        variant={statusTone("statementImport", row.status)}
                       >
                         {statusLabel(row.status)}
-                      </span>
+                      </Badge>
                     </span>
                   </div>
                 );

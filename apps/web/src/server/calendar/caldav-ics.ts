@@ -15,6 +15,7 @@ import {
   householdDateTime,
   householdLocalDate,
 } from "~/lib/household-date";
+import { shiftPlainDate } from "~/lib/plain-date";
 
 import type {
   CalDavCollection,
@@ -27,11 +28,6 @@ import { serializeCalendarComponent } from "./ics";
 
 function invalid(message: string): never {
   throw new Error(`Invalid CalDAV event: ${message}`);
-}
-function shiftDate(date: string, days: number): string {
-  const result = new Date(`${date}T00:00:00Z`);
-  result.setUTCDate(result.getUTCDate() + days);
-  return result.toISOString().slice(0, 10);
 }
 function validDate(date: string): boolean {
   const value = new Date(`${date}T00:00:00Z`);
@@ -193,10 +189,10 @@ function allDayEnd(start: ICAL.Time, event: ICAL.Component): string {
     return plainDate(end);
   }
   const duration = durationProperty(event);
-  if (!duration) return shiftDate(plainDate(start), 1);
+  if (!duration) return shiftPlainDate(plainDate(start), 1);
   if (duration.hours || duration.minutes || duration.seconds)
     invalid("all-day duration requires whole days");
-  return shiftDate(plainDate(start), duration.weeks * 7 + duration.days);
+  return shiftPlainDate(plainDate(start), duration.weeks * 7 + duration.days);
 }
 function nearestSlot(start: Date): MealType {
   const local = new TZDate(start.getTime(), HOUSEHOLD_TIMEZONE);
@@ -240,7 +236,10 @@ export function parseCalDavEvent(
     const startDate = plainDate(start);
     const endDateExclusive = allDayEnd(start, event);
     if (endDateExclusive <= startDate) invalid("duration must be positive");
-    if (collection === "meals" && endDateExclusive !== shiftDate(startDate, 1))
+    if (
+      collection === "meals" &&
+      endDateExclusive !== shiftPlainDate(startDate, 1)
+    )
       invalid("an all-day meal must be one day");
     return {
       uid,
@@ -258,7 +257,7 @@ export function parseCalDavEvent(
   const startDate = householdLocalDate(begins);
   if (collection === "meals" && householdLocalDate(ends) !== startDate)
     invalid("a timed meal may not cross midnight");
-  const endDateExclusive = shiftDate(
+  const endDateExclusive = shiftPlainDate(
     householdLocalDate(new Date(ends.getTime() - 1)),
     1,
   );
@@ -306,7 +305,7 @@ function setDates(
       : (projection.dueEndDate ?? projection.dueDate);
   if (!begin || !last || last < begin)
     throw new Error("Calendar projection lacks valid event dates");
-  const exclusive = shiftDate(last, 1);
+  const exclusive = shiftPlainDate(last, 1);
   event.addPropertyWithValue("dtstart", ICAL.Time.fromDateString(begin));
   event.addPropertyWithValue("dtend", ICAL.Time.fromDateString(exclusive));
   return { start: householdDateTime(begin), end: householdDateTime(exclusive) };

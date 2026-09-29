@@ -20,8 +20,9 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { formatMinutesSeconds } from "~/lib/format-duration";
 
-import { formatDuration, formatUsd } from "./import-helpers";
+import { formatUsd } from "./import-helpers";
 import {
   flagSummary,
   reportCalls,
@@ -130,8 +131,8 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
       <CollapsibleTrigger className="flex w-full items-center gap-1 text-left text-xs text-muted-foreground hover:text-foreground">
         <CaretDownIcon className="size-3" />
         Run report — {formatUsd(report.total_cost_usd)}
-        {!report.cost_complete && "+"} · {formatDuration(report.wall_ms)} ·{" "}
-        {calls.length} call{calls.length === 1 ? "" : "s"}
+        {!report.cost_complete && "+"} · {formatMinutesSeconds(report.wall_ms)}{" "}
+        · {calls.length} call{calls.length === 1 ? "" : "s"}
       </CollapsibleTrigger>
       <CollapsibleContent>
         <Stack gap="sm" className="mt-2 border border-border p-2">

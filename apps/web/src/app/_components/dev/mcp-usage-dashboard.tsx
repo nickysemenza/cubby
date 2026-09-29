@@ -38,6 +38,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { mcp } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
+import { statusTone } from "~/lib/status-tone";
 import { formatCount } from "~/lib/utils";
 
 const windows: Array<{ label: string; value: McpUsageWindow }> = [
@@ -72,13 +73,11 @@ function Metric({ label, value }: { label: string; value: number | string }) {
 }
 
 function StatusBadge({ status }: { status: McpToolUsageStatus }) {
-  const variant =
-    status === "active"
-      ? "default"
-      : status === "never" || status === "retired"
-        ? "outline"
-        : "secondary";
-  return <Badge variant={variant}>{status.toUpperCase()}</Badge>;
+  return (
+    <Badge variant={statusTone("mcpUsage", status)}>
+      {status.toUpperCase()}
+    </Badge>
+  );
 }
 
 function formatOrNever(value: Date | null): string {

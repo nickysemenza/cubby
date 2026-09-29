@@ -28,3 +28,18 @@ export function formatPlainDate(date: Date): string {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
+
+/**
+ * Add whole days to a "YYYY-MM-DD" plain date. Calendar arithmetic in UTC, so
+ * DST never moves the result. Throws `RangeError` on a malformed date rather
+ * than returning a garbled string.
+ */
+export function shiftPlainDate(value: string, days: number): string {
+  const [year, month, day] = value.split("-").map(Number);
+  if (year === undefined || month === undefined || day === undefined) {
+    throw new RangeError(`Invalid plain date: ${value}`);
+  }
+  return new Date(Date.UTC(year, month - 1, day + days))
+    .toISOString()
+    .slice(0, 10);
+}

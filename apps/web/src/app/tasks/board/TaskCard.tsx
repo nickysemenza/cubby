@@ -31,10 +31,11 @@ import {
 import { entities, entityDetailParams } from "~/entities/entities";
 import { formatCalendarDay } from "~/lib/date-format";
 import { householdLocalDate } from "~/lib/household-date";
+import { statusTone } from "~/lib/status-tone";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import { cn } from "~/lib/utils";
 
-import { TASK_STATUS_LABELS, taskStatusBadgeVariant } from "../task-options";
+import { TASK_STATUS_LABELS } from "../task-options";
 import type {
   BoardColumnKey,
   BoardLaneKey,
@@ -232,7 +233,7 @@ export function TaskCard({
                         onSetStatus(status);
                       }}
                     >
-                      <Badge variant={taskStatusBadgeVariant[status]}>
+                      <Badge variant={statusTone("task", status)}>
                         {TASK_STATUS_LABELS[status]}
                       </Badge>
                     </DropdownMenuItem>
@@ -266,7 +267,7 @@ export function TaskCard({
             </span>
           )}
           {showStatus && (
-            <Badge variant={taskStatusBadgeVariant[task.status]}>
+            <Badge variant={statusTone("task", task.status)}>
               {TASK_STATUS_LABELS[task.status]}
             </Badge>
           )}

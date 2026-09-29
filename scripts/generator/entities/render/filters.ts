@@ -6,7 +6,6 @@ import type {
   SourceRef,
 } from "../declarations.ts";
 import { entityProjectionMaps } from "./index.ts";
-import { renderRecord } from "./record.ts";
 
 /**
  * One aliased runtime import per distinct `module#export`, sorted so the
@@ -128,81 +127,7 @@ export const renderFilterArtifacts = (
         `${JSON.stringify(key)}:[${filterDescriptors.map(runtimeDescriptor).join(",")}],`,
     )
     .join("\n");
-  const filterContractCases = Object.fromEntries(
-    filterEntities.map(
-      ({ key, filterAudit, filterSchema, filterDescriptors }) => [
-        key,
-        {
-          descriptorColumns: filterDescriptors.map(({ columnId }) => columnId),
-          urlKeys: filterDescriptors.map(({ urlKey }) => urlKey),
-          referenceFilters: filterDescriptors.flatMap((descriptor) =>
-            descriptor.brandRef === null
-              ? []
-              : [
-                  {
-                    columnId: descriptor.columnId,
-                    entity: descriptor.brandRef.entity,
-                  },
-                ],
-          ),
-          schema:
-            filterSchema === null
-              ? null
-              : `${filterSchema.module}#${filterSchema.export}`,
-          optionSources: [
-            ...new Set(
-              filterDescriptors.flatMap((descriptor) => [
-                ...(descriptor.optionsKey === null
-                  ? []
-                  : [descriptor.optionsKey]),
-                ...(descriptor.optionsRef === null
-                  ? []
-                  : [
-                      `${descriptor.optionsRef.module}#${descriptor.optionsRef.export}`,
-                    ]),
-              ]),
-            ),
-          ],
-          audit: filterAudit,
-          rangeExpanders: filterDescriptors.flatMap((descriptor) => {
-            if (descriptor.kind !== "range") return [];
-            if (descriptor.expandRef !== null)
-              return [
-                `${descriptor.columnId}:${descriptor.expandRef.module}#${descriptor.expandRef.export}`,
-              ];
-            return presetTable(descriptor) === null
-              ? []
-              : [`${descriptor.columnId}:presets`];
-          }),
-        },
-      ],
-    ),
-  );
   return [
-    {
-      relativePath:
-        "apps/web/src/entities/generated/entity-filter-contracts.gen.ts",
-      source:
-        generatedHeader +
-        'import type { Entity } from "@cubby/schemas/entity";\n\n' +
-        'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n\n' +
-        "export type EntityFilterContractCase = {\n" +
-        "  descriptorColumns: readonly string[];\n" +
-        "  urlKeys: readonly string[];\n" +
-        "  referenceFilters: readonly { columnId: string; entity: ShortcodeEntity }[];\n" +
-        "  schema: string | null;\n" +
-        "  optionSources: readonly string[];\n" +
-        "  audit: boolean;\n" +
-        "  rangeExpanders: readonly string[];\n" +
-        "};\n\n" +
-        renderRecord({
-          name: "generatedEntityFilterContractCases",
-          entries: filterContractCases,
-          satisfies: "Record<Entity, EntityFilterContractCase>",
-          comment:
-            "// Generated contract cases keep mechanical filter invariants reviewable.\n// Generated filter contract cases stay compact.",
-        }),
-    },
     {
       relativePath:
         "apps/web/src/entities/generated/entity-filter-bindings.gen.ts",

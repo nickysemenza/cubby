@@ -5,20 +5,16 @@ import type {
 } from "@cubby/schemas/calendar";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ProjectId } from "@cubby/schemas/identifiers";
-import { addDays } from "date-fns";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import { and, eq, gte, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 
-import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
+import { shiftPlainDate } from "~/lib/plain-date";
 import type { Database } from "~/server/db";
 import { location, plant, planting } from "~/server/db/schema";
 import { plantingDisplayName } from "~/server/repo/garden";
 
 import { getDb, notDeleted } from "./database-helpers";
 import { effectiveTaskProjectSql } from "./task-project-inheritance";
-
-const shiftPlainDate = (value: string, amount: number) =>
-  formatPlainDate(addDays(parsePlainDate(value), amount));
 
 /** The planting lifecycle's milestone date columns, in the order they occur.
  * Shared by the "any milestone falls in range" read predicate and by

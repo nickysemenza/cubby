@@ -116,6 +116,16 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
+    file: "list-delete.spec.ts",
+    globs: [
+      `${WEB}/src/routes/_authenticated/tasks.index.tsx`,
+      `${WEB}/src/app/_components/hooks/useOptimisticDelete.tsx`,
+      `${WEB}/src/app/_components/hooks/useEntityListPresentation.tsx`,
+      `${WEB}/src/app/tasks/**`,
+      `${WEB}/src/server/repo/task/**`,
+    ],
+  },
+  {
     file: "calendar.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/calendar.tsx`,
@@ -286,6 +296,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/routes/api/auth/**`,
       `${WEB}/src/routes/_authenticated/account.$accountView.tsx`,
       `${WEB}/src/lib/http-api/**`,
+      `${WEB}/tests/e2e/http-api-client.ts`,
       `${WEB}/src/server/repo/vendor.ts`,
     ],
   },
@@ -295,6 +306,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/routes/api/v1/**`,
       `${WEB}/src/routes/api/auth/**`,
       `${WEB}/src/lib/http-api/**`,
+      `${WEB}/tests/e2e/http-api-client.ts`,
     ],
   },
   {

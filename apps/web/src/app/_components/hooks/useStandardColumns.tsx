@@ -15,13 +15,13 @@ import {
   getSortableFields,
 } from "~/entities/entities";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
+import { createUnitMappingsColumn } from "~/entities/list-columns/product";
 
 import {
   createActionsColumn,
   createCreatedAtColumn,
   createImageColumn,
   createNameColumn,
-  createUnitMappingsColumn,
   createUpdatedAtColumn,
   type FilterConfig,
   multiSelectFilterFn,

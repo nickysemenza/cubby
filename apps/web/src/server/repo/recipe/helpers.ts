@@ -205,9 +205,9 @@ type RecipeShallowOut = Omit<
   "meals" | "sectionCount" | "displayImages" | "dataQuality"
 >;
 
-export const dbRecipeToAPIShallow: (
-  recipeParam: RecipeSelect,
-) => RecipeShallowOut = (recipeData) => {
+const dbRecipeToAPIShallow: (recipeParam: RecipeSelect) => RecipeShallowOut = (
+  recipeData,
+) => {
   const totals = totalsForRead(recipeData.totals, recipeData.totalsComputedAt);
   return {
     ...dbRecipeToTopLevel(recipeData),

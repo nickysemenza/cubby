@@ -68,7 +68,7 @@ export function LocationIconWithLabel({
 
 /**
  * Location type options with colored icons for dropdowns and the tint the
- * generic enum pill shares with `LocationTypeLabel`. The shared static
+ * generic enum pill uses. The shared static
  * picker suppresses its fallback swatch when an option already has an icon.
  */
 export const locationTypeOptionsWithTheme = locationType.options.map(

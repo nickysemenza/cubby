@@ -13,7 +13,6 @@ import type {
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   TaskBulkReorderInput,
-  TaskBulkStatusInput,
   TaskCreateInput,
   TaskOut,
   TaskUpdateInput,
@@ -47,7 +46,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { bulkPatchEntities, patchEntityRows } from "~/server/repo/entity-patch";
+import { bulkPatchEntities } from "~/server/repo/entity-patch";
 import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
 /**
  * Task CRUD operations.
@@ -346,7 +345,7 @@ export const getTaskByShortcode = (db: Database, shortcode: string) =>
   taskReader.getByShortcode(db, shortcode);
 
 /**
- * Batch by-id read for bulk-write results (`setTasksStatus`) — the same row
+ * Batch by-id read for bulk-write results (`reorderTasks`) — the same row
  * shape/joins as `getTaskByID`, fetched with one `inArray` query plus
  * the batched dependency/subtask-count reads instead of N one-by-one calls.
  * Exported for `repo/project/create-from-tasks.ts`'s promotion read-back
@@ -630,17 +629,6 @@ export const updateTask = async (
   };
 };
 
-/**
- * Resolve a bulk selection to live uuids, DROPPING codes that name nothing
- * live. Bulk writes are documented to skip a soft-deleted or unknown id rather
- * than reject the batch; use {@link resolveLiveTaskIdsOrThrow} where a specific
- * id is a precondition (the reorder anchor), not part of a set.
- */
-const resolveLiveTaskIds = (
-  tx: DrizzleTransaction,
-  shortcodes: TaskShortcode[],
-): Promise<TaskId[]> => resolveAllPresent(tx, "task", shortcodes);
-
 const resolveLiveTaskIdsOrThrow = (
   tx: DrizzleTransaction,
   shortcodes: TaskShortcode[],
@@ -694,42 +682,6 @@ export const updateTasksInBulk = (
     shortcodes,
     data,
   );
-};
-
-/**
- * Bulk status write — a plain `status` column write over `ids`. A plain
- * UPDATE with no recurrence/denormalization side-effects, same as
- * `updateTask`'s status write — there's no "done" cascade in this schema
- * today.
- */
-export const setTasksStatus = async (
-  db: Database,
-  input: TaskBulkStatusInput,
-  actor: ActorContext,
-): Promise<TaskOut[]> => {
-  const { status } = input;
-
-  const updatedIds = await withTransaction(db, async (tx) => {
-    const ids = await resolveLiveTaskIds(tx, input.ids);
-    if (ids.length === 0) return [];
-
-    await patchEntityRows(
-      tx,
-      actor,
-      {
-        entity: "task",
-        table: task,
-        fields: entityFieldModels.task.bulk,
-      },
-      ids,
-      { status },
-    );
-    // Preserve the convenience setter's all-live-selection result even when
-    // patchEntityRows finds no changed rows.
-    return ids;
-  });
-
-  return getTasksByIDs(db, updatedIds);
 };
 
 /** Rank writes are deliberately unaudited: materializing manual priority

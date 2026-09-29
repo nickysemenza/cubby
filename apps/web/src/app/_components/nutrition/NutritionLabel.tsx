@@ -9,7 +9,11 @@ import {
   TIER1_NUTRIENTS,
 } from "@cubby/usda";
 
-import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
+import {
+  estimateStatusText,
+  formatEstimate,
+  trimAmount,
+} from "~/lib/nutrition-format";
 import { cn } from "~/lib/utils";
 
 /**
@@ -46,8 +50,6 @@ const SUB_NUTRIENTS: ReadonlySet<NutrientKey> = new Set([
 
 // Trim trailing-zero decimals: 18.0 -> "18", 1.7 -> "1.7" — matches
 // NutrientsSummary's amount formatting so figures read consistently app-wide.
-const trimAmount = (v: number) => Number(v.toFixed(1)).toString();
-
 const formatAmount = (
   estimate: NutritionEstimate[NutrientKey],
   unit: string,

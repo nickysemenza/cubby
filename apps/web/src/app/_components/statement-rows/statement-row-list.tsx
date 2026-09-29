@@ -18,7 +18,7 @@ import { PossibleVendor } from "~/app/finance/possible-vendor";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
-import { type BadgeVariant, badgeVariantColor } from "~/components/ui/badge";
+import { badgeVariantColor } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { DrilldownMetricStrip } from "~/components/ui/drilldown-metric-strip";
 import { Input } from "~/components/ui/input";
@@ -30,6 +30,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { statementRow } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { statusTone } from "~/lib/status-tone";
 import { formatCurrency } from "~/lib/utils";
 
 import {
@@ -56,13 +57,6 @@ type MatchStateSearchValue = StatementRowMatchState | "all";
 const NO_ROWS: StatementRowOut[] = [];
 const NO_SOURCES: string[] = [];
 
-const MATCH_STATE_TONE = {
-  matched: "positive",
-  unmatched: "warning",
-  superseded: "slate",
-  ignored: "secondary",
-} satisfies Record<StatementRowMatchState, BadgeVariant>;
-
 const MATCH_STATE_VALUES = [
   "matched",
   "unmatched",
@@ -75,14 +69,10 @@ const MATCH_STATE_OPTIONS: FilterableComboboxItem[] = MATCH_STATE_VALUES.map(
   (value) => ({
     value,
     label: capitalize(value),
-    color: badgeVariantColor[MATCH_STATE_TONE[value]],
+    color: badgeVariantColor[statusTone("statementMatch", value)],
   }),
 );
 
-const DISPOSITION_TONE = {
-  open: "outline",
-  ignored: "secondary",
-} satisfies Record<StatementRowDisposition, BadgeVariant>;
 const DISPOSITION_VALUES = [
   "open",
   "ignored",
@@ -92,7 +82,7 @@ const DISPOSITION_OPTIONS: FilterableComboboxItem[] = DISPOSITION_VALUES.map(
   (value) => ({
     value,
     label: capitalize(value),
-    color: badgeVariantColor[DISPOSITION_TONE[value]],
+    color: badgeVariantColor[statusTone("statementDisposition", value)],
   }),
 );
 

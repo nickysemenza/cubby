@@ -3,18 +3,13 @@ import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import type { Entity, EntityRef } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import {
-  type LocationShortcode,
-  parseShortcodeFor,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { locationType, type LocationType } from "@cubby/schemas/location";
-import type { ProductPricingOut } from "@cubby/schemas/product";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
-import { PushPinIcon } from "@phosphor-icons/react/dist/csr/PushPin";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { uniqBy } from "es-toolkit";
@@ -58,7 +53,6 @@ import {
   isBrowserRoutedEntity,
 } from "~/entities/entities";
 import { multiSelectFilterFn } from "~/entities/filters";
-import { type BaseKind, gradedKinds } from "~/lib/conversion-coverage";
 import { colorizeSelectOptions } from "~/lib/select-options";
 import { cn, formatCurrency } from "~/lib/utils";
 
@@ -75,7 +69,7 @@ import {
 } from "../combobox/with-search-hook";
 import { useEntityDisplayImage } from "../entity-media/entity-display-images";
 import { ImageThumbnail } from "../table/ImageThumbnail";
-import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
+import type { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import type { CellClipboardSpec, CellJsonValue } from "./cell-clipboard";
 import {
   amountCellData,
@@ -94,14 +88,6 @@ import {
   type FilterableComboboxItem,
 } from "./editable-cell";
 import { EditableEntityCell } from "./editable-entity-cell";
-import type {
-  InventoryEntryBase,
-  InventoryRelatedEntity,
-} from "./inventory-column-helpers";
-import {
-  InventoryEntriesCell,
-  type InventoryEntriesCellProps,
-} from "./inventory-entries-cell";
 import { nameLabel } from "./name-label";
 import type {
   CubbyCellContext as CellContext,
@@ -115,6 +101,8 @@ import {
 } from "./table-meta";
 
 export type { FilterConfig, MobileColumnMeta, MobileSlot } from "./table-meta";
+
+type UnitMapping = Parameters<typeof UnitMappingDisplay>[0]["mappings"][number];
 
 export { multiSelectFilterFn };
 
@@ -668,142 +656,6 @@ export function createEntityInlineLinkColumn<
         info.getValue() ?? [],
         options?.dedupe ?? false,
       ),
-  });
-}
-
-type UnitMapping = Parameters<typeof UnitMappingDisplay>[0]["mappings"][number];
-
-export function createUnitMappingsColumn<
-  // `ingredient.naKinds` is the coverage opt-out; optional so the ingredient
-  // list (whose rows ARE the ingredient) and any future caller still fit.
-  T extends { id: string; ingredient?: { naKinds?: BaseKind[] | null } | null },
->(
-  columnHelper: ColumnHelper<T>,
-  mappingsMap: Record<string, UnitMapping[]>,
-  options?: {
-    id?: string;
-    header?: string;
-    className?: string;
-    enableSorting?: boolean;
-    compact?: boolean;
-  },
-) {
-  const compact = options?.compact ?? true;
-  return columnHelper.display({
-    id: options?.id ?? "unitMappings",
-    header: options?.header ?? "Unit Mappings",
-    enableSorting: options?.enableSorting ?? false,
-    meta: {
-      className:
-        options?.className ?? (compact ? "min-w-0 w-32" : "w-96 max-w-96"),
-    },
-    cell: (info) => {
-      const entity = info.row.original;
-      const mappings = mappingsMap[entity.id] ?? [];
-      return (
-        <div className="w-full">
-          <UnitMappingDisplay
-            mappings={mappings}
-            title=""
-            compact={compact}
-            showTier={compact}
-            // Grade against the linked ingredient's applicable kinds, same as
-            // the Problems panel and the enrichment workbench. Without this the
-            // list graded against all four BASE_KINDS and disagreed with both —
-            // an ingredient that opted out of `volume` read worse here than on
-            // the page you'd go to act on it.
-            kinds={gradedKinds(entity.ingredient?.naKinds)}
-          />
-        </div>
-      );
-    },
-  });
-}
-
-export function createInventoryEntriesColumn<
-  TEntry extends InventoryEntryBase,
-  TEntity extends InventoryRelatedEntity["entity"],
-  K extends PropertyKey,
-  T extends Record<K, TEntry[]>,
->(
-  columnHelper: ColumnHelper<T>,
-  accessor: K,
-  entity: TEntity,
-  getRelatedEntity: InventoryEntriesCellProps<
-    T,
-    TEntry,
-    TEntity
-  >["getRelatedEntity"],
-  options?: {
-    id?: string;
-    header?: string;
-    className?: string;
-    enableSorting?: boolean;
-    layout?: "stacked" | "inline";
-    mobile?: MobileColumnMeta;
-    filterConfig?: FilterConfig;
-    provenance?: EntityFieldProvenance;
-    /**
-     * When set, rows with entries get a hover-revealed pencil that opens a
-     * quick-edit surface (e.g. the per-entry inventory dialog). A pencil
-     * affordance rather than a whole-cell click target: the entry links inside
-     * the cell must stay navigable, and interactive-inside-interactive nesting
-     * is invalid.
-     */
-    onQuickEdit?: (row: T) => void;
-    /**
-     * Inline edit + clipboard on the 0/1-entry cases: an `EditableEntityCell`
-     * (pencil trigger) lets you move the single entry's location, or create a
-     * new entry at a picked location when there are none. Only meaningful for
-     * entity === "location" + layout === "inline" — ignored otherwise (e.g.
-     * LocationList's Products column, or the "stacked" layout).
-     */
-    inlineEdit?: {
-      /** `useEntityListSource("location", ...)` — injected so unit tests can stub it. */
-      SearchProvider: (
-        props: SearchProviderProps<LocationShortcode>,
-      ) => ReactNode;
-      onMoveEntry: (
-        entry: TEntry,
-        locationId: LocationShortcode,
-      ) => Promise<void>;
-      onCreateEntry: (row: T, locationId: LocationShortcode) => Promise<void>;
-    };
-  },
-) {
-  const layout = options?.layout ?? "inline";
-
-  return columnHelper.accessor((row: T) => row[accessor], {
-    id: options?.id ?? String(accessor),
-    header:
-      options?.header ?? (entity === "location" ? "Locations" : "Products"),
-    enableSorting: options?.enableSorting ?? false,
-    meta: attachCubbyColumnMeta<T>({
-      className: options?.className ?? "min-w-0 w-40 max-w-56",
-      mobile: options?.mobile,
-      filterConfig: options?.filterConfig,
-      provenance: options?.provenance,
-      entityRefs: (row) =>
-        row[accessor].flatMap((entry) => {
-          const related = getRelatedEntity(entry);
-          return related ? [{ entityKind: entity, entityId: related.id }] : [];
-        }),
-    }),
-    cell: (info) => (
-      <InventoryEntriesCell<T, TEntry, TEntity>
-        entries={info.getValue() ?? []}
-        entity={entity}
-        getRelatedEntity={getRelatedEntity}
-        layout={layout}
-        row={info.row.original}
-        onQuickEdit={options?.onQuickEdit}
-        inlineEdit={
-          entity === "location" && layout === "inline"
-            ? options?.inlineEdit
-            : undefined
-        }
-      />
-    ),
   });
 }
 
@@ -1619,77 +1471,6 @@ export function renderOptionCell(
       ) : null}
     </EnumPill>
   );
-}
-
-/**
- * `Product.pricing.source` in prose — the one place this ternary is spelled
- * out, so the detail-page caption and the cell tooltip (below) can't drift
- * apart on what "explicit" / "derived" / "none" mean to a reader.
- */
-export function describeProductPricingSource(
-  pricing: Pick<ProductPricingOut, "source" | "knownExpenseCount" | "partial">,
-): string {
-  switch (pricing.source) {
-    case "explicit":
-      return "Manual override";
-    case "derived":
-      return `Derived from ${pricing.knownExpenseCount} expense${pricing.knownExpenseCount === 1 ? "" : "s"}${pricing.partial ? " · partial history" : ""}`;
-    case "none":
-      return "No override or quantified purchase history";
-  }
-}
-
-/**
- * `Product.price`'s `EditableCell` edits the manual override, but *displays*
- * `pricing.effectivePrice` — the override OR the Expense-derived fallback.
- * Both render as a plain number, so without a cue an override and a derived
- * price (and a cleared override that happens to land on the same digits as
- * the old one) are visually identical. The pin marks the exception (a manual
- * override); the derived norm stays unmarked, and the tooltip names either
- * source. This is that cue;
- * shared by the detail page and the list column so the two surfaces can't
- * disagree about what the cell means.
- */
-export function renderProductPriceValue(
-  pricing: Pick<
-    ProductPricingOut,
-    "effectivePrice" | "source" | "knownExpenseCount" | "partial"
-  >,
-): ReactNode {
-  if (pricing.effectivePrice === null) return <NoneValue />;
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={<span className="inline-flex items-center gap-1" />}
-      >
-        {pricing.source === "explicit" ? (
-          <PushPinIcon
-            aria-hidden
-            className="size-3 shrink-0 text-muted-foreground"
-          />
-        ) : null}
-        {formatCurrency(pricing.effectivePrice)}
-      </TooltipTrigger>
-      <TooltipContent side="top">
-        {describeProductPricingSource(pricing)}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-/**
- * Label for `Product.price`'s currency-clear control: names the state
- * clearing the override lands on, so the button reads as "go back to the
- * derived price" rather than an unlabelled "clear". Shared by the detail
- * page and the list column so a clear affordance can't say something
- * different on one surface than the other.
- */
-export function productPriceClearLabel(
-  pricing: Pick<ProductPricingOut, "derivedPrice">,
-): string {
-  return pricing.derivedPrice !== null
-    ? `Revert to ${formatCurrency(pricing.derivedPrice)} (derived)`
-    : "Clear override (no derived price on record)";
 }
 
 /**

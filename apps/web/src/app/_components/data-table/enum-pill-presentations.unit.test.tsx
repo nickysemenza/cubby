@@ -1,7 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { LocationTypeLabel } from "~/app/_components/locations/LocationTypeLabel";
 import { CategoryLabel } from "~/app/_components/products/CategoryLabel";
 import { tradeOptions } from "~/app/projects/trade-options";
 
@@ -19,15 +18,9 @@ function pillFor(label: string) {
 }
 
 describe("enum pill icons", () => {
-  it("shows the existing category and location-type glyphs", () => {
-    const category = render(
-      <CategoryLabel category={categorySummaryFixture("supplies")} />,
-    );
+  it("shows the existing category glyph", () => {
+    render(<CategoryLabel category={categorySummaryFixture("supplies")} />);
     expect(pillFor("Supplies").querySelectorAll("svg")).toHaveLength(1);
-    category.unmount();
-
-    render(<LocationTypeLabel type="drawer" product={null} />);
-    expect(pillFor("drawer").querySelectorAll("svg")).toHaveLength(1);
   });
 
   it("uses an option-roster icon for a generic trade pill", () => {

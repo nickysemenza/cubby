@@ -13,7 +13,6 @@ import {
   mealTypeRank,
 } from "@cubby/schemas/meal-classification";
 import type { NutritionTotals } from "@cubby/schemas/nutrition";
-import { addDays } from "date-fns";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import {
   and,
@@ -29,7 +28,7 @@ import {
 import { uniq } from "es-toolkit";
 
 import { aggregateTotals } from "~/lib/nutrition-estimates";
-import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
+import { shiftPlainDate } from "~/lib/plain-date";
 import type { Database } from "~/server/db";
 import { expense, project, purchase, task } from "~/server/db/schema";
 
@@ -76,9 +75,6 @@ const emptyDaySummary = (): CalendarDaySummary => ({
   mealCount: 0,
   projectCount: 0,
 });
-
-const shiftPlainDate = (value: string, amount: number) =>
-  formatPlainDate(addDays(parsePlainDate(value), amount));
 
 const itemOrder = {
   project: 0,
