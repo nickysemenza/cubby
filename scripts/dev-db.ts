@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveDevProfile } from "./lib/dev-profile.ts";
 
 import {
   containerCli,
@@ -12,35 +12,74 @@ import {
 } from "./lib/apple-container.ts";
 
 /**
- * A persistent local PostgreSQL for `pnpm dev:local` iteration — separate
+ * A persistent local PostgreSQL for `pnpm dev` iteration — separate
  * from the ephemeral/warm containers scripts/test-services.ts manages for
  * test runs. Fixed name, fixed published port, named volume: `up` is
  * idempotent and data survives across runs until `down` (which stops the
  * container but keeps the volume) or a manual `container volume rm`.
  */
-export const DEV_DB_CONTAINER = "cubby-dev-pg";
-export const DEV_DB_VOLUME = "cubby-dev-pg-data";
-export const DEV_DB_HOST = "localhost";
-export const DEV_DB_PORT = 55432;
-export const DEV_DB_NAME = "cubby_dev";
-export const DEV_DB_USER = "postgres";
+const DEV_DB_CONTAINER = "cubby-dev-pg";
+const DEV_DB_VOLUME = "cubby-dev-pg-data";
+const DEV_DB_HOST = "localhost";
+const DEV_DB_PORT = 55432;
+const DEV_DB_NAME = "cubby_dev";
+const DEV_DB_USER = "postgres";
 // Synthetic, local-only credential — never used outside this dev container.
-export const DEV_DB_PASSWORD = "password";
-/**
- * The database this invocation targets. Worktrees share `cubby_dev`; a branch
- * whose migrations are ahead of main sets CUBBY_DEV_DB_NAME=cubby_dev_<name>
- * to get its own database in the same container, so it never migrates the
- * shared one. apps/web/tooling/dev-db-guard.ts accepts the same pattern.
- */
-const devDatabaseName = process.env.CUBBY_DEV_DB_NAME ?? DEV_DB_NAME;
-if (!/^cubby_dev(?:_[a-z0-9_]+)?$/u.test(devDatabaseName))
-  throw new Error("CUBBY_DEV_DB_NAME must be cubby_dev or cubby_dev_<a-z0-9_>");
-const ownDatabase = devDatabaseName !== DEV_DB_NAME;
-export const DEV_DATABASE_URL = `postgresql://${DEV_DB_USER}:${DEV_DB_PASSWORD}@${DEV_DB_HOST}:${DEV_DB_PORT}/${devDatabaseName}`;
+const DEV_DB_PASSWORD = "password";
+const profile = resolveDevProfile(
+  path.resolve(import.meta.dirname, ".."),
+  process.env,
+);
+const devDatabaseName = profile.name;
+const DEV_DATABASE_URL = profile.databaseUrl;
 
 const postgresImage = "docker.io/pgvector/pgvector:pg17";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.join(__dirname, "../apps/web");
+const useDocker =
+  process.env.CUBBY_DEV_SERVICES === "docker" || process.platform !== "darwin";
+
+function docker(args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("docker", args, { stdio: ["ignore", "pipe", "pipe"] });
+    let output = "";
+    let error = "";
+    child.stdout.on("data", (chunk) => {
+      output += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      error = (error + String(chunk)).slice(-8_000);
+    });
+    child.once("error", reject);
+    child.once("close", (code) =>
+      code === 0
+        ? resolve(output.trim())
+        : reject(new Error(`docker ${args[0]} failed (${code}): ${error}`)),
+    );
+  });
+}
+
+async function dockerIdentity(): Promise<boolean> {
+  const existing = await docker([
+    "ps",
+    "-a",
+    "--filter",
+    `name=^/${DEV_DB_CONTAINER}$`,
+    "--format",
+    "{{.Names}}",
+  ]);
+  if (!existing) return false;
+  const [info] = JSON.parse(await docker(["inspect", DEV_DB_CONTAINER]));
+  if (
+    info.Config.Image !== "pgvector/pgvector:pg17" ||
+    info.Config.Labels?.["com.docker.compose.project"] !== "cubby-dev" ||
+    !info.Mounts?.some(
+      (mount: { Name?: string }) => mount.Name === DEV_DB_VOLUME,
+    )
+  )
+    throw new Error(`Refusing unowned ${DEV_DB_CONTAINER}`);
+  return true;
+}
 
 async function assertOwnedContainer(): Promise<boolean> {
   if (!(await findContainer(DEV_DB_CONTAINER))) return false;
@@ -78,6 +117,20 @@ async function assertOwnedContainer(): Promise<boolean> {
 }
 
 async function up(): Promise<void> {
+  if (useDocker) {
+    await dockerIdentity();
+    await docker([
+      "compose",
+      "-p",
+      "cubby-dev",
+      "-f",
+      path.resolve(__dirname, "../docker-compose.dev.yml"),
+      "up",
+      "-d",
+    ]);
+    await waitFor("cubby-dev-pg", () => tcpReady(DEV_DB_HOST, DEV_DB_PORT));
+    return;
+  }
   const existing = await findContainer(DEV_DB_CONTAINER);
   if (existing) await assertOwnedContainer();
   if (existing?.status.state === "running") {
@@ -122,6 +175,18 @@ async function up(): Promise<void> {
 }
 
 async function down(): Promise<void> {
+  if (useDocker) {
+    if (await dockerIdentity())
+      await docker([
+        "compose",
+        "-p",
+        "cubby-dev",
+        "-f",
+        path.resolve(__dirname, "../docker-compose.dev.yml"),
+        "down",
+      ]);
+    return;
+  }
   const existing = await findContainer(DEV_DB_CONTAINER);
   if (!existing) {
     console.log(`[dev-db] ${DEV_DB_CONTAINER} is not running`);
@@ -136,6 +201,12 @@ async function down(): Promise<void> {
 }
 
 async function assertRunningOwnedContainer(): Promise<void> {
+  if (useDocker) {
+    if (!(await dockerIdentity()))
+      throw new Error("Start the owned database with pnpm db:dev:up first");
+    await tcpReady(DEV_DB_HOST, DEV_DB_PORT);
+    return;
+  }
   if (
     !(await assertOwnedContainer()) ||
     (await findContainer(DEV_DB_CONTAINER))?.status.state !== "running"
@@ -146,7 +217,7 @@ async function assertRunningOwnedContainer(): Promise<void> {
   }
 }
 
-/** `migrate` and `seed` need apps/web's own deps (drizzle-orm, pg, faker, the entity kernel). */
+/** Migrations need apps/web's own database dependencies. */
 function runInWebWorkspace(
   script: string,
   args: string[] = [],
@@ -166,19 +237,19 @@ function runInWebWorkspace(
   });
 }
 
-function runWebCommand(args: string[]): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("pnpm", args, {
-      cwd: webRoot,
-      stdio: "inherit",
-      env: { ...process.env, DATABASE_URL: DEV_DATABASE_URL },
-    });
-    child.once("error", reject);
-    child.once("close", (code) => resolve(code ?? 1));
-  });
-}
-
 function psql(sql: string): Promise<string> {
+  if (useDocker)
+    return docker([
+      "exec",
+      DEV_DB_CONTAINER,
+      "psql",
+      "-U",
+      DEV_DB_USER,
+      "-d",
+      "postgres",
+      "-tAc",
+      sql,
+    ]);
   return containerCli([
     "exec",
     DEV_DB_CONTAINER,
@@ -192,9 +263,9 @@ function psql(sql: string): Promise<string> {
   ]);
 }
 
-/** A branch database (CUBBY_DEV_DB_NAME) is created on first use. */
+/** Each checkout's selected database is created on first use. */
 async function ensureDatabase(): Promise<void> {
-  if (!ownDatabase) return;
+  await waitFor("PostgreSQL query readiness", () => psql("SELECT 1"));
   const exists = await psql(
     `SELECT 1 FROM pg_database WHERE datname = '${devDatabaseName}'`,
   );
@@ -213,22 +284,13 @@ async function ready(): Promise<number> {
     );
     return migrated;
   }
-  if (!existsSync(path.join(webRoot, "dist/server/wrangler.json"))) {
-    const built = await runWebCommand(["run", "build:cf"]);
-    if (built !== 0) return built;
-  }
-  return runInWebWorkspace("dev-db-seed.ts", ["--if-empty"]);
+  return 0;
 }
 
 async function reset(): Promise<number> {
   await assertRunningOwnedContainer();
-  if (ownDatabase) {
-    // Only this branch's database; the shared volume stays.
-    await psql(`DROP DATABASE IF EXISTS "${devDatabaseName}" WITH (FORCE)`);
-    return ready();
-  }
-  await stopAndRemove(DEV_DB_CONTAINER);
-  await containerCli(["volume", "rm", DEV_DB_VOLUME]);
+  // The shared service contains other checkouts' databases.
+  await psql(`DROP DATABASE IF EXISTS "${devDatabaseName}" WITH (FORCE)`);
   return ready();
 }
 
@@ -245,16 +307,13 @@ async function main(): Promise<number> {
       await assertRunningOwnedContainer();
       await ensureDatabase();
       return runInWebWorkspace("db-migrate.ts", ["--target=dev"]);
-    case "seed":
-      await assertRunningOwnedContainer();
-      return runInWebWorkspace("dev-db-seed.ts");
     case "ready":
       return ready();
     case "reset":
       return reset();
     default:
       console.error(
-        "Usage: node scripts/dev-db.ts <up|migrate|seed|ready|reset|down>",
+        "Usage: node scripts/dev-db.ts <up|migrate|ready|reset|down>",
       );
       return 1;
   }

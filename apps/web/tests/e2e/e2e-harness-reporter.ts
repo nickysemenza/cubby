@@ -8,9 +8,12 @@ import type {
 } from "@playwright/test/reporter";
 import { z } from "zod";
 
-import { writeE2ERunBundle } from "../../tooling/e2e-run-bundle";
+import {
+  captureE2ERunIdentity,
+  writeE2ERunBundle,
+  type E2ERunIdentity,
+} from "../../tooling/e2e-run-bundle";
 import { assertTestRunContract } from "../../tooling/test-run-contract";
-import { readWebBuildProvenance } from "../../tooling/web-build-provenance";
 
 import {
   NAVIGATION_ANNOTATION,
@@ -33,6 +36,13 @@ class E2EHarnessReporter implements Reporter {
   }> = [];
   private testMs = 0;
   private phases: number[][] = [];
+  private started?: E2ERunIdentity;
+
+  onBegin(): void {
+    this.started = captureE2ERunIdentity(
+      path.resolve(import.meta.dirname, "../../../.."),
+    );
+  }
 
   onTestEnd(test: TestCase, result: TestResult): void {
     if (result.retry === 0) {
@@ -100,7 +110,7 @@ class E2EHarnessReporter implements Reporter {
       evidence: [resultsPath],
       kind: "browser",
       status: this.runStatus,
-      build: readWebBuildProvenance(repoRoot),
+      started: this.started,
       command: [
         "pnpm",
         "--dir",
@@ -109,6 +119,11 @@ class E2EHarnessReporter implements Reporter {
         ...process.argv.slice(2).filter((argument) => argument !== "test"),
       ],
       cases: this.bundleCases,
+      profile: "built-worker",
+      scenario: this.bundleCases.map((testCase) => testCase.name).join("; "),
+      fixture: "isolated E2E scenario builders",
+      fixtureVersion: 1,
+      phases: [{ name: "test", durationMs: this.testMs }],
       runtime: {
         playwright: z
           .object({ version: z.string() })

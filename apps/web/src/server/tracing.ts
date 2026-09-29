@@ -5,11 +5,9 @@
  * Two backends, picked at build time via the `__CF_WORKERS__` define so the
  * unused one is dead-code-eliminated:
  *
- *  - Dev / Node → the global `@opentelemetry/api` tracer that the dev NodeSDK
- *    (`instrument.server.mjs`, loaded via `--import`) registers, exporting to
- *    Jaeger. Rich span semantics (status, recorded exceptions, W3C context
- *    propagation) all work.
- *  - Deployed CF Worker → the runtime `cloudflare:workers` `tracing.enterSpan`
+ *  - Node tests → the global `@opentelemetry/api` tracer. A test may register
+ *    its own provider to observe span semantics and W3C context propagation.
+ *  - Local and deployed CF Worker → the runtime `cloudflare:workers` `tracing.enterSpan`
  *    API. Its spans nest under CF's automatic platform
  *    spans and flow into the `grafana-traces` OTLP destination — no OTel SDK
  *    runs in the Worker. The CF `Span` is thinner (`setAttribute` only), so
@@ -36,7 +34,7 @@ const isCloudflareWorkerBuild = (
 ): flag is true => flag === true;
 const IS_CF = isCloudflareWorkerBuild();
 
-// Single OTel tracer instance — used by the dev `withTrace` backend and by the
+// Single OTel tracer instance — used by the Node `withTrace` backend and by the
 // synchronous WASM spans in `~/lib/wasm.ts` (which can't use the async
 // `withTrace`). In the deployed Worker no OTel provider is registered, so these
 // calls are no-ops; the CF backend below handles prod tracing instead.

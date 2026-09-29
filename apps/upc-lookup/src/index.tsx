@@ -188,7 +188,9 @@ app.get(
 // so tracesSampleRate is 0. `withSentry`'s auto-capture only fires on a throw
 // that escapes `fetch`; the `registerSentryErrorCapture` call above is what
 // actually reports the route-level errors Hono swallows into a 500.
-const handler = { fetch: app.fetch } satisfies ExportedHandler<Env>;
+export const localWorkerHandler = {
+  fetch: app.fetch,
+} satisfies ExportedHandler<Env>;
 
 export default Sentry.withSentry(
   () => ({
@@ -197,5 +199,7 @@ export default Sentry.withSentry(
     tracesSampleRate: 0,
     initialScope: { tags: { service: "upc-lookup" } },
   }),
-  handler,
+  // Sentry mutates its handler; local Wrangler peers use the raw export and
+  // cannot evaluate Vite's import.meta.env in the production options callback.
+  { ...localWorkerHandler },
 );

@@ -1,4 +1,11 @@
 /** Built previews on loopback are local executions, even with production JS. */
+export function workerSentryEnabled(env: {
+  SENTRY_ENVIRONMENT?: string;
+  E2E_AUTH_TEST_MODE?: string;
+}): boolean {
+  return env.SENTRY_ENVIRONMENT !== "test" && env.E2E_AUTH_TEST_MODE !== "true";
+}
+
 export function sentryEnvironment(
   origin: string | undefined,
   fallback: string | undefined,

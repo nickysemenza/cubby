@@ -11,6 +11,7 @@ const APP_HTML = resolve(import.meta.dirname, "../../mcp-apps/dist/app.html");
  * this keeps the Worker holding a URL and lets its ASSETS binding serve bytes.
  */
 export function mcpAppAsset(): Plugin {
+  let building = false;
   const source = () => readFileSync(APP_HTML);
   const fileName = () => {
     const hash = createHash("sha256")
@@ -23,6 +24,22 @@ export function mcpAppAsset(): Plugin {
   return {
     name: "cubby-mcp-app-asset",
     enforce: "pre",
+    configResolved(config) {
+      building = config.command === "build";
+    },
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+        if (!pathname.startsWith("/assets/mcp-usda-picker-")) return next();
+        if (pathname !== `/assets/${fileName()}`) {
+          res.statusCode = 404;
+          return res.end();
+        }
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader("Cache-Control", "no-cache");
+        res.end(req.method === "HEAD" ? undefined : source());
+      });
+    },
     resolveId(id, importer) {
       if (!importer || !id.endsWith("?url")) return undefined;
       const candidate = resolve(importer, "..", id.slice(0, -4));
@@ -36,7 +53,7 @@ export function mcpAppAsset(): Plugin {
     buildStart() {
       // Vite builds client and SSR as separate environments. Only the static
       // client output is attached to the Worker's ASSETS binding.
-      if (this.environment.name !== "client") return;
+      if (!building || this.environment.name !== "client") return;
       this.emitFile({
         type: "asset",
         fileName: `assets/${fileName()}`,

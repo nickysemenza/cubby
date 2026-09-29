@@ -47,6 +47,7 @@
         "src/routes/**/*.{ts,tsx}!",
         "src/server.ts!",
         "src/cf-server.ts!",
+        "vite.config.ts!",
         "src/styles.css!",
         "src/lib/recipebridge-cf.ts!",
         "src/lib/sentry-cf-shim.ts!",
@@ -64,8 +65,7 @@
         "scripts/apple-preview-fixtures.ts!",
         "tooling/**/*.{ts,tsx}!",
         "tooling/e2e-db-watchdog.mjs!",
-        "drizzle.config.ts!",
-        "instrument.server.mjs!"
+        "drizzle.config.ts!"
       ],
       // Test seams (fixtures, mocks, harnesses) are reached only from tests;
       // production mode leaves them out of the file graph.
@@ -82,19 +82,20 @@
         "~/*": ["./src/*"],
         "tooling/*": ["./tooling/*"]
       },
-      "ignoreBinaries": ["tsgo", "rsvg-convert", "magick"],
+      "ignoreBinaries": ["tsgo", "rsvg-convert", "magick", "apple"],
       "ignoreDependencies": [
         "@fontsource-variable/inter",
         "@fontsource-variable/jetbrains-mono",
         "@testing-library/.+",
         "@vitest/.+",
         "@tailwindcss/vite",
-        "@opentelemetry/.+",
         "cloudflare",
         "vite-plugin-wasm",
         "vite-plugin-top-level-await"
       ],
       "vitest": { "config": "vitest.config.ts" },
+      // Analyze the config imports above without executing local startup guards.
+      "vite": { "config": [] },
       "playwright": { "config": "playwright.config.ts" }
     },
     "apps/purchase-agent": {
@@ -126,6 +127,7 @@
     "apps/upc-lookup": {
       "entry": [
         "src/index.tsx!",
+        "src/local-dev.ts!",
         "src/**/*.test.ts!",
         "vite.config.ts!",
         "drizzle.config.ts!"
@@ -135,6 +137,7 @@
     "apps/usda-api": {
       "entry": [
         "src/worker.ts!",
+        "src/local-dev.ts!",
         "src/db/import-usda.ts!",
         "src/**/*.test.ts!",
         "scripts/**/*.ts!",

@@ -20,7 +20,10 @@ import {
 } from "./lib/http-cache";
 import { httpRouteTemplate } from "./lib/http-route-template";
 import { observeResponseBody } from "./lib/response-body-observer";
-import { resolveWorkerSentryEnvironment } from "./lib/sentry-environment";
+import {
+  resolveWorkerSentryEnvironment,
+  workerSentryEnabled,
+} from "./lib/sentry-environment";
 import { SENTRY_IGNORED_ERRORS } from "./lib/sentry-noise";
 import { scrubSentryEvent } from "./lib/sentry-scrub";
 import {
@@ -508,7 +511,11 @@ const handler = {
   // Background queue consumer. Each message is a complete task; there is no
   // execution row behind it. Per-message ack/retry so one failing task never
   // replays its siblings, and the queue's own retry budget is the only retry.
-  async queue(batch: BackgroundQueueBatch | TelemetryQueueBatch, env: Env) {
+  async queue(
+    batch: BackgroundQueueBatch | TelemetryQueueBatch,
+    env: Env,
+    _ctx: { waitUntil(promise: Promise<unknown>): void },
+  ) {
     setCfEnv(env);
     await withTrace(
       "cf.queue",
@@ -1167,7 +1174,7 @@ export default Sentry.withSentry(
     dsn: CUBBY_SENTRY_DSN,
     // The e2e harness identity (see `tests/e2e/e2e-worker-runtime.ts`) must
     // never ship envelopes to the real DSN.
-    enabled: env.E2E_AUTH_TEST_MODE !== "true",
+    enabled: workerSentryEnabled(env),
     sendDefaultPii: false,
     release: `cubby@${__GIT_COMMIT__}`,
     // Covers queue/cron events without request URLs. Deployed previews retain

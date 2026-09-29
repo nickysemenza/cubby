@@ -3,14 +3,9 @@ import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
 import { withErrorReporting } from "~/server/errors/report-error";
 
-// __CF_WORKERS__ is a build-time define (true only in build:cf, false elsewhere). In production
-// the Workers entry (cf-server.ts) wraps everything with @sentry/cloudflare's
-// withSentry — the workerd-native SDK. wrapFetchWithSentry is built on
-// @sentry/node: its error capture is safe, but its tracing (startSpan on the
-// _serverFn path) assumes the Node OpenTelemetry runtime that workerd lacks.
-// So apply it only in dev (Node via `vite dev`), where the node SDK is actually
-// initialized by instrument.server.mjs. In prod, errors still reach Sentry via
-// withSentry + the explicit captures in cf-server.ts / observed-request.ts.
+// Local and production Workers use cf-server.ts's workerd-native Sentry wrapper.
+// The Node wrapper remains for unbundled Node/test entrypoints; its tracing
+// assumes Node OpenTelemetry and must stay outside the Worker graph.
 //
 // Two independent guards, and both matter. At RUNTIME `isCfBuild` is true in
 // prod, so wrapFetchWithSentry is never *called*. At BUILD time `cfSentryShim`

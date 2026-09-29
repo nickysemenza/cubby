@@ -55,9 +55,12 @@ export async function assertNoDevLoginInWorker(
 ): Promise<void> {
   for (const file of await walk(workerDirectory)) {
     if (path.extname(file) !== ".js") continue;
-    if ((await readFile(file, "utf8")).includes("/__dev/login")) {
+    const code = await readFile(file, "utf8");
+    if (
+      ["/__dev/", "/__local-storage/s3/"].some((route) => code.includes(route))
+    ) {
       throw new Error(
-        `Vite-only auto-login route leaked into Worker bundle: ${file}`,
+        `Local development route leaked into production Worker bundle: ${file}`,
       );
     }
   }
@@ -68,6 +71,7 @@ const invokedPath = process.argv[1]
   : undefined;
 if (invokedPath === import.meta.url) {
   await assertNoServerCodeInClient(CLIENT_DIR);
-  await assertNoDevLoginInWorker(WORKER_DIR);
+  if (process.env.CUBBY_DEV_PREVIEW_BUILD !== "true")
+    await assertNoDevLoginInWorker(WORKER_DIR);
   console.log("[check-client-bundle] no server-only code in dist/client");
 }

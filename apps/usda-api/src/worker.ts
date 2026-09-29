@@ -12,7 +12,7 @@ import type { EdgeBindings } from "./data/cloudflare-types.js";
 let app: ReturnType<typeof createUsdaApp> | undefined;
 type WorkerBindings = EdgeBindings & { SENTRY_ENVIRONMENT: string };
 
-const handler = {
+export const localWorkerHandler = {
   fetch(
     request: Request,
     env: WorkerBindings,
@@ -66,5 +66,6 @@ export default Sentry.withSentry(
     tracesSampleRate: 0,
     initialScope: { tags: { service: "usda-api" } },
   }),
-  handler,
+  // Keep the local export raw: Sentry mutates the handler it receives.
+  { ...localWorkerHandler },
 );

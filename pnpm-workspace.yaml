@@ -38,10 +38,10 @@ overrides:
   # unmet exact @better-fetch/fetch peer. Keep this equal to better-auth in
   # apps/web; Renovate bumps both in the same grouped PR.
   "@better-auth/core": 1.7.5
-  # The 2026-08-01 workerd pulled by newer Cloudflare tooling crashes under the
-  # parallel Playwright CI load. Keep the last green toolchain until upstream
-  # ships a stable runtime; the app and Worker builds remain independently tested.
-  "@cloudflare/vite-plugin": 1.51.1
+  # Keep Vite and Wrangler on a compatible pair: local auxiliary Workers use
+  # the purchase agent's 2026-09-19 compatibility date. The older Vite runtime
+  # only accepted dates through 2026-08-08.
+  "@cloudflare/vite-plugin": 1.62.1
   effect: ^3.20.0
   esbuild: ^0.28.1
   # GHSA-7p8r-x3mc-p8w7 / GHSA-v2hh-gcrm-f6hx (host confusion). Transitive via
@@ -72,7 +72,7 @@ overrides:
   undici@7.28.0: 8.10.2
   vite: ^8.0.0
   webpack: ^5.104.1
-  wrangler: 4.134.0
+  wrangler: 4.144.0
 
 # The global store cannot rely on project-local hoisting. The maintained type
 # fixer handles published devDependencies; these packages omit that metadata
