@@ -130,6 +130,14 @@ describe("location shape", () => {
       updateLocation(ctx.db, linked.entityId, { productId: null }, TEST_ACTOR),
     ).rejects.toThrow(/furniture location is an instance of a Product/u);
 
+    await expect(
+      createLocationFixture(
+        ctx.db,
+        makeLocationInput({ name: "Bare furniture", type: "furniture" }),
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/furniture location is an instance of a Product/u);
+
     // The database refuses it too, whatever path wrote the row.
     await expect(
       insertWithShortcode(ctx.db, "location", {

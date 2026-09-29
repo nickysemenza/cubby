@@ -227,6 +227,13 @@ const raiseMissingType = (): never => {
   );
 };
 
+const raiseFurnitureWithoutProduct = (): never => {
+  throw createAppError(
+    "CONSTRAINT_VIOLATION",
+    "A furniture location is an instance of a Product. Link a Product, or choose another type.",
+  );
+};
+
 const createLocationTx = async (
   db: Database,
   data: LocationCreateInput,
@@ -260,6 +267,8 @@ const createLocationTx = async (
             raiseMissingProduct(),
         )
       : null;
+    const type = data.type ?? (productId ? "furniture" : raiseMissingType());
+    if (type === "furniture" && !productId) raiseFurnitureWithoutProduct();
     const newLocation = await insertWithShortcode(tx, "location", {
       name: data.name,
       aliases: data.aliases,
@@ -267,7 +276,7 @@ const createLocationTx = async (
       // `type` is the physical form factor; `productId` is identity. A
       // product-linked location can still carry a type (e.g. a raised bed
       // that is also a specific product); without one it is `furniture`.
-      type: data.type ?? (productId ? "furniture" : raiseMissingType()),
+      type,
       notes: data.notes ?? null,
       productId,
       parentId,
@@ -431,12 +440,8 @@ export const updateLocation = async (
     const nextType = data.type ?? before?.type;
     const nextProductId =
       productId === undefined ? before?.productId : productId;
-    if (nextType === "furniture" && !nextProductId) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "A furniture location is an instance of a Product. Link a Product, or choose another type.",
-      );
-    }
+    if (nextType === "furniture" && !nextProductId)
+      raiseFurnitureWithoutProduct();
 
     const updateValues = buildPartialUpdateValues({
       name: data.name,
