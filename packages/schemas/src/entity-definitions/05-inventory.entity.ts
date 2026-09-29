@@ -40,7 +40,10 @@ export default defineEntity({
     detail: {},
     list: {
       actionOverrides: ["moveTo", "delete"],
-      links: [{ label: "Recount", path: "/inventory/session" }],
+      links: [
+        { label: "Recount", path: "/inventory/session" },
+        { label: "Suggestions", path: "/meals/suggestions" },
+      ],
     },
   },
   model: {
