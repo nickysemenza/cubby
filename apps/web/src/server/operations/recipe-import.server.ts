@@ -61,6 +61,7 @@ import { findParentRecipeIdsBatch } from "~/server/repo/recipe/totals";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import {
   actorWithRun,
+  aiCallRunInput,
   cookbookRunInput,
   ensureRun,
 } from "~/server/runs/ensure-run";
@@ -867,9 +868,11 @@ export const forwardGatewayRequestWorkflow = defineWorkflowOperation(
     context: AuthenticatedStartOperationContext,
     input: GatewayForwardInput,
   ) => {
-    const runId = await ensureRun(context.db, context.actorContext, {
-      purpose: "ai_action",
-    });
+    const runId = await ensureRun(
+      context.db,
+      context.actorContext,
+      aiCallRunInput(context.actorContext),
+    );
     return forwardGatewayRequest(input, {
       db: context.db,
       runId,

@@ -99,7 +99,7 @@ export async function embedTexts(
      * books the call under a `background`-purpose run rather than forcing
      * that plumbing everywhere `db` is threaded. Those land in one system
      * run per day, not one per search. A caller that already has the
-     * request's `ai_action` (or an inherited) run should pass it.
+     * request's `ai_suggest` (or an inherited) run should pass it.
      */
     runId?: RunId;
     feature?: string;

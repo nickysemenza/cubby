@@ -95,11 +95,9 @@ import {
   importHunt,
   importPreparedOrder,
   run as runTable,
-  vendorMailSearchJob,
   runApproval,
   runControlEvent,
   runEvidence,
-  runMutation,
   runOperation,
   runOrderCandidate,
   runProgress,
@@ -1241,16 +1239,6 @@ export const ENTITY_EDGES = {
           "Append-only provenance: a job keeps naming the run that scheduled it.",
       },
     },
-    "VendorMailSearchJob.runId": {
-      column: vendorMailSearchJob.runId,
-      role: "history",
-      label: "Gmail search",
-      description: "The Vendor Gmail search requested by this run.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason: "The search record preserves the run that requested it.",
-      },
-    },
     "Purchase.runId": {
       column: purchase.runId,
       role: "history",
@@ -1286,14 +1274,6 @@ export const ENTITY_EDGES = {
       role: "owned-child",
       label: "evidence",
       description: "Captured evidence filed under this run.",
-      liveness: { kind: "must-target-live" },
-    },
-    "RunMutation.runId": {
-      column: runMutation.runId,
-      role: "owned-child",
-      label: "mutations",
-      description:
-        "An explicit row mutation attributed to this run, independent of AuditLog's actor shape.",
       liveness: { kind: "must-target-live" },
     },
     "RunOperation.runId": {

@@ -371,8 +371,8 @@ export const fieldSuggestionsInput = z.object({
   /**
    * One id per page mount, minted client-side and reused across every
    * `suggestFields` call that page makes — groups them into one `ai_suggest`
-   * run instead of a run per field. Omitted falls back to a per-call
-   * `ai_action` run.
+   * run instead of a run per field. Omitted shares the actor's run for the
+   * UTC hour.
    */
   runKey: z.string().uuid().optional(),
 });

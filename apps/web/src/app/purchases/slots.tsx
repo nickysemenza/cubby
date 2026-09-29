@@ -84,7 +84,7 @@ export const PurchaseOrderMail: DetailSlotComponent<"purchase"> = ({
   );
 };
 
-/** Runs are linked through RunMutation, so replay-only source claims do not appear here. */
+/** Runs are linked through their AuditLog rows, so replay-only source claims do not appear here. */
 export const Runs: DetailSlotComponent<"purchase"> = ({ record: purchase }) => {
   const runsQuery = useQuery(
     runOperations.history.queryOptions({ purchaseId: purchase.id }),

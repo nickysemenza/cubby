@@ -60,6 +60,7 @@ import { purchaseImportDebugEvent } from "~/lib/purchase-import-debug";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   aiUsage,
+  auditLog,
   entityAttachment,
   entityIdentity,
   financialTransaction,
@@ -73,7 +74,6 @@ import {
   runApproval,
   runControlEvent,
   runEvidence,
-  runMutation,
   runOperation,
   runOrderCandidate,
   runProgress,
@@ -1535,10 +1535,10 @@ export async function claimNextImportWork(
       productName: product.name,
       startUrl: productExternalId.url,
     })
-    .from(runMutation)
+    .from(auditLog)
     .innerJoin(
       product,
-      and(eq(product.id, runMutation.targetId), notDeleted(product)),
+      and(eq(product.id, auditLog.entityId), notDeleted(product)),
     )
     .innerJoin(
       productExternalId,
@@ -1557,8 +1557,8 @@ export async function claimNextImportWork(
     )
     .where(
       and(
-        eq(runMutation.runId, scope.public.runId),
-        eq(runMutation.targetKind, "product"),
+        eq(auditLog.runId, scope.public.runId),
+        eq(auditLog.entityKind, "product"),
         isNull(entityAttachment.id),
       ),
     )
@@ -2870,16 +2870,13 @@ export async function loadRunDetail(
         displayName: purchase.displayLabel,
         orderId: purchase.orderId,
       })
-      .from(runMutation)
+      .from(auditLog)
       .innerJoin(
         purchase,
-        and(eq(purchase.id, runMutation.targetId), notDeleted(purchase)),
+        and(eq(purchase.id, auditLog.entityId), notDeleted(purchase)),
       )
       .where(
-        and(
-          eq(runMutation.runId, run.id),
-          eq(runMutation.targetKind, "purchase"),
-        ),
+        and(eq(auditLog.runId, run.id), eq(auditLog.entityKind, "purchase")),
       ),
     database
       .select({

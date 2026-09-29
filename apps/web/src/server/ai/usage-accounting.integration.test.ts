@@ -66,7 +66,7 @@ describe("AiUsage accounting", () => {
       ),
     );
     const { embedTexts } = await import("~/server/semantic/embeddings");
-    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_action" });
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
 
     await embedTexts(["eggs", "flour"], {
       db: ctx.db,
@@ -89,7 +89,7 @@ describe("AiUsage accounting", () => {
   });
 
   it("records one row for one location vision model call", async () => {
-    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_action" });
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     // The fake `chat` fires the runner's usage middleware as the real engine
     // does on finish, so the row count reflects every writer the runner
     // attaches to a call: a second one would show up as a second row.
@@ -124,7 +124,7 @@ describe("AiUsage accounting", () => {
   });
 
   it("records one row for a location analysis served from AiAnalysis", async () => {
-    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_action" });
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     const shelf = await createLocationFixture(
       ctx.db,
       makeLocationInput({ name: "Usage Accounting Shelf" }),
@@ -160,7 +160,7 @@ describe("AiUsage accounting", () => {
   });
 
   it("records one zero-cost row for a decision served from the response cache", async () => {
-    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_action" });
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
 
     await recordApplicationCacheHit(
       FIELD_SUGGESTION_FEATURE,

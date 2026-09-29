@@ -214,7 +214,7 @@ export interface FieldSuggestionSource {
   readonly targets: readonly string[];
   readonly basis: Record<string, string | null>;
   /** One id per page mount, grouping every call this page makes into one
-   * `ai_suggest` run. Omit to fall back to a per-call `ai_action` run. */
+   * `ai_suggest` run. Omit to share the actor's run for the hour. */
   readonly runKey?: string;
 }
 

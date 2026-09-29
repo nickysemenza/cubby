@@ -27,14 +27,6 @@ const SYSTEM_USER_ID: UserId = userId.parse("cubby-system");
 export const systemActor = (): ActorContext =>
   buildActorContext(SYSTEM_USER_ID, "system");
 
-/**
- * The run that owns AI usage recorded before every call had a run, and any
- * usage whose run is gone. The reserved run exists in the production database.
- */
-export const LEGACY_RUN_ID: RunId = runEntityId.parse(
-  "00000000-0000-4000-8000-00000000c0de",
-);
-
 export type EnsureRunInput = {
   purpose: RunPurpose;
   /** `ephemeral` (the default) creates the run already `completed`. */
@@ -109,6 +101,29 @@ export async function ensureRun(
       .where(eq(runTable.id, result.row.id));
   }
   return result.row.id;
+}
+
+/**
+ * Where an AI call's usage is filed when the caller has no run of its own.
+ * A page's `runKey` groups every suggestion the page asks for into one run;
+ * every other caller shares one run per actor, channel and UTC hour, so a
+ * burst of previews or one-off actions is one `ai_suggest` run, not one each.
+ * `now` is a parameter so the hour boundary is testable.
+ */
+export function aiCallRunInput(
+  actor: ActorContext,
+  options: { runKey?: string; now?: Date } = {},
+): EnsureRunInput {
+  if (options.runKey)
+    return { purpose: "ai_suggest", clientKey: `jev:${options.runKey}` };
+  const hour = (options.now ?? new Date()).toISOString().slice(0, 13);
+  // The system user is one actor by definition; the MCP session id is not on
+  // `ActorContext`, so an MCP actor's calls group by user instead.
+  const who = actor.channel === "system" ? "" : `${actor.userId}:`;
+  return {
+    purpose: "ai_suggest",
+    clientKey: `${actor.channel}:${who}${hour}`,
+  };
 }
 
 /** `actor` with its run set, opening one when nothing encloses the work. */

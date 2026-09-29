@@ -982,6 +982,25 @@ const buildMetadataSchemas = () => {
             .default({}),
           /** Replaces the subtitle inferred from mobile card placement. */
           shelfSubtitleOverride: z.array(fieldKey).optional(),
+          /**
+           * The filter a fresh list opens with, as column filters (`id` is a
+           * field key, the value what its filter control would hold). Applies
+           * only while the URL names no filter of its own; clearing it writes
+           * `filters=none`, so the person's choice to see everything survives a
+           * reload. Positive on purpose: to hide ephemeral runs, select the
+           * triggers people start.
+           */
+          initialFilter: z
+            .array(
+              z
+                .object({
+                  id: fieldKey,
+                  value: z.union([z.string(), z.array(z.string()).min(1)]),
+                })
+                .strict(),
+            )
+            .optional()
+            .default([]),
           /** A custom list transport's search parameter (for example USDA's nameFilter). */
           primarySearch: z
             .object({ key: nonEmptyString(), placeholder: nonEmptyString() })
@@ -1046,6 +1065,7 @@ const buildMetadataSchemas = () => {
             viewOverrides,
             viewAliases,
             shelfSubtitleOverride,
+            initialFilter,
             primarySearch,
             tree,
             links,
@@ -1057,6 +1077,7 @@ const buildMetadataSchemas = () => {
               shelfSubtitleOverride === undefined
                 ? null
                 : { subtitle: shelfSubtitleOverride },
+            initialFilter,
             primarySearch,
             tree,
             actions: actionOverrides,

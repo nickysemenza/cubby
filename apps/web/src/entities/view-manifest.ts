@@ -860,7 +860,8 @@ export const viewManifest = defineViewManifest({
     {
       id: "imports",
       label: "Imports",
-      description: "Account syncs, validations, enrichments and photo batches",
+      description:
+        "Account syncs, validations, enrichments, photo batches and Gmail searches",
       filters: [
         {
           id: "purpose",
@@ -869,6 +870,7 @@ export const viewManifest = defineViewManifest({
             "purchase_validation",
             "product_enrichment",
             "photo_inventory",
+            "mail_search",
           ],
         },
       ],
@@ -876,10 +878,9 @@ export const viewManifest = defineViewManifest({
     {
       id: "ai-work",
       label: "AI work",
-      description: "Jev suggestion passes, AI actions and background AI work",
-      filters: [
-        { id: "purpose", value: ["ai_suggest", "ai_action", "background"] },
-      ],
+      description:
+        "Jev suggestion passes, hourly AI groups and background AI work",
+      filters: [{ id: "purpose", value: ["ai_suggest", "background"] }],
     },
   ],
   wish: [

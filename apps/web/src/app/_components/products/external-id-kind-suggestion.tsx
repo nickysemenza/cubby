@@ -56,8 +56,8 @@ export function ExternalIdKindSuggestion<TFieldValues extends FieldValues>({
     source != null && (identifier?.length ?? 0) >= MIN_IDENTIFIER_LENGTH;
 
   // Reuses the mounted `FieldSuggestionProvider`'s page-mount run when this
-  // row lives inside one (the product editor); absent one, the server falls
-  // back to a per-call `ai_action` run.
+  // row lives inside one (the product editor); absent one, the server files
+  // the call under the actor's run for the hour.
   const runKey = useFieldSuggestionContext()?.runKey;
 
   const basis = {

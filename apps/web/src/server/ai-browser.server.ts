@@ -15,37 +15,45 @@ import {
   suggestUsdaFoodWorkflow,
   summarizeAiUsageWorkflow,
 } from "~/server/operations/ai.server";
-import { ensureRun } from "~/server/runs/ensure-run";
+import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 
 /** AI reads are authoritative: suggestions must see the row just written. */
 export const aiHandlers = implementOperationDomain(aiContract, {
   describeLocation: async (context, input) => {
-    const runId = await ensureRun(context.db, context.actorContext, {
-      purpose: "ai_action",
-    });
+    const runId = await ensureRun(
+      context.db,
+      context.actorContext,
+      aiCallRunInput(context.actorContext),
+    );
     return describeLocationWorkflow({ db: context.db, runId }, input);
   },
   detectInventoryItems: async (context, input) => {
-    const runId = await ensureRun(context.db, context.actorContext, {
-      purpose: "ai_action",
-    });
+    const runId = await ensureRun(
+      context.db,
+      context.actorContext,
+      aiCallRunInput(context.actorContext),
+    );
     return detectInventoryItemsWorkflow({ db: context.db, runId }, input);
   },
   approveDetectedInventoryItem: (context, input) =>
     approveDetectedInventoryItemWorkflow(context, input),
   identifyProduct: async (context, input) => {
-    const runId = await ensureRun(context.db, context.actorContext, {
-      purpose: "ai_action",
-    });
+    const runId = await ensureRun(
+      context.db,
+      context.actorContext,
+      aiCallRunInput(context.actorContext),
+    );
     return identifyProductWorkflow({ db: context.db, runId }, input);
   },
   suggestUsdaFood: suggestUsdaFoodWorkflow,
   suggestUsdaFoodBatch: suggestUsdaFoodBatchWorkflow,
   suggestIngredientMergeBatch: async (context, input) => {
-    const runId = await ensureRun(context.db, context.actorContext, {
-      purpose: "ai_action",
-    });
+    const runId = await ensureRun(
+      context.db,
+      context.actorContext,
+      aiCallRunInput(context.actorContext),
+    );
     return suggestIngredientMergeBatchWorkflow(
       { db: context.db, runId },
       input,

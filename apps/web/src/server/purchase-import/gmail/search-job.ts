@@ -1,7 +1,11 @@
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 import { runEntityId, runShortcode } from "@cubby/schemas/identifiers";
-import { vendorSearchMailOut } from "@cubby/schemas/order-mail-review";
-import { and, desc, eq, inArray, lt } from "drizzle-orm";
+import {
+  type MailSearchRunProgress,
+  mailSearchRunInput,
+  mailSearchRunProgress,
+} from "@cubby/schemas/run-fields";
+import { and, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 
 import {
   describeErrorCauses,
@@ -9,12 +13,7 @@ import {
 } from "~/lib/error-diagnostics";
 import { isAiGatewayRateLimit } from "~/server/clients/ai-gateway-error";
 import type { Database } from "~/server/db";
-import {
-  run as runTable,
-  runProgress,
-  vendor,
-  vendorMailSearchJob,
-} from "~/server/db/schema";
+import { run as runTable, runProgress, vendor } from "~/server/db/schema";
 import { reportServerError } from "~/server/errors/report-error";
 import { getDb } from "~/server/repo/database-helpers";
 import { ensureRun } from "~/server/runs/ensure-run";
@@ -22,9 +21,65 @@ import { ensureRun } from "~/server/runs/ensure-run";
 import { resolveVendorMailSearchTarget } from "./targets";
 import { vendorSearchTerms } from "./vendor-identity";
 
-const activeStatuses = ["queued", "running"];
+/*
+ * A Gmail search is one `mail_search` Run. `Run.input` is what was asked
+ * (`after`, `searchTerms`); `Run.progress` is where the page-by-page walk
+ * stands. `progress.phase` is the claim state a page's worker CAS-es on:
+ * `queued` between pages, `running` while one is scanned. The Run's own
+ * `status` stays `running` until the last page or a terminal failure.
+ */
+const activePhases = ["queued", "running"];
 
-type SearchJob = typeof vendorMailSearchJob.$inferSelect;
+// A Run whose `input`/`progress` were never written (its opening transaction
+// failed after `ensureRun` committed it) is not a search and stays invisible.
+const mailSearchRun = and(
+  eq(runTable.purpose, "mail_search"),
+  isNotNull(runTable.progress),
+);
+const phaseIs = (phase: string) =>
+  sql`${runTable.progress}->>'phase' = ${phase}`;
+const phaseIn = (phases: readonly string[]) =>
+  inArray(sql<string>`${runTable.progress}->>'phase'`, [...phases]);
+const pagesScannedIs = (pages: number) =>
+  sql`(${runTable.progress}->>'pagesScanned')::int = ${pages}`;
+/** Merge into `progress` in SQL so a concurrent writer's other keys survive. */
+const patchProgress = (patch: Partial<MailSearchRunProgress>) =>
+  sql`coalesce(${runTable.progress}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`;
+
+const jobColumns = {
+  runId: runTable.id,
+  runShortcode: runTable.shortcode,
+  vendorId: runTable.vendorId,
+  actorUserId: runTable.actorUserId,
+  status: runTable.status,
+  input: runTable.input,
+  progress: runTable.progress,
+  skipped: runTable.skipped,
+  dispatchError: runTable.dispatchError,
+  createdAt: runTable.createdAt,
+  updatedAt: runTable.updatedAt,
+};
+
+type JobRow = {
+  runId: typeof runTable.$inferSelect.id;
+  runShortcode: string;
+  vendorId: typeof runTable.$inferSelect.vendorId;
+  actorUserId: typeof runTable.$inferSelect.actorUserId;
+  status: string;
+  input: unknown;
+  progress: unknown;
+  skipped: number;
+  dispatchError: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+const readJob = (row: JobRow) => ({
+  ...row,
+  input: mailSearchRunInput.parse(row.input),
+  progress: mailSearchRunProgress.parse(row.progress),
+});
+type SearchJob = ReturnType<typeof readJob>;
 
 const jobErrorText = (error: Error | string, sentryEventId?: string) => {
   const causes = describeErrorCauses(error).causes;
@@ -44,15 +99,15 @@ const jobErrorText = (error: Error | string, sentryEventId?: string) => {
   return sentryEventId ? `${concise}\nSentry event: ${sentryEventId}` : concise;
 };
 
-const displayJob = (job: SearchJob, runShortcode: string) => ({
-  runShortcode,
-  status: vendorSearchMailOut.shape.status.parse(job.status),
-  searched: job.searched,
+const displayJob = (job: SearchJob) => ({
+  runShortcode: job.runShortcode,
+  status: job.progress.phase,
+  searched: job.progress.searched,
   skipped: job.skipped,
-  reviewable: job.reviewable,
-  after: job.after,
-  nextPageToken: job.nextPageToken,
-  error: job.error,
+  reviewable: job.progress.reviewable,
+  after: job.input.after,
+  nextPageToken: job.progress.nextPageToken,
+  error: job.progress.error ?? job.dispatchError,
   createdAt: job.createdAt.toISOString(),
 });
 
@@ -63,19 +118,19 @@ export async function latestVendorMailSearchJob(
 ) {
   const target = await resolveVendorMailSearchTarget(db, vendorCode, actor);
   const [record] = await getDb(db)
-    .select({ job: vendorMailSearchJob, runShortcode: runTable.shortcode })
-    .from(vendorMailSearchJob)
-    .innerJoin(runTable, eq(vendorMailSearchJob.runId, runTable.id))
+    .select(jobColumns)
+    .from(runTable)
     .where(
       and(
+        mailSearchRun,
         eq(runTable.vendorId, target.vendorId),
         eq(runTable.ledgerPartyId, target.memberId),
         eq(runTable.actorUserId, actor.userId),
       ),
     )
-    .orderBy(desc(vendorMailSearchJob.createdAt))
+    .orderBy(desc(runTable.createdAt))
     .limit(1);
-  return record ? displayJob(record.job, record.runShortcode) : null;
+  return record ? displayJob(readJob(record)) : null;
 }
 
 /** Resend a saved page when queue delivery has not reached its worker. */
@@ -88,33 +143,37 @@ export async function retryStalledVendorMailSearchJob(
   } = {},
 ) {
   const database = getDb(db);
-  const [record] = await database
-    .select({ job: vendorMailSearchJob, runShortcode: runTable.shortcode })
-    .from(vendorMailSearchJob)
-    .innerJoin(runTable, eq(vendorMailSearchJob.runId, runTable.id))
+  const [row] = await database
+    .select(jobColumns)
+    .from(runTable)
     .where(
       and(
+        mailSearchRun,
         eq(runTable.shortcode, runShortcode.parse(runCode)),
         eq(runTable.actorUserId, actor.userId),
       ),
     )
     .limit(1);
-  if (!record) throw new Error("No Gmail search job exists for this Run.");
-  const [claimed] = await database
-    .update(vendorMailSearchJob)
-    .set({ status: "queued" })
+  if (!row) throw new Error("No Gmail search job exists for this Run.");
+  const record = readJob(row);
+  // Re-stating `queued` bumps `updatedAt`, which is what fences a second
+  // resend inside the three-minute window.
+  const [claimedRow] = await database
+    .update(runTable)
+    .set({ progress: patchProgress({ phase: "queued" }) })
     .where(
       and(
-        eq(vendorMailSearchJob.runId, record.job.runId),
-        eq(vendorMailSearchJob.status, "queued"),
-        lt(vendorMailSearchJob.updatedAt, new Date(Date.now() - 3 * 60_000)),
+        eq(runTable.id, record.runId),
+        phaseIs("queued"),
+        lt(runTable.updatedAt, new Date(Date.now() - 3 * 60_000)),
       ),
     )
-    .returning();
-  if (!claimed)
+    .returning(jobColumns);
+  if (!claimedRow)
     throw new Error(
       "Gmail search is still waiting for its worker or has already started. Retry is available after three minutes without a worker.",
     );
+  const claimed = readJob(claimedRow);
   const publish =
     options.publish ??
     (await import("~/server/background-tasks/publish")).publishBackgroundTasks;
@@ -125,7 +184,7 @@ export async function retryStalledVendorMailSearchJob(
         {
           kind: "vendor-mail.search",
           jobId: claimed.runId,
-          page: claimed.pagesScanned,
+          page: claimed.progress.pagesScanned,
           requestedAt: new Date().toISOString(),
         },
       ],
@@ -133,13 +192,13 @@ export async function retryStalledVendorMailSearchJob(
     );
   } catch (error) {
     await database
-      .update(vendorMailSearchJob)
-      .set({ updatedAt: record.job.updatedAt })
+      .update(runTable)
+      .set({ updatedAt: record.updatedAt })
       .where(
         and(
-          eq(vendorMailSearchJob.runId, claimed.runId),
-          eq(vendorMailSearchJob.status, "queued"),
-          eq(vendorMailSearchJob.updatedAt, claimed.updatedAt),
+          eq(runTable.id, claimed.runId),
+          phaseIs("queued"),
+          eq(runTable.updatedAt, claimed.updatedAt),
         ),
       );
     await database.insert(runProgress).values({
@@ -156,9 +215,9 @@ export async function retryStalledVendorMailSearchJob(
     runId: claimed.runId,
     eventId: crypto.randomUUID(),
     phase: "requeued",
-    detail: `Resent Gmail page ${claimed.pagesScanned + 1} to the background queue`,
+    detail: `Resent Gmail page ${claimed.progress.pagesScanned + 1} to the background queue`,
   });
-  return displayJob(claimed, record.runShortcode);
+  return displayJob(claimed);
 }
 
 export async function startVendorMailSearchJob(
@@ -177,20 +236,20 @@ export async function startVendorMailSearchJob(
     );
   const database = getDb(db);
   const [active] = await database
-    .select({ job: vendorMailSearchJob, runShortcode: runTable.shortcode })
-    .from(vendorMailSearchJob)
-    .innerJoin(runTable, eq(vendorMailSearchJob.runId, runTable.id))
+    .select(jobColumns)
+    .from(runTable)
     .where(
       and(
+        mailSearchRun,
         eq(runTable.vendorId, target.vendorId),
         eq(runTable.ledgerPartyId, target.memberId),
         eq(runTable.actorUserId, actor.userId),
-        inArray(vendorMailSearchJob.status, activeStatuses),
+        phaseIn(activePhases),
       ),
     )
-    .orderBy(desc(vendorMailSearchJob.createdAt))
+    .orderBy(desc(runTable.createdAt))
     .limit(1);
-  if (active) return displayJob(active.job, active.runShortcode);
+  if (active) return displayJob(readJob(active));
   const after =
     input.after ??
     new Date(Date.now() - 365 * 86_400_000)
@@ -200,32 +259,35 @@ export async function startVendorMailSearchJob(
   const runId = await ensureRun(
     db,
     { ...actor, runId: null },
-    { purpose: "background", trigger: "manual", notes: "Vendor Gmail search" },
+    { purpose: "mail_search", trigger: "manual", notes: "Vendor Gmail search" },
   );
-  const [runRecord] = await database
-    .select({ shortcode: runTable.shortcode })
-    .from(runTable)
-    .where(eq(runTable.id, runId))
-    .limit(1);
-  if (!runRecord) throw new Error("Gmail search Run was not created");
-  const [job] = await database.transaction(async (tx) => {
-    await tx
+  const created = await database.transaction(async (tx) => {
+    const [row] = await tx
       .update(runTable)
-      .set({ vendorId: target.vendorId })
-      .where(eq(runTable.id, runId));
-    const jobs = await tx
-      .insert(vendorMailSearchJob)
-      .values({ runId, after, pageToken: input.pageToken ?? null, searchTerms })
-      .returning();
+      .set({
+        vendorId: target.vendorId,
+        input: { after, searchTerms },
+        progress: {
+          phase: "queued",
+          pageToken: input.pageToken ?? null,
+          nextPageToken: null,
+          pagesScanned: 0,
+          searched: 0,
+          reviewable: 0,
+        },
+      })
+      .where(eq(runTable.id, runId))
+      .returning(jobColumns);
     await tx.insert(runProgress).values({
       runId,
       eventId: crypto.randomUUID(),
       phase: "queued",
       detail: "Waiting to search Gmail",
     });
-    return jobs;
+    return row;
   });
-  if (!job) throw new Error("Gmail search job was not created");
+  if (!created) throw new Error("Gmail search Run was not created");
+  const job = readJob(created);
   try {
     const publish =
       options.publish ??
@@ -250,12 +312,9 @@ export async function startVendorMailSearchJob(
     const finishedAt = new Date();
     await database.transaction(async (tx) => {
       await tx
-        .update(vendorMailSearchJob)
-        .set({ status: "failed", error: message, finishedAt })
-        .where(eq(vendorMailSearchJob.runId, job.runId));
-      await tx
         .update(runTable)
         .set({
+          progress: patchProgress({ phase: "failed" }),
           status: "failed",
           endedAt: finishedAt,
           failureCode: "vendor_mail_publish_failed",
@@ -272,11 +331,11 @@ export async function startVendorMailSearchJob(
     throw error;
   }
   const [current] = await database
-    .select()
-    .from(vendorMailSearchJob)
-    .where(eq(vendorMailSearchJob.runId, job.runId))
+    .select(jobColumns)
+    .from(runTable)
+    .where(eq(runTable.id, job.runId))
     .limit(1);
-  return displayJob(current ?? job, runRecord.shortcode);
+  return displayJob(current ? readJob(current) : job);
 }
 
 // eslint-disable-next-line complexity -- A page's checkpoint, rate-limit retry, terminal failure, and next-page handoff share this claim boundary.
@@ -291,32 +350,24 @@ export async function runVendorMailSearchJob(
   } = {},
 ) {
   const database = getDb(db);
-  const [record] = await database
-    .select({ job: vendorMailSearchJob, owner: runTable })
-    .from(vendorMailSearchJob)
-    .innerJoin(runTable, eq(vendorMailSearchJob.runId, runTable.id))
-    .where(eq(vendorMailSearchJob.runId, runEntityId.parse(jobId)))
+  const [row] = await database
+    .select(jobColumns)
+    .from(runTable)
+    .where(and(mailSearchRun, eq(runTable.id, runEntityId.parse(jobId))))
     .limit(1);
-  if (!record) return "skipped" as const;
-  const job = record.job;
+  if (!row) return "skipped" as const;
+  const job = readJob(row);
   const page = options.page ?? 0;
   const [claimed] = await database
-    .update(vendorMailSearchJob)
-    .set({
-      status: "running",
-      error: null,
-      startedAt: job.startedAt ?? new Date(),
-    })
+    .update(runTable)
+    .set({ progress: patchProgress({ phase: "running", error: null }) })
     .where(
-      and(
-        eq(vendorMailSearchJob.runId, job.runId),
-        eq(vendorMailSearchJob.status, "queued"),
-        eq(vendorMailSearchJob.pagesScanned, page),
-      ),
+      and(eq(runTable.id, job.runId), phaseIs("queued"), pagesScannedIs(page)),
     )
-    .returning({ runId: vendorMailSearchJob.runId });
+    .returning({ runId: runTable.id });
   if (!claimed) return "skipped" as const;
-  const cursor = page === 0 ? job.pageToken : job.nextPageToken;
+  const cursor =
+    page === 0 ? job.progress.pageToken : job.progress.nextPageToken;
   const recordProgress = async (
     phase: string,
     detail: string,
@@ -325,12 +376,14 @@ export async function runVendorMailSearchJob(
     await database.transaction(async (tx) => {
       if (counts)
         await tx
-          .update(vendorMailSearchJob)
+          .update(runTable)
           .set({
-            searched: job.searched + (counts.searched ?? 0),
+            progress: patchProgress({
+              searched: job.progress.searched + (counts.searched ?? 0),
+            }),
             skipped: job.skipped + (counts.skipped ?? 0),
           })
-          .where(eq(vendorMailSearchJob.runId, job.runId));
+          .where(eq(runTable.id, job.runId));
       await tx.insert(runProgress).values({
         runId: job.runId,
         eventId: crypto.randomUUID(),
@@ -343,7 +396,7 @@ export async function runVendorMailSearchJob(
   try {
     const search =
       options.search ?? (await import("./search")).searchVendorOrderMail;
-    const ownerVendorId = record.owner.vendorId;
+    const ownerVendorId = job.vendorId;
     if (!ownerVendorId)
       throw new Error("Vendor for Gmail search no longer exists");
     const [vendorRecord] = await database
@@ -357,11 +410,11 @@ export async function runVendorMailSearchJob(
       db,
       {
         vendorId: vendorRecord.shortcode,
-        after: job.after,
+        after: job.input.after,
         pageToken: cursor ?? undefined,
-        searchTerms: job.searchTerms,
+        searchTerms: job.input.searchTerms,
       },
-      buildActorContext(record.owner.actorUserId, "system", {
+      buildActorContext(job.actorUserId, "system", {
         runId: job.runId,
       }),
       recordProgress,
@@ -370,28 +423,27 @@ export async function runVendorMailSearchJob(
       throw new Error("Gmail returned the same page cursor twice");
     const hasNextPage = result.nextPageToken !== null;
     const pagesScanned = page + 1;
-    const searched = job.searched + result.searched;
+    const searched = job.progress.searched + result.searched;
     const skipped = job.skipped + result.skipped;
-    const reviewable = job.reviewable + result.reviewable;
+    const reviewable = job.progress.reviewable + result.reviewable;
     const finishedAt = hasNextPage ? null : new Date();
     await database.transaction(async (tx) => {
       await tx
-        .update(vendorMailSearchJob)
+        .update(runTable)
         .set({
-          status: hasNextPage ? "queued" : "completed",
-          searched,
+          progress: patchProgress({
+            phase: hasNextPage ? "queued" : "completed",
+            searched,
+            reviewable,
+            pagesScanned,
+            nextPageToken: result.nextPageToken,
+          }),
           skipped,
-          reviewable,
-          pagesScanned,
-          nextPageToken: result.nextPageToken,
-          finishedAt,
+          // Undefined leaves a column alone: only the last page closes the Run.
+          status: finishedAt ? "completed" : undefined,
+          endedAt: finishedAt ?? undefined,
         })
-        .where(eq(vendorMailSearchJob.runId, job.runId));
-      if (finishedAt)
-        await tx
-          .update(runTable)
-          .set({ status: "completed", endedAt: finishedAt })
-          .where(eq(runTable.id, job.runId));
+        .where(eq(runTable.id, job.runId));
       await tx.insert(runProgress).values({
         runId: job.runId,
         eventId: crypto.randomUUID(),
@@ -423,22 +475,27 @@ export async function runVendorMailSearchJob(
       error instanceof Error ? error : String(error),
     );
     const [current] = await database
-      .select({ pagesScanned: vendorMailSearchJob.pagesScanned })
-      .from(vendorMailSearchJob)
-      .where(eq(vendorMailSearchJob.runId, job.runId))
+      .select({ progress: runTable.progress })
+      .from(runTable)
+      .where(eq(runTable.id, job.runId))
       .limit(1);
-    const checkpointSaved = (current?.pagesScanned ?? page) > page;
+    const savedPages = current?.progress
+      ? mailSearchRunProgress.parse(current.progress).pagesScanned
+      : page;
+    const checkpointSaved = savedPages > page;
     if (isAiGatewayRateLimit(error) && !checkpointSaved) {
       await database.transaction(async (tx) => {
         await tx
-          .update(vendorMailSearchJob)
+          .update(runTable)
           .set({
-            status: "queued",
-            error: message,
-            searched: job.searched,
+            progress: patchProgress({
+              phase: "queued",
+              error: message,
+              searched: job.progress.searched,
+            }),
             skipped: job.skipped,
           })
-          .where(eq(vendorMailSearchJob.runId, job.runId));
+          .where(eq(runTable.id, job.runId));
         await tx.insert(runProgress).values({
           runId: job.runId,
           eventId: crypto.randomUUID(),
@@ -460,27 +517,25 @@ export async function runVendorMailSearchJob(
     const finishedAt = new Date();
     await database.transaction(async (tx) => {
       await tx
-        .update(vendorMailSearchJob)
-        .set(
-          checkpointSaved
-            ? { status: "failed", error: failureMessage, finishedAt }
-            : {
-                status: "failed",
-                error: failureMessage,
-                finishedAt,
-                searched: job.searched,
-                skipped: job.skipped,
-              },
-        )
-        .where(eq(vendorMailSearchJob.runId, job.runId));
-      await tx
         .update(runTable)
         .set({
+          // A failed page after a saved checkpoint keeps that page's totals.
+          progress: patchProgress(
+            checkpointSaved
+              ? { phase: "failed", error: null }
+              : {
+                  phase: "failed",
+                  error: null,
+                  searched: job.progress.searched,
+                },
+          ),
+          skipped: checkpointSaved ? undefined : job.skipped,
           status: "failed",
           endedAt: finishedAt,
           failureCode: checkpointSaved
             ? "vendor_mail_publish_failed"
             : "vendor_mail_search_failed",
+          dispatchError: failureMessage,
         })
         .where(eq(runTable.id, job.runId));
       await tx.insert(runProgress).values({
@@ -508,18 +563,15 @@ export async function recoverStaleVendorMailSearchJobs(
   const cutoff = new Date(Date.now() - 15 * 60_000);
   const stale = await database
     .select({
-      runId: vendorMailSearchJob.runId,
-      page: vendorMailSearchJob.pagesScanned,
-      updatedAt: vendorMailSearchJob.updatedAt,
+      runId: runTable.id,
+      page: sql<number>`(${runTable.progress}->>'pagesScanned')::int`,
+      updatedAt: runTable.updatedAt,
     })
-    .from(vendorMailSearchJob)
+    .from(runTable)
     .where(
-      and(
-        inArray(vendorMailSearchJob.status, activeStatuses),
-        lt(vendorMailSearchJob.updatedAt, cutoff),
-      ),
+      and(mailSearchRun, phaseIn(activePhases), lt(runTable.updatedAt, cutoff)),
     )
-    .orderBy(vendorMailSearchJob.updatedAt)
+    .orderBy(runTable.updatedAt)
     .limit(50);
   const publish =
     options.publish ??
@@ -527,16 +579,16 @@ export async function recoverStaleVendorMailSearchJobs(
   let republished = 0;
   for (const job of stale) {
     const [claimed] = await database
-      .update(vendorMailSearchJob)
-      .set({ status: "queued" })
+      .update(runTable)
+      .set({ progress: patchProgress({ phase: "queued" }) })
       .where(
         and(
-          eq(vendorMailSearchJob.runId, job.runId),
-          eq(vendorMailSearchJob.updatedAt, job.updatedAt),
-          inArray(vendorMailSearchJob.status, activeStatuses),
+          eq(runTable.id, job.runId),
+          eq(runTable.updatedAt, job.updatedAt),
+          phaseIn(activePhases),
         ),
       )
-      .returning({ runId: vendorMailSearchJob.runId });
+      .returning({ runId: runTable.id });
     if (!claimed) continue;
     await database.insert(runProgress).values({
       runId: job.runId,

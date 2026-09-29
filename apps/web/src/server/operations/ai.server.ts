@@ -34,7 +34,7 @@ import {
   resolveLiveShortcodes,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
-import { ensureRun } from "~/server/runs/ensure-run";
+import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
 import {
   suggestIngredientMerge,
   suggestIngredientMergeBatch,
@@ -64,7 +64,7 @@ import {
 } from "~/server/workflow-runtime";
 
 type LocationIdInput = z.output<typeof aiLocationIdInput>;
-/** The request's `ai_action` run; `ai-browser.server.ts` mints it once via
+/** The actor's AI run for the hour; `ai-browser.server.ts` opens it once via
  * `ensureRun` before calling in. */
 type AiActionRunContext = { db: Database; runId: RunId };
 export const describeLocationWorkflow = bindWorkflow(
@@ -137,7 +137,11 @@ export const suggestUsdaFoodWorkflow = bindWorkflow(
     "ai.suggestUsdaFood",
   )
     .call("runId", ({ context }) =>
-      ensureRun(context.db, context.actorContext, { purpose: "ai_action" }),
+      ensureRun(
+        context.db,
+        context.actorContext,
+        aiCallRunInput(context.actorContext),
+      ),
     )
     .call("suggestion", ({ context }, { input, runId }) =>
       suggestUsdaFood(context.usdaService, context.db, input.ingredientName, {
@@ -153,7 +157,11 @@ export const suggestUsdaFoodBatchWorkflow = bindWorkflow(
     "ai.suggestUsdaFoodBatch",
   )
     .call("runId", ({ context }) =>
-      ensureRun(context.db, context.actorContext, { purpose: "ai_action" }),
+      ensureRun(
+        context.db,
+        context.actorContext,
+        aiCallRunInput(context.actorContext),
+      ),
     )
     .call("ids", async ({ context }, { input }) =>
       resolveAllOrThrow(
@@ -232,12 +240,14 @@ const precomputeEnrichmentDefinition = defineBulkWorkflow({
     EnrichmentPrecomputeInput
   >("ai.precomputeEnrichmentProposals.items")
     .call("resolved", async ({ context }, { input }) => {
-      // One `ai_action` run for the whole precompute request, not one per
-      // item: `resolved` runs once before the item stage fans out, so every
+      // One run for the whole precompute request, not one per item:
+      // `resolved` runs once before the item stage fans out, so every
       // item's usda/merge lookup below carries the same run id.
-      const runId = await ensureRun(context.db, context.actorContext, {
-        purpose: "ai_action",
-      });
+      const runId = await ensureRun(
+        context.db,
+        context.actorContext,
+        aiCallRunInput(context.actorContext),
+      );
       const resolved = await resolveLiveShortcodes(
         context.db,
         input.items.map((item) => item.id),
@@ -375,13 +385,11 @@ export const suggestFieldsWorkflow = defineWorkflowOperation(
   ) => {
     // A page's own `runKey` groups every target it asks about into one
     // `ai_suggest` run; no `runKey` (an older client, a one-off caller)
-    // falls back to a per-call `ai_action` run.
+    // shares the actor's run for the hour.
     const runId = await ensureRun(
       context.db,
       context.actorContext,
-      input.runKey
-        ? { purpose: "ai_suggest", clientKey: `jev:${input.runKey}` }
-        : { purpose: "ai_action" },
+      aiCallRunInput(context.actorContext, { runKey: input.runKey }),
     );
     return suggestFields(context.db, runId, input);
   },
@@ -395,9 +403,7 @@ export const suggestExternalIdKindWorkflow = defineWorkflowOperation(
     const runId = await ensureRun(
       context.db,
       context.actorContext,
-      input.runKey
-        ? { purpose: "ai_suggest", clientKey: `jev:${input.runKey}` }
-        : { purpose: "ai_action" },
+      aiCallRunInput(context.actorContext, { runKey: input.runKey }),
     );
     return suggestExternalIdKind(input, {
       db: context.db,
