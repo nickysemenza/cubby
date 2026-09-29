@@ -275,14 +275,13 @@ Local development supplies its own database, Better Auth, and storage values.
 Production `.env` files are not loaded by the local supervisor. These optional
 settings control the local session:
 
-| Key                                                     | Purpose                                                      |
-| ------------------------------------------------------- | ------------------------------------------------------------ |
-| `PORT` / `CUBBY_DEV_INSPECTOR_PORT`                     | Explicit app/inspector ports; occupied explicit ports fail   |
-| `CUBBY_DEV_INSTANCE`                                    | Another isolated instance in the same checkout               |
-| `CUBBY_DEV_SERVICES`                                    | `docker` to use Docker on macOS; otherwise Apple `container` |
-| `CUBBY_DEV_TELEMETRY`                                   | Explicit `true` enables development telemetry                |
-| `CUBBY_DEV_AI_GATEWAY_ID` / `CUBBY_DEV_VECTORIZE_INDEX` | Isolated remote development bindings for `dev:integrations`  |
-| `CUBBY_DEV_AI_GATEWAY_API_KEY`                          | Optional token for the explicit development AI gateway       |
+| Key                                                     | Purpose                                                     |
+| ------------------------------------------------------- | ----------------------------------------------------------- |
+| `PORT` / `CUBBY_DEV_INSPECTOR_PORT`                     | Explicit app/inspector ports; occupied explicit ports fail  |
+| `CUBBY_DEV_INSTANCE`                                    | Another isolated instance in the same checkout              |
+| `CUBBY_DEV_TELEMETRY`                                   | Explicit `true` enables development telemetry               |
+| `CUBBY_DEV_AI_GATEWAY_ID` / `CUBBY_DEV_VECTORIZE_INDEX` | Isolated remote development bindings for `dev:integrations` |
+| `CUBBY_DEV_AI_GATEWAY_API_KEY`                          | Optional token for the explicit development AI gateway      |
 
 Deployment keys remain documented in [apps/web/.env.example](apps/web/.env.example)
 and `wrangler.jsonc`; production migrations use `PRODUCTION_DIRECT_DATABASE_URL`.

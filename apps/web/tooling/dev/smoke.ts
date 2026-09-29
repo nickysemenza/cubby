@@ -1,8 +1,11 @@
+import { tmpdir } from "node:os";
+import { createTestHarness } from "wrangler";
+import { devSessionSchema as sessionSchema } from "./state";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -12,6 +15,7 @@ import {
   expect,
   type Browser,
   type BrowserContext,
+  type Page,
 } from "@playwright/test";
 import { productId } from "@cubby/schemas/identifiers";
 import { searchIndexRepairCountersSchema } from "@cubby/schemas/maintenance";
@@ -24,9 +28,9 @@ import { z } from "zod";
 import {
   resolveDevProfile,
   type DevProfile,
-} from "../../../scripts/lib/dev-profile.ts";
-import { DEV_USER_EMAIL, LOCAL_FIXTURE_VERSION } from "./dev-db-identity";
-import { writeE2ERunBundle } from "./e2e-run-bundle";
+} from "../../../../scripts/lib/dev-profile.ts";
+import { DEV_USER_EMAIL, LOCAL_FIXTURE_VERSION } from "./state";
+import { writeE2ERunBundle } from "../e2e-run-bundle";
 
 declare global {
   interface Window {
@@ -39,7 +43,7 @@ declare global {
 // interaction or HMR fails under workerd; signed/public storage disagree;
 // restart loses state; another instance shares state; down/reset affects peers.
 // This is the acceptance test at those actual browser/runtime boundaries.
-const repoRoot = path.resolve(import.meta.dirname, "../../..");
+const repoRoot = path.resolve(import.meta.dirname, "../../../..");
 const webRoot = path.join(repoRoot, "apps/web");
 const runId = `${Date.now().toString(36)}_${randomBytes(3).toString("hex")}`;
 const outputDir = path.join(repoRoot, "artifacts/local-dev-smoke", runId);
@@ -55,11 +59,6 @@ const readySchema = z.object({
   database: z.string(),
   ready: z.boolean(),
   fixturesReady: z.boolean(),
-});
-const sessionSchema = z.object({
-  readiness: z.string(),
-  phases: z.record(z.string(), z.number()),
-  explorerURL: z.string().url(),
 });
 const evidence: Record<string, string | number | boolean | string[]> = {};
 let browser: Browser | undefined;
@@ -127,10 +126,14 @@ async function isolatedSession(suffix: string) {
   return session;
 }
 
-function command(session: (typeof sessions)[number], action: string) {
+function command(
+  session: (typeof sessions)[number],
+  action: string,
+  args: string[] = [],
+) {
   const child = spawn(
     "pnpm",
-    ["--dir", webRoot, "exec", "tsx", "tooling/dev.ts", action],
+    ["--dir", webRoot, "exec", "tsx", "tooling/dev/index.ts", action, ...args],
     {
       cwd: repoRoot,
       env: session.env,
@@ -694,6 +697,67 @@ try {
     true,
   );
 
+  await check(
+    "raw Worker CORS permits signed browser transport headers",
+    async () => {
+      await checkRawStorageCors(page);
+    },
+  );
+  await check(
+    "Problems pack retains failed/pending source contracts on reseeding",
+    async () => {
+      await command(first, "seed", ["problems"]).done;
+      const result = await databaseCheck(
+        first.profile,
+        `SELECT r.notes, r.status,
+      r."failureCode", r."endedAt", j.state, j.attempts,
+      j."sourceContentHash" = i.sha256 AS source_matches,
+      i.status = 'UPLOADED' AND i."storageStatus" = 'available' AND i."renderStatus" = 'verified' AS source_available,
+      j."lastError", i.key
+      FROM "Run" r JOIN "ImageProcessingJob" j ON j."runId" = r.id
+      JOIN "Image" i ON i.id = j."imageId"
+      WHERE r.notes IN ($1, $2) AND r."deletedAt" IS NULL`,
+        [
+          "Synthetic failed photo processing fixture",
+          "Synthetic pending photo processing fixture",
+        ],
+      );
+      assert.equal(result.rows.length, 2);
+      const failed = result.rows.find((row) => row.state === "failed");
+      const pending = result.rows.find((row) => row.state === "pending");
+      assert.ok(failed);
+      assert.ok(pending);
+      assert.equal(failed.status, "failed");
+      assert.equal(failed.failureCode, "flue_failed");
+      assert.ok(failed.endedAt);
+      assert.equal(failed.attempts, 1);
+      assert.match(failed.lastError, /Synthetic provider failure/u);
+      assert.equal(pending.status, "running");
+      assert.equal(pending.endedAt, null);
+      assert.equal(pending.attempts, 0);
+      for (const row of result.rows) {
+        assert.equal(row.source_matches, true);
+        assert.equal(row.source_available, true);
+        const response = await fetch(
+          new URL(`/${row.key}`, first.profile.origin),
+        );
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("content-type"), "image/png");
+        assert.ok((await response.arrayBuffer()).byteLength > 0);
+      }
+      await command(first, "seed", ["problems"]).done;
+      const repeated = await databaseCheck(
+        first.profile,
+        'SELECT count(*)::integer AS count FROM "Run" WHERE notes IN ($1, $2) AND "deletedAt" IS NULL',
+        [
+          "Synthetic failed photo processing fixture",
+          "Synthetic pending photo processing fixture",
+        ],
+      );
+      assert.equal(repeated.rows[0]?.count, 2);
+    },
+  );
+
   await context.tracing.stop({
     path: path.join(first.profile.stateDir, "smoke-trace.zip"),
   });
@@ -822,7 +886,7 @@ try {
       "apps/web",
       "exec",
       "tsx",
-      "tooling/local-dev-smoke.ts",
+      "tooling/dev/smoke.ts",
     ],
     cases,
     profile: "offline",
@@ -842,3 +906,113 @@ if (failure)
   throw new Error(
     diagnostic(failure instanceof Error ? failure.message : String(failure)),
   );
+
+/** Wrangler supplies its own HTTP CORS. Read raw Worker responses to guard
+ * the adapter's Authorization exception without hiding it behind that layer. */
+async function checkRawStorageCors(page: Page): Promise<void> {
+  const directory = await mkdtemp(path.join(tmpdir(), "cubby-storage-cors-"));
+  const harness = createTestHarness({
+    root: directory,
+    workers: [
+      {
+        config: {
+          name: "cubby-storage-cors",
+          main: "worker.ts",
+          compatibility_date: "2026-09-01",
+          r2_buckets: [
+            { binding: "LOCAL_DEV_STORAGE", bucket_name: "cors-contract" },
+          ],
+          vars: {
+            R2_BUCKET_NAME: "cors-contract",
+            R2_KEY_PREFIX: "synthetic-storage",
+          },
+        },
+      },
+    ],
+  });
+  let bridgeError: unknown;
+  let preflights = 0;
+  const bridge = createServer(async (request, response) => {
+    try {
+      const headers = new Headers();
+      for (const [name, value] of Object.entries(request.headers)) {
+        if (Array.isArray(value))
+          for (const item of value) headers.append(name, item);
+        else if (value !== undefined) headers.set(name, value);
+      }
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(Buffer.from(chunk));
+      const result = await harness
+        .getWorker()
+        .fetch(`http://local${request.url ?? "/"}`, {
+          method: request.method,
+          headers: [...headers],
+          body: chunks.length ? Buffer.concat(chunks) : undefined,
+        });
+      if (request.method === "OPTIONS") {
+        preflights++;
+        assert.equal(result.headers.get("x-worker-adapter"), "true");
+      }
+      response.writeHead(result.status, Object.fromEntries(result.headers));
+      response.end(Buffer.from(await result.arrayBuffer()));
+    } catch (error) {
+      bridgeError = error;
+      response.writeHead(500).end("Synthetic storage transport failure");
+    }
+  });
+  try {
+    await writeFile(
+      path.join(directory, "worker.ts"),
+      `import { handleLocalStorageRequest } from ${JSON.stringify(path.join(import.meta.dirname, "storage.ts"))};
+      export default { async fetch(request, env) {
+        const response = await handleLocalStorageRequest(request, env) ?? new Response("Missing route", {status:404});
+        response.headers.set("X-Worker-Adapter", "true"); return response;
+      }};`,
+    );
+    await harness.listen();
+    await new Promise<void>((resolve) =>
+      bridge.listen(0, "127.0.0.1", resolve),
+    );
+    const { port } = z.object({ port: z.number() }).parse(bridge.address());
+    const endpoint = `http://127.0.0.1:${port}/__local-storage/s3/cors-contract/synthetic-storage/browser.bin?X-Amz-Expires=0`;
+    assert.notEqual(new URL(page.url()).origin, new URL(endpoint).origin);
+    const result = await page.evaluate(async (target) => {
+      const headers = {
+        Authorization: "Bearer synthetic-local",
+        "x-amz-content-sha256": "synthetic-checksum",
+        "Content-Type": "application/octet-stream",
+      };
+      const upload = await fetch(target, {
+        method: "PUT",
+        headers,
+        body: "synthetic-browser-bytes",
+        signal: AbortSignal.timeout(5000),
+      });
+      const read = await fetch(target, { headers });
+      const bytes = await read.text();
+      const deleted = await fetch(target, { method: "DELETE", headers });
+      const missing = await fetch(target, { headers });
+      return {
+        upload: upload.status,
+        read: read.status,
+        bytes,
+        deleted: deleted.status,
+        missing: missing.status,
+      };
+    }, endpoint);
+    if (bridgeError) throw bridgeError;
+    assert.ok(preflights > 0);
+    assert.deepEqual(result, {
+      upload: 200,
+      read: 200,
+      bytes: "synthetic-browser-bytes",
+      deleted: 204,
+      missing: 404,
+    });
+  } finally {
+    bridge.closeAllConnections();
+    bridge.close();
+    await harness.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}

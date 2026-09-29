@@ -63,7 +63,7 @@
     "dev:down": "pnpm --filter @cubby/web dev:down",
     "dev:sim": "pnpm --filter @cubby/web dev:sim",
     "dev:integrations": "pnpm --filter @cubby/web dev:integrations",
-    "test:e2e:dev": "pnpm --dir apps/web exec tsx tooling/local-dev-smoke.ts"
+    "test:e2e:dev": "pnpm --dir apps/web exec tsx tooling/dev/smoke.ts"
   },
   "dependencies": {
     "@neon/config": "^1.8.2",

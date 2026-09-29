@@ -11,7 +11,7 @@ import {
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { testUserId } from "@cubby/schemas/testing";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
-import { faker } from "@faker-js/faker";
+import { en, Faker } from "@faker-js/faker";
 import type { Pool } from "pg";
 
 import * as schema from "~/server/db/schema";
@@ -29,8 +29,7 @@ import {
 } from "./context";
 
 /**
- * A deterministic (faker.seed(1) — the caller seeds it once, before calling
- * this) synthetic household corpus for local `dev:local` iteration: a
+ * A deterministic synthetic household corpus for local `dev` iteration: a
  * location tree, a product taxonomy, products, inventory, a financial
  * account, and a few tasks — everything a fixture-backed preview route or a
  * developer poking at the UI needs to see non-empty screens.
@@ -42,6 +41,8 @@ import {
  * etc.) rather than reimplementing their Page-driven flows headlessly.
  */
 export async function seedCorpus(pool: Pool, userId: string): Promise<void> {
+  const faker = new Faker({ locale: en });
+  faker.seed(1);
   const db = buildScenarioDatabase(pool);
   // testUserId() only brands the string (see @cubby/schemas/test-support) — it
   // is the real, database-backed dev user's id from better-auth sign-up, not

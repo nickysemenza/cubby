@@ -1,15 +1,14 @@
-import { faker } from "@faker-js/faker";
 import { request } from "@playwright/test";
 import { Pool } from "pg";
 import { z } from "zod";
 
-import { assertDevDatabaseUrl } from "./dev-db-guard";
+import { assertDevDatabaseUrl } from "./state";
 import {
   LOCAL_FIXTURE_VERSION,
   DEV_USER_EMAIL,
   DEV_USER_NAME,
   DEV_USER_PASSWORD,
-} from "./dev-db-identity";
+} from "./state";
 
 const signUpResponseSchema = z.object({
   user: z.object({ id: z.string().min(1) }),
@@ -125,12 +124,11 @@ export async function seedDevDatabase(options: {
     );
     startedPack = true;
     const userId = await ensureDevUser(options.baseURL);
-    faker.seed(1);
     if (pack === "core") {
-      const { seedCorpus } = await import("./scenarios/corpus");
+      const { seedCorpus } = await import("../scenarios/corpus");
       await seedCorpus(pool, userId);
     } else {
-      const { seedLocalFixturePack } = await import("./scenarios/local-packs");
+      const { seedLocalFixturePack } = await import("./scenarios");
       await seedLocalFixturePack(pool, userId, pack, options.baseURL);
     }
     await pool.query(

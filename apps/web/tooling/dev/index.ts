@@ -1,3 +1,8 @@
+import {
+  devSessionSchema as sessionSchema,
+  type DevSession as Session,
+} from "./state";
+import { localSimulatorServer } from "../../../../scripts/lib/simulator-server.ts";
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import {
   mkdirSync,
@@ -16,28 +21,9 @@ import {
   devProcessEnvironment,
   resolveDevProfile,
   type DevProfile,
-} from "../../../scripts/lib/dev-profile.ts";
+} from "../../../../scripts/lib/dev-profile.ts";
 
-const root = path.resolve(import.meta.dirname, "../../..");
-const sessionSchema = z.object({
-  schemaVersion: z.literal(1),
-  id: z.string(),
-  profile: z.enum(["offline", "integrations"]),
-  mode: z.enum(["development", "preview"]).default("development"),
-  origin: z.string().url(),
-  database: z.string(),
-  stateDir: z.string(),
-  supervisorPid: z.number().int().positive(),
-  supervisorIdentity: z.string(),
-  runtimePid: z.number().int().positive().optional(),
-  runtimeIdentity: z.string().optional(),
-  startedAt: z.string(),
-  readiness: z.enum(["starting", "ready", "stopped", "failed"]),
-  explorerURL: z.string().url(),
-  inspectorURL: z.string().url(),
-  phases: z.record(z.string(), z.number()),
-});
-type Session = z.infer<typeof sessionSchema>;
+const root = path.resolve(import.meta.dirname, "../../../..");
 interface DiagnosticChecks {
   session: boolean;
   process: boolean;
@@ -294,7 +280,7 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
       run(profile, process.execPath, ["apps/mcp-apps/build.mjs", "--if-stale"]),
     );
     await phase("peers", async () => {
-      const { prepareLocalDevPeers } = await import("./local-dev-peers.ts");
+      const { prepareLocalDevPeers } = await import("./config.ts");
       await prepareLocalDevPeers(profile);
     });
     if (preview)
@@ -327,7 +313,7 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
           JSON.stringify(config),
         );
       });
-    const { createLocalDevPeers } = await import("./local-dev-peers.ts");
+    const { createLocalDevPeers } = await import("./config.ts");
     const peers = await createLocalDevPeers(profile);
     const args = preview
       ? [
@@ -411,7 +397,7 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
         );
     });
     await phase("fixtures", async () => {
-      const { seedDevDatabase } = await import("./dev-db-seed.ts");
+      const { seedDevDatabase } = await import("./fixtures.ts");
       installEnvironment(profile);
       await seedDevDatabase({
         databaseUrl: profile.databaseUrl,
@@ -504,14 +490,7 @@ async function diagnostics(
     checks.diagnostic = String(error);
   }
   if (command === "doctor") {
-    for (const tool of [
-      "node",
-      "pnpm",
-      process.env.CUBBY_DEV_SERVICES === "docker" ||
-      process.platform !== "darwin"
-        ? "docker"
-        : "container",
-    ]) {
+    for (const tool of ["node", "pnpm", "container"]) {
       try {
         execFileSync(tool, ["--version"], { stdio: "ignore" });
         checks.tools[tool] = true;
@@ -574,8 +553,6 @@ async function main(): Promise<void> {
   if (!session || !alive(session)) throw new Error("Start pnpm dev first");
   await readiness(session);
   if (command === "sim") {
-    const { launchLocalDevSimulator } =
-      await import("./local-dev-simulator.ts");
     return launchLocalDevSimulator(session.origin, args.slice(1));
   }
   if (command === "seed") {
@@ -591,7 +568,7 @@ async function main(): Promise<void> {
       },
     });
     const { seedDevDatabase, devFixturePackSchema } =
-      await import("./dev-db-seed.ts");
+      await import("./fixtures.ts");
     return seedDevDatabase({
       databaseUrl: profile.databaseUrl,
       baseURL: session.origin,
@@ -614,3 +591,38 @@ if (process.argv[1] === import.meta.filename)
     else console.error(`[dev] ${String(error)}`);
     process.exitCode = 1;
   });
+
+async function launchLocalDevSimulator(
+  origin: string,
+  args: readonly string[] = [],
+): Promise<void> {
+  const server = localSimulatorServer(origin);
+  if (args.includes("--server"))
+    throw new Error(
+      "The development session selects the simulator server; omit --server.",
+    );
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(
+      "pnpm",
+      [
+        "apple",
+        "sim",
+        "--server",
+        server,
+        ...args.filter((arg) => arg !== "--"),
+      ],
+      {
+        cwd: path.resolve(import.meta.dirname, "../../../.."),
+        stdio: "inherit",
+      },
+    );
+    child.once("error", reject);
+    child.once("exit", (code, signal) =>
+      code === 0
+        ? resolve()
+        : reject(
+            new Error(`Local simulator launch failed (${signal ?? code}).`),
+          ),
+    );
+  });
+}
