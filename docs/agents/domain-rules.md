@@ -150,4 +150,6 @@ suffix, because TanStack's file router needs physical files there and a
 `__virtual.ts` would take over the whole directory. A generated `.gitignore`
 in that directory ignores them, and `pnpm generate` deletes one it no longer
 emits. To customize one, set that `route.list` / `route.detail` to `null` in
-the declaration and write the file.
+the declaration and write the file. Entities with `route.create: "dialog"`
+also get a generated `<basePath>.new.tsx` that redirects to the list with
+`?create=true`; `"page"` entities keep a hand-written `.new.tsx`.
