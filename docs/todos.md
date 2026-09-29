@@ -81,6 +81,23 @@ history is the archive. Permanent product constraints live in the
 
 ## Ready projects
 
+- **Transaction ownership on the purchase-agent MCP path.** Found in review of
+  the 2026-09 consolidation; all were already true on main.
+  - Deadlock: `McpOperationContext.inTransaction`
+    (`apps/web/src/server/mcp/operation-context.ts`) keeps the pool-bound
+    `recipeCosting` service, so an agent ingredient merge locks Recipe rows in
+    the transaction and then waits on `markRecipesStale` over the pool. Rebind
+    it with `bindTo(transactionDb, deferred.publish)` (or wrap merge like
+    `writeWithProjections`), with an integration test that merges ingredients
+    through the agent path.
+  - The kernel's own transaction is a savepoint there, so deferred publications
+    and storage deletes run before the real commit; collect them and flush
+    after `inTransaction` commits. Nested deletes also lose repeatable read.
+  - Deletes publish inside their transaction (planting delete refreshes garden
+    entry embeddings early); give the delete workflow a post-commit step.
+  - Plant `bulkUpdate` loops without a transaction or side effects; location
+    update writes its AI description after the main update commits.
+
 - **Maintenance mode.** A minimal switch exists: the `MAINTENANCE_MODE` Worker
   secret makes the web Worker answer 503 and skips the cron
   (`apps/web/src/server/maintenance.ts`); queues are paused by hand with
