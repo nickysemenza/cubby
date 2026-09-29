@@ -4,11 +4,7 @@ import type {
   FoodSummaryEnrichment,
   FoodSummaryWithLinkedProducts,
 } from "@cubby/schemas/usda";
-import type {
-  DataType,
-  FoodLookupParam,
-  FoodSummary,
-} from "@cubby/usda-schemas";
+import type { DataType, FoodLookupParam, FoodSummary } from "@cubby/usda";
 
 import { unitMappingsFromFood } from "~/lib/unit-mapping-utils";
 import { TraceNames, withTrace } from "~/server/tracing";

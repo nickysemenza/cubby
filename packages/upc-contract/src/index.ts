@@ -1,4 +1,4 @@
-import { upc } from "@cubby/usda-schemas";
+import { upc } from "@cubby/shared/upc";
 import { z } from "zod";
 
 export const upcLookupInput = z.object({ upc });

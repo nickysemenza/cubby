@@ -4,7 +4,7 @@ import {
   type NutrientKey,
   TIER1_NUTRIENT_KEYS,
   TIER1_NUTRIENTS,
-} from "@cubby/usda-schemas";
+} from "@cubby/usda";
 
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { formatCurrency } from "~/lib/utils";

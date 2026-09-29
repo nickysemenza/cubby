@@ -1,4 +1,4 @@
-import type { NutrientSummary, NutritionInfo } from "@cubby/usda-schemas";
+import type { NutrientSummary, NutritionInfo } from "@cubby/usda";
 import { useMemo } from "react";
 
 import { useTableColumnLayout } from "../data-table/column-layout";

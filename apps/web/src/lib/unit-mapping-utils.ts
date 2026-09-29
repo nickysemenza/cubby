@@ -10,7 +10,7 @@ import {
   getNutrientKey,
   getNutrientUnitString,
   isTier1Nutrient,
-} from "@cubby/usda-schemas";
+} from "@cubby/usda";
 import type { ReadonlyDeep } from "type-fest";
 
 import { labelNutritionMappings } from "~/lib/label-nutrition";

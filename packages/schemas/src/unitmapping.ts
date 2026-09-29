@@ -1,4 +1,4 @@
-import { fdcId } from "@cubby/usda-schemas";
+import { fdcId } from "@cubby/usda";
 import { z } from "zod";
 import { amount, positiveAmount } from "./codec";
 import { productShortcode } from "./identifier-fields";

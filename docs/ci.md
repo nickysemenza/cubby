@@ -7,7 +7,9 @@ documentation-only change; deployment never waits for post-merge CI.
 
 ## Local verification
 
-`scripts/ci-change-scope.ts` classifies hosted changes for the `Scope` job;
+`scripts/ci-change-scope.ts` classifies hosted changes for the `Scope` job (a
+`cubby-ffi/` change selects both `apple` and the `Rust - recipebridge` job, which
+runs fmt, clippy, and tests for `recipebridge` and `cubby-ffi`);
 unknown paths and manual runs select every lane. Local affected-ness and
 scoping remain Nx's job: every gate is a target on the project whose files it
 covers (`apps/web/project.json` — `postgres`, `build-cf`, `e2e`,
@@ -19,37 +21,30 @@ which projects and prerequisite targets are selected and ordered. Target
 `inputs` and `dependentTasksOutputFiles` decide cache keys and whether a selected
 target can reuse a prior result; they are separate concerns.
 
-`pnpm verify:local` is an optional local diagnostic:
-(`nx run-many -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1`).
-`--parallel=1` is deliberate: every tier is already parallel inside (vitest
-workers, Playwright workers, cargo, xcodebuild), and running tiers side by
-side on one host reproduces the contention the sequential `test:all` removed
-— measured 2026-09-16, the web unit tier took 196s instead of 24s under
-`run-many`'s default parallelism and tripped a 5s test timeout.
-It first rejects an uncommitted or untracked working tree and checks it again
-after the run; any generated churn must be resolved before handoff. It then runs
-every target across every project —
-most selected targets replay from cache on a small change, so an unaffected
-native or PostgreSQL gate costs a cache lookup, not a rebuild. E2E is explicitly
-uncached and always runs its browser tests; its `build-cf` prerequisite may
-reuse a cache entry, but the browser run itself never replays. The textual order
-of the `run-many -t` list is not an execution-order contract; Nx dependencies
-provide the ordering guarantees (including WASM before its consumers and the
-web build before E2E). It deploys nothing. `pnpm verify:local:full` sets
-`NX_SKIP_NX_CACHE=true` first, forcing every target to actually execute
-regardless of cache state — use it for high-risk changes or before a release.
-Both print static actionable diagnostics and step timings.
+`pnpm verify:local` is an optional local diagnostic; commands and when to use
+it live in the [validation policy](agents/validation.md) and
+[quality guide](agents/validation-quality.md). Facts that shape it:
 
-**Git operations.** Pre-commit runs `pnpm check:staged`, which uses lint-staged
-with the existing Oxlint and Oxfmt rules on staged files only. Checks are
-read-only, preserve partial staging, and report issues for explicit correction.
-There is no pre-push hook or push-time verifier. A push does not require a clean
-working tree or refreshed base ref. The [validation policy](agents/validation.md)
-controls local feedback and handoff; GitHub checks on the final PR head remain
-the merge gate.
+- `--parallel=1` is deliberate: every tier is already parallel inside (vitest
+  workers, Playwright workers, cargo, xcodebuild), and running tiers side by
+  side on one host reproduces the contention the sequential `test:all` removed
+  — measured 2026-09-16, the web unit tier took 196s instead of 24s under
+  `run-many`'s default parallelism and tripped a 5s test timeout.
+- Most selected targets replay from Nx cache on a small change, so an unaffected
+  native or PostgreSQL gate costs a cache lookup, not a rebuild. E2E is
+  explicitly uncached and always runs its browser tests; its `build-cf`
+  prerequisite may reuse a cache entry.
+- The textual order of the `run-many -t` list is not an execution-order
+  contract; Nx dependencies provide the ordering (WASM before its consumers,
+  web build before E2E). `verify:local:full` sets `NX_SKIP_NX_CACHE=true` so
+  every target executes.
+
+Commit hooks, push behavior, and the merge gate are defined in the
+[validation policy](agents/validation.md); GitHub checks on the final PR head
+remain the merge gate.
 
 Node 24, pnpm 12.4.1, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
-browsers must be available. Follow [validation guidance](agents/validation.md) for database setup.
+browsers must be available; [test tiers](agents/validation-tests.md) cover database setup.
 PostgreSQL remains the authoritative integration tier; Playwright retains a
 single worker and no retries. Both tiers reject an empty selection or an
 unexpected skipped test without freezing the suite to a hand-maintained count.
@@ -151,8 +146,8 @@ contain household data or credentials.
 declare their own `postgres`/`integresql` `services:` block — GitHub Actions
 YAML has no anchors and no reusable construct that fits here, so the
 duplication is accepted rather than worked around. Affected jobs wait on
-`Scope`. The separate Markdown link workflow remains available manually, and
-the same check runs automatically in `Validation` for Markdown changes. The
+`Scope`. The offline Markdown link check runs in `Validation` for Markdown
+changes. The
 `@claude` mention workflow (`claude.yml`) remains manual;
 `claude-code-review.yml` reviews each non-Renovate, non-fork PR once,
 on `opened`/`ready_for_review`/`reopened` (never on `synchronize`, so a push

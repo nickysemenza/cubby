@@ -8,7 +8,7 @@ import {
 } from "@cubby/schemas/unitmapping";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import type { FoodSummary } from "@cubby/usda-schemas";
+import type { FoodSummary } from "@cubby/usda";
 
 import { getHoverableMeasureUnitIcon } from "~/app/_components/inventory/format-amount";
 import { isDisplayMapping } from "~/app/_components/units/unit-mapping-graph";

@@ -5,10 +5,10 @@ harness. This document is the current native implementation guidance.
 
 For fast iteration, choose the loop in [ITERATION.md](ITERATION.md): focused
 Swift tests or previews for failures native E2E cannot observe,
-`test:e2e:headless:watch` for API behavior, and
-`dev:sim:watch` for repeated simulator UI interactions. The warm simulator
+`test:e2e:sim -- --headless --watch` for API behavior, and
+`test:e2e:sim -- --watch` for repeated simulator UI interactions. The warm simulator
 runner owns its disposable database and agent-device session; stop it with
-Ctrl-C when done. Run `test:e2e:sim` for the full Search journey.
+Ctrl-C when done. Run `test:e2e:sim` for the full Search journey (flags: `--video`, `--layout`, `--headless [--photo [--purchase]]`, `--watch`).
 
 ## Build order
 

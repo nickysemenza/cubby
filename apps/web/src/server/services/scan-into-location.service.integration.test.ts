@@ -5,7 +5,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { UPCLookupResponse } from "@cubby/upc-contract";
-import type { FoodSummary } from "@cubby/usda-schemas";
+import type { FoodSummary } from "@cubby/usda";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 

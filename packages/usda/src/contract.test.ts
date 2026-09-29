@@ -4,7 +4,7 @@ import {
   listFoodsQuery,
   MAX_BATCH_LOOKUP_SIZE,
   MAX_LIST_FOODS_PAGE_SIZE,
-} from "./index";
+} from "./contract";
 
 // Only the contract's non-obvious coercion/bounds logic is worth pinning here —
 // the endpoint shapes and "does zod validate a valid object" cases are just the

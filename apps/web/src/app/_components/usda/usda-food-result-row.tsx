@@ -1,5 +1,5 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import { dataTypeLabel } from "@cubby/usda-schemas";
+import { dataTypeLabel } from "@cubby/usda";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 

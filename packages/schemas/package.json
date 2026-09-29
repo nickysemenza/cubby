@@ -43,6 +43,7 @@
     "./base-entity": "./src/base-entity.ts",
     "./pagination": "./src/pagination.ts",
     "./context": "./src/context.ts",
+    "./context-breakdown": "./src/context-breakdown.ts",
     "./data-quality": "./src/data-quality.ts",
     "./data-quality-facets": "./src/data-quality-facets.ts",
     "./data-quality-shape": "./src/data-quality-shape.ts",
@@ -150,7 +151,7 @@
   },
   "dependencies": {
     "@cubby/shared": "workspace:*",
-    "@cubby/usda-schemas": "workspace:*",
+    "@cubby/usda": "workspace:*",
     "zod": "^4.6.5"
   },
   "devDependencies": {

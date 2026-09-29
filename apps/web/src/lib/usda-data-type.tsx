@@ -1,4 +1,4 @@
-import { type DataType, dataTypeLabel } from "@cubby/usda-schemas";
+import { type DataType, dataTypeLabel } from "@cubby/usda";
 
 import { cn } from "~/lib/utils";
 

@@ -4,7 +4,7 @@ import { imageWithEntitySchema } from "@cubby/schemas/image";
 import { cookbookSummary } from "@cubby/schemas/recipe";
 import { runOut } from "@cubby/schemas/run";
 import { testShortcode } from "@cubby/schemas/testing";
-import { TIER1_NUTRIENT_KEYS } from "@cubby/usda-schemas";
+import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 

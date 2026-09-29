@@ -164,8 +164,7 @@ and drift-check procedure live in [docs/infrastructure.md](docs/infrastructure.m
 | -------------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | [packages/wasm](packages/wasm)                     | `@cubby/recipebridge`   | WASM bindings — built from `recipebridge/` Rust source via `pnpm run wasm`                                                                                                    | `web`                                                                                   |
 | [packages/upc-contract](packages/upc-contract)     | `@cubby/upc-contract`   | Shared UPC request/response transport contract                                                                                                                                | `web`, `upc-lookup`                                                                     |
-| [packages/usda-contract](packages/usda-contract)   | `@cubby/usda-contract`  | ts-rest endpoint contract for the USDA API                                                                                                                                    | `web`, `usda-api`                                                                       |
-| [packages/usda-schemas](packages/usda-schemas)     | `@cubby/usda-schemas`   | Shared Zod schemas for USDA entities                                                                                                                                          | `web`, `usda-api`                                                                       |
+| [packages/usda](packages/usda)                     | `@cubby/usda`           | Shared Zod schemas for USDA entities; the ts-rest USDA API contract is the `@cubby/usda/contract` subpath                                                                     | `web`, `usda-api`                                                                       |
 | [packages/schemas](packages/schemas)               | `@cubby/schemas`        | Cross-app Zod schemas                                                                                                                                                         | `web`                                                                                   |
 | [packages/shared](packages/shared)                 | `@cubby/shared`         | Shared utilities, including guarded external fetches                                                                                                                          | `web`, `upc-lookup`                                                                     |
 | [packages/worker-tracing](packages/worker-tracing) | `@cubby/worker-tracing` | Cloudflare Worker tracing/Sentry bootstrap                                                                                                                                    | `upc-lookup`, `usda-api`                                                                |
@@ -350,18 +349,19 @@ drops the database after the run. Set
 failure artifacts are under `artifacts/sim-e2e/`. The manual `CI` workflow
 dispatch option `simulator_e2e` runs the same command with native PostgreSQL
 17 and pgvector on a hosted macOS runner. This lane is not a required PR check.
-`pnpm test:e2e:sim:video` also saves `run.mp4` and a timestamped
-`contact-sheet.png` in that run's artifact directory for review in Codex. See the
+`pnpm test:e2e:sim -- --video` also saves `run.mp4` and a timestamped
+`contact-sheet.png` in that run's artifact directory for review in Codex, and
+`-- --layout` runs the layout-only journey. See the
 [fast native iteration guide](apps/apple/ITERATION.md) for which loop to use.
 
-`pnpm dev:sim:watch` keeps a disposable database, workerd, and the installed
+`pnpm test:e2e:sim -- --watch` keeps a disposable database, workerd, and the installed
 Debug app alive for local UI iteration. Press Enter to seed a new product and
 replay a short deep-link edit flow; the app rebuilds after Apple source changes.
 The command prints an agent-device session for interactive inspection. Ctrl-C
 closes the session and drops the database. See the [iteration guide](apps/apple/ITERATION.md)
 for snapshot, screenshot, and replay commands.
 
-`pnpm test:e2e:headless` uses the same disposable database, synthetic product,
+`pnpm test:e2e:sim -- --headless` uses the same disposable database, synthetic product,
 and workerd harness. The `cubby` CLI signs in through `AuthFlow`, searches,
 builds an `EntityPatch`, updates through `CubbyClient`, and checks native readback
 plus the database row. It skips Xcode, installation, and UI automation for a
@@ -370,7 +370,7 @@ The [local journey coverage map](docs/agents/core-journey-e2e.md) tracks
 input-first checks for Product, photo, order, statement, inventory, and other
 documented core flows, including their remaining UI gaps.
 Headless failure logs are under `artifacts/headless-e2e/`.
-For repeated native changes, `pnpm test:e2e:headless:watch` keeps that database
+For repeated native changes, `pnpm test:e2e:sim -- --headless --watch` keeps that database
 and workerd harness running. Press Enter to seed a fresh product and rerun the
 CLI scenario; Ctrl-C drops the database. Restart watch mode after changing web
 server or Rust FFI code so it rebuilds those bundles. Watch mode runs the built
@@ -534,8 +534,10 @@ In dev, `await __jsProfile(5000)` in the browser console captures a CPU flame su
 | `*.integration.test.ts` | Authoritative PostgreSQL contracts | Vitest     |
 | `*.spec.ts`             | E2E tests                          | Playwright |
 
-Local and CI E2E use isolated IntegreSQL PostgreSQL clones. See `e2e-helpers.ts`
-for the shared browser fixtures.
+Which tier to use, focused-run commands, and the PR merge gate live in the
+[validation policy](docs/agents/validation.md) and
+[test tiers](docs/agents/validation-tests.md); shared browser fixtures are in
+`e2e-helpers.ts`.
 
 ### File Naming Conventions
 
@@ -830,8 +832,8 @@ between the web app and the iframes.
 
 ## 🥕 USDA Integration
 
-- **Contract:** `@cubby/usda-contract` defines endpoints with Zod schemas (ts-rest).
-- **Schemas:** `@cubby/usda-schemas` for shared entity types.
+- **Contract:** `@cubby/usda/contract` defines endpoints with Zod schemas (ts-rest).
+- **Schemas:** `@cubby/usda` for shared entity types.
 - **Client:** [apps/web/src/server/clients/usda.ts](apps/web/src/server/clients/usda.ts) wraps the ts-rest client.
 - **Browser adapter:** [apps/web/src/contracts/usda.contract.ts](apps/web/src/contracts/usda.contract.ts) (cache tags and freshness live on its members; the generated `catalog.gen.ts` resolves them).
 - Service layer processes USDA portion data through WASM for conversions.

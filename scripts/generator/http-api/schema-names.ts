@@ -19,8 +19,11 @@ import {
  * qualified name is an error naming both sources.
  */
 
-/** Package export subpaths that hold test helpers, not schemas. */
-const EXCLUDED_SUBPATHS = new Set(["./testing"]);
+/**
+ * Package export subpaths that hold test helpers or transport contracts, not
+ * schemas (`@cubby/usda/contract` is the ts-rest endpoint contract).
+ */
+const EXCLUDED_SUBPATHS = new Set(["./testing", "./contract"]);
 
 /** Web-side schema modules the HTTP contract reaches, relative to src. */
 const WEB_SCHEMA_MODULES = [
@@ -56,7 +59,11 @@ interface SchemaModule {
  * real path names the same module instance the contract imports, because
  * Node keys ESM modules by their symlink-resolved path.
  */
-const packageModules = (name: string, packageJsonUrl: URL): SchemaModule[] => {
+const packageModules = (
+  name: string,
+  packageJsonUrl: URL,
+  rootQualifier = name.split("/").at(-1)!,
+): SchemaModule[] => {
   const { exports } = packageExports.parse(
     JSON.parse(readFileSync(packageJsonUrl, "utf8")),
   );
@@ -68,9 +75,7 @@ const packageModules = (name: string, packageJsonUrl: URL): SchemaModule[] => {
       .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
       .map(([subpath, target]) => ({
         specifier: new URL(z.string().parse(target), packageJsonUrl).href,
-        qualifier: pascal(
-          subpath === "." ? name.split("/").at(-1)! : subpath.slice(2),
-        ),
+        qualifier: pascal(subpath === "." ? rootQualifier : subpath.slice(2)),
       }))
   );
 };
@@ -81,8 +86,10 @@ const schemaModules = (srcUrl: URL): SchemaModule[] => [
     new URL("../../../packages/schemas/package.json", srcUrl),
   ),
   ...packageModules(
-    "@cubby/usda-schemas",
-    new URL("../../../packages/usda-schemas/package.json", srcUrl),
+    "@cubby/usda",
+    new URL("../../../packages/usda/package.json", srcUrl),
+    // Pinned: renaming it would requalify colliding OpenAPI component names.
+    "usda-schemas",
   ),
   ...WEB_SCHEMA_MODULES.map((path) => ({
     specifier: new URL(path, srcUrl).href,

@@ -10,7 +10,7 @@ import {
   productTopLevelOut,
 } from "@cubby/schemas/product";
 import { recipeMcpOut } from "@cubby/schemas/recipe";
-import { foodSummary } from "@cubby/usda-schemas";
+import { foodSummary } from "@cubby/usda";
 import { z } from "zod";
 
 /**

@@ -12,7 +12,7 @@ import {
   normalizeCollectionSlug,
 } from "@cubby/shared/collection-tag";
 import { redundantTokens } from "@cubby/shared/redundant-tokens";
-import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda-schemas";
+import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { type MutableRefObject, useMemo, useRef, useState } from "react";

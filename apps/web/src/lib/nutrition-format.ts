@@ -4,7 +4,7 @@ import {
   type MeasureEstimate,
   type NutritionEstimate,
 } from "@cubby/schemas/nutrition";
-import { TIER1_NUTRIENTS, type NutrientsPer100 } from "@cubby/usda-schemas";
+import { TIER1_NUTRIENTS, type NutrientsPer100 } from "@cubby/usda";
 
 /**
  * Render an estimate without hiding its confidence. Callers own the unit and

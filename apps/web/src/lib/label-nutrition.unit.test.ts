@@ -1,5 +1,5 @@
 import { testShortcode } from "@cubby/schemas/testing";
-import type { FoodSummary } from "@cubby/usda-schemas";
+import type { FoodSummary } from "@cubby/usda";
 import { describe, expect, it } from "vitest";
 
 import {

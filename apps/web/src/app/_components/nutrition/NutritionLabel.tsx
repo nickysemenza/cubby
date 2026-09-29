@@ -7,7 +7,7 @@ import {
   isNutrientKey,
   type NutrientKey,
   TIER1_NUTRIENTS,
-} from "@cubby/usda-schemas";
+} from "@cubby/usda";
 
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { cn } from "~/lib/utils";

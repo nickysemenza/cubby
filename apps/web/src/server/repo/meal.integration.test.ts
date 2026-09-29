@@ -8,7 +8,7 @@ import {
   hasKnownEstimate,
   type NutritionEstimate,
 } from "@cubby/schemas/nutrition";
-import { TIER1_NUTRIENT_KEYS } from "@cubby/usda-schemas";
+import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";

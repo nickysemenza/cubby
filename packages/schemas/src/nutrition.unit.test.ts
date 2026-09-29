@@ -5,7 +5,7 @@ import {
   measureEstimate,
   nutritionTotals,
 } from "./nutrition";
-import { TIER1_NUTRIENT_KEYS } from "@cubby/usda-schemas";
+import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 
 describe("nutrition estimate contract", () => {
   it("preserves known zero and distinguishes unavailable nutrients", () => {

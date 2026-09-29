@@ -23,7 +23,7 @@ import {
   productPricingOut,
 } from "@cubby/schemas/product-fields";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
-import { fdcId } from "@cubby/usda-schemas";
+import { fdcId } from "@cubby/usda";
 import { z } from "zod";
 import { productCategorySummary } from "../product-category-fields";
 export default defineEntity({

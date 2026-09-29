@@ -1,11 +1,11 @@
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { usdaContract } from "@cubby/usda-contract";
 import type {
   BrandedFoodInfo,
   DataType,
   FoodLookupParam,
   FoodSummary,
-} from "@cubby/usda-schemas";
+} from "@cubby/usda";
+import { usdaContract } from "@cubby/usda/contract";
 import { initClient } from "@ts-rest/core";
 
 import { injectTraceContext, TraceNames, withTrace } from "~/server/tracing";

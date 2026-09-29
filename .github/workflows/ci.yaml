@@ -135,7 +135,7 @@ jobs:
       - run: pnpm --filter @cubby/upc-lookup run build
 
   test-rust:
-    name: Rust - recipebridge
+    name: Rust - recipebridge and cubby-ffi
     needs: scope
     if: needs.scope.outputs.rust == 'true'
     runs-on: ubuntu-24.04-arm
@@ -145,10 +145,15 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
         with:
           cache: true
-          cache-workspaces: "recipebridge -> target"
+          cache-workspaces: |
+            recipebridge -> target
+            cubby-ffi -> target
       - run: cargo fmt --manifest-path recipebridge/Cargo.toml --check
       - run: cargo clippy --manifest-path recipebridge/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --manifest-path recipebridge/Cargo.toml
+      - run: cargo fmt --manifest-path cubby-ffi/Cargo.toml --check
+      - run: cargo clippy --manifest-path cubby-ffi/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --manifest-path cubby-ffi/Cargo.toml
 
   test-web:
     name: Tests - web (${{ matrix.tier }})

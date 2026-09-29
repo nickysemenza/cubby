@@ -1,4 +1,4 @@
-import type { FoodSummary } from "@cubby/usda-schemas";
+import type { FoodSummary } from "@cubby/usda";
 import { createContext, type ReactNode, useContext } from "react";
 
 import { useChunkedRecordQuery } from "~/app/_components/hooks/useChunkedRecordQuery";

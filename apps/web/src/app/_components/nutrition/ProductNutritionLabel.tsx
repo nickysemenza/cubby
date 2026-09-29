@@ -1,5 +1,5 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import type { FoodPortion, NutrientsPer100 } from "@cubby/usda-schemas";
+import type { FoodPortion, NutrientsPer100 } from "@cubby/usda";
 import { useMemo, useState } from "react";
 
 import { Stack } from "~/components/layout";

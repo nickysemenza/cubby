@@ -1,6 +1,6 @@
 import type { Confidence } from "@cubby/schemas/ai";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import type { DataType } from "@cubby/usda-schemas";
+import type { DataType } from "@cubby/usda";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";

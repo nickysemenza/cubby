@@ -1,5 +1,5 @@
 import { manualUnitMapping } from "@cubby/schemas/unitmapping";
-import { buildNutrients } from "@cubby/usda-schemas";
+import { buildNutrients } from "@cubby/usda";
 import { describe, expect, it } from "vitest";
 
 import {

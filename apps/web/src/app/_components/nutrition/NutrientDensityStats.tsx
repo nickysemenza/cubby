@@ -1,8 +1,5 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import {
-  getNutrientValueByKey,
-  type NutrientsPer100,
-} from "@cubby/usda-schemas";
+import { getNutrientValueByKey, type NutrientsPer100 } from "@cubby/usda";
 
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";

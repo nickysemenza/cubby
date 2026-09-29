@@ -6,7 +6,7 @@ import {
   productSourceSchema,
 } from "@cubby/upc-contract";
 import { withSpan } from "@cubby/worker-tracing";
-import { upc as upcSchema } from "@cubby/usda-schemas";
+import { upc as upcSchema } from "@cubby/shared/upc";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { uniq } from "es-toolkit";

@@ -7,12 +7,15 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./ai-gateway-request": "./src/ai-gateway-request.ts",
     "./collection-tag": "./src/collection-tag.ts",
     "./constants": "./src/constants.ts",
     "./external-fetch": "./src/external-fetch.ts",
+    "./image-types": "./src/image-types.ts",
     "./location-type-theme": "./src/location-type-theme.ts",
     "./redundant-tokens": "./src/redundant-tokens.ts",
-    "./text-case": "./src/text-case.ts"
+    "./text-case": "./src/text-case.ts",
+    "./upc": "./src/upc.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/generator/ensure.ts && tsc --noEmit",

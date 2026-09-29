@@ -9,7 +9,7 @@ import type {
   ProductTopLevelOut,
 } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { type FoodLookupParam, foodLookupParam } from "@cubby/usda-schemas";
+import { type FoodLookupParam, foodLookupParam } from "@cubby/usda";
 import { and, eq, ilike, inArray, or, type SQL, sql } from "drizzle-orm";
 import { match } from "ts-pattern";
 

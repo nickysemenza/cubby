@@ -1,5 +1,5 @@
 import { productCategorySummary } from "./product-category-fields";
-import { fdcId } from "@cubby/usda-schemas";
+import { fdcId } from "@cubby/usda";
 import { gtin } from "./external-id";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
