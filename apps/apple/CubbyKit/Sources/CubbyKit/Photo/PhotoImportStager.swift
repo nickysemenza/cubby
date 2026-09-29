@@ -342,7 +342,7 @@ public actor PhotoImportTransaction {
         unique: [String: Staged], imageIDs: [ImageCode], reconciliation: PhotoImportReconcileOutput
     ) {
         let (unique, imageIDs) = stagedImageIDs(for: items)
-        let reconciliation = try await client.reconcilePhotoImport(imageIDs)
+        let reconciliation = try await client.reconcilePhotoImport(.init(imageIds: imageIDs))
         if !reconciliation.missing.isEmpty {
             let missing = Set(reconciliation.missing)
             for (clientID, staged) in unique where missing.contains(staged.imageID) {
@@ -407,7 +407,7 @@ public actor PhotoImportTransaction {
                 throw Failure.commitOutcomeUncertain(imageIDs)
             }
             let associationMatches = detail.associations.contains { association in
-                guard association.entityType.rawValue == route.target.rawValue else { return false }
+                guard association.entityKind.rawValue == route.target.rawValue else { return false }
                 return item.candidateID.map { association.entityId == $0 } ?? true
             }
             guard detail.status == .uploaded, associationMatches else {
