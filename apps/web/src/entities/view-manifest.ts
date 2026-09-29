@@ -92,7 +92,7 @@ interface ViewProblem {
  * menu owns the mapping from `kind` to a typed link.
  */
 interface ViewFlow {
-  kind: "recount-worklist";
+  kind: "recount-worklist" | "shelf-triage";
   label: string;
 }
 
@@ -368,6 +368,8 @@ export const viewManifest = defineViewManifest({
         { id: "components", value: "none" },
       ],
       sort: [{ id: "price", desc: true }],
+      // A one-pass triage of exactly these rows: discard, stock, or park.
+      flow: { kind: "shelf-triage", label: "Triage these" },
       // Every half of the signal: a filled Expected beside an empty Location,
       // not a bin, not a kit, still undecided on stock tracking.
       // `quantityVariance` is deliberately NOT revealed — on-hand units are

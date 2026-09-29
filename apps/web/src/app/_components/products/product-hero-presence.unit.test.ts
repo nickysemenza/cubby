@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { heroPresence } from "./product-hero-presence";
+import { defaultStockAmount, heroPresence } from "./product-hero-presence";
 
 describe("heroPresence", () => {
   it("reports a product held only as locations, not zero", () => {
@@ -200,5 +200,38 @@ describe("heroPresence location stat", () => {
     });
     expect(result.locationCount).toBe(2);
     expect(result.presenceCount).toBe(1);
+  });
+});
+
+describe("defaultStockAmount", () => {
+  it("proposes the units the ledger says are missing from the shelf", () => {
+    expect(defaultStockAmount({ expectedQuantity: 5, onHandUnits: 2 })).toEqual(
+      { value: 3, unit: "each" },
+    );
+  });
+
+  it("treats no shelf rows as nothing on hand", () => {
+    expect(
+      defaultStockAmount({ expectedQuantity: 4, onHandUnits: null }),
+    ).toEqual({ value: 4, unit: "each" });
+  });
+
+  it("falls back to one unit when the ledger has nothing outstanding", () => {
+    expect(
+      defaultStockAmount({ expectedQuantity: 0, onHandUnits: null }),
+    ).toEqual({ value: 1, unit: "each" });
+    expect(defaultStockAmount({ expectedQuantity: 2, onHandUnits: 3 })).toEqual(
+      { value: 1, unit: "each" },
+    );
+  });
+
+  it("keeps the shelf's own unit when there is one", () => {
+    expect(
+      defaultStockAmount({
+        expectedQuantity: 3,
+        onHandUnits: 1,
+        entryUnit: "box",
+      }),
+    ).toEqual({ value: 2, unit: "box" });
   });
 });

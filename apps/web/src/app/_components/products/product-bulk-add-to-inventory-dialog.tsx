@@ -19,6 +19,7 @@
  *   what it will become.
  */
 
+import type { Amount } from "@cubby/schemas/codec";
 import {
   type ProductShortcode,
   productShortcode,
@@ -77,6 +78,11 @@ export interface BulkAddProduct {
    * suffix rather than blocking the add.
    */
   manufacturer?: string | null;
+  /**
+   * The quantity to prefill, when the caller can say better than one unit —
+   * the shelf triage proposes what the ledger says is outstanding.
+   */
+  defaultAmount?: Amount;
 }
 
 interface ProductBulkAddToInventoryDialogProps {
@@ -166,7 +172,10 @@ const rowsFor = (products: readonly BulkAddProduct[]) =>
     label: product.manufacturer
       ? `${product.name} (${product.manufacturer})`
       : product.name,
-    amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
+    amount: product.defaultAmount ?? {
+      value: 1,
+      unit: DEFAULT_AMOUNT_UNIT,
+    },
   }));
 
 export const ProductBulkAddToInventoryDialog: FC<

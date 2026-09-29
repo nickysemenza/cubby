@@ -127,7 +127,14 @@ function ViewFlowMenuItem({
   return (
     <DropdownMenuItem
       render={
-        <Link to="/inventory/session" search={{ worklist: "shelf-disagrees" }} />
+        flow.kind === "recount-worklist" ? (
+          <Link
+            to="/inventory/session"
+            search={{ worklist: "shelf-disagrees" }}
+          />
+        ) : (
+          <Link to="/inventory/triage" search={{ run: undefined }} />
+        )
       }
     >
       <ListChecksIcon className="size-3.5" />

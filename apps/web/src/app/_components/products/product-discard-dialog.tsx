@@ -83,6 +83,15 @@ interface ProductDiscardDialogProps {
    * comes from a row the operator clicked, and they can still change it.
    */
   defaultInventoryEntryId?: InventoryShortcode;
+  /**
+   * Units to prefill, for a caller that knows how many the ledger says are
+   * outstanding (the shelf triage discards what it cannot find, not one unit).
+   * Seeds the form like `defaultInventoryEntryId`, and a shelf entry still caps
+   * it, so a part-used shelf never proposes binning more than it holds.
+   */
+  defaultQuantity?: number;
+  /** Called once the discard is recorded — not on cancel. */
+  onComplete?: () => void;
 }
 
 export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
@@ -90,6 +99,8 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   onOpenChange,
   product,
   defaultInventoryEntryId,
+  defaultQuantity,
+  onComplete,
 }) => {
   const adjustInventoryId = useId();
   const entries = product.inventoryEntry;
@@ -104,7 +115,10 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
       // "Threw away the rest" is the common case on a part-used shelf, so a 0.5
       // entry prefills 0.5 — but a shelf of 12 still prefills 1 rather than
       // proposing to bin the lot.
-      quantity: Math.min(1, defaultEntry?.amount.value ?? 1),
+      quantity: Math.min(
+        defaultQuantity ?? 1,
+        defaultEntry?.amount.value ?? Number.POSITIVE_INFINITY,
+      ),
       date: format(new Date(), "yyyy-MM-dd"),
       reason: "",
       adjustInventory: entries.length > 0,
@@ -125,7 +139,10 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
       `Discarded ${Math.abs(result.storedQuantity)} × ${product.name}${
         result.inventory?.removed ? " — shelf entry removed" : ""
       }`,
-    onSuccess: () => close(false),
+    onSuccess: () => {
+      close(false);
+      onComplete?.();
+    },
   });
 
   const entryOptions = useMemo(
