@@ -14,12 +14,12 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { chromium, expect, request } from "@playwright/test";
 import { drizzle } from "drizzle-orm/node-postgres";
-import dotenv from "dotenv";
 import { Pool } from "pg";
 import { z } from "zod";
 
 import { writeE2ERunBundle } from "./e2e-run-bundle";
 import { assertSimulatorAdminUrl } from "./sim-db-guard";
+import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
 
 const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -68,7 +68,6 @@ const lane = layout
         : watch
           ? "sim-dev"
           : "sim-e2e";
-dotenv.config({ path: path.join(webRoot, ".env") });
 for (const [key, value] of Object.entries({
   R2_ACCESS_KEY_ID: "cubby-sim",
   R2_SECRET_ACCESS_KEY: "cubby-sim",
@@ -87,6 +86,8 @@ process.env.DATABASE_URL = databaseURL;
 const artifacts = path.join(repoRoot, "artifacts", lane, simName);
 mkdirSync(artifacts, { recursive: true });
 const runStartedAt = performance.now();
+const phases: Array<{ name: string; durationMs: number }> = [];
+let phase = "setup";
 let nativeBuildBinary: string | undefined;
 let nativeBuildSourceVersion: string | undefined;
 let currentNativeSourceVersion: (() => string) | undefined;
@@ -1074,13 +1075,14 @@ async function runHeadlessProductScenario(
 }
 
 function nativeBuildMetadata() {
+  const web = readWebBuildProvenance(repoRoot);
   const fingerprint =
     nativeBuildReady && nativeBuildBinary && existsSync(nativeBuildBinary)
       ? createHash("sha256")
           .update(readFileSync(nativeBuildBinary))
           .digest("hex")
       : null;
-  const matchesSource =
+  const nativeFresh =
     fingerprint !== null &&
     nativeBuildSourceVersion !== undefined &&
     currentNativeSourceVersion?.() === nativeBuildSourceVersion;
@@ -1093,7 +1095,19 @@ function nativeBuildMetadata() {
       [headless ? "cliBinarySha256" : "appBinarySha256"]: fingerprint,
     }),
   };
-  return { build: { fingerprint, matchesSource }, runtime };
+  return {
+    build: {
+      fingerprint,
+      sourceFresh: nativeFresh && web.sourceFresh,
+      matchesSource: nativeFresh && web.matchesSource,
+      details: {
+        webFingerprint: web.fingerprint ?? "unavailable",
+        webSourceFresh: web.sourceFresh,
+        webSourceFingerprint: web.details.sourceFingerprint ?? "unavailable",
+      },
+    },
+    runtime,
+  };
 }
 
 function finishE2ERun(failure: Error | undefined): Error | undefined {
@@ -1115,10 +1129,24 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
       status,
       command: ["pnpm", "test:e2e:sim", "--", ...flags],
       cases: [{ name: lane, status, durationMs }],
+      profile: "worker",
+      scenario: lane,
+      fixture: layout
+        ? "synthetic-layout"
+        : photo
+          ? "synthetic-wardrobe"
+          : "synthetic-product",
+      fixtureVersion: 1,
+      phase,
+      phases,
       runtime,
       build,
     });
     console.log(`[${lane}] E2E artifact: ${manifest}`);
+    if (failure)
+      console.log(
+        `[${lane}] Replay: pnpm test:e2e:sim -- ${flags.join(" ")}\n[${lane}] Evidence: ${manifest}`,
+      );
     return failure;
   } catch (artifactError) {
     return new AggregateError(
@@ -1187,8 +1215,6 @@ async function runNativeJourney(
 
 async function main(): Promise<void> {
   assertSimulatorAdminUrl(adminURL);
-  if (process.env.CUBBY_SIM_DB_EXTERNAL !== "1")
-    await run("node", ["scripts/dev-db.ts", "up"]);
   const admin = new Pool({ connectionString: adminURL });
   let created = false;
   let harness:
@@ -1243,6 +1269,38 @@ async function main(): Promise<void> {
     return errors;
   };
   try {
+    phase = "web-build";
+    const buildStarted = performance.now();
+    const buildAction = await ensureWebBuild(
+      repoRoot,
+      async (skipCache) => {
+        const previous = process.env.NX_SKIP_NX_CACHE;
+        process.env.NX_DAEMON = "false";
+        if (skipCache) process.env.NX_SKIP_NX_CACHE = "true";
+        try {
+          await run("pnpm", [
+            "exec",
+            "nx",
+            "run",
+            "@cubby/web:build-cf",
+            "--outputStyle=stream",
+          ]);
+        } finally {
+          if (previous === undefined) delete process.env.NX_SKIP_NX_CACHE;
+          else process.env.NX_SKIP_NX_CACHE = previous;
+        }
+      },
+      process.env.CUBBY_E2E_PREBUILT_WEB === "1",
+    );
+    phases.push({
+      name: "web-build",
+      durationMs: Math.round(performance.now() - buildStarted),
+    });
+    console.log(`[${lane}] Web build ${buildAction}`);
+    phase = "database";
+    const databaseStarted = performance.now();
+    if (process.env.CUBBY_SIM_DB_EXTERNAL !== "1")
+      await run("node", ["scripts/dev-db.ts", "up"]);
     await admin.query(`CREATE DATABASE "${simName}"`);
     created = true;
     console.log(`[${lane}] Disposable database ${simName}`);
@@ -1255,9 +1313,12 @@ async function main(): Promise<void> {
       await pool.end();
     }
 
-    // tooling/local-e2e.ts builds once for every lane it runs.
-    if (process.env.CUBBY_E2E_PREBUILT_WEB !== "1")
-      await run("pnpm", ["run", "build:cf"], webRoot);
+    phase = "worker-startup";
+    phases.push({
+      name: "database",
+      durationMs: Math.round(performance.now() - databaseStarted),
+    });
+    const workerStarted = performance.now();
     const { writeLocalWorkerdConfig } = await import("./e2e-worker-config");
     writeLocalWorkerdConfig(webRoot);
     const runtime = await import("./local-workerd-harness");
@@ -1296,6 +1357,12 @@ async function main(): Promise<void> {
       `[${lane}] Workerd at ${url.origin}${productId ? `; seeded product ${productId}` : ""}`,
     );
 
+    phase = "native-scenario";
+    phases.push({
+      name: "worker-startup",
+      durationMs: Math.round(performance.now() - workerStarted),
+    });
+    const scenarioStarted = performance.now();
     if (headless) {
       if (photo) {
         await runHeadlessPhotoScenario(url, objectStorage.url, userId);
@@ -1453,17 +1520,24 @@ async function main(): Promise<void> {
         throw error;
       }
     }
+    phases.push({
+      name: "native-scenario",
+      durationMs: Math.round(performance.now() - scenarioStarted),
+    });
+    phase = "completed";
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
     writeFileSync(path.join(artifacts, "failure.txt"), String(error));
     console.error(`[${lane}] Failure artifacts: ${artifacts}`);
   } finally {
     const cleanupErrors = await cleanup();
-    if (cleanupErrors.length > 0)
+    if (cleanupErrors.length > 0) {
+      phase = "cleanup";
       failure = new AggregateError(
         failure === undefined ? cleanupErrors : [failure, ...cleanupErrors],
         `${lane} failed with cleanup errors for ${simName}`,
       );
+    }
   }
   failure = finishE2ERun(failure);
   if (failure !== undefined) throw failure;

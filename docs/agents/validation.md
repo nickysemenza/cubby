@@ -9,6 +9,10 @@ implementation it guards.
 
 ## During implementation
 
+For persistent HMR, fixture packs, runtime discovery, or manual simulator work,
+load [local development](../local-development.md). Disposable E2E lanes keep
+owning their test databases and replay artifacts.
+
 Run one affected E2E scenario when it exposes the behavior. For an isolated web
 contract, run `pnpm test:file src/...` from the repository root; paths are
 relative to `apps/web`. For PostgreSQL contracts use `pnpm test:file:postgres
@@ -18,7 +22,7 @@ unchanged tier to rediscover its failures.
 
 Before a PR, run only what CI cannot: `pnpm test:e2e:local` for the
 local-only native/simulator lanes (one lane: `pnpm test:e2e:sim -- <flags>`, see the
-[README](../../README.md#local-dev-database-optional)), plus focused tests for
+[local development](../local-development.md#native-iteration-and-validation)), plus focused tests for
 the change. CI runs the PostgreSQL, fast, typecheck, lint, and knip tiers on every PR; do not
 repeat them locally as a gate.
 

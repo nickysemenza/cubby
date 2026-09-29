@@ -4,6 +4,7 @@ import {
   existsSync,
   readFileSync,
   readdirSync,
+  lstatSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -12,9 +13,11 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 const buildStampSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   sourceCommit: z.string().regex(/^[a-f0-9]{40}$/u),
   sourceDirty: z.boolean(),
+  sourceFingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
+  previewBuild: z.boolean(),
   fingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
   fileCount: z.number().int().nonnegative(),
 });
@@ -28,11 +31,16 @@ interface BuildFingerprint {
 
 export interface WebBuildProvenance {
   fingerprint: string | null;
+  /** Current output was built from the current content, including dirty edits. */
+  sourceFresh: boolean;
+  /** Current output is also exactly replayable from a clean commit. */
   matchesSource: boolean;
   details: {
     reason: string;
     sourceCommit?: string;
     sourceDirty?: boolean;
+    sourceFingerprint?: string;
+    previewBuild?: boolean;
     buildMatches?: boolean;
     fileCount?: number;
   };
@@ -76,6 +84,7 @@ function buildFingerprint(repoRoot: string): BuildFingerprint {
     ...filesUnder(path.join(webRoot, "dist/server/assets")),
     ...filesUnder(path.join(repoRoot, "packages/wasm/recipebridge.js")),
     ...filesUnder(path.join(repoRoot, "packages/wasm/recipebridge_bg.js")),
+    ...filesUnder(path.join(repoRoot, "packages/wasm/package.json")),
   ].sort();
   const hash = createHash("sha256");
   for (const file of files) {
@@ -91,12 +100,120 @@ function stampPath(repoRoot: string): string {
   return path.join(repoRoot, "apps/web/dist/web-build-provenance.json");
 }
 
-export function writeWebBuildProvenance(repoRoot: string): string {
+const sourceGlobs = [
+  "apps/web/src/**",
+  "apps/web/public/**",
+  "apps/web/tooling/**",
+  "apps/web/scripts/**",
+  "apps/web/*.{ts,json,jsonc,toml,html}",
+  "apps/mcp-apps/**",
+  "packages/**",
+  "recipebridge/**",
+  "scripts/**",
+  "*.{json,jsonc,yaml,yml,toml,lock}",
+  ".npmrc",
+];
+
+function excludedSource(file: string): boolean {
+  return (
+    file.startsWith("packages/wasm/") ||
+    file
+      .split("/")
+      .some(
+        (part) =>
+          [
+            "dist",
+            "node_modules",
+            "target",
+            "artifacts",
+            "test-results",
+            "playwright-report",
+            "coverage",
+            ".auth",
+            ".git",
+            ".nx",
+            "certificates",
+            "secrets",
+          ].includes(part) ||
+          part.startsWith(".env") ||
+          part.startsWith(".dev.vars") ||
+          part.startsWith(".wrangler") ||
+          part.startsWith(".cache"),
+      )
+  );
+}
+
+function sourceFilesUnder(repoRoot: string, relative: string): string[] {
+  const absolute = path.join(repoRoot, relative);
+  if (excludedSource(relative) || !existsSync(absolute)) return [];
+  const stat = lstatSync(absolute);
+  if (stat.isSymbolicLink()) return [];
+  if (stat.isFile()) return [relative];
+  return readdirSync(absolute).flatMap((entry) =>
+    sourceFilesUnder(repoRoot, `${relative}/${entry}`),
+  );
+}
+
+export function webBuildSourceFingerprint(repoRoot: string): string {
+  const gitFiles = execFileSync(
+    "git",
+    ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+    { cwd: repoRoot, encoding: "utf8" },
+  )
+    .split("\0")
+    .filter(
+      (file) =>
+        file && sourceGlobs.some((glob) => path.matchesGlob(file, glob)),
+    );
+  // Generated TS/routes are ignored by Git but still consumed by the build.
+  // Include their actual bytes and paths so edits, additions and deletions fail
+  // freshness verification just like hand-written inputs.
+  const files = [
+    ...gitFiles,
+    ...["apps/web/src", "apps/web/public", "apps/mcp-apps", "packages"].flatMap(
+      (root) => sourceFilesUnder(repoRoot, root),
+    ),
+  ]
+    .filter((file) => !excludedSource(file))
+    .filter(
+      (file) => !/\.(?:test|spec)\.[^.]+$/u.test(file) && !file.endsWith(".md"),
+    );
+  const hash = createHash("sha256");
+  hash.update(
+    `preview-build:${process.env.CUBBY_DEV_PREVIEW_BUILD === "true"}\0`,
+  );
+  for (const file of [...new Set(files)].sort()) {
+    const absolute = path.join(repoRoot, file);
+    // Deleted tracked inputs change the digest; symlinks never read secrets
+    // outside the source inventory.
+    if (!existsSync(absolute) || !lstatSync(absolute).isFile()) continue;
+    hash.update(file);
+    hash.update("\0");
+    hash.update(readFileSync(absolute));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
+export function writeWebBuildProvenance(
+  repoRoot: string,
+  expectedSourceFingerprint?: string,
+): string {
+  const fingerprint = webBuildSourceFingerprint(repoRoot);
+  if (
+    expectedSourceFingerprint !== undefined &&
+    fingerprint !== expectedSourceFingerprint
+  )
+    throw new Error(
+      "Source changed during the web build; refusing to stamp potentially stale output. Rebuild with stable source inputs.",
+    );
   const build = buildFingerprint(repoRoot);
   const stamp: BuildStamp = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     sourceCommit: git(repoRoot, ["rev-parse", "HEAD"]),
     sourceDirty: git(repoRoot, ["status", "--porcelain"]).length > 0,
+    sourceFingerprint: fingerprint,
+    previewBuild: process.env.CUBBY_DEV_PREVIEW_BUILD === "true",
     ...build,
   };
   const output = stampPath(repoRoot);
@@ -109,6 +226,7 @@ export function readWebBuildProvenance(repoRoot: string): WebBuildProvenance {
   if (!existsSync(output))
     return {
       fingerprint: null,
+      sourceFresh: false,
       matchesSource: false,
       details: { reason: "missing-build-stamp" },
     };
@@ -118,6 +236,7 @@ export function readWebBuildProvenance(repoRoot: string): WebBuildProvenance {
   } catch {
     return {
       fingerprint: null,
+      sourceFresh: false,
       matchesSource: false,
       details: { reason: "invalid-build-stamp" },
     };
@@ -131,6 +250,7 @@ export function readWebBuildProvenance(repoRoot: string): WebBuildProvenance {
   } catch {
     return {
       fingerprint: stamp.fingerprint,
+      sourceFresh: false,
       matchesSource: false,
       details: {
         reason: "missing-build-output",
@@ -143,26 +263,60 @@ export function readWebBuildProvenance(repoRoot: string): WebBuildProvenance {
   }
   const sourceMatches =
     stamp.sourceCommit === git(repoRoot, ["rev-parse", "HEAD"]) &&
-    !stamp.sourceDirty &&
-    git(repoRoot, ["status", "--porcelain"]).length === 0;
+    stamp.sourceFingerprint === webBuildSourceFingerprint(repoRoot);
+  const clean =
+    !stamp.sourceDirty && git(repoRoot, ["status", "--porcelain"]).length === 0;
   return {
     fingerprint: stamp.fingerprint,
-    matchesSource: sourceMatches && buildMatches,
+    sourceFresh: sourceMatches && buildMatches,
+    matchesSource: sourceMatches && buildMatches && clean,
     details: {
       reason: !buildMatches
         ? "build-output-changed"
         : !sourceMatches
-          ? "source-changed-or-dirty"
-          : "verified",
+          ? "source-changed"
+          : clean
+            ? "verified"
+            : "verified-local-content",
       sourceCommit: stamp.sourceCommit,
       sourceDirty: stamp.sourceDirty,
+      sourceFingerprint: stamp.sourceFingerprint,
+      previewBuild: stamp.previewBuild,
       buildMatches,
       fileCount: stamp.fileCount,
     },
   };
 }
 
+export function webBuildNeedsBuild(
+  repoRoot: string,
+  requirePrebuilt = false,
+): boolean {
+  const provenance = readWebBuildProvenance(repoRoot);
+  if (requirePrebuilt && !provenance.sourceFresh)
+    throw new Error(
+      `Invalid prebuilt web bundle: ${provenance.details.reason}. Run the web build before E2E.`,
+    );
+  return !provenance.sourceFresh;
+}
+
+export async function ensureWebBuild(
+  repoRoot: string,
+  build: (skipCache: boolean) => void | Promise<void>,
+  requirePrebuilt = false,
+): Promise<"reused" | "built"> {
+  if (!webBuildNeedsBuild(repoRoot, requirePrebuilt)) return "reused";
+  await build(false);
+  // An older/incompletely keyed Nx cache entry can restore a stale stamp.
+  // Rebuild only when content verification rejects that restoration.
+  if (webBuildNeedsBuild(repoRoot)) await build(true);
+  webBuildNeedsBuild(repoRoot, true);
+  return "built";
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const repoRoot = path.resolve(import.meta.dirname, "../../..");
-  console.log(`[web build] Provenance: ${writeWebBuildProvenance(repoRoot)}`);
+  const provenance = readWebBuildProvenance(repoRoot);
+  console.log(JSON.stringify(provenance));
+  process.exitCode = provenance.sourceFresh ? 0 : 1;
 }

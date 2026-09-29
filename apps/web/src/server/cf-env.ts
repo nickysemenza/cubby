@@ -1,9 +1,9 @@
 // Access to the CF Workers env (service bindings) outside the fetch handler.
 //
 // Module-level storage is safe here — unlike the per-request pg.Pool in
-// db.ts, `env` is the same object for every request in an isolate. On the
-// dev server (plain Node via vite) setCfEnv is never called, so accessors
-// return undefined and callers fall back to public URLs + global fetch.
+// db.ts, `env` is the same object for every request in an isolate. Both local
+// workerd and deployed Workers set it; scripts and isolated tests outside the
+// Worker adapter can leave it undefined.
 
 import { AsyncLocalStorage } from "node:async_hooks";
 
@@ -35,7 +35,7 @@ export const runWithExecutionCtx = <T>(
     fn,
   );
 
-/** Undefined outside a CF request (queue/cron invocations, the Node dev server). */
+/** Undefined outside a Worker fetch request, including queue/cron invocations. */
 export const getExecutionCtx = (): WaitUntilContext | undefined =>
   executionCtxStore.getStore();
 
@@ -48,14 +48,14 @@ export const setCfEnv = (env?: Env): void => {
 /** True after the request has entered the Cloudflare Worker adapter. */
 export const isCloudflareRuntime = (): boolean => cfEnv !== undefined;
 
-/** Durable search-index repair binding; absent in plain Node/Vite development. */
+/** Durable search-index repair binding when configured in the Worker environment. */
 export const getSearchIndexRepairWorkflow = ():
   | Env["SEARCH_INDEX_REPAIR"]
   | undefined => cfEnv?.SEARCH_INDEX_REPAIR;
 
 /**
- * The background queue producer (`env.BACKGROUND_QUEUE`) on CF Workers, or
- * undefined on the dev Node server (where setCfEnv is never called). The binding
+ * The background queue producer (`env.BACKGROUND_QUEUE`) on local or deployed
+ * Workers, or undefined outside the Worker adapter. The binding
  * is generated from wrangler.jsonc; this accessor narrows it to the producer
  * surface shared by production and tests.
  */
@@ -65,7 +65,7 @@ export const getBackgroundQueue = (): BackgroundQueueProducer | undefined => {
   return cfEnv?.BACKGROUND_QUEUE as BackgroundQueueProducer | undefined;
 };
 
-/** The low-priority telemetry queue, or undefined in the Node dev server. */
+/** The low-priority telemetry queue when configured in the Worker environment. */
 export const getTelemetryQueue = (): TelemetryQueueProducer | undefined => {
   // SAFETY: Wrangler generates Env bindings structurally from configuration;
   // this adapter narrows that generated queue binding to Cubby's owned port.
@@ -95,7 +95,7 @@ export const getGmailOAuthCredentials = () => {
   };
 };
 
-/** Origin-keyed durable calendar publishing state, absent in plain Vite. */
+/** Origin-keyed durable calendar publishing state from the Worker environment. */
 export const getCalendarFeedNamespace = (): Env["CALENDAR_FEED"] | undefined =>
   cfEnv?.CALENDAR_FEED;
 
@@ -108,20 +108,18 @@ export const getImageProcessingNamespace = () => cfEnv?.IMAGE_PROCESSING;
 // for the gateway binding (below) and the gateway-REST base URL built in
 // `~/server/clients/ai-gateway`.
 export const CF_ACCOUNT_ID = "9f10f078d35d86c78dedece2300a6b88";
-export const CF_AIG_GATEWAY_ID = "cubby";
+export const CF_AIG_GATEWAY_ID = process.env.AI_GATEWAY_ID || "cubby";
 
 /**
- * The AI Gateway binding (`env.AI.gateway("cubby")`) on CF Workers, or undefined
- * on the dev Node server (where setCfEnv is never called). The one caller is the
- * transport shim in `~/server/clients/ai-gateway`, which authenticates via
- * Worker identity in prod and falls back to gateway-REST with
- * AI_GATEWAY_API_KEY in dev.
+ * The optional AI Gateway binding (`env.AI.gateway("cubby")`) from the Worker
+ * environment. The transport shim in `~/server/clients/ai-gateway` can use
+ * Worker identity or gateway-REST with an explicitly configured API key.
  */
 export const getAiGateway = () => cfEnv?.AI?.gateway(CF_AIG_GATEWAY_ID);
 
 /**
- * The entity-vector index (`env.VECTORIZE`) on CF Workers, or undefined on the
- * dev Node server. Narrowed to Cubby's owned surface because `wrangler types`
+ * The optional entity-vector index (`env.VECTORIZE`) from the Worker
+ * environment. Narrowed to Cubby's owned surface because `wrangler types`
  * emits the legacy `VectorizeIndex` class, which omits `queryById`.
  */
 export const getVectorIndex = (): VectorizeIndexBinding | undefined => {

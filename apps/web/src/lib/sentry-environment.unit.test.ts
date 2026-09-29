@@ -1,6 +1,26 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveWorkerSentryEnvironment } from "./sentry-environment";
+import {
+  resolveWorkerSentryEnvironment,
+  workerSentryEnabled,
+} from "./sentry-environment";
+
+// Local sessions use real auth, so E2E_AUTH_TEST_MODE cannot suppress telemetry.
+it("keeps local test telemetry off without enabling test authentication", () => {
+  expect(
+    workerSentryEnabled({
+      SENTRY_ENVIRONMENT: "test",
+      E2E_AUTH_TEST_MODE: "false",
+    }),
+  ).toBe(false);
+  expect(
+    workerSentryEnabled({
+      SENTRY_ENVIRONMENT: "development",
+      E2E_AUTH_TEST_MODE: "false",
+    }),
+  ).toBe(true);
+  expect(workerSentryEnabled({ E2E_AUTH_TEST_MODE: "true" })).toBe(false);
+});
 
 describe("resolveWorkerSentryEnvironment", () => {
   it("honors the SENTRY_ENVIRONMENT var for a deployed origin", () => {

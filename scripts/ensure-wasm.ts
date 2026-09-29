@@ -17,6 +17,7 @@
 // wasm-pack rewrites byte-identically so the cache key stays stable.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import {
@@ -42,6 +43,12 @@ const BINARY = "recipebridge_bg.wasm";
 const MARKER = ".fingerprint";
 
 const fingerprint = () => {
+  // Match pnpm wasm's build environment before hashing. Otherwise its stamp
+  // includes the default target directory but every startup computes another key.
+  process.env.CARGO_TARGET_DIR ??= join(
+    homedir(),
+    ".cache/cubby/recipebridge-target",
+  );
   const extra = [command("wasm-pack", ["--version"])];
   // wasm-pack can provision its own optimizer when none is installed on PATH.
   try {

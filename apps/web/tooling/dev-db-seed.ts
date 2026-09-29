@@ -1,35 +1,15 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { faker } from "@faker-js/faker";
 import { request } from "@playwright/test";
-import dotenv from "dotenv";
 import { Pool } from "pg";
 import { z } from "zod";
 
 import { assertDevDatabaseUrl } from "./dev-db-guard";
 import {
+  LOCAL_FIXTURE_VERSION,
   DEV_USER_EMAIL,
   DEV_USER_NAME,
   DEV_USER_PASSWORD,
 } from "./dev-db-identity";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const webRoot = path.join(__dirname, "..");
-
-// The entity kernel and Worker harness validate server env at import time.
-// Load defaults before importing either; process.env from scripts/dev-db.ts wins.
-dotenv.config({ path: path.resolve(webRoot, ".env") });
-for (const [key, value] of Object.entries({
-  R2_ACCESS_KEY_ID: "cubby-dev",
-  R2_SECRET_ACCESS_KEY: "cubby-dev",
-  R2_ENDPOINT: "http://localhost:9000",
-  R2_BUCKET_NAME: "cubby-dev",
-  R2_PUBLIC_URL: "http://localhost:9000",
-  UPC_LOOKUP_API_URL: "http://127.0.0.1:9/",
-  BETTER_AUTH_SECRET: "cubby-dev-local-secret",
-})) {
-  process.env[key] ??= value;
-}
 
 const signUpResponseSchema = z.object({
   user: z.object({ id: z.string().min(1) }),
@@ -73,85 +53,102 @@ async function ensureDevUser(baseURL: string): Promise<string> {
   }
 }
 
-async function main(): Promise<void> {
-  const databaseUrl = process.env.DATABASE_URL;
-  assertDevDatabaseUrl(databaseUrl);
-  if (!databaseUrl) throw new Error("unreachable"); // narrowed by the guard above
+export const LOCAL_FIXTURE_PACKS = [
+  "core",
+  "recipes",
+  "images",
+  "purchase",
+  "garden",
+  "calendar",
+  "problems",
+] as const;
+export const devFixturePackSchema = z.enum(LOCAL_FIXTURE_PACKS);
+export type LocalFixturePack = (typeof LOCAL_FIXTURE_PACKS)[number];
 
-  if (process.argv.includes("--if-empty")) {
-    const probe = new Pool({ connectionString: databaseUrl });
-    try {
-      const result = await probe.query<{
-        product_count: string;
-        marker_exists: boolean;
-        dev_user_exists: boolean;
-        vendor_marker_exists: boolean;
-      }>(
-        `SELECT (SELECT count(*)::text FROM "Product") AS product_count,
-                EXISTS (SELECT 1 FROM "Task" WHERE name = 'Restock cleaning supplies') AS marker_exists,
-                EXISTS (SELECT 1 FROM "user" WHERE email = $1) AS dev_user_exists,
-                EXISTS (SELECT 1 FROM "Vendor" WHERE name = 'Synthetic Supply Co') AS vendor_marker_exists`,
-        [DEV_USER_EMAIL],
-      );
-      const state = result.rows[0];
-      const allMarkersPresent =
-        Number(state?.product_count) > 0 &&
-        state?.marker_exists &&
-        state.dev_user_exists &&
-        state.vendor_marker_exists;
-      const anyMarkerPresent =
-        Number(state?.product_count) > 0 ||
-        state?.marker_exists ||
-        state?.dev_user_exists ||
-        state?.vendor_marker_exists;
-      if (allMarkersPresent) {
-        console.log("[dev-db] Existing synthetic corpus found; seed skipped");
-        return;
-      }
-      // The vendor marker was added after the product/task/user markers, so a
-      // database seeded before it exists has every marker except this one —
-      // caught here as "partial", not silently treated as complete, the same
-      // way any other partial corpus is.
-      if (anyMarkerPresent) {
-        throw new Error(
-          "Local database contains part of the synthetic corpus; run `pnpm db:dev:reset` for a clean seed",
-        );
-      }
-    } finally {
-      await probe.end();
+/** Completion is committed only after all domain writes and real auth succeed.
+ * An interrupted pack refuses a retry rather than duplicating its partial graph. */
+export async function seedDevDatabase(options: {
+  databaseUrl: string;
+  baseURL: string;
+  pack?: LocalFixturePack;
+}): Promise<void> {
+  assertDevDatabaseUrl(options.databaseUrl);
+  const base = new URL(options.baseURL);
+  if (!["localhost", "127.0.0.1"].includes(base.hostname)) {
+    throw new Error(
+      "Local fixtures require an already-running localhost auth runtime",
+    );
+  }
+  const pack = options.pack ?? "core";
+  const pool = new Pool({ connectionString: options.databaseUrl });
+  let startedPack = false;
+  try {
+    // This development-only table deliberately has no production migration.
+    await pool.query(`CREATE TABLE IF NOT EXISTS cubby_dev_fixture (
+      pack text PRIMARY KEY, version integer NOT NULL, state text NOT NULL
+    )`);
+    const existing = await pool.query<{ version: number; state: string }>(
+      "SELECT version, state FROM cubby_dev_fixture WHERE pack = $1",
+      [pack],
+    );
+    const marker = existing.rows[0];
+    if (
+      marker?.state === "complete" &&
+      marker.version === LOCAL_FIXTURE_VERSION
+    ) {
+      console.log(`[dev-db] Fixture pack ${pack} already complete`);
+      return;
     }
-  }
-
-  const { createE2EObjectStorage } = await import("./local-object-storage");
-  const { createLocalWorkerdHarness, installDatabaseEnvironment } =
-    await import("./local-workerd-harness");
-  const { seedCorpus } = await import("./scenarios/corpus");
-  const { writeLocalWorkerdConfig } = await import("./e2e-worker-config");
-  // A short-lived harness only to run the real sign-up flow (so the local dev
-  // user's password hash and session model exactly match production). It is
-  // pointed at the persistent dev database, not a throwaway IntegreSQL one.
-  writeLocalWorkerdConfig(webRoot);
-  const restoreEnvironment = installDatabaseEnvironment(databaseUrl);
-  const objectStorage = await createE2EObjectStorage();
-  const harness = createLocalWorkerdHarness(databaseUrl, objectStorage.url);
-  let userId: string;
-  try {
-    const { url } = await harness.listen();
-    userId = await ensureDevUser(url.origin);
-  } finally {
-    await harness.close();
-    await objectStorage.close();
-    restoreEnvironment();
-  }
-
-  const pool = new Pool({ connectionString: databaseUrl });
-  try {
+    if (marker)
+      throw new Error(
+        `Local fixture pack ${pack} is partial or outdated; run pnpm db:dev:reset`,
+      );
+    if (pack === "core") {
+      const legacy = await pool.query(`SELECT EXISTS (
+        SELECT 1 FROM "Product" UNION ALL SELECT 1 FROM "Task" UNION ALL SELECT 1 FROM "Vendor"
+      ) AS present`);
+      if (legacy.rows[0]?.present)
+        throw new Error(
+          "Unversioned or partial local corpus found; run pnpm db:dev:reset",
+        );
+    } else {
+      const core = await pool.query(
+        "SELECT 1 FROM cubby_dev_fixture WHERE pack = 'core' AND version = $1 AND state = 'complete'",
+        [LOCAL_FIXTURE_VERSION],
+      );
+      if (!core.rowCount)
+        throw new Error("Seed the complete core fixture pack first");
+    }
+    await pool.query(
+      "INSERT INTO cubby_dev_fixture (pack, version, state) VALUES ($1, $2, 'seeding')",
+      [pack, LOCAL_FIXTURE_VERSION],
+    );
+    startedPack = true;
+    const userId = await ensureDevUser(options.baseURL);
     faker.seed(1);
-    await seedCorpus(pool, userId);
-    console.log("[dev-db] Corpus seeded");
+    if (pack === "core") {
+      const { seedCorpus } = await import("./scenarios/corpus");
+      await seedCorpus(pool, userId);
+    } else {
+      const { seedLocalFixturePack } = await import("./scenarios/local-packs");
+      await seedLocalFixturePack(pool, userId, pack, options.baseURL);
+    }
+    await pool.query(
+      "UPDATE cubby_dev_fixture SET state = 'complete' WHERE pack = $1 AND version = $2",
+      [pack, LOCAL_FIXTURE_VERSION],
+    );
+    console.log(`[dev-db] Fixture pack ${pack} complete`);
+  } catch (error) {
+    if (startedPack) {
+      await pool
+        .query(
+          "UPDATE cubby_dev_fixture SET state = 'failed' WHERE pack = $1 AND state = 'seeding'",
+          [pack],
+        )
+        .catch(() => {});
+    }
+    throw error;
   } finally {
     await pool.end();
   }
 }
-
-await main();

@@ -28,6 +28,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { localSimulatorServer } from "./lib/simulator-server.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const APPLE = join(ROOT, "apps/apple");
@@ -44,12 +45,13 @@ const DERIVED = join(APPLE, "DerivedData");
 const BUNDLE_ID = "com.nickysemenza.cubby";
 const PRODUCT = "Cubby.app";
 
-const usage = `usage: pnpm apple <cli|mac|ios|sim|gen|test|check> [--device <name>] [--sim <name>] [--verbose] [--timing] [-- <cli args>]`;
+const usage = `usage: pnpm apple <cli|mac|ios|sim|gen|test|check> [--device <name>] [--sim <name>] [--server <local origin>] [--verbose] [--timing] [-- <cli args>]`;
 
 type Options = {
   command: string;
   device?: string;
   sim?: string;
+  server?: string;
   verbose: boolean;
   timing: boolean;
   rest: string[];
@@ -68,6 +70,16 @@ const parseArguments = (argv: readonly string[]): Options => {
   for (let index = 0; index < tail.length; index += 1) {
     const argument = tail[index];
     switch (argument) {
+      case "--server": {
+        if (command !== "sim")
+          throw new Error(`--server requires sim\n${usage}`);
+        const value = tail[index + 1];
+        if (!value || options.server)
+          throw new Error(`--server requires one local origin\n${usage}`);
+        options.server = localSimulatorServer(value);
+        index += 1;
+        break;
+      }
       case "--device":
       case "--sim": {
         const value = tail[index + 1];
@@ -352,6 +364,7 @@ const sim = (options: Options) => {
     "--terminate-running-process",
     simulator.udid,
     BUNDLE_ID,
+    ...(options.server ? ["--cubby-dev-server", options.server] : []),
   ]);
 };
 

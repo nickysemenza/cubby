@@ -73,7 +73,7 @@ const PRODUCTION_URL_ENV = "PRODUCTION_DIRECT_DATABASE_URL";
  * `--target=dev` (via `pnpm db:dev:migrate`): only the guarded local
  * container. `--target=production`: only an explicit direct (non-pooled) URL
  * in PRODUCTION_DIRECT_DATABASE_URL — never the ambient DATABASE_URL, which
- * points at production for every local session.
+ * can still point at production in legacy environments.
  */
 function resolveTargetUrl(target: string | undefined): string {
   if (target === "dev") {

@@ -1,5 +1,4 @@
-// Keep these in sync with scripts/dev-db.ts's DEV_DB_HOST/DEV_DB_NAME (a
-// different pnpm workspace, so it can't import this module directly).
+// This guard also runs in workerd; keep it free of Node-only profile tooling.
 const ALLOWED_HOSTS = new Set(["localhost", "127.0.0.1"]);
 // `cubby_dev`, or a branch's own `cubby_dev_<name>` (CUBBY_DEV_DB_NAME) in the
 // same container, so a branch with newer migrations never migrates the
@@ -17,8 +16,7 @@ const DEV_DB_PORT = "55432";
 export function assertDevDatabaseUrl(databaseUrl: string | undefined): URL {
   if (!databaseUrl) {
     throw new Error(
-      "DATABASE_URL is not set. Run this through `pnpm db:dev:migrate` / " +
-        "`pnpm db:dev:seed` (which set it), not directly.",
+      "DATABASE_URL is not set. Use `pnpm db:dev:migrate` or `pnpm dev:seed`.",
     );
   }
   let url: URL;

@@ -1,11 +1,94 @@
-import { readdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { ALL_SPECS_TRIGGERS, SPEC_AREAS } from "../tests/e2e/spec-areas.ts";
-import { computeAffected } from "./e2e-affected.ts";
+import { computeAffected, runAffectedSpecs } from "./e2e-affected.ts";
+import {
+  readWebBuildProvenance,
+  writeWebBuildProvenance,
+} from "../tooling/web-build-provenance";
 
 const E2E_DIR = fileURLToPath(new URL("../tests/e2e", import.meta.url));
+
+// Affected execution can select correct specs yet silently run stale output;
+// prebuilt mode can bypass that repair; listing must remain free of builds.
+it("repairs stale output before affected tests and rejects a stale prebuilt request", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "cubby-affected-build-"));
+  const previous = process.env.CUBBY_E2E_PREBUILT_WEB;
+  const put = (file: string, content = "synthetic") => {
+    mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    writeFileSync(path.join(root, file), content);
+  };
+  try {
+    delete process.env.CUBBY_E2E_PREBUILT_WEB;
+    put(".gitignore", "apps/web/dist/\npackages/wasm/\n");
+    put("apps/web/src/example.ts");
+    execFileSync("git", ["init", "--quiet"], { cwd: root });
+    execFileSync("git", ["add", "."], { cwd: root });
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "user.name=Synthetic",
+        "-c",
+        "user.email=synthetic@example.test",
+        "commit",
+        "--quiet",
+        "-m",
+        "Synthetic fixture",
+      ],
+      { cwd: root },
+    );
+    put("apps/web/dist/client/main.js");
+    put("apps/web/dist/server/index.js");
+    put("packages/wasm/recipebridge_bg.wasm");
+    writeWebBuildProvenance(root);
+    put("apps/web/src/example.ts", "dirty edit");
+    const calls: string[] = [];
+    const testedFreshness: boolean[] = [];
+    const testedArgs: string[][] = [];
+    const execute = (_command: string, args: string[]) => {
+      if (args.includes("@cubby/web:build-cf")) {
+        calls.push("build");
+        writeWebBuildProvenance(root);
+      } else {
+        calls.push("tests");
+        testedFreshness.push(readWebBuildProvenance(root).sourceFresh);
+        testedArgs.push(args);
+      }
+    };
+    await runAffectedSpecs(root, ["synthetic.spec.ts"], [], execute);
+    expect(calls).toEqual(["build", "tests"]);
+    calls.length = 0;
+    await runAffectedSpecs(root, ["synthetic.spec.ts"], [], execute);
+    expect(calls).toEqual(["tests"]);
+    expect(testedFreshness).toEqual([true, true]);
+    expect(testedArgs.every((args) => args.includes("synthetic.spec.ts"))).toBe(
+      true,
+    );
+    put("apps/web/src/example.ts", "another edit");
+    process.env.CUBBY_E2E_PREBUILT_WEB = "1";
+    calls.length = 0;
+    await expect(
+      runAffectedSpecs(root, ["synthetic.spec.ts"], [], execute),
+    ).rejects.toThrow(/prebuilt.*source-changed/iu);
+    expect(calls).toEqual([]);
+  } finally {
+    if (previous === undefined) delete process.env.CUBBY_E2E_PREBUILT_WEB;
+    else process.env.CUBBY_E2E_PREBUILT_WEB = previous;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 describe("spec-areas.ts manifest coverage", () => {
   it("has an entry for every *.spec.ts file on disk, and no entry for a missing file", () => {
@@ -29,6 +112,31 @@ describe("spec-areas.ts manifest coverage", () => {
 });
 
 describe("computeAffected", () => {
+  // Harness/config changes outside src must not silently select zero specs.
+  it.each([
+    "apps/web/tooling/local-workerd-harness.ts",
+    "apps/web/scripts/e2e-affected.ts",
+    "scripts/test-services.ts",
+    "apps/web/wrangler.jsonc",
+    "apps/web/tsconfig.json",
+    "nx.json",
+    "package.json",
+  ])(
+    "selects every spec for runtime or validation configuration %s",
+    (file) => {
+      const result = computeAffected([file]);
+      expect(result.ranEverything).toBe(true);
+      expect(result.specs).toHaveLength(SPEC_AREAS.length);
+      expect(result.reasons.join("\n")).toContain(file);
+    },
+  );
+  it("explains every matching file even when a previous file selected the same spec", () => {
+    const result = computeAffected([
+      "apps/web/src/app/vendors/one.ts",
+      "apps/web/src/app/vendors/two.ts",
+    ]);
+    expect(result.reasons.join("\n")).toContain("vendors/two.ts");
+  });
   it("selects the specs mapped to a changed route file", () => {
     const { specs, ranEverything } = computeAffected(
       ["apps/web/src/routes/_authenticated/tasks.index.tsx"],

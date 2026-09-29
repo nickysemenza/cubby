@@ -25,9 +25,12 @@ this way).
 
 Traps, all seen for real:
 
-- The dev `DATABASE_URL` is the production Neon database, so MCP writes hit
-  prod, and other sessions plus the UI write to it concurrently —
-  point-in-time sweeps are unreliable. `db:migrate` never reads it.
+- Local startup, fixtures, integrations, runtime inspection, and simulator
+  discovery follow [local development](../local-development.md). `pnpm dev`
+  supplies a guarded checkout database and ignores production env files.
+  Explicit production MCP/database access still reaches the shared household;
+  concurrent sessions make point-in-time production sweeps unreliable.
+  `db:migrate` uses its explicit target, never the application's `DATABASE_URL`.
 - Migrations from parallel branches can interleave: drizzle skips a journal
   entry older than the last applied one, so regenerate after merging `main`
   (`db:check` rejects an out-of-order journal).

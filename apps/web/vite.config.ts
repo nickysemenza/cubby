@@ -8,20 +8,21 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import {
   defineConfig,
-  loadEnv,
   type BuildEnvironmentOptions,
   type Plugin,
   type PluginOption,
 } from "vite";
 import wasm from "vite-plugin-wasm";
-import { isGitWorktree } from "./tooling/git-worktree.ts";
-import { assertDevDatabaseUrl } from "./tooling/dev-db-guard.ts";
 import { mcpAppAsset } from "./tooling/mcp-app-asset.ts";
 import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts";
-import { viteDevLogin } from "./tooling/vite-dev-login.ts";
+import { resolveDevProfile } from "../../scripts/lib/dev-profile.ts";
+import { writeLocalDevConfig } from "./tooling/local-dev-config.ts";
+import {
+  createLocalDevPeers,
+  createLocalDevPeerPlugins,
+} from "./tooling/local-dev-peers.ts";
 import { readR2PublicUrlFromWrangler } from "./tooling/wrangler-public-config.ts";
 
-const isCloudflare = process.env.DEPLOY_TARGET === "cloudflare";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Generated output is never committed; bring it current before any module
 // graph (or TanStack's route scan) reads it. A no-op when inputs are unchanged.
@@ -58,15 +59,11 @@ const wranglerR2PublicUrl = readR2PublicUrlFromWrangler();
 /**
  * The client's transform gate must name the host the SERVER stamps on image
  * URLs, or `transformedImageUrl` passes every URL through untouched. Builds
- * take wrangler.jsonc (the deployed Worker's origin); the dev server takes the
- * same `.env` `R2_PUBLIC_URL` the server reads, which points at the dev bucket
- * — a different host, so with the wrangler value alone dev never downsized.
+ * take wrangler.jsonc; local development takes the supervisor's local origin
+ * so image transformations and storage URLs agree with the Worker.
  */
-const resolveR2PublicUrl = (command: "build" | "serve", mode: string) =>
-  command === "serve"
-    ? (loadEnv(mode, import.meta.dirname, "R2_PUBLIC_URL").R2_PUBLIC_URL ??
-      wranglerR2PublicUrl)
-    : wranglerR2PublicUrl;
+const resolveR2PublicUrl = (localOrigin: string | undefined) =>
+  localOrigin ?? wranglerR2PublicUrl;
 
 const clientCodeSplittingGroups = [
   {
@@ -206,31 +203,39 @@ function cfSentryShim(): Plugin {
   };
 }
 
-export default defineConfig(async ({ command, mode }) => {
-  let enableDevLogin = false;
-  if (command === "serve") {
-    try {
-      assertDevDatabaseUrl(process.env.DATABASE_URL);
-      enableDevLogin = true;
-    } catch {
-      // Only the fixed local development database can enable this middleware.
-    }
-  }
-  const r2PublicUrl = resolveR2PublicUrl(command, mode);
-  // CF Workers build: use @cloudflare/vite-plugin (Vite Environment API).
-  // Dev server runs without a deploy plugin (plain Node.js via vite dev).
+export default defineConfig(async ({ command }) => {
+  const local =
+    command === "serve" || process.env.CUBBY_DEV_PREVIEW_BUILD === "true";
+  const profile = local ? resolveDevProfile(repoRoot) : undefined;
+  if (command === "serve" && !process.env.CUBBY_DEV_ID)
+    throw new Error(
+      "Start local development with pnpm dev (the supervisor prepares the database and local resources)",
+    );
+  const r2PublicUrl = resolveR2PublicUrl(profile?.origin);
+  // Development and production share the Cloudflare Vite Environment runtime.
   const deployPlugin: PluginOption[] = [];
-  if (isCloudflare) {
-    const { cloudflare } = await import("@cloudflare/vite-plugin");
-    deployPlugin.push(cloudflare({ viteEnvironment: { name: "ssr" } }));
-  }
+  const { cloudflare } = await import("@cloudflare/vite-plugin");
+  if (profile) {
+    deployPlugin.push(...(await createLocalDevPeerPlugins(profile)));
+    const peers = await createLocalDevPeers(profile);
+    deployPlugin.push(
+      cloudflare({
+        configPath: await writeLocalDevConfig(profile),
+        viteEnvironment: { name: "ssr" },
+        auxiliaryWorkers: peers.auxiliaryWorkers,
+        // The plugin and Wrangler CLI append v3; the programmatic proxy does not.
+        persistState: { path: path.join(profile.stateDir, "cloudflare") },
+        inspectorPort: profile.inspectorPort,
+        remoteBindings: profile.profile === "integrations",
+      }),
+    );
+  } else deployPlugin.push(cloudflare({ viteEnvironment: { name: "ssr" } }));
 
-  // Multi-worktree dev-server port resolution (see `server.port` below).
-  const serverPort = Number(process.env.PORT) || 0;
-  const inWorktree = isGitWorktree();
+  const serverPort = Number(process.env.PORT) || 3000;
 
   return {
-    envDir: ".", // Explicitly load .env from this directory
+    envDir: local ? (false as const) : ".",
+    ...(profile && { cacheDir: path.join(profile.stateDir, "vite") }),
     // Resolve tsconfig `paths` (~/*, tooling/*) natively — Vite 8 replaces the
     // vite-tsconfig-paths plugin with this built-in option.
     resolve: { tsconfigPaths: true },
@@ -277,39 +282,25 @@ export default defineConfig(async ({ command, mode }) => {
     build: { reportCompressedSize: process.env.CUBBY_BUNDLE_REPORT === "1" },
     // CF Workers build-time flag for dead code elimination in db.ts
     define: {
+      "import.meta.env.CUBBY_LOCAL_RUNTIME": JSON.stringify(local),
+      "import.meta.env.CUBBY_LOCAL_TELEMETRY": JSON.stringify(
+        process.env.CUBBY_DEV_TELEMETRY === "true",
+      ),
       __GIT_COMMIT__: JSON.stringify(gitCommit),
       __SOURCE_COMMIT__: JSON.stringify(sourceCommit),
       __SOURCE_BRANCH__: JSON.stringify(sourceBranch),
       __BUILD_DATE__: JSON.stringify(sourceDate),
       __R2_PUBLIC_URL__: JSON.stringify(r2PublicUrl),
-      __CF_WORKERS__: isCloudflare ? "true" : "false",
+      __CF_WORKERS__: "true",
     },
     server: {
-      host: "0.0.0.0",
-      // Port resolution for multi-worktree dev (see README "Worktrees"):
-      // - A preview harness can inject PORT when it picks a free port — bind
-      //   exactly that (strictPort) so the preview attaches.
-      // - No PORT: the main checkout is 3000-or-fail-loudly (never silent-drift);
-      //   any linked Git worktree auto-finds a free port instead.
-      port: serverPort || 3000,
-      strictPort: serverPort ? true : !inWorktree,
+      host: local ? "localhost" : "0.0.0.0",
+      // The supervisor already selected and advertised this origin.
+      port: serverPort,
+      strictPort: true,
       allowedHosts: ["nickys-macbook-air.tailnet-0eba.ts.net"],
     },
-    ssr: {
-      // Externalize OpenTelemetry packages to avoid ESM/CJS compatibility issues in dev.
-      // Not needed for CF Workers builds — the cloudflare plugin handles bundling.
-      external: isCloudflare
-        ? []
-        : [
-            "@opentelemetry/sdk-node",
-            "@opentelemetry/resources",
-            "@opentelemetry/semantic-conventions",
-            "@opentelemetry/auto-instrumentations-node",
-            "@opentelemetry/exporter-trace-otlp-http",
-          ],
-    },
     plugins: [
-      ...(enableDevLogin ? [viteDevLogin()] : []),
       // Permit the JS Self-Profiling API in dev (`window.__jsProfile`, see
       // lib/perf/js-self-profile.ts). The header must be on the SSR document, and
       // `server.headers` doesn't reach TanStack Start's response — set it via
@@ -328,9 +319,9 @@ export default defineConfig(async ({ command, mode }) => {
       ...deployPlugin,
       mcpAppAsset(),
       // CF Workers WASM instantiation plugin must run before vite-plugin-wasm
-      ...(isCloudflare
-        ? [cfPgNativeStub(), cfWasmPlugin(), cfSentryShim()]
-        : []),
+      cfPgNativeStub(),
+      cfWasmPlugin(),
+      cfSentryShim(),
       wasm(),
       devtools({
         // Keep the runtime devtools available to the production lazy chunk;
@@ -382,7 +373,7 @@ export default defineConfig(async ({ command, mode }) => {
       // lets one Sentry code mapping (repo root -> repo root on main) resolve
       // browser and Worker frames. Without SENTRY_AUTH_TOKEN (PR/preview CI) the plugin warns,
       // skips the upload, and still injects debug IDs and deletes the maps.
-      ...(isCloudflare && command === "build"
+      ...(command === "build"
         ? [
             sentryTanstackStart({
               org: "nicky-semenza",

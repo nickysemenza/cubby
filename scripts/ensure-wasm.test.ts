@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import {
   mkdtempSync,
   mkdirSync,
@@ -9,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   cargoMetadataSchema,
   sourceDigest,
@@ -16,6 +18,20 @@ import {
   stampWasm,
   wasmIsCurrent,
 } from "./ensure-wasm.ts";
+
+test("offline startup ignores inherited Rust logging but preserves compiler flag freshness", () => {
+  const script = fileURLToPath(new URL("./ensure-wasm.ts", import.meta.url));
+  const key = (env: NodeJS.ProcessEnv) =>
+    execFileSync(process.execPath, [script, "--fingerprint"], {
+      env,
+      encoding: "utf8",
+    }).trim();
+  const offline = { ...process.env };
+  delete offline.RUST_LOG;
+  const original = key(offline);
+  assert.equal(key({ ...offline, RUST_LOG: "debug" }), original);
+  assert.notEqual(key({ ...offline, RUSTFLAGS: "-C debuginfo=1" }), original);
+});
 
 test("WASM inputs follow contents across checkouts, including local dependency assets", (t) => {
   const root = mkdtempSync(join(tmpdir(), "cubby-wasm-inputs-"));

@@ -67,7 +67,10 @@ export const getRouter = () => {
       // E2E uses the production bundle but installs this flag before client
       // scripts run. Disabling the SDK here keeps test events out of Sentry
       // without Playwright routing, which disables the browser HTTP cache.
-      enabled: !("__CUBBY_E2E_DISABLE_SENTRY__" in window),
+      enabled:
+        !("__CUBBY_E2E_DISABLE_SENTRY__" in window) &&
+        (!import.meta.env.CUBBY_LOCAL_RUNTIME ||
+          import.meta.env.CUBBY_LOCAL_TELEMETRY),
       sendDefaultPii: false,
       release: `cubby@${__GIT_COMMIT__}`,
       environment: sentryEnvironment(

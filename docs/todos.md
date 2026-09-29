@@ -429,32 +429,20 @@ example vegetable` must not resolve to the weight of an entire linked bag
   relation section headers) get the same density without per-call-site
   classes.
 
-- **Fixture-backed web preview route.** Web has no `#Preview` equivalent:
-  seeing a component's empty, loading, error, or edge state means driving the
-  full app against the dev server's `DATABASE_URL`, which is the shared prod
-  database (real records in screenshots, writes land in prod). A dev-only
-  route rendering components from `mock()` fixtures
-  (`apps/web/src/lib/test/mock-schema.ts`) in named states, read through the
-  browser pane with HMR, would mirror the Apple loop in
-  [docs/agents/xcode-mcp.md](agents/xcode-mcp.md) without Storybook's weight.
-  Promote when agents keep reproducing edge states against real data; decide
-  how it stays out of the production bundle (`mock-schema.ts` imports faker).
-  The data half is now covered: `pnpm dev:local` sets up a persistent
-  local database seeded with the scenario corpus (products, inventory,
-  projects, purchases, expenses and a photo run), so `dev:local` no longer needs the shared prod `DATABASE_URL` for
-  this. What remains is the route/component-preview half — driving one
-  component into an arbitrary state (loading/error/edge) without navigating
-  the full app to reach it.
+- **Fixture-backed web preview route.** `pnpm dev` now runs the full app in
+  workerd with a persistent synthetic corpus and optional domain packs. What
+  remains is a dev-only component route that renders arbitrary loading, error,
+  and edge states from schema-backed fixtures without navigating the full app.
+  The production bundle must exclude faker and the preview route. Promote when
+  driving individual states through full app flows repeatedly slows iteration.
 
-- **E2E against the dev server.** `pnpm --filter @cubby/web test:e2e:watch`
-  runs Playwright against a `vite build --watch` Worker bundle plus warm
-  PostgreSQL/IntegreSQL containers, not the Node `vite dev` server — Node
-  `vite dev` is not workerd, so tests that depend on Worker-only behavior
-  (bindings, Durable Objects, the entity-kernel routes as actually deployed)
-  would not exercise the real runtime there. Investigate whether a
-  `dev:local`-backed lane is worth adding as a faster iteration path for
-  UI-only specs; it could never become the CI merge gate (`docs/ci.md`
-  requires the workerd-backed harness), only an optional local shortcut.
+- **E2E against the HMR session.** `pnpm --filter @cubby/web test:e2e:watch`
+  retains a `vite build --watch` Worker bundle and disposable warm PostgreSQL
+  services. The persistent `pnpm dev` session now also runs in workerd; an
+  optional Playwright lane could reuse its discovered origin for interactive
+  iteration. It still needs isolated fixtures, cleanup, and sanitized replay
+  artifacts before replacing any existing local lane. CI continues to own the
+  exact-head merge gate through its disposable harness.
 
 - **Declarative "many, clamped to one" cardinality.** The image-provenance
   work chose a many-row `ImageSighting` child table plus derived declared-`one`
