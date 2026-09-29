@@ -1,14 +1,20 @@
+import type { PlantId } from "@cubby/schemas/identifiers";
 import { plantOut } from "@cubby/schemas/plant";
 import { z } from "zod";
 
 import { entityMutationReferences } from "~/server/entity-kernel/adapter";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
+import { withTransactionDatabase } from "~/server/repo/database-helpers";
 import {
   asActor,
   defineRepository,
   listOn,
   onDb,
 } from "~/server/repo/repository";
+import {
+  mutationEvents,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 
 import {
   createPlant,
@@ -43,7 +49,25 @@ export const plantRepository = defineRepository("plant", {
   update: asActor(updatePlant),
   bulkUpdate: async (ctx, ids, data) => {
     // A household catalogue is small; one audited update per plant is fine.
-    for (const id of ids) await updatePlant(ctx.db, id, data, ctx.actorContext);
+    // One transaction, so a failing plant leaves the whole patch unapplied;
+    // its projections refresh inside it and the embedding tasks publish
+    // after its commit.
+    await withTransactionDatabase(ctx.db, async (transactionDb) => {
+      const entityIds: PlantId[] = [];
+      for (const id of ids) {
+        const { entityId } = await updatePlant(
+          transactionDb,
+          id,
+          data,
+          ctx.actorContext,
+        );
+        entityIds.push(entityId);
+      }
+      await runMutationSideEffectsForEntities(
+        transactionDb,
+        mutationEvents("plant", "updated", entityIds, "plant.bulkUpdate"),
+      );
+    });
     return { updatedReferences: entityMutationReferences("plant", ids) };
   },
   merge: {
