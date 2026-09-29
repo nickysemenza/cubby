@@ -9,14 +9,15 @@ import {
   type IngredientId,
   type IngredientShortcode,
   parseShortcodeFor,
+  type ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
   IngredientWithRecipesAndProductOut,
   ingredientCreateInput,
   ingredientUpdateData,
 } from "@cubby/schemas/ingredient";
-import { and, eq } from "drizzle-orm";
-import type { z } from "zod";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { ingredient, product } from "~/server/db/schema";
@@ -32,6 +33,10 @@ import {
 import { patchEntityRows } from "~/server/repo/entity-patch";
 import { markProductConversionCoverageInputStale } from "~/server/repo/product/conversion-coverage";
 import { createEntityCrud } from "~/server/repo/repository";
+import {
+  lexicalEligibility,
+  lexicalRelevance,
+} from "~/server/repo/search-lexical";
 import {
   findOrCreateWithShortcode,
   insertWithShortcode,
@@ -242,4 +247,76 @@ export const resolveOrCreateIngredients = async (
       created: row.created,
     };
   });
+};
+
+export interface UnlinkedProductCandidate {
+  id: ProductShortcode;
+  name: string;
+  manufacturer: string;
+}
+
+const PRODUCT_CANDIDATES_PER_INGREDIENT = 5;
+/** One `UNION ALL` arm per ingredient; bounds the statement, not the input. */
+const PRODUCT_CANDIDATE_MAX_INGREDIENTS = 100;
+
+const candidateRowSchema = z.object({
+  key: z.string(),
+  shortcode: z.string(),
+  name: z.string(),
+  manufacturer: z.string(),
+});
+
+/**
+ * Live Products with no ingredient link that read as each ingredient, ranked
+ * by the command-search relevance and capped per ingredient, in one
+ * statement. Advisory only: it proposes rows for a caller to link. Only the
+ * first `PRODUCT_CANDIDATE_MAX_INGREDIENTS` ingredients are searched; the
+ * rest map to nothing. Eligibility ANDs every name token, so an ingredient's
+ * (short, generic) name must appear within the product's name.
+ */
+export const findUnlinkedProductCandidates = async (
+  db: Database | DrizzleTransaction,
+  ingredients: ReadonlyArray<{ id: IngredientShortcode; name: string }>,
+): Promise<Map<IngredientShortcode, UnlinkedProductCandidate[]>> => {
+  // Two requested names can resolve to one ingredient; search it once.
+  const distinct = [
+    ...new Map(ingredients.map((entry) => [entry.id, entry])).values(),
+  ];
+  const arms = distinct
+    .slice(0, PRODUCT_CANDIDATE_MAX_INGREDIENTS)
+    .flatMap(({ id, name }) => {
+      const eligible = lexicalEligibility("product", product.id, name);
+      // A name with no searchable token matches nothing rather than everything.
+      if (!eligible) return [];
+      return [
+        sql`(
+          SELECT ${id}::text AS "key", ${product.shortcode} AS "shortcode", ${product.name} AS "name", ${product.manufacturer} AS "manufacturer",
+            row_number() OVER (ORDER BY ${lexicalRelevance("product", product.id, name)} ASC, ${product.name} ASC, ${product.shortcode} ASC) AS "rank"
+          FROM ${product}
+          WHERE ${and(notDeleted(product), isNull(product.ingredientId), eligible)}
+          ORDER BY "rank"
+          LIMIT ${PRODUCT_CANDIDATES_PER_INGREDIENT}
+        )`,
+      ];
+    });
+  const byIngredient = new Map<
+    IngredientShortcode,
+    UnlinkedProductCandidate[]
+  >();
+  if (arms.length === 0) return byIngredient;
+  const result = await unwrapDb(db).execute(
+    sql`SELECT * FROM (${sql.join(arms, sql` UNION ALL `)}) candidates ORDER BY "key", "rank"`,
+  );
+  for (const row of z.array(candidateRowSchema).parse(result.rows)) {
+    const key = parseShortcodeFor("ingredient", row.key);
+    byIngredient.set(key, [
+      ...(byIngredient.get(key) ?? []),
+      {
+        id: parseShortcodeFor("product", row.shortcode),
+        name: row.name,
+        manufacturer: row.manufacturer,
+      },
+    ]);
+  }
+  return byIngredient;
 };

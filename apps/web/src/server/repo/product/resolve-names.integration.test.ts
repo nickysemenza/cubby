@@ -5,6 +5,7 @@ import {
   createProductFixture as createProduct,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { refreshSearchDocument } from "~/server/repo/search-document";
 
 import { resolveProductNames } from "./resolve-names";
 
@@ -154,5 +155,50 @@ describe("resolveProductNames", () => {
       expect.objectContaining({ id: solo.id, name: solo.name }),
     ]);
     expect(ten.queryCount).toBe(one.queryCount);
+  });
+
+  // The miss pass is the lexical engine, not a raw contains: a receipt line
+  // carries words the stored name lacks and vice versa.
+  describe("lexical candidates for a miss", () => {
+    const indexed = async (name: string, aliases: string[] = []) => {
+      const created = await createProduct(
+        ctx.db,
+        makeProductInput({ name, aliases }),
+        ctx.actor,
+      );
+      await refreshSearchDocument(ctx.db, "product", created.entityId);
+      return created;
+    };
+
+    it("finds a product whose whole name sits inside a longer requested name", async () => {
+      const fruit = await indexed("Example Fruit");
+      const [result] = await resolveProductNames(ctx.db, [
+        "Organic Example Fruit",
+      ]);
+      expect(result).toMatchObject({ exact: false });
+      expect(result?.candidates.map((c) => c.id)).toEqual([fruit.id]);
+    });
+
+    it("ranks products covering more of the requested tokens first", async () => {
+      const jam = await indexed("Example Fruit Jam Jar");
+      const tea = await indexed("Organic Widget Tea");
+      await indexed("Unrelated Gadget");
+      const [result] = await resolveProductNames(ctx.db, [
+        "organic example fruit spread",
+      ]);
+      expect(result?.candidates.map((c) => c.id)).toEqual([jam.id, tea.id]);
+    });
+
+    it("tolerates a misspelling through the trigram arm", async () => {
+      const marmalade = await indexed("Marmalade");
+      const [result] = await resolveProductNames(ctx.db, ["marmelade"]);
+      expect(result?.candidates.map((c) => c.id)).toEqual([marmalade.id]);
+    });
+
+    it("offers nothing when no token or trigram overlaps", async () => {
+      await indexed("Zebra Crossing Paint");
+      const [result] = await resolveProductNames(ctx.db, ["quartz countertop"]);
+      expect(result?.candidates).toEqual([]);
+    });
   });
 });

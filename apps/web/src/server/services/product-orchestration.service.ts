@@ -46,7 +46,9 @@ import {
   findProductsWithNoImages,
   getProductByShortcode,
   quickCreateProduct,
+  updateProduct,
 } from "~/server/repo/product";
+import { findUnbarcodedBookByTitle } from "~/server/repo/product/book-title-match";
 import {
   resolveCreatedOrInvariant,
   resolveLiveShortcode,
@@ -472,7 +474,9 @@ export async function findOrCreateByUPC(
  * ISBNs are EAN barcodes, but they are not food identities: skip USDA and
  * create through `isbn` so the repository both stores the canonical GTIN and
  * applies the `books` category invariant. The general UPC provider can still
- * supply the edition's title, publisher/manufacturer, price, and cover.
+ * supply the edition's title, publisher/manufacturer, price, and cover. When it
+ * names a title that exactly matches one barcode-less book already on the
+ * shelf, that Product gains the ISBN instead of a duplicate being created.
  */
 async function findOrCreateByISBN(
   db: Database,
@@ -508,6 +512,26 @@ async function findOrCreateByISBN(
   return runWithConflictRecovery(
     async () => {
       const external = await upcLookupClient.lookup(normalized.isbn13);
+      // A shelved copy entered by hand before its first scan: attach the ISBN
+      // instead of minting a second Product for the same book. Any doubt
+      // (no title, none or several matches) falls through to a create.
+      const shelved = external
+        ? await findUnbarcodedBookByTitle(db, external.name)
+        : null;
+      if (shelved) {
+        const { product: attached } = await updateProduct(
+          db,
+          shelved,
+          { isbn: canonicalGtin },
+          actor,
+        );
+        await runMutationSideEffects(db, {
+          action: "updated",
+          entity: { entity: "product", id: shelved },
+          source: "product.findOrCreateByCode",
+        });
+        return matched(attached);
+      }
       const product = await quickCreateProduct(
         db,
         {

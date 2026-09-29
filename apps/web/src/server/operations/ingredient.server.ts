@@ -1,4 +1,8 @@
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  parseShortcodeFor,
+  type ProductShortcode,
+} from "@cubby/schemas/identifiers";
 import {
   type ingredientIdInput,
   ingredientMergeOut,
@@ -10,7 +14,11 @@ import type { z } from "zod";
 
 import { ingredientContract } from "~/contracts/ingredient.contract";
 import type { Database } from "~/server/db";
-import { executeEntity } from "~/server/entity-kernel";
+import {
+  type EntityKernelContext,
+  executeEntity,
+} from "~/server/entity-kernel";
+import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { withTransaction } from "~/server/repo/database-helpers";
 import {
@@ -18,6 +26,7 @@ import {
   getRecipeUsagesForIngredient,
   resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
+import { findUnlinkedProductCandidates } from "~/server/repo/ingredient/crud";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import {
   enrichmentWorkbench,
@@ -66,6 +75,49 @@ export const resolveOrCreateWorkflow = bindWorkflow(
     )
     .output(({ ingredients }) => ingredients),
 );
+
+/**
+ * The agent-facing `entity.resolve` for ingredients: the plain resolve plus,
+ * per ingredient, live Products with no ingredient link that read as its
+ * name. `linkProductId` links one such Product to the single resolved
+ * ingredient through the normal Product update, so costing staleness and
+ * embedding refresh fire exactly as for any other edit; candidates are read
+ * after the link, so the linked Product no longer appears.
+ */
+export async function resolveWithProductCandidatesWorkflow(
+  context: EntityKernelContext,
+  input: ResolveInput & { linkProductId?: ProductShortcode },
+) {
+  const nameCount = input.names.filter((name) => name.trim() !== "").length;
+  if (input.linkProductId !== undefined && nameCount !== 1)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `linkProductId links one Product to one ingredient: pass exactly one non-blank name (got ${nameCount}).`,
+    );
+  const resolved = await resolveOrCreateWorkflow(context.db, {
+    names: input.names,
+  });
+  const [only] = resolved;
+  let linkedProduct: { id: ProductShortcode } | undefined;
+  if (input.linkProductId !== undefined && only) {
+    await executeEntity(context, {
+      action: "update",
+      entity: "product",
+      id: input.linkProductId,
+      data: { ingredientId: only.id },
+    });
+    linkedProduct = { id: input.linkProductId };
+  }
+  const candidates = await findUnlinkedProductCandidates(
+    context.db,
+    resolved.map(({ id, canonicalName }) => ({ id, name: canonicalName })),
+  );
+  return resolved.map((ingredient) => ({
+    ...ingredient,
+    candidateProducts: candidates.get(ingredient.id) ?? [],
+    ...(linkedProduct && { linkedProduct }),
+  }));
+}
 
 export async function mergeWorkflow(
   context: Parameters<typeof executeEntity>[0],
