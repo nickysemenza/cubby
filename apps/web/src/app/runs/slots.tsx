@@ -13,10 +13,19 @@ import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { StatusText } from "~/components/ui/status-text";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import { TechnicalError } from "~/components/ui/technical-error";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { run } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatCurrency } from "~/lib/utils";
 
@@ -167,7 +176,7 @@ export function RunLiveProgress({ record }: { record: RunOut }) {
                 className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums"
                 dateTime={event.createdAt}
               >
-                {new Date(event.createdAt).toLocaleTimeString()}
+                {formatInstant(event.createdAt, "time")}
               </time>
               <span className="font-medium">{phaseLabel(event.phase)}</span>
               {event.detail ? (
@@ -247,82 +256,76 @@ export function RunAiUsage({ record }: { record: RunOut }) {
         </div>
       </div>
       {usage.records.length ? (
-        <div className="overflow-x-auto">
-          <table className="w-max min-w-full table-auto text-left text-[13px] leading-5 whitespace-nowrap tabular-nums [&_td]:px-2 [&_td]:py-1 [&_th]:px-2 [&_th]:py-1 [&_tr]:h-8">
-            <thead className="border-b border-border text-xs text-muted-foreground">
-              <tr>
-                <th scope="col">Time</th>
-                <th scope="col">Operation</th>
-                <th scope="col">Model</th>
-                <th scope="col">Attempt</th>
-                <th scope="col">Tokens</th>
-                <th scope="col">Cache</th>
-                <th scope="col">Duration</th>
-                <th scope="col">Cost</th>
-                <th scope="col">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {usage.records.map((call) => (
-                <tr
-                  key={call.id}
-                  className="border-b border-border last:border-0"
-                >
-                  <td className="font-mono">
-                    {call.createdAt.toLocaleString()}
-                  </td>
-                  <td>
-                    {call.operation}
-                    <span className="text-muted-foreground">
-                      {" "}
-                      · {call.feature} · {call.provider}
+        <Table className="w-max min-w-full table-auto text-[13px] leading-5 tabular-nums">
+          <TableHeader>
+            <TableRow className="h-8">
+              <TableHead className="h-auto py-1">Time</TableHead>
+              <TableHead className="h-auto py-1">Operation</TableHead>
+              <TableHead className="h-auto py-1">Model</TableHead>
+              <TableHead className="h-auto py-1">Attempt</TableHead>
+              <TableHead className="h-auto py-1">Tokens</TableHead>
+              <TableHead className="h-auto py-1">Cache</TableHead>
+              <TableHead className="h-auto py-1">Duration</TableHead>
+              <TableHead className="h-auto py-1">Cost</TableHead>
+              <TableHead className="h-auto py-1">Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {usage.records.map((call) => (
+              <TableRow key={call.id} className="h-8">
+                <TableCell className="py-1 font-mono">
+                  {formatInstant(call.createdAt, "dateTime")}
+                </TableCell>
+                <TableCell className="py-1">
+                  {call.operation}
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {call.feature} · {call.provider}
+                  </span>
+                </TableCell>
+                <TableCell className="py-1 font-mono">{call.model}</TableCell>
+                <TableCell className="py-1 font-mono">{call.attempt}</TableCell>
+                <TableCell className="py-1 font-mono">
+                  {call.inputTokens ?? "—"} in / {call.outputTokens ?? "—"} out
+                </TableCell>
+                <TableCell className="py-1 font-mono">
+                  {call.applicationCacheStatus === "hit"
+                    ? "Application hit · no model call"
+                    : `Application ${call.applicationCacheStatus ?? "—"}`}
+                  {" · Gateway "}
+                  {call.cacheStatus ?? "—"}
+                  <span className="text-muted-foreground">
+                    {" · "}
+                    {call.cacheReadTokens ?? "—"} read /{" "}
+                    {call.cacheWriteTokens ?? "—"} write
+                  </span>
+                </TableCell>
+                <TableCell className="py-1 font-mono">
+                  {formatDuration(call.durationMs)}
+                </TableCell>
+                <TableCell className="py-1 font-mono">
+                  {call.estimatedCost == null
+                    ? "unpriced"
+                    : formatCurrency(call.estimatedCost, 6)}
+                </TableCell>
+                <TableCell className="py-1">
+                  <Badge
+                    variant={
+                      call.status === "succeeded" ? "positive" : "destructive"
+                    }
+                  >
+                    {call.status}
+                  </Badge>
+                  {call.gatewayLogId ? (
+                    <span className="ml-1 font-mono text-muted-foreground">
+                      · {call.gatewayLogId}
                     </span>
-                  </td>
-                  <td className="font-mono">{call.model}</td>
-                  <td className="font-mono">{call.attempt}</td>
-                  <td className="font-mono">
-                    {call.inputTokens ?? "—"} in / {call.outputTokens ?? "—"}{" "}
-                    out
-                  </td>
-                  <td className="font-mono">
-                    {call.applicationCacheStatus === "hit"
-                      ? "Application hit · no model call"
-                      : `Application ${call.applicationCacheStatus ?? "—"}`}
-                    {" · Gateway "}
-                    {call.cacheStatus ?? "—"}
-                    <span className="text-muted-foreground">
-                      {" · "}
-                      {call.cacheReadTokens ?? "—"} read /{" "}
-                      {call.cacheWriteTokens ?? "—"} write
-                    </span>
-                  </td>
-                  <td className="font-mono">
-                    {formatDuration(call.durationMs)}
-                  </td>
-                  <td className="font-mono">
-                    {call.estimatedCost == null
-                      ? "unpriced"
-                      : formatCurrency(call.estimatedCost, 6)}
-                  </td>
-                  <td>
-                    <Badge
-                      variant={
-                        call.status === "succeeded" ? "positive" : "destructive"
-                      }
-                    >
-                      {call.status}
-                    </Badge>
-                    {call.gatewayLogId ? (
-                      <span className="ml-1 font-mono text-muted-foreground">
-                        · {call.gatewayLogId}
-                      </span>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  ) : null}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       ) : (
         <StatusText>No AI calls were recorded for this run.</StatusText>
       )}

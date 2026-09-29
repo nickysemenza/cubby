@@ -7,7 +7,16 @@ import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { StatusText } from "~/components/ui/status-text";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatInstant } from "~/lib/date-format";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { formatCurrency } from "~/lib/utils";
 
@@ -22,6 +31,10 @@ import { CopyJsonButton } from "./copy-debug-button";
  * navbar debug toggle is on — same convention as the Raw Details card — so the
  * explain query never fires in normal use.
  */
+
+// Wrapping, top-aligned cells: measure cells stack a source line over the
+// value/error string, which must wrap rather than widen the row.
+const CELL_CLASS = "py-1 pr-2 pl-0 align-top whitespace-normal";
 
 const sourceLabel = (s: RowDiagnosticOut["plan"]["cost"]): string =>
   match(s)
@@ -128,7 +141,7 @@ export const RecipeCostingDebugCard: React.FC<{
               ? `${formatEstimate(persisted.totals.cost, formatCurrency)} · ${formatEstimate(persisted.totals.nutrition.kcal, (value) => `${Math.round(value)} kcal`)}`
               : "—"}
             {persisted.totalsComputedAt &&
-              ` @ ${persisted.totalsComputedAt.toLocaleString()}`}
+              ` @ ${formatInstant(persisted.totalsComputedAt, "dateTime")}`}
           </span>
           <span className={showDrift ? "font-medium" : ""}>
             live {formatEstimate(computed.totals.cost, formatCurrency)} ·{" "}
@@ -156,62 +169,60 @@ export const RecipeCostingDebugCard: React.FC<{
         )}
 
         {/* Per-row trace: usage, fired rule per measure, value-or-error + path. */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="text-muted-foreground">
-              <tr>
-                <th className="py-1 pr-2">Row</th>
-                <th className="py-1 pr-2">Usage</th>
-                <th className="py-1 pr-2">Cost</th>
-                <th className="py-1 pr-2">Weight</th>
-                <th className="py-1 pr-2">Nutrients</th>
-              </tr>
-            </thead>
-            <tbody>
-              {computed.diagnostics.map((d) => (
-                <tr key={d.id} className="border-t align-top">
-                  <td className="py-1 pr-2">
-                    {d.name}
-                    {d.sectionName && (
-                      <span className="block text-2xs text-muted-foreground">
-                        {d.sectionName}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-1 pr-2">
-                    <Badge variant="outline">{d.usage}</Badge>
-                    {!d.measured && (
-                      <span className="block text-2xs text-muted-foreground">
-                        unmeasured
-                        {d.basisGrams != null &&
-                          ` · basis ${Math.round(d.basisGrams)} g`}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-1 pr-2">
+        <Table className="table-auto">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="h-auto py-1 pr-2 pl-0">Row</TableHead>
+              <TableHead className="h-auto py-1 pr-2 pl-0">Usage</TableHead>
+              <TableHead className="h-auto py-1 pr-2 pl-0">Cost</TableHead>
+              <TableHead className="h-auto py-1 pr-2 pl-0">Weight</TableHead>
+              <TableHead className="h-auto py-1 pr-2 pl-0">Nutrients</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {computed.diagnostics.map((d) => (
+              <TableRow key={d.id} className="align-top">
+                <TableCell className={CELL_CLASS}>
+                  {d.name}
+                  {d.sectionName && (
                     <span className="block text-2xs text-muted-foreground">
-                      {sourceLabel(d.plan.cost)}
+                      {d.sectionName}
                     </span>
-                    <MeasureCell diag={d.price} path={d.paths?.money} />
-                  </td>
-                  <td className="py-1 pr-2">
+                  )}
+                </TableCell>
+                <TableCell className={CELL_CLASS}>
+                  <Badge variant="outline">{d.usage}</Badge>
+                  {!d.measured && (
                     <span className="block text-2xs text-muted-foreground">
-                      {sourceLabel(d.plan.weight)}
+                      unmeasured
+                      {d.basisGrams != null &&
+                        ` · basis ${Math.round(d.basisGrams)} g`}
                     </span>
-                    <MeasureCell diag={d.gram} path={d.paths?.weight} />
-                  </td>
-                  <td className="py-1 pr-2">
-                    <span className="block text-2xs text-muted-foreground">
-                      {sourceLabel(d.plan.nutrients)}
-                      {d.nutritionSource && ` · ${d.nutritionSource}`}
-                    </span>
-                    <MeasureCell diag={d.nutrient} path={d.paths?.calories} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  )}
+                </TableCell>
+                <TableCell className={CELL_CLASS}>
+                  <span className="block text-2xs text-muted-foreground">
+                    {sourceLabel(d.plan.cost)}
+                  </span>
+                  <MeasureCell diag={d.price} path={d.paths?.money} />
+                </TableCell>
+                <TableCell className={CELL_CLASS}>
+                  <span className="block text-2xs text-muted-foreground">
+                    {sourceLabel(d.plan.weight)}
+                  </span>
+                  <MeasureCell diag={d.gram} path={d.paths?.weight} />
+                </TableCell>
+                <TableCell className={CELL_CLASS}>
+                  <span className="block text-2xs text-muted-foreground">
+                    {sourceLabel(d.plan.nutrients)}
+                    {d.nutritionSource && ` · ${d.nutritionSource}`}
+                  </span>
+                  <MeasureCell diag={d.nutrient} path={d.paths?.calories} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </CardContent>
     </Card>
   );

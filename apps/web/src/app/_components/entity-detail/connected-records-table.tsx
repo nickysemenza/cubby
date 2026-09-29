@@ -9,6 +9,14 @@ import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
+import {
   entityDetailParams,
   entities,
   isBrowserRoutedEntity,
@@ -22,6 +30,11 @@ import {
 } from "../data-table/detail-page";
 
 const PAGE_SIZE = 20;
+
+// Roomier than the primitive defaults, and wrapping: a path evidence cell is a
+// multi-line list, not a single truncated value.
+const HEAD_CLASS = "h-auto p-3 text-sm";
+const CELL_CLASS = "p-3 align-top whitespace-normal";
 
 function RecordPathLink({ node }: { node: ConnectedPathNode }) {
   if (!isBrowserRoutedEntity(node.entityKind)) return <span>{node.label}</span>;
@@ -234,35 +247,33 @@ export function ConnectedRecordsTable({
   return (
     <div className="space-y-3">
       <HopRange range={routeHopRange} />
-      <div className="overflow-x-auto rounded-md border border-border">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-border text-muted-foreground">
-            <tr>
-              <th className="p-3 font-medium">
-                {isBrowserRoutedEntity(target)
-                  ? entities[target].label
-                  : "Record"}
-              </th>
-              <th className="p-3 font-medium">Connected through</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr
-                key={item.target.entityId}
-                className="border-b border-border last:border-0"
-              >
-                <td className="p-3 align-top font-medium">
-                  <RecordPathLink node={item.target} />
-                </td>
-                <td className="p-3 align-top">
-                  <RecordPaths paths={item.paths} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Table
+        containerClassName="rounded-md border border-border"
+        className="table-auto text-sm"
+      >
+        <TableHeader>
+          <TableRow>
+            <TableHead className={HEAD_CLASS}>
+              {isBrowserRoutedEntity(target)
+                ? entities[target].label
+                : "Record"}
+            </TableHead>
+            <TableHead className={HEAD_CLASS}>Connected through</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {items.map((item) => (
+            <TableRow key={item.target.entityId}>
+              <TableCell className={`${CELL_CLASS} font-medium`}>
+                <RecordPathLink node={item.target} />
+              </TableCell>
+              <TableCell className={CELL_CLASS}>
+                <RecordPaths paths={item.paths} />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
       <ConnectionPager
         openAll={openAll}
         page={page}
