@@ -40,9 +40,10 @@ booted and the relevant build artifacts warm while working on one feature.
    a human should review the exact UI actions. The database is unique per run
    and dropped afterward; artifacts stay under `artifacts/sim-e2e/`.
 
-For manual exploration with a stable corpus, start `pnpm dev:local`, choose
-**Local** in the app's Settings server picker, and use `pnpm apple sim`. That
-database persists across runs. The disposable headless and simulator lanes
+For manual exploration with a stable corpus, start `pnpm dev`, then use
+`pnpm dev:sim -- --sim <name>`. The launcher discovers the session origin and
+persists the app's development server choice. That database persists across
+runs; see [local development](../../docs/local-development.md). The disposable headless and simulator lanes
 have their own synthetic account and seed. SwiftUI previews use in-memory
 fixtures, so editing the local database does not change a preview.
 

@@ -202,7 +202,7 @@ final class AppModel {
     var baseURL: URL {
         didSet {
             guard baseURL != oldValue else { return }
-            UserDefaults.standard.set(baseURL.absoluteString, forKey: Self.baseURLKey)
+            Self.persistBaseURL(baseURL)
             Diagnostics.setBaseURL(baseURL)
             rebindClients()
             ImageCaches.reset()
@@ -219,6 +219,10 @@ final class AppModel {
     /// `Diagnostics.start` can run first in `CubbyApp.init`.
     static var persistedBaseURL: URL {
         UserDefaults.standard.string(forKey: baseURLKey).flatMap(URL.init(string:)) ?? defaultBaseURL
+    }
+
+    static func persistBaseURL(_ url: URL) {
+        UserDefaults.standard.set(url.absoluteString, forKey: baseURLKey)
     }
 
     init(store: any SessionTokenStore = KeychainSessionTokenStore(), baseURL: URL? = nil) {

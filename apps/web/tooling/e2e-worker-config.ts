@@ -1,9 +1,11 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
+import { webBuildNeedsBuild } from "./web-build-provenance";
 
 /** Keep the built Worker and local bindings; omit remote-only AI and background consumers. */
 export function writeLocalWorkerdConfig(webRoot: string): void {
+  webBuildNeedsBuild(path.resolve(webRoot, "../.."), true);
   const source = path.join(webRoot, "dist/server/wrangler.json");
   if (!existsSync(source))
     throw new Error("Build the web Cloudflare bundle before starting workerd");

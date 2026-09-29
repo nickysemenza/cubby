@@ -18,7 +18,7 @@ import {
 
 import { type ContextRecorder, withContextCapture } from "./context-breakdown";
 
-const CUBBY_GATEWAY_ID = "cubby";
+const CUBBY_GATEWAY_ID = process.env.AI_GATEWAY_ID || "cubby";
 const OPENAI_MODELS = ["gpt-6-sol", "gpt-6-luna"] as const;
 const ANTHROPIC_MODELS = ["claude-haiku-4-5", "claude-sonnet-5"] as const;
 

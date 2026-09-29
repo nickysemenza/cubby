@@ -90,6 +90,12 @@
       "inputs": [
         "default",
         "^default",
+        "{workspaceRoot}/apps/mcp-apps/**",
+        "{workspaceRoot}/scripts/**",
+        "{workspaceRoot}/packages/**",
+        "{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyKit/Catalog/EntityManifest.swift",
+        "{workspaceRoot}/package.json",
+        { "env": "CUBBY_DEV_PREVIEW_BUILD" },
         {
           "dependentTasksOutputFiles": "packages/wasm/**/*"
         }

@@ -33,7 +33,10 @@ function createDefaultDependencies(
     getFreshMisses: (upcs) => getFreshMisses(db, upcs),
     recordMiss: (upc) => recordMiss(db, upc),
     deleteMiss: (upc) => deleteMiss(db, upc),
-    lookupExternalProduct,
+    lookupExternalProduct:
+      env.LOCAL_OFFLINE === "true"
+        ? async () => ({ status: "error" })
+        : lookupExternalProduct,
     storeImage: (upc, imageUrl) => storeImage(upc, imageUrl, env),
     createResolvedProduct: (values) => createResolvedProduct(db, values),
     cleanupImageVariants: (upc, currentImageKey) =>

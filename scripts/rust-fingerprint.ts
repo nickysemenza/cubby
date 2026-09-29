@@ -116,7 +116,13 @@ export const rustFingerprint = (
   add(
     JSON.stringify(
       Object.entries(process.env)
-        .filter(([name]) => /^(CARGO_|RUST|WASM_|CC$|CFLAGS$|AR$)/u.test(name))
+        // Offline startup strips inherited logging settings. Rust's log filter
+        // changes diagnostics, while compiler flags must still invalidate output.
+        .filter(
+          ([name]) =>
+            name !== "RUST_LOG" &&
+            /^(CARGO_|RUST|WASM_|CC$|CFLAGS$|AR$)/u.test(name),
+        )
         .sort(([left], [right]) => left.localeCompare(right)),
     ),
   );

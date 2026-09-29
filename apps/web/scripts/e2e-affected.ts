@@ -12,11 +12,12 @@
  * selection when this happens).
  */
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, type ExecFileSyncOptions } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { ALL_SPECS_TRIGGERS, SPEC_AREAS } from "../tests/e2e/spec-areas.ts";
+import { ensureWebBuild } from "../tooling/web-build-provenance.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const WEB_DIR = path.resolve(path.dirname(__filename), "..");
@@ -66,7 +67,13 @@ export interface AffectedResult {
   ranEverything: boolean;
 }
 
-const MAPPABLE_PREFIXES = ["apps/web/src/", "apps/web/tests/e2e/"];
+const MAPPABLE_PREFIXES = [
+  "apps/web/src/",
+  "apps/web/tests/e2e/",
+  "apps/web/tooling/",
+  "apps/web/scripts/",
+  "scripts/",
+];
 
 export function computeAffected(
   changed: readonly string[],
@@ -93,10 +100,8 @@ export function computeAffected(
       const glob = matches(file, entry.globs);
       if (glob) {
         matchedAny = true;
-        if (!selected.has(entry.file)) {
-          selected.add(entry.file);
-          reasons.push(`${file} matches "${glob}" -> ${entry.file}`);
-        }
+        selected.add(entry.file);
+        reasons.push(`${file} matches "${glob}" -> ${entry.file}`);
       }
     }
 
@@ -115,14 +120,80 @@ export function computeAffected(
   return { specs, reasons, ranEverything };
 }
 
+export async function runAffectedSpecs(
+  root: string,
+  specs: string[],
+  passthrough: string[],
+  execute: (
+    command: string,
+    args: string[],
+    options: ExecFileSyncOptions,
+  ) => void = execFileSync,
+): Promise<void> {
+  await ensureWebBuild(
+    root,
+    (skipCache) => {
+      execute(
+        "pnpm",
+        [
+          "exec",
+          "nx",
+          "run",
+          "@cubby/web:build-cf",
+          ...(skipCache ? ["--skip-nx-cache"] : []),
+        ],
+        {
+          cwd: root,
+          stdio: "inherit",
+          env: { ...process.env, NX_DAEMON: "false" },
+        },
+      );
+    },
+    process.env.CUBBY_E2E_PREBUILT_WEB === "1",
+  );
+  execute(
+    process.execPath,
+    [
+      "../../scripts/test-services.ts",
+      "--",
+      "playwright",
+      "test",
+      ...specs,
+      ...passthrough,
+    ],
+    {
+      cwd: path.join(root, "apps/web"),
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        CUBBY_TEST_SERVICES: process.env.CUBBY_TEST_SERVICES ?? "warm",
+      },
+    },
+  );
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const listOnly = args.includes("--list");
-  const passthrough = args.filter((arg) => arg !== "--list");
+  const json = args.includes("--json");
+  const passthrough = args.filter(
+    (arg) => !["--list", "--json", "--"].includes(arg),
+  );
 
   const root = repoRoot();
   const changed = changedFiles(root);
   const { specs, reasons, ranEverything } = computeAffected(changed);
+
+  if (json) {
+    console.log(
+      JSON.stringify(
+        { changedFiles: changed, specs, reasons, ranEverything },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
 
   if (changed.length === 0) {
     console.log("[e2e-affected] no changed files detected; nothing to run.");
@@ -149,19 +220,7 @@ async function main() {
 
   if (listOnly) return;
 
-  process.env.CUBBY_TEST_SERVICES ??= "warm";
-  execFileSync(
-    "node",
-    [
-      "../../scripts/test-services.ts",
-      "--",
-      "playwright",
-      "test",
-      ...specs,
-      ...passthrough,
-    ],
-    { cwd: WEB_DIR, stdio: "inherit", env: process.env },
-  );
+  await runAffectedSpecs(root, specs, passthrough);
 }
 
 const invokedPath = process.argv[1]

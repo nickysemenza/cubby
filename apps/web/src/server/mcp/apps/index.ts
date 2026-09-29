@@ -41,8 +41,8 @@ async function loadUsdaPickerHtml(): Promise<string> {
       return response.text();
     }
 
-    // Raw HTML is deliberately limited to the Node dev server and Vitest. A
-    // production Worker must have the ASSETS binding configured above.
+    // Vitest can read the raw bundle without a Worker binding. Local and
+    // deployed Workers load the emitted/served URL through ASSETS above.
     if (import.meta.env.DEV) {
       const { USDA_PICKER_HTML } = await import("@cubby/mcp-apps/dev");
       return USDA_PICKER_HTML;

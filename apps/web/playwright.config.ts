@@ -1,27 +1,17 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
-import dotenv from "dotenv";
 import { resolveE2EWorkers } from "./tooling/e2e-workers";
-
-/**
- * Read environment variables from file.
- * https://github.com/motdotla/dotenv
- */
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 // The spec files import server modules (`~/server/db`, repositories) whose
 // `~/env` schema validates at import and whose module scope reads values like
 // `new URL(env.R2_PUBLIC_URL)`, so the Playwright process itself needs a
-// complete server env even though every Worker gets its own from
-// e2e-worker-runtime.ts. Locally `.env` above supplies it; CI has no `.env`,
-// so fill in placeholders the way vitest.config.ts does. Values already in the
+// complete server env even though every Worker gets its own isolated bindings.
+// Do not load credential files for acceptance tests; use synthetic placeholders. Values already in the
 // environment win. DATABASE_URL matches the CI postgres service so the eager
 // module pool in `~/server/db` points somewhere real; the fixtures themselves
 // connect through E2E_DATABASE_URL.
 const e2eProcessEnvDefaults = {
+  E2E_TEST_USER_EMAIL: "e2e@example.test",
+  E2E_TEST_USER_PASSWORD: "cubby-e2e-local-only",
   DATABASE_URL: "postgresql://postgres:password@localhost:5432/cubby",
   R2_ACCESS_KEY_ID: "e2e",
   R2_SECRET_ACCESS_KEY: "e2e",

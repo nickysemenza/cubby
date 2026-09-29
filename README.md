@@ -259,83 +259,50 @@ Prereqs: **Node** (see [.nvmrc](.nvmrc), currently `v24`), **pnpm** (pinned in [
 # 1. Install
 pnpm install
 
-# 2. Env
-cp apps/web/.env.example apps/web/.env
-# Edit apps/web/.env — see "Environment Variables" below
-
-# 3. Build the WASM shim (one-time, or whenever recipebridge/ changes)
-pnpm run wasm
-
-# 4. Dev server (uses your configured DATABASE_URL)
-pnpm run dev
+# 2. Start the local Worker runtime (prepares WASM, resources, and fixtures)
+pnpm dev
 ```
 
-Database-backed tests start and stop their own services on macOS. For example,
-`pnpm test:file:postgres src/server/repo/vendor.integration.test.ts`
-uses disposable databases, independently of your application's `DATABASE_URL`.
-For optional traces, run `pnpm trace` in another terminal and enable
-`CUBBY_OTEL=1` for the app. Ctrl-C stops Jaeger.
-
-App: <http://localhost:3000> · Jaeger: <http://localhost:16686>
+The default is an offline local session with synthetic data. Startup prints the
+app, login, explorer, inspector, and database URLs; `pnpm dev:status -- --json`
+reports the discovered session. See [local development](docs/local-development.md)
+for persistent fixtures, worktree isolation, integrations, and simulator use.
+Database-backed tests manage their own disposable services independently.
 
 ### Environment Variables
 
-Required keys (see [apps/web/.env.example](apps/web/.env.example) for the full file):
+Local development supplies its own database, Better Auth, and storage values.
+Production `.env` files are not loaded by the local supervisor. These optional
+settings control the local session:
 
-| Key                                                                                              | Purpose                                                                        |
-| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `BETTER_AUTH_SECRET`                                                                             | Auth signing secret                                                            |
-| `DATABASE_URL`                                                                                   | Application PostgreSQL connection; separate from disposable test databases     |
-| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_ENDPOINT` / `R2_BUCKET_NAME` / `R2_PUBLIC_URL` | Image storage                                                                  |
-| `USDA_API_URL`                                                                                   | USDA service URL (defaults to `http://localhost:8787/` for local Wrangler dev) |
-| `UPC_LOOKUP_API_URL` / `UPC_LOOKUP_API_KEY`                                                      | UPC lookup worker                                                              |
-| `NOTION_API_KEY`                                                                                 | _(optional)_ Notion recipes import                                             |
-| `OTEL_EXPORTER_OTLP_ENDPOINT`                                                                    | _(optional)_ OTLP traces → Jaeger (`pnpm trace`; defaults to localhost:4318)   |
+| Key                                                     | Purpose                                                      |
+| ------------------------------------------------------- | ------------------------------------------------------------ |
+| `PORT` / `CUBBY_DEV_INSPECTOR_PORT`                     | Explicit app/inspector ports; occupied explicit ports fail   |
+| `CUBBY_DEV_INSTANCE`                                    | Another isolated instance in the same checkout               |
+| `CUBBY_DEV_SERVICES`                                    | `docker` to use Docker on macOS; otherwise Apple `container` |
+| `CUBBY_DEV_TELEMETRY`                                   | Explicit `true` enables development telemetry                |
+| `CUBBY_DEV_AI_GATEWAY_ID` / `CUBBY_DEV_VECTORIZE_INDEX` | Isolated remote development bindings for `dev:integrations`  |
+| `CUBBY_DEV_AI_GATEWAY_API_KEY`                          | Optional token for the explicit development AI gateway       |
 
-### Local dev database (optional)
+Deployment keys remain documented in [apps/web/.env.example](apps/web/.env.example)
+and `wrangler.jsonc`; production migrations use `PRODUCTION_DIRECT_DATABASE_URL`.
 
-`pnpm run dev` uses whatever `DATABASE_URL` is in `apps/web/.env` — normally
-the shared prod Neon instance (see "⚠ Shared prod DB" below). For iteration
-that shouldn't touch prod, use the persistent local PostgreSQL lane:
+### Local development
 
 ```sh
-pnpm dev:local      # start PostgreSQL, apply migrations, seed if empty, then Vite
-pnpm db:dev:reset  # delete the guarded local volume, then rebuild its corpus
-pnpm db:dev:down    # stop the container (the named volume, and its data, persist)
+pnpm dev                         # HMR in workerd; local PostgreSQL and fixtures
+pnpm dev:status -- --json        # discover the active session
+pnpm dev:doctor -- --json        # check runtime, tools, and database
+pnpm dev:seed recipes            # optional synthetic pack; see the guide
+pnpm dev:sim -- --sim <name>     # simulator against the discovered session
+pnpm dev:down                    # stop this checkout; keep data
+pnpm dev:reset                   # reset this checkout's database and Worker state
 ```
 
-`db:dev:up` is macOS/Apple-`container`-only, matches a fixed name
-(`cubby-dev-pg`) and port (`localhost:55432`), and is idempotent — rerunning
-it reuses the existing container rather than recreating it. `db:dev:migrate` and
-`db:dev:seed` refuse to run against anything but that local database (checked
-by protocol, host, port, user, password, and database). The reset also checks
-the running container's image, published port, environment, and named volume
-before removing it; after `db:dev:down`, run `db:dev:up` before resetting.
-`dev:local` skips corpus seeding when products already exist;
-`db:dev:reset` restores a clean corpus. The persistent database is shared by
-local worktrees.
-`db:dev:migrate` applies the committed migrations (`apps/web/drizzle/`); a
-database built by the retired `db:push` is refused, so rebuild it once with
-`pnpm db:dev:reset`. A branch whose migrations are ahead of main
-sets `CUBBY_DEV_DB_NAME=cubby_dev_<name>` for `dev:local`, `db:dev:migrate`,
-`db:dev:seed`, and `db:dev:reset` to use its own database in the same
-container; reset then drops only that database.
-
-The corpus is created through a local, synthetic-only account
-(`dev@cubby.localhost` / `cubby-dev-local-only`, seeded by the real
-better-auth sign-up flow so its session behaves exactly like a real account —
-never used against the shared deployment) and a deterministic
-(`faker.seed(1)`) set of locations, a product taxonomy, products, inventory,
-a financial account, and tasks. See
-[apps/web/tooling/scenarios/corpus.ts](apps/web/tooling/scenarios/corpus.ts)
-for exactly what it seeds and what it deliberately leaves out (recipes need
-the WASM build; a few Playwright-only scenarios aren't reimplemented
-headlessly).
-
-The Vite-only `/__dev/login` route signs the synthetic user in through Better
-Auth on loopback. For example, open `http://localhost:3000/__dev/login?next=/`.
-It exists only with the guarded local database; the deployed Worker has no
-such route. Browser E2E still uses its API-authenticated storage state.
+The authoritative startup, discovery, fixture, profile, and troubleshooting
+contract is [local development](docs/local-development.md). `dev:local` remains
+an alias for `dev`. Each checkout gets its own stable database and local Worker
+resources; the default offline profile needs no production credentials.
 
 `pnpm test:e2e:local` runs every local-only lane below (headless, photo,
 wardrobe, simulator, simulator layout) one after another with a single web
@@ -428,16 +395,11 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   the same Nx targets as `pnpm check`. Documentation and Rust-only edits do not
   invalidate those two targets. `pnpm lint:fix` and `pnpm format` always execute
   their tools because they edit files. Set `NX_SKIP_NX_CACHE=true` for a live run.
-- **Ports.** The main checkout is always `:3000` (`vite.config.ts` uses `strictPort`,
-  so it fails loudly rather than drifting). Worktree dev servers auto-pick a free
-  port — the preview harness via `autoPort` (injects `PORT`), or a terminal
-  `pnpm dev` via vite's auto-increment.
-- **Previewing a worktree:** in Claude, start with the **worktree folder itself**
-  selected as the project (`<repo>/.claude/worktrees/<name>`) so preview resolves
-  that checkout's `launch.json`. In Codex, start the task in Worktree mode and use
-  the `Web` or `Dev stack` action from the local environment. Any linked worktree
-  without an injected `PORT` auto-picks a free port; the main checkout remains
-  strict on `:3000`.
+- **Local sessions:** `pnpm dev` creates a stable database and Worker resource
+  namespace per checkout. It selects free app and inspector ports unless they
+  were explicit. Use `pnpm dev:status -- --json` or `.cubby-dev/session.json` to
+  discover the active origin. Claude and Codex preview actions run this same
+  supervisor; select the actual worktree as the project.
 - **Test services:** on macOS each independent PostgreSQL/browser command owns
   one Apple PostgreSQL/IntegreSQL pair. `pnpm test:all` runs fast tests first, then
   shares one pair across its concurrent database tiers. Container IPs avoid host
@@ -470,10 +432,9 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   gives each worker its own database, object storage, and Worker harness;
   `CUBBY_E2E_WORKERS=1|2|3|4` overrides its local macOS default of 2. CI and Linux
   default to one browser worker. Multiple pairs share the host's finite CPU and memory.
-- **⚠ Shared prod DB:** every worktree's `DATABASE_URL` is the **same prod Neon**
-  instance (dev DB _is_ prod). Data changes from one worktree are visible
-  everywhere and hit prod; schema changes reach prod only through
-  `db:migrate --target=production` — coordinate them across parallel work.
+- **Production access:** local development uses synthetic data. Explicit
+  production database/MCP work still reaches the shared household and needs the
+  production migration coordination described in [domain rules](docs/agents/domain-rules.md).
 - Editing `recipebridge/` Rust source — or the patched sibling ingredient-parser
   checkout — is picked up automatically on the next `pnpm dev` (see "WASM never
   silently drifts" above); `pnpm run wasm` forces it. Needs the rust toolchain + the
@@ -483,7 +444,7 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 
 | Command                                                          | What it does                                                                     |
 | ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `pnpm run dev`                                                   | Start the web, UPC, and USDA local services                                      |
+| `pnpm run dev`                                                   | Start the local workerd HMR session with isolated persistent resources           |
 | `pnpm run build`                                                 | Build all three production Worker bundles                                        |
 | `pnpm run check`                                                 | Fast full-tree quality, TypeScript, entity freshness, Knip, and high-risk guards |
 | `pnpm run check:all`                                             | `check` plus Worker/OpenAPI, script-test, and security validation                |
@@ -500,8 +461,8 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 | `pnpm run test:local`                                            | Alias of `test:all`                                                              |
 | `pnpm run test:services:down`                                    | Remove warm `CUBBY_TEST_SERVICES=warm` containers                                |
 | `pnpm --filter @cubby/web run test:e2e:watch`                    | Warm services + `vite build --watch` + Playwright `--ui`, local-only             |
-| `pnpm run db:dev:up` / `:migrate` / `:seed` / `:down`            | Persistent local dev PostgreSQL + synthetic corpus (see above)                   |
-| `pnpm run dev:local`                                             | `vite dev` against the local dev database instead of prod                        |
+| `pnpm run db:dev:up` / `:migrate` / `:seed` / `:down`            | Low-level PostgreSQL lifecycle; seed alias uses the live session                 |
+| `pnpm run dev:local`                                             | Alias of `dev`; see the local-development guide                                  |
 | `pnpm run db:generate`                                           | Generate a migration for `schema.ts` + derived-DDL changes (`apps/web/drizzle/`) |
 | `pnpm run db:check`                                              | Prove the migrations carry `schema.ts` and build its exact catalog               |
 | `pnpm --filter @cubby/web run db:migrate -- --target=production` | Apply pending migrations; needs `PRODUCTION_DIRECT_DATABASE_URL`                 |
@@ -552,7 +513,7 @@ Which tier to use, focused-run commands, and the PR merge gate live in the
 
 What deploys where lives in the [Monorepo Layout](#-monorepo-layout) table. This section covers the non-trivial internals of the main app's CF Workers deploy. (`upc-lookup` and `usda-api` are also Cloudflare Workers.)
 
-The dev server is plain Node via `vite dev`. Production = CF Workers.
+Development and production both execute in Cloudflare Workers; development uses Vite HMR with isolated local bindings.
 
 `pnpm run deploy:all` deploys the complete production system in order: web,
 purchase-agent, upc-lookup, then usda-api. It stops at the first failed deploy.
@@ -627,7 +588,7 @@ NULL`, the embedding text hash, the AI fingerprint cache), so duplicate,
   TypeScript; nothing stores them); the problem-count badge is a KV
   snapshot refreshed behind a read once a mutation marks it dirty; abandoned
   uploads are culled on the next presign.
-- **OTel disabled in production** — only runs in dev via `instrument.server.mjs`.
+- **Worker tracing** runs through Cloudflare platform spans; local telemetry is opt-in.
 - Secrets via `wrangler secret put BETTER_AUTH_SECRET` (etc.) — see `wrangler.jsonc` for the full list.
 
 ## 🔐 Authentication

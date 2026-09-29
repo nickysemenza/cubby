@@ -143,9 +143,17 @@ export const auth = betterAuth({
   },
   // The E2E harness intentionally runs the production Worker artifact, where
   // Better Auth otherwise applies its process-local request limit to every
-  // browser context as one local client. This flag is injected only by
-  // e2e-global-setup; production and preview Workers retain rate limiting.
-  rateLimit: { enabled: env.E2E_AUTH_TEST_MODE !== "true" },
+  // browser context as one local client. Production retains rate limiting;
+  // disposable acceptance and the guarded loopback dev profile disable it.
+  rateLimit: {
+    // Sequential fixture packs and simulator login share the synthetic account.
+    enabled:
+      env.E2E_AUTH_TEST_MODE !== "true" &&
+      !(
+        env.NODE_ENV === "development" &&
+        env.BETTER_AUTH_URL?.startsWith("http://localhost:")
+      ),
+  },
   session: {
     // Read session validity from a short-lived signed cookie instead of hitting
     // the DB on every getSession. Removes the serialized session+user lookups

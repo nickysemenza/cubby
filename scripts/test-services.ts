@@ -1,6 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { setTimeout as delay } from "node:timers/promises";
 
 import {
   containerAddress,
@@ -25,7 +24,6 @@ export const WARM_INTEGRESQL_NAME = "cubby-test-integresql";
 interface Options {
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
-  tracing?: boolean;
   warm?: boolean;
 }
 
@@ -48,16 +46,9 @@ export function serviceMode(
 function usesAppleServices(
   env: NodeJS.ProcessEnv,
   platform: NodeJS.Platform,
-  tracing: boolean,
   mode: ServiceMode,
 ): boolean {
-  const managed =
-    tracing || (mode !== "external" && !env.CI && platform === "darwin");
-  if (tracing && platform !== "darwin") {
-    throw new Error(
-      "Use docker compose -p cubby --profile tracing up -d on Linux",
-    );
-  }
+  const managed = mode !== "external" && !env.CI && platform === "darwin";
   if (mode === "warm" && (env.CI || platform !== "darwin")) {
     throw new Error(
       "CUBBY_TEST_SERVICES=warm (or --warm) needs macOS Apple `container` outside CI; use the default mode instead",
@@ -88,19 +79,18 @@ export async function runWithTestServices(
   {
     env = process.env,
     platform = process.platform,
-    tracing = false,
     warm = false,
   }: Options = {},
 ): Promise<number> {
-  if (!tracing && !command.length) {
+  if (!command.length) {
     throw new Error(
       "Usage: node scripts/test-services.ts -- <command> [arguments]",
     );
   }
   const mode = serviceMode(env, warm);
-  const managed = usesAppleServices(env, platform, tracing, mode);
+  const managed = usesAppleServices(env, platform, mode);
   const detachedCommand = managed && platform !== "win32";
-  const isWarm = mode === "warm" && !tracing;
+  const isWarm = mode === "warm";
   const owned: string[] = [];
   const prefix = `cubby-${process.pid}-${randomUUID().slice(0, 8)}`;
   let child: ChildProcess | undefined;
@@ -321,34 +311,6 @@ export async function runWithTestServices(
     };
   }
 
-  async function runTracing(): Promise<number> {
-    await startEphemeral("jaeger", [
-      "--cpus",
-      "1",
-      "--memory",
-      "256M",
-      "--publish",
-      "127.0.0.1:16686:16686",
-      "--publish",
-      "127.0.0.1:4318:4318",
-      "--publish",
-      "127.0.0.1:4317:4317",
-      // Official Docker Hub image: Apple's runtime rejects the cross-domain
-      // auth redirect from cr.jaegertracing.io to auth.docker.io.
-      "docker.io/jaegertracing/jaeger:2.20.0",
-    ]);
-    await waitFor("Jaeger", () => httpReady("http://127.0.0.1:16686"));
-    console.log(
-      "[test-services] Jaeger: http://localhost:16686 — Ctrl-C to stop",
-    );
-    // Signal listeners alone do not keep Node alive while the container is detached.
-    for (;;) {
-      if (interrupted) break;
-      await delay(200);
-    }
-    return 0;
-  }
-
   function runCommand(childEnv: NodeJS.ProcessEnv): Promise<number> {
     checkInterrupted();
     const [executable, ...args] = command;
@@ -369,14 +331,10 @@ export async function runWithTestServices(
   }
 
   try {
-    if (tracing) {
-      exitCode = await runTracing();
-    } else {
-      const childEnv = managed
-        ? { ...env, ...(await startDatabaseServices()) }
-        : env;
-      exitCode = await runCommand(childEnv);
-    }
+    const childEnv = managed
+      ? { ...env, ...(await startDatabaseServices()) }
+      : env;
+    exitCode = await runCommand(childEnv);
   } catch (error) {
     console.error("[test-services]", error);
   } finally {
@@ -407,7 +365,6 @@ if (import.meta.main) {
     process.exitCode = await runWithTestServices(
       rest[0] === "--" ? rest.slice(1) : rest,
       {
-        tracing: rest[0] === "--trace",
         warm,
       },
     ).catch((error) => {

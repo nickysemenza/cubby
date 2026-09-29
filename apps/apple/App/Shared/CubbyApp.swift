@@ -18,23 +18,25 @@ struct CubbyApp: App {
     init() {
         #if DEBUG && os(iOS)
             let e2eURL = Self.e2eServerURL
+            let serverURL = e2eURL ?? Self.devServerURL
             if e2eURL != nil {
                 // A fresh simulator stays a plain viewer without presenting the
                 // first-install companion-work decision over the E2E flow.
                 DeviceParticipation(automaticWork: false, answeredAt: .now).save(to: .standard)
             }
         #else
-            let e2eURL: URL? = nil
+            let serverURL: URL? = nil
         #endif
         // Before anything else so a crash during model setup is still reported.
-        Diagnostics.start(baseURL: e2eURL ?? AppModel.persistedBaseURL)
+        Diagnostics.start(baseURL: serverURL ?? AppModel.persistedBaseURL)
         #if DEBUG && os(iOS)
             let model =
-                e2eURL.map {
+                serverURL.map {
                     AppModel(
                         store: FileSessionTokenStore(
                             fileURL: URL.applicationSupportDirectory.appending(
-                                path: "Cubby/e2e-credentials.json")),
+                                path: e2eURL == nil
+                                    ? "Cubby/dev-credentials.json" : "Cubby/e2e-credentials.json")),
                         baseURL: $0)
                 } ?? AppModel()
         #else
@@ -140,13 +142,37 @@ struct CubbyApp: App {
 
     #if DEBUG && os(iOS)
         private static var e2eServerURL: URL? {
+            serverURL(argument: "--cubby-e2e-server")
+        }
+
+        private static var devServerURL: URL? {
+            let key = "cubby.devServerURL"
+            if let url = serverURL(argument: "--cubby-dev-server") {
+                AppModel.persistBaseURL(url)
+                UserDefaults.standard.set(url.absoluteString, forKey: key)
+                return url
+            }
+            // Settings remains authoritative when the user switches servers.
+            guard let saved = UserDefaults.standard.string(forKey: key),
+                let url = localServerURL(saved), url == AppModel.persistedBaseURL
+            else { return nil }
+            return url
+        }
+
+        private static func serverURL(argument: String) -> URL? {
             let arguments = ProcessInfo.processInfo.arguments
-            guard let index = arguments.firstIndex(of: "--cubby-e2e-server"),
-                arguments.indices.contains(index + 1),
-                let url = URL(string: arguments[index + 1]),
+            guard let index = arguments.firstIndex(of: argument),
+                arguments.indices.contains(index + 1)
+            else { return nil }
+            return localServerURL(arguments[index + 1])
+        }
+
+        private static func localServerURL(_ value: String) -> URL? {
+            guard let url = URL(string: value),
                 url.scheme == "http",
                 ["localhost", "127.0.0.1"].contains(url.host ?? ""),
                 url.port != nil,
+                url.user == nil, url.password == nil,
                 url.path.isEmpty || url.path == "/",
                 url.query == nil,
                 url.fragment == nil
