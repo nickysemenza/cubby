@@ -31,7 +31,7 @@ identifies the migrated surfaces and their remaining domain ports.
   Unknown renderer overrides fail explicitly rather than silently losing fields.
 - Generic MCP inputs reuse canonical mutation schemas. MCP response contracts
   explicitly choose audience-specific projections; specialized tool digests
-  remain separate. The assistant's `get_entities` capability is read-only.
+  remain separate. The assistant's `entity_read` tool is read-only.
 - Semantic editing intents select fields once; shared field construction uses
   those selections. Context-sensitive defaults, access rules, command transforms,
   and editor-specific blank handling remain explicit. Canonical schemas validate

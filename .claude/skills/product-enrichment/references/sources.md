@@ -7,12 +7,12 @@ the whole file.
 ## General
 
 - **Gate every image on both dimensions ≥ 200 px AND ≥ 2,000 bytes**, then
-  `verify_products_images`. Real placeholders seen: a 43-byte 1×1 GIF (legacy
+  `product_enrichment.verify_images`. Real placeholders seen: a 43-byte 1×1 GIF (legacy
   Amazon endpoint), a 60×40 "no image available" GIF, 988×87 / 803×127 banner
   strips (pass a width check), Newegg's 300×146 `not-available` graphic, and a
   shared 1×1 GIF that Whole Foods serves for unphotographed items. Treat the
   floor as a heuristic — a real 186×282 book cover at 19 KB is fine.
-- **`verify_products_images` never decodes the bytes.** It checks R2 existence
+- **`product_enrichment.verify_images` never decodes the bytes.** It checks R2 existence
   and metadata, so a corrupt or fully transparent file passes as verified. When
   correctness matters, download the stored file and look at it. A subagent
   citing the verify tool is not proof.
@@ -35,11 +35,11 @@ the whole file.
   closed). Read the notes for what else the lookup would answer.
 - **An attachment URL fetch is not your browser.** A URL that loads for you
   can 403 the server (kitchenaid.com's image CDN); stage local bytes with
-  `create_file_uploads({items})` and attach its indexed `uploadId` result.
+  `image.create_uploads({items})` and attach its indexed `uploadId` result.
   Conversely `m.media-amazon.com`, `ikea.com`,
   `mobileimages.lowes.com`, `images.thdstatic.com`, Zoro's `og:image` and Shopify
   CDNs all fetch server-side fine.
-- **`entity merge product` carries fields.** The survivor's empty `upc`,
+- **`entity.merge product` carries fields.** The survivor's empty `upc`,
   `price` and `expectedQuantity` are filled from the loser, and the loser's
   image can take cover — so folding a scan-created duplicate onto a clean
   record installs the catalog price as an override that beats the
@@ -99,7 +99,7 @@ the whole file.
   and loose produce and raw meat usually have an Amazon Fresh package photo.
   Books → Open Library by ISBN (watch for undersized thumbnails).
 - **Grocery detail bullets carry a `UPC` row** (`#detailBullets_feature_div`
-  / `#prodDetails`). It is seller-supplied: corroborate with `lookup_upc`
+  / `#prodDetails`). It is seller-supplied: corroborate with `imports_read.upc_lookup`
   (a USDA branded hit under the right brand owner is proof) or the barcode on
   the back-of-bag gallery image. `Item model number` on grocery is the UPC
   again or junk (`Ad-bm6-8005`) — never copy it to `model`.

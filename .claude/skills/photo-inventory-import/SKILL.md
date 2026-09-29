@@ -19,7 +19,7 @@ party. Free-text `notes` gives context such as a location by time window
 
 ## Read the run
 
-Call `get_photo_run_context { runId }` for `ledgerPartyId`, `notes`, and the
+Call `imports_read.photo_context { runId }` for `ledgerPartyId`, `notes`, and the
 run's photos, one page at a time: pass `nextCursor` back as `cursor` until it
 is null. Filter its images to `targetState: "pending"`; the pages are ordered
 by the run's picker `position`, which reflects capture order. Each image
@@ -33,7 +33,7 @@ removal is queued for every image automatically; cutouts appear only while
 image processing is enabled and a paired Apple device is connected, so a
 missing cutout is not an import failure.
 
-Record a legible barcode with `patch_products_external_ids` (`source: "gtin"`,
+Record a legible barcode with `product_enrichment.patch_external_ids` (`source: "gtin"`,
 `kind: "gtin_14"`) so a later order line matches it exactly — see
 [product identity](../product-enrichment/references/product-identity.md).
 
@@ -54,11 +54,11 @@ one as imported.
 Name and match per [product identity](../product-enrichment/references/product-identity.md)
 — its either-side-first contract governs every photo Product: `Brand Model —
 Color, Size`, one Product per exact variant. Before creating, check for an
-existing match — call `suggest_photo_product_candidates` once per distinct
+existing match — call `imports_read.photo_candidates` once per distinct
 item with its observed name and manufacturer. Its results include purchase,
 own-photo, earlier photo-import, and inventory evidence. Compare exact variant
 facts yourself; rank and absence of an own photo are useful leads, not proof.
-Use `resolve_products` or `find_similar_entities` only
+Use `entity_read.resolve` or `search.similar` only
 when the candidate response leaves a concrete identity question unanswered;
 avoid repeating broad catalog reads for every photo of the same item. A
 purchase-created Product without an own photo deserves close inspection even
@@ -79,13 +79,13 @@ it lists the current root/group/type choices and the tag-transcription rules.
 
 ## Propose the groups
 
-Send groups with `propose_photo_groups` `{ runId, groups }` — the same group
-shape `commit_photo_group` takes, minus `runId`, plus optional `evidence`
+Send groups with `photo_run.propose_groups` `{ runId, groups }` — the same group
+shape `photo_run.commit_group` takes, minus `runId`, plus optional `evidence`
 (why these photos are one item and why this Product). Nothing is written to
 Products or Inventory yet: the user reviews and edits groups on the run page,
-then approves one or a selected batch. Approval runs `commit_photo_group` for
+then approves one or a selected batch. Approval runs `photo_run.commit_group` for
 each selected group with its reviewed payload. Call
-`commit_photo_group` directly only when the user explicitly asks to skip
+`photo_run.commit_group` directly only when the user explicitly asks to skip
 review.
 
 Each group: `product` is `{ kind: "existing", existingId }` or
@@ -104,7 +104,7 @@ Use a stable `groupKey` per physical item. Re-proposing a groupKey replaces
 it while it is still `proposed`; `committed`/`discarded` groups are frozen and
 come back in `frozenGroupKeys`; `removeGroupKeys` drops a proposed group.
 Then stop and tell the user the groups are ready to review on the run page.
-Read the outcome with `list_photo_group_proposals`: a group left `proposed`
+Read the outcome with `imports_read.photo_proposals`: a group left `proposed`
 with `conflict` hit an exact case-insensitive name/alias collision (re-propose
 with that `existingId` or a distinctly different name); `lastError` is a
 failed approval to fix and re-propose.
@@ -117,7 +117,7 @@ group with only its own photos needs no reordering.
 
 ## Finish
 
-The run is done once `get_photo_run_context` has no pending images — the
+The run is done once `imports_read.photo_context` has no pending images — the
 approval (or discard) that settles the last pending image marks the run
 `completed` automatically. Report items
 committed, images skipped (with reasons), Products matched vs. created,

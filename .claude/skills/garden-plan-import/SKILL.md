@@ -1,6 +1,6 @@
 ---
 name: garden-plan-import
-description: Turn a seasonal garden plan document (beds, per-bed per-season plantings, a dated work calendar, a shopping list, a plant index with variety/source/seed-stock, grow/skip verdicts, watering/lessons prose) into Cubby Locations, a season Project, Tasks, Plants, and planned Plantings via the MCP entity/entity_batch tools. Use when the user supplies a garden plan, seasonal plan, bed plan, or planting plan and wants it imported or ingested into Cubby.
+description: Turn a seasonal garden plan document (beds, per-bed per-season plantings, a dated work calendar, a shopping list, a plant index with variety/source/seed-stock, grow/skip verdicts, watering/lessons prose) into Cubby Locations, a season Project, Tasks, Plants, and planned Plantings via the MCP entity tool (create and commands actions). Use when the user supplies a garden plan, seasonal plan, bed plan, or planting plan and wants it imported or ingested into Cubby.
 ---
 
 # Import a seasonal garden plan
@@ -35,7 +35,7 @@ Location (bed/planter/area) ──< Planting >── Plant (cultivar/species; ga
   do not decompose narrative into fake records to house it.
 - A `Task` exists for every calendar row and every shopping-list line. A
   planting's `taskId` points at the Task that will do the sowing/transplant,
-  so "what does this plan still ask of me" is always `entity list task
+  so "what does this plan still ask of me" is always `entity_read.list task
 {filters:{projectId}}`.
 - A Planting names its `Plant` (`plantId`), never free-text variety. A Plant
   is one cultivar ("Sun Gold F1") or, with no cultivar, the species
@@ -71,8 +71,8 @@ Location (bed/planter/area) ──< Planting >── Plant (cultivar/species; ga
    entry (variety, source, seed stock) — a partial read produces a partial
    import that reads as complete.
 3. Resolve Locations. Search existing Locations by name before creating any
-   (`entity {action:"list", entity:"location", filters:{search:"..."}}` or
-   `global_search`). Create only what's missing: beds `type: "bed"`, pots/
+   (`entity_read {action:"list", entity:"location", filters:{search:"..."}}` or
+   `search.global`). Create only what's missing: beds `type: "bed"`, pots/
    containers `type: "planter"`, open ground `type: "area"`. Set `type`
    whether or not the Location links a Product (a bought raised bed still
    carries `type: "bed"`) — the Product supplies identity and price, `type`
@@ -83,10 +83,10 @@ Location (bed/planter/area) ──< Planting >── Plant (cultivar/species; ga
    skip-lists in `notes`.
 5. Create a `Task` per calendar row and per shopping-list line, all under
    that Project (`projectId`). Due dates come from the plan's headings.
-   Resolve `subjectProductId` with `resolve_products` when a matching
+   Resolve `subjectProductId` with `entity_read.resolve` (`entity: "product"`) when a matching
    Product already exists; never create one for a not-yet-bought line.
-6. Resolve cultivars in one batch with `resolve_plants`
-   (`{ name, gardenGuideKey?, ingredientName? }[]`). `gardenGuideKey` must be
+6. Resolve cultivars in one batch with `entity.resolve`
+   (`{ entity: "plant", plants: { name, gardenGuideKey?, ingredientName? }[] }`). `gardenGuideKey` must be
    an existing key in `packages/schemas/src/garden-practice.ts`
    (`gardenCropKeys`) — never invent one. Then set on each Plant what the
    plan states: `verdict` from its grow/maybe/skip lists (reason in

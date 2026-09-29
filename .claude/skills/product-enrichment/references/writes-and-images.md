@@ -16,19 +16,19 @@ Before writing, check for a merge candidate: a photo-created Product with a
 matching vendor identity, or a purchase-created Product covering the same
 item, means this Product should converge with the other side rather than be
 enriched as if it stood alone. Confirm through `dataGap:
-product_unpurchased`/`resolve_products` or the server's automatic detector,
-then call `propose_product_match` with evidence (matched identifier,
+product_unpurchased`/`entity_read.resolve` or the server's automatic detector,
+then call `product_enrichment.propose_match` with evidence (matched identifier,
 description, source page) for human review — see [product
 identity](product-identity.md) for the exact-id-vs-descriptive rule.
 Enrichment itself never merges without that human confirmation.
 
-For identifier-only work, each `patch_products_external_ids` item upserts one precise
+For identifier-only work, each `product_enrichment.patch_external_ids` item upserts one precise
 source/kind slot and removes only an explicitly obsolete value with its exact
 `expectedExternalId`; unrelated IDs survive and a changed live slot refuses the
-patch. A full `entity update product` external-ID set is a deliberate complete
+patch. A full `entity.update product` external-ID set is a deliberate complete
 replacement: preserve every intended ID and remove MCP-only timestamps first.
 
-For settled attachments, call `attach_files({items})`; every item supplies an
+For settled attachments, call `image.attach_files({items})`; every item supplies an
 `entityId`, one `url` or `uploadId`, its idempotency key, a `source` (`own`,
 `catalog`, or `unknown` — never omitted), and the freshly read
 `expectedImageCount` for a Product gallery. This count includes all attachments,
@@ -51,7 +51,7 @@ If there is no separate retail/package variant, the listing's UPC remains the
 Product's UPC. Confirm that distinction before treating a standalone listing as
 kit-component evidence.
 
-`verify_products_images` returns the detailed Product per item.
+`product_enrichment.verify_images` returns the detailed Product per item.
 Confirm the previous IDs survived, intended removals are absent, the new image
 has a one-based display position and valid dimensions/MIME/SHA-256, and PDFs or
 failed-integrity files remain non-displayable. Stop and report gallery drift on

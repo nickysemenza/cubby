@@ -646,8 +646,8 @@ Workflow operations are explicit Start functions with no entity business logic i
 the transport adapter. Removing an operation has no deployment shim: a tab loaded
 before that deployment must reload before calling the removed function.
 
-MCP invokes `executeEntity` directly through the `entity` tool and publishes its
-machine-readable contract at `entities://catalog`. The `get_entities` capability
+MCP invokes `executeEntity` directly through the `entity` and `entity_read` tools and publishes its
+machine-readable contract at `entities://catalog`. The `entity_read` tool
 uses the same generated get/list/search contracts with mutation actions excluded
 by its input schema. Workflow-shaped MCP tools remain separate. MCP, jobs, repositories, entity modules, and kernel tests must
 not import browser transport modules. Explicit workflow adapters and typed JSONL
@@ -735,8 +735,8 @@ an `EXISTS` against an aliased related table using that entity's own
 bindings; `list-scaffold.ts` binds the resulting filters and sort for every
 scored entity's list in one place.
 
-Durable "not available" exceptions (`set_data_exception`/
-`clear_data_exception`) live in the `DataException` table, keyed by an
+Durable "not available" exceptions (`data_exception.set`/
+`data_exception.clear`) live in the `DataException` table, keyed by an
 `Entity(id, kind)` FK, for every entity whose declaration sets `exceptions`.
 Enabling it requires fingerprint inputs for every check and an allowed-reason
 list per check (`EXCEPTION_REASONS` in `repo/data-quality/exceptions.ts`). An
@@ -793,7 +793,7 @@ The physical graph is composed at read time from `ENTITY_EDGES` and
 `ENTITY_EDGE_OWNERS` (`repo/entity-edge-source.ts`): `(edgeKey, sourceKind,
 sourceId, targetKind, targetId)` with both ends live. It backs the Relations
 tab's Connections, the impact preview, the graph explorer's physical edges,
-the Problems orphan finder, and MCP `get_entity_connections`. Writes never go
+the Problems orphan finder, and MCP `entity_read.connections`. Writes never go
 through it.
 
 ## Product classification and photos

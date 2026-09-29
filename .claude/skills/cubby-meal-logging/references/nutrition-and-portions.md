@@ -13,7 +13,7 @@ revised retroactively, name the Product for that particular meal/date and use
 explicit `labelNutrition`. Nutrient-free items need a serving mass and all-zero
 macros, rather than `usdaUnavailable`, to clear recipe coverage.
 
-`explain_recipe_costing` identifies missing price, weight, and nutrients. A
+`recipe_insights.costing` identifies missing price, weight, and nutrients. A
 price per `each` needs mappings all the way from the recipe unit: `1 scoop = 5
 g` is insufficient without the package mapping such as `1 each = 500 g`.
 Volume units likewise need a path to grams. Persisted totals recompute on the
@@ -25,7 +25,7 @@ ingredient quantities and the batch yield proportionally before recording a
 second share. Ask when an unknown yield is material; otherwise keep the yield
 explicitly estimated.
 
-`add_recipe_to_meal` returns its `mealRecipeId`; retain that occurrence
+`meal_recipe.add` returns its `mealRecipeId`; retain that occurrence
 handle, because adding the join alone does not log intake. Save each eater's
 preparation against that join. A single-eater recipe built to the plate has
 `actualYieldGrams` equal to `grams`. Use `estimatedYieldGrams` rather than

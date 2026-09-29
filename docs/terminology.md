@@ -397,7 +397,7 @@ Three verbs that all _bring data in_ but mean different things:
 - **Import** — pulling a _recipe_ in from an external source and converting it
   into Cubby's shape (`ImportRecipe → RecipeCreateInput`, then upsert). Sources
   are tagged via `Recipe.SourceType` (the `RecipeSource` enum) — see below.
-  Code: `import-recipe-convert.ts`, `upsertImportRecipe`, the `import_recipe`
+  Code: `import-recipe-convert.ts`, `upsertImportRecipe`, the `recipe_import.import`
   MCP tool.
 - **Enrich** — the optional **service layer** augmenting an entity with derived
   / external data _after_ it exists (the architecture's

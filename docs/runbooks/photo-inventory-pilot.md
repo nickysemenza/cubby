@@ -13,7 +13,7 @@ in the real member, closets, and taxonomy gaps for an actual run.
 2. Create person-scoped closet/dresser Locations for them (e.g. "Jordan's
    closet", "Jordan's dresser") — inventory in step 5 needs a real location
    to receive into.
-3. Expand the Apparel taxonomy with one `entity_batch` call covering the gaps
+3. Expand the Apparel taxonomy with one `entity.commands` call covering the gaps
    in [the apparel reference](../../.claude/skills/photo-inventory-import/references/apparel.md)
    (Loafers, Dress shoes, Slippers, and the rest of the Clothes list), then
    re-file any root-level `Apparel` Products into their new types — a Product
@@ -24,7 +24,7 @@ in the real member, closets, and taxonomy gaps for an actual run.
    location-by-time-window (e.g. "9:15–9:40am: primary closet; 9:40–10:05am:
    hallway dresser").
 5. Have an agent work the run with the `photo-inventory-import` skill: it
-   proposes groups with `propose_photo_groups` and stops. Review them on the
+   proposes groups with `photo_run.propose_groups` and stops. Review them on the
    run page (`/runs/RUN-…`) — move, split, or merge photos, fix
    item/label, pick an existing Product, then approve or discard — until
    `targetState: ["pending"]` returns nothing for that run. Cutouts appear only

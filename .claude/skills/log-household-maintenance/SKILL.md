@@ -16,10 +16,10 @@ Keep the maintenance record, product identity, and inventory receipt separate.
 3. Resolve the durable Product by exact identity before linking
    `subjectProductId`. A cover, filter, cleaner, or accessory is not the
    maintained subject. Create a Product only when identity and ownership are
-   established; use one complete `entity` create and do not invent identifiers,
+   established; use one complete `entity.create` and do not invent identifiers,
    price, or model.
 4. Resolve all dependencies, then send independent Task creates or updates in
-   one `entity_batch`; inspect every ordered result and retry only failed items.
+   one `entity.commands`; inspect every ordered result and retry only failed items.
    Use `other` for general cleaning and `appliances` for appliance upkeep when
    no closer trade is known.
 5. Receive or move Inventory only when the user explicitly asks to inventory or
