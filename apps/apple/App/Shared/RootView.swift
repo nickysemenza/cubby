@@ -17,6 +17,15 @@ struct RootView: View {
 
     @ViewBuilder
     private var content: some View {
+        if model.requestTrace.clientUpdateRequired {
+            UpdateRequiredView()
+        } else {
+            phaseContent
+        }
+    }
+
+    @ViewBuilder
+    private var phaseContent: some View {
         switch model.phase {
         case .restoring:
             VStack(spacing: FieldGuideTokens.Space.md) {
