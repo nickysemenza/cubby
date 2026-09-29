@@ -18,7 +18,11 @@ test("copy last week plans the previous week's meals into the week shown", async
   await gotoAuthenticatedPage(page, NEXT_WEEK);
   await expect(mealChip).toHaveCount(0);
   await page.getByRole("button", { name: "Copy last week" }).click();
-  await expect(page.getByText("Copied 1 meal from last week")).toBeVisible();
+  // Other specs in this worker's database plan meals on the same fixture
+  // date, so the copied total varies; this spec's own chip is the assertion.
+  await expect(
+    page.getByText(/^Copied \d+ meals? from last week$/),
+  ).toBeVisible();
   await expect(mealChip).toHaveCount(1);
 
   // Copies append rather than replace: a second copy adds a second plan.
