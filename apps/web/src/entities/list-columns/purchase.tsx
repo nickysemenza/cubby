@@ -1,5 +1,4 @@
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
-import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 
 import {
@@ -17,16 +16,14 @@ import { FinancialSettlementCell } from "~/app/purchases/financial-settlement";
 import { ReconciliationStatus } from "~/app/purchases/purchase-reconciliation";
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { VendorCell } from "~/components/entity/vendor-cell";
-import { Grid, Row } from "~/components/layout";
+import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
-import { StatTile } from "~/components/ui/stat-tile";
 import { entityListHiddenColumns } from "~/entities/entity-display";
 import {
   labeledFieldProvenance,
   relationshipFieldProvenance,
 } from "~/entities/field-provenance";
-import { formatCurrency } from "~/lib/utils";
 
 import { defineListOverride, interleaveDeclared } from "./types";
 
@@ -38,38 +35,6 @@ const PURCHASE_INITIAL_COLUMN_VISIBILITY = {
   dataGaps: false,
   ...entityListHiddenColumns("purchase"),
 };
-
-/**
- * Loaded-pages figures, labelled as such: there is no purchase-side analytics
- * procedure for the full filtered set (the ledger's totals live on
- * `expense.analytics`), so these summarize what is on screen.
- */
-function PurchaseStats({
-  data,
-  totalCount,
-}: {
-  data: PurchaseOut[];
-  totalCount: number | undefined;
-}) {
-  const loadedTotal = useMemo(
-    () => sumBy(data, (row) => row.expenseTotal),
-    [data],
-  );
-  const loadedExpenses = useMemo(
-    () => sumBy(data, (row) => row.expenseCount),
-    [data],
-  );
-  return (
-    <Grid cols="summary" className="mb-4">
-      <StatTile label="Purchases">{totalCount ?? 0}</StatTile>
-      <StatTile label="Shown">{data.length}</StatTile>
-      <StatTile label="Expenses (shown)">{loadedExpenses}</StatTile>
-      <StatTile label="Spend (shown)">
-        {formatCurrency(loadedTotal, 0)}
-      </StatTile>
-    </Grid>
-  );
-}
 
 /**
  * The two totals split on purpose: `statedTotal` is what the paperwork
@@ -281,9 +246,6 @@ export const purchaseListOverride = defineListOverride<
       overrides,
       compose,
       list,
-      above: ({ data, totalCount }) => (
-        <PurchaseStats data={data} totalCount={totalCount} />
-      ),
     };
   },
 });

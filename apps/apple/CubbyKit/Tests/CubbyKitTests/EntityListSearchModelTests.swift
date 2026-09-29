@@ -134,10 +134,35 @@ struct EntityListSearchModelTests {
         #expect(model.phase == .loaded)
         #expect(model.rows.map(\.title) == ["original"])
         #expect(model.refreshError == "failed")
+        #expect(model.meta != nil)
+        #expect(model.summaryMeta == nil)
 
         await model.refresh()
         #expect(model.rows.map(\.title) == ["refreshed"])
         #expect(model.refreshError == nil)
+        #expect(model.summaryMeta != nil)
+    }
+
+    @Test func changedFilterLoaderDoesNotKeepPreviousTotals() async {
+        let model = EntityListSearchModel(
+            debounceNanoseconds: 1,
+            sleeper: { _ in },
+            loader: { _, _ in
+                ListPage(
+                    items: [Self.row("old")],
+                    meta: ListPageMeta(
+                        pageIndex: 1, pageSize: 25, totalCount: 1,
+                        sums: .init(additionalProperties: ["price": 25])))
+            })
+        model.setQuery("sample")
+        #expect(await waitUntil { model.phase == .loaded })
+        #expect(model.meta?.sums?.additionalProperties["price"] == 25)
+
+        model.setLoader { _, _ in throw TestFailure.failed }
+        #expect(await waitUntil { model.phase == .failed("failed") })
+
+        #expect(model.rows.map(\.title) == ["old"])
+        #expect(model.meta == nil)
     }
 
     private nonisolated static func row(_ title: String) -> EntityRow {

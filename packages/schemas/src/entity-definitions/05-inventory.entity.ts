@@ -39,6 +39,14 @@ export default defineEntity({
     icons: { phosphor: "Package", sfSymbol: "cube.box", emoji: "🗃️" },
     detail: {},
     list: {
+      totalOverrides: [
+        {
+          id: "valuation",
+          label: "Valuation",
+          keys: ["valuation"],
+          format: "currency",
+        },
+      ],
       actionOverrides: ["moveTo", "delete"],
       links: [
         { label: "Recount", path: "/inventory/session" },

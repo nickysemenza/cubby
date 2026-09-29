@@ -469,14 +469,13 @@ export const vendorList = async (
 ): Promise<{
   data: VendorOut[];
   count: number;
-  sums: { spend: number; purchaseCount: number };
+  sums?: { spend: number; purchaseCount: number };
 }> => {
   const whereClause = buildVendorWhereClause(filters);
   if (readIntent === "count") {
     return {
       data: [],
       count: await countWhere(db, vendor, whereClause),
-      sums: { spend: 0, purchaseCount: 0 },
     };
   }
   const { take, skip } = vendorScaffold.page(pagination);
@@ -526,10 +525,13 @@ export const vendorList = async (
     // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
     data: rows.map((row) => dbVendorToAPI(row, dataQualities.get(row.id)!)),
     count,
-    sums: {
-      spend: Number(totals?.spend ?? 0),
-      purchaseCount: Number(totals?.purchaseCount ?? 0),
-    },
+    sums:
+      readIntent === "page"
+        ? {
+            spend: Number(totals?.spend ?? 0),
+            purchaseCount: Number(totals?.purchaseCount ?? 0),
+          }
+        : undefined,
   };
 };
 

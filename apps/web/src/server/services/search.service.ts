@@ -91,13 +91,15 @@ const withThumbnails = async (
   db: Database,
   candidates: InternalSearchCandidate[],
 ): Promise<SearchHit[]> => {
-  const images = await hydrateThumbnails(db, candidates);
-  const paths = await loadLocationAncestors(
-    db,
-    candidates
-      .filter((candidate) => candidate.entityKind === "location")
-      .map((candidate) => parseEntityId("location", candidate.entityId)),
-  );
+  const [images, paths] = await Promise.all([
+    hydrateThumbnails(db, candidates),
+    loadLocationAncestors(
+      db,
+      candidates
+        .filter((candidate) => candidate.entityKind === "location")
+        .map((candidate) => parseEntityId("location", candidate.entityId)),
+    ),
+  ]);
   return candidates.map(({ entityId, ...candidate }) => ({
     ...candidate,
     imageUrl: images.get(entityRefKey(candidate.entityKind, entityId)) ?? null,

@@ -72,6 +72,14 @@ export default defineEntity({
       ],
     },
     list: {
+      totalOverrides: [
+        {
+          id: "cost",
+          label: "Ledger cost",
+          keys: ["cost"],
+          format: "currency",
+        },
+      ],
       viewOverrides: [
         "table",
         {

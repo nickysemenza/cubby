@@ -451,16 +451,17 @@ describe("expense workflow", () => {
           ctx.actor,
         ),
       ]);
-      for (const [name, projectId] of [
-        ["has a project", projA.id],
-        ["other project", projB.id],
-        ["needs a project", undefined],
+      for (const [name, projectId, cost] of [
+        ["has a project", projA.id, 10],
+        ["other project", projB.id, 20],
+        ["needs a project", undefined, -3],
       ] as const) {
         const input: ExpenseCreateSeed = {
           date: "2024-01-15",
           trade: "drywall",
           costType: "tools",
           name,
+          cost,
         };
         if (projectId !== undefined) input.projectId = projectId;
         await createExpense(ctx.db, expenseCreateInput.parse(input), ctx.actor);
@@ -488,6 +489,15 @@ describe("expense workflow", () => {
         listed.data.reduce((sum, p) => sum + (p.cost ?? 0), 0),
         2,
       );
+      expect(listed.sums).toEqual({ cost: 7 });
+      const counted = await expenseList(
+        ctx.db,
+        filters,
+        [],
+        { pageIndex: 0, pageSize: 500 },
+        "count",
+      );
+      expect(counted).not.toHaveProperty("sums");
     });
 
     // CUBBY-11R: the relational list leg threw `invalid reference to

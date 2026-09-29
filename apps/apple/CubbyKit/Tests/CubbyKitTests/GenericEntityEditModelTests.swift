@@ -198,7 +198,7 @@ struct GenericEntityEditModelTests {
             presentation: EntityPresentation(
                 detailVariant: .standard, heroChip: nil, heroStats: [], heroBreadcrumb: nil,
                 heroImages: false, heroActions: [], detailSections: [], connectedViews: [],
-                listViews: [], shelfSubtitle: [],
+                listViews: [], listTotals: [], shelfSubtitle: [],
                 listActions: [], timelineFields: [], lifecycle: nil, editSections: nil,
                 readOnlyOnUpdate: readOnlyOnUpdate, readOnlyWhen: readOnlyWhen))
     }

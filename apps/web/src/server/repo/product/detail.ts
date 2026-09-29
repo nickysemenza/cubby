@@ -132,7 +132,7 @@ export async function readProductDetail(
         : Promise.resolve(null);
     },
   );
-  const pricing = await observeOperationPhase(
+  const pricingPromise = observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
     "pricing",
     async () => {
@@ -143,7 +143,7 @@ export async function readProductDetail(
       return pricing;
     },
   );
-  const quantityLedger = await observeOperationPhase(
+  const quantityPromise = observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
     "quantity",
     async () => {
@@ -153,19 +153,21 @@ export async function readProductDetail(
       return quantities.get(row.id) ?? EMPTY_QUANTITY_LEDGER;
     },
   );
-  const breadcrumbed = await observeOperationPhase(
+  const breadcrumbPromise = observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
     "breadcrumbs",
-    () =>
-      enrichProductRowsWithInventoryValuations(context.db, [row])
-        .then((valued) =>
-          hydrateProductLocationBreadcrumbs(context.db, [
-            { ...valued[0]!, quantityLedger },
-          ]),
-        )
-        .then((rows) => rows[0]!),
+    async () => {
+      const [valued, quantityLedger] = await Promise.all([
+        enrichProductRowsWithInventoryValuations(context.db, [row]),
+        quantityPromise,
+      ]);
+      const rows = await hydrateProductLocationBreadcrumbs(context.db, [
+        { ...valued[0]!, quantityLedger },
+      ]);
+      return rows[0]!;
+    },
   );
-  const dataQuality = await observeOperationPhase(
+  const dataQualityPromise = observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
     "quality",
     async () => {
@@ -181,15 +183,16 @@ export async function readProductDetail(
   // "entity.detail" is a closed list (`entity-detail.ts`) this repo
   // module doesn't own, so this batched lookup rides alongside the "quality"
   // phase's timing instead of minting a new one.
-  const coverImageUrl =
-    (await getProductCoverImageUrlsByProductIds(context.db, [row.id])).get(
-      row.id,
-    ) ?? null;
-  const analysisSummaries = await loadImageAnalysisSummaries(
-    context.db,
-    productImageShortcodesOf(breadcrumbed.images),
+  const coverPromise = getProductCoverImageUrlsByProductIds(context.db, [
+    row.id,
+  ]);
+  const analysisPromise = breadcrumbPromise.then((breadcrumbed) =>
+    loadImageAnalysisSummaries(
+      context.db,
+      productImageShortcodesOf(breadcrumbed.images),
+    ),
   );
-  const recipe = await observeOperationPhase(
+  const recipePromise = observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
     "recipe_usages",
     () =>
@@ -197,7 +200,26 @@ export async function readProductDetail(
         ? getRecipeUsagesForIngredient(context.db, row.ingredient.id)
         : Promise.resolve(emptyRecipeUsages),
   );
-  const food = await foodPromise;
+  const [
+    pricing,
+    quantityLedger,
+    breadcrumbed,
+    dataQuality,
+    covers,
+    analysisSummaries,
+    recipe,
+    food,
+  ] = await Promise.all([
+    pricingPromise,
+    quantityPromise,
+    breadcrumbPromise,
+    dataQualityPromise,
+    coverPromise,
+    analysisPromise,
+    recipePromise,
+    foodPromise,
+  ]);
+  const coverImageUrl = covers.get(row.id) ?? null;
 
   const mapped = dbProductToAPI(
     {

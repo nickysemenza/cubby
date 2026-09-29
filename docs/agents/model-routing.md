@@ -29,8 +29,8 @@ is host state; these supported pairs are the Cubby routing contract.
 | -------------------------------------------------------- | ------------------------ | --------------- |
 | Targeted search, log extraction, mechanical sanitization | `gpt-6-luna` / low       | haiku / low     |
 | Bounded implementation, focused tests, docs restructure  | `gpt-5.6-terra` / medium | sonnet / medium |
-| Hard diagnosis, cross-subsystem work                     | `gpt-6-sol` / high       | opus / medium   |
-| Independent broad or high-risk review                    | `gpt-6-sol` / high       | opus / high     |
+| Hard diagnosis, cross-subsystem work                     | `gpt-6.1-sol` / high     | opus / medium   |
+| Independent broad or high-risk review                    | `gpt-6.1-sol` / high     | opus / high     |
 
 Search and extraction lanes run at low effort; diagnosis and review lanes
 start at their table effort. Escalate when evidence conflicts or

@@ -1,10 +1,10 @@
 import { expenseCreateInput } from "@cubby/schemas/project";
-import { and, inArray } from "drizzle-orm";
+import { and, inArray, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { product } from "~/server/db/schema";
-import { notDeleted } from "~/server/repo/database-helpers";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { createExpense } from "~/server/repo/expense";
 import { createIngredient } from "~/server/repo/ingredient";
 import { attachProductComponents } from "~/server/repo/product-components";
@@ -16,7 +16,8 @@ import {
 } from "~/server/repo/repo.fixtures";
 
 import { productList } from ".";
-import { loadProductPriceSum } from "./pricing";
+import { loadProductPriceSum, loadProductPricing } from "./pricing";
+import { loadProductQuantityLedgers } from "./quantity-ledger";
 
 /**
  * `ingredientIdFilter` (the SKU's own ingredient) and `growsPlantIdFilter`
@@ -172,6 +173,114 @@ describe("product list price footer", () => {
       pageSize: 2,
     });
     expect(page.data).toHaveLength(2);
-    expect(page.sums.price).toBeCloseTo(159.99, 2);
+    expect(page.sums!.price).toBeCloseTo(159.99, 2);
+  });
+
+  it("keeps nested kit shares, own counts, overrides, refunds, and live siblings aligned across batch reads and the footer", async () => {
+    const [outer, inner, leaf, other, sibling] = await Promise.all([
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Outer kit" }),
+        ctx.actor,
+      ),
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Inner kit" }),
+        ctx.actor,
+      ),
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Leaf" }),
+        ctx.actor,
+      ),
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Other leaf", price: 2.25 }),
+        ctx.actor,
+      ),
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Sibling" }),
+        ctx.actor,
+      ),
+    ]);
+    await attachProductComponents(
+      ctx.db,
+      outer.entityId,
+      [
+        { productId: inner.entityId, quantity: 2 },
+        { productId: sibling.entityId, quantity: 1 },
+      ],
+      ctx.actor,
+    );
+    await attachProductComponents(
+      ctx.db,
+      inner.entityId,
+      [
+        { productId: leaf.entityId, quantity: 3 },
+        { productId: other.entityId, quantity: 1 },
+      ],
+      ctx.actor,
+    );
+    for (const [name, productId, cost, productQuantity] of [
+      ["Outer acquisition", outer.id, 90, 1],
+      ["Inner acquisition", inner.id, 30, 1],
+      ["Unknown leaf acquisition", leaf.id, 10, null],
+      ["Leaf refund", leaf.id, -5, -1],
+    ] as const) {
+      await createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({
+            name,
+            productId,
+            cost,
+            productQuantity,
+          }),
+        ),
+        ctx.actor,
+      );
+    }
+
+    const products = [outer, inner, leaf, other, sibling].map(
+      ({ entityId, id }) => ({
+        id: entityId,
+        price: id === other.id ? 2.25 : null,
+      }),
+    );
+    const before = await loadProductPricing(ctx.db, products);
+    const ledger = await loadProductQuantityLedgers(
+      ctx.db,
+      products.map(({ id }) => id),
+    );
+    expect(before.get(leaf.entityId)).toMatchObject({
+      derivedPrice: 7.5,
+      effectivePrice: 7.5,
+      knownExpenseCount: 0,
+      unknownExpenseCount: 1,
+      knownUnitCount: 9,
+    });
+    expect(before.get(other.entityId)).toMatchObject({
+      derivedPrice: 7.5,
+      effectivePrice: 2.25,
+      source: "explicit",
+    });
+    expect(ledger.get(leaf.entityId)?.expectedQuantity).toBe(8);
+
+    const filtered = and(
+      inArray(product.id, [leaf.entityId, other.entityId]),
+      notDeleted(product),
+    );
+    expect(await loadProductPriceSum(ctx.db, filtered)).toBeCloseTo(9.75, 2);
+
+    await getDb(ctx.db).execute(sql`UPDATE "EntityLink"
+      SET "deletedAt" = now()
+      WHERE "kind" = 'productComponent'
+        AND "fromEntityId" = ${outer.entityId}
+        AND "toEntityId" = ${sibling.entityId}`);
+    const after = await loadProductPricing(ctx.db, products);
+    expect(after.get(leaf.entityId)?.derivedPrice).toBe(10);
+    expect(after.get(other.entityId)?.effectivePrice).toBe(2.25);
+    expect(await loadProductPriceSum(ctx.db, filtered)).toBeCloseTo(12.25, 2);
   });
 });

@@ -3,6 +3,7 @@ import { testUserId } from "@cubby/schemas/testing";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { Database } from "~/server/db";
+import { readPolicyFor } from "~/server/read-policy";
 import {
   requireActor,
   selectOperationContext,
@@ -49,6 +50,29 @@ beforeEach(() => {
 });
 
 describe("shared database freshness operation routing", () => {
+  it("ordinary interactive reads never wait for the freshness service", async () => {
+    const context = authenticatedContext("api", "interactive");
+    const unavailable: DatabaseReadRouting = {
+      cachedDb: boundedStaleDb,
+      readFreshness: async () => {
+        throw new Error("freshness service must not be contacted");
+      },
+    };
+    for (const operation of [
+      "entity.list",
+      "entity.detail",
+      "search.global",
+      "expense.analytics",
+      "task.board",
+    ] as const) {
+      const selected = await selectOperationContext(
+        context,
+        readPolicyFor(operation, "query"),
+        unavailable,
+      );
+      expect(selected.db).toBe(db);
+    }
+  });
   it("uses cached reads before a write, then makes every household caller strong until expiry", async () => {
     const ui = authenticatedContext("web", "ui");
     const api = authenticatedContext("api", "api");

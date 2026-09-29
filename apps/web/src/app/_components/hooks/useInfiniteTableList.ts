@@ -270,7 +270,7 @@ export function useInfiniteTableList<
   return {
     data,
     totalCount,
-    sums,
+    sums: isPlaceholderData ? undefined : sums,
     groups,
     isLoading,
     error: error instanceof Error ? error : null,

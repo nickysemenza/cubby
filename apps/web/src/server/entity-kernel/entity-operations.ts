@@ -14,7 +14,6 @@ import {
   normalizeSorts,
   type PaginationParams,
 } from "@cubby/schemas/pagination";
-import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
 import { deferPublications } from "~/server/background-tasks/publish";
@@ -58,60 +57,6 @@ type EntityListInput<TFilters = unknown> = {
     | { orderBy: string; direction: "asc" | "desc" }[];
   pagination?: PaginationParams;
   groupBy?: string;
-};
-
-const LIST_ID_SCAN_PAGE_SIZE = 100;
-
-/**
- * `filters.ids` is an MCP-wide shortcode intersection, not a domain filter.
- * Keep repositories unaware of transport-only syntax while preserving their
- * own filtering and sort order. The bounded scan runs only when ids are
- * supplied and pages the repository rather than requesting an unbounded read.
- */
-const listRestrictedToIds = async <
-  E extends EntityKernelEntity,
-  S extends EntityBindingSchemas,
->(
-  binding: EntityKernelCoreBinding<E, S>,
-  context: EntityKernelContext,
-  filters: z.output<S["filters"]>,
-  sorts: ReturnType<typeof parseSorts<E, S>>,
-  groupBy: string | undefined,
-  requested: PaginationParams,
-  ids: readonly string[],
-) => {
-  // Codes are accepted in any casing (`parseShortcode` canonicalizes).
-  const wanted = new Set(ids.map((id) => parseShortcode(id)?.shortcode ?? id));
-  // A repository on the list scaffold applies `ids` itself, so the scan
-  // below reads one page; any other still pages its own rows.
-  const restriction = { ids: [...wanted] };
-  const restricted = Object.assign({}, filters, restriction);
-  const matching: z.output<S["repositoryList"]>[] = [];
-  let pageIndex = 0;
-  let totalCount = 0;
-  do {
-    const page = await binding.repository.list(
-      context,
-      restricted,
-      sorts,
-      { pageIndex, pageSize: LIST_ID_SCAN_PAGE_SIZE },
-      groupBy,
-    );
-    totalCount = page.count;
-    matching.push(
-      ...page.data.filter((item) => {
-        const { id } = z.object({ id: z.string() }).parse(item);
-        return wanted.has(id);
-      }),
-    );
-    pageIndex += 1;
-  } while (pageIndex * LIST_ID_SCAN_PAGE_SIZE < totalCount);
-
-  const start = requested.pageIndex * requested.pageSize;
-  return {
-    data: matching.slice(start, start + requested.pageSize),
-    count: matching.length,
-  };
 };
 
 const DEFAULT_PAGINATION: PaginationParams = { pageIndex: 0, pageSize: 10 };
@@ -391,23 +336,17 @@ export const defineEntityOperations = <
         };
       })
       .call("page", async ({ context }, { validated }) => {
-        return validated.ids
-          ? listRestrictedToIds(
-              binding,
-              context,
-              validated.filters,
-              validated.sorts,
-              validated.groupBy,
-              validated.pagination,
-              validated.ids,
-            )
-          : binding.repository.list(
-              context,
-              validated.filters,
-              validated.sorts,
-              validated.pagination,
-              validated.groupBy,
-            );
+        return binding.repository.list(
+          context,
+          Object.assign(
+            {},
+            validated.filters,
+            validated.ids === undefined ? {} : { ids: validated.ids },
+          ),
+          validated.sorts,
+          validated.pagination,
+          validated.groupBy,
+        );
       })
       .call("mediaPage", async ({ context }, { page }) => ({
         ...page,

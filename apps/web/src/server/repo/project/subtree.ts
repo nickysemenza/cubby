@@ -310,6 +310,8 @@ export function aggregateSubtreeDates(
 /** The whole live project tree in the three shapes callers read it in. */
 export type ProjectTree = {
   allRows: ProjectParentRow[];
+  rowsById: ReadonlyMap<ProjectId, ProjectParentRow>;
+  rowsByShortcode: ReadonlyMap<string, ProjectParentRow>;
   childrenByParent: Map<ProjectId, ProjectId[]>;
   nameById: Map<ProjectId, string>;
   shortcodeById: Map<ProjectId, string>;
@@ -348,6 +350,8 @@ export async function loadProjectTree(db: Database): Promise<ProjectTree> {
   const allRows = await allProjectParentRows(db);
   return {
     allRows,
+    rowsById: new Map(allRows.map((row) => [row.id, row])),
+    rowsByShortcode: new Map(allRows.map((row) => [row.shortcode, row])),
     childrenByParent: buildChildrenMap(allRows),
     nameById: new Map(allRows.map((r) => [r.id, r.name])),
     shortcodeById: new Map(allRows.map((r) => [r.id, r.shortcode])),

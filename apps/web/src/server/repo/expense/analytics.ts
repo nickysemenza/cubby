@@ -81,8 +81,10 @@ export async function expenseMonthlySummary(
   db: Database,
   filters: ExpenseFilters,
 ): Promise<ExpenseMonthlySummaryOut> {
-  const whereClause = await buildExpenseWhereClause(db, filters);
   const projectScope = await resolveExpenseProjectAllocationScope(db, filters);
+  const whereClause = await buildExpenseWhereClause(db, filters, {
+    projectScope,
+  });
   const aggregate = aggregateForCost(analyticsCost(projectScope));
   const datedWhereClause = and(whereClause, isNotNull(expense.date));
   return await getDb(db)
@@ -97,8 +99,10 @@ export async function expenseAnalytics(
   db: Database,
   filters: ExpenseFilters,
 ): Promise<ExpenseAnalyticsOut> {
-  const whereClause = await buildExpenseWhereClause(db, filters);
   const projectScope = await resolveExpenseProjectAllocationScope(db, filters);
+  const whereClause = await buildExpenseWhereClause(db, filters, {
+    projectScope,
+  });
   const aggregate = aggregateForCost(analyticsCost(projectScope));
   const principalWhereClause = and(
     whereClause,

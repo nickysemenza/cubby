@@ -93,6 +93,14 @@ export default defineEntity({
       ],
     },
     list: {
+      totalOverrides: [
+        {
+          id: "costEstimate",
+          label: "Estimates",
+          keys: ["costEstimate"],
+          format: "currency",
+        },
+      ],
       viewOverrides: [
         "table",
         {

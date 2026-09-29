@@ -324,6 +324,10 @@ const listSearchSchema = z
 const listIdsSchema = z
   .object({ ids: z.array(z.string()).optional() })
   .passthrough();
+/** Shared by scaffold lists and repositories with a custom WHERE builder. */
+export const listIdsCondition = (shortcode: AnyColumn, filters: unknown) =>
+  shortcodeSetCondition(sql`${shortcode}`, listIdsSchema.parse(filters).ids);
+
 const searchQueryFromFilters = <Filters extends object>(
   filters: Filters | undefined,
 ) => listSearchSchema.parse(filters ?? {}).searchQuery;
@@ -371,10 +375,7 @@ export function listScaffold<
           // `<prefix>PresenceFilter`, `<prefix>Search`) for every list.
           ...relatedWhereConditions(entity, filters, table.id),
           // The kernel's `filters.ids` restriction, by canonical shortcode.
-          shortcodeSetCondition(
-            sql`${table.shortcode}`,
-            listIdsSchema.parse(filters).ids,
-          ),
+          listIdsCondition(table.shortcode, filters),
           ...(searchable
             ? [
                 lexicalEligibility(

@@ -37,7 +37,17 @@ export default defineEntity({
         },
       ],
     },
-    list: { actionOverrides: ["markPurchased", "delete"] },
+    list: {
+      actionOverrides: ["markPurchased", "delete"],
+      totalOverrides: [
+        {
+          id: "priceRange",
+          label: "Price range",
+          keys: ["priceLow", "priceHigh"],
+          format: "currencyRange",
+        },
+      ],
+    },
   },
   model: {
     fields: [

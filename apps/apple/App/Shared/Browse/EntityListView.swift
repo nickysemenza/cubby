@@ -375,19 +375,24 @@ struct EntityListView: View {
                     Button("Retry") { Task { await model.loadInitial() } }
                 }
             case .loaded:
-                ContentUnavailableView {
-                    Label(
-                        model.filters.isEmpty
-                            ? "No \(descriptor.plural) yet" : "No matching \(descriptor.plural)",
-                        systemImage: entitySymbol(for: key))
-                } actions: {
-                    if !model.filters.isEmpty {
-                        Button("Clear filters") { Task { await model.apply(filters: EntityFilterState()) } }
+                VStack {
+                    if let meta = model.summaryMeta { listSummary(meta: meta, shown: 0) }
+                    ContentUnavailableView {
+                        Label(
+                            model.filters.isEmpty
+                                ? "No \(descriptor.plural) yet" : "No matching \(descriptor.plural)",
+                            systemImage: entitySymbol(for: key))
+                    } actions: {
+                        if !model.filters.isEmpty {
+                            Button("Clear filters") {
+                                Task { await model.apply(filters: EntityFilterState()) }
+                            }
+                        }
                     }
                 }
             }
         } else if model.view == .shelf {
-            cardGrid(model, rows: model.rows, meta: model.meta)
+            cardGrid(model, rows: model.rows, meta: model.summaryMeta)
         } else {
             rowList(model)
         }
@@ -409,10 +414,14 @@ struct EntityListView: View {
                         Button("Retry") { search.retry() }
                     }
                 case .loaded:
-                    ContentUnavailableView("No matching \(descriptor.plural)", systemImage: "magnifyingglass")
+                    VStack {
+                        if let meta = search.summaryMeta { listSummary(meta: meta, shown: 0) }
+                        ContentUnavailableView(
+                            "No matching \(descriptor.plural)", systemImage: "magnifyingglass")
+                    }
                 }
             } else if model.view == .shelf {
-                cardGrid(model, rows: search.rows, meta: search.meta)
+                cardGrid(model, rows: search.rows, meta: search.summaryMeta)
             } else {
                 rowList(model)
             }
@@ -428,9 +437,7 @@ struct EntityListView: View {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if hasBanner(model) { banner(model).padding(.horizontal) }
                 if let meta {
-                    Text("\(meta.totalCount.formatted()) total · \(rows.count.formatted()) shown")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    listSummary(meta: meta, shown: rows.count)
                         .padding(.horizontal, FieldGuideTokens.Space.md)
                         .padding(.top, FieldGuideTokens.Space.sm)
                 }
@@ -500,10 +507,9 @@ struct EntityListView: View {
     private func rows(_ model: GenericEntityListModel) -> some View {
         if hasBanner(model) { Section { banner(model) } }
         let visibleRows = model.isSearching ? (model.searchModel?.rows ?? []) : model.rows
-        let visibleMeta = model.isSearching ? model.searchModel?.meta : model.meta
+        let visibleMeta = model.isSearching ? model.searchModel?.summaryMeta : model.summaryMeta
         if let meta = visibleMeta {
-            Text("\(meta.totalCount.formatted()) total · \(visibleRows.count.formatted()) shown")
-                .font(.caption).foregroundStyle(.secondary)
+            listSummary(meta: meta, shown: visibleRows.count)
         }
         ForEach(visibleRows) { row in
             rowContent(row)
@@ -517,6 +523,22 @@ struct EntityListView: View {
                 .accessibilityIdentifier("browse.\(key.rawValue).row.\(row.id)")
         }
         if model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore { loadMore(model) }
+    }
+
+    private func listSummary(meta: ListPageMeta, shown: Int) -> some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            Text("\(meta.totalCount.formatted()) total · \(shown.formatted()) shown")
+            if let totals = ListTotalsSummary.line(
+                totals: descriptor.presentation.listTotals,
+                sums: meta.sums?.additionalProperties)
+            {
+                Text(totals)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder

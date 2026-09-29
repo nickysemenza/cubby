@@ -203,6 +203,7 @@ export interface UseEntityListReturn<
   data: TRow[];
   requestDelete: (item: TData) => void;
   totalCount: number | undefined;
+  sums: Record<string, number> | undefined;
   inspection: ReturnType<typeof useEntityPreview>;
 }
 
@@ -628,6 +629,7 @@ export function useEntityList<
     // default totalCount to 0 pre-response, which would otherwise flash
     // "0 …" in the eyebrow before the real count arrives.
     totalCount: isLoading ? undefined : totalCount,
+    sums,
     inspection,
   };
 }

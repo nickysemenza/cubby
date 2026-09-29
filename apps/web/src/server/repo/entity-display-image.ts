@@ -491,7 +491,7 @@ export async function resolvePublicEntityDisplayImages(
   );
 }
 
-async function resolveEntityDisplayImageLists(
+export async function resolveEntityDisplayImageLists(
   db: Database | DrizzleTransaction,
   refs: readonly EntityDisplayImageRef[],
 ): Promise<Map<string, DisplayImageSummary[]>> {

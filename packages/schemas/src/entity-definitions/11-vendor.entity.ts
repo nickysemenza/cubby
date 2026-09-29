@@ -40,7 +40,18 @@ export default defineEntity({
         },
       ],
     },
-    list: { actionOverrides: ["merge", "delete"] },
+    list: {
+      actionOverrides: ["merge", "delete"],
+      totalOverrides: [
+        { id: "spend", label: "Spend", keys: ["spend"], format: "currency" },
+        {
+          id: "purchaseCount",
+          label: "Purchases",
+          keys: ["purchaseCount"],
+          format: "integer",
+        },
+      ],
+    },
   },
   model: {
     fields: [

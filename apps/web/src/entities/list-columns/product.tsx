@@ -398,7 +398,7 @@ export const productListOverride = defineListOverride<
               footer: (info) => {
                 const total =
                   info.table.options.meta?.serverTotals?.sums?.price;
-                return total ? (
+                return total !== undefined ? (
                   <span className="tabular-nums">{formatCurrency(total)}</span>
                 ) : null;
               },

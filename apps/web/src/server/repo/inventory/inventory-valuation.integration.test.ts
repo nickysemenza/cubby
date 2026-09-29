@@ -70,7 +70,7 @@ describe("inventory valuation — computed on read", () => {
     ).toBe(60);
     const list = await inventoryentryList(ctx.db, {}, [], page);
     expect(list.data.find((row) => row.id === entry.id)?.valuation).toBe(60);
-    expect(list.sums.valuation).toBeGreaterThanOrEqual(60);
+    expect(list.sums!.valuation).toBeGreaterThanOrEqual(60);
   });
 
   it("sorts, filters and totals on the computed figure", async () => {
@@ -113,6 +113,6 @@ describe("inventory valuation — computed on read", () => {
       page,
     );
     expect(only(missing.data)).toEqual([unpriced.entry.id]);
-    expect(valued.sums.valuation).toBeGreaterThanOrEqual(55);
+    expect(valued.sums!.valuation).toBeGreaterThanOrEqual(55);
   });
 });

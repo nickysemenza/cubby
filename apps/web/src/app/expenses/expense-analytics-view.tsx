@@ -250,7 +250,15 @@ function ExpenseAnalytics({
 
   return (
     <Stack gap="lg">
-      <ExpenseSummaryStrip summary={summary} adjustmentsNet={adjustments.net} />
+      <ExpenseSummaryStrip
+        basis={
+          filters.projectId || filters.projectPresenceFilter
+            ? "allocation"
+            : "ledger"
+        }
+        summary={summary}
+        adjustmentsNet={adjustments.net}
+      />
 
       <Section
         title="Analyze"

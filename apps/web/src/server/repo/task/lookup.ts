@@ -86,13 +86,12 @@ const toUuids = async <E extends ShortcodeEntity>(
  * just be a separate condition in the caller's list — an AND there is the bug
  * this replaced. `undefined` when neither is given (no condition added).
  */
-async function buildTaskProjectCondition(
-  db: Database,
+function buildTaskProjectCondition(
   projectId: TaskFilters["projectId"],
-  includeSubProjects: boolean | undefined,
+  projectIds: EntityId<"project">[],
   presence?: PresenceFilter,
   taskAlias = "Task",
-): Promise<SQL | undefined> {
+): SQL | undefined {
   const effectiveProjectId = effectiveTaskProjectSql(taskAlias);
   const presenceCond =
     presence === "has"
@@ -102,25 +101,51 @@ async function buildTaskProjectCondition(
         : undefined;
   const selectedCodes = projectId ? [projectId].flat() : [];
   if (selectedCodes.length === 0) return presenceCond;
-  const selected = await toUuids(db, selectedCodes, "project");
-  if (selected.length === 0) return presenceCond ?? sql`false`;
-  if (!includeSubProjects)
-    return or(
-      sql`${effectiveProjectId} = ANY(${uuidArrayParam(selected)})`,
-      presenceCond,
-    );
-
-  const { childrenByParent } = await loadProjectTree(db);
-  const scopedIds = uniq(
-    selected.flatMap((id) => [
-      id,
-      ...collectDescendantIds(childrenByParent, id),
-    ]),
-  );
+  if (projectIds.length === 0) return presenceCond ?? sql`false`;
   return or(
-    sql`${effectiveProjectId} = ANY(${uuidArrayParam(scopedIds)})`,
+    sql`${effectiveProjectId} = ANY(${uuidArrayParam(projectIds)})`,
     presenceCond,
   );
+}
+
+async function resolveTaskFilterReferences(db: Database, filters: TaskFilters) {
+  const parentTaskCodes = filters.parentTaskId
+    ? [filters.parentTaskId].flat()
+    : [];
+  const [
+    selectedProjectIds,
+    parentTaskIds,
+    scopedProjectIds,
+    subjectProductIds,
+  ] = await Promise.all([
+    toUuids(db, filters.projectId ? [filters.projectId].flat() : [], "project"),
+    toUuids(db, parentTaskCodes, "task"),
+    filters.projectScope
+      ? matchingEmbeddedProjectIds(db, filters.projectScope)
+      : Promise.resolve(null),
+    toUuids(
+      db,
+      filters.subjectProductId ? [filters.subjectProductId].flat() : [],
+      "product",
+    ),
+  ]);
+  let projectIds = selectedProjectIds;
+  if (selectedProjectIds.length > 0 && filters.includeSubProjects) {
+    const { childrenByParent } = await loadProjectTree(db);
+    projectIds = uniq(
+      selectedProjectIds.flatMap((id) => [
+        id,
+        ...collectDescendantIds(childrenByParent, id),
+      ]),
+    );
+  }
+  return {
+    projectIds,
+    parentTaskCodes,
+    parentTaskIds,
+    scopedProjectIds,
+    subjectProductIds,
+  };
 }
 
 /**
@@ -163,26 +188,21 @@ export const buildTaskWhere = async (
   db: Database,
   filters: TaskFilters,
   taskAlias = "Task",
+  resolved?: Awaited<ReturnType<typeof resolveTaskFilterReferences>>,
 ) => {
   const dbClient = getDb(db);
-  const projectCondition = await buildTaskProjectCondition(
-    db,
+  const {
+    projectIds,
+    parentTaskCodes,
+    parentTaskIds,
+    scopedProjectIds,
+    subjectProductIds,
+  } = resolved ?? (await resolveTaskFilterReferences(db, filters));
+  const projectCondition = buildTaskProjectCondition(
     filters.projectId,
-    filters.includeSubProjects,
+    projectIds,
     filters.projectPresenceFilter,
     taskAlias,
-  );
-  const parentTaskCodes = filters.parentTaskId
-    ? [filters.parentTaskId].flat()
-    : [];
-  const parentTaskIds = await toUuids(db, parentTaskCodes, "task");
-  const scopedProjectIds = filters.projectScope
-    ? await matchingEmbeddedProjectIds(db, filters.projectScope)
-    : null;
-  const subjectProductIds = await toUuids(
-    db,
-    filters.subjectProductId ? [filters.subjectProductId].flat() : [],
-    "product",
   );
   const subjectProductCondition = () =>
     filters.subjectProductId &&
@@ -301,9 +321,10 @@ export const taskList = async (
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
 ) => {
+  const resolved = await resolveTaskFilterReferences(db, filters);
   const [whereClause, countWhereClause] = await Promise.all([
-    buildTaskWhere(db, filters, "task"),
-    buildTaskWhere(db, filters),
+    buildTaskWhere(db, filters, "task", resolved),
+    buildTaskWhere(db, filters, "Task", resolved),
   ]);
   return taskScaffold.list(
     db,
