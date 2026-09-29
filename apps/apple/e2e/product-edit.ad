@@ -24,17 +24,27 @@ wait "id=browse.catalog.product" 30000
 click "id=browse.catalog.product label=Products"
 wait "id=browse.product.list" 30000
 wait "id=browse.product.row.${PRODUCT_ID}" 30000
+wait "label=\"List controls\"" 30000
 click "label=\"List controls\""
+wait "label=View" 30000
 click "label=View"
+wait "label=Cards" 30000
 click "label=Cards"
 wait "id=browse.product.cards.${PRODUCT_ID}" 30000
+wait "label=\"List controls\"" 30000
 click "label=\"List controls\""
+wait "label=View" 30000
 click "label=View"
+wait "label=Compact" 30000
 click "label=Compact"
 wait "id=browse.product.compact.${PRODUCT_ID}" 30000
+wait "label=\"List controls\"" 30000
 click "label=\"List controls\""
+wait "label=View" 30000
 click "label=View"
+wait "label=List" 30000
 click "label=List"
+wait "label=\"List controls\"" 30000
 click "label=\"List controls\""
 click "role=Button label=Search"
 wait "role=SearchField" 30000

@@ -184,6 +184,11 @@ test("server error references remain usable on desktop", async ({
     .getByLabel("Workspace navigation")
     .getByRole("link", { name: /^Products(?: [\d,]+ records)?$/ })
     .click();
+  // Navigation can reuse prefetched core rows; a new filter exercises the
+  // browser error boundary rather than depending on that cache's freshness.
+  await page
+    .getByRole("textbox", { name: "Search products or shortcode" })
+    .fill("Synthetic diagnostic filter");
   await expect(
     page.getByText("Server request failed (HTTP 500)", { exact: true }).first(),
   ).toBeVisible();
