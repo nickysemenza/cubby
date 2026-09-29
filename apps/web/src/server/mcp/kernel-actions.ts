@@ -1,7 +1,8 @@
 import { previewOperationSchema } from "@cubby/schemas/entity-integrity";
+import { productShortcode } from "@cubby/schemas/identifiers";
 import {
   ingredientResolvableNamesInput,
-  ingredientResolveOrCreateOut,
+  ingredientResolveOrCreateResultOut,
 } from "@cubby/schemas/ingredient";
 import { resolvePlantsInput, resolvePlantsOutput } from "@cubby/schemas/plant";
 import {
@@ -52,7 +53,7 @@ import {
   generatedMcpEntityRelationPreviewInputSchema,
 } from "~/server/generated/entity-relation-contracts.gen";
 import { previewOperation } from "~/server/operations/entity-integrity-preview.server";
-import { resolveOrCreateWorkflow } from "~/server/operations/ingredient.server";
+import { resolveWithProductCandidatesWorkflow } from "~/server/operations/ingredient.server";
 import { resolveOrCreatePlants } from "~/server/repo/plant";
 import { resolveProductNames } from "~/server/repo/product";
 
@@ -201,9 +202,35 @@ const productResolveInput = productResolveNamesInput.extend({
   entity: z.literal("product"),
 });
 const resolveOrCreateInput = z.discriminatedUnion("entity", [
-  ingredientResolvableNamesInput.extend({ entity: z.literal("ingredient") }),
+  ingredientResolvableNamesInput.extend({
+    entity: z.literal("ingredient"),
+    linkProductId: productShortcode
+      .optional()
+      .describe(
+        "Link this Product to the resolved ingredient (requires exactly one name), through the normal Product update. Pick it from a previous call's candidateProducts.",
+      ),
+  }),
   resolvePlantsInput.extend({ entity: z.literal("plant") }),
 ]);
+const ingredientResolveWithProductsOut = z.array(
+  ingredientResolveOrCreateResultOut.extend({
+    candidateProducts: z
+      .array(
+        z.object({
+          id: productShortcode,
+          name: z.string(),
+          manufacturer: z.string(),
+        }),
+      )
+      .describe(
+        "Up to 5 live Products with no ingredient link whose name contains every word of the ingredient, best match first. Advisory: link one with linkProductId.",
+      ),
+    linkedProduct: z
+      .object({ id: productShortcode })
+      .optional()
+      .describe("Present when linkProductId was applied."),
+  }),
+);
 
 /** Build the kernel verbs over one executor (production: `executeEntity`). */
 export const createKernelMcpActions = (
@@ -364,7 +391,7 @@ export const createKernelMcpActions = (
     resolveOrCreate: {
       input: resolveOrCreateInput,
       output: z.union([
-        mcpResultsEnvelope(ingredientResolveOrCreateOut),
+        mcpResultsEnvelope(ingredientResolveWithProductsOut),
         resolvePlantsOutput,
       ]),
       run: async (raw, extra) => {
@@ -373,8 +400,9 @@ export const createKernelMcpActions = (
         if (input.entity === "plant")
           return resolveOrCreatePlants(context.db, input, context.actorContext);
         return {
-          results: await resolveOrCreateWorkflow(context.db, {
+          results: await resolveWithProductCandidatesWorkflow(context, {
             names: input.names,
+            linkProductId: input.linkProductId,
           }),
         };
       },
