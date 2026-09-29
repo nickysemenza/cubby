@@ -74,8 +74,8 @@ const affectedByPath = (path: string): Partial<CiChangeScope> | null => {
     sharedConfig.has(path)
   )
     return null;
-  if (path.startsWith("apps/apple/") || path.startsWith("cubby-ffi/"))
-    return { apple: true };
+  if (path.startsWith("apps/apple/")) return { apple: true };
+  if (path.startsWith("cubby-ffi/")) return { rust: true, apple: true };
   if (path.startsWith("recipebridge/"))
     return {
       validation: true,

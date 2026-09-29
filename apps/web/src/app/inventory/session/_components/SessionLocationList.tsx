@@ -24,7 +24,8 @@ import { QrJumpButton } from "./QrJumpButton";
 import type { InventoryItem, ItemResolution } from "./types";
 
 type SessionLocationListProps = {
-  parent: InfLocation;
+  /** The scope's heading: the recount's root, or the worklist's name. */
+  title: string;
   locations: SessionLocation[];
   currentId: LocationShortcode | null;
   inventoryByLocation: Map<string, InventoryItem[]>;
@@ -36,7 +37,8 @@ type SessionLocationListProps = {
   onScanJump: (locationId: string) => void;
   /** Re-parent a scanned stray bin into the location being recounted. */
   onAdoptLocation: (location: Pick<InfLocation, "id" | "name">) => void;
-  parentLocation: InfLocation;
+  /** The tree a scanned bin is classified against. */
+  scopeRoots: InfLocation[];
   /** The bin being recounted, which a scanned bin is classified against. */
   currentLocation: InfLocation | null;
 };
@@ -48,7 +50,7 @@ type SessionLocationListProps = {
  * so there is a single implementation of "what's left / jump to a location".
  */
 function SessionLocationList({
-  parent,
+  title,
   locations,
   currentId,
   inventoryByLocation,
@@ -58,7 +60,7 @@ function SessionLocationList({
   onSelect,
   onScanJump,
   onAdoptLocation,
-  parentLocation,
+  scopeRoots,
   currentLocation,
 }: SessionLocationListProps) {
   const [showCompleted, setShowCompleted] = useState(false);
@@ -77,14 +79,14 @@ function SessionLocationList({
       <Stack gap="sm" className="shrink-0 border-b p-4">
         <Row align="center" justify="between" gap="sm">
           <div className="min-w-0">
-            <CardTitle>{parent.name}</CardTitle>
+            <CardTitle>{title}</CardTitle>
             <Description>
               {completed} complete / {locations.length} locations
               {skipped > 0 ? ` · ${skipped} skipped` : ""}
             </Description>
           </div>
           <QrJumpButton
-            parent={parentLocation}
+            roots={scopeRoots}
             current={currentLocation}
             onJump={onScanJump}
             onAdopt={onAdoptLocation}
@@ -169,7 +171,7 @@ export function MobileLocationSwitcher({
 }: SessionLocationListProps & { currentIndex: number }) {
   const [open, setOpen] = useState(false);
   const {
-    parent,
+    title,
     locations,
     onSelect,
     onScanJump,
@@ -189,11 +191,8 @@ export function MobileLocationSwitcher({
           onClick={() => setOpen(true)}
           className="flex w-full items-center justify-between gap-2 border bg-card px-4 py-2 text-left"
         >
-          <span
-            className="min-w-0 truncate text-sm font-medium"
-            title={parent.name}
-          >
-            {parent.name}
+          <span className="min-w-0 truncate text-sm font-medium" title={title}>
+            {title}
           </span>
           <span className="shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
             {currentIndex + 1} / {locations.length} · {completed} done

@@ -41,6 +41,7 @@ import {
   eq,
   exists,
   getTableColumns,
+  gt,
   inArray,
   isNotNull,
   isNull,
@@ -359,6 +360,20 @@ export const attachExistingImageToEntity = async (
   return attached;
 };
 
+/**
+ * Project a just-inserted Image (and its direct owners) and queue the
+ * embedding. Image repository writes opt out of kernel side effects
+ * (`sideEffects: false`), so without this an upload is invisible to
+ * `settleAwaitingWork`, which only repairs already-projected documents.
+ */
+const projectNewImage = async (db: Database, imageId: string) => {
+  await refreshCapturedImageSearchOwnerRefs(
+    db,
+    await findDirectImageSearchOwnerRefs(db, imageId),
+    "image.upload",
+  );
+};
+
 export const createPendingImageRecord = async (
   db: Database,
   {
@@ -391,7 +406,7 @@ export const createPendingImageRecord = async (
 ) => {
   // `insertWithShortcode`, not a bare insert: Image now carries a public `IMG-`
   // id, and minting is what turns a row into something addressable.
-  return await insertWithShortcode(db, "image", {
+  const created = await insertWithShortcode(db, "image", {
     key,
     filename,
     size,
@@ -406,41 +421,54 @@ export const createPendingImageRecord = async (
     sourceAssetUrl,
     sourceName,
   });
+  await projectNewImage(db, created.id);
+  return created;
 };
 
-export const createUploadedImageRecord = async (
+type UploadedImageParams = {
+  key: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  width?: number | null;
+  height?: number | null;
+  detectedContentType?: string | null;
+  sha256?: string | null;
+  renderStatus?: "unverified" | "verified" | "failed" | null;
+  storageStatus?:
+    | "unverified"
+    | "available"
+    | "missing"
+    | "metadata_mismatch"
+    | null;
+  verifiedAt?: Date | null;
+  targetType?: string | null;
+  targetId?: string | null;
+  idempotencyKey?: string | null;
+  source?: "own" | "catalog" | "unknown" | "screenshot";
+  sourcePageUrl?: string | null;
+  sourceAssetUrl?: string | null;
+  sourceName?: string | null;
+  provenanceEvidence?: { basis: "import-url" } | null;
+};
+
+const insertUploadedImageRecord = async (
   db: Database | DrizzleTransaction,
-  params: {
-    key: string;
-    filename: string;
-    contentType: string;
-    size: number;
-    width?: number | null;
-    height?: number | null;
-    detectedContentType?: string | null;
-    sha256?: string | null;
-    renderStatus?: "unverified" | "verified" | "failed" | null;
-    storageStatus?:
-      | "unverified"
-      | "available"
-      | "missing"
-      | "metadata_mismatch"
-      | null;
-    verifiedAt?: Date | null;
-    targetType?: string | null;
-    targetId?: string | null;
-    idempotencyKey?: string | null;
-    source?: "own" | "catalog" | "unknown" | "screenshot";
-    sourcePageUrl?: string | null;
-    sourceAssetUrl?: string | null;
-    sourceName?: string | null;
-    provenanceEvidence?: { basis: "import-url" } | null;
-  },
-) => {
-  return await insertWithShortcode(db, "image", {
+  params: UploadedImageParams,
+) =>
+  await insertWithShortcode(db, "image", {
     ...params,
     status: "UPLOADED",
   });
+
+/** Database-only: inside a transaction use {@link insertUploadedImageRecord} and project after commit. */
+export const createUploadedImageRecord = async (
+  db: Database,
+  params: UploadedImageParams,
+) => {
+  const created = await insertUploadedImageRecord(db, params);
+  await projectNewImage(db, created.id);
+  return created;
 };
 
 export const getImageHashIndex = async (
@@ -2489,6 +2517,46 @@ export async function countImagesStaleMetadata(db: Database): Promise<number> {
   return row?.count ?? 0;
 }
 
+// Hand-qualified `"Image"."id"`: an interpolated column renders unqualified on
+// a single-table select and would bind to the subquery's own `id`.
+const missingSearchDocumentWhere = and(
+  notDeleted(image),
+  sql`NOT EXISTS (
+    SELECT 1 FROM "SearchDocument" sd
+    WHERE sd."entityKind" = 'image' AND sd."entityId" = ${sql.raw('"Image"."id"')}
+      AND sd."deletedAt" IS NULL
+  )`,
+);
+
+/** Live images with no live SearchDocument, which `settleAwaitingWork` cannot see. */
+export async function selectImageIdsMissingSearchDocument(
+  db: Database,
+  options: { afterId?: string; limit: number },
+): Promise<ImageId[]> {
+  const rows = await getDb(db)
+    .select({ id: image.id })
+    .from(image)
+    .where(
+      and(
+        missingSearchDocumentWhere,
+        options.afterId ? gt(image.id, options.afterId) : undefined,
+      ),
+    )
+    .orderBy(asc(image.id))
+    .limit(options.limit);
+  return rows.map((row) => parseEntityId("image", row.id));
+}
+
+export async function countImagesMissingSearchDocument(
+  db: Database,
+): Promise<number> {
+  const [row] = await getDb(db)
+    .select({ count: count() })
+    .from(image)
+    .where(missingSearchDocumentWhere);
+  return row?.count ?? 0;
+}
+
 /** A single row's extraction inputs — the background task's freshness check
  * re-reads this by id rather than trusting the queue message's own age. */
 export async function getImageMetadataExtractionRow(
@@ -2812,16 +2880,15 @@ const associateImageWithEntity = async (
  */
 export const createOrReuseAttachedImage = async (
   db: Database,
-  params: Parameters<typeof createUploadedImageRecord>[1] & {
-    idempotencyKey?: string | null;
+  params: UploadedImageParams & {
     expectedImageCount?: number;
     pendingImageId?: ImageId;
     purpose?: ProductImagePurpose;
   },
   entity: AttachableImageRef,
   documentKind?: PurchaseDocumentKind,
-): Promise<{ row: typeof image.$inferSelect; reused: boolean }> =>
-  await withTransaction(db, async (tx) => {
+): Promise<{ row: typeof image.$inferSelect; reused: boolean }> => {
+  const attached = await withTransaction(db, async (tx) => {
     await lockAttachableEntity(tx, entity);
     if (params.idempotencyKey) {
       const winner = await findAttachmentByIdempotencyKey(
@@ -2859,7 +2926,7 @@ export const createOrReuseAttachedImage = async (
             notDeleted(image),
           ),
         )
-      : await createUploadedImageRecord(tx, record);
+      : await insertUploadedImageRecord(tx, record);
     const imageId = parseEntityId("image", row.id);
     await associateImageWithEntity(tx, entity, imageId, documentKind, purpose);
     if (idempotencyKey) {
@@ -2876,6 +2943,11 @@ export const createOrReuseAttachedImage = async (
     }
     return { row, reused: false };
   });
+  // After commit, so the queued embedding never races an uncommitted row; the
+  // refresh covers both the new Image document and the owner it now feeds.
+  if (!attached.reused) await projectNewImage(db, attached.row.id);
+  return attached;
+};
 
 export const getImagesByProjectIds = async (
   db: Database,

@@ -53,6 +53,7 @@ import {
   useIngredientResolver,
 } from "./ingredient-preview-table";
 import { InstructionFieldArray } from "./instruction-field-array";
+import { RecipeCookbookField } from "./recipe-cookbook-field";
 import { RecipeLivePreview } from "./recipe-live-preview";
 import { TagInput } from "./tag-input";
 import {
@@ -430,6 +431,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 section="identity"
                 options={{ name: { placeholder: "Enter recipe name" } }}
               />
+              {mode === "edit" && (
+                <RecipeCookbookField control={form.control} />
+              )}
               <YieldServingsFields form={form} mode={mode} />
               <Controller
                 control={form.control}

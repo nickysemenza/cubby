@@ -1,7 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { BookmarkIcon } from "@phosphor-icons/react/dist/csr/Bookmark";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
+import { Fragment } from "react";
 
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -115,6 +118,31 @@ export function TableSavedViewsMenuItems<TData extends RowData>({
   );
 }
 
+/** The link into the guided pass a view declares beside it. */
+function ViewFlowMenuItem({
+  flow,
+}: {
+  flow: NonNullable<ViewDefinition["flow"]>;
+}) {
+  return (
+    <DropdownMenuItem
+      render={
+        flow.kind === "recount-worklist" ? (
+          <Link
+            to="/inventory/session"
+            search={{ worklist: "shelf-disagrees" }}
+          />
+        ) : (
+          <Link to="/inventory/triage" search={{ run: undefined }} />
+        )
+      }
+    >
+      <ListChecksIcon className="size-3.5" />
+      <span>{flow.label}</span>
+    </DropdownMenuItem>
+  );
+}
+
 /** The saved-view rows shared by the standalone menu and the `Actions ▾` submenu. */
 function SavedViewsMenuItems({
   entity,
@@ -143,17 +171,20 @@ function SavedViewsMenuItems({
       {views.map((view) => {
         const active = isViewActive(view, columnFilters, sorting);
         return (
-          <DropdownMenuItem key={view.id} onClick={() => applyView(view)}>
-            <CheckIcon
-              className={active ? "size-3.5" : "size-3.5 text-transparent"}
-            />
-            <Stack gap="tight">
-              <span>{view.label}</span>
-              <span className="text-xs text-muted-foreground">
-                {view.description}
-              </span>
-            </Stack>
-          </DropdownMenuItem>
+          <Fragment key={view.id}>
+            <DropdownMenuItem onClick={() => applyView(view)}>
+              <CheckIcon
+                className={active ? "size-3.5" : "size-3.5 text-transparent"}
+              />
+              <Stack gap="tight">
+                <span>{view.label}</span>
+                <span className="text-xs text-muted-foreground">
+                  {view.description}
+                </span>
+              </Stack>
+            </DropdownMenuItem>
+            {view.flow && <ViewFlowMenuItem flow={view.flow} />}
+          </Fragment>
         );
       })}
     </DropdownMenuGroup>

@@ -34,7 +34,7 @@ import {
   type NutrientsPer100,
   TIER1_NUTRIENT_KEYS,
   TIER1_NUTRIENTS,
-} from "@cubby/usda-schemas";
+} from "@cubby/usda";
 import { err, ok } from "neverthrow";
 
 import { productNutritionSource } from "~/lib/label-nutrition";

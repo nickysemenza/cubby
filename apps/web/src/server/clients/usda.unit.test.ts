@@ -1,4 +1,4 @@
-import type { FoodLookupParam } from "@cubby/usda-schemas";
+import type { FoodLookupParam } from "@cubby/usda";
 import { describe, expect, it, vi } from "vitest";
 import { type JSONType, z } from "zod";
 

@@ -29,7 +29,7 @@
       "inputs": ["formattable"]
     },
     "knip": {
-      "command": "knip --no-config-hints --no-gitignore",
+      "command": "knip --no-config-hints --no-gitignore && pnpm knip:production",
       "cache": true,
       "inputs": ["repo"]
     },

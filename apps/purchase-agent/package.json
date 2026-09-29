@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@cubby/schemas": "workspace:*",
+    "@cubby/shared": "workspace:*",
     "@cubby/worker-tracing": "workspace:*",
     "@earendil-works/pi-ai": "0.83.0",
     "@flue/opentelemetry": "2.1.0",

@@ -1,3 +1,10 @@
+import {
+  endpointFor,
+  gatewayBaseURL,
+  gatewayQuery,
+  requestUrl,
+  strippedHeaders,
+} from "@cubby/shared/ai-gateway-request";
 import { z } from "zod";
 
 import { env } from "~/env";
@@ -23,6 +30,8 @@ export interface GatewayResponseFailure {
 
 /** The gateway keeps at most five metadata entries; the rest are dropped. */
 const MAX_METADATA_ENTRIES = 5;
+
+export { gatewayBaseURL };
 
 const GATEWAY_REST_BASE = "https://gateway.ai.cloudflare.com/v1";
 
@@ -117,71 +126,10 @@ function validatedCacheTtlSeconds(ttl: number | undefined): number | undefined {
   return ttl;
 }
 
-/**
- * A deterministic, unroutable base URL for provider SDKs. Only
- * {@link gatewayFetch} ever resolves it: the SDK builds
- * `${gatewayBaseURL(p)}/<endpoint>` and the shim turns that back into the
- * gateway's `{provider, endpoint}` pair. `.invalid` is reserved by RFC 2606,
- * so a shim bypass fails loudly instead of leaking a real request.
- */
-export function gatewayBaseURL(provider: GatewayProvider): string {
-  return `https://ai-gateway.invalid/${provider}`;
-}
-
-/**
- * Headers a provider SDK sets that must never reach the gateway. Gateway auth
- * priority is request provider key > BYOK > unified billing, so a placeholder
- * `x-api-key` / `authorization` from the SDK would out-rank unified billing
- * and be sent upstream as a real (bogus) credential. `content-length` is
- * reframed by both branches.
- */
-const STRIPPED_SDK_HEADERS = ["authorization", "x-api-key", "content-length"];
-
-function requestUrl(input: RequestInfo | URL) {
-  return input instanceof Request ? input.url : String(input);
-}
-
-/** The path (plus search) after the provider's placeholder base. */
-function endpointFor(provider: GatewayProvider, url: string): string {
-  const prefix = `${gatewayBaseURL(provider)}/`;
-  if (url.startsWith(prefix)) return url.slice(prefix.length);
-  const parsed = new URL(url);
-  return `${parsed.pathname.replace(/^\/+/u, "")}${parsed.search}`;
-}
-
-function strippedHeaders(init: RequestInit | undefined): Headers {
-  const headers = new Headers(init?.headers);
-  for (const name of STRIPPED_SDK_HEADERS) headers.delete(name);
-  return headers;
-}
-
-function headerRecord(headers: Headers) {
-  return Object.fromEntries(headers.entries());
-}
-
 function cappedMetadata(metadata: GatewayMetadata): GatewayMetadata {
   const entries = Object.entries(metadata);
   if (entries.length <= MAX_METADATA_ENTRIES) return metadata;
   return Object.fromEntries(entries.slice(0, MAX_METADATA_ENTRIES));
-}
-
-/** A provider request body: the JSON the gateway forwards as `query`. */
-const gatewayQuerySchema = z.record(z.string(), z.json());
-type GatewayQuery = z.output<typeof gatewayQuerySchema>;
-
-/**
- * The body a provider SDK sent, decoded. `Response` normalizes every
- * `BodyInit` the SDKs produce (string, typed array, stream) without the shim
- * having to branch on its representation.
- */
-async function gatewayQuery(
-  body: BodyInit | null | undefined,
-): Promise<GatewayQuery> {
-  const decoded = await new Response(body ?? "{}")
-    .json()
-    .catch(() => undefined);
-  const parsed = gatewayQuerySchema.safeParse(decoded);
-  return parsed.success ? parsed.data : {};
 }
 
 /**
@@ -214,7 +162,7 @@ export function gatewayFetch(
           {
             provider,
             endpoint,
-            headers: headerRecord(headers),
+            headers: Object.fromEntries(headers.entries()),
             query: await gatewayQuery(init?.body),
           },
           {

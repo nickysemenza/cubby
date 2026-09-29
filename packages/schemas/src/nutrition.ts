@@ -1,4 +1,4 @@
-import { TIER1_NUTRIENT_KEYS } from "@cubby/usda-schemas";
+import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 import { z } from "zod";
 
 export const nutrientKey = z.enum(TIER1_NUTRIENT_KEYS);

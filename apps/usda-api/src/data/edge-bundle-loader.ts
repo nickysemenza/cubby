@@ -1,4 +1,4 @@
-import { foodSummary, type FoodSummary } from "@cubby/usda-schemas";
+import { foodSummary, type FoodSummary } from "@cubby/usda";
 import { withSpan } from "@cubby/worker-tracing";
 import pMap from "p-map";
 import { z } from "zod";

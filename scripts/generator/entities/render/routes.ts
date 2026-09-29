@@ -52,7 +52,8 @@ export const browserRoutes = (entity: CompiledEntity) => {
   const detail = `/${basePath}/$${detailParam}`;
   const list = `/${basePath}`;
   // `routes.new` exists exactly when a hand-written `<basePath>.new.tsx`
-  // does; a dialog-created entity deep-links through `?create=true`.
+  // does; a dialog-created entity deep-links through `?create=true`, and its
+  // generated `<basePath>.new.tsx` only redirects there.
   const routes: BrowserRouteSet = {
     detail,
     list,
@@ -86,6 +87,9 @@ export const generatedBrowserRouteFiles = (
       ...(entity.route.detail === null
         ? []
         : [`${routeDirectory}/${basePath}.$${detailParam}.tsx`]),
+      ...(entity.route.create === "dialog"
+        ? [`${routeDirectory}/${basePath}.new.tsx`]
+        : []),
     ];
   });
 

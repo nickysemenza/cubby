@@ -9,7 +9,7 @@ Cloudflare Worker that serves Cubby's USDA food lookup API from D1 and R2.
 - D1 FTS5 for `description` search
 - R2 for versioned, uncompressed NDJSON `FoodSummary` bundles
 
-The public API contract stays in `packages/usda-contract`:
+The public API contract stays in `packages/usda` (`@cubby/usda/contract`):
 
 - `GET /counts`
 - `GET /api/foods/:fdc_id`

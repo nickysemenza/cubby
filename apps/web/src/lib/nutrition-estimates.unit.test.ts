@@ -4,7 +4,7 @@ import {
   type NutritionTotals,
   withMacros,
 } from "@cubby/schemas/nutrition";
-import { TIER1_NUTRIENT_KEYS } from "@cubby/usda-schemas";
+import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 import { describe, expect, it } from "vitest";
 
 import {

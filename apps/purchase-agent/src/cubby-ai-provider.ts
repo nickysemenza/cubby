@@ -7,48 +7,25 @@ import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messag
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
 import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
-import { z } from "zod";
 import { importRunIdFromAgentIdentity } from "@cubby/schemas/import-run-agent";
+import {
+  endpointFor,
+  gatewayBaseURL,
+  gatewayQuery,
+  requestUrl,
+  strippedHeaders,
+} from "@cubby/shared/ai-gateway-request";
 
 import { type ContextRecorder, withContextCapture } from "./context-breakdown";
 
 const CUBBY_GATEWAY_ID = "cubby";
 const OPENAI_MODELS = ["gpt-6-sol", "gpt-6-luna"] as const;
 const ANTHROPIC_MODELS = ["claude-haiku-4-5", "claude-sonnet-5"] as const;
-const STRIPPED_SDK_HEADERS = [
-  "authorization",
-  "x-api-key",
-  "content-length",
-] as const;
-const gatewayQuerySchema = z.record(z.string(), z.json());
 
 type GatewayProvider = "openai" | "anthropic";
 type Gateway = Pick<AiGateway, "run">;
 type GatewayHost = { gateway(id: string): Gateway };
 export type PurchaseAgentTestModelBinding = Pick<Fetcher, "fetch">;
-
-function gatewayBaseUrl(provider: GatewayProvider) {
-  return `https://ai-gateway.invalid/${provider}`;
-}
-
-function requestUrl(input: RequestInfo | URL) {
-  return input instanceof Request ? input.url : String(input);
-}
-
-function endpointFor(provider: GatewayProvider, url: string) {
-  const prefix = `${gatewayBaseUrl(provider)}/`;
-  if (url.startsWith(prefix)) return url.slice(prefix.length);
-  const parsed = new URL(url);
-  return `${parsed.pathname.replace(/^\/+/, "")}${parsed.search}`;
-}
-
-async function gatewayQuery(body: BodyInit | null | undefined) {
-  const decoded = await new Response(body ?? "{}")
-    .json<unknown>()
-    .catch(() => undefined);
-  const parsed = gatewayQuerySchema.safeParse(decoded);
-  return parsed.success ? parsed.data : {};
-}
 
 /** Provider SDK fetch shim for Cubby's binding-authenticated Universal Gateway. */
 export function createCubbyGatewayFetch(
@@ -57,8 +34,7 @@ export function createCubbyGatewayFetch(
   agentScope?: () => string,
 ): typeof fetch {
   return async (input, init) => {
-    const headers = new Headers(init?.headers);
-    for (const name of STRIPPED_SDK_HEADERS) headers.delete(name);
+    const headers = strippedHeaders(init);
     const runId = importRunIdFromAgentIdentity(agentScope?.());
     const metadata = {
       feature: "purchase_import_agent",
@@ -222,7 +198,7 @@ export function cubbyAiGatewayProviders(
       models: selectedModels(
         openaiProvider(),
         OPENAI_MODELS,
-        gatewayBaseUrl("openai"),
+        gatewayBaseURL("openai"),
       ),
       api: streamsThroughGateway(openAIResponsesApi(), openaiFetch),
     }),
@@ -233,7 +209,7 @@ export function cubbyAiGatewayProviders(
       models: selectedModels(
         anthropicProvider(),
         ANTHROPIC_MODELS,
-        gatewayBaseUrl("anthropic"),
+        gatewayBaseURL("anthropic"),
       ),
       api: streamsThroughGateway(anthropicMessagesApi(), anthropicFetch),
     }),

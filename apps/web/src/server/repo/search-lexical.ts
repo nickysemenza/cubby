@@ -24,6 +24,17 @@ export const buildPrefixTsQuery = (query: string): string =>
     .join(" & ");
 
 /**
+ * Any-token prefix query. `buildPrefixTsQuery` ANDs every token, so a longer
+ * requested name ("Organic Example Fruit") never matches a shorter stored
+ * one ("Example Fruit"); name resolution wants the ranked OR instead, where
+ * `ts_rank_cd` puts the rows covering most tokens first.
+ */
+export const buildAnyPrefixTsQuery = (query: string): string =>
+  searchTerms(query)
+    .map((term) => `${term.replace(/[':&|!()]/g, "")}:*`)
+    .join(" | ");
+
+/**
  * The deliberately uncapped lexical eligibility used by an entity list.
  *
  * Global command search applies a small fuzzy-candidate cap after using this

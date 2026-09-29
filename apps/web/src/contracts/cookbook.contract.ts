@@ -1,9 +1,9 @@
 import { cookbookShortcode } from "@cubby/schemas/identifiers";
 import { cookbookSummariesOut } from "@cubby/schemas/import-recipe";
-import { cookbookSummary } from "@cubby/schemas/recipe";
+import { cookbookSummary, cookbookUpdateInput } from "@cubby/schemas/recipe";
 import { z } from "zod";
 
-import { defineContract, query } from "~/contracts/define";
+import { defineContract, mutation, query } from "~/contracts/define";
 
 export const cookbookContract = defineContract("cookbook", {
   list: query({
@@ -17,5 +17,11 @@ export const cookbookContract = defineContract("cookbook", {
     input: z.object({ shortcode: cookbookShortcode }),
     output: cookbookSummary.nullable(),
     cache: { tags: [["cookbook"]] },
+  }),
+  // A retitle also moves every recipe's source label.
+  update: mutation({
+    input: z.object({ id: cookbookShortcode, data: cookbookUpdateInput }),
+    output: cookbookSummary,
+    invalidates: ["recipeCookbook"],
   }),
 });

@@ -43,6 +43,28 @@ export function imageAnalysisRenditionUrl(originalUrl: string): string {
   return `${parsed.origin}/cdn-cgi/image/width=2048,fit=scale-down,format=jpeg${parsed.pathname}${parsed.search}`;
 }
 
+const RENDITION_ERROR_BODY_CHARS = 500;
+
+/**
+ * Fetch the edge rendition, refusing a non-2xx response. Without the check an
+ * error page is read as image bytes and the job fails later with an unrelated
+ * "must be JPEG" message that hides the real status.
+ */
+export async function fetchAnalysisRendition(
+  url: string,
+  fetcher?: typeof fetch,
+): Promise<Uint8Array> {
+  const response = await fetchExternalResponse(url, { fetcher });
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(
+      `Analysis rendition fetch failed: HTTP ${response.status} ${response.statusText}`.trimEnd() +
+        (body ? `: ${body.slice(0, RENDITION_ERROR_BODY_CHARS)}` : ""),
+    );
+  }
+  return await readResponseWithLimit(response, MAX_EXTERNAL_IMAGE_BYTES);
+}
+
 /**
  * Includes only bytes and declared AI inputs. Timestamps and perceptual hashes
  * are deliberately absent: neither tells us whether the model saw new pixels.
@@ -134,8 +156,7 @@ export async function describeOriginalImage(
   const key = `cubby/analysis-inputs/${input.attemptId}.jpg`;
   if (!(await reserveImageAnalysisInput(db, input.attemptId, key)))
     throw new Error("Image analysis attempt is no longer current");
-  const response = await fetchExternalResponse(analysisUrl);
-  const bytes = await readResponseWithLimit(response, MAX_EXTERNAL_IMAGE_BYTES);
+  const bytes = await fetchAnalysisRendition(analysisUrl);
   const inspected = await inspectImageFile(bytes, "image/jpeg");
   if (inspected.detectedContentType !== "image/jpeg")
     throw new Error("Analysis rendition must be JPEG");

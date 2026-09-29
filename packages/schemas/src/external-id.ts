@@ -64,7 +64,7 @@ export const displayGtin = (value: string): string =>
  * two to agree (see `externalIdValueFields.isPrimary`). A transform from string
  * to string leaves them identical, so the form resolver is unaffected.
  *
- * Distinct from `upc` in `@cubby/usda-schemas`, which is the barcode being
+ * Distinct from `upc` in `@cubby/shared/upc`, which is the barcode being
  * LOOKED UP against USDA and the UPC provider — those index their own
  * encodings and must not be normalized.
  */

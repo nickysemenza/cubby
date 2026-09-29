@@ -24,6 +24,7 @@ export const backgroundTaskKinds = [
   "maintenance.recover",
   "maintenance.purchase-discovery",
   "vendor-mail.search",
+  "calendar-feed.mark-dirty",
 ] as const;
 
 export const backgroundTaskKindSchema = z.enum(backgroundTaskKinds);
@@ -128,6 +129,18 @@ export const vendorMailSearchTaskSchema = z.object({
   page: z.number().int().nonnegative().optional(),
 });
 
+/**
+ * Fallback for a dirty-mark RPC that failed every in-request retry. `markDirty`
+ * only sets a flag on the origin's calendar Durable Object, so replay is
+ * harmless; the handler throws on failure so the queue keeps retrying.
+ */
+export const calendarFeedMarkDirtyTaskSchema = z.object({
+  kind: z.literal("calendar-feed.mark-dirty"),
+  ...taskEnvelopeFields,
+  origin: z.url(),
+  reason: z.string().min(1),
+});
+
 export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   recipeTotalsRecomputeTaskSchema,
   entityEmbeddingRefreshTaskSchema,
@@ -139,6 +152,7 @@ export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   maintenanceRecoverTaskSchema,
   maintenancePurchaseDiscoveryTaskSchema,
   vendorMailSearchTaskSchema,
+  calendarFeedMarkDirtyTaskSchema,
 ]);
 
 /** The parsed (branded) task a handler receives. */

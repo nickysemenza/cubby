@@ -1,5 +1,5 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda-schemas";
+import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda";
 
 // Core nutrients we surface an at-a-glance coverage row for. Code + tooltip name
 // derive from TIER1_NUTRIENTS by key (no raw nutrient_nbr here); `short` is the

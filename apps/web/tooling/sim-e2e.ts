@@ -28,31 +28,31 @@ const webRoot = path.resolve(
 const repoRoot = path.resolve(webRoot, "../..");
 const kitRoot = path.join(repoRoot, "apps/apple/CubbyKit");
 const appleRoot = path.join(repoRoot, "apps/apple");
-const headless = process.argv.slice(2).includes("--headless");
-const photo = process.argv.slice(2).includes("--photo");
-const purchase = process.argv.slice(2).includes("--purchase");
-const watch = process.argv.slice(2).includes("--watch");
-const video = process.argv.slice(2).includes("--video");
-const layout = process.argv.slice(2).includes("--layout");
+// `pnpm test:e2e:sim -- <flags>` may forward the separator itself.
+const flags = process.argv.slice(2).filter((argument) => argument !== "--");
+const headless = flags.includes("--headless");
+const photo = flags.includes("--photo");
+const purchase = flags.includes("--purchase");
+const watch = flags.includes("--watch");
+const video = flags.includes("--video");
+const layout = flags.includes("--layout");
 if (
   (watch && video) ||
   (video && headless) ||
   (layout && (headless || photo || purchase || watch)) ||
   (photo && (!headless || watch)) ||
   (purchase && !photo) ||
-  process.argv
-    .slice(2)
-    .some(
-      (argument) =>
-        ![
-          "--headless",
-          "--watch",
-          "--video",
-          "--photo",
-          "--purchase",
-          "--layout",
-        ].includes(argument),
-    )
+  flags.some(
+    (argument) =>
+      ![
+        "--headless",
+        "--watch",
+        "--video",
+        "--photo",
+        "--purchase",
+        "--layout",
+      ].includes(argument),
+  )
 )
   throw new Error(
     "Usage: sim-e2e.ts [--video | --layout [--video] | --watch | --headless [--watch | --photo [--purchase]]]",
@@ -1107,24 +1107,13 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
       resultsPath,
       `${JSON.stringify({ schemaVersion: 1, status, scenario: lane, durationMs }, null, 2)}\n`,
     );
-    const command = purchase
-      ? "test:e2e:headless:wardrobe"
-      : photo
-        ? "test:e2e:headless:photo"
-        : headless
-          ? "test:e2e:headless"
-          : layout
-            ? "test:e2e:sim:layout"
-            : video
-              ? "test:e2e:sim:video"
-              : "test:e2e:sim";
     const manifest = writeE2ERunBundle({
       repoRoot,
       outputDir: artifacts,
       evidence: [resultsPath],
       kind: "native",
       status,
-      command: ["pnpm", command],
+      command: ["pnpm", "test:e2e:sim", "--", ...flags],
       cases: [{ name: lane, status, durationMs }],
       runtime,
       build,

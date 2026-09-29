@@ -194,6 +194,7 @@ describe("financial transaction list display columns", () => {
       "sourceCategory",
       "sourceRefs",
       "notes",
+      "itemization",
       "vendorInference",
       "dataQuality",
     ]);
@@ -217,6 +218,7 @@ describe("financial transaction list display columns", () => {
       rawDescription: "Raw description",
       sourceCategory: "Source category",
       notes: "Notes",
+      itemization: "Itemization",
       dataQuality: "Data quality",
     });
   });

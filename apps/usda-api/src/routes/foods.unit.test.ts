@@ -1,8 +1,8 @@
 import {
   MAX_BATCH_LOOKUP_SIZE,
   MAX_LIST_FOODS_PAGE_SIZE,
-} from "@cubby/usda-contract";
-import type { FoodLookupParam, FoodSummary } from "@cubby/usda-schemas";
+} from "@cubby/usda/contract";
+import type { FoodLookupParam, FoodSummary } from "@cubby/usda";
 import type { Hono } from "hono";
 import { beforeEach, describe, expect, it } from "vitest";
 

@@ -8,6 +8,7 @@ import {
 import { MEAL_TYPE_LABELS } from "@cubby/schemas/meal-classification";
 import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 
+import { shiftPlainDate } from "~/lib/plain-date";
 import {
   type CalDavWrite,
   type CalendarProjection,
@@ -24,12 +25,13 @@ import { buildCrudServices } from "~/server/request-context";
 const PAGE_SIZE = 500;
 
 const shiftDate = (value: string, days: number) => {
-  const [year, month, day] = value.split("-").map(Number);
-  if (year === undefined || month === undefined || day === undefined)
-    throw new CalDavError(400, "Invalid calendar date");
-  return new Date(Date.UTC(year, month - 1, day + days))
-    .toISOString()
-    .slice(0, 10);
+  try {
+    return shiftPlainDate(value, days);
+  } catch (error) {
+    if (error instanceof RangeError)
+      throw new CalDavError(400, "Invalid calendar date");
+    throw error;
+  }
 };
 
 const timestamp = (value: Date) => value.toISOString();

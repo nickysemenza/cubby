@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Pool } from "pg";
-import { createCubbyClient } from "~/lib/http-api/client";
+import { createCubbyClient } from "./http-api-client";
 import {
   settledCalendarFeedRevision,
   expectCalendarFeedDirtied,

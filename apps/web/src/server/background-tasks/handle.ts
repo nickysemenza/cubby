@@ -30,14 +30,29 @@ const productionExtractImageMetadata: ExtractImageMetadataPort = async (
   return extractAndStoreImageMetadata(db, imageId);
 };
 
+type MarkCalendarFeedDirtyPort = (
+  origin: string,
+  reason: string,
+) => Promise<void>;
+
+const productionMarkCalendarFeedDirty: MarkCalendarFeedDirtyPort = async (
+  origin,
+  reason,
+) => {
+  const { calendarFeedStateFor } = await import("~/server/calendar/client");
+  await (await calendarFeedStateFor(origin)).markDirty(reason);
+};
+
 export interface BackgroundTaskPorts {
   readonly embedding: EmbeddingRefreshPort;
   readonly extractImageMetadata: ExtractImageMetadataPort;
+  readonly markCalendarFeedDirty: MarkCalendarFeedDirtyPort;
 }
 
 export const productionBackgroundTaskPorts: BackgroundTaskPorts = {
   embedding: productionEmbeddingRefreshPort,
   extractImageMetadata: productionExtractImageMetadata,
+  markCalendarFeedDirty: productionMarkCalendarFeedDirty,
 };
 
 /**
@@ -156,6 +171,12 @@ export async function handleBackgroundTask(
       const { runVendorMailSearchJob } =
         await import("~/server/purchase-import/gmail/search-job");
       return runVendorMailSearchJob(db, task.jobId, { page: task.page });
+    }
+    case "calendar-feed.mark-dirty": {
+      // Propagates a failure on purpose: the queue retries only a throwing
+      // handler, and `markDirty` is a flag set, so replay is harmless.
+      await ports.markCalendarFeedDirty(task.origin, task.reason);
+      return "succeeded";
     }
   }
 }

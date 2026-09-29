@@ -1,3 +1,4 @@
+import type { ImageProcessingJobKind } from "@cubby/schemas/image-processing";
 import {
   imageProcessingSettings,
   imageProcessingMaintenanceCounts,
@@ -25,6 +26,15 @@ import {
 // A namespaced settings row, not an import session or a processing run.
 const SETTINGS_ID = "00000000-0000-4000-8000-000000000071";
 const DEFAULTS = { enabled: false, paused: true };
+
+const ALL_IMAGE_PROCESSING_KINDS: readonly ImageProcessingJobKind[] = [
+  "describe_image",
+  "subject_lift",
+];
+const REVISION_BY_KIND = {
+  describe_image: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  subject_lift: IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+} satisfies Record<ImageProcessingJobKind, number>;
 
 export async function readImageProcessingSettings(
   db: Database | DrizzleTransaction,
@@ -119,8 +129,13 @@ export async function imageProcessingMaintenanceSummary(db: Database) {
 
 export async function backfillImageProcessing(
   db: Database,
-  input: { batchSize: number; retryFailures: boolean },
+  input: {
+    batchSize: number;
+    retryFailures: boolean;
+    kinds?: readonly ImageProcessingJobKind[];
+  },
 ) {
+  const kinds = input.kinds ?? ALL_IMAGE_PROCESSING_KINDS;
   const { scheduleImageProcessingJobs, publishImageProcessingWakeups } =
     await import("~/server/services/image-processing.service");
   const settings = await readImageProcessingSettings(db);
@@ -129,6 +144,7 @@ export async function backfillImageProcessing(
   if (input.retryFailures) {
     const jobs = await retryFailedImageProcessingJobs(db, input.batchSize, {
       submissionId: submission.id,
+      kinds,
     });
     await publishImageProcessingWakeups(db, jobs);
     return {
@@ -137,16 +153,19 @@ export async function backfillImageProcessing(
       submissionId: submission.publicId,
     };
   }
-  // A batch contains only images missing a current description or cutout decision.
+  // A batch contains only images missing a current job of a requested kind.
   // Existing failed/skipped work is not silently reclassified or retried.
+  const missing = kinds.map(
+    (
+      kind,
+    ) => sql`NOT EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."imageId" = i.id
+          AND j.kind = ${kind} AND j."sourceContentHash" = i.sha256 AND j."processorRevision" = ${REVISION_BY_KIND[kind]})`,
+  );
   const result = await getDb(db).execute(sql`
     SELECT i.shortcode FROM "Image" i
     WHERE i."deletedAt" IS NULL AND i.status = 'UPLOADED'
       AND i.sha256 IS NOT NULL AND i."contentType" LIKE 'image/%'
-      AND (NOT EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."imageId" = i.id
-          AND j.kind = 'describe_image' AND j."sourceContentHash" = i.sha256 AND j."processorRevision" = ${IMAGE_DESCRIPTION_PROCESSOR_REVISION})
-        OR NOT EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."imageId" = i.id
-          AND j.kind = 'subject_lift' AND j."sourceContentHash" = i.sha256 AND j."processorRevision" = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION}))
+      AND (${sql.join(missing, sql` OR `)})
     ORDER BY i."createdAt", i.id LIMIT ${input.batchSize}
   `);
   const rows = z.array(z.object({ shortcode: z.string() })).parse(result.rows);
@@ -154,7 +173,7 @@ export async function backfillImageProcessing(
   for (const row of rows) {
     const scheduled = await scheduleImageProcessingJobs(db, {
       id: row.shortcode,
-      kinds: ["describe_image", "subject_lift"],
+      kinds,
       publish: false,
       submission,
     });

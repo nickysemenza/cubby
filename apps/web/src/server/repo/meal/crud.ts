@@ -349,12 +349,6 @@ export const createMealWithEntityId = async (
   return { output: await requireMeal(db, id), entityId: id };
 };
 
-export const createMeal = async (
-  db: Database,
-  data: MealCreateInput,
-  actor: ActorContext,
-): Promise<MealOut> => (await createMealWithEntityId(db, data, actor)).output;
-
 export const updateMeal = async (
   db: Database,
   id: MealId,

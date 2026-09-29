@@ -1,8 +1,8 @@
-import { countsSchema } from "@cubby/usda-contract";
-import type { FoodLookupParam, FoodSummary } from "@cubby/usda-schemas";
+import { countsSchema } from "@cubby/usda/contract";
+import type { FoodLookupParam, FoodSummary } from "@cubby/usda";
 import type { D1PreparedStatement } from "@cloudflare/workers-types";
 import { type SpanAttr, withSpan } from "@cubby/worker-tracing";
-import { toFtsQuery } from "../search/fts-query.js";
+import { toFtsFallbackQuery, toFtsQuery } from "../search/fts-query.js";
 import { manifestKey } from "./artifact-layout.js";
 import {
   createFoodBundleLoader,
@@ -358,84 +358,100 @@ export function createEdgeUsdaDataSource(
       // Decide on the *built* query, not the raw filter: a punctuation-only
       // filter such as "-" trims to a non-empty string but tokenizes to nothing,
       // and `MATCH ''` is an FTS5 syntax error (a 500 in production).
-      const ftsQuery = toFtsQuery(nameFilter ?? "");
-      const hasName = ftsQuery.length > 0;
-      let dataFrom: string;
-      let countFrom: string;
-      let where: string;
-      let values: string[];
+      const andQuery = toFtsQuery(nameFilter ?? "");
+      const hasName = andQuery.length > 0;
 
-      if (hasName) {
-        dataFrom = `${tables.foodSearch}
+      const runPage = async (ftsQuery: string) => {
+        let dataFrom: string;
+        let countFrom: string;
+        let where: string;
+        let values: string[];
+
+        if (hasName) {
+          dataFrom = `${tables.foodSearch}
              INNER JOIN ${tables.foodIndex} i
                ON i.fdc_id = ${tables.foodSearch}.fdc_id`;
-        countFrom = tables.foodSearch;
-        const dt = dataTypePredicate(
-          `${tables.foodSearch}.data_type`,
-          dataTypeFilter,
-          foodsOnly,
-          dataTypes,
-        );
-        where =
-          `WHERE ${tables.foodSearch} MATCH ?` +
-          (dt.sql ? ` AND ${dt.sql}` : "");
-        values = [ftsQuery, ...dt.values];
-      } else {
-        dataFrom = `${tables.foodIndex} i`;
-        countFrom = `${tables.foodIndex} i`;
-        const dt = dataTypePredicate(
-          "i.data_type",
-          dataTypeFilter,
-          foodsOnly,
-          dataTypes,
-        );
-        where = dt.sql ? `WHERE ${dt.sql}` : "";
-        values = dt.values;
-      }
-
-      // Relevance ordering only means something with an FTS query. Textual fit
-      // leads: literal/whole-word/prefix matches, then bm25 and description
-      // specificity. Data type is a late tie-break because Foundation, Survey,
-      // Branded, and SR Legacy serve different use cases; none is a universal
-      // "best" record. FDC id is only the unique terminal key required for
-      // deterministic LIMIT/OFFSET paging, never a quality or recency signal.
-      // These extra `?`s bind AFTER the WHERE values and BEFORE LIMIT/OFFSET, by
-      // SQL appearance order. Without a name filter, fall back to alphabetical.
-      const orderValues: string[] = [];
-      let orderClause: string;
-      if (orderBy === "relevance") {
-        if (hasName) {
-          orderValues.push(...matchQualityBindings(nameFilter?.trim() ?? ""));
-          // The trailing `i.fdc_id ASC` is a stability tiebreak, not a
-          // preference: without a unique terminal key, rows tied on all four
-          // ranking keys come back in SQLite-defined order, which makes
-          // LIMIT/OFFSET paging non-deterministic — the same row can appear on
-          // two pages, or on neither.
-          orderClause = `${matchQualityCase("i.description")} ASC, ${tables.foodSearch}.rank ASC, LENGTH(i.description) ASC, ${dataTypePriorityCase(`${tables.foodSearch}.data_type`)} ASC, i.fdc_id ASC`;
+          countFrom = tables.foodSearch;
+          const dt = dataTypePredicate(
+            `${tables.foodSearch}.data_type`,
+            dataTypeFilter,
+            foodsOnly,
+            dataTypes,
+          );
+          where =
+            `WHERE ${tables.foodSearch} MATCH ?` +
+            (dt.sql ? ` AND ${dt.sql}` : "");
+          values = [ftsQuery, ...dt.values];
         } else {
-          orderClause = "i.description ASC";
+          dataFrom = `${tables.foodIndex} i`;
+          countFrom = `${tables.foodIndex} i`;
+          const dt = dataTypePredicate(
+            "i.data_type",
+            dataTypeFilter,
+            foodsOnly,
+            dataTypes,
+          );
+          where = dt.sql ? `WHERE ${dt.sql}` : "";
+          values = dt.values;
         }
-      } else {
-        orderClause = `i.${sqlOrderBy(orderBy)} ${sqlDirection(direction)}`;
-      }
 
-      // Data and count queries are independent — run them in one round trip.
-      const [result, countRow] = await Promise.all([
-        env.DB.prepare(
-          `SELECT i.*
+        // Relevance ordering only means something with an FTS query. Textual
+        // fit leads: literal/whole-word/prefix matches, then bm25 and
+        // description specificity. Data type is a late tie-break because
+        // Foundation, Survey, Branded, and SR Legacy serve different use cases;
+        // none is a universal "best" record. FDC id is only the unique terminal
+        // key required for deterministic LIMIT/OFFSET paging, never a quality
+        // or recency signal. These extra `?`s bind AFTER the WHERE values and
+        // BEFORE LIMIT/OFFSET, by SQL appearance order. Without a name filter,
+        // fall back to alphabetical.
+        const orderValues: string[] = [];
+        let orderClause: string;
+        if (orderBy === "relevance") {
+          if (hasName) {
+            orderValues.push(...matchQualityBindings(nameFilter?.trim() ?? ""));
+            // The trailing `i.fdc_id ASC` is a stability tiebreak, not a
+            // preference: without a unique terminal key, rows tied on all four
+            // ranking keys come back in SQLite-defined order, which makes
+            // LIMIT/OFFSET paging non-deterministic — the same row can appear
+            // on two pages, or on neither.
+            orderClause = `${matchQualityCase("i.description")} ASC, ${tables.foodSearch}.rank ASC, LENGTH(i.description) ASC, ${dataTypePriorityCase(`${tables.foodSearch}.data_type`)} ASC, i.fdc_id ASC`;
+          } else {
+            orderClause = "i.description ASC";
+          }
+        } else {
+          orderClause = `i.${sqlOrderBy(orderBy)} ${sqlDirection(direction)}`;
+        }
+
+        // Data and count queries are independent — run them in one round trip.
+        const [result, countRow] = await Promise.all([
+          env.DB.prepare(
+            `SELECT i.*
            FROM ${dataFrom}
            ${where}
            ORDER BY ${orderClause}
            LIMIT ? OFFSET ?`,
-        )
-          .bind(...values, ...orderValues, pageSize, offset)
-          .all<FoodIndexRow>(),
-        env.DB.prepare(`SELECT count(*) as count FROM ${countFrom} ${where}`)
-          .bind(...values)
-          .first<{ count: number }>(),
-      ]);
-      const rows = rowsFromResult(result);
-      const totalCount = countRow?.count ?? 0;
+          )
+            .bind(...values, ...orderValues, pageSize, offset)
+            .all<FoodIndexRow>(),
+          env.DB.prepare(`SELECT count(*) as count FROM ${countFrom} ${where}`)
+            .bind(...values)
+            .first<{ count: number }>(),
+        ]);
+        return {
+          rows: rowsFromResult(result),
+          totalCount: countRow?.count ?? 0,
+        };
+      };
+
+      let page = await runPage(andQuery);
+      // The fallback decision is the AND *count*, not the page: an empty page
+      // past the end of a non-empty result is paging, not a miss. Data and
+      // count both re-run under the fallback so they stay consistent.
+      if (hasName && page.totalCount === 0) {
+        const fallbackQuery = toFtsFallbackQuery(nameFilter ?? "");
+        if (fallbackQuery.length > 0) page = await runPage(fallbackQuery);
+      }
+      const { rows, totalCount } = page;
 
       const data = (await hydrateRows(rows)).filter(
         (food): food is FoodSummary => food !== null,

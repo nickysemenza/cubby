@@ -1,10 +1,10 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import type { FoodPortion, NutrientsPer100 } from "@cubby/usda-schemas";
+import type { FoodPortion, NutrientsPer100 } from "@cubby/usda";
 import { useMemo, useState } from "react";
 
 import { Stack } from "~/components/layout";
 import { ChoiceSwitcher } from "~/components/ui/view-switcher";
-import { sourceNutritionEstimate } from "~/lib/nutrition-format";
+import { sourceNutritionEstimate, trimAmount } from "~/lib/nutrition-format";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 import { usdaNutrientBasis } from "~/lib/unit-mapping-utils";
 
@@ -64,8 +64,6 @@ const resolveServingBasis = (
   }
   return null;
 };
-
-const trimAmount = (v: number) => Number(v.toFixed(1)).toString();
 
 /**
  * Product-detail nutrition label with a per-100-basis / per-serving toggle

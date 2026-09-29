@@ -5,13 +5,17 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  type EntityRecommendationOperations,
+  EntityRecommendations,
+} from "~/app/_components/relatedness/entity-recommendations";
+import {
   inventory,
   recommendations,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { categorySummaryFixture } from "../../../../tooling/product-category-fixtures";
-import { InventoryPlacementSuggestion } from "./inventory-placement-suggestion";
+import { useInventoryPlacementAction } from "./inventory-placement-suggestion";
 
 const INVENTORY_ID = testShortcode("inventory", "INV-PARK");
 const SURVIVING_INVENTORY_ID = testShortcode("inventory", "INV-PNTR");
@@ -94,6 +98,28 @@ const recommendation = entityRecommendationsOut.parse({
   ],
 });
 
+function PlacementSuggestion({
+  recommendationOperations,
+  moveOperation,
+}: {
+  recommendationOperations: EntityRecommendationOperations;
+  moveOperation: typeof inventory.moveEntries;
+}) {
+  const placement = useInventoryPlacementAction({
+    inventoryitem,
+    moveOperation,
+  });
+  return (
+    <EntityRecommendations
+      source={{ entityKind: "inventory", entityId: inventoryitem.id }}
+      operations={recommendationOperations}
+      compact
+      pending={placement.isPending}
+      onAcceptInventoryPlacement={placement.accept}
+    />
+  );
+}
+
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {
   harness = createBrowserTestHarness({
@@ -102,7 +128,7 @@ beforeEach(() => {
 });
 afterEach(() => harness.dispose());
 
-describe("InventoryPlacementSuggestion", () => {
+describe("useInventoryPlacementAction", () => {
   it("previews the move and sends the existing atomic move payload only after apply", async () => {
     const move = vi.fn(async () => ({
       items: [
@@ -120,8 +146,7 @@ describe("InventoryPlacementSuggestion", () => {
       sideEffects: {},
     }));
     render(
-      <InventoryPlacementSuggestion
-        inventoryitem={inventoryitem}
+      <PlacementSuggestion
         recommendationOperations={{
           forEntity: recommendations.forEntity.withTransport(
             async () => recommendation,
@@ -166,8 +191,7 @@ describe("InventoryPlacementSuggestion", () => {
 
   it("shows the mutation error and retains the proposed move", async () => {
     render(
-      <InventoryPlacementSuggestion
-        inventoryitem={inventoryitem}
+      <PlacementSuggestion
         recommendationOperations={{
           forEntity: recommendations.forEntity.withTransport(
             async () => recommendation,

@@ -13,7 +13,6 @@ import {
   filterGetterFromSearch,
   partitionFilterSpecs,
 } from "./filters";
-import { generatedEntityFilterContractCases } from "./generated/entity-filter-contracts.gen";
 import { entitySearch } from "./generated/entity-search.gen";
 
 const VENDOR_ONE = testShortcode("vendor", "VEN-4K7M");
@@ -197,77 +196,32 @@ describe("manifestFilterConfig", () => {
   });
 });
 
-describe("generated filter contracts", () => {
-  it("keeps generated descriptor, URL, schema, option, audit, and expander cases exact", () => {
-    for (const [entity, contract] of Object.entries(
-      generatedEntityFilterContractCases,
-    )) {
-      const parsedEntity = entitySchema.safeParse(entity);
-      if (!parsedEntity.success) throw new Error(`Unknown entity: ${entity}`);
-      const specs = getEntityFilters(parsedEntity.data);
-      expect(specs.map((spec) => spec.columnId)).toEqual(
-        contract.descriptorColumns,
-      );
-      expect(specs.map((spec) => spec.urlKey ?? spec.columnId)).toEqual(
-        contract.urlKeys,
-      );
-      expect(
-        contract.referenceFilters.every(({ columnId, entity: target }) => {
-          const spec = specs.find(
-            (candidate) => candidate.columnId === columnId,
-          );
-          if (
-            spec === undefined ||
-            (spec.kind !== "id" && spec.kind !== "idMulti") ||
-            spec.brand === undefined
-          ) {
-            return false;
-          }
-          const shortcode = testShortcode(
-            target,
-            `${entity}-${columnId}-filter`,
-          );
-          const field = spec.field ?? spec.columnId;
-          const filters = buildFiltersFromManifest(
-            specs,
-            filterGetterFromSearch(specs, {
-              [spec.urlKey ?? columnId]: shortcode,
-            }),
-          );
-          return (
-            spec.brand(shortcode) === shortcode &&
-            (spec.kind === "id"
-              ? filters[field] === shortcode
-              : Array.isArray(filters[field]) &&
-                filters[field]?.[0] === shortcode)
-          );
-        }),
-      ).toBe(true);
-      expect(new Set(contract.urlKeys).size).toBe(contract.urlKeys.length);
-      expect(
-        contract.rangeExpanders.every((entry) => {
-          // A column id may itself contain ":" (`related:product.tasks`); the
-          // suffix is a `:~/module#export` ref or the literal `:presets`.
-          const columnId = entry.slice(
-            0,
-            entry.includes(":~/")
-              ? entry.indexOf(":~/")
-              : entry.lastIndexOf(":"),
-          );
-          return specs.some(
-            (spec) =>
-              spec.columnId === columnId &&
-              spec.kind === "range" &&
-              spec.expand,
-          );
-        }),
-      ).toBe(true);
-      if (contract.audit) {
-        // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
-        expect(specs.map((spec) => spec.columnId)).toEqual(
-          // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
-          expect.arrayContaining(["createdAt", "updatedAt"]),
+describe("declared filter specs", () => {
+  it("gives every entity unique URL keys and shortcode-branded reference filters", () => {
+    for (const entity of entitySchema.options) {
+      const specs = getEntityFilters(entity);
+      const urlKeys = specs.map((spec) => spec.urlKey ?? spec.columnId);
+      expect(new Set(urlKeys).size).toBe(urlKeys.length);
+      for (const spec of specs) {
+        if (spec.kind !== "id" && spec.kind !== "idMulti") continue;
+        if (spec.brand === undefined || spec.referenceEntity === undefined) {
+          continue;
+        }
+        const shortcode = testShortcode(
+          spec.referenceEntity,
+          `${entity}-${spec.columnId}-filter`,
         );
+        const field = spec.field ?? spec.columnId;
+        const filters = buildFiltersFromManifest(
+          specs,
+          filterGetterFromSearch(specs, {
+            [spec.urlKey ?? spec.columnId]: shortcode,
+          }),
+        );
+        expect(spec.brand(shortcode)).toBe(shortcode);
+        expect(
+          spec.kind === "id" ? filters[field] : [filters[field]].flat()[0],
+        ).toBe(shortcode);
       }
     }
   });

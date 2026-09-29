@@ -31,7 +31,10 @@ import {
   type RecipeId,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import type { CookbookSummary } from "@cubby/schemas/recipe";
+import type {
+  CookbookSummary,
+  CookbookUpdateInput,
+} from "@cubby/schemas/recipe";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -45,7 +48,7 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
-import { logAuditEntry } from "~/server/repo/audit-log";
+import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { cookbookSourceRecipeCountSql } from "~/server/repo/cookbook-source-count";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
@@ -415,6 +418,70 @@ export const setCookbookProduct = async (
     throw createAppError("COOKBOOK_NOT_FOUND", `Cookbook ${id} not found`);
   }
   return summary;
+};
+
+/**
+ * Rename a cookbook or edit its author/subject lists (`cookbook.update`).
+ * The live title is unique, so a taken title is refused up front naming the
+ * holder; the unique index backstops a race, and the caller's transaction
+ * (the kernel's) rolls back either way.
+ */
+export const updateCookbook = async (
+  db: Database,
+  actor: ActorContext,
+  shortcode: CookbookShortcode,
+  data: CookbookUpdateInput,
+): Promise<{ output: CookbookSummary; entityId: CookbookId }> => {
+  const before = await getDb(db).query.cookbook.findFirst({
+    where: and(eq(cookbook.shortcode, shortcode), notDeleted(cookbook)),
+  });
+  if (!before) {
+    throw createAppError(
+      "COOKBOOK_NOT_FOUND",
+      `Cookbook ${shortcode} not found`,
+    );
+  }
+  const values = {
+    name: data.name,
+    author: data.author,
+    subjects: data.subjects,
+  } satisfies Partial<typeof cookbook.$inferInsert>;
+  if (data.name !== undefined && data.name !== before.name) {
+    const holder = await getCookbookByName(db, data.name);
+    if (holder && holder.id !== before.id) {
+      throw createAppError(
+        "DUPLICATE_RECORD",
+        `Cookbook title "${data.name}" is already used by ${holder.shortcode}; pick another title.`,
+      );
+    }
+  }
+  const updated = await updateAndReturn(
+    db,
+    cookbook,
+    values,
+    and(eq(cookbook.id, before.id), notDeleted(cookbook)),
+  );
+  const changes = computeChanges(before, updated, [
+    "name",
+    "author",
+    "subjects",
+  ]);
+  if (changes) {
+    await logAuditEntry(db, actor, {
+      entityKind: "cookbook",
+      entityId: before.id,
+      action: "update",
+      changes,
+    });
+  }
+  const summary = await getCookbookSummary(db, shortcode);
+  if (!summary) {
+    throw createAppError(
+      "COOKBOOK_NOT_FOUND",
+      `Cookbook ${shortcode} not found`,
+    );
+  }
+  return { output: summary, entityId: before.id };
 };
 
 /**

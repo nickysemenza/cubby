@@ -5,6 +5,11 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { type ReactNode, useMemo } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import {
+  describeProductPricingSource,
+  productPriceClearLabel,
+  renderProductPriceValue,
+} from "~/entities/list-columns/product";
 import { booleanCellOptions } from "~/lib/select-options";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { formatCurrency } from "~/lib/utils";
@@ -18,9 +23,6 @@ import {
   createImageColumn,
   createNameColumn,
   createSingleEntityInlineLinkColumn,
-  describeProductPricingSource,
-  productPriceClearLabel,
-  renderProductPriceValue,
   rowImages,
 } from "./columnHelpers";
 import { EditableCell } from "./editable-cell";

@@ -4,7 +4,7 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { ImageAssociation, ImageWithEntity } from "@cubby/schemas/image";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import { dataTypeLabel } from "@cubby/usda-schemas";
+import { dataTypeLabel } from "@cubby/usda";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { z } from "zod";

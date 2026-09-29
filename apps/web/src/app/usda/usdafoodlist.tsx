@@ -3,11 +3,7 @@ import type {
   USDAFoodSortField,
 } from "@cubby/schemas/usda";
 import { usdaListInput } from "@cubby/schemas/usda";
-import {
-  type DataType,
-  dataTypeEnum,
-  dataTypeLabel,
-} from "@cubby/usda-schemas";
+import { type DataType, dataTypeEnum, dataTypeLabel } from "@cubby/usda";
 import { useCallback, useEffect, useMemo } from "react";
 
 import { DataTableToolbar } from "~/app/_components/data-table/data-table-toolbar";

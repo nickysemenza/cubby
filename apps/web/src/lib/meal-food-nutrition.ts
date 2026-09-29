@@ -17,7 +17,7 @@ import {
   isNutrientKey,
   TIER1_NUTRIENT_KEYS,
   TIER1_NUTRIENTS,
-} from "@cubby/usda-schemas";
+} from "@cubby/usda";
 
 import {
   fromNamedEstimates,

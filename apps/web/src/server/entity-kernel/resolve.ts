@@ -2,8 +2,8 @@
  * The declared `capabilities.resolve`: names → live rows, one implementation
  * for every resolvable entity. One exact pass matches every requested name
  * case-insensitively against the declared stored columns (`text-array`
- * columns by element); misses get one batched contains pass when the entity
- * declares `candidates`, and — only when the caller asks and the declaration
+ * columns by element); misses get one batched lexical pass (contains, token
+ * OR, trigram) when the entity declares `candidates`, and — only when the caller asks and the declaration
  * allows it — a race-safe find-or-create.
  *
  * Kept free of kernel/service imports: repositories call `resolveNames`
@@ -14,6 +14,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
 import { type EntityId, parseEntityId } from "@cubby/schemas/identifiers";
+import { searchableEntitySchema } from "@cubby/schemas/search";
 import {
   and,
   getTableColumns,
@@ -32,6 +33,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { generatedEntityResolveCapabilities } from "~/server/generated/entity-kernel-entities.gen";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import { buildAnyPrefixTsQuery } from "~/server/repo/search-lexical";
 import {
   SHORTCODE_TABLE,
   type ShortcodeTable,
@@ -263,15 +265,25 @@ const createMiss = async <E extends ResolvableEntity>(
   return resolvedRow(plan.entity, stored, created);
 };
 
-/** One batched contains pass for every miss — not a round trip per name. */
+/**
+ * One batched candidate pass for every miss — not a round trip per name.
+ * Best tier first: the stored name/aliases contain the request, the request
+ * contains the stored name ("Organic Example Fruit" finds "Example Fruit"),
+ * any request token prefixes the row's search vector (ranked by how many),
+ * then a trigram-similar title. The search-document arms are additive: a row
+ * not yet indexed still matches through the stored columns.
+ */
 const candidatesFor = async <E extends ResolvableEntity>(
   db: Db,
   plan: ResolvePlan & { entity: E },
   limit: number,
   lowered: readonly string[],
 ): Promise<Map<string, ResolvedName<E>["candidates"]>> => {
+  // A resolvable entity that declares `candidates` must be indexed for search.
+  const entityKind = searchableEntitySchema.parse(plan.entity);
   const qualified = (column: PgColumn) =>
     sql.raw(`t.${JSON.stringify(column.name)}`);
+  const name = qualified(plan.name.column);
   const contains = or(
     ...plan.match.map(({ column, array }) =>
       array
@@ -279,18 +291,38 @@ const candidatesFor = async <E extends ResolvableEntity>(
         : sql`${qualified(column)} ILIKE '%' || m.key || '%'`,
     ),
   );
+  const contained = sql`(char_length(${name}) >= 3 AND strpos(m.key, lower(${name})) > 0)`;
+  const tokenQuery = sql`to_tsquery('simple', NULLIF(m.tsq, ''))`;
+  const tokenMatch = sql`sd."searchVector" @@ ${tokenQuery}`;
   const scoped = sql.join(
     plan.scope.map((column) => sql` AND ${qualified(column)} IS NULL`),
     sql``,
   );
   const result = await unwrapDb(db).execute(sql`
     SELECT m.key AS key, cand.id AS id, cand.shortcode AS shortcode, cand.name AS name
-    FROM unnest(ARRAY[${textList(lowered)}]::text[]) AS m(key)
+    FROM unnest(
+      ARRAY[${textList(lowered)}]::text[],
+      ARRAY[${textList(lowered.map(buildAnyPrefixTsQuery))}]::text[]
+    ) AS m(key, tsq)
     CROSS JOIN LATERAL (
-      SELECT t."id" AS id, t."shortcode" AS shortcode, ${qualified(plan.name.column)} AS name
+      SELECT t."id" AS id, t."shortcode" AS shortcode, ${name} AS name
       FROM ${sql.identifier(getTableName(plan.table))} t
-      WHERE t."deletedAt" IS NULL${scoped} AND (${contains})
-      ORDER BY ${qualified(plan.name.column)} ASC, t."shortcode" ASC, t."id" ASC
+      LEFT JOIN "SearchDocument" sd
+        ON sd."entityId" = t."id"
+        AND sd."entityKind" = ${entityKind}
+        AND sd."deletedAt" IS NULL
+      WHERE t."deletedAt" IS NULL${scoped}
+        AND (
+          ${contains}
+          OR ${contained}
+          OR ${tokenMatch}
+          OR (char_length(m.key) >= 3 AND sd."normalizedText" % m.key)
+        )
+      ORDER BY
+        CASE WHEN ${contains} THEN 0 WHEN ${contained} THEN 1 WHEN ${tokenMatch} THEN 2 ELSE 3 END,
+        COALESCE(ts_rank_cd(sd."searchVector", ${tokenQuery}), 0) DESC,
+        COALESCE(similarity(sd."normalizedText", m.key), 0) DESC,
+        ${name} ASC, t."shortcode" ASC, t."id" ASC
       LIMIT ${limit}
     ) cand
   `);

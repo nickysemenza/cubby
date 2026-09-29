@@ -7,7 +7,7 @@ import type {
 } from "@cubby/schemas/project";
 import type { ProductCategory } from "@cubby/shared";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
-import type { DataType } from "@cubby/usda-schemas";
+import type { DataType } from "@cubby/usda";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
 

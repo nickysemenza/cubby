@@ -19,6 +19,12 @@ import { formatRelative } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
 
 import {
+  RECOUNT_WORKLISTS,
+  type RecountWorklist,
+  WORKLIST_TITLES,
+  worklistScopeKey,
+} from "../../worklist/worklist-locations";
+import {
   flattenAllLocations,
   flattenAuditableLocations,
   flattenPickerTree,
@@ -34,14 +40,20 @@ import {
 
 const NO_STORED_PASSES: StoredSessionPass[] = [];
 
+const worklistForRootId = (rootId: string) =>
+  RECOUNT_WORKLISTS.find((worklist) => worklistScopeKey(worklist) === rootId) ??
+  null;
+
 export function ParentPicker({
   locations,
   initialParentShortcode,
   onSelect,
+  onSelectWorklist,
 }: {
   locations: InfLocation[];
   initialParentShortcode?: LocationShortcode;
   onSelect: (shortcode: LocationShortcode) => void;
+  onSelectWorklist: (worklist: RecountWorklist) => void;
 }) {
   const candidateIds = useMemo(
     () =>
@@ -91,6 +103,9 @@ export function ParentPicker({
     // resumed, so drop its key rather than showing a dead card.
     setStoredPasses(
       listStoredSessionPasses().filter((pass) => {
+        // A worklist pass is keyed by the worklist, not a location, so it has
+        // no root to go missing.
+        if (worklistForRootId(pass.rootId)) return true;
         if (locationsById.has(pass.rootId)) return true;
         clearStoredSessionPass(pass.rootId);
         return false;
@@ -101,6 +116,23 @@ export function ParentPicker({
   const inProgressPasses = useMemo(
     () =>
       storedPasses.flatMap((pass) => {
+        const worklist = worklistForRootId(pass.rootId);
+        if (worklist) {
+          // The worklist's live size is a product-set read the picker does not
+          // make, so the persisted total is the only one available here.
+          const total = pass.totalCount ?? 0;
+          const settled = pass.completedCount + pass.skippedCount;
+          if (total === 0 || settled >= total) return [];
+          return [
+            {
+              ...pass,
+              name: WORKLIST_TITLES[worklist],
+              resume: () => onSelectWorklist(worklist),
+              settled,
+              total,
+            },
+          ];
+        }
         const location = locationsById.get(pass.rootId);
         if (!location) return [];
         // The live tree is authoritative for the total; the persisted count is
@@ -109,9 +141,17 @@ export function ParentPicker({
           flattenAuditableLocations(location).length || (pass.totalCount ?? 0);
         const settled = pass.completedCount + pass.skippedCount;
         if (total === 0 || settled >= total) return [];
-        return [{ ...pass, location, settled, total }];
+        return [
+          {
+            ...pass,
+            name: location.name,
+            resume: () => onSelect(location.id),
+            settled,
+            total,
+          },
+        ];
       }),
-    [locationsById, storedPasses],
+    [locationsById, onSelect, onSelectWorklist, storedPasses],
   );
 
   const dismissPass = (rootId: string) => {
@@ -168,7 +208,7 @@ export function ParentPicker({
                 <Stack gap="xs" className="min-w-0 flex-1">
                   <Row align="center" gap="sm" className="min-w-0">
                     <span className="min-w-0 truncate text-sm font-medium">
-                      {pass.location.name}
+                      {pass.name}
                     </span>
                     <Badge variant="outline">
                       {pass.settled}/{pass.total}
@@ -185,7 +225,7 @@ export function ParentPicker({
                 <Button
                   type="button"
                   className="min-h-12 shrink-0"
-                  onClick={() => onSelect(pass.location.id)}
+                  onClick={pass.resume}
                 >
                   Resume
                 </Button>
@@ -193,7 +233,7 @@ export function ParentPicker({
                   type="button"
                   variant="ghost"
                   className="min-h-12 shrink-0 px-2"
-                  aria-label={`Dismiss saved ${pass.location.name} recount`}
+                  aria-label={`Dismiss saved ${pass.name} recount`}
                   onClick={() => dismissPass(pass.rootId)}
                 >
                   <XIcon />
@@ -233,6 +273,17 @@ export function ParentPicker({
               >
                 {showAreas ? "Hide areas" : "Choose an area"}
               </Button>
+              {RECOUNT_WORKLISTS.map((worklist) => (
+                <Button
+                  key={worklist}
+                  type="button"
+                  variant="outline"
+                  className="min-h-12"
+                  onClick={() => onSelectWorklist(worklist)}
+                >
+                  Recount: {WORKLIST_TITLES[worklist]}
+                </Button>
+              ))}
             </Row>
           </Stack>
           {showAreas && (

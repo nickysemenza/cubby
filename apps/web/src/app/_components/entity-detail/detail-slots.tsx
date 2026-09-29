@@ -35,6 +35,9 @@ const IMPORT_WORKFLOW_PURPOSES: ReadonlySet<RunPurpose> = new Set([
   "file_import",
 ]);
 
+const isImportRun = (run: { purpose: RunPurpose }) =>
+  IMPORT_WORKFLOW_PURPOSES.has(run.purpose);
+
 type SlotModule<T> = Promise<{ default: T }>;
 const slot = <E extends GenericDetailEntity>(
   load: () => SlotModule<DetailSlotComponent<E>>,
@@ -112,6 +115,11 @@ export const detailSlots = {
     "nutrition-product": slot(() =>
       import("~/app/ingredients/slots").then((m) => ({
         default: m.IngredientNutritionProduct,
+      })),
+    ),
+    "recipe-usages": slot(() =>
+      import("~/app/ingredients/slots").then((m) => ({
+        default: m.IngredientRecipeUsages,
       })),
     ),
   },
@@ -225,12 +233,103 @@ export const detailSlots = {
         default: m.RunLiveProgress,
       })),
     ),
-    "import-workflow": slot(
+    "import-controls": slot(
       () =>
         import("~/app/purchases/purchase-import-run-detail").then((m) => ({
-          default: m.RunImportWorkflow,
+          default: m.RunImportControls,
         })),
-      (run) => IMPORT_WORKFLOW_PURPOSES.has(run.purpose),
+      isImportRun,
+    ),
+    "import-stats": slot(
+      () =>
+        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+          default: m.RunImportStats,
+        })),
+      isImportRun,
+    ),
+    "import-progress-live": slot(
+      () =>
+        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+          default: m.RunImportProgressActive,
+        })),
+      isImportRun,
+    ),
+    "import-agent-live": slot(
+      () =>
+        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+          default: m.RunImportAgentActive,
+        })),
+      isImportRun,
+    ),
+    "import-purchases": slot(
+      () =>
+        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+          default: m.RunImportPurchases,
+        })),
+      isImportRun,
+    ),
+    "import-approvals": slot(
+      () =>
+        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+          default: m.RunImportApprovals,
+        })),
+      isImportRun,
+    ),
+    "import-findings": slot(
+      () =>
+        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+          default: m.RunImportFindings,
+        })),
+      isImportRun,
+    ),
+    "import-targets": slot(
+      () =>
+        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+          default: m.RunImportTargets,
+        })),
+      isImportRun,
+    ),
+    "import-evidence": slot(
+      () =>
+        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+          default: m.RunImportEvidence,
+        })),
+      isImportRun,
+    ),
+    "import-prepared-orders": slot(
+      () =>
+        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+          default: m.RunImportPreparedOrders,
+        })),
+      isImportRun,
+    ),
+    "import-progress-stopped": slot(
+      () =>
+        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+          default: m.RunImportProgressStopped,
+        })),
+      isImportRun,
+    ),
+    "import-agent-stopped": slot(
+      () =>
+        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+          default: m.RunImportAgentStopped,
+        })),
+      isImportRun,
+    ),
+    "import-timeline": slot(
+      () =>
+        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+          default: m.RunImportTimeline,
+        })),
+      isImportRun,
+    ),
+    "import-debug-log": slot(
+      () =>
+        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+          default: m.RunImportDebugLog,
+        })),
+      isImportRun,
     ),
     "photo-batch": slot(
       () =>

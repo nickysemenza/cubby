@@ -6,7 +6,8 @@ import type {
   CalendarProjection,
 } from "~/server/calendar/caldav-types";
 import { getDb } from "~/server/repo/database-helpers";
-import { createMeal, getMealByID } from "~/server/repo/meal";
+import { getMealByID } from "~/server/repo/meal";
+import { createMealWithEntityId } from "~/server/repo/meal/crud";
 import { updateTask } from "~/server/repo/task";
 
 import { executeCalDavWrite, loadCalDavProjection } from "./calendar-caldav";
@@ -80,7 +81,7 @@ describe("CalDAV canonical mutation seam", () => {
   });
 
   it("keeps an unnamed meal unnamed when its generated title is echoed, then updates it canonically", async () => {
-    const meal = await createMeal(
+    const { output: meal } = await createMealWithEntityId(
       ctx.db,
       { date: "2026-09-07", name: null, mealType: "breakfast" },
       ctx.actor,

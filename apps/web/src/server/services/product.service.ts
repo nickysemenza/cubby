@@ -11,7 +11,7 @@ import type {
   ProductUpdateInput,
   ProductWithFoodOut,
 } from "@cubby/schemas/product";
-import type { FoodSummary } from "@cubby/usda-schemas";
+import type { FoodSummary } from "@cubby/usda";
 import { uniq } from "es-toolkit";
 
 import { startOperationDefinition } from "~/lib/start-operation-observability";

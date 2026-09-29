@@ -28,6 +28,7 @@ export default defineEntity({
           "Who ate it is per-portion meal data; the Meals table on this page shows each meal and its eaters.",
       },
       additionalSectionOverrides: [
+        { kind: "slot", id: "recipe-usages", title: "Recipe lines" },
         { kind: "slot", id: "nutrition-product", title: "Nutrition" },
       ],
     },
@@ -288,6 +289,13 @@ export default defineEntity({
           { value: "has", label: "Has product", meta: true },
           { value: "none", label: "(none)", meta: true },
         ],
+      },
+      {
+        columnId: "mappingGap",
+        field: "mappingGap",
+        kind: "select",
+        placeholder: "Filter product mapping...",
+        options: [{ value: "gap", label: "Needs product mapping" }],
       },
       {
         columnId: "usuallyOnHand",

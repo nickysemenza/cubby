@@ -27,6 +27,7 @@ import {
 import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { VendorCell } from "~/components/entity/vendor-cell";
+import { badgeVariantColor } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
@@ -34,7 +35,6 @@ import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { multiSelectFilterFnBy, type FilterValue } from "~/entities/filters";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { getStatusBadgeProps } from "~/lib/status-colors";
-import { cn } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
 
 export { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
@@ -53,12 +53,13 @@ export {
 export { TradeBadge } from "./trade-options";
 
 export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
-  const { icon: Icon, className } = getStatusBadgeProps("project", status);
-  // Extract just the text color from the bg+text className tuple.
-  const textClass =
-    className.split(" ").find((c) => c.startsWith("text-")) ??
-    "text-muted-foreground";
-  return Icon ? <Icon className={cn("size-4 shrink-0", textClass)} /> : null;
+  const { icon: Icon, variant } = getStatusBadgeProps("project", status);
+  return Icon ? (
+    <Icon
+      className="size-4 shrink-0"
+      style={{ color: badgeVariantColor[variant] }}
+    />
+  ) : null;
 }
 
 /** Match id-valued Vendor options against `row.vendorId`, not the displayed name. */

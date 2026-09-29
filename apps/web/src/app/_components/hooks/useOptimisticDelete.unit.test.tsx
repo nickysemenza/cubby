@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { EntityEditResult } from "~/entities/editing/types";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { useCubbyTable } from "../data-table/table-features";
@@ -86,6 +87,34 @@ function createDeferredCommandPort() {
       resolvePending(result);
     },
   };
+}
+
+/** A `connections` transport that reports one blocking incoming group per id. */
+function blockingConnections(requestedIds: string[]) {
+  return entityGraph.connections.withTransport(async ({ input }) => {
+    requestedIds.push(input.id);
+    return {
+      id: input.id,
+      kind: "product",
+      redirectedFrom: null,
+      groups: [
+        {
+          direction: "incoming",
+          edgeKey: "Expense.productId",
+          label: "Expenses",
+          role: "reference",
+          otherKind: "expense",
+          count: 3,
+          items: [],
+          disposition: {
+            code: "block-live-expenses",
+            effect: "block",
+            description: "Unlink the expenses first.",
+          },
+        },
+      ],
+    };
+  });
 }
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
@@ -251,5 +280,67 @@ describe("useOptimisticDelete", () => {
 
     await waitFor(() => expect(imageRequests).toEqual([["IMG-2222"]]));
     expect(command.requests).toEqual([]);
+  });
+
+  it("previews connection impact for a single-row delete without blocking confirm", async () => {
+    const command = createDeferredCommandPort();
+    const previewed: string[] = [];
+    const hook = renderHook(
+      () =>
+        useOptimisticDelete<TestRow>({
+          deletable: registeredDeletable(),
+          commandPort: command.commandPort,
+          impactPreviewOperations: {
+            connections: blockingConnections(previewed),
+          },
+        }),
+      { wrapper: QueryHarness },
+    );
+
+    act(() => {
+      hook.result.current.requestDelete({ id: "PRD-2222", name: "Apples" });
+    });
+    render(<>{hook.result.current.deleteDialog}</>, { wrapper: QueryHarness });
+
+    expect(await screen.findByText("Blocks the delete")).toBeVisible();
+    expect(screen.getByText("Unlink the expenses first.")).toBeVisible();
+    expect(previewed).toEqual(["PRD-2222"]);
+    // Advisory only: the mutation's own refusal stays the authority.
+    expect(screen.getByRole("button", { name: "Delete" })).toBeEnabled();
+  });
+
+  it("previews connection impact for each selected row in a bulk delete", async () => {
+    const command = createDeferredCommandPort();
+    const previewed: string[] = [];
+    const rows = [
+      { id: "PRD-2222", name: "Apples" },
+      { id: "PRD-3333", name: "Bananas" },
+    ];
+    const hook = renderHook(
+      () =>
+        useOptimisticDelete<TestRow>({
+          deletable: registeredDeletable(),
+          commandPort: command.commandPort,
+          impactPreviewOperations: {
+            connections: blockingConnections(previewed),
+          },
+        }),
+      { wrapper: QueryHarness },
+    );
+    const table = renderHook(() => useTableRows(rows), {
+      wrapper: QueryHarness,
+    });
+    const action = hook.result.current.deleteBulkAction;
+    if (!action) throw new Error("Expected delete bulk action");
+
+    act(() => {
+      void action.onExecute(table.result.current);
+    });
+    render(<>{hook.result.current.deleteDialog}</>, { wrapper: QueryHarness });
+
+    await waitFor(() =>
+      expect(screen.getAllByText("Blocks the delete")).toHaveLength(2),
+    );
+    expect([...previewed].sort()).toEqual(["PRD-2222", "PRD-3333"]);
   });
 });

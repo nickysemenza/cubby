@@ -12,7 +12,7 @@ import {
   productWithMappingsAndFoodOut,
 } from "@cubby/schemas/product";
 import { recipeTopLevel } from "@cubby/schemas/recipe-shared";
-import { foodSummary } from "@cubby/usda-schemas";
+import { foodSummary } from "@cubby/usda";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";

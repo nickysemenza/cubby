@@ -99,6 +99,24 @@ const renderIndexRoute = (entity: RoutedEntity, listed: boolean): string => {
   );
 };
 
+/**
+ * A dialog-created entity has no form route: its capture dialog is the list's
+ * `?create=true`. This static `/new` keeps a bookmark or share link off the
+ * `/$shortcode` detail route (which would read "new" as a record id).
+ */
+const renderNewRoute = (entity: RoutedEntity): string => {
+  const { basePath } = browserRoutes(entity);
+  return (
+    generatedHeader +
+    'import { createFileRoute, redirect } from "@tanstack/react-router";\n\n' +
+    `export const Route = createFileRoute(${JSON.stringify(`/_authenticated/${basePath}/new`)})({\n` +
+    "  beforeLoad: () => {\n" +
+    `    throw redirect({ to: ${JSON.stringify(`/${basePath}`)}, search: { create: true }, replace: true });\n` +
+    "  },\n" +
+    "});\n"
+  );
+};
+
 const renderDetailRoute = (
   entity: RoutedEntity,
   detail: NonNullable<RoutedEntity["route"]["detail"]>,
@@ -150,8 +168,8 @@ const renderDetailRoute = (
 };
 
 /**
- * The boilerplate list and detail route modules, one per `route.list` /
- * `route.detail` declaration. They live beside the hand-written routes
+ * The boilerplate list, detail and `/new` redirect route modules, one per
+ * `route.list` / `route.detail` / dialog `route.create` declaration. They live beside the hand-written routes
  * (TanStack's file router needs physical files, and a `__virtual.ts` would
  * take over the whole directory), carrying the generated header so the
  * extraneous-file cleanup covers them.
@@ -187,6 +205,14 @@ export const renderBrowserRouteArtifacts = (
                 source: renderDetailRoute(entity, entity.route.detail),
               },
             ]),
+        ...(entity.route.create === "dialog"
+          ? [
+              {
+                relativePath: `${directory}/${basePath}.new.tsx`,
+                source: renderNewRoute(entity),
+              },
+            ]
+          : []),
       ];
     });
   // The modules sit beside hand-written routes, so the directory's own

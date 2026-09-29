@@ -29,6 +29,7 @@ import { fieldEnumOptions } from "~/entities/enum-field-display";
 import { useIsMobile } from "~/hooks/useMobile";
 import { formatCurrency } from "~/lib/utils";
 
+import { DuplicateMealButton } from "../meals/copy-meals";
 import { CalendarItemPresentation, itemMetadata } from "./calendar-item-row";
 import { calendarItemEditDescriptor } from "./calendar-kind-registry";
 
@@ -237,6 +238,9 @@ function EditableCalendarItem({
           prefix="$"
           step="0.01"
         />
+      )}
+      {item.kind === "meal" && (
+        <DuplicateMealButton mealId={item.id} onDuplicated={onSaved} />
       )}
       <OpenFullRecord item={item} />
     </FormWrapper>

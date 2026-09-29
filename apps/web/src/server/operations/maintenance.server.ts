@@ -13,6 +13,7 @@ import { requestCatchUp } from "~/server/services/catch-up.service";
 import { repairImageDimensions } from "~/server/services/image-dimension-repair.service";
 import { backfillImageMetadata } from "~/server/services/image-metadata-backfill.service";
 import { classifyImageProvenance } from "~/server/services/image-provenance-classify.service";
+import { backfillImageSearchDocuments } from "~/server/services/image-search-backfill.service";
 
 /** Counts read the authoritative handle: this is the truth the badge and the cron agree on. */
 export const maintenanceHandlers = implementOperationDomain(
@@ -32,5 +33,7 @@ export const maintenanceHandlers = implementOperationDomain(
       classifyImageProvenance(context.db, input),
     backfillImageMetadata: (context, input) =>
       backfillImageMetadata(context.db, input),
+    backfillImageSearch: (context, input) =>
+      backfillImageSearchDocuments(context.db, input),
   },
 );

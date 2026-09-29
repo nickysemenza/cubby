@@ -116,6 +116,16 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
+    file: "list-delete.spec.ts",
+    globs: [
+      `${WEB}/src/routes/_authenticated/tasks.index.tsx`,
+      `${WEB}/src/app/_components/hooks/useOptimisticDelete.tsx`,
+      `${WEB}/src/app/_components/hooks/useEntityListPresentation.tsx`,
+      `${WEB}/src/app/tasks/**`,
+      `${WEB}/src/server/repo/task/**`,
+    ],
+  },
+  {
     file: "calendar.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/calendar.tsx`,
@@ -131,6 +141,22 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     globs: [
       `${WEB}/src/routes/index.tsx`,
       `${WEB}/src/app/_components/home/**`,
+    ],
+  },
+  {
+    file: "cookbook-edit.spec.ts",
+    globs: [
+      `${WEB}/src/routes/_authenticated/cookbooks.$shortcode.tsx`,
+      `${WEB}/src/routes/_authenticated/recipes.$shortcode.tsx`,
+      `${WEB}/src/app/cookbooks/**`,
+      `${WEB}/src/app/_components/recipe/recipe-form/**`,
+      `${WEB}/src/app/_components/entity-detail/detail-edit-overrides.tsx`,
+      `${WEB}/src/entities/list-columns/cookbook.tsx`,
+      `${WEB}/src/server/repo/cookbook.ts`,
+      `${WEB}/src/server/repo/cookbook.repository.ts`,
+      `${WEB}/src/server/repo/recipe/update-helpers.ts`,
+      `${WEB}/src/server/operations/cookbook.server.ts`,
+      `${WEB}/src/contracts/cookbook.contract.ts`,
     ],
   },
   {
@@ -270,6 +296,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/routes/api/auth/**`,
       `${WEB}/src/routes/_authenticated/account.$accountView.tsx`,
       `${WEB}/src/lib/http-api/**`,
+      `${WEB}/tests/e2e/http-api-client.ts`,
       `${WEB}/src/server/repo/vendor.ts`,
     ],
   },
@@ -279,6 +306,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/routes/api/v1/**`,
       `${WEB}/src/routes/api/auth/**`,
       `${WEB}/src/lib/http-api/**`,
+      `${WEB}/tests/e2e/http-api-client.ts`,
     ],
   },
   {
@@ -315,6 +343,17 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     globs: [
       `${WEB}/src/routes/_authenticated/mcp.tsx`,
       `${WEB}/src/app/_components/dev/mcp-usage-dashboard.tsx`,
+    ],
+  },
+  {
+    file: "meal-copy.spec.ts",
+    globs: [
+      `${WEB}/src/routes/_authenticated/meals.index.tsx`,
+      `${WEB}/src/app/meals/**`,
+      `${WEB}/src/app/calendar/**`,
+      `${WEB}/src/server/repo/meal/**`,
+      `${WEB}/src/server/operations/meal.server.ts`,
+      `${WEB}/src/contracts/meal.contract.ts`,
     ],
   },
   {
@@ -423,6 +462,15 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/app/_components/command-menu.tsx`,
       `${WEB}/src/app/_components/command-menu-loader.ts`,
       `${WEB}/src/app/_components/command-menu-search-groups.unit.test.tsx`,
+    ],
+  },
+  {
+    file: "finance-itemization.spec.ts",
+    globs: [
+      `${WEB}/src/routes/_authenticated/financial-transactions.index.tsx`,
+      `${WEB}/src/entities/list-columns/finance.tsx`,
+      `${WEB}/src/server/repo/financial-transaction.ts`,
+      `${WEB}/src/server/repo/financial-reconciliation.ts`,
     ],
   },
   {

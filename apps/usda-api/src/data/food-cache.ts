@@ -1,4 +1,4 @@
-import { foodSummary, type FoodSummary } from "@cubby/usda-schemas";
+import { foodSummary, type FoodSummary } from "@cubby/usda";
 import type { D1Database } from "@cloudflare/workers-types";
 
 const MAX_SQL_VARIABLES = 100;

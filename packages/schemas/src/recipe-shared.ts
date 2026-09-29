@@ -1,5 +1,5 @@
 import { timestampedFields } from "./base-entity";
-import { fdcId } from "@cubby/usda-schemas";
+import { fdcId } from "@cubby/usda";
 import { z } from "zod";
 import { positiveAmount } from "./codec";
 import { cookbookShortcode, recipeShortcode } from "./identifier-fields";

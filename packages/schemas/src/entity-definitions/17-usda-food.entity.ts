@@ -9,7 +9,7 @@ import {
   foodPortion,
   legacyFoodInfo,
   nutritionInfo,
-} from "@cubby/usda-schemas";
+} from "@cubby/usda";
 import { z } from "zod";
 import { productTopLevelOut } from "../product-output-fields.js";
 export default defineEntity({

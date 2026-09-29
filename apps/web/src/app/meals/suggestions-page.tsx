@@ -79,6 +79,51 @@ export function MealSuggestionsPage({
   );
 }
 
+/**
+ * Each missing ingredient links to the workbench on that ingredient, scoped to
+ * this recipe, where its product mapping and conversions get fixed. A sibling
+ * of the card's recipe link, not a child: anchors cannot nest.
+ */
+function MissingIngredients({
+  recipeId,
+  missing,
+  ingredients,
+}: {
+  recipeId: string;
+  missing: readonly string[];
+  ingredients: RecipeAvailability["ingredients"];
+}) {
+  const idByName = new Map(
+    ingredients.flatMap((row) =>
+      row.ingredientId ? [[row.name, row.ingredientId] as const] : [],
+    ),
+  );
+  return (
+    <Description as="span" size="xs">
+      Need:{" "}
+      {missing.map((name, index) => {
+        const ingredientId = idByName.get(name);
+        return (
+          <span key={name}>
+            {index > 0 && ", "}
+            {ingredientId ? (
+              <Link
+                to="/ingredients/workbench"
+                search={{ focus: ingredientId, recipe: recipeId }}
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                {name}
+              </Link>
+            ) : (
+              name
+            )}
+          </span>
+        );
+      })}
+    </Description>
+  );
+}
+
 function RecipeCoverageCard({ recipe }: { recipe: RecipeAvailability }) {
   const assumedNames = [
     ...new Set(
@@ -118,11 +163,6 @@ function RecipeCoverageCard({ recipe }: { recipe: RecipeAvailability }) {
           {recipe.availableIngredients}/{recipe.totalIngredients} ingredients
           {recipe.totalIngredients > 0 ? ` · ${pct}%` : ""}
         </Description>
-        {recipe.missing.length > 0 && (
-          <Description as="span" size="xs">
-            Need: {recipe.missing.join(", ")}
-          </Description>
-        )}
         {assumedNames.length > 0 && (
           <Description as="span" size="xs">
             Staples assumed: {assumedNames.join(", ")}
@@ -134,6 +174,13 @@ function RecipeCoverageCard({ recipe }: { recipe: RecipeAvailability }) {
           </Description>
         )}
       </Link>
+      {recipe.missing.length > 0 && (
+        <MissingIngredients
+          recipeId={recipe.recipeId}
+          missing={recipe.missing}
+          ingredients={recipe.ingredients}
+        />
+      )}
       <Row justify="end">
         <AddToMeal recipeId={recipe.recipeId} recipeName={recipe.recipeName} />
       </Row>

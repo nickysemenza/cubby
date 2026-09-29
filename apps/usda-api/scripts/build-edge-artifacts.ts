@@ -3,7 +3,7 @@ import path from "node:path";
 import { once } from "node:events";
 import BetterSqlite3 from "better-sqlite3";
 import type { Database } from "better-sqlite3";
-import { TIER1_CODES } from "@cubby/usda-schemas";
+import { TIER1_CODES } from "@cubby/usda";
 import { z } from "zod";
 import {
   assertVersion,

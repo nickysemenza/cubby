@@ -25,7 +25,10 @@ import { scaleTotals } from "~/lib/nutrition-estimates";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import type { Database } from "~/server/db";
-import { executeEntity } from "~/server/entity-kernel";
+import {
+  type EntityKernelContext,
+  executeEntity,
+} from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getMultiMeasureRecipeIngredients } from "~/server/repo/equivalences";
@@ -323,6 +326,28 @@ export async function explainCostingWorkflow(
   costing: Costing,
 ) {
   return costing.explainRecipe(await recipeShortcodes.one(db, input.id));
+}
+
+const COVERAGE_GAPS = ["price", "weight", "nutrients"] as const;
+
+/**
+ * Per costed line, which of price / weight / nutrients cannot be derived —
+ * the `explainRecipe` row flags, read fresh from the stored recipe so an
+ * agent sees what blocks costing right after a write. MCP projection only:
+ * the entity output stays as the manifest declares it.
+ */
+export async function recipeLineCoverage(
+  context: EntityKernelContext,
+  recipeCode: string,
+) {
+  const explain = await context.services.recipeCosting.explainRecipe(
+    await recipeShortcodes.one(context.db, recipeCode),
+  );
+  return explain.computed.diagnostics.map((line) => ({
+    id: line.id,
+    name: line.name,
+    missing: COVERAGE_GAPS.filter((gap) => line.missing[gap]),
+  }));
 }
 
 export const recipeHandlers = implementOperationDomain(recipeContract, {

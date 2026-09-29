@@ -461,6 +461,12 @@ export const duplicateFinancialAccountSourceAliasSchema = z.object({
   accountIds: z.array(financialAccountShortcode),
 });
 
+export const provisionalFinancialAccountSchema = z.object({
+  id: financialAccountShortcode,
+  name: z.string(),
+  transactionCount: z.number().int(),
+});
+
 /**
  * A broken `FinancialTransactionAllocation` invariant. Every reason has a
  * mechanical cause and a definite right answer, so this is a `defect`, not a
@@ -731,6 +737,13 @@ export const problemDetectors = {
     "defect",
     duplicateFinancialAccountSourceAliasSchema,
   ),
+  // Coverage: receipts keep minting provisional accounts, so the list never
+  // stays empty. The fix is a link to the real provider account.
+  provisionalFinancialAccounts: detector(
+    "fast",
+    "coverage",
+    provisionalFinancialAccountSchema,
+  ),
   financialTransactionAllocationDefects: detector(
     "fast",
     "defect",
@@ -798,9 +811,12 @@ export const problemDetectors = {
     productWithTitleDerivableSizeSchema,
   ),
   // --- upc lane ---
+  // COVERAGE, not defect: the proposals come from an external provider, so the
+  // count snapshot skips this lane and the navbar badge must not include it.
+  // The Problems page still loads it (`getUpc`) and lists the rows.
   productsWithBetterUpcData: detector(
     "upc",
-    "defect",
+    "coverage",
     productWithBetterUpcDataSchema,
   ),
   // --- tracker lane ---

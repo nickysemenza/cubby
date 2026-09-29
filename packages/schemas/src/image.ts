@@ -4,6 +4,10 @@ import {
   imageAnalysisSummarySchema,
 } from "./entity-definitions/field-primitives";
 import { z } from "zod";
+import {
+  ALLOWED_IMAGE_TYPES,
+  type AllowedImageType,
+} from "@cubby/shared/image-types";
 import { generatedEntitySort } from "./generated/entity-sort.gen";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { nonEmptyTuple } from "./identifiers";
@@ -74,15 +78,7 @@ export const imageProcessingIssueFilter = oneOrMany(imageProcessingIssue)
 
 export type ImageSortField = GeneratedEntitySortField<"image">;
 
-export const ALLOWED_IMAGE_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-] as const;
-export type AllowedImageType = (typeof ALLOWED_IMAGE_TYPES)[number];
+export { ALLOWED_IMAGE_TYPES, type AllowedImageType };
 const imageContentType = z.enum(ALLOWED_IMAGE_TYPES);
 
 export const perceptualHashSchema = z.string().regex(/^[0-9a-f]{16}$/);

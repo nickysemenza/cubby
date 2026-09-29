@@ -1,4 +1,4 @@
-import type { NutritionInfo } from "@cubby/usda-schemas";
+import type { NutritionInfo } from "@cubby/usda";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { TreeViewIcon } from "@phosphor-icons/react/dist/csr/TreeView";
 import { useState } from "react";

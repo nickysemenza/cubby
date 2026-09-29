@@ -1,4 +1,4 @@
-import { dataTypeEnum, foodLookupParam } from "@cubby/usda-schemas";
+import { dataTypeEnum, foodLookupParam } from "@cubby/usda";
 import { z } from "zod";
 import {
   createSortPaginationFields,

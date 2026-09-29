@@ -130,3 +130,31 @@ export const heroPresence = ({
     presenceCount,
   };
 };
+
+/**
+ * The quantity a "stock this" flow proposes, from the same two server numbers
+ * the hero reads: units the ledger says were acquired and not disposed of, and
+ * units already on a shelf.
+ *
+ * A proposal, never a write — the operator confirms the amount, so this does
+ * not breach "inventory never auto-decrements" (and nothing here decrements).
+ * A ledger with nothing outstanding (expected 0, or a shelf already at or above
+ * it) falls back to one unit rather than proposing zero or a negative, which is
+ * the constant this replaces. `onHandUnits` is null both for no shelf rows and
+ * for mixed units; both read as "none counted" here.
+ */
+export const defaultStockAmount = ({
+  expectedQuantity,
+  onHandUnits,
+  entryUnit,
+}: {
+  expectedQuantity: number;
+  onHandUnits: number | null;
+  entryUnit?: string;
+}): Amount => {
+  const outstanding = expectedQuantity - (onHandUnits ?? 0);
+  return {
+    value: outstanding > 0 ? outstanding : 1,
+    unit: entryUnit ?? "each",
+  };
+};

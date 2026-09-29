@@ -1,5 +1,6 @@
 import { entityMutationReferences } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
+import { withTransactionDatabase } from "~/server/repo/database-helpers";
 import { defineRepository, onDb } from "~/server/repo/repository";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import {
@@ -48,26 +49,32 @@ export const locationRepository = defineRepository("location", {
     const imagesChanged =
       (data.pendingImageIds?.length ?? 0) > 0 ||
       (data.removeImageIds?.length ?? 0) > 0;
-    const { location: updated, detachedImageKeys } = await updateLocation(
-      ctx.db,
-      entityId,
-      data,
-      ctx.actorContext,
-    );
-    await runMutationSideEffects(ctx.db, {
-      action: "updated",
-      entity: { entity: "location", id: entityId },
-      source: "location.update",
-      locationImagesChanged: imagesChanged,
+    // The description a removed last image leaves behind is cleared in the
+    // update's transaction; the vision refresh and embedding tasks publish
+    // only after its commit, so none of them reads the pre-update row.
+    return withTransactionDatabase(ctx.db, async (transactionDb) => {
+      const { location: updated, detachedImageKeys } = await updateLocation(
+        transactionDb,
+        entityId,
+        data,
+        ctx.actorContext,
+      );
+      if (imagesChanged && updated.images.length === 0)
+        await updateLocationAiDescription(transactionDb, entityId, null);
+      await runMutationSideEffects(transactionDb, {
+        action: "updated",
+        entity: { entity: "location", id: entityId },
+        source: "location.update",
+        locationImagesChanged: imagesChanged,
+      });
+      return {
+        output: imagesChanged
+          ? await getLocationById(transactionDb, entityId)
+          : updated,
+        entityId,
+        detachedImageKeys,
+      };
     });
-    if (!imagesChanged) return { output: updated, entityId, detachedImageKeys };
-    if (updated.images.length === 0)
-      await updateLocationAiDescription(ctx.db, entityId, null);
-    return {
-      output: await getLocationById(ctx.db, entityId),
-      entityId,
-      detachedImageKeys,
-    };
   },
   delete: async (ctx, shortcodes) => {
     const ids = await locationShortcodes.all(ctx.db, shortcodes);

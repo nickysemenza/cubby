@@ -44,7 +44,6 @@ export {
   getExpenseByID,
   getExpenseByShortcode,
   setExpensesCostType,
-  setExpensesTrade,
   updateExpense,
 } from "./crud";
 export { expenseList } from "./lookup";

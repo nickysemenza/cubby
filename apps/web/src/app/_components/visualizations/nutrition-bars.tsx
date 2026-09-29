@@ -7,7 +7,11 @@ import { useMemo } from "react";
 
 import { StatTile } from "~/components/ui/stat-tile";
 import { aggregateEstimates, scaleNutrition } from "~/lib/nutrition-estimates";
-import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
+import {
+  estimateStatusText,
+  formatEstimate,
+  trimAmount,
+} from "~/lib/nutrition-format";
 import type { IngredientDataItem } from "~/lib/recipe-costing";
 
 import { VisualizationPlaceholder } from "./visualization-placeholder";
@@ -36,10 +40,7 @@ const formatKcal = (estimate: MeasureEstimate): string =>
   formatEstimate(estimate, (value) => `${Math.round(value)} kcal`);
 
 const formatGrams = (estimate: MeasureEstimate): string =>
-  formatEstimate(
-    estimate,
-    (value) => `${Number(value.toFixed(1)).toString()} g`,
-  );
+  formatEstimate(estimate, (value) => `${trimAmount(value)} g`);
 
 const estimateUsesKnownGeometry = (estimate: MeasureEstimate): boolean =>
   hasKnownEstimate(estimate) &&

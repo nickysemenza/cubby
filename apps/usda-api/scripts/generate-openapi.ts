@@ -2,7 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { usdaContract } from "@cubby/usda-contract";
+import { usdaContract } from "@cubby/usda/contract";
 import { z } from "zod";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));

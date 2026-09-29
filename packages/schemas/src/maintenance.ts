@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { backgroundTaskReceiptSchema } from "./background-tasks";
+import { imageProcessingJobKind } from "./image-processing";
 
 /**
  * Derived work that is waiting on a queue message that may never arrive.
@@ -72,6 +73,30 @@ export type BackfillImageMetadataInput = z.infer<
 >;
 export type BackfillImageMetadataOut = z.infer<
   typeof backfillImageMetadataOutSchema
+>;
+
+/**
+ * One-off repair for live images that never received a SearchDocument (the
+ * upload paths did not project on create), which `settleAwaitingWork` cannot
+ * see because it starts from existing documents. Each page is projected and
+ * its embeddings queued; bounded like `backfillImageMetadata`.
+ */
+export const backfillImageSearchInputSchema = z.object({
+  batchSize: z.number().int().positive().max(200).default(100),
+  maxBatches: z.number().int().positive().max(100).default(20),
+});
+export const backfillImageSearchOutSchema = z.object({
+  batches: z.number().int().nonnegative(),
+  scanned: z.number().int().nonnegative(),
+  published: z.number().int().nonnegative(),
+  remaining: z.number().int().nonnegative(),
+  stopped: z.enum(["complete", "limit"]),
+});
+export type BackfillImageSearchInput = z.infer<
+  typeof backfillImageSearchInputSchema
+>;
+export type BackfillImageSearchOut = z.infer<
+  typeof backfillImageSearchOutSchema
 >;
 
 /**
@@ -169,9 +194,12 @@ export const imageProcessingMaintenanceOutput = z.object({
 export const imageProcessingBatchInput = z.object({
   batchSize: z.number().int().min(1).max(100).default(25),
   retryFailures: z.boolean().default(false),
+  /** Restrict the batch to these job kinds; omitted means every kind. */
+  kinds: z.array(imageProcessingJobKind).min(1).optional(),
 });
 export const imageProcessingBatchOutput = z.object({
   submissionId: z.string().nullable().optional(),
   scheduled: z.number().int().nonnegative(),
+  /** True when processing is paused, which blocks every backfill. */
   paused: z.boolean(),
 });

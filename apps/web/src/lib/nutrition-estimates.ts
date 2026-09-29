@@ -11,7 +11,7 @@ import {
   type StoredNutritionTotals,
   withMacros,
 } from "@cubby/schemas/nutrition";
-import { TIER1_NUTRIENT_KEYS, TIER1_NUTRIENTS } from "@cubby/usda-schemas";
+import { TIER1_NUTRIENT_KEYS, TIER1_NUTRIENTS } from "@cubby/usda";
 
 import { wasm } from "~/lib/wasm";
 

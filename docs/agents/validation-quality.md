@@ -7,6 +7,11 @@ and calendar Worker tests. CI runs `pnpm dedupe:check` when code validation is
 selected; use it
 locally when diagnosing dependency duplication.
 
+The `knip` gate also runs `pnpm knip:production`, which fails on a file or
+dependency the production graph never reaches. A script invoked only by a hook,
+CI, or package script needs a `!` entry in `knip.json`; a test seam (fixture,
+mock, harness) belongs in the negated `project` patterns.
+
 `pnpm verify:local` runs the clean-tree full graph sequentially. Its target
 order is not dependency order; Nx supplies generation and build prerequisites.
 `pnpm verify:local:full` sets `NX_SKIP_NX_CACHE=true`. Verifier entrypoints

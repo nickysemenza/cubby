@@ -2,9 +2,11 @@ import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type ProductFilters,
   type ProductListItem,
+  type ProductPricingOut,
 } from "@cubby/schemas/product";
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import { formatCategoryLabel } from "@cubby/shared";
+import { PushPinIcon } from "@phosphor-icons/react/dist/csr/PushPin";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -15,17 +17,15 @@ import { useEntityListSource } from "~/app/_components/combobox/with-search-hook
 import {
   createBooleanColumn,
   createExternalLinkColumn,
-  createInventoryEntriesColumn,
   createSingleEntityInlineLinkColumn,
-  productPriceClearLabel,
   renderOptionCell,
-  renderProductPriceValue,
 } from "~/app/_components/data-table/columnHelpers";
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   type CubbyColumnCollection,
+  type CubbyColumnHelper as ColumnHelper,
 } from "~/app/_components/data-table/table-features";
 import type { GroupConfig } from "~/app/_components/data-table/useGroupedList";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
@@ -38,6 +38,7 @@ import { useCreateInventoryMutation } from "~/app/_components/inventory/hooks";
 import { InventoryEntriesQuickEditDialog } from "~/app/_components/inventory/inventory-entries-quick-edit-dialog";
 import { TruncatedList } from "~/app/_components/TruncatedList";
 import { UnitPriceLine } from "~/app/_components/units/unit-price-line";
+import { UnitMappingDisplay } from "~/app/_components/units/UnitMappingDisplay";
 import {
   buildProductTreeRows,
   groupComponentsByParent,
@@ -68,10 +69,12 @@ import {
   product as productOperations,
   relatedData,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { type BaseKind, gradedKinds } from "~/lib/conversion-coverage";
 import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 
+import { createInventoryEntriesColumn } from "./inventory";
 import { useStableIds } from "./stable-ids";
 import { defineListOverride, interleaveDeclared } from "./types";
 
@@ -910,4 +913,124 @@ function ProductListHydration({
   const stableKitIds = useStableIds(kitCandidates);
   useEffect(() => onKitIds([...stableKitIds]), [onKitIds, stableKitIds]);
   return children;
+}
+
+type UnitMapping = Parameters<typeof UnitMappingDisplay>[0]["mappings"][number];
+
+export function createUnitMappingsColumn<
+  // `ingredient.naKinds` is the coverage opt-out; optional so the ingredient
+  // list (whose rows ARE the ingredient) and any future caller still fit.
+  T extends { id: string; ingredient?: { naKinds?: BaseKind[] | null } | null },
+>(
+  columnHelper: ColumnHelper<T>,
+  mappingsMap: Record<string, UnitMapping[]>,
+  options?: {
+    id?: string;
+    header?: string;
+    className?: string;
+    enableSorting?: boolean;
+    compact?: boolean;
+  },
+) {
+  const compact = options?.compact ?? true;
+  return columnHelper.display({
+    id: options?.id ?? "unitMappings",
+    header: options?.header ?? "Unit Mappings",
+    enableSorting: options?.enableSorting ?? false,
+    meta: {
+      className:
+        options?.className ?? (compact ? "min-w-0 w-32" : "w-96 max-w-96"),
+    },
+    cell: (info) => {
+      const entity = info.row.original;
+      const mappings = mappingsMap[entity.id] ?? [];
+      return (
+        <div className="w-full">
+          <UnitMappingDisplay
+            mappings={mappings}
+            title=""
+            compact={compact}
+            showTier={compact}
+            // Grade against the linked ingredient's applicable kinds, same as
+            // the Problems panel and the enrichment workbench. Without this the
+            // list graded against all four BASE_KINDS and disagreed with both —
+            // an ingredient that opted out of `volume` read worse here than on
+            // the page you'd go to act on it.
+            kinds={gradedKinds(entity.ingredient?.naKinds)}
+          />
+        </div>
+      );
+    },
+  });
+}
+
+/**
+ * `Product.pricing.source` in prose — the one place this ternary is spelled
+ * out, so the detail-page caption and the cell tooltip (below) can't drift
+ * apart on what "explicit" / "derived" / "none" mean to a reader.
+ */
+export function describeProductPricingSource(
+  pricing: Pick<ProductPricingOut, "source" | "knownExpenseCount" | "partial">,
+): string {
+  switch (pricing.source) {
+    case "explicit":
+      return "Manual override";
+    case "derived":
+      return `Derived from ${pricing.knownExpenseCount} expense${pricing.knownExpenseCount === 1 ? "" : "s"}${pricing.partial ? " · partial history" : ""}`;
+    case "none":
+      return "No override or quantified purchase history";
+  }
+}
+
+/**
+ * `Product.price`'s `EditableCell` edits the manual override, but *displays*
+ * `pricing.effectivePrice` — the override OR the Expense-derived fallback.
+ * Both render as a plain number, so without a cue an override and a derived
+ * price (and a cleared override that happens to land on the same digits as
+ * the old one) are visually identical. The pin marks the exception (a manual
+ * override); the derived norm stays unmarked, and the tooltip names either
+ * source. This is that cue;
+ * shared by the detail page and the list column so the two surfaces can't
+ * disagree about what the cell means.
+ */
+export function renderProductPriceValue(
+  pricing: Pick<
+    ProductPricingOut,
+    "effectivePrice" | "source" | "knownExpenseCount" | "partial"
+  >,
+): ReactNode {
+  if (pricing.effectivePrice === null) return <NoneValue />;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<span className="inline-flex items-center gap-1" />}
+      >
+        {pricing.source === "explicit" ? (
+          <PushPinIcon
+            aria-hidden
+            className="size-3 shrink-0 text-muted-foreground"
+          />
+        ) : null}
+        {formatCurrency(pricing.effectivePrice)}
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        {describeProductPricingSource(pricing)}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * Label for `Product.price`'s currency-clear control: names the state
+ * clearing the override lands on, so the button reads as "go back to the
+ * derived price" rather than an unlabelled "clear". Shared by the detail
+ * page and the list column so a clear affordance can't say something
+ * different on one surface than the other.
+ */
+export function productPriceClearLabel(
+  pricing: Pick<ProductPricingOut, "derivedPrice">,
+): string {
+  return pricing.derivedPrice !== null
+    ? `Revert to ${formatCurrency(pricing.derivedPrice)} (derived)`
+    : "Clear override (no derived price on record)";
 }

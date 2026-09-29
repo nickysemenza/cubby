@@ -123,7 +123,7 @@ const FILTER_TYPES = [
 
 /**
  * USDA `nutrient_nbr` codes for the macros, mirroring `TIER1_NUTRIENTS` in
- * @cubby/usda-schemas. Copied rather than imported: that package's only export
+ * @cubby/usda. Copied rather than imported: that package's only export
  * is its root index, which pulls zod in, and zod's module-level schema
  * construction doesn't tree-shake out — a large dependency to inline into a
  * sandboxed iframe for four constants that have been stable for decades.

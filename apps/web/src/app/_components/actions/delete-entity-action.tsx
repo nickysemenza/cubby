@@ -11,11 +11,12 @@ import {
   generatedBrowserCrudEntities,
   type GeneratedBrowserCrudEntity,
 } from "~/entities/generated/entity-routes.gen";
+import { pluralWord } from "~/lib/pluralize";
 
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 import {
-  DeleteImpactPreview,
+  DeleteImpactPreviewList,
   type ImpactPreviewOperations,
 } from "./entity-operation-impact-preview";
 
@@ -25,11 +26,78 @@ export type DeleteEntityActionCommands = Pick<
   "isPending" | "remove"
 >;
 
+/** One confirmation sentence for a delete of `count` rows of `label`. */
+function deleteDescription(label: string, count = 1): string {
+  const noun = label.toLowerCase();
+  const subject =
+    count === 1 ? `this ${noun}` : `${count} ${pluralWord(noun, count)}`;
+  return `This will permanently remove ${subject} from your workspace. This action cannot be undone.`;
+}
+
 export function deleteDescriptionForEntity(
   entity: GeneratedBrowserCrudEntity,
 ): string {
-  const label = entityLabel(entity).toLowerCase();
-  return `This will permanently remove this ${label} from your workspace. This action cannot be undone.`;
+  return deleteDescription(entityLabel(entity));
+}
+
+/**
+ * The one delete confirmation: the rows about to go, the refusal list, and the
+ * advisory connection-impact preview. The detail/inspector action and the
+ * list/selection delete both render this, so a delete reads the same wherever
+ * it starts. `previewImpact` is off only for a delete with no connections
+ * graph (the legacy image delete).
+ */
+export function DeleteEntityDialog({
+  entityLabel: label,
+  items,
+  failures = [],
+  isPending,
+  previewImpact = true,
+  impactPreviewOperations,
+  onOpenChange,
+  onSubmit,
+}: {
+  entityLabel: string;
+  items: readonly { id: string; name: string }[];
+  failures?: readonly string[];
+  isPending: boolean;
+  previewImpact?: boolean;
+  /** Test-injectable seam for the impact preview's `connections` query. */
+  impactPreviewOperations?: ImpactPreviewOperations;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: () => Promise<void>;
+}) {
+  return (
+    <BulkActionDialog
+      open={items.length > 0}
+      onOpenChange={onOpenChange}
+      items={[...items]}
+      itemNoun={label}
+      action="Delete"
+      variant="destructive"
+      pendingLabel="Deleting..."
+      description={deleteDescription(label, items.length)}
+      renderItem={(item) => item.name}
+      error={
+        failures.length > 0 ? (
+          <ul className="space-y-1">
+            {failures.map((failure) => (
+              <li key={failure}>{failure}</li>
+            ))}
+          </ul>
+        ) : undefined
+      }
+      onSubmit={onSubmit}
+      isPending={isPending}
+    >
+      {previewImpact ? (
+        <DeleteImpactPreviewList
+          targets={items.map((item) => ({ id: item.id, label: item.name }))}
+          operations={impactPreviewOperations}
+        />
+      ) : null}
+    </BulkActionDialog>
+  );
 }
 
 /**
@@ -94,27 +162,15 @@ export function useDeleteEntityAction(
           }
         : { status: "available" },
     dialog: staged ? (
-      <BulkActionDialog
-        open
+      <DeleteEntityDialog
+        entityLabel={label}
+        items={[{ id: staged.id, name: staged.name ?? staged.id }]}
+        failures={failures}
+        isPending={commands.isPending}
+        impactPreviewOperations={options?.impactPreviewOperations}
         onOpenChange={(open) => {
           if (!open) finish(false);
         }}
-        items={[{ id: staged.id, name: staged.name ?? staged.id }]}
-        itemNoun={label}
-        action="Delete"
-        variant="destructive"
-        pendingLabel="Deleting..."
-        description={deleteDescriptionForEntity(generatedEntity)}
-        renderItem={(item) => item.name}
-        error={
-          failures.length > 0 ? (
-            <ul className="space-y-1">
-              {failures.map((failure) => (
-                <li key={failure}>{failure}</li>
-              ))}
-            </ul>
-          ) : undefined
-        }
         onSubmit={async () => {
           const execution = await commands.remove([staged.id]);
           if (!execution.ok) {
@@ -133,13 +189,7 @@ export function useDeleteEntityAction(
           if (options?.navigateOnSuccess ?? true)
             void navigate({ to: entities[generatedEntity].routes.list });
         }}
-        isPending={commands.isPending}
-      >
-        <DeleteImpactPreview
-          id={staged.id}
-          operations={options?.impactPreviewOperations}
-        />
-      </BulkActionDialog>
+      />
     ) : null,
   };
 }

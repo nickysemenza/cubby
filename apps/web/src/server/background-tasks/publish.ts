@@ -12,6 +12,7 @@ import * as Sentry from "@sentry/tanstackstart-react";
 import type { UnparsedError } from "~/lib/error-utils";
 import { getBackgroundQueue, getExecutionCtx } from "~/server/cf-env";
 import type { Database } from "~/server/db";
+import { runAfterCommit } from "~/server/repo/database-helpers/core";
 
 import type { BackgroundQueueProducer } from "../background-queue-types";
 
@@ -122,13 +123,38 @@ export async function publishBackgroundTasks(
 }
 
 /**
+ * Enqueue one task from code that holds no `Database` — a Durable Object's
+ * fallback once its own retries are spent. Resolves `true` once the queue
+ * accepted the task. Plain Node development has no queue binding and no
+ * request database to run the handler inline against, so there it logs and
+ * resolves `false`; a failed send rejects.
+ */
+export async function enqueueBackgroundTask(
+  task: BackgroundTaskInput,
+  options: PublishOptions,
+): Promise<boolean> {
+  const queue = getBackgroundQueue();
+  if (!queue) {
+    console.warn(
+      `[background-tasks] no queue binding; not enqueued kind=${task.kind} source=${options.source}`,
+    );
+    return false;
+  }
+  await sendToQueue(queue, [task]);
+  console.log(`[background-tasks] published count=1 source=${options.source}`);
+  return true;
+}
+
+/**
  * Publish after a mutation without holding the response for it.
  *
- * The saved mutation is already committed; a failed publication is reported
- * (log + Sentry) and never implies a rollback. The stale marker on the source
- * row keeps the work discoverable — the Problems page's "Awaiting work" card
- * and the recipe/relatedness reads repair it. Without an execution context
- * (Node dev, queue consumers) the publication is simply awaited.
+ * On a handle inside a `withTransaction` the publication waits for the
+ * outermost commit (`runAfterCommit`), so no consumer reads the pre-write row
+ * and a rollback publishes nothing. After the commit a failed publication is
+ * reported (log + Sentry) and never implies a rollback. The stale marker on
+ * the source row keeps the work discoverable — the Problems page's "Awaiting
+ * work" card and the recipe/relatedness reads repair it. Without an execution
+ * context (Node dev, queue consumers) the publication is simply awaited.
  */
 export function publishInBackground(
   db: Database,
@@ -136,6 +162,16 @@ export function publishInBackground(
   options: PublishOptions,
 ): Promise<void> {
   if (tasks.length === 0) return Promise.resolve();
+  return runAfterCommit(db, (committedDb) =>
+    publishCommitted(committedDb, tasks, options),
+  );
+}
+
+function publishCommitted(
+  db: Database,
+  tasks: readonly BackgroundTaskInput[],
+  options: PublishOptions,
+): Promise<void> {
   const publication = publishBackgroundTasks(db, tasks, options)
     .then(() => undefined)
     .catch((error: UnparsedError) => {
@@ -167,7 +203,11 @@ export type BackgroundTaskPublisher = (
 
 export interface DeferredPublications {
   readonly publish: BackgroundTaskPublisher;
-  /** Send everything collected so far; call once the transaction committed. */
+  /**
+   * Send everything collected so far; call once the transaction committed.
+   * On a handle still inside an outer transaction this defers again, to the
+   * outer commit ({@link publishInBackground}).
+   */
   flush(db: Database): Promise<void>;
 }
 

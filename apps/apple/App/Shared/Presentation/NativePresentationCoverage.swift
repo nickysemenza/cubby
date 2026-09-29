@@ -117,7 +117,7 @@ enum NativePresentationCoverage {
             return .unsupported("Unknown native detail slot.")
         }
         return switch id {
-        case .ledgerPartyWardrobe, .mealNutrition, .runImportWorkflow, .runPhotoBatch,
+        case .ledgerPartyWardrobe, .mealNutrition, .runImportControls, .runPhotoBatch,
             .purchaseOrderMail, .vendorOrderMail, .vendorAccountOrderMail:
             .implemented
         case .productLabels,
@@ -129,6 +129,7 @@ enum NativePresentationCoverage {
             .productRuns,
             .recipeWorkflow,
             .ingredientNutritionProduct,
+            .ingredientRecipeUsages,
             .cookbookToc,
             .cookbookImportProgress,
             .locationContentsValuation,
@@ -146,7 +147,20 @@ enum NativePresentationCoverage {
             .imageAssociations,
             .runAiUsage,
             .runLiveProgress,
-            .runChanges:
+            .runChanges,
+            .runImportAgentLive,
+            .runImportAgentStopped,
+            .runImportApprovals,
+            .runImportDebugLog,
+            .runImportEvidence,
+            .runImportFindings,
+            .runImportPreparedOrders,
+            .runImportProgressLive,
+            .runImportProgressStopped,
+            .runImportPurchases,
+            .runImportStats,
+            .runImportTargets,
+            .runImportTimeline:
             .unsupported("This detail is available on web.")
         }
     }

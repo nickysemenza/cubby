@@ -23,7 +23,8 @@
  *     carries `startSource`/`endSource`, so this costs no new plumbing.
  */
 import type { ProjectDateWindow } from "@cubby/schemas/project";
-import { addDays, format, parseISO, subDays } from "date-fns";
+
+import { shiftPlainDate } from "~/lib/plain-date";
 
 /**
  * Slack allowed on a boundary the window merely *inferred*. Wide enough to
@@ -73,18 +74,6 @@ export type ToolTimelineProjectWindow = Pick<
   "effectiveStart" | "effectiveEnd" | "startSource" | "endSource"
 >;
 
-const shiftPlainDate = (
-  date: string,
-  days: number,
-  direction: 1 | -1,
-): string =>
-  format(
-    direction === 1
-      ? addDays(parseISO(date), days)
-      : subDays(parseISO(date), days),
-    "yyyy-MM-dd",
-  );
-
 /**
  * The conflict, or null when the pair is possible (or unknowable).
  *
@@ -106,11 +95,11 @@ export function toolTimelineConflict(
         : window.effectiveEnd;
   const end =
     rawEnd !== null && window.endSource === "derived" && !options.isLive
-      ? shiftPlainDate(rawEnd, TOOL_TIMELINE_GRACE_DAYS, 1)
+      ? shiftPlainDate(rawEnd, TOOL_TIMELINE_GRACE_DAYS)
       : rawEnd;
   const start =
     window.effectiveStart !== null && window.startSource === "derived"
-      ? shiftPlainDate(window.effectiveStart, TOOL_TIMELINE_GRACE_DAYS, -1)
+      ? shiftPlainDate(window.effectiveStart, -TOOL_TIMELINE_GRACE_DAYS)
       : window.effectiveStart;
 
   if (acquiredAt !== null && end !== null) {

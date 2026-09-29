@@ -32,7 +32,7 @@ import type {
   RecipeTotals,
   StoredRecipeTotals,
 } from "@cubby/schemas/recipe-shared";
-import { TIER1_NUTRIENT_KEYS } from "@cubby/usda-schemas";
+import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 import { keyBy, uniq } from "es-toolkit";
 import { z } from "zod";
 

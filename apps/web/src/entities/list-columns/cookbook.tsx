@@ -128,12 +128,66 @@ const overrides = createCubbyColumnCollection<CookbookSummary>((add) => {
   );
 });
 
-const compose = (declared: CubbyColumnCollection<CookbookSummary>) =>
-  createCubbyColumnCollection<CookbookSummary>((add) => {
-    // Cover first, as the other image-led rosters read.
-    declared.filter((column) => column.id === "coverUrl").visit(add);
-    declared.filter((column) => column.id !== "coverUrl").visit(add);
-  });
+/**
+ * `subjects` is a text array, so TanStack would resolve a filterFn from the
+ * array row value and match nothing against a picked set; a book matches when
+ * it carries any picked subject.
+ */
+export const subjectsFilterFn = (
+  row: { getValue: (id: string) => readonly string[] },
+  columnId: string,
+  picked: readonly string[] | undefined,
+): boolean => {
+  if (!picked || picked.length === 0) return true;
+  const carried = row.getValue(columnId);
+  return picked.some((subject) => carried.includes(subject));
+};
+
+/** Every subject in the loaded books, most-used first, with its book count. */
+export const subjectOptions = (
+  rows: readonly Pick<CookbookSummary, "subjects">[],
+) => {
+  const counts = new Map<string, number>();
+  for (const row of rows)
+    for (const subject of new Set(row.subjects))
+      counts.set(subject, (counts.get(subject) ?? 0) + 1);
+  return [...counts]
+    .sort(([a, x], [b, y]) => y - x || a.localeCompare(b))
+    .map(([subject, count]) => ({
+      value: subject,
+      label: subject,
+      hint: String(count),
+    }));
+};
+
+const composeWithSubjectFilter =
+  (options: ReturnType<typeof subjectOptions>) =>
+  (declared: CubbyColumnCollection<CookbookSummary>) =>
+    createCubbyColumnCollection<CookbookSummary>((add) => {
+      // Cover first, as the other image-led rosters read.
+      declared.filter((column) => column.id === "coverUrl").visit(add);
+      declared
+        .filter((column) => column.id === "subjects")
+        .visit((column) =>
+          add({
+            ...column,
+            filterFn: subjectsFilterFn,
+            meta: {
+              ...column.meta,
+              filterConfig: {
+                placeholder: "Filter by subject...",
+                filterType: "multiselect",
+                options,
+              },
+            },
+          }),
+        );
+      declared
+        .filter(
+          (column) => column.id !== "coverUrl" && column.id !== "subjects",
+        )
+        .visit(add);
+    });
 
 /**
  * Browse-by-source index: every cookbook a recipe was imported from. Backed
@@ -158,6 +212,10 @@ export const cookbookListOverride = defineListOverride<CookbookSummary, object>(
           matchesSearch: matchesCookbookSearch,
         }),
         [data, error, isFetching, isLoading, refetch],
+      );
+      const compose = useMemo(
+        () => composeWithSubjectFilter(subjectOptions(data ?? EMPTY_COOKBOOKS)),
+        [data],
       );
       return {
         overrides,

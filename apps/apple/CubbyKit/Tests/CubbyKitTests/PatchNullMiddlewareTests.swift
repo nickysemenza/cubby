@@ -144,13 +144,13 @@ struct PatchNullMiddlewareTests {
         #expect(requests.isEmpty)
     }
 
-    /// `cookbook` has no resource CRUD in the HTTP document at all, so it stays unsupported even
-    /// once every declared update operation is generated.
+    /// `run` is declared read-only, so it has no update operation in the HTTP document and stays
+    /// unsupported even once every declared update operation is generated.
     @Test func anEntityWithoutAnUpdateOperationIsUnsupported() async throws {
         let requests = try await capture { client in
-            await #expect(throws: EntityOperationError.unsupported(.cookbook, .update)) {
+            await #expect(throws: EntityOperationError.unsupported(.run, .update)) {
                 try await client.update(
-                    EntityCatalog[.cookbook], id: "CKB-2345", patch: EntityPatch(values: ["name": "Basics"]))
+                    EntityCatalog[.run], id: "RUN-2345", patch: EntityPatch(values: ["name": "Basics"]))
             }
         }
         #expect(requests.isEmpty)

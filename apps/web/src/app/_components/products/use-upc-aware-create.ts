@@ -1,5 +1,5 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
-import { upc as upcSchema } from "@cubby/usda-schemas";
+import { upc as upcSchema } from "@cubby/shared/upc";
 import { useCallback } from "react";
 
 import { useUpcLookup } from "~/app/_components/inventory/hooks/useUpcLookup";

@@ -36,6 +36,25 @@ export const financialTransactionAllocations = z.array(
   financialTransactionAllocation,
 );
 
+/**
+ * How well a charge's purchase is itemized against it. `shared` wins over every
+ * other verdict: a charge that is one of several on a purchase (installments,
+ * combined orders) is never compared to that purchase's lines.
+ */
+export const financialTransactionItemizationValues = [
+  "bare",
+  "lump",
+  "itemized_match",
+  "itemized_mismatch",
+  "shared",
+] as const;
+export const financialTransactionItemization = z.enum(
+  financialTransactionItemizationValues,
+);
+export type FinancialTransactionItemization = z.infer<
+  typeof financialTransactionItemization
+>;
+
 export const merchantVendorCandidate = z.object({
   vendorId: vendorShortcode,
   vendorName: z.string().min(1),

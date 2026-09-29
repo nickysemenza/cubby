@@ -1,27 +1,14 @@
-import type { TaskStatus } from "@cubby/schemas/project";
 import { addDays, endOfWeek, format, startOfWeek } from "date-fns";
 import { match } from "ts-pattern";
 
 /**
  * Human-facing labels for the raw DB enum values — single source of truth for
  * task status display text everywhere (lists, badges, charts, command menu).
- * Lives here (not projects/shared.tsx) so shared.tsx can import the options/
- * variant maps below without a circular import; shared.tsx re-exports it for
+ * Lives here (not projects/shared.tsx) so shared.tsx can import the options
+ * below without a circular import; shared.tsx re-exports it for
  * its existing consumers.
  */
 export { TASK_STATUS_LABELS } from "@cubby/schemas/task-fields";
-
-/** Badge tone per status — Porcelain semantic tokens, not raw colors. */
-export const taskStatusBadgeVariant = {
-  not_started: "secondary",
-  later: "outline",
-  in_progress: "warning",
-  blocked: "destructive",
-  done: "positive",
-} satisfies Record<
-  TaskStatus,
-  "secondary" | "outline" | "warning" | "destructive" | "positive"
->;
 
 /**
  * Resolves a due-date preset (as read off the "due" column filter) into

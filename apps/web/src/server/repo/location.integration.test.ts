@@ -26,7 +26,6 @@ import {
   bulkReparentLocations,
   createLocation,
   deleteLocations,
-  findOrCreateLocationByName,
   getLocationById,
 } from "./location";
 import { createProduct } from "./product";
@@ -40,19 +39,19 @@ import {
 } from "./repo.fixtures";
 import { resolveLiveShortcode } from "./shortcode-resolver";
 
-describe("findOrCreateLocationByName", () => {
+describe("createLocation name race", () => {
   const ctx = withTestDb();
 
-  it("recovers from a concurrent create race instead of 500ing", async () => {
-    // Cross-request race, deterministically forced (the findOrCreate primitive's
-    // conflict branch): a "winner" txn inserts the same-named location and holds
-    // its lock open while our call runs. Our SELECT misses (winner uncommitted),
-    // the INSERT ... ON CONFLICT DO NOTHING blocks on the lock; once the winner
-    // commits, DO NOTHING returns no row and the re-SELECT finds the winner —
-    // no unique-violation 500, no duplicate.
+  it("reports a concurrent same-name create as a duplicate instead of a raw unique violation", async () => {
+    // Cross-request race, deterministically forced: a "winner" txn inserts the
+    // same-named location and holds its lock open while our call runs. Our
+    // INSERT blocks on the `Location_name_key` lock; once the winner commits it
+    // raises a unique violation, which must surface as DUPLICATE_RECORD naming
+    // the surviving location rather than an unclassified 500.
     const name = "Garage";
+    const winnerCode = parseShortcodeFor("location", "LOC-RACE");
 
-    const { winner: winnerId, loser: result } = await raceUniqueInsert(ctx, {
+    const { loser: outcome } = await raceUniqueInsert(ctx, {
       winner: ({ releaseSignal, markWinnerReady }) =>
         getDb(ctx.db).transaction(async (tx) => {
           const [row] = await tx
@@ -60,7 +59,7 @@ describe("findOrCreateLocationByName", () => {
             .values({
               name,
               type: "room",
-              shortcode: parseShortcodeFor("location", "LOC-RACE"),
+              shortcode: winnerCode,
               parentId: TEST_HOME_ID,
             })
             .returning();
@@ -68,11 +67,21 @@ describe("findOrCreateLocationByName", () => {
           await releaseSignal; // hold the txn (and its lock) open
           return row!.id;
         }),
-      loser: () => findOrCreateLocationByName(ctx.db, name, null, "room"),
+      loser: () =>
+        createLocation(
+          ctx.db,
+          makeLocationInput({ name, parentId: null }),
+          ctx.actor,
+        ).then(
+          () => null,
+          (error) => error,
+        ),
     });
 
-    expect(result.created).toBe(false);
-    expect(result.locationId).toEqual(winnerId);
+    expect(outcome).toMatchObject({
+      reason: "DUPLICATE_RECORD",
+      message: expect.stringContaining(winnerCode),
+    });
 
     const [countRow] = await getDb(ctx.db)
       .select({ count: count() })

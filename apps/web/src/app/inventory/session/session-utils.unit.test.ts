@@ -14,6 +14,8 @@ import {
   getSessionRootCandidates,
   getUnknownChildLocations,
   isDescendantLocation,
+  sessionBreadcrumbSegments,
+  sessionLocationsForIds,
 } from "./session-utils";
 
 function loc(
@@ -338,6 +340,51 @@ describe("inventory session utils", () => {
 
     it("offers to adopt a sibling branch, not just a leaf", () => {
       expect(classifyScannedLocation(house, shelf, garage.id)).toBe(
+        "elsewhere",
+      );
+    });
+  });
+
+  // A worklist scope names locations by id from a product-set snapshot, so the
+  // stops sit anywhere in the tree and the scope has several roots.
+  describe("worklist scope", () => {
+    const drawer = loc("...0011", "Drawer", "box");
+    const shelf = loc("...0012", "Shelf", "shelf", [drawer]);
+    const garage = loc("...0013", "Garage", "room");
+    const house = loc("...0014", "House", "room", [shelf]);
+
+    it("queues exactly the named locations, in tree order, flat", () => {
+      const stops = sessionLocationsForIds(
+        [garage, house],
+        new Set([drawer.id, garage.id]),
+      );
+      expect(stops.map((stop) => stop.name)).toEqual(["Garage", "Drawer"]);
+      expect(stops.map((stop) => stop.depth)).toEqual([0, 0]);
+      expect(stops[1]?.path).toEqual(["House", "Shelf", "Drawer"]);
+    });
+
+    it("drops an id the tree no longer holds", () => {
+      const stops = sessionLocationsForIds(
+        [house],
+        new Set([shelf.id, garage.id]),
+      );
+      expect(stops.map((stop) => stop.name)).toEqual(["Shelf"]);
+    });
+
+    it("reads breadcrumbs from whichever root holds the stop", () => {
+      expect(
+        sessionBreadcrumbSegments([garage, house], drawer.id).map(
+          (segment) => segment.name,
+        ),
+      ).toEqual(["House", "Shelf", "Drawer"]);
+      expect(sessionBreadcrumbSegments([garage], drawer.id)).toEqual([]);
+    });
+
+    it("classifies a scanned bin against every root", () => {
+      expect(classifyScannedLocation([garage, house], shelf, house.id)).toBe(
+        "ancestor",
+      );
+      expect(classifyScannedLocation([garage, house], shelf, garage.id)).toBe(
         "elsewhere",
       );
     });

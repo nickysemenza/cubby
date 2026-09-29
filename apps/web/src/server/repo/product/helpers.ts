@@ -1,5 +1,5 @@
 import { displayGtin, normalizeGtin } from "@cubby/schemas/external-id";
-import { type FoodLookupParam, foodLookupParam } from "@cubby/usda-schemas";
+import { type FoodLookupParam, foodLookupParam } from "@cubby/usda";
 
 /**
  * Convert a product to a USDA food lookup parameter.

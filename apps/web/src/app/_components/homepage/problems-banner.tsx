@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useRouteContext } from "@tanstack/react-router";
 
 import { problems } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { cn } from "~/lib/utils";
+import { cn, formatCount } from "~/lib/utils";
 
 /**
  * Data-problems bar, shown only when something is outstanding. Ports the
@@ -86,7 +86,7 @@ function ProblemsBannerContent({
       {defects > 0 ? (
         <>
           <span className="font-mono text-xs font-semibold tabular-nums">
-            {defects.toLocaleString()}
+            {formatCount(defects)}
           </span>
           <span className="text-xs">{problemsBannerMessage(defects)}</span>
         </>
@@ -95,7 +95,7 @@ function ProblemsBannerContent({
       )}
       {coverageTotal > 0 && (
         <span className="ml-auto truncate font-mono text-2xs text-warning-ink uppercase">
-          {coverageTotal.toLocaleString()} coverage gaps
+          {formatCount(coverageTotal)} coverage gaps
         </span>
       )}
       <span aria-hidden="true" className="shrink-0 text-xs">

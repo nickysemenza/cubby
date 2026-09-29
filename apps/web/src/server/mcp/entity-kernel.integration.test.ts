@@ -12,6 +12,14 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { createMcpServer, listMcpToolCatalog } from "~/server/mcp/server";
+import { findOrCreateIngredient } from "~/server/repo/ingredient";
+import {
+  createProductFixture,
+  ingredientRef,
+  makeProductInput,
+  makeRecipeInput,
+} from "~/server/repo/repo.fixtures";
+import { refreshSearchDocument } from "~/server/repo/search-document";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { callMcpTool, kernelRequestContext } from "./mcp-test-utils";
@@ -320,6 +328,190 @@ describe("MCP entity kernel boundary", () => {
     expect(refetchedItem.unitMappings[0]!.b).toMatchObject({
       value: 125,
       unit: "g",
+    });
+  });
+
+  describe("entity.resolve for ingredients", () => {
+    const resolveResultSchema = z.object({
+      results: z.array(
+        z.object({
+          name: z.string(),
+          id: z.string(),
+          created: z.boolean(),
+          candidateProducts: z.array(
+            z.object({
+              id: z.string(),
+              name: z.string(),
+              manufacturer: z.string().nullable(),
+            }),
+          ),
+          linkedProduct: z.object({ id: z.string() }).optional(),
+        }),
+      ),
+    });
+    const kernel = () =>
+      entityKernelContextSchema.parse(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: testUserId("test-user-id") },
+        }),
+      );
+    const indexedProduct = async (name: string) => {
+      const created = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name }),
+        ctx.actor,
+      );
+      await refreshSearchDocument(ctx.db, "product", created.entityId);
+      return created;
+    };
+
+    it("offers unlinked products as candidates and links one through the product update path", async () => {
+      const entityKernel = kernel();
+      const call = (args: ToolArguments) =>
+        callMcpTool(
+          createMcpServer(),
+          "entity",
+          args,
+          kernelRequestContext(entityKernel),
+          { entityKernel },
+        );
+      const fresh = await indexedProduct("Example Basil, Fresh 1 oz");
+      const seeds = await indexedProduct("Example Basil Seeds");
+      await indexedProduct("Unrelated Gadget");
+
+      const first = await call({
+        action: "resolve",
+        entity: "ingredient",
+        names: ["Example Basil"],
+      });
+      expect(first.isError).not.toBe(true);
+      const [offered] = resolveResultSchema.parse(
+        first.structuredContent,
+      ).results;
+      expect(offered?.created).toBe(true);
+      expect(offered?.candidateProducts.map((c) => c.id).sort()).toEqual(
+        [fresh.id, seeds.id].sort(),
+      );
+
+      const linked = await call({
+        action: "resolve",
+        entity: "ingredient",
+        names: ["Example Basil"],
+        linkProductId: fresh.id,
+      });
+      expect(linked.isError).not.toBe(true);
+      const [afterLink] = resolveResultSchema.parse(
+        linked.structuredContent,
+      ).results;
+      expect(afterLink?.linkedProduct?.id).toBe(fresh.id);
+      // Linked through the normal update: the row now reads back linked, and
+      // it is no longer an unlinked candidate.
+      expect(afterLink?.candidateProducts.map((c) => c.id)).toEqual([seeds.id]);
+      const read = await executeEntity(entityKernel, {
+        action: "get",
+        entity: "product",
+        id: fresh.id,
+        missing: "error",
+      });
+      expect(read.item?.ingredient?.id).toBe(afterLink?.id);
+    });
+
+    it("refuses linkProductId unless exactly one name is resolved", async () => {
+      const entityKernel = kernel();
+      const product = await indexedProduct("Example Thyme Bundle");
+      const result = await callMcpTool(
+        createMcpServer(),
+        "entity",
+        {
+          action: "resolve",
+          entity: "ingredient",
+          names: ["Example Thyme", "Example Sage"],
+          linkProductId: product.id,
+        },
+        kernelRequestContext(entityKernel),
+        { entityKernel },
+      );
+      expect(result.isError).toBe(true);
+    });
+  });
+
+  describe("recipe write coverage", () => {
+    const lineCoverageSchema = z.object({
+      item: z.object({ id: z.string() }).passthrough(),
+      lineCoverage: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          missing: z.array(z.enum(["price", "weight", "nutrients"])),
+        }),
+      ),
+    });
+
+    it("reports per line what stops costing on create, update, and full detail", async () => {
+      const entityKernel = entityKernelContextSchema.parse(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: testUserId("test-user-id") },
+        }),
+      );
+      const call = (args: ToolArguments) =>
+        callMcpTool(
+          createMcpServer(),
+          "entity",
+          args,
+          kernelRequestContext(entityKernel),
+          { entityKernel },
+        );
+      const [leek, thyme] = await Promise.all(
+        ["coverage leek", "coverage thyme"].map((name) =>
+          findOrCreateIngredient(ctx.db, name),
+        ),
+      );
+
+      const created = await call({
+        action: "create",
+        entity: "recipe",
+        data: makeRecipeInput({
+          name: "Coverage soup",
+          sections: [
+            {
+              name: "Soup",
+              ingredients: [
+                ingredientRef(leek!.shortcode, {
+                  amounts: [{ value: 2, unit: "whole" }],
+                }),
+                ingredientRef(thyme!.shortcode, {
+                  amounts: [{ value: 1, unit: "sprig" }],
+                }),
+              ],
+              instructions: [{ instruction: "Simmer." }],
+            },
+          ],
+        }),
+      });
+      expect(created.isError).not.toBe(true);
+      const summary = lineCoverageSchema.parse(created.structuredContent);
+      expect(summary.lineCoverage.map((line) => line.name)).toEqual([
+        "coverage leek",
+        "coverage thyme",
+      ]);
+      // No product backs either ingredient: nothing to price, weigh or
+      // count nutrients from.
+      expect(summary.lineCoverage.map((line) => line.missing)).toEqual([
+        ["price", "weight", "nutrients"],
+        ["price", "weight", "nutrients"],
+      ]);
+
+      const renamed = await call({
+        action: "update",
+        entity: "recipe",
+        id: summary.item.id,
+        data: { name: "Coverage soup, renamed" },
+        resultDetail: "full",
+      });
+      expect(renamed.isError).not.toBe(true);
+      expect(
+        lineCoverageSchema.parse(renamed.structuredContent).lineCoverage,
+      ).toHaveLength(2);
     });
   });
 });

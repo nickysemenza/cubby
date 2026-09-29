@@ -8,6 +8,7 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { and, asc, eq, isNull, lte, or, sql } from "drizzle-orm";
 
+import { shiftPlainDate } from "~/lib/plain-date";
 import type { Database } from "~/server/db";
 import {
   financialAccount,
@@ -60,12 +61,6 @@ export async function confirmMerchantVendorRule(
     vendorId: input.vendorId,
   });
 }
-
-const shiftDate = (date: string, days: number) => {
-  const value = new Date(`${date}T12:00:00.000Z`);
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
-};
 
 /** Create replay-safe work from confirmed merchant routing; no fuzzy vendor guess is persisted. */
 /** A member's confirmed merchant routing, plus every vendor it may route to. */
@@ -160,8 +155,8 @@ export async function discoverImportHunts(db: Database): Promise<number> {
   for (const row of rows) {
     if (!row.transactionDate || !row.ledgerPartyId) continue;
     const window = {
-      dateFrom: shiftDate(row.transactionDate, -7),
-      dateTo: shiftDate(row.transactionDate, 7),
+      dateFrom: shiftPlainDate(row.transactionDate, -7),
+      dateTo: shiftPlainDate(row.transactionDate, 7),
     };
     const inserted = await database
       .insert(importHunt)

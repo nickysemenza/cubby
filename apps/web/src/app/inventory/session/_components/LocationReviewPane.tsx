@@ -50,7 +50,7 @@ import type { InventoryItem, ItemResolution } from "./types";
 import { UnknownTray } from "./UnknownTray";
 
 export function LocationReviewPane({
-  parent,
+  scopeRoots,
   location,
   items,
   quantitySummaries,
@@ -76,7 +76,9 @@ export function LocationReviewPane({
   locationSkipped,
   isUnknownLocation,
 }: {
-  parent: InfLocation;
+  /** The tree the breadcrumb is read from: the recount's root, or the whole
+   * tree for a worklist scope. */
+  scopeRoots: InfLocation[];
   location: SessionLocation;
   items: InventoryItem[];
   quantitySummaries: ProductQuantitySummariesOut | undefined;
@@ -107,7 +109,7 @@ export function LocationReviewPane({
   isUnknownLocation: boolean;
 }) {
   const locationNoun = locationTypeNoun(location.type);
-  const breadcrumbSegments = sessionBreadcrumbSegments(parent, location.id);
+  const breadcrumbSegments = sessionBreadcrumbSegments(scopeRoots, location.id);
   const [addOpen, setAddOpen] = useState(false);
   // Recounting Unknown itself: its tray would just mirror the expected rows and
   // "Move to Unknown" would be a no-op, so both drop out. "Move somewhere else"

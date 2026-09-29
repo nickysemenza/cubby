@@ -10,6 +10,7 @@ import { calendarPeriodParam } from "~/app/calendar/calendar-search";
 import { UnifiedCalendar } from "~/app/calendar/unified-calendar";
 import { householdLocalDate } from "~/lib/household-date";
 
+import { CopyLastWeekButton } from "./copy-meals";
 import { DailyNutrition } from "./daily-nutrition";
 
 const MEAL_KINDS: CalendarItemKind[] = ["meal"];
@@ -34,6 +35,11 @@ function MealCalendarSlot({ search, navigate }: ListSlotProps) {
       period={period}
       date={week}
       lockedKinds={MEAL_KINDS}
+      periodActions={(range) =>
+        period === "week" ? (
+          <CopyLastWeekButton weekStart={range.startDate} />
+        ) : undefined
+      }
       onPeriodChange={(next) =>
         navigate({ period: next === "month" ? undefined : next }, REPLACE)
       }

@@ -12,7 +12,7 @@ unresolved decisions, investigations, external triggers, and long-term
 directions. **Dormant schema** lists tables and columns that exist but hold
 little or no data, kept on purpose for a later decision. **Next pass** holds the
 follow-ups deferred from the last large refactor. **Deferred: deploy surface** holds work that changes what gets
-deployed. **Operational passes** are household data work, not software
+deployed. **Probably not anytime soon** parks wanted-but-unpulled work. **Operational passes** are household data work, not software
 projects.
 
 Each item lives in one primary section based on its next blocker: an unresolved
@@ -28,21 +28,15 @@ history is the archive. Permanent product constraints live in the
 
 ## Easy fixes
 
-- **Canvas conformance follow-ups.** The generic pages now render the
-  canvas (<https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL>): one 44px
-  workbench band with declared-filter chips and `Actions ▾`, plate verbs,
-  inline anchor index, counted relation sections with header verbs and
-  sentence + action empty states, sentence-case labels and facts, the phone
-  edit sheet with header actions, and phone rows as the manifest projection.
-  What the pass surfaced but did not finish:
-  - The timeline list view keeps its own controls inside the body; the
-    ListTimeline artboard draws them as a second 40px band (mode seg, From /
-    To chips, order seg, cohort line).
-  - The phone band still carries the grouped toggle beside the view seg;
-    the artboard's band has only seg · search · Filter — fold it into the
-    Filter sheet with sort and columns.
-  - The canvas's NEXT SESSION note still describes this pass; retire it on
-    the next canvas edit.
+- **Retire the canvas NEXT SESSION note.** The canvas
+  (<https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL>) still describes the
+  conformance pass as upcoming; retire it on the next canvas edit.
+
+- **Audit recipe cookbook re-points.** The recipe form can now move a recipe
+  to another cookbook (`resolveCookbookRepoint` in
+  `server/repo/recipe/update-helpers.ts`), but `cookbookId` is not in the
+  recipe audit roster, so the move leaves no before/after trail
+  (`server/repo/recipe/crud.ts`).
 
 - **Photo-flow leftovers from #1084/#1086.** Small, independent:
   - The classification sweep and the review sheet's `LocalPhotoAnalyzer` share no Vision
@@ -53,12 +47,6 @@ history is the archive. Permanent product constraints live in the
     `createInput` (the generator runs before that file exists); if the two
     ever disagree the route fails at commit time with `CONSTRAINT_VIOLATION`
     instead of at generation.
-
-- **Durable CalDAV dirty-mark fallback.** `scheduleCalendarFeedDirty`
-  (`apps/web/src/server/calendar/client.ts`) now retries the Durable Object
-  `markDirty` twice inside its `waitUntil`, but a failure that outlasts the
-  retries still leaves the feed stale until the next write. Fall back to a
-  background-queue message; it needs a database handle the call site lacks.
 
 - **Test the photo-approval `lastError` guard.** The `state='proposed'` guard
   on the approval failure's `lastError` write
@@ -80,23 +68,6 @@ history is the archive. Permanent product constraints live in the
 ---
 
 ## Ready projects
-
-- **Transaction ownership on the purchase-agent MCP path.** Found in review of
-  the 2026-09 consolidation; all were already true on main.
-  - Deadlock: `McpOperationContext.inTransaction`
-    (`apps/web/src/server/mcp/operation-context.ts`) keeps the pool-bound
-    `recipeCosting` service, so an agent ingredient merge locks Recipe rows in
-    the transaction and then waits on `markRecipesStale` over the pool. Rebind
-    it with `bindTo(transactionDb, deferred.publish)` (or wrap merge like
-    `writeWithProjections`), with an integration test that merges ingredients
-    through the agent path.
-  - The kernel's own transaction is a savepoint there, so deferred publications
-    and storage deletes run before the real commit; collect them and flush
-    after `inTransaction` commits. Nested deletes also lose repeatable read.
-  - Deletes publish inside their transaction (planting delete refreshes garden
-    entry embeddings early); give the delete workflow a post-commit step.
-  - Plant `bulkUpdate` loops without a transaction or side effects; location
-    update writes its AI description after the main update commits.
 
 - **Maintenance mode.** A minimal switch exists: the `MAINTENANCE_MODE` Worker
   secret makes the web Worker answer 503 and skips the cron
@@ -129,87 +100,34 @@ history is the archive. Permanent product constraints live in the
   import coverage count rows already present in overlapping exports, rather
   than treating every unattached row as missing.
 
-- **Accept recipe links from the iOS Share Sheet.** Route incoming recipe URLs
-  into the native recipe flow before retiring the remaining web intake.
+- **Decide on automatic image description.** `backfillImageProcessing` now
+  takes `kinds: ["describe_image"]` for a description-only sweep with the
+  existing pause and coverage readout, but image-processing settings still
+  ship `enabled: false, paused: true`, so new uploads stay undescribed and
+  category suggestions see only text. Decide whether to turn automatic
+  scheduling on. Measured cost is about $1.10 per 1,000 images at ~7 s each.
 
-- **Backfill image descriptions as a paced, visible sweep.** Product
-  classification evidence is built from `image-description` analyses, but
-  automatic scheduling is off (image-processing settings `enabled: false`) and
-  `image.schedule_processing` queues one image at a time, so nearly every
-  product photo is undescribed and category suggestions see only text. Add a
-  "describe every undescribed image" command that enqueues `describe_image`
-  jobs in pages on the existing `ImageProcessingJob` queue, with a cap, the
-  existing pause, and a coverage readout (described / eligible). Decide whether
-  to turn automatic scheduling on for new uploads. Measured cost is about
-  $1.10 per 1,000 images at ~7 s each, so parallelism sets wall time.
+- **Bounded shelf-triage worklists.** `/inventory/triage` walks the
+  `unlocated` view (optionally `?run=`, scoped through the run's affected
+  purchases, so photo runs yield nothing). Extend it to accept a value- or
+  category-bounded worklist, and let the general "Add to inventory" action
+  default its amount from the quantity ledger as triage does.
 
-- **Post-import shelf triage.** After a vendor purchase import every new
-  product lands in the `unlocated` saved view (`entities/view-manifest.ts`:
-  bought, never sold, held nowhere) and the operator decides each one by hand:
-  discard, stock it at a location, or park it in the household **Unknown**
-  location. The verbs exist — `discard` (ledger-only exit when unstocked),
-  `addToInventory`/`receive`, and `location.ensureGlobalUnknown` (the
-  recount and sweep flows already call it) — but there is no one-pass flow.
-  Build a guided pass over the `unlocated` rows offering exactly those three
-  choices per product: a one-click "Park in Unknown" (ensure the global
-  Unknown, create the entry there so it surfaces in `unknownParkedItems`) and
-  a stock amount defaulted from the quantity ledger (`expectedQuantity −
-onHandUnits`; `product-hero-presence.ts` computes the presentation and is
-  currently unused) instead of `QuickInventoryAdd`'s constant `1`. Detail
-  pages have no prev/next navigation, so use the guided-flow shape
-  (`problem-actions.ts` `start-recount`), optionally scoped to one import run
-  (`product-runs.tsx` already knows it). Receiving stays explicit
-  (purchase-import plan decision 15).
-  The same pass should also accept a value- or category-bounded worklist
-  (not only the `unlocated` view) and reuse the existing location picker and
-  immediate-write inventory flows.
+- **One-call identity resolve.** `entity_read.resolve` now ranks name
+  candidates with the lexical engine. Remaining: one call taking `{name,
+externalIds[]}` per line and returning exact-id hits, alias hits, and
+  lexical candidates together (grocery ASINs split across Fresh / Whole Foods
+  / in-store, so the name fallback is load-bearing).
 
-- **`entity.resolve` suggests product links.** A newly resolved ingredient
-  can remain unlinked to an existing matching product. Products with
-  `ingredientId: null` do not contribute costing until hand-linked. Return
-  `candidateProducts` by name similarity and accept
-  `linkProductId` in the same call. Pairs with the coverage-visibility entry
-  below.
+- **Meal-suggestion shortfalls to the shopping list.** Missing ingredients
+  now link to the workbench and Inventory links to suggestions; adding a
+  shortfall to the shopping list waits on durable manual shopping items.
 
-- **`entity_read.resolve` should share `search.global`'s lexical engine.** Name
-  variants such as
-  `Organic Example Fruit` and `Example Fruit` should resolve through the same
-  lexical matching that powers `search.global`. For grocery the ASIN collision
-  check
-  misses the Fresh / Whole Foods / in-store ASIN split constantly, so the name
-  fallback is load-bearing. Ideal shape: one call taking `{name,
-externalIds[]}` per line and returning exact-id hits, alias hits, and lexical
-  candidates together.
-
-- **Actionable meal suggestions.** `/meals/suggestions` is already reachable
-  from navigation. Remaining scope: link missing ingredients to their repair
-  surface, allow adding shortfalls to the shopping list, and add an entry
-  point from inventory.
-
-- **Cookbook browsing.** Add search, sorting, and a browsable/filterable subjects
-  facet. Partial-import repair stays on the existing Problems worklist.
-
-- **Cookbook metadata editing.** Allow imported cookbook titles and other source
-  metadata to be corrected after import, including malformed OPF titles. Cookbook
-  is still write-once in the entity kernel (`bindings.unit.test.ts` asserts
-  `updateInput` is null), and a recipe's cookbook link cannot be re-pointed from
-  the recipe form even though the generated update field group already permits
-  `cookbookId` — wire both in the same slice.
-
-- **Coverage diagnostics on recipe and product writes.** Recipe create returned
-  `totals: pending`, so finding the uncosted lines took a separate
-  `recipe_insights.costing` per recipe per fix. Return
-  the per-line `missing: [price|weight|nutrients]` list inline on recipe
-  create/update, and on product updates report which recipe lines the change
-  closed: one corrected package-weight mapping can repair many recipes.
-
-- **Duplicate a meal or copy last week.** Add the remaining calendar round-trip
-  shortcuts for repeating an individual meal or a prior week without rebuilding
-  it by hand.
-
-- **Fix actions for financial duplicate findings.** Give duplicate transaction
-  source-ref and account-alias Problems findings a safe targeted action, without
-  widening the general entity-merge system to money entities.
+- **Coverage diagnostics on product writes.** MCP recipe create/update now
+  return per-line `lineCoverage` (`missing: price|weight|nutrients`); batched
+  `entity.commands` and `recipe_import` do not. Product updates should report
+  which recipe lines the change closed: one corrected package-weight mapping
+  can repair many recipes.
 
 - **Import extracted cookbook bundles.** Accept ingredient-parser's `.cookbook`
   archives with extracted recipes and images through the existing cookbook
@@ -219,30 +137,6 @@ externalIds[]}` per line and returning exact-id hits, alias hits, and lexical
   must not require loading the entire archive into memory. The first version
   requires an open tab; add R2 staging or Workflows only when unattended or
   resumable imports become a demonstrated need.
-
-- **Ingredient coverage visibility.** The ingredient list already shows a USDA
-  badge, a recipe-usage-count column, and a binary has/none product-presence
-  filter. Remaining scope: a combined, mapping-quality-aware signal/filter
-  that surfaces heavily used ingredients lacking a usable Product mapping
-  specifically, not just ones with no Product at all.
-
-- **Reparse from the recipe-usage drift indicator.** The ingredient detail
-  page's recipe-usage drift indicator is read-only; add a reparse action. Use
-  this workflow to deepen the shared editing module only after its concrete
-  needs are proven.
-
-- **Itemization and settlement verdict on the transactions list.** The
-  linkage exists (`FinancialTransaction ──< Allocation >── Purchase ──<
-Expense`) but the two halves of "is this charge itemized?" sit on different
-  lists: `/finance` transactions have only the has/none purchase-presence
-  filter, and the reconciliation verdict (`unknown`/`match`/`refund_adjusted`/
-  `mismatch`, `financial-reconciliation.ts`) lives on `/purchases`. Add a
-  derived transaction column with a filter over: bare (no Purchase), linked to
-  a single productless lump line (order booked, not itemized), itemized and
-  reconciled, itemized and mismatched. Distinguish sole-charge mismatches from multiple charges
-  on a shared purchase (installments or combined charges). Count product-linked lines per
-  allocated purchase; do not compare a shared purchase's lines against one
-  charge's amount.
 
 - **Identify the specific record a photo belongs to, not just its type.** Photo
   import (app and `cubby photo analyze`) stops at the entity type: for a first
@@ -278,25 +172,6 @@ text: none` plus candidate names and passes through as "Deterministic local
   from a photo pasted into chat. Accept an attached image on the product and
   extract the Nutrition Facts panel into `labelNutrition` with the image as
   provenance.
-
-- **USDA search ranking and product-driven suggestion.** `usda_food.search`
-  is phrase/AND matching: `"chicken breast ground raw"` (sr_legacy) → 0,
-  `"chicken, ground"` → 344. Tokenize and rank, and add
-  `suggest_usda_for_product(productId)` that searches on name + brand + GTIN
-  (Mary's chicken resolved to Pitman Farms only by knowing the parent brand).
-
-- **Variance-targeted recount pass.** Seed a recount session from the
-  shelf-versus-ledger disagreement worklist so the pass visits the products that
-  actually disagree wherever they live.
-
-- **Stream photo-run progress over Flue SSE.** Photo runs dispatch to the Flue
-  coordinator; the run page still polls every 3 s
-  (`apps/web/src/app/runs/photo-group-review.tsx` `refetchInterval`). Use the
-  Flue SSE channel instead.
-
-- **Move the purchase run detail onto generic entity-detail slots.**
-  `RunContent` in `apps/web/src/app/purchases/purchase-import-run-detail.tsx`
-  is hand-written even though `run` is a manifest entity.
 
 ---
 
@@ -352,11 +227,6 @@ example vegetable` must not resolve to the weight of an entire linked bag
   derive have/need/buy through the availability engine without reservations or
   automatic inventory decrement.
 
-- **Recurring maintenance tasks.** Add simple every-N-weeks/months recurrence;
-  completing an instance creates the next one, which naturally enters Needs
-  Attention. Cover every completion path with one idempotent transactional rule,
-  not a scheduler or RRULE system.
-
 - **Saved user-created views.** Persist named filter and sort sets using the
   versioned external-state pattern, and render them alongside the
   manifest-defined `presentation.list.views` without creating a second query
@@ -379,14 +249,6 @@ example vegetable` must not resolve to the weight of an entire linked bag
   response cache keys on the taxonomy revision, so any category edit
   invalidates a completed sweep.
 
-- **Image embeddings stopped being written.** On 2026-09-23 only 20 of about
-  6,300 live Images had an `EntityEmbedding` row, and none was newer than
-  2026-09-21, while every other embeddable kind was fully covered. The loader
-  exists (`getImageEmbeddingTexts` in `repo/entity-embedding-refresh.ts`), so
-  find out whether image refreshes are never enqueued, filtered out before
-  embedding, or were simply never backfilled, then backfill and add a guard
-  (a detector threshold or a test) that catches a kind going silent.
-
 - **Measure the delegate-less routing change.** Around 2026-10-06, re-measure
   30 days of Claude session transcripts against the baseline in
   [model routing](agents/model-routing.md#delegate-or-not): share of sessions
@@ -403,7 +265,8 @@ example vegetable` must not resolve to the weight of an entire linked bag
   Decide between semantic candidates (`services/semantic-search.service.ts`),
   the whole ingredient list if it stays small, or lexical fan-out plus aliases.
   Basis `name, manufacturer, categoryId, notes` — the category lets Jev return
-  none for non-food. Pairs with the `entity.resolve` product-link entry.
+  none for non-food. `entity.resolve` already offers `candidateProducts` by
+  lexical rank; a Jev pick would sit on top of that roster.
   Other fields without `suggest` (`location.parentId`,
   `productCategory.parentId`, `recipe.cookbookId`, `ledgerParty.kind`,
   `product.growsIngredientId`) stay manual: rare, deliberate edits.
@@ -701,24 +564,12 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   user-selected entitlement; do not add broad access or persistent bookmarks
   for an immediate export.
 
-- **Validate image bytes before AI description.** The image-description path
-  hands a Cloudflare rendition URL to the provider without proving that the
-  response is decodable image content. First confirm the gateway adapter's
-  supported binary input shape, then validate MIME, magic bytes, and bounded
-  size at the outbound boundary so transformation error bodies never reach the
-  model and the durable image job records a truthful failure.
-
 - **Capture exact runtime error shapes before broadening suppression.** The
   remaining client-disconnected cancellation, missing update-result, opaque
   database failure, and pathological LIKE/GLOB reports need sanitized
   name/message/stack/route evidence and an event-shaped regression test before
   changing global filters or contracts. Archive expected noise only after the
   narrow classifier is proved; do not hide unrelated transport or query errors.
-
-- **Generate a `/new` contract for every creatable entity.** Keep rich Product
-  and Recipe creation pages; generate redirects from dialog-created entities'
-  `/new` URLs into their list `?create=true` deep links. Validate recipe
-  share-target and direct-link behavior before changing routes.
 
 - **Trial `@cf/baai/bge-base-en-v1.5` via AI Gateway alongside OpenAI.**
   Vectorize's per-vector cost is model-agnostic, so a cheaper/faster
@@ -827,22 +678,11 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
 - **Meal templates.** Save reusable meal compositions without coupling them to
   recurrence.
 
-- (lead) **React #418 hydration error on `/garden-entries`.**
-  Logged in production on both route loads. The dnd-kit per-request id lead is
-  fixed (headers build their id from `useId()`). The remaining lead:
-  `@tanstack/react-router-ssr-query` 1.167 calls `hydrate(client, undefined)`
-  on the query stream's final `done` read, which query-core logs as "Error
-  reading query stream … reading 'mutations'"; upgrade once it guards `done`,
-  then re-check production.
-
 - **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
   `nutrition.shopping_list` is a plain structured/text tool. The remaining USDA
   Picker template is 352,004 bytes raw / 83,655 gzip and builds in 132 ms on
   the local M3 development machine. Keep it only while refinement and explicit
   selection materially outperform a plain `usda_food.search` result.
-
-- **Recurring meals.** Add a focused recurrence model for meals as its own slice,
-  separate from templates and nutrition goals.
 
 - **Server-backed table intelligence.** Extend exact facet counts and honest
   aggregate summaries from Expenses to one justified server-paginated surface at
@@ -1033,24 +873,11 @@ productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
   and assert the hero's identifier names B. Keep it out of the pre-push gate;
   run it from `apple-check.sh` behind a flag.
 
-- **Match book scans against ledger-imported books** — Promote when the next ISBN scan
-  mints a twin. `findOrCreateByISBN` (`product-orchestration.service.ts`) matches on GTIN
-  only, and Products created by the eBay/Amazon ledger imports carry no ISBN, so a scan
-  duplicates a book that already has purchase history; the merge that follows is lossy.
-  Either backfill ISBNs onto import-created book Products from their external ids, or
-  fall back to a title/author match before creating.
-
 - **Measured table-virtualizer investigation** — Revisit direct-DOM-write
   virtualizer options only during a measured desktop table-virtualizer
   investigation (re-check `@tanstack/react-virtual`'s current API for a
   low-render-overhead update mode; the option this line previously named,
   `directDomUpdates`, no longer exists in the installed version).
-
-- **Move the UPC-batch detector out of the problem-count badge** — Promote if
-  the badge's refresh-behind-read ever shows up in request timings: one detector
-  (`productsWithBetterUpcData`) calls the external UPC lookup, so the badge
-  refresh is not pure SQL. Moving it to the coverage page (computed on that
-  page's load) keeps the badge cheap without losing the detector.
 
 - **Timeline notes carry links and product `usedOnProjects`** — Promote when
   the "N products omitted" sentences in the product timeline need to be
@@ -1081,13 +908,6 @@ productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
   (`LedgerAttributionsControl`). On web, `cardNumbers` has no editor at all —
   only the create form's "Last four" seeds a primary entry; the dated history
   is MCP-only.
-
-- **Receipt-minted provisional accounts** — Promote when the next one appears.
-  A provisional `FinancialAccount` with no source aliases whose every live
-  transaction has `sourceRefs = []` was minted from receipt digits (FAC-J7CE,
-  2026-09-19, was the Apple Pay device number of FAC-E67H). Now that
-  `cardNumbers` gives those digits a home, a Problems finding should flag the
-  shape so it gets folded into the funding account instead of lingering.
 
 - **Native workflow parity with web.** Promote when a recurring household task
   still requires switching to the web. Native already renders every manifest
@@ -1363,6 +1183,24 @@ productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
 
 ---
 
+## Probably not anytime soon
+
+Parked on purpose: wanted in principle, but nothing in current household use
+pulls them forward. Promote only with a concrete trigger.
+
+- **Accept recipe links from the iOS Share Sheet.** Route incoming recipe URLs
+  into the native recipe flow before retiring the remaining web intake.
+
+- **Recurring maintenance tasks.** Add simple every-N-weeks/months recurrence;
+  completing an instance creates the next one, which naturally enters Needs
+  Attention. Cover every completion path with one idempotent transactional rule,
+  not a scheduler or RRULE system.
+
+- **Recurring meals.** Add a focused recurrence model for meals as its own slice,
+  separate from templates and nutrition goals.
+
+---
+
 ## Dormant schema — revisit
 
 Built but barely used. Each stays until someone decides to use or remove it;
@@ -1396,22 +1234,19 @@ PRs; unordered.
   `hooks/`, `app/_components/hooks/`, `lib/`, `misc/` and `server-functions/`.
   Move to `ui/` (primitives), `features/<domain>/`, `entity/` (generic shells)
   and `lib/` (pure utilities) with one codemod commit and nothing else in flight.
-- **Merge `@cubby/usda-contract` and `@cubby/usda-schemas` into `@cubby/usda`.**
-  Always consumed together by web and usda-api; move the `upc` schema out first.
+- **Retire the `server/repo/*/index.ts` barrels.** Kernel repositories bypass
+  them; about 45 re-exported names have no production importer. Rewrite
+  importers per name with an import-aware codemod (not sed), leaving
+  `database-helpers`, which is a real module API with ~350 importers.
 - **One Cargo workspace for `recipebridge` and `cubby-ffi`.** They keep separate
-  `Cargo.lock` files and only recipebridge runs clippy/tests in CI.
-- **Drop mermaid.** Only `docs/_components/MermaidDiagram.tsx` uses it and it
-  forces the `lodash-es` override; pre-render the docs diagrams.
-- **purchase-agent schemas.** Declare the context-breakdown shape once in
-  `@cubby/schemas/purchase-import` (today also in `purchase-agent/src/context-breakdown.ts`)
-  and replace valibot with zod if Flue accepts Standard Schema.
-- **Script and CI leftovers.** Delete `scripts/neon` and
-  `.github/workflows/docs.yaml` (its link check duplicates `ci.yaml`); collapse the
-  `test:e2e:*` / `dev:sim:watch` aliases into one script with arguments.
-- **One owning doc per topic.** Validation guidance is split across
-  `docs/ci.md`, `local-check-performance.md`, `docs/agents/validation*.md` and the
-  README; fold `docs/visualization-audit.md` decisions into `apps/web/DESIGN.md`;
-  refresh `apps/usda-api/README.md`, `apps/web/PRODUCT.md`.
+  `Cargo.lock` files. Trap: member `[profile.*]` tables are ignored in a
+  workspace and `wasm-pack` takes only `--dev/--profiling/--release`, so
+  recipebridge's `panic = "abort"` would leak into the FFI release build and
+  break UniFFI's `catch_unwind`; set wasm's panic strategy through the `wasm`
+  script's environment instead of a profile.
+- **Refresh stale docs.** `apps/web/PRODUCT.md` predates the manifest
+  consolidation.
+
 - **One data-quality framework.** `repo/problems/detectors-*` and the declared
   checks in `repo/data-quality/` are two systems for "this record is wrong";
   make detectors declared checks and have Problems read their results.
@@ -1421,9 +1256,6 @@ PRs; unordered.
   `EntityLink` merge path.
 - **Declare non-entity child tables in the manifest (`children:`)** so their
   DDL is generated like entity tables.
-- **Gate or remove Apple photo diagnostics** (`PhotoDiagnosticsView`,
-  `PhotoMatchDiagnostics`, `PhotoMatchInspection*`, about 1.5k lines).
-
 - **Profile test cost before another pruning pass.** [PR #1273](https://github.com/nickysemenza/cubby/pull/1273) reduced literal
   test declarations but did not show an overall CI speed gain: web node and
   Apple checks ran longer while PostgreSQL ran faster than successful main
@@ -1471,6 +1303,10 @@ PRs; unordered.
   apply the accepted sweep and run `backfillImageMetadata`. Confirm each native
   install's automatic-work participation choice. The Device, ImageSighting,
   and Image capture columns are already present in production.
+
+- **Project existing images into search.** Uploads created before the
+  embedding fix have no `SearchDocument`. After deploy, call
+  `maintenance.backfillImageSearch` until it reports `stopped: "complete"`.
 
 - **Fill ingredient density gaps.** Use the existing missing-weight list to add
   Product `UnitMapping` data organically as ingredients need it.
