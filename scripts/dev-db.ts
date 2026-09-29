@@ -36,51 +36,6 @@ const DEV_DATABASE_URL = profile.databaseUrl;
 const postgresImage = "docker.io/pgvector/pgvector:pg17";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.join(__dirname, "../apps/web");
-const useDocker =
-  process.env.CUBBY_DEV_SERVICES === "docker" || process.platform !== "darwin";
-
-function docker(args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("docker", args, { stdio: ["ignore", "pipe", "pipe"] });
-    let output = "";
-    let error = "";
-    child.stdout.on("data", (chunk) => {
-      output += String(chunk);
-    });
-    child.stderr.on("data", (chunk) => {
-      error = (error + String(chunk)).slice(-8_000);
-    });
-    child.once("error", reject);
-    child.once("close", (code) =>
-      code === 0
-        ? resolve(output.trim())
-        : reject(new Error(`docker ${args[0]} failed (${code}): ${error}`)),
-    );
-  });
-}
-
-async function dockerIdentity(): Promise<boolean> {
-  const existing = await docker([
-    "ps",
-    "-a",
-    "--filter",
-    `name=^/${DEV_DB_CONTAINER}$`,
-    "--format",
-    "{{.Names}}",
-  ]);
-  if (!existing) return false;
-  const [info] = JSON.parse(await docker(["inspect", DEV_DB_CONTAINER]));
-  if (
-    info.Config.Image !== "pgvector/pgvector:pg17" ||
-    info.Config.Labels?.["com.docker.compose.project"] !== "cubby-dev" ||
-    !info.Mounts?.some(
-      (mount: { Name?: string }) => mount.Name === DEV_DB_VOLUME,
-    )
-  )
-    throw new Error(`Refusing unowned ${DEV_DB_CONTAINER}`);
-  return true;
-}
-
 async function assertOwnedContainer(): Promise<boolean> {
   if (!(await findContainer(DEV_DB_CONTAINER))) return false;
   const [info] = JSON.parse(await containerCli(["inspect", DEV_DB_CONTAINER]));
@@ -117,20 +72,6 @@ async function assertOwnedContainer(): Promise<boolean> {
 }
 
 async function up(): Promise<void> {
-  if (useDocker) {
-    await dockerIdentity();
-    await docker([
-      "compose",
-      "-p",
-      "cubby-dev",
-      "-f",
-      path.resolve(__dirname, "../docker-compose.dev.yml"),
-      "up",
-      "-d",
-    ]);
-    await waitFor("cubby-dev-pg", () => tcpReady(DEV_DB_HOST, DEV_DB_PORT));
-    return;
-  }
   const existing = await findContainer(DEV_DB_CONTAINER);
   if (existing) await assertOwnedContainer();
   if (existing?.status.state === "running") {
@@ -175,18 +116,6 @@ async function up(): Promise<void> {
 }
 
 async function down(): Promise<void> {
-  if (useDocker) {
-    if (await dockerIdentity())
-      await docker([
-        "compose",
-        "-p",
-        "cubby-dev",
-        "-f",
-        path.resolve(__dirname, "../docker-compose.dev.yml"),
-        "down",
-      ]);
-    return;
-  }
   const existing = await findContainer(DEV_DB_CONTAINER);
   if (!existing) {
     console.log(`[dev-db] ${DEV_DB_CONTAINER} is not running`);
@@ -201,12 +130,6 @@ async function down(): Promise<void> {
 }
 
 async function assertRunningOwnedContainer(): Promise<void> {
-  if (useDocker) {
-    if (!(await dockerIdentity()))
-      throw new Error("Start the owned database with pnpm db:dev:up first");
-    await tcpReady(DEV_DB_HOST, DEV_DB_PORT);
-    return;
-  }
   if (
     !(await assertOwnedContainer()) ||
     (await findContainer(DEV_DB_CONTAINER))?.status.state !== "running"
@@ -238,18 +161,6 @@ function runInWebWorkspace(
 }
 
 function psql(sql: string): Promise<string> {
-  if (useDocker)
-    return docker([
-      "exec",
-      DEV_DB_CONTAINER,
-      "psql",
-      "-U",
-      DEV_DB_USER,
-      "-d",
-      "postgres",
-      "-tAc",
-      sql,
-    ]);
   return containerCli([
     "exec",
     DEV_DB_CONTAINER,
@@ -295,6 +206,14 @@ async function reset(): Promise<number> {
 }
 
 async function main(): Promise<number> {
+  if (process.platform !== "darwin")
+    throw new Error(
+      "Local development requires macOS Apple container; CI uses external test services.",
+    );
+  if (process.env.CUBBY_DEV_SERVICES)
+    throw new Error(
+      "Local development uses Apple container; unset CUBBY_DEV_SERVICES.",
+    );
   const [command] = process.argv.slice(2);
   switch (command) {
     case "up":

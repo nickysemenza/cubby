@@ -16,7 +16,7 @@ describe("local R2 HTTP contract", () => {
     directory = await mkdtemp(join(tmpdir(), "cubby-local-r2-test-"));
     await writeFile(
       join(directory, "worker.ts"),
-      `import { handleLocalStorageRequest } from ${JSON.stringify(join(import.meta.dirname, "local-r2.ts"))};
+      `import { handleLocalStorageRequest } from ${JSON.stringify(join(import.meta.dirname, "storage.ts"))};
        export default { async fetch(request, env) {
          return await handleLocalStorageRequest(request, env) ?? new Response("App route", {status: 418});
        }};`,

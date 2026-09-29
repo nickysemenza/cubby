@@ -142,7 +142,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - **Storage:** Cloudflare R2 (S3-compatible) for images
 - **Charts:** Nivo (bar, pie, treemap, sunburst, calendar, line) + d3-force, d3-hierarchy
 - **Tooling:** Oxlint + Oxfmt (lint + format) · Vitest (unit/integration) · Playwright (E2E) · PostgreSQL + IntegreSQL (authoritative contracts)
-- **Observability:** OpenTelemetry → Jaeger (dev only) · Sentry (the Apple app reports to its own `cubby-apple` project)
+- **Observability:** Cloudflare Worker logs/traces → Grafana Cloud · Sentry (the Apple app reports to its own `cubby-apple` project)
 
 The reconstructable provider inventory, resource identifiers, secret names,
 and drift-check procedure live in [docs/infrastructure.md](docs/infrastructure.md).
@@ -275,14 +275,13 @@ Local development supplies its own database, Better Auth, and storage values.
 Production `.env` files are not loaded by the local supervisor. These optional
 settings control the local session:
 
-| Key                                                     | Purpose                                                      |
-| ------------------------------------------------------- | ------------------------------------------------------------ |
-| `PORT` / `CUBBY_DEV_INSPECTOR_PORT`                     | Explicit app/inspector ports; occupied explicit ports fail   |
-| `CUBBY_DEV_INSTANCE`                                    | Another isolated instance in the same checkout               |
-| `CUBBY_DEV_SERVICES`                                    | `docker` to use Docker on macOS; otherwise Apple `container` |
-| `CUBBY_DEV_TELEMETRY`                                   | Explicit `true` enables development telemetry                |
-| `CUBBY_DEV_AI_GATEWAY_ID` / `CUBBY_DEV_VECTORIZE_INDEX` | Isolated remote development bindings for `dev:integrations`  |
-| `CUBBY_DEV_AI_GATEWAY_API_KEY`                          | Optional token for the explicit development AI gateway       |
+| Key                                                     | Purpose                                                     |
+| ------------------------------------------------------- | ----------------------------------------------------------- |
+| `PORT` / `CUBBY_DEV_INSPECTOR_PORT`                     | Explicit app/inspector ports; occupied explicit ports fail  |
+| `CUBBY_DEV_INSTANCE`                                    | Another isolated instance in the same checkout              |
+| `CUBBY_DEV_TELEMETRY`                                   | Explicit `true` enables development telemetry               |
+| `CUBBY_DEV_AI_GATEWAY_ID` / `CUBBY_DEV_VECTORIZE_INDEX` | Isolated remote development bindings for `dev:integrations` |
+| `CUBBY_DEV_AI_GATEWAY_API_KEY`                          | Optional token for the explicit development AI gateway      |
 
 Deployment keys remain documented in [apps/web/.env.example](apps/web/.env.example)
 and `wrangler.jsonc`; production migrations use `PRODUCTION_DIRECT_DATABASE_URL`.

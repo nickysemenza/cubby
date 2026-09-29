@@ -7,9 +7,9 @@ and reports readiness only after the database, fixtures, and Worker agree.
 
 ## Start and discover
 
-Install dependencies with `pnpm install`. On macOS, install Apple `container`
-and run `container system start`; Linux uses Docker. Set
-`CUBBY_DEV_SERVICES=docker` to use Docker on macOS. Then run:
+Install dependencies with `pnpm install`. Local development requires macOS and
+Apple `container`; run `container system start`. Docker is used by CI test
+services, not the local development supervisor. Then run:
 
 ```sh
 pnpm dev
@@ -41,6 +41,21 @@ that checkout's supervisor. `pnpm dev:reset` stops it and resets its database an
 Worker state; start `pnpm dev` again to recreate the corpus. The older
 `dev:local` and `db:dev:seed`/`reset` commands remain aliases. Low-level
 `db:dev:up`, `migrate`, and `down` manage the shared PostgreSQL service.
+
+## Tooling layout
+
+Local runtime tooling lives in `apps/web/tooling/dev/`. `index.ts` owns the
+supervisor and commands; `config.ts` owns main/peer bindings and their small
+synthetic datasets; `state.ts` owns portable local identity, guards, and session
+contracts. `fixtures.ts` manages auth and fixture markers, while `scenarios.ts`
+builds the optional domain graphs. `worker.ts` and `storage.ts` own the local
+Worker entry and R2 transport. `smoke.ts` verifies the complete lifecycle,
+including raw browser CORS and failed/pending fixture work, through one command:
+`pnpm test:e2e:dev`. Build provenance and disposable E2E tooling remain separate.
+
+Core corpus values use an independent seeded Faker instance and the existing
+Zod create-input schemas. Scenario states and relationships remain explicit;
+random filler does not decide whether work is failed, pending, or complete.
 
 ## Fixtures
 

@@ -16,11 +16,11 @@ import wasm from "vite-plugin-wasm";
 import { mcpAppAsset } from "./tooling/mcp-app-asset.ts";
 import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts";
 import { resolveDevProfile } from "../../scripts/lib/dev-profile.ts";
-import { writeLocalDevConfig } from "./tooling/local-dev-config.ts";
+import { writeLocalDevConfig } from "./tooling/dev/config.ts";
 import {
   createLocalDevPeers,
   createLocalDevPeerPlugins,
-} from "./tooling/local-dev-peers.ts";
+} from "./tooling/dev/config.ts";
 import { readR2PublicUrlFromWrangler } from "./tooling/wrangler-public-config.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

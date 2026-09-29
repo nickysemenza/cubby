@@ -8,7 +8,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 
 import { ensureDbExtensions } from "./db-extensions";
-import { assertDevDatabaseUrl } from "./dev-db-guard";
+import { assertDevDatabaseUrl } from "./dev/state";
 
 /** The committed, ordered migration series (`apps/web/drizzle`). */
 export const MIGRATIONS_FOLDER = fileURLToPath(
