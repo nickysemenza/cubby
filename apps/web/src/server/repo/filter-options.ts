@@ -484,12 +484,15 @@ export async function getFilterOptions(
       loadEntityRows(db, input, false),
       input.selectedIds.length > 0 ? loadEntityRows(db, input, true) : [],
     ]);
-    const [pageRows, selectedRows] = withDates
-      ? await Promise.all([
-          withProjectDates(db, input, pageRowsRaw),
-          withProjectDates(db, input, selectedRowsRaw),
-        ])
-      : [pageRowsRaw, selectedRowsRaw];
+    const datedRows = withDates
+      ? await withProjectDates(db, input, [...pageRowsRaw, ...selectedRowsRaw])
+      : null;
+    const pageRows = datedRows
+      ? datedRows.slice(0, pageRowsRaw.length)
+      : pageRowsRaw;
+    const selectedRows = datedRows
+      ? datedRows.slice(pageRowsRaw.length)
+      : selectedRowsRaw;
     const hasNextPage = pageRows.length > input.limit;
     const byId = new Map(
       pageRows.slice(0, input.limit).map((row) => [row.id, row]),

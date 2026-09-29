@@ -33,6 +33,7 @@ import {
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
 import { identityListConfig } from "~/app/_components/entity-list/identity-list-config";
+import { ListTotalSummary } from "~/app/_components/entity-list/list-total-summary";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useDeferredReferenceFilterOptions } from "~/app/_components/hooks/useDeferredReferenceFilterOptions";
 import {
@@ -412,6 +413,10 @@ function ServerListBody({
   const body = (
     <>
       {parts.above?.(list)}
+      <ListTotalSummary
+        totals={entitySummary[entity].list.totals}
+        sums={list.sums}
+      />
       <Stack gap="sm">
         {renderedView !== "table" && (
           <DataTableToolbar

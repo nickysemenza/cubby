@@ -101,20 +101,24 @@ export const resolveProductPricing = (
  * principal. Correlated on `ka."productId"` so the kit walk can evaluate it for
  * an ancestor as readily as for the product itself.
  *
- * These predicates are the money side's definition of "an acquisition", and
- * they exist exactly once — every pricing path below is this aggregate seen
- * through {@link kitProjectionFrom}.
+ * These predicates and measures define an acquisition once. Scalar and batch
+ * pricing use the correlated aggregate through {@link kitProjectionFrom};
+ * the full-filter footer groups the same measures for visited ancestors.
  */
-const PRICING_OWN_AGGREGATE = `SELECT sum(kpe."cost") FILTER (WHERE kpe."productQuantity" IS NOT NULL) AS "knownCost",
+const PRICING_OWN_MEASURES = `sum(kpe."cost") FILTER (WHERE kpe."productQuantity" IS NOT NULL) AS "knownCost",
          sum(abs(kpe."productQuantity")) AS "knownUnitCount",
          count(*) FILTER (WHERE kpe."productQuantity" IS NOT NULL) AS "knownExpenseCount",
-         count(*) FILTER (WHERE kpe."productQuantity" IS NULL) AS "unknownExpenseCount"
-    FROM "Expense" kpe
-   WHERE kpe."productId" = ka."productId"
-     AND kpe."deletedAt" IS NULL
+         count(*) FILTER (WHERE kpe."productQuantity" IS NULL) AS "unknownExpenseCount"`;
+
+const PRICING_OWN_PREDICATES = `kpe."deletedAt" IS NULL
      AND kpe."future" = false
      AND kpe."lineKind" = 'principal'
      AND kpe."cost" > 0`;
+
+const PRICING_OWN_AGGREGATE = `SELECT ${PRICING_OWN_MEASURES}
+    FROM "Expense" kpe
+   WHERE kpe."productId" = ka."productId"
+     AND ${PRICING_OWN_PREDICATES}`;
 
 const PRICING_PROJECTION_FROM = kitProjectionFrom(PRICING_OWN_AGGREGATE);
 
@@ -329,19 +333,32 @@ export const effectiveProductPriceSql = (productAlias = '"product"') =>
   `COALESCE(${productAlias}."price", ${derivedProductPriceSql(productAlias)})`;
 
 /**
- * The list footer sums the same effective prices as the rows, but projects all
- * filtered unpriced products in one kit walk. A correlated effective-price
- * scalar otherwise repeats the recursive walk once per catalog product.
+ * The list footer projects all filtered unpriced products in one kit walk.
+ * Unlike the page-sized loader, it groups live sibling quantities and own
+ * acquisition rows once for the visited ancestors; repeating those scans for
+ * every product makes a full-catalog footer dominate the list request.
  */
 const productPriceSumSql = (whereClause: SQL | undefined): SQL<number> => {
   const condition = whereClause ?? sql`TRUE`;
-  return sql<number>`${kitAncestorCteSql(sql`
+  return sql<number>`${kitAncestorCteSql(
+    sql`
     SELECT "Product"."id", "Product"."id", 1::numeric, 1::numeric, 0
       FROM "Product"
      WHERE ${condition} AND "Product"."price" IS NULL
-  `)}, derived AS (
+  `,
+    { groupedSiblingQuantities: true },
+  )}, kit_own_ids AS MATERIALIZED (
+    SELECT DISTINCT ka."productId" FROM kit_anc ka
+  ), kit_own AS MATERIALIZED (
+    SELECT kpe."productId", ${sql.raw(PRICING_OWN_MEASURES)}
+      FROM "Expense" kpe
+      JOIN kit_own_ids koi ON koi."productId" = kpe."productId"
+     WHERE ${sql.raw(PRICING_OWN_PREDICATES)}
+     GROUP BY kpe."productId"
+  ), derived AS (
     SELECT ka.target, ${sql.raw(PROJECTED_DERIVED_PRICE)} AS price
-      ${sql.raw(PRICING_PROJECTION_FROM)}
+      FROM kit_anc ka
+      LEFT JOIN kit_own ko ON ko."productId" = ka."productId"
      GROUP BY ka.target
   )
   SELECT (COALESCE((

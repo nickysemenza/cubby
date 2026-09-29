@@ -59,6 +59,47 @@ import { resolveLiveShortcode } from "./shortcode-resolver";
 import { insertWithShortcode } from "./shortcode-utils";
 import { findOrCreateVendor, getVendorByID } from "./vendor";
 
+// Full-filter totals must include unloaded purchases and credits, without summing stated totals.
+describe("purchase list totals", () => {
+  const ctx = withTestDb();
+  it("sums live ledger rows across pages and respects the purchase filter", async () => {
+    const vendorId = await vendorShortcodeByName(
+      ctx.db,
+      "Totals fixture vendor",
+    );
+    for (const [index, cost] of [80, -20].entries()) {
+      const { output: row } = await createPurchase(
+        ctx.db,
+        purchaseCreateInput.parse({
+          vendorId,
+          date: "2026-01-15",
+          orderId: `TOTALS-${index}`,
+          statedTotal: 999,
+        }),
+        ctx.actor,
+      );
+      await createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({
+            name: `Totals expense ${index}`,
+            purchaseId: row.id,
+            cost,
+          }),
+        ),
+        ctx.actor,
+      );
+    }
+    const page = await purchaseList(ctx.db, { vendorId }, [], {
+      pageIndex: 0,
+      pageSize: 1,
+    });
+    expect(page.data).toHaveLength(1);
+    expect(page.count).toBe(2);
+    expect(page).toHaveProperty("sums", { expenseTotal: 60, expenseCount: 2 });
+  });
+});
+
 /**
  * `Purchase` is ONE vendor transaction. All money lives on `Expense`; a charge
  * only carries identity (`vendorId` + optional `orderId`), a date, documents,

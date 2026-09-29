@@ -1001,6 +1001,29 @@ const buildMetadataSchemas = () => {
             .record(nonEmptyString(), nonEmptyString())
             .optional()
             .default({}),
+          /** Full-filter server aggregates to present on every list client. */
+          totalOverrides: z
+            .array(
+              z
+                .object({
+                  id: nonEmptyString(),
+                  label: nonEmptyString(),
+                  keys: z.union([
+                    z.tuple([nonEmptyString()]),
+                    z.tuple([nonEmptyString(), nonEmptyString()]),
+                  ]),
+                  format: z.enum(["currency", "currencyRange", "integer"]),
+                })
+                .strict()
+                .refine(
+                  (total) =>
+                    (total.format === "currencyRange") ===
+                    (total.keys.length === 2),
+                  "currencyRange requires two sum keys; other totals require one",
+                ),
+            )
+            .optional()
+            .default([]),
           /** Replaces the subtitle inferred from mobile card placement. */
           shelfSubtitleOverride: z.array(fieldKey).optional(),
           /**
@@ -1085,6 +1108,7 @@ const buildMetadataSchemas = () => {
             actionOverrides,
             viewOverrides,
             viewAliases,
+            totalOverrides,
             shelfSubtitleOverride,
             initialFilter,
             primarySearch,
@@ -1094,6 +1118,7 @@ const buildMetadataSchemas = () => {
           }) => ({
             views: viewOverrides,
             viewAliases,
+            totals: totalOverrides,
             shelf:
               shelfSubtitleOverride === undefined
                 ? null

@@ -459,6 +459,7 @@ export const compilePresentation = (
           : []),
       ],
       viewAliases: list.viewAliases,
+      totals: list.totals,
       shelf: { subtitle: shelfSubtitle },
       initialFilter: list.initialFilter,
       primarySearch: list.primarySearch,

@@ -12,22 +12,28 @@ interface ExpenseSummary {
 
 export function ExpenseSummaryStrip({
   summary,
-  adjustmentsNet = 0,
+  adjustmentsNet,
+  basis = "ledger",
   loading = false,
   className,
 }: {
   summary?: ExpenseSummary;
+  basis?: "ledger" | "allocation";
   adjustmentsNet?: number;
   loading?: boolean;
   className?: string;
 }) {
+  const label = (value: string) =>
+    basis === "allocation" ? `Allocated ${value.toLowerCase()}` : value;
+  const money = (value: number | undefined) =>
+    value === undefined ? "Unavailable" : formatCurrency(value, 0);
   const metrics = [
-    ["Actual", formatCurrency(summary?.actual ?? 0, 0)],
-    ["Committed", formatCurrency(summary?.committed ?? 0, 0)],
-    ["Credits", formatCurrency(summary?.credits ?? 0, 0)],
-    ["Net", formatCurrency(summary?.net ?? 0, 0)],
-    ["Purchase adjustments", formatCurrency(adjustmentsNet, 0)],
-    ["Count", summary?.count ?? 0],
+    [label("Actual"), money(summary?.actual)],
+    [label("Committed"), money(summary?.committed)],
+    [label("Credits"), money(summary?.credits)],
+    [label("Net"), money(summary?.net)],
+    ["Purchase adjustments", money(adjustmentsNet)],
+    ["Count", summary?.count ?? "Unavailable"],
   ] as const;
 
   return (

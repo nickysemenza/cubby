@@ -469,6 +469,8 @@ public struct EntityPresentation: Codable, Sendable, Hashable {
     public let detailSections: [DetailSection]
     public let connectedViews: [ConnectedViewSpec]
     public let listViews: [ListView]
+    /// Full-filtered-set totals supplied by list metadata, in declaration order.
+    public let listTotals: [ListTotalDescriptor]
     /// Shelf card subtitle fields, in order; empty when there is no shelf view.
     public let shelfSubtitle: [String]
     public let listActions: [String]
@@ -479,6 +481,26 @@ public struct EntityPresentation: Codable, Sendable, Hashable {
     public let editSections: [EditSection]?
     public let readOnlyOnUpdate: [String]
     public let readOnlyWhen: [ReadOnlyRule]
+}
+
+public enum ListTotalFormat: String, Codable, Sendable, Hashable {
+    case currency
+    case currencyRange
+    case integer
+}
+
+public struct ListTotalDescriptor: Codable, Sendable, Hashable, Identifiable {
+    public let id: String
+    public let label: String
+    public let keys: [String]
+    public let format: ListTotalFormat
+
+    public init(id: String, label: String, keys: [String], format: ListTotalFormat) {
+        self.id = id
+        self.label = label
+        self.keys = keys
+        self.format = format
+    }
 }
 
 public enum RelationCardinality: String, Codable, Sendable, Hashable {

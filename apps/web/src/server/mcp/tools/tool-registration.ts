@@ -380,7 +380,7 @@ function compileAction(
       prepareInput: (args) =>
         kernel.verb ? { ...args, action: kernel.verb } : args,
       output: kernel.output,
-      readPolicy: readPolicyOf("context"),
+      readPolicy: readPolicyOf("strong"),
       telemetryEntity: (input) =>
         spec.telemetryEntity?.(input) ??
         entityOf.safeParse(input).data?.entity ??

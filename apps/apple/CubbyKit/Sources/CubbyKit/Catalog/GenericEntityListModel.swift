@@ -51,6 +51,12 @@ public final class GenericEntityListModel {
         return page * meta.pageSize < meta.totalCount
     }
 
+    /// Metadata is only presented as current while its last refresh succeeded.
+    public var summaryMeta: ListPageMeta? {
+        guard activity == .idle, refreshError == nil else { return nil }
+        return meta
+    }
+
     public var views: [ListView] { descriptor.presentation.listViews }
 
     private let client: CubbyClient
@@ -105,6 +111,7 @@ public final class GenericEntityListModel {
     public func apply(filters newFilters: EntityFilterState) async {
         guard newFilters != filters else { return }
         filters = newFilters
+        meta = nil
         searchModel?.setLoader(
             Self.searchLoader(
                 descriptor: descriptor, client: client, filters: newFilters,

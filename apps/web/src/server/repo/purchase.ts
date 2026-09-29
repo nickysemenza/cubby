@@ -611,12 +611,17 @@ export const purchaseList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
-): Promise<{ data: PurchaseListItemOut[]; count: number }> => {
-  return purchaseScaffold.list(
+): Promise<{
+  data: PurchaseListItemOut[];
+  count: number;
+  sums?: { expenseTotal: number; expenseCount: number };
+}> => {
+  const where = await buildPurchaseWhereClause(db, filters);
+  const pagePromise = purchaseScaffold.list(
     db,
     { filters, sorts, pagination, readIntent },
     {
-      where: await buildPurchaseWhereClause(db, filters),
+      where,
       resolveSort: resolvePurchaseSort,
       select: (page) =>
         getDb(db)
@@ -643,6 +648,31 @@ export const purchaseList = async (
       },
     },
   );
+  if (readIntent !== "page") return pagePromise;
+  // Filter purchases first; each live ledger row contributes once, regardless of other joins.
+  const totalsPromise = getDb(db)
+    .select({
+      expenseTotal: sql<number>`COALESCE(sum(${expense.cost}::numeric), 0)::double precision`,
+      expenseCount: sql<number>`count(*)::int`,
+    })
+    .from(expense)
+    .where(
+      and(
+        notDeleted(expense),
+        inArray(
+          expense.purchaseId,
+          getDb(db).select({ id: purchase.id }).from(purchase).where(where),
+        ),
+      ),
+    );
+  const [page, [totals]] = await Promise.all([pagePromise, totalsPromise]);
+  return {
+    ...page,
+    sums: {
+      expenseTotal: Number(totals?.expenseTotal ?? 0),
+      expenseCount: Number(totals?.expenseCount ?? 0),
+    },
+  };
 };
 
 export const getPurchaseByID = async (

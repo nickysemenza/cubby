@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { mutationChangesHouseholdData, readPolicyFor } from "./read-policy";
 
 describe("shared read policy", () => {
-  it("uses bounded-stale context for representative display reads", () => {
+  it("uses authoritative reads for representative interactive workflows", () => {
     for (const operation of [
       "ai.usageRecent",
       "meal.getShoppingList",
@@ -22,7 +22,7 @@ describe("shared read policy", () => {
       "recipe.getDependencyGraph",
       "task.board",
     ] as const) {
-      expect(readPolicyFor(operation, "query")).toBe("context");
+      expect(readPolicyFor(operation, "query")).toBe("strong");
     }
   });
 

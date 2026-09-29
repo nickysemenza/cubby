@@ -98,8 +98,22 @@ function ExpenseLedgerSummary({ filters }: { filters: ExpenseFilters }) {
   });
   return (
     <ExpenseSummaryStrip
-      summary={analyticsQuery.data?.summary}
-      adjustmentsNet={analyticsQuery.data?.adjustments.net}
+      basis={
+        filters.projectId || filters.projectPresenceFilter
+          ? "allocation"
+          : "ledger"
+      }
+      loading={analyticsQuery.isPending || analyticsQuery.isPlaceholderData}
+      summary={
+        analyticsQuery.isPlaceholderData
+          ? undefined
+          : analyticsQuery.data?.summary
+      }
+      adjustmentsNet={
+        analyticsQuery.isPlaceholderData
+          ? undefined
+          : analyticsQuery.data?.adjustments.net
+      }
       className="mb-4"
     />
   );

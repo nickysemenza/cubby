@@ -71,29 +71,33 @@ export const MAX_KIT_PROJECTION_DEPTH = 4;
 /**
  * Σ quantity over one parent's LIVE components — the denominator of the share.
  *
- * Correlated rather than a grouped CTE on purpose: this fragment is dropped
- * into scalar subqueries that run per row of the Product list, and
- * `ProductComponent_parentProductId_idx` makes it an index scan over a handful
- * of rows. A grouped CTE would be re-derived per row instead.
+ * Scalar and page-sized calls keep this correlated: a global grouped CTE
+ * would scan unrelated kits for each call. The full-filter footer opts into
+ * grouping once because it visits many products in a single projection.
  */
-const liveSiblingQuantitySum = (parentExpr: string) =>
-  `(SELECT sum(ksib."quantity")
-      FROM "EntityLink" ksib
+const liveSiblingRows = (parentPredicate = "") =>
+  `FROM "EntityLink" ksib
       JOIN "Product" ksibp
         ON ksibp."id" = ksib."toEntityId"
        AND ksibp."deletedAt" IS NULL
-     WHERE ksib."fromEntityId" = ${parentExpr}
-       AND ksib."deletedAt" IS NULL AND ksib."kind" = 'productComponent')`;
+     WHERE ksib."deletedAt" IS NULL AND ksib."kind" = 'productComponent'
+       ${parentPredicate}`;
+
+const liveSiblingQuantitySum = (parentExpr: string) =>
+  `(SELECT sum(ksib."quantity")
+      ${liveSiblingRows(`AND ksib."fromEntityId" = ${parentExpr}`)})`;
 
 /**
  * The recursive term. One copy, shared by every projection in every consumer:
  * this is the "keep the four copies in agreement" clause made structural rather
  * than aspirational.
  */
-const KIT_ANCESTOR_STEP = `SELECT ka.target,
+const kitAncestorStep = (
+  groupedSiblingQuantities: boolean,
+) => `SELECT ka.target,
            kpc."fromEntityId",
            ka."costWeight" * kpc."quantity"::numeric
-             / NULLIF(${liveSiblingQuantitySum(`kpc."fromEntityId"`)}, 0),
+             / NULLIF(${groupedSiblingQuantities ? 'ksq."quantitySum"' : liveSiblingQuantitySum(`kpc."fromEntityId"`)}, 0),
            ka."unitWeight" * kpc."quantity",
            ka.depth + 1
       FROM kit_anc ka
@@ -103,6 +107,7 @@ const KIT_ANCESTOR_STEP = `SELECT ka.target,
       JOIN "Product" kparent
         ON kparent."id" = kpc."fromEntityId"
        AND kparent."deletedAt" IS NULL
+      ${groupedSiblingQuantities ? 'LEFT JOIN kit_sibling_qty ksq ON ksq."fromEntityId" = kpc."fromEntityId"' : ""}
      WHERE ka.depth < ${MAX_KIT_PROJECTION_DEPTH}`;
 
 /**
@@ -113,13 +118,25 @@ const KIT_ANCESTOR_STEP = `SELECT ka.target,
 const KIT_ANCESTOR_COLUMNS = `(target, "productId", "costWeight", "unitWeight", depth)`;
 
 const cteOpen = `WITH RECURSIVE kit_anc ${KIT_ANCESTOR_COLUMNS} AS (`;
-const cteClose = `UNION ALL ${KIT_ANCESTOR_STEP})`;
+const cteClose = `UNION ALL ${kitAncestorStep(false)})`;
 
 export const kitAncestorCteText = (seed: string) =>
   `${cteOpen} ${seed} ${cteClose}`;
 
-export const kitAncestorCteSql = (seed: SQL): SQL =>
-  sql`${sql.raw(cteOpen)} ${seed} ${sql.raw(cteClose)}`;
+export const kitAncestorCteSql = (
+  seed: SQL,
+  options: { groupedSiblingQuantities?: boolean } = {},
+): SQL => {
+  if (options.groupedSiblingQuantities) {
+    const groupedOpen = `WITH RECURSIVE kit_sibling_qty AS MATERIALIZED (
+      SELECT ksib."fromEntityId", sum(ksib."quantity") AS "quantitySum"
+        ${liveSiblingRows()}
+       GROUP BY ksib."fromEntityId"
+    ), kit_anc ${KIT_ANCESTOR_COLUMNS} AS (`;
+    return sql`${sql.raw(groupedOpen)} ${seed} ${sql.raw(`UNION ALL ${kitAncestorStep(true)})`)}`;
+  }
+  return sql`${sql.raw(cteOpen)} ${seed} ${sql.raw(cteClose)}`;
+};
 
 /**
  * Seed one product, correlated to the enclosing query's alias. No FROM: the id

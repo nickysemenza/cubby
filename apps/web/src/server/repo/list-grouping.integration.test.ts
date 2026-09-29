@@ -141,7 +141,14 @@ describe("server list grouping", () => {
       groupBy: "categoryId",
       pagination: { pageIndex: 0, pageSize: 1 },
     });
-    expect(restricted.meta.groups).toBeUndefined();
+    expect(restricted.meta.groups).toEqual([
+      expect.objectContaining({
+        key: beta.output.id,
+        count: 1,
+        label: expect.stringContaining("Beta group"),
+      }),
+    ]);
+    expect(restricted.meta.totalCount).toBe(1);
 
     const categories = await executeEntity(kernelContext, {
       action: "list",

@@ -277,9 +277,17 @@ const expenseScaffold = listScaffold("expense", expense);
 export const buildExpenseWhereClause = async (
   db: Database,
   filters: ExpenseFilters,
-  options?: { extraConditions?: Array<SQL | undefined> },
+  options?: {
+    extraConditions?: Array<SQL | undefined>;
+    projectScope?: ExpenseAllocationProjectScope;
+  },
 ): Promise<SQL | undefined> => {
-  const projectCondition = await projectFilterCondition(db, filters);
+  const projectCondition =
+    options && "projectScope" in options
+      ? options.projectScope
+        ? expenseAllocationExistsSql(sql`${expense.id}`, options.projectScope)
+        : undefined
+      : await projectFilterCondition(db, filters);
   // The `(none)` / `Has project` sentinels OR with that selection instead of
   // ANDing against it, so "Kitchen or unassigned" is one filter. The
   // unassigned-spend worklist is just `projectPresenceFilter: "none"` with no
@@ -465,17 +473,31 @@ export const expenseList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
-): Promise<{ data: ExpenseListItemOut[]; count: number }> => {
-  return expenseScaffold.list(
+): Promise<{
+  data: ExpenseListItemOut[];
+  count: number;
+  sums?: { cost: number };
+}> => {
+  const where = await buildExpenseWhereClause(db, filters);
+  const page = expenseScaffold.list(
     db,
     { filters, sorts, pagination, readIntent },
     {
-      where: await buildExpenseWhereClause(db, filters),
+      where,
       resolveSort: resolveExpenseSort,
-      select: (page) => selectExpensePage(db, page),
+      select: (listPage) => selectExpensePage(db, listPage),
       hydrate: (rows) => hydrateExpenseRows(db, rows),
     },
   );
+  if (readIntent !== "page") return page;
+  const [result, [sum]] = await Promise.all([
+    page,
+    getDb(db)
+      .select({ cost: sql<number>`coalesce(sum(${expense.cost}), 0)::float` })
+      .from(expense)
+      .where(where),
+  ]);
+  return { ...result, sums: { cost: sum?.cost ?? 0 } };
 };
 
 const selectExpensePage = (db: Database, page: ListPage) =>

@@ -537,6 +537,12 @@ const presentationJSON = (
       target: view.target,
     })),
     listViews: list.views.map((view) => listViewJSON(entity, view, vocabulary)),
+    listTotals: list.totals.map((total) => ({
+      id: total.id,
+      label: total.label,
+      keys: [...total.keys],
+      format: total.format,
+    })),
     shelfSubtitle: [...(list.shelf?.subtitle ?? [])],
     listActions: [...list.actions],
     timelineFields: [...(list.timeline?.fields ?? [])],

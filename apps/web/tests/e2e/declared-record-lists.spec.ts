@@ -1,7 +1,9 @@
 import {
+  createFixture,
   seedPurchaseHeicAttachment,
   seedRecordListDisplayPrerequisite,
   seedRunHistoryDefaults,
+  seedVendorDisplayPrerequisite,
 } from "./e2e-fixtures";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
@@ -88,6 +90,113 @@ test("declared record lists retain identities, relationships and amounts on desk
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(1281);
+});
+
+test("purchase and expense totals follow the full filtered set in tables and cards", async ({
+  page,
+}) => {
+  const tag = `RecordTotals${Date.now()}`;
+  const vendor = await seedVendorDisplayPrerequisite(page, `${tag} vendor`);
+  const purchase = async (suffix: string) =>
+    createFixture(page, "purchase", {
+      vendorId: vendor.id,
+      orderId: `${tag} ${suffix}`,
+      date: "2026-09-10",
+    });
+  const [a, b, c] = [
+    await purchase("CopperDebit"),
+    await purchase("QuartzRefund"),
+    await purchase("FreeMarker"),
+  ];
+  const expense = (name: string, cost: number, purchaseId: string) =>
+    createFixture(page, "expense", {
+      name: `${tag} ${name}`,
+      cost,
+      purchaseId,
+      date: "2026-09-10",
+      costType: "materials",
+      trade: "other",
+    });
+  await expense("debit A", 20, a.id);
+  await expense("credit A", -5, a.id);
+  await expense("credit B", -7, b.id);
+  await expense("zero C", 0, c.id);
+
+  const summaryValue = (label: string) =>
+    page
+      .getByText("All matching", { exact: true })
+      .locator("..")
+      .getByText(label, { exact: true })
+      .locator("..")
+      .locator("dd");
+  const purchaseSearch = page.getByRole("textbox", {
+    name: "Search purchases or shortcode",
+    exact: true,
+  });
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await gotoAuthenticatedPage(page, `/purchases?q=${encodeURIComponent(tag)}`);
+  await expect(summaryValue("Spend")).toHaveText("$8.00");
+  await expect(summaryValue("Expense lines")).toHaveText("4");
+  await expect(
+    page.getByRole("link", { name: `${tag} CopperDebit`, exact: true }),
+  ).toBeVisible();
+
+  await purchaseSearch.fill("QuartzRefund");
+  await expect(summaryValue("Spend")).toHaveText("-$7.00");
+  await expect(summaryValue("Expense lines")).toHaveText("1");
+  await page.reload();
+  await expect(summaryValue("Spend")).toHaveText("-$7.00");
+  await purchaseSearch.fill("FreeMarker");
+  await expect(summaryValue("Spend")).toHaveText("$0.00");
+  await expect(summaryValue("Expense lines")).toHaveText("1");
+
+  await gotoAuthenticatedPage(page, `/expenses?q=${encodeURIComponent(tag)}`);
+  await expect(summaryValue("Ledger cost")).toHaveText("$8.00");
+  await page
+    .getByRole("textbox", { name: "Search expenses or shortcode", exact: true })
+    .fill("credit");
+  await expect(summaryValue("Ledger cost")).toHaveText("-$12.00");
+  await page
+    .getByRole("textbox", { name: "Search expenses or shortcode", exact: true })
+    .fill("zero");
+  await expect(summaryValue("Ledger cost")).toHaveText("$0.00");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const [path, label, value, count] of [
+    ["purchases", "Spend", "$8.00", 3],
+    ["expenses", "Ledger cost", "$8.00", 4],
+  ] as const) {
+    await gotoAuthenticatedPage(
+      page,
+      `/${path}?q=${encodeURIComponent(tag)}&view=shelf`,
+    );
+    await expect(page.getByTestId("entity-card-grid")).toBeVisible();
+    await expect(
+      page.getByTestId("entity-card-grid").locator("[data-entity-card]"),
+    ).toHaveCount(count);
+    await expect(summaryValue(label)).toHaveText(value);
+  }
+
+  for (const [path, sums] of [
+    ["purchases", { expenseTotal: 8, expenseCount: 4 }],
+    ["expenses", { cost: 8 }],
+  ] as const) {
+    for (const pageNumber of [1, 2]) {
+      const response = await page.request.get(`/api/v1/${path}`, {
+        params: { search: tag, page: String(pageNumber), pageSize: "1" },
+      });
+      expect(response.status(), await response.text()).toBe(200);
+      expect(await response.json()).toMatchObject({
+        items: [expect.any(Object)],
+        meta: {
+          pageIndex: pageNumber - 1,
+          totalCount: path === "purchases" ? 3 : 4,
+          sums,
+        },
+      });
+    }
+  }
 });
 
 test("purchase detail renders an attached HEIC instead of the empty image state", async ({

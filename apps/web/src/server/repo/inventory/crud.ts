@@ -44,7 +44,7 @@ import {
   relations,
   updateLiveAndReturn,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/list";
+import { declaredFilterPredicates, listIdsCondition } from "~/server/repo/list";
 import { isGlobalUnknownLocation } from "~/server/repo/location";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
 import {
@@ -316,6 +316,7 @@ export const buildInventoryWhere = async (
       // Stored id filters (`ownerLedgerPartyId`) come from the manifest; this
       // hand-built where must apply them since it is not on `listScaffold`.
       ...declaredFilterPredicates("inventory", inventoryEntry, filters),
+      listIdsCondition(inventoryEntry.shortcode, filters),
       lexicalEligibility("inventory", inventoryEntry.id, filters.searchQuery),
       eqAnyRequested(inventoryEntry.locationId, locationIds),
       eqAnyRequested(inventoryEntry.productId, productIds),
@@ -387,8 +388,8 @@ export const inventoryentryList = async (
     return {
       data: [],
       count: result?.count ?? 0,
+      sums: undefined,
       // Count-only consumers deliberately do not request table footers.
-      sums: { valuation: 0 },
     };
   }
 
@@ -475,7 +476,10 @@ export const inventoryentryList = async (
   return {
     data: inventoryEntries,
     count: countResult?.count ?? 0,
-    sums: { valuation: Number.isNaN(valuationSum) ? 0 : valuationSum },
+    sums:
+      readIntent === "page"
+        ? { valuation: Number.isNaN(valuationSum) ? 0 : valuationSum }
+        : undefined,
   };
 };
 

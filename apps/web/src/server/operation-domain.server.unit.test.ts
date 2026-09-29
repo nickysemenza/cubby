@@ -130,7 +130,7 @@ describe("implementOperationDomain", () => {
     });
     expect(adapter.last?.inputSchema).toBe(rangeInput);
     expect(adapter.last?.outputSchema).toBe(rangeOutput);
-    expect(adapter.last?.readPolicy).toBe("context");
+    expect(adapter.last?.readPolicy).toBe("strong");
     expect(seen.input).toEqual({ start: "2026-08-25" });
     expect(seen.context?.signal).toBe(request.signal);
     expect(seen.context?.db).toBe(baseContext.db);

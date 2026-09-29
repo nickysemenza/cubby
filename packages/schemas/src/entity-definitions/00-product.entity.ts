@@ -109,6 +109,15 @@ export default defineEntity({
       ],
     },
     list: {
+      totalOverrides: [
+        { id: "price", label: "Prices", keys: ["price"], format: "currency" },
+        {
+          id: "expenseTotal",
+          label: "Expenses",
+          keys: ["expenseTotal"],
+          format: "currency",
+        },
+      ],
       shelfSubtitleOverride: ["price", "category"],
       actionOverrides: [
         "addToInventory",

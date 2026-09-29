@@ -153,22 +153,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
           },
         })
       : Promise.resolve([]);
-  const identityProducts = await loadIdentityProducts();
-  const productsById = new Map(
-    identityProducts.map((identityProduct) => [
-      identityProduct.id,
-      {
-        ...identityProduct,
-        // Identity-product cover semantics are displayable-image semantics;
-        // PDFs, failed renders, and missing files cannot occupy the slot.
-        images: identityProduct.images.filter((association) => {
-          const [mapped] = mapImages([association]);
-          return mapped ? isDisplayableImageFile(mapped) : false;
-        }),
-      },
-    ]),
-  );
-
+  const identityProductsPromise = loadIdentityProducts();
   // Batch fetch all images for all locations in one query to avoid N+1
   const locationIds = locationRows.map((loc) => loc.id);
   const loadLocationImages = () =>
@@ -184,18 +169,35 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
           ),
         })
       : Promise.resolve([]);
-  const [allLocationImages, inventoryByLocationId, valuations, dataQualities] =
-    await Promise.all([
-      loadLocationImages(),
-      // One loader for items and their count, so the tree's `directItemCount`
-      // and `inventoryItems` cannot disagree (see `stock-items.ts`).
-      loadStockItemsByLocation(db, locationIds),
-      // A whole-tree compute, not scoped to `locationIds`: a node's valuation
-      // rolls up its ENTIRE subtree, including anything below this query's
-      // anchor (or below a node outside it, for a rootId-anchored subtree).
-      computeLocationValuations(db),
-      loadDataQualities(db, "location", locationIds),
-    ]);
+  const [
+    identityProducts,
+    allLocationImages,
+    inventoryByLocationId,
+    valuations,
+    dataQualities,
+  ] = await Promise.all([
+    identityProductsPromise,
+    loadLocationImages(),
+    // The same loader supplies both inventory rows and directItemCount.
+    loadStockItemsByLocation(db, locationIds),
+    // An anchored subtree still needs the whole-tree valuation rollup.
+    computeLocationValuations(db),
+    loadDataQualities(db, "location", locationIds),
+  ]);
+  const productsById = new Map(
+    identityProducts.map((identityProduct) => [
+      identityProduct.id,
+      {
+        ...identityProduct,
+        // Identity-product cover semantics are displayable-image semantics;
+        // PDFs, failed renders, and missing files cannot occupy the slot.
+        images: identityProduct.images.filter((association) => {
+          const [mapped] = mapImages([association]);
+          return mapped ? isDisplayableImageFile(mapped) : false;
+        }),
+      },
+    ]),
+  );
 
   const imagesByLocationId = new Map<
     LocationId,

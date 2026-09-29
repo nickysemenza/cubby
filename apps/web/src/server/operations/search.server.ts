@@ -77,10 +77,16 @@ export const searchHandlers = implementOperationDomain(searchContract, {
     requestEmbeddingRefreshWorkflow(context.db, input),
   global: async (context, input) => {
     const { includeRelated, ...query } = input;
-    const results = await findSearchHits(context.db, query);
     if (!includeRelated)
-      return { results, related: [], relatedStatus: "not_requested" as const };
-    const related = await findRelatedSearchHits(context.db, query);
+      return {
+        results: await findSearchHits(context.db, query),
+        related: [],
+        relatedStatus: "not_requested" as const,
+      };
+    const [results, related] = await Promise.all([
+      findSearchHits(context.db, query),
+      findRelatedSearchHits(context.db, query),
+    ]);
     const primaryKeys = new Set(
       results.map((result) => `${result.entityKind}:${result.id}`),
     );

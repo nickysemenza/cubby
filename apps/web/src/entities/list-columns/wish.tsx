@@ -268,7 +268,11 @@ export const wishListOverride = defineListOverride<
                 footer: (info) => {
                   // Server sums span the whole filtered set, never the page.
                   const sums = info.table.options.meta?.serverTotals?.sums;
-                  if (!sums?.priceHigh) return null;
+                  if (
+                    sums?.priceLow === undefined ||
+                    sums.priceHigh === undefined
+                  )
+                    return null;
                   return (
                     <span className="tabular-nums">
                       {formatCurrencyRange(sums.priceLow ?? 0, sums.priceHigh)}

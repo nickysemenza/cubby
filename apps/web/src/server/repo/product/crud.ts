@@ -102,8 +102,10 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
-import { withDisplayImages } from "~/server/repo/entity-display-image";
+import {
+  resolveEntityDisplayImageLists,
+  resolveEntityDisplayImages,
+} from "~/server/repo/entity-display-image";
 import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { liveLinks } from "~/server/repo/entity-links";
 import { patchEntityRows } from "~/server/repo/entity-patch";
@@ -1074,8 +1076,7 @@ export const productList = async (
     return {
       data: [],
       count: await countWhere(db, product, whereClause),
-      // Count-only consumers deliberately do not request table footers.
-      sums: { price: 0, expenseTotal: 0 },
+      sums: undefined,
     };
   }
 
@@ -1094,7 +1095,7 @@ export const productList = async (
   ];
 
   const { take, skip } = productScaffold.page(pagination);
-  const skipAggregates = readIntent === "sample";
+  const skipAggregates = readIntent !== "page";
 
   const [{ data: results, count: totalCount }, aggregates, expenseAggregates] =
     await Promise.all([
@@ -1142,32 +1143,36 @@ export const productList = async (
             ),
     ]);
 
-  const listRelations = await loadProductListRelations(
-    db,
-    results.map((row) => row.id),
-  );
-  const hydratedResults = results.map((row) => ({
-    ...row,
-    ...(listRelations.get(row.id) ?? emptyProductListRelations()),
-  }));
-  const qualities = await loadProductDataQualities(
-    db,
-    hydratedResults.map((row) => row.id),
-  );
-  const pricedResults = await enrichProductRowsWithPricing(db, hydratedResults);
-  const ledgeredResults = await enrichProductRowsWithQuantityLedger(
-    db,
-    pricedResults,
-  );
-  const products = await withDisplayImages(
-    db,
-    "product",
-    ledgeredResults,
-    (prod, displayImages) =>
-      dbProductToListAPI(
-        { ...prod, dataQuality: qualities.get(prod.id)! },
-        displayImages,
+  const ids = results.map((row) => row.id);
+  const [listRelations, qualities, priced, ledgered, displayImages] =
+    await Promise.all([
+      loadProductListRelations(db, ids),
+      loadProductDataQualities(db, ids),
+      enrichProductRowsWithPricing(db, results),
+      enrichProductRowsWithQuantityLedger(db, results),
+      resolveEntityDisplayImageLists(
+        db,
+        ids.map((id) => ({ entityKind: "product", entityId: id })),
       ),
+    ]);
+  const pricingById = new Map(priced.map((row) => [row.id, row.pricing]));
+  const ledgerById = new Map(
+    ledgered.map((row) => [row.id, row.quantityLedger]),
+  );
+  const products = await hydrateImageReadProjection(
+    db,
+    results.map((row) =>
+      dbProductToListAPI(
+        {
+          ...row,
+          ...(listRelations.get(row.id) ?? emptyProductListRelations()),
+          pricing: pricingById.get(row.id)!,
+          quantityLedger: ledgerById.get(row.id)!,
+          dataQuality: qualities.get(row.id)!,
+        },
+        displayImages.get(entityRefKey("product", row.id)) ?? [],
+      ),
+    ),
   );
   const productsWithUnitPrices = await enrichProductListItems(
     products,
@@ -1180,10 +1185,12 @@ export const productList = async (
   const result = {
     data: productsWithUnitPrices,
     count: totalCount,
-    sums: {
-      price: Number.isNaN(priceSum) ? 0 : priceSum,
-      expenseTotal: Number.isNaN(expenseTotalSum) ? 0 : expenseTotalSum,
-    },
+    sums: skipAggregates
+      ? undefined
+      : {
+          price: Number.isNaN(priceSum) ? 0 : priceSum,
+          expenseTotal: Number.isNaN(expenseTotalSum) ? 0 : expenseTotalSum,
+        },
   };
   return groups
     ? {

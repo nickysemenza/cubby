@@ -152,6 +152,35 @@ struct GenericEntityListModelTests {
         #expect(model.phase == .loaded)
         #expect(model.rows.map(\.id) == ["PRD-2345"])
         #expect(model.refreshError?.contains("Still offline") == true)
+        #expect(model.meta != nil)
+        #expect(model.summaryMeta == nil)
+    }
+
+    @Test func changedFiltersDoNotKeepPreviousTotalsAfterFailure() async throws {
+        defer { ListStub.handler.withLock { $0 = nil } }
+        let calls = Mutex(0)
+        let first = try productPage(
+            id: "PRD-2345", name: "First", page: 1, total: 1, sums: ["price": 25])
+        let failure = Data(#"{"code":"FILTER_FAILURE","message":"Try again"}"#.utf8)
+        ListStub.handler.withLock { handler in
+            handler = { _ in
+                let call = calls.withLock { value in
+                    value += 1
+                    return value
+                }
+                return call == 1 ? (200, first) : (503, failure)
+            }
+        }
+        let model = GenericEntityListModel(descriptor: EntityCatalog[.product], client: try makeClient())
+        await model.loadInitial()
+        #expect(model.meta?.sums?.additionalProperties["price"] == 25)
+
+        let search = try #require(EntityCatalog[.product].primarySearch)
+        await model.apply(filters: EntityFilterState([search.key: .single("new")]))
+
+        #expect(model.rows.map(\.id) == ["PRD-2345"])
+        #expect(model.refreshError?.contains("Try again") == true)
+        #expect(model.meta == nil)
     }
 
     @Test func refreshSupersedesALateNextPageResponse() async throws {
@@ -224,7 +253,9 @@ struct GenericEntityListModelTests {
             .first(where: { $0.name == "page" })?.value.flatMap(Int.init) ?? 1
     }
 
-    private func productPage(id: String, name: String, page: Int, total: Int) throws -> Data {
+    private func productPage(
+        id: String, name: String, page: Int, total: Int, sums: [String: Double]? = nil
+    ) throws -> Data {
         var object = try #require(
             JSONSerialization.jsonObject(with: Fixtures.data(named: "products-list.json"))
                 as? [String: Any])
@@ -236,6 +267,7 @@ struct GenericEntityListModelTests {
         meta["pageIndex"] = page
         meta["pageSize"] = 1
         meta["totalCount"] = total
+        if let sums { meta["sums"] = sums }
         object["meta"] = meta
         return try JSONSerialization.data(withJSONObject: object)
     }

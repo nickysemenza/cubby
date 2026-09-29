@@ -20,9 +20,14 @@ extension Entity {
         @Option var page: Int = 1
         @Option(name: .customLong("page-size")) var pageSize: Int = 50
         @Option var sort: String?
+        @Flag(name: .customLong("with-meta"), help: "Include list metadata with --json.")
+        var withMeta = false
 
         func run() async throws {
             try await CLI.run {
+                guard !withMeta || global.json else {
+                    throw ValidationError("--with-meta requires --json")
+                }
                 let descriptor = try Entity.descriptor(for: key)
                 // `httpActions` is the set the HTTP document routes; `nativeActions` is the subset
                 // the generated client carries for create/update/delete/timeline.
@@ -35,10 +40,24 @@ extension Entity {
                     descriptor, page: page, pageSize: pageSize, sort: sort)
 
                 if global.json {
-                    print(try CLI.prettyJSON(.array(result.items.map(\.raw))))
+                    let items = JSONValue.array(result.items.map(\.raw))
+                    let output: JSONValue
+                    if withMeta {
+                        output = .object(["items": items, "meta": try JSONValue(encoding: result.meta)])
+                    } else {
+                        output = items
+                    }
+                    print(try CLI.prettyJSON(output))
                 } else {
                     for row in result.items {
                         print("\(row.id)\t\(row.title)")
+                    }
+                    print("Matching records: \(result.meta.totalCount.formatted())")
+                    if let totals = ListTotalsSummary.line(
+                        totals: descriptor.presentation.listTotals,
+                        sums: result.meta.sums?.additionalProperties)
+                    {
+                        print(totals)
                     }
                 }
             }

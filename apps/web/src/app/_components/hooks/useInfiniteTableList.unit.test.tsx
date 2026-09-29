@@ -167,11 +167,13 @@ describe("useInfiniteTableList", () => {
         if (filters.scope === "new" && pagination.pageIndex === 0) {
           return nextFirstPage.promise;
         }
-        return page(
+        const result = page(
           `${filters.scope}-${pagination.pageIndex}`,
           pagination.pageIndex,
           2,
         );
+        result.meta.sums = { cost: 999 };
+        return result;
       },
     });
 
@@ -192,14 +194,21 @@ describe("useInfiniteTableList", () => {
       expect(result.current.infiniteScroll.isTransitioning).toBe(true),
     );
     expect(result.current.data).toEqual([{ id: "old-0" }]);
+    expect(result.current.sums).toBeUndefined();
     expect(result.current.infiniteScroll.hasNextPage).toBe(false);
     act(() => result.current.infiniteScroll.fetchNextPage());
     expect(requested).not.toContain("new:1");
 
-    act(() => nextFirstPage.resolve(page("new-0", 0, 2)));
+    act(() =>
+      nextFirstPage.resolve({
+        ...page("new-0", 0, 2),
+        meta: { pageIndex: 0, pageSize: 1, totalCount: 2, sums: { cost: -10 } },
+      }),
+    );
     await waitFor(() => {
       expect(result.current.infiniteScroll.isTransitioning).toBe(false);
       expect(result.current.data).toEqual([{ id: "new-0" }]);
+      expect(result.current.sums).toEqual({ cost: -10 });
     });
   });
 });

@@ -343,7 +343,7 @@ export const projectList = async (
 ): Promise<{
   data: ProjectListItemOut[];
   count: number;
-  sums: { costEstimate: number };
+  sums?: { costEstimate: number };
 }> => {
   const { tree, whereClause, orderByArray } = await buildProjectListQuery(
     db,
@@ -354,13 +354,11 @@ export const projectList = async (
     return {
       data: [],
       count: await countWhere(db, project, whereClause),
-      // Count-only consumers deliberately do not request table footers.
-      sums: { costEstimate: 0 },
     };
   }
   const { take, skip } = projectScaffold.page(pagination);
 
-  const [{ data: rows, count }, sums] = await Promise.all([
+  const [{ data: rows, count }, sums, loadedTree] = await Promise.all([
     executeListQueryWithCount({
       kind: readIntent,
       rows: () =>
@@ -375,12 +373,13 @@ export const projectList = async (
     readIntent === "sample"
       ? Promise.resolve({ costEstimate: 0 })
       : projectListSums(db, whereClause),
+    tree ?? loadProjectTree(db),
   ]);
 
   const ids = rows.map((r) => r.id);
 
   const [projectContext, deps, dataQualities] = await Promise.all([
-    loadProjectSubtreeRollups(db, ids, tree),
+    loadProjectSubtreeRollups(db, ids, loadedTree),
     projectDependencyIds(db, ids),
     loadDataQualities(db, "project", ids),
   ]);
@@ -394,5 +393,5 @@ export const projectList = async (
       hydrateProjectRow(row, projectContext, deps, dataQualities.get(row.id)!),
   );
 
-  return { data, count, sums };
+  return { data, count, sums: readIntent === "page" ? sums : undefined };
 };

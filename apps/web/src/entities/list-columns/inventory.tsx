@@ -39,7 +39,6 @@ import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useProductCategories } from "~/app/_components/hooks/useProductCategories";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { InventoryValuationSummary } from "~/app/_components/locations/inventory-valuation-summary";
 import { CategoryLabel } from "~/app/_components/products/CategoryLabel";
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ProductGtin } from "~/components/entity/product-gtin";
@@ -282,11 +281,6 @@ export const inventoryListOverride = defineListOverride<
       overrides,
       compose,
       list,
-      useWorkbench: ({ data }) => ({
-        contextualStatus: (
-          <InventoryValuationSummary items={data} variant="compact" />
-        ),
-      }),
       wrap: (children, { data }) => (
         <EntityDisplayImagesProvider
           refs={data.flatMap((row) => [

@@ -39,11 +39,8 @@ interface OperationObservability {
  * verbs are flagged on the entity declaration (`native.create/update/delete`)
  * instead.
  *
- * `readPolicy: "strong"` on a query keeps it on the authoritative database
- * adapter: it needs live data, or is a bounded read where the freshness RPC
- * would cost more than it saves. Absent, the query reads through the
- * request-selected adapter. The generator collects the strong set into
- * `STRONG_QUERY_OPERATIONS`; mutations are always strong.
+ * Ordinary interactive queries and mutations use the authoritative adapter.
+ * `readPolicy` remains declaration metadata for specialized read workflows.
  */
 export interface QueryContract<
   Input extends z.ZodTypeAny = z.ZodTypeAny,

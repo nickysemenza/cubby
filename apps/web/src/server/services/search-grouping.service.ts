@@ -449,25 +449,30 @@ async function composeSearchGroups(
       ),
     ]),
   ];
-  const [productHits, placementsByProduct, componentPlacementsByProduct] =
-    await Promise.all([
-      hydrateSearchHitRefs(
-        db,
-        productRefs.map((entityId) => ({ entityKind: "product", entityId })),
+  const [
+    productHits,
+    placementsByProduct,
+    componentPlacementsByProduct,
+    hitByCandidate,
+  ] = await Promise.all([
+    hydrateSearchHitRefs(
+      db,
+      productRefs.map((entityId) => ({ entityKind: "product", entityId })),
+    ),
+    loadProductPlacements(db, selectedProductIds),
+    loadComponentPlacements(db, selectedProductIds),
+    addCandidateImages(
+      db,
+      selectedGroups.flatMap((group) =>
+        group.kind === "entity"
+          ? [group.candidate]
+          : [group.bestCandidate, ...group.activityCandidates],
       ),
-      loadProductPlacements(db, selectedProductIds),
-      loadComponentPlacements(db, selectedProductIds),
-    ]);
+    ),
+  ]);
   const productById = new Map(
     productHits.map((hit) => [hit.entityId, destinationFromInternalHit(hit)]),
   );
-  const usedCandidates = selectedGroups.flatMap((group) =>
-    group.kind === "entity"
-      ? [group.candidate]
-      : [group.bestCandidate, ...group.activityCandidates],
-  );
-  const hitByCandidate = await addCandidateImages(db, usedCandidates);
-
   const result: SearchResultGroup[] = [];
   for (const group of selectedGroups) {
     if (group.kind === "entity") {

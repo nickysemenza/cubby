@@ -976,17 +976,10 @@ export function createCurrencyColumn<
       cellData,
     }),
     footer: (info) => {
-      // Prefer the server's full-filtered-set aggregate — the client only
-      // holds loaded pages, so a row reduction under-reports.
-      const serverSum =
-        info.table.options.meta?.serverTotals?.sums?.[info.column.id];
+      // Only a server aggregate can represent the full filtered set.
       const total =
-        serverSum ??
-        info.table.getFilteredRowModel().rows.reduce((acc, row) => {
-          const val = row.getValue<number | null>(info.column.id);
-          return val != null ? acc + val : acc;
-        }, 0);
-      if (total === 0) return null;
+        info.table.options.meta?.serverTotals?.sums?.[info.column.id];
+      if (total === undefined) return null;
       // Honor signedTone: a net-positive total (spend) stays neutral, a
       // negative total (net credit) greens — matching the cell values above so
       // the footer never reads as the wrong sign.

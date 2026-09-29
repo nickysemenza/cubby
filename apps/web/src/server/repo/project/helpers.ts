@@ -34,18 +34,9 @@ export type ProjectRow = {
 /** Resolve project-only inherited settings from the already-loaded tree. */
 const resolveInheritedProjectSettings = (
   row: ProjectRow,
-  allRows: ReadonlyArray<{
-    id: ProjectId;
-    shortcode: string;
-    name: string;
-    parentProjectId: ProjectId | null;
-    locations: string[];
-    locationsMode: "inherit" | "explicit";
-    defaultTrade: ProjectOut["defaultTrade"];
-  }>,
+  byId: ReadonlyMap<ProjectId, ProjectParentRow>,
 ) => {
-  const byId = new Map(allRows.map((item) => [item.id, item]));
-  let current: (typeof allRows)[number] | ProjectRow | undefined = row;
+  let current: ProjectParentRow | ProjectRow | undefined = row;
   const seen = new Set<ProjectId>();
   let locations: string[] | null = null;
   let defaultTrade: ProjectOut["defaultTrade"] = null;
@@ -159,7 +150,8 @@ const dbProjectToAPI = ({
   parentProjectName,
   parentProjectShortcode,
   childProjectIds,
-  allRows,
+  rowsById,
+  rowsByShortcode,
   dataQuality,
 }: {
   row: ProjectRow;
@@ -171,21 +163,21 @@ const dbProjectToAPI = ({
   parentProjectName: string | null;
   parentProjectShortcode: string | null;
   childProjectIds: string[];
-  allRows: Parameters<typeof resolveInheritedProjectSettings>[1];
+  rowsById: ReadonlyMap<ProjectId, ProjectParentRow>;
+  rowsByShortcode: ReadonlyMap<string, ProjectParentRow>;
   dataQuality: DataQuality;
 }): ProjectOut => {
-  const resolved = resolveInheritedProjectSettings(row, allRows);
+  const resolved = resolveInheritedProjectSettings(row, rowsById);
   const fallback = resolveInheritedProjectSettings(
     { ...row, locationsMode: "inherit", defaultTrade: null },
-    allRows,
+    rowsById,
   );
   const reference = (shortcode: string | null) =>
     shortcode
       ? {
           entityKind: "project" as const,
           entityId: shortcode,
-          name:
-            allRows.find((item) => item.shortcode === shortcode)?.name ?? null,
+          name: rowsByShortcode.get(shortcode)?.name ?? null,
         }
       : null;
   return {
@@ -281,7 +273,8 @@ export const hydrateProjectRow = (
     nameById: Map<ProjectId, string>;
     shortcodeById: Map<ProjectId, string>;
     childrenByParent: Map<ProjectId, ProjectId[]>;
-    allRows: ProjectParentRow[];
+    rowsById: ReadonlyMap<ProjectId, ProjectParentRow>;
+    rowsByShortcode: ReadonlyMap<string, ProjectParentRow>;
   },
   dependencies: {
     blockedBy: Map<ProjectId, ProjectId[]>;
@@ -307,7 +300,8 @@ export const hydrateProjectRow = (
     childProjectIds: (context.childrenByParent.get(row.id) ?? []).map(
       toShortcode,
     ),
-    allRows: context.allRows,
+    rowsById: context.rowsById,
+    rowsByShortcode: context.rowsByShortcode,
     dataQuality,
   });
 };

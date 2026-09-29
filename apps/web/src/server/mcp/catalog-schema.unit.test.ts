@@ -329,14 +329,14 @@ describe("MCP catalog schemas", () => {
     );
   });
 
-  it("resolves shared freshness separately for each tool execution", async () => {
+  it("prepares an authoritative read separately for each tool execution", async () => {
     const server = new McpServer({ name: "test", version: "1.0.0" });
     const operationContext = new McpOperationContext(fromAny({}));
     const prepare = vi
       .spyOn(operationContext, "prepare")
       .mockResolvedValue(fromAny({ requestContext: {}, entityKernel: {} }));
     registerTestTool(server, {
-      name: "freshness_scoped_read",
+      name: "authoritative_scoped_read",
       kind: "query",
       input: z.object({}),
       output: z.object({ ok: z.boolean() }),
@@ -345,7 +345,7 @@ describe("MCP catalog schemas", () => {
 
     await callMcpTool(
       server,
-      "freshness_scoped_read",
+      "authoritative_scoped_read",
       { action: "run" },
       {},
       {
@@ -354,7 +354,7 @@ describe("MCP catalog schemas", () => {
     );
     await callMcpTool(
       server,
-      "freshness_scoped_read",
+      "authoritative_scoped_read",
       { action: "run" },
       {},
       {
@@ -363,8 +363,8 @@ describe("MCP catalog schemas", () => {
     );
 
     expect(prepare).toHaveBeenCalledTimes(2);
-    expect(prepare).toHaveBeenNthCalledWith(1, "context");
-    expect(prepare).toHaveBeenNthCalledWith(2, "context");
+    expect(prepare).toHaveBeenNthCalledWith(1, "strong");
+    expect(prepare).toHaveBeenNthCalledWith(2, "strong");
   });
 
   it("publishes concrete, mock-free input and output schemas for the live catalog", async () => {

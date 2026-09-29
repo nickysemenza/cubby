@@ -36,6 +36,12 @@ public final class EntityListSearchModel {
         return page * meta.pageSize < meta.totalCount
     }
 
+    /// Metadata is only presented as current while its last refresh succeeded.
+    public var summaryMeta: ListPageMeta? {
+        guard phase == .loaded, refreshError == nil else { return nil }
+        return meta
+    }
+
     private let debounceNanoseconds: UInt64
     private var loader: PageLoader
     private let sleeper: Sleeper
@@ -99,6 +105,7 @@ public final class EntityListSearchModel {
     /// replayed against the new scope; an idle search stays idle until the next query.
     public func setLoader(_ loader: @escaping PageLoader) {
         self.loader = loader
+        meta = nil
         guard !query.isEmpty else { return }
         requestTask?.cancel()
         requestGeneration += 1

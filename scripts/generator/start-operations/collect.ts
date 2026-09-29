@@ -512,22 +512,19 @@ export const collectStartOperations = async (): Promise<
 };
 
 /**
- * Query ids whose contract member declares `readPolicy: "strong"`, sorted. A
+ * Validate contract members declaring `readPolicy: "strong"`. A
  * flag on a mutation or subscription is an error here: mutations are always
  * strong and subscriptions run through the workflow stream's own policy, so a
  * flag there would be silently meaningless.
  */
-export const collectStrongQueryOperationIds = async (): Promise<string[]> => {
-  const ids: string[] = [];
+export const validateStrongQueryOperations = async (): Promise<void> => {
   for (const [operation, declared] of await collectDeclaredOperations()) {
     if (!declared.strongRead) continue;
     if (declared.kind !== "query")
       throw new Error(
         `${operation} declares readPolicy: "strong" but is a ${declared.kind}; only queries choose a read policy.`,
       );
-    ids.push(operation);
   }
-  return ids.sort((a, b) => a.localeCompare(b));
 };
 
 /**
