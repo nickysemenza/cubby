@@ -270,6 +270,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/routes/api/auth/**`,
       `${WEB}/src/routes/_authenticated/account.$accountView.tsx`,
       `${WEB}/src/lib/http-api/**`,
+      `${WEB}/tests/e2e/http-api-client.ts`,
       `${WEB}/src/server/repo/vendor.ts`,
     ],
   },
@@ -279,6 +280,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/routes/api/v1/**`,
       `${WEB}/src/routes/api/auth/**`,
       `${WEB}/src/lib/http-api/**`,
+      `${WEB}/tests/e2e/http-api-client.ts`,
     ],
   },
   {
