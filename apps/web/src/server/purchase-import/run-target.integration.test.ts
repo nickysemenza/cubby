@@ -7,10 +7,10 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { auditLog, runTarget } from "~/server/db/schema";
+import { runHandlers } from "~/server/operations/run.server";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
-import { runHandlers } from "~/server/run-browser.server";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { startOrResumeRun, startPhotoInventoryRun } from "./run-service";

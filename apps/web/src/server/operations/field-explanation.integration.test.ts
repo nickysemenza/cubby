@@ -5,7 +5,7 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
-import { explainField } from "~/server/field-explanation-browser.server";
+import { explainField } from "~/server/operations/field-explanation.server";
 import { createExpense } from "~/server/repo/expense";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLedgerParty } from "~/server/repo/ledger-party";

@@ -1,80 +1,53 @@
-import type {
-  collectionCreateInput,
-  collectionDetailInput,
-  collectionMatrixInput,
-  collectionTagSetInput,
+import {
+  collectionDefinitionForReference,
+  type collectionCreateInput,
+  type collectionDetailInput,
+  type collectionTagSetInput,
 } from "@cubby/schemas/collection";
 import type { ActorContext } from "@cubby/schemas/context";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 
+import { collectionContract } from "~/contracts/collection.contract";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
+import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   getCollectionDetail,
   getCollectionMatrix,
+  getSmartCollectionDetail,
   listCollections,
+  listSmartCollections,
   setCollectionAssignment,
 } from "~/server/repo/collection";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
-import {
-  bindWorkflow,
-  defineWorkflowOperation,
-  workflow,
-} from "~/server/workflow-runtime";
+import { bindWorkflow, workflow } from "~/server/workflow-runtime";
 
 export type CollectionWorkflowContext = {
   db: Database;
   actorContext: ActorContext;
 };
 
-export const listCollectionSummaries = defineWorkflowOperation(
-  "collection.list",
-  async (context: CollectionWorkflowContext) => listCollections(context.db),
-);
+export const listCollectionSummaries = (context: CollectionWorkflowContext) =>
+  listCollections(context.db);
 
-export const readCollectionDetail = bindWorkflow(
-  workflow<CollectionWorkflowContext, z.output<typeof collectionDetailInput>>(
-    "collection.detail",
-  )
-    .call("read", async ({ context }, { input }) =>
-      getCollectionDetail(
-        context.db,
-        input.collection,
-        input.search,
-        input.pagination,
-      ),
-    )
-    .output(({ read, input }) => {
-      if (!read)
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          `Collection not found: ${input.collection}`,
-        );
-      return read;
-    }),
-  (
-    context: CollectionWorkflowContext,
-    input: z.output<typeof collectionDetailInput>,
-  ) => ({ context, input }),
-);
-
-export const readCollectionMatrix = defineWorkflowOperation(
-  "collection.matrix",
-  async (
-    context: CollectionWorkflowContext,
-    input: z.output<typeof collectionMatrixInput>,
-  ) =>
-    getCollectionMatrix(
-      context.db,
-      input.subject,
-      input.search,
-      input.sort,
-      input.collection,
-      input.membership,
-      input.pagination,
-    ),
-);
+export async function readCollectionDetail(
+  context: CollectionWorkflowContext,
+  input: z.output<typeof collectionDetailInput>,
+) {
+  const detail = await getCollectionDetail(
+    context.db,
+    input.collection,
+    input.search,
+    input.pagination,
+  );
+  if (!detail)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Collection not found: ${input.collection}`,
+    );
+  return detail;
+}
 
 const runCollectionEffects = async (
   context: CollectionWorkflowContext,
@@ -128,3 +101,36 @@ export const createCollection = bindWorkflow(
       return summary;
     }),
 );
+
+export const collectionHandlers = implementOperationDomain(collectionContract, {
+  referenceDetail: (context, input) =>
+    getSmartCollectionDetail(
+      context.db,
+      collectionDefinitionForReference(input.reference),
+      input.search,
+      input.pagination,
+    ),
+  smartList: (context, input) =>
+    listSmartCollections(context.db, input.definitions),
+  smartDetail: (context, input) =>
+    getSmartCollectionDetail(
+      context.db,
+      input.definition,
+      input.search,
+      input.pagination,
+    ),
+  list: listCollectionSummaries,
+  detail: readCollectionDetail,
+  matrix: (context, input) =>
+    getCollectionMatrix(
+      context.db,
+      input.subject,
+      input.search,
+      input.sort,
+      input.collection,
+      input.membership,
+      input.pagination,
+    ),
+  set: setCollectionMembership,
+  create: createCollection,
+});

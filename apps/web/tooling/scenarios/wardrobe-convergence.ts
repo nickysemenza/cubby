@@ -37,11 +37,11 @@ import {
 import { classifyOrderCapture } from "~/server/purchase-import/order-list";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { productEnrichmentTarget } from "~/server/purchase-import/product-enrichment-target";
+import { recommendationsHandlers } from "~/server/operations/recommendations.server";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { recordStatementRows } from "~/server/repo/statement-row";
 import { statementRowExternalId } from "~/server/repo/statement-row-identity";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { recommendationsHandlers } from "~/server/recommendations-browser.server";
 
 import {
   buildKernelContext,

@@ -5,10 +5,9 @@ import type { LocalPhotoAnalysis } from "~/contracts/photo-import.contract";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { AppError } from "~/server/errors/app-error";
 import {
-  productionImagePhotoAnalysisPorts,
   readImageAnalysis,
   recordImageAnalysis,
-} from "~/server/image-browser.server";
+} from "~/server/operations/image-analysis.server";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -88,7 +87,6 @@ describe("image photo-analysis backfill", () => {
       const outcome = await (async () => {
         try {
           const result = await recordImageAnalysis(
-            productionImagePhotoAnalysisPorts,
             context(),
             fixture.shortcode,
             analysis,
@@ -103,11 +101,7 @@ describe("image photo-analysis backfill", () => {
       })();
       expect(outcome).toMatchObject(expectedOutcome);
 
-      const stored = await readImageAnalysis(
-        productionImagePhotoAnalysisPorts,
-        context(),
-        fixture.shortcode,
-      );
+      const stored = await readImageAnalysis(context(), fixture.shortcode);
       expect(stored?.sha256 ?? null).toBe(expectedStoredSha256);
     },
   );
@@ -119,11 +113,7 @@ describe("image photo-analysis backfill", () => {
     });
 
     await expect(
-      readImageAnalysis(
-        productionImagePhotoAnalysisPorts,
-        context(),
-        fixture.shortcode,
-      ),
+      readImageAnalysis(context(), fixture.shortcode),
     ).resolves.toBeNull();
   });
 });

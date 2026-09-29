@@ -100,7 +100,6 @@ const executeMerge = bindWorkflow(
         sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
       }),
     ),
-  (context: EntityKernelContext, input: MergeCommand) => ({ context, input }),
 );
 
 const executeRelationMutation = async (
@@ -169,11 +168,10 @@ export async function executeEntity(
     }
 
     case "update": {
-      return ENTITY_KERNEL_OPERATIONS[command.entity].update(
-        ctx,
-        command.id,
-        command.data,
-      );
+      return ENTITY_KERNEL_OPERATIONS[command.entity].update(ctx, {
+        id: command.id,
+        data: command.data,
+      });
     }
 
     case "delete": {
@@ -181,11 +179,10 @@ export async function executeEntity(
     }
 
     case "bulkUpdate": {
-      return ENTITY_KERNEL_OPERATIONS[command.entity].bulkUpdate(
-        ctx,
-        command.ids,
-        command.data,
-      );
+      return ENTITY_KERNEL_OPERATIONS[command.entity].bulkUpdate(ctx, {
+        ids: command.ids,
+        data: command.data,
+      });
     }
 
     case "merge": {

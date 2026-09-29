@@ -26,11 +26,11 @@ import { z } from "zod";
 import { householdLocalDate } from "~/lib/household-date";
 import {
   addRecipeToMealWorkflow,
-  getMealNutritionWorkflow,
-  getMealPreparationsWorkflow,
   removeMealRecipeWorkflow,
   updateMealRecipeWorkflow,
 } from "~/server/operations/meal.server";
+import { getMealPreparations } from "~/server/repo/meal";
+import { getMealNutrition } from "~/server/services/meal-nutrition.service";
 
 import {
   READ_ONLY_CLOSED,
@@ -148,7 +148,7 @@ const trimNutrition =
 
 /** `get_daily_intake`'s projection of the meal-nutrition read onto one eater. */
 export function dailyIntake(
-  summary: Awaited<ReturnType<typeof getMealNutritionWorkflow>>,
+  summary: Awaited<ReturnType<typeof getMealNutrition>>,
   params: z.output<typeof dailyIntakeInput>,
 ): z.infer<typeof dailyIntakeOut> {
   const person = summary.people.find(
@@ -181,7 +181,7 @@ export function dailyIntake(
 
 /** `get_meal_preparations`'s trim of every totals block to the requested detail. */
 export function mealPreparations(
-  view: Awaited<ReturnType<typeof getMealPreparationsWorkflow>>,
+  view: Awaited<ReturnType<typeof getMealPreparations>>,
   nutrition: MealPreparationNutritionDetail,
 ) {
   const project = trimNutrition(nutrition);
@@ -249,7 +249,7 @@ export function registerMealTools(server: McpServer) {
     annotations: READ_ONLY_CLOSED,
     call: async (context, params) =>
       dailyIntake(
-        await getMealNutritionWorkflow(
+        await getMealNutrition(
           context.db,
           { date: params.date },
           context.usdaClient,
@@ -267,7 +267,7 @@ export function registerMealTools(server: McpServer) {
     annotations: READ_ONLY_CLOSED,
     call: async (context, params) =>
       mealPreparations(
-        await getMealPreparationsWorkflow(
+        await getMealPreparations(
           context.db,
           { mealId: params.mealId },
           context.services.recipeCosting,
@@ -285,16 +285,12 @@ export function registerMealTools(server: McpServer) {
     annotations: WRITE_CLOSED,
     call: async (context, params) =>
       addedMealRecipe(
-        await addRecipeToMealWorkflow(
-          context.db,
-          {
-            mealId: params.mealId,
-            recipeId: params.recipeId,
-            scale: params.scale,
-            sortOrder: params.sortOrder,
-          },
-          context.actorContext,
-        ),
+        await addRecipeToMealWorkflow(context, {
+          mealId: params.mealId,
+          recipeId: params.recipeId,
+          scale: params.scale,
+          sortOrder: params.sortOrder,
+        }),
         params.nutrition,
       ),
   });
@@ -320,11 +316,11 @@ export function registerMealTools(server: McpServer) {
     outputSchema: mealMcpOut,
     annotations: WRITE_CLOSED,
     call: async (context, params) => {
-      const result = await updateMealRecipeWorkflow(
-        context.db,
-        { id: params.id, scale: params.scale, sortOrder: params.sortOrder },
-        context.actorContext,
-      );
+      const result = await updateMealRecipeWorkflow(context, {
+        id: params.id,
+        scale: params.scale,
+        sortOrder: params.sortOrder,
+      });
       return respond(result, slimMeal);
     },
   });
@@ -341,11 +337,9 @@ export function registerMealTools(server: McpServer) {
     outputSchema: mealMcpOut,
     annotations: WRITE_CLOSED,
     call: async (context, params) => {
-      const result = await removeMealRecipeWorkflow(
-        context.db,
-        { id: params.id },
-        context.actorContext,
-      );
+      const result = await removeMealRecipeWorkflow(context, {
+        id: params.id,
+      });
       return respond(result, slimMeal);
     },
   });

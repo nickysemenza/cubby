@@ -1,8 +1,5 @@
-import type { UserId } from "@cubby/schemas/identifiers";
-import { revokeConnectedAppInput } from "@cubby/schemas/oauth";
-import type { z } from "zod";
-
-import type { Database } from "~/server/db";
+import { oauthContract } from "~/contracts/connected-apps.contract";
+import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   countOrphanedOAuthClients,
   listConnectedApps,
@@ -10,19 +7,15 @@ import {
   revokeConnectedApp,
 } from "~/server/repo/oauth-consent";
 
-export { revokeConnectedAppInput };
-
-export const listConnectedAppsWorkflow = async (db: Database, userId: UserId) =>
-  await listConnectedApps(db, userId);
-
-export const revokeConnectedAppWorkflow = async (
-  db: Database,
-  userId: UserId,
-  input: z.input<typeof revokeConnectedAppInput>,
-) => await revokeConnectedApp(db, userId, input.consentId);
-
-export const countOrphanedOAuthClientsWorkflow = async (db: Database) =>
-  await countOrphanedOAuthClients(db);
-
-export const pruneOrphanedOAuthClientsWorkflow = async (db: Database) =>
-  await pruneOrphanedOAuthClients(db);
+export const oauthHandlers = implementOperationDomain(oauthContract, {
+  listConnectedApps: (context) =>
+    listConnectedApps(context.db, context.actorContext.userId),
+  revokeConnectedApp: (context, input) =>
+    revokeConnectedApp(
+      context.db,
+      context.actorContext.userId,
+      input.consentId,
+    ),
+  countOrphanedClients: (context) => countOrphanedOAuthClients(context.db),
+  pruneOrphanedClients: (context) => pruneOrphanedOAuthClients(context.db),
+});

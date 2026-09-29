@@ -12,7 +12,6 @@ import {
   expenseAnalyzeTraceAttributes,
   expenseAnalyzeWorkflow,
   expenseChargeContextWorkflow,
-  expenseChartDataWorkflow,
   expenseFacetCountsWorkflow,
   expenseFacetTraceAttributes,
 } from "./expense.server";
@@ -25,10 +24,6 @@ const input: ExpenseAnalyzeInput = {
 };
 
 const expectAnalyzerGraph = () => {
-  expect(inspectWorkflow(expenseChartDataWorkflow.definition)).toMatchObject({
-    name: "expense.chartData",
-    steps: [{ type: "call", name: "list", dependencies: ["$input"] }],
-  });
   const analysis = inspectWorkflow(expenseAnalyzeWorkflow.definition);
   expect(analysis.steps.map(({ type, name }) => ({ type, name }))).toEqual([
     { type: "call", name: "currentWhere" },

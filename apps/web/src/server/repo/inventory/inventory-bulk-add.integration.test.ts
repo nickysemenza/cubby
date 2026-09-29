@@ -28,7 +28,6 @@ import {
   discardProductWorkflow,
   getProductInventoryEntriesWorkflow,
 } from "~/server/operations/product.server";
-import { getPlacementRecommendationWorkflow } from "~/server/operations/recommendations.server";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   addInventoryEntries,
@@ -45,6 +44,7 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { requireActor } from "~/server/request-context";
+import { getPlacementRecommendation } from "~/server/services/placement-recommendation.service";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**
@@ -410,7 +410,7 @@ describe("placement recommendation workflow", () => {
     const parkedId = parked.items[0]?.id;
     if (!parkedId) throw new Error("Parked fixture missing");
     await expect(
-      getPlacementRecommendationWorkflow(ctx.db, { inventoryId: parkedId }),
+      getPlacementRecommendation(ctx.db, parkedId),
     ).resolves.toMatchObject({
       inventoryId: parkedId,
       sourceLocation: { name: "Unknown" },

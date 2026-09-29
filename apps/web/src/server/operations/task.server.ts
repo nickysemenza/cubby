@@ -1,12 +1,11 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
-import {
-  taskBulkReorderInput,
-  taskFiltersSchema,
-} from "@cubby/schemas/project";
+import { taskBulkReorderInput } from "@cubby/schemas/project";
 import type { z } from "zod";
 
+import { taskContract } from "~/contracts/task.contract";
 import type { Database } from "~/server/db";
+import { implementOperationDomain } from "~/server/operation-domain.server";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import {
   getTaskBoard,
@@ -18,51 +17,9 @@ import {
   taskList,
 } from "~/server/repo/task";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
-import {
-  bindWorkflow,
-  defineWorkflowOperation,
-  workflow,
-} from "~/server/workflow-runtime";
-
-export { taskFiltersSchema };
+import { bindWorkflow, workflow } from "~/server/workflow-runtime";
 
 const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 } as const;
-
-export const taskListActionableWorkflow = defineWorkflowOperation(
-  "task.listActionable",
-  (db: Database, input: z.output<typeof taskFiltersSchema> | undefined) =>
-    listActionableTasks(db, input ?? {}),
-);
-type TaskFilters = z.output<typeof taskFiltersSchema>;
-export const taskChartDataWorkflow = bindWorkflow(
-  workflow<Database, TaskFilters>("task.chartData")
-    .call("read", async ({ context }, { input }) =>
-      taskList(
-        context,
-        input,
-        [{ orderBy: "createdAt", direction: "desc" }],
-        FETCH_ALL,
-      ),
-    )
-    .output(({ read }) => read.data),
-  (db: Database, input: TaskFilters) => ({ context: db, input }),
-);
-export const taskSummaryWorkflow = defineWorkflowOperation(
-  "task.summary",
-  (db: Database) => getTaskSummary(db),
-);
-export const taskTodayBriefingWorkflow = defineWorkflowOperation(
-  "task.todayBriefing",
-  getTaskTodayBriefing,
-);
-export const taskBoardWorkflow = defineWorkflowOperation(
-  "task.board",
-  getTaskBoard,
-);
-export const taskTimelineWorkflow = defineWorkflowOperation(
-  "task.timeline",
-  getTaskTimeline,
-);
 
 /**
  * `task.bulkReorder` stays bespoke — it is positional, not a field patch, so
@@ -72,7 +29,7 @@ export const taskTimelineWorkflow = defineWorkflowOperation(
  */
 type ReorderInput = z.output<typeof taskBulkReorderInput>;
 type ReorderContext = { db: Database; actorContext: ActorContext };
-export const taskBulkReorderWorkflow = bindWorkflow(
+const bulkReorderWorkflow = bindWorkflow(
   workflow<ReorderContext, ReorderInput>("task.bulkReorder")
     .commit("items", async ({ context }, { input }) =>
       reorderTasks(
@@ -102,8 +59,30 @@ export const taskBulkReorderWorkflow = bindWorkflow(
       items,
       sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
     })),
-  (db: Database, input: ReorderInput, actorContext: ActorContext) => ({
-    context: { db, actorContext },
-    input,
-  }),
 );
+
+export const taskBulkReorderWorkflow = Object.assign(
+  (db: Database, input: ReorderInput, actorContext: ActorContext) =>
+    bulkReorderWorkflow({ db, actorContext }, input),
+  { definition: bulkReorderWorkflow.definition },
+);
+
+export const taskHandlers = implementOperationDomain(taskContract, {
+  listActionable: (context, input) =>
+    listActionableTasks(context.db, input ?? {}),
+  chartData: async (context, input) =>
+    (
+      await taskList(
+        context.db,
+        input,
+        [{ orderBy: "createdAt", direction: "desc" }],
+        FETCH_ALL,
+      )
+    ).data,
+  summary: (context) => getTaskSummary(context.db),
+  todayBriefing: (context) => getTaskTodayBriefing(context.db),
+  board: (context, input) => getTaskBoard(context.db, input),
+  timeline: (context, input) => getTaskTimeline(context.db, input),
+  bulkReorder: (context, input) =>
+    taskBulkReorderWorkflow(context.db, input, context.actorContext),
+});

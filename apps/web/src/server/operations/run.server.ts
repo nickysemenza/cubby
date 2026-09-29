@@ -5,7 +5,6 @@ import { runContract } from "~/contracts/run.contract";
 import { oauthRefreshToken } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { listRunAiUsageWorkflow } from "~/server/operations/ai.server";
 import {
   findActivePurchaseAgentGrant,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
@@ -32,8 +31,10 @@ import {
   loadTargetedImportLaunch,
   startTargetedImport,
 } from "~/server/purchase-import/targeted-run";
+import { listAiUsageForRun } from "~/server/repo/ai-usage";
 import { getDb } from "~/server/repo/database-helpers";
 import { getRunByShortcode } from "~/server/repo/run";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import type { AuthenticatedRequestContext } from "~/server/request-context";
 
 /** Import runs belong to a household member's ledger party. */
@@ -194,7 +195,12 @@ export const runHandlers = implementOperationDomain(runContract, {
     await confirmMerchantVendorRule(context.db, input, context.actorContext);
     return listMerchantVendorRules(context.db, party.id);
   },
-  aiUsage: (context, input) => listRunAiUsageWorkflow(context.db, input),
+  aiUsage: async (context, input) =>
+    listAiUsageForRun(
+      context.db,
+      await resolveOrThrow(context.db, "run", input.runId),
+      { cursor: input.cursor, limit: input.limit },
+    ),
   reportDeviceWork: async (context, input) => {
     await memberParty(context);
     return reportRunTargetDeviceWork(context.db, {

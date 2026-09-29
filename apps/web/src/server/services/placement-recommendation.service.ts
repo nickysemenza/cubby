@@ -94,14 +94,11 @@ export const placementRecommendationWorkflowDefinition = workflow<
   })
   .output(({ eligible }) => eligible);
 
-export const getPlacementRecommendation = bindWorkflow(
+const placementRecommendation = bindWorkflow(
   placementRecommendationWorkflowDefinition,
-  (
-    db: Database,
-    inventoryId: InventoryShortcode,
-    ports: PlacementRecommendationPorts = productionPlacementRecommendationPorts,
-  ) => ({
-    context: { db, ports },
-    input: { inventoryId },
-  }),
 );
+export const getPlacementRecommendation = (
+  db: Database,
+  inventoryId: InventoryShortcode,
+  ports: PlacementRecommendationPorts = productionPlacementRecommendationPorts,
+) => placementRecommendation({ db, ports }, { inventoryId });

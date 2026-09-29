@@ -6,7 +6,7 @@ import {
   boundExplanationSources,
   explainProjectionSources,
   readExplanationPath,
-} from "./field-explanation-browser.server";
+} from "./field-explanation.server";
 
 describe("field explanation projection", () => {
   it("treats a nullable computed parent as a real null value", () => {

@@ -7,11 +7,11 @@ import { similarEntitiesInputSchema } from "@cubby/schemas/search";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { z } from "zod";
 
+import { findSimilarEntitiesWorkflow } from "~/server/operations/semantic-similarity.server";
 import {
-  findRelatedSearchHitsWorkflow,
-  findSearchHitsWorkflow,
-  findSimilarEntitiesWorkflow,
-} from "~/server/operations/search.server";
+  findRelatedSearchHits,
+  findSearchHits,
+} from "~/server/services/search.service";
 
 import { READ_ONLY_CLOSED, registerRouterTool } from "./_shared";
 
@@ -29,7 +29,7 @@ export function registerSearchTools(server: McpServer) {
     annotations: READ_ONLY_CLOSED,
     call: async (context, params) => {
       const { includeRelated, ...query } = params;
-      const results = await findSearchHitsWorkflow(context.db, query);
+      const results = await findSearchHits(context.db, query);
 
       if (!includeRelated) {
         return {
@@ -39,10 +39,7 @@ export function registerSearchTools(server: McpServer) {
         };
       }
 
-      const relatedResult = await findRelatedSearchHitsWorkflow(
-        context.db,
-        query,
-      );
+      const relatedResult = await findRelatedSearchHits(context.db, query);
       const primaryKeys = new Set(
         results.map((result) => `${result.entityKind}:${result.id}`),
       );
