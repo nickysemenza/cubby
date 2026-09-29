@@ -24,13 +24,18 @@ function RecipeEditRedirect({ onClose }: { onClose: () => void }) {
 
 /**
  * The entities whose Edit action does not open the generic `update:full`
- * dialog: recipe edits on its own route; image has no kernel update
- * contract. Product now opens the generic dialog too — its rich fields
+ * dialog: recipe edits on its own route; image and cookbook have no create
+ * contract, so they edit through their own operation. Product now opens the generic dialog too — its rich fields
  * (`unitMappings`, `labelNutrition`, external IDs) have specialized
  * renderers (`entity-primitive-fields.tsx`'s `controlRendererCoverage`).
  */
 export const detailEditOverrides = {
   recipe: RecipeEditRedirect,
+  cookbook: lazy(() =>
+    import("~/app/cookbooks/cookbook-edit-dialog").then((module) => ({
+      default: module.CookbookEditDialog,
+    })),
+  ),
   image: lazy(() =>
     import("~/app/images/image-edit-dialog").then((module) => ({
       default: module.ImageEditDialog,

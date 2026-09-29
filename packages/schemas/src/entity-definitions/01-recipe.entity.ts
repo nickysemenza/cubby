@@ -1,5 +1,9 @@
 import { defineEntity } from "./definition.js";
-import { imageShortcode, recipeShortcode } from "../identifier-fields.js";
+import {
+  cookbookShortcode,
+  imageShortcode,
+  recipeShortcode,
+} from "../identifier-fields.js";
 import { imageOut } from "./field-primitives.js";
 import { recipeSectionsInput, recipeSectionsOut } from "../recipe-fields.js";
 import {
@@ -472,10 +476,17 @@ export default defineEntity({
         readKeyOverride: "source",
       },
       {
+        // Re-pointing a recipe at another cookbook (or none). Read through
+        // `source`, so no read schema of its own.
         key: "cookbookId",
         kind: "identifier",
         nullable: true,
         reference: { entity: "cookbook" },
+        validation: {
+          read: null,
+          create: null,
+          update: cookbookShortcode.nullable().optional(),
+        },
       },
       {
         key: "forkedFromRecipeId",
@@ -586,6 +597,7 @@ export default defineEntity({
       "removeImageIds",
       "imageOrder",
       "forkedFromRecipeId",
+      "cookbookId",
     ],
     bulk: [],
     audit: ["name", "forkedFromRecipeId"],

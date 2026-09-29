@@ -113,6 +113,8 @@ const recipeYieldDraft = z
 // Form schema for recipe form
 export const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  // The source cookbook; edit mode only (`null` = not from a cookbook).
+  cookbookId: z.string().nullish(),
   meta: recipeMetaDraft,
   // Yield is edited as two separate optional inputs, and react-hook-form
   // materializes `yield` into an object ({ value: undefined, unit: undefined }) the
