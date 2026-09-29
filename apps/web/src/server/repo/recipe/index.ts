@@ -41,7 +41,6 @@ export {
   appearsInRecipesRefsForIngredientSql,
   computeRecipeUsages,
   cookbookOnlyForIngredientSql,
-  dbRecipeToAPIShallow,
   dbRecipeToTopLevel,
   liveRecipeCountForIngredientSql,
   ownRecipeCountForIngredientSql,

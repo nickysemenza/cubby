@@ -17,7 +17,6 @@
 
 export {
   addRecipeToMeal,
-  createMeal,
   deleteMeals,
   getMealByID,
   getMealsByDateRange,

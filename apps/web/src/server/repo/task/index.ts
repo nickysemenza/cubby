@@ -26,7 +26,6 @@ export {
   getTaskByShortcode,
   getTasksByIDs,
   reorderTasks,
-  setTasksStatus,
   updateTask,
 } from "./crud";
 export { taskList } from "./lookup";

@@ -36,7 +36,6 @@ export {
 } from "./crud";
 // Lookup operations
 export {
-  findOrCreateLocationByName,
   getLocationPutAwayCandidates,
   getLocationsByShortcodes,
   type LocationPutAwayCandidate,

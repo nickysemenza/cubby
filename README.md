@@ -733,7 +733,7 @@ The contract is a real ts-rest router (`apps/web/src/lib/generated/http-contract
 built from the operation contracts in `apps/web/src/contracts/` and the entity
 resource table), served by `@ts-rest/serverless` and documented by
 `@ts-rest/open-api`. `createCubbyClient({ baseUrl, apiKey? })` in
-`apps/web/src/lib/http-api/client.ts` is a plain `initClient` over it with
+`apps/web/tests/e2e/http-api-client.ts` is a plain `initClient` over it with
 same-origin browser credentials: `client.dashboard.counts({ query: {} })`,
 `client.resources.vendor.create({ body: { name } })`,
 `client.resources.recipe.list({ query: { page: 1, pageSize: 20, sort: "name", nameFilter: "Soup" } })`,
