@@ -243,14 +243,16 @@ stale-while-revalidate, so reads taken against the old schema can outlive the
 deploy. Wrangler has no purge subcommand; toggling caching is the closest
 reset, and waiting bounds staleness by the configured max age plus SWR.
 
-- [ ] Toggle caching on the cached config off and back on with its original
-      timings (IDs in [infrastructure.md](../infrastructure.md#postgresql-and-hyperdrive);
-      policy in `apps/web/src/lib/hyperdrive-cache-policy.ts`), or wait at least
-      75 seconds before the smoke list:
+- [ ] Wait at least 75 seconds after the deploy finishes before the smoke list.
+- [ ] Optional hard reset: toggle caching on the cached config (IDs in
+      [infrastructure.md](../infrastructure.md#postgresql-and-hyperdrive);
+      policy in `apps/web/src/lib/hyperdrive-cache-policy.ts`). Read
+      `wrangler hyperdrive update --help` first: `--max-age` and `--swr` cannot
+      be set while caching is disabled, so the re-enable form must be checked
+      before caching is turned off.
 
 ```bash
 pnpm --dir apps/web exec wrangler hyperdrive update <cached-id> --caching-disabled
-pnpm --dir apps/web exec wrangler hyperdrive update <cached-id> --max-age 60 --swr 15
 ```
 
 - [ ] Resume the queues paused in step 2:
@@ -312,10 +314,9 @@ the integration branch when this was written. -->
 ## Rollback
 
 - **Before step 7 commits** (including a failed `0002`): nothing changed in the
-  schema. Only the bookkeeping edit in step 6 needs reversing, by restoring
-  the six deleted rows from the dump if the old runner will be used again, or
-  by leaving the single baseline row for the retry. Resume queues and lift
-  maintenance.
+  schema, and nothing else reads the bookkeeping table, so leave the single
+  baseline row in place and restart at step 7 once the cause is fixed. Resume
+  queues and lift maintenance if the attempt is abandoned.
 - **After step 7 commits, before the deploy:** restore. Create a new Neon
   branch or restore point from `pre-cutover-<ts>`, point production at it (a
   Hyperdrive origin update, via the direct URL), and confirm the old Workers
