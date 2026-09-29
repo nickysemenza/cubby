@@ -51,7 +51,7 @@ test-command duration fell from 3.02 to 2.12 seconds. All 27 tests passed.
 
 ## Complete local verification
 
-After the local-verification workflow change, `pnpm verify:local:full` passed
+`pnpm verify:local:full` passed
 in **124.47 seconds** on the 8-core, 24 GiB ARM Mac, measured with
 `/usr/bin/time -p`. This warm run includes WASM preparation, frozen dependency
 installation, all repository checks, dependency deduplication, Rust formatting,
@@ -59,16 +59,12 @@ Clippy and tests, all Worker builds, workspace tests, PostgreSQL and Playwright.
 The PostgreSQL and browser tiers overlap through the existing npm runner after
 the fast tier; neither test coverage nor browser worker limits changed.
 
-The preceding full pre-push gate and push took 289.37 seconds, including
-52.95 seconds of Clippy compilation and 82 seconds of Rust test compilation.
-Warm Clippy and Rust test build phases took 0.15 and 0.19 seconds respectively.
 Warm web tests passed all 3,442 cases in 18.87 seconds; PostgreSQL passed all
-262 cases in 29.07 seconds, alongside all 22 passing browser tests. Both complete
-runs passed. Measurements were taken on code commit `7f7f2c13d` using local Node
-26.7.0; hosted configuration continues to pin Node 24. These are two observations
-with different cache states, not a controlled before/after comparison or a
-measurement of aggregate process-tree memory. The typechecker RSS measurements
-above remain separate.
+262 cases in 29.07 seconds, alongside all 22 passing browser tests. Measured on
+code commit `7f7f2c13d` with local Node 26.7.0 (hosted configuration pins Node
+24); this is one observation, not a controlled comparison or a measurement of
+aggregate process-tree memory. The typechecker RSS measurements above remain
+separate. Commands: [quality guide](agents/validation-quality.md).
 
 ## Excluded claims
 

@@ -535,8 +535,10 @@ In dev, `await __jsProfile(5000)` in the browser console captures a CPU flame su
 | `*.integration.test.ts` | Authoritative PostgreSQL contracts | Vitest     |
 | `*.spec.ts`             | E2E tests                          | Playwright |
 
-Local and CI E2E use isolated IntegreSQL PostgreSQL clones. See `e2e-helpers.ts`
-for the shared browser fixtures.
+Which tier to use, focused-run commands, and the PR merge gate live in the
+[validation policy](docs/agents/validation.md) and
+[test tiers](docs/agents/validation-tests.md); shared browser fixtures are in
+`e2e-helpers.ts`.
 
 ### File Naming Conventions
 
