@@ -316,10 +316,10 @@ VACUUM (ANALYZE);
       (`.github/workflows/apple-testflight.yaml` validates the tag and refuses
       one that is not on `main`).
 
-<!-- TODO(main agent): name where the server's minimum client version is
-configured (lane A's gate keyed on the User-Agent product and
-`CFBundleShortVersionString`) so the tag can be checked against it. Not yet on
-the integration branch when this was written. -->
+The minimum is `MINIMUM_APPLE_CLIENT_VERSION` in
+`apps/web/src/server/apple-client-gate.ts` (`2.0` for this cutover): Apple
+builds older than it get HTTP 426 `CLIENT_UPDATE_REQUIRED` on `/api/v1`. Tag
+this release `v2.0.0` or higher, or the new build is gated too.
 
 - [ ] The TestFlight build is processed; install it and repeat the photo sync
       smoke item.
