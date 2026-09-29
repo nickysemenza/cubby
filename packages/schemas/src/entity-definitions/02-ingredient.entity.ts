@@ -290,6 +290,13 @@ export default defineEntity({
         ],
       },
       {
+        columnId: "mappingGap",
+        field: "mappingGap",
+        kind: "select",
+        placeholder: "Filter product mapping...",
+        options: [{ value: "gap", label: "Needs product mapping" }],
+      },
+      {
         columnId: "usuallyOnHand",
         field: "usuallyOnHand",
         kind: "boolean",

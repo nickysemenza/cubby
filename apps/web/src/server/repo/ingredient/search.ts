@@ -23,6 +23,7 @@ import {
   isNotNull,
   isNull,
   ne,
+  notInArray,
   type SQL,
   sql,
 } from "drizzle-orm";
@@ -31,6 +32,7 @@ import type { Database } from "~/server/db";
 import {
   ingredient,
   product,
+  productConversionCoverage,
   recipe,
   recipeSection,
   recipeSectionIngredient,
@@ -60,6 +62,7 @@ import {
 
 import { categorySummarySql } from "../product-category-sql";
 import { productClassificationEvidenceSql } from "../product/classification-evidence";
+import { currentProductConversionCoverageCondition } from "../product/conversion-coverage";
 import {
   appearsInRecipesRefsForIngredientSql,
   computeRecipeUsages,
@@ -488,6 +491,25 @@ export const buildIngredientListWhere = async (
     )
     .where(notDeleted(recipeSectionIngredient));
 
+  // Live products whose persisted conversion coverage is complete. A product
+  // with no current coverage row is unknown, so it does not close the gap. The
+  // isNotNull guard keeps NOT IN from going UNKNOWN on a NULL ingredientId.
+  const ingredientIdsWithCompleteProducts = dbClient
+    .select({ ingredientId: product.ingredientId })
+    .from(product)
+    .innerJoin(
+      productConversionCoverage,
+      eq(productConversionCoverage.productId, product.id),
+    )
+    .where(
+      and(
+        notDeleted(product),
+        isNotNull(product.ingredientId),
+        currentProductConversionCoverageCondition(),
+        eq(productConversionCoverage.coverageTier, "complete"),
+      ),
+    );
+
   // Always filter out recipe-scoped ingredients; `notDeleted` is folded into
   // `ingredientScaffold.where` below.
   const computed: Array<SQL | undefined> = [isNull(ingredient.recipeId)];
@@ -523,6 +545,12 @@ export const buildIngredientListWhere = async (
       ingredientIdsInOwnRecipes,
     ),
   );
+
+  if (filters.mappingGap === "gap")
+    computed.push(
+      inArray(ingredient.id, ingredientIdsInLiveRecipes),
+      notInArray(ingredient.id, ingredientIdsWithCompleteProducts),
+    );
 
   const whereClause = ingredientScaffold.where(filters, computed);
   return whereClause;

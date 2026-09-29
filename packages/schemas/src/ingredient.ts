@@ -63,6 +63,12 @@ export const ingredientFilterFields = {
   recipePresenceFilter: presenceFilter.describe(
     "Filter to ingredients that are / aren't used by at least one live recipe",
   ),
+  mappingGap: z
+    .enum(["gap"])
+    .optional()
+    .describe(
+      "Ingredients used by at least one live recipe with no live linked product whose conversion coverage is complete: the product-mapping worklist.",
+    ),
 };
 
 export const ingredientFiltersSchema = z.object(ingredientFilterFields);
