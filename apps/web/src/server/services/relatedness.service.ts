@@ -45,7 +45,7 @@ export interface RelatednessDependencies {
   makeCandidateKey: typeof suggestionCandidateKey;
 }
 
-export const productionRelatednessDependencies: RelatednessDependencies = {
+const productionRelatednessDependencies: RelatednessDependencies = {
   resolveSourceId: resolveOrThrow,
   findSimilarEntities: findSimilarEntitiesWorkflow,
   getProductsSharingTags,
@@ -63,7 +63,7 @@ type RelatednessContext = {
   dependencies: RelatednessDependencies;
 };
 
-export const productRelatednessWorkflowDefinition = workflow<
+const productRelatednessWorkflowDefinition = workflow<
   RelatednessContext,
   ProductShortcode
 >("relatedness.product")
@@ -147,7 +147,7 @@ export const getProductRelatedness = (
  * Tags are proposed only from current semantic neighbours. They remain out of
  * relatedness scoring, so the ground-truth label cannot vote for itself.
  */
-export const productTagPropagationWorkflowDefinition = workflow<
+const productTagPropagationWorkflowDefinition = workflow<
   RelatednessContext,
   ProductShortcode
 >("recommendations.tagPropagation")
