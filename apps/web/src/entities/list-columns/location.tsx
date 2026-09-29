@@ -11,7 +11,6 @@ import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import {
   createEntityInlineLinkColumn,
   createImageColumn,
-  createInventoryEntriesColumn,
   createSingleEntityInlineLinkColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import {
@@ -29,6 +28,7 @@ import { entityListHiddenColumns } from "~/entities/entity-display";
 import { relationshipFieldProvenance } from "~/entities/field-provenance";
 import type { EntityListParamsByEntity } from "~/entities/generated/entity-lists.gen";
 
+import { createInventoryEntriesColumn } from "./inventory";
 import { defineListOverride } from "./types";
 
 type LocationFilters = EntityListParamsByEntity["location"]["filters"];
