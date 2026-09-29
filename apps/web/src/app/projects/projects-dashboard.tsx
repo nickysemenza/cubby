@@ -57,6 +57,7 @@ import {
   image,
   project,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatCalendarDay } from "~/lib/date-format";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn, formatCurrency } from "~/lib/utils";
 
@@ -72,7 +73,6 @@ import { ActiveScopeSummary, DashboardFilters } from "./dashboard-filters";
 import { NeedsAttention } from "./needs-attention";
 import {
   capitalize,
-  formatDate,
   formatDateRange,
   PROJECT_STATUS_LABELS,
   StatusIcon,
@@ -463,7 +463,7 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
             )}
             {task.dueDate && (
               <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                {formatDate(task.dueDate)}
+                {formatCalendarDay(task.dueDate, "monthDay")}
               </span>
             )}
           </Row>

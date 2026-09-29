@@ -15,6 +15,7 @@ import {
   StatTile,
   type SummaryItem,
 } from "~/components/ui/stat-tile";
+import { formatInstant } from "~/lib/date-format";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { formatCurrency } from "~/lib/utils";
 
@@ -153,7 +154,7 @@ const formatInventorySummary = (data: InventorySummaryData): SummaryItem[] => [
     ? [
         {
           label: "Last Updated",
-          value: data.lastUpdated.toLocaleDateString(),
+          value: formatInstant(data.lastUpdated, "dateNumeric"),
         },
       ]
     : []),

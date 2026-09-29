@@ -2,7 +2,6 @@ import type { ExpenseOut } from "@cubby/schemas/project";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { format } from "date-fns";
 import { sumBy } from "es-toolkit";
 import { useMemo, type FC } from "react";
 
@@ -17,7 +16,7 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
 import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { parsePlainDate } from "~/lib/plain-date";
+import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
 
 // Module-level so the fallback keeps a stable reference across renders.
@@ -179,7 +178,7 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
               >
                 {line.date && (
                   <span className="text-muted-foreground">
-                    {format(parsePlainDate(line.date), "MMM d, yyyy")}
+                    {formatCalendarDay(line.date, "dateShort")}
                   </span>
                 )}
                 {line.cost != null ? formatCurrency(line.cost) : <NoneValue />}

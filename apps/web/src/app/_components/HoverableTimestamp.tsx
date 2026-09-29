@@ -1,11 +1,10 @@
-import { format } from "date-fns";
-
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { formatInstant } from "~/lib/date-format";
 
 type HoverableTimestampProps = {
   timestamp: string | Date;
@@ -30,7 +29,7 @@ export function formatCompactRelative(date: Date): string {
 
 export function HoverableTimestamp({ timestamp }: HoverableTimestampProps) {
   const date = new Date(timestamp);
-  const formattedDate = format(date, "yyyy-MM-dd HH:mm:ss");
+  const formattedDate = formatInstant(date, "isoDateTimeSeconds");
   const relativeTime = formatCompactRelative(date);
 
   return (

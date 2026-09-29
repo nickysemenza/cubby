@@ -14,6 +14,7 @@ import {
   run as runOperations,
   purchase as purchaseOperations,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatInstant } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
 
@@ -53,7 +54,7 @@ export const PurchaseOrderMail: DetailSlotComponent<"purchase"> = ({
           <Row align="center" justify="between" gap="sm" className="flex-wrap">
             <span className="font-medium">{mail.subject}</span>
             <span className="text-xs text-muted-foreground">
-              {new Date(mail.receivedAt).toLocaleString()}
+              {formatInstant(mail.receivedAt, "dateTime")}
             </span>
           </Row>
           <div className="text-xs text-muted-foreground">{mail.sender}</div>
@@ -147,7 +148,7 @@ function RunSummary({ run }: { run: RunSummary }) {
         </span>
       </div>
       <div className="text-muted-foreground">
-        {new Date(run.startedAt).toLocaleString()} · {run.trigger} ·{" "}
+        {formatInstant(run.startedAt, "dateTime")} · {run.trigger} ·{" "}
         {run.ordersSeen} seen · {run.imported} imported · {run.updated} updated
         · {run.skipped} skipped
       </div>

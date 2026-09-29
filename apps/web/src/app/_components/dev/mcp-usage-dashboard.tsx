@@ -36,6 +36,7 @@ import { Input } from "~/components/ui/input";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
 import { mcp } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatInstant } from "~/lib/date-format";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
 import { formatCount } from "~/lib/utils";
 
@@ -80,9 +81,8 @@ function StatusBadge({ status }: { status: McpToolUsageStatus }) {
   return <Badge variant={variant}>{status.toUpperCase()}</Badge>;
 }
 
-function formatDate(value: Date | null): string {
-  if (!value) return "Never";
-  return new Date(value).toLocaleString();
+function formatOrNever(value: Date | null): string {
+  return value ? formatInstant(value, "dateTime") : "Never";
 }
 
 function ChartCard({
@@ -385,7 +385,7 @@ function ToolRosterTable({
             size: 190,
             enableSorting: false,
             meta: { mobile: { slot: "meta", priority: 20 } },
-            cell: ({ getValue }) => formatDate(getValue()),
+            cell: ({ getValue }) => formatOrNever(getValue()),
           }),
         );
         add(
@@ -397,7 +397,7 @@ function ToolRosterTable({
               (left.getValue<Date | null>(id)?.getTime() ?? 0) -
               (right.getValue<Date | null>(id)?.getTime() ?? 0),
             meta: { mobile: { slot: "meta", priority: 30 } },
-            cell: ({ getValue }) => formatDate(getValue()),
+            cell: ({ getValue }) => formatOrNever(getValue()),
           }),
         );
         add(
@@ -550,7 +550,7 @@ function ActivityTable({
               mono: true,
               mobile: { slot: "subtitle", priority: 0 },
             },
-            cell: ({ getValue }) => formatDate(getValue()),
+            cell: ({ getValue }) => formatOrNever(getValue()),
           }),
         );
         add(
@@ -748,9 +748,12 @@ export function McpUsageDashboard() {
             <Metric label="Status" value={selected.status} />
             <Metric
               label="First used"
-              value={formatDate(selected.firstUsedAt)}
+              value={formatOrNever(selected.firstUsedAt)}
             />
-            <Metric label="Last used" value={formatDate(selected.lastUsedAt)} />
+            <Metric
+              label="Last used"
+              value={formatOrNever(selected.lastUsedAt)}
+            />
             <Metric
               label="Last release"
               value={selected.lastRelease?.slice(0, 10) ?? "—"}
@@ -833,7 +836,7 @@ export function McpUsageDashboard() {
           <AlertTitle>Incomplete observation window</AlertTitle>
           <AlertDescription>
             {data.observationStartedAt
-              ? `Telemetry began ${formatDate(data.observationStartedAt)}. `
+              ? `Telemetry began ${formatOrNever(data.observationStartedAt)}. `
               : "No MCP calls have been captured yet. "}
             Never and inactive classifications are provisional until the full
             window has elapsed.

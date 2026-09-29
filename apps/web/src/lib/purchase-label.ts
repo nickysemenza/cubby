@@ -1,6 +1,4 @@
-import { format } from "date-fns";
-
-import { parsePlainDate } from "./plain-date";
+import { formatCalendarDay } from "~/lib/date-format";
 
 /**
  * A purchase's human label.
@@ -40,7 +38,7 @@ export function purchaseIdentityLabel(purchase: PurchaseLabelInput): string {
   return purchase.orderId
     ? purchase.orderId
     : purchase.date
-      ? `${vendor} · ${format(parsePlainDate(purchase.date), "MMM d, yyyy")}`
+      ? `${vendor} · ${formatCalendarDay(purchase.date, "dateShort")}`
       : vendor;
 }
 

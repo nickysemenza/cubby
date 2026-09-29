@@ -1,4 +1,3 @@
-import { format } from "date-fns";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -11,7 +10,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
-import { parsePlainDate } from "~/lib/plain-date";
+import { formatCalendarDay } from "~/lib/date-format";
 
 export type ScalarDisplayValue =
   | { kind: "empty"; raw: null | undefined }
@@ -154,7 +153,7 @@ export function renderScalarValue(
     case "timestamp":
       return <HoverableTimestamp timestamp={value.raw} />;
     case "date":
-      return format(parsePlainDate(value.raw), "MMM d, yyyy");
+      return formatCalendarDay(value.raw, "dateShort");
     case "boolean":
       return value.raw ? "Yes" : "No";
     case "number":

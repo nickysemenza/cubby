@@ -18,6 +18,7 @@ import {
 } from "~/components/ui/table";
 import { useHydrated } from "~/hooks/useHydrated";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatInstant } from "~/lib/date-format";
 import { formatCount, formatCurrency } from "~/lib/utils";
 
 const supportedEntityKinds = [
@@ -342,7 +343,9 @@ export function AiUsagePage() {
           <TableBody>
             {recentRows?.map((row) => (
               <TableRow key={row.id}>
-                <TableCell>{row.createdAt.toLocaleString()}</TableCell>
+                <TableCell>
+                  {formatInstant(row.createdAt, "dateTime")}
+                </TableCell>
                 <TableCell>{row.feature}</TableCell>
                 <TableCell>
                   {row.provider} / {row.model}

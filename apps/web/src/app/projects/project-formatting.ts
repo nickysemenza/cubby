@@ -1,7 +1,7 @@
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import { capitalize } from "@cubby/shared";
-import { format } from "date-fns";
 
+import { formatCalendarDay } from "~/lib/date-format";
 import { plainDateDaysBetween } from "~/lib/household-date";
 import { parsePlainDate } from "~/lib/plain-date";
 
@@ -11,19 +11,11 @@ export { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
 
 export function monthLabel(key: string): string {
   const [year, month] = key.split("-");
-  const date = new Date(Number(year), Number(month) - 1, 1);
-  return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+  return formatCalendarDay(
+    new Date(Number(year), Number(month) - 1, 1),
+    "monthYearCompact",
+  );
 }
-
-export const formatDate = (date: string): string =>
-  format(parsePlainDate(date), "MMM d");
-
-/**
- * `MMM d, yyyy`. Use instead of {@link formatDate} whenever the value can be
- * historical: a bare "Jun 4" on a row dated 2022 reads as this year.
- */
-export const formatDateWithYear = (date: string): string =>
-  format(parsePlainDate(date), "MMM d, yyyy");
 
 // NOTE: shared across the app (task due-date ranges, project date ranges,
 // trade activity, etc) — see grep for `formatDateRange` before changing its
@@ -33,7 +25,7 @@ export function formatDateRange(
   end: string | null,
 ): string {
   if (!start) return "No date";
-  if (!end) return formatDate(start);
+  if (!end) return formatCalendarDay(start, "monthDay");
   // Most callers are short same-year ranges (a task's due window), where the
   // year would just be noise. But a project can span years (e.g. Dec 2025 →
   // Jul 2027) and "Dec 1 — Jul 1" silently drops which December/July —
@@ -41,8 +33,8 @@ export function formatDateRange(
   const crossesYear =
     parsePlainDate(start).getFullYear() !== parsePlainDate(end).getFullYear();
   return crossesYear
-    ? `${formatDateWithYear(start)} — ${formatDateWithYear(end)}`
-    : `${formatDate(start)} — ${formatDate(end)}`;
+    ? `${formatCalendarDay(start, "dateShort")} — ${formatCalendarDay(end, "dateShort")}`
+    : `${formatCalendarDay(start, "monthDay")} — ${formatCalendarDay(end, "monthDay")}`;
 }
 
 /**

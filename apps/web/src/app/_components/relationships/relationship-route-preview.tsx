@@ -10,7 +10,6 @@ import { skipToken, useQuery } from "@tanstack/react-query";
 import { type ReactNode, useMemo } from "react";
 import { z } from "zod";
 
-import { formatDate } from "~/app/projects/project-formatting";
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ErrorDisplay } from "~/components/feedback/error-display";
@@ -23,6 +22,7 @@ import {
 } from "~/entities/entities";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatCalendarDay } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
 
 const ROUTE_PREVIEW_LIMIT = 3;
@@ -125,7 +125,7 @@ export function relationshipRouteSourceFromRecord(
     title && title.trim().length > 0
       ? title
       : entity === "meal" && record.date
-        ? formatDate(record.date)
+        ? formatCalendarDay(record.date, "monthDay")
         : null;
   if (!label) return null;
   return {

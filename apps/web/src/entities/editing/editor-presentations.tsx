@@ -2,7 +2,6 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import { financialAccountIdentity } from "@cubby/schemas/financial-account";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
 import {
   type ComponentProps,
   type ComponentType,
@@ -37,6 +36,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import type { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entityListFor } from "~/entities/entity-list";
+import { formatCalendarDay } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
 
 import {
@@ -564,7 +564,7 @@ const presentations = {
       if (result.name) {
         return `Added "${result.name}"`;
       }
-      return `Added meal for ${format(parseISO(result.date), "EEE, MMM d")}`;
+      return `Added meal for ${formatCalendarDay(result.date, "weekdayMonthDay")}`;
     },
   },
   "task:create:capture": {

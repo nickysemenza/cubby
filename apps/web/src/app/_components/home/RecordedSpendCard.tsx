@@ -1,7 +1,6 @@
 import type { ExpenseMonthlyAggregate } from "@cubby/schemas/project";
 import { ChartBarIcon } from "@phosphor-icons/react/dist/csr/ChartBar";
 import { useQuery } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
 import { useId, useMemo } from "react";
 
 import { Row } from "~/components/layout";
@@ -12,6 +11,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
 
 import { getHomeAsOfWindow, type HomeAsOfWindow } from "./home-as-of-window";
@@ -177,14 +177,14 @@ function RecordedSpendBars({
             key={row.month}
             className="min-w-0 flex-1 truncate text-center font-mono text-2xs text-muted-foreground uppercase"
           >
-            {format(parseISO(`${row.month}-01`), "MMM")}
+            {formatCalendarDay(`${row.month}-01`, "monthShort")}
           </span>
         ))}
       </div>
       <ul className="sr-only">
         {monthly.map((row) => (
           <li key={row.month}>
-            {format(parseISO(`${row.month}-01`), "MMMM yyyy")}:{" "}
+            {formatCalendarDay(`${row.month}-01`, "monthYearLong")}:{" "}
             {formatCurrency(row.net)}
           </li>
         ))}

@@ -5,7 +5,6 @@ import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVerti
 import { DotsThreeVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsThreeVertical";
 import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
 import { useNavigate } from "@tanstack/react-router";
-import { format } from "date-fns";
 
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import { useEntityDisplayImage } from "~/app/_components/entity-media/entity-display-images";
@@ -30,6 +29,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { formatCalendarDay } from "~/lib/date-format";
 import { householdLocalDate } from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import { cn } from "~/lib/utils";
@@ -64,12 +64,6 @@ interface TaskCardProps {
    * inside it would go with it mid-flight.
    */
   onRequestDelete: (task: TaskOut) => void;
-}
-
-/** "YYYY-MM-DD" -> "Mon d", parsed component-wise (no UTC day-shift). */
-function formatDue(value: string): string {
-  const [y, m, d] = value.split("-").map(Number);
-  return format(new Date(y ?? 0, (m ?? 1) - 1, d ?? 1), "MMM d");
 }
 
 function blockedByLabel(task: TaskOut, taskById: Record<string, TaskOut>) {
@@ -268,7 +262,7 @@ export function TaskCard({
             >
               {task.dueEndDate
                 ? formatDateRange(task.dueDate, task.dueEndDate)
-                : formatDue(task.dueDate)}
+                : formatCalendarDay(task.dueDate, "monthDay")}
             </span>
           )}
           {showStatus && (

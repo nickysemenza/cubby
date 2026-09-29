@@ -32,6 +32,7 @@ import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
 
 export interface RunHistoryFilters extends Partial<ActivityListInput> {
@@ -50,7 +51,6 @@ type HistoryRow = ActivityRun & {
 };
 const kinds = activityKind.options;
 const label = (value: string) => value.replaceAll("_", " ");
-const moment = (value: string) => new Date(value).toLocaleString();
 const duration = (value: number | null) =>
   value == null ? "—" : `${(value / 1_000).toFixed(1)} s`;
 const localDateTime = (value?: string) =>
@@ -370,7 +370,7 @@ export function RunHistory({
           helper.accessor("createdAt", {
             header: "Submitted",
             size: 180,
-            cell: ({ getValue }) => moment(getValue()),
+            cell: ({ getValue }) => formatInstant(getValue(), "dateTime"),
             meta: { mono: true, mobile: { slot: "meta", priority: 40 } },
           }),
         );

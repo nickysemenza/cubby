@@ -2,7 +2,6 @@
 
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
-import { format } from "date-fns";
 import {
   type FocusEvent,
   lazy,
@@ -19,6 +18,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import { formatCalendarDay } from "~/lib/date-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { parsePlainDateInput } from "~/lib/plain-date-input";
 import { cn } from "~/lib/utils";
@@ -59,7 +59,7 @@ interface DatePickerInputProps {
 }
 
 const displayValue = (value: string | null) =>
-  value ? format(parsePlainDate(value), "MMM d, yyyy") : "";
+  value ? formatCalendarDay(value, "dateShort") : "";
 
 const displayedDraftDate = (draft: string, value: string | null) => {
   const parsed = parsePlainDateInput(draft);
