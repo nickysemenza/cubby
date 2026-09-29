@@ -6,6 +6,7 @@ import {
   recipeMeta,
   recipeNotes,
   recipeServings,
+  recipeSourceValues,
   recipeTags,
   recipeTopLevelFields,
   recipeTotals,
@@ -651,6 +652,71 @@ export default defineEntity({
     mcpOutput: {
       module: "@cubby/schemas/recipe",
       export: "recipeMcpEntityOut",
+    },
+  },
+  storage: {
+    indexes: [
+      // Non-cookbook recipes keep a globally-unique name. Cookbook (Book) and
+      // Notion recipes are excluded — they're keyed by (cookbook, name) and by
+      // their Notion page's EntityExternalId — so the same title can appear
+      // across a cookbook, a Notion page, and a web recipe. `IS DISTINCT FROM`
+      // (not NOT IN) keeps NULL-sourceType legacy rows inside the index.
+      {
+        on: ["name"],
+        unique: true,
+        where:
+          "{deletedAt} IS NULL AND {sourceType} IS DISTINCT FROM 'Book' AND {sourceType} IS DISTINCT FROM 'Notion'",
+      },
+      // A cookbook recipe's identity is (cookbook, title): unique per book, but
+      // the same title may recur across books.
+      {
+        on: ["cookbookId", "name"],
+        unique: true,
+        where: "{cookbookId} IS NOT NULL AND {deletedAt} IS NULL",
+      },
+      { on: ["sourceType"] },
+      {
+        name: "Recipe_created_at_desc_idx",
+        on: [{ column: "createdAt", desc: true }],
+      },
+      {
+        name: "Recipe_name_active_idx",
+        on: ["name"],
+        where: "{deletedAt} IS NULL",
+      },
+      {
+        name: "Recipe_totals_stale_idx",
+        on: ["totalsComputedAt"],
+        where: "{totalsComputedAt} IS NULL",
+      },
+    ],
+    checks: [
+      {
+        column: "sourceType",
+        values: [...recipeSourceValues],
+        nullClause: true,
+        bare: true,
+      },
+    ],
+    relations: {
+      sections: { many: "recipeSection" },
+      externalIds: {
+        many: "entityExternalId",
+        relationName: "recipeExternalIds",
+      },
+      pointerIngredient: {
+        one: "ingredient",
+        field: "id",
+        references: "recipeId",
+      },
+      cookbook: "cookbookId",
+      forkedFrom: {
+        field: "forkedFromRecipeId",
+        relationName: "RecipeForkedFrom",
+      },
+      forks: { many: "recipe", relationName: "RecipeForkedFrom" },
+      images: { many: "entityAttachment" },
+      mealRecipes: { many: "mealRecipe" },
     },
   },
   filters: {

@@ -554,6 +554,51 @@ export default defineEntity({
     list: { module: "@cubby/schemas/location", export: "locationListItemOut" },
     detail: { module: "@cubby/schemas/location", export: "infLocation" },
   },
+  storage: {
+    indexes: [
+      {
+        name: "Location_name_key",
+        on: [{ sql: "lower({name})" }],
+        unique: true,
+        where: "{deletedAt} IS NULL",
+      },
+      { on: ["name"] },
+      { on: ["tags"], using: "gin" },
+      { on: ["createdAt"] },
+      { on: ["lastBulkInventory"] },
+      { trigram: "name" },
+      { on: ["type", "name"] },
+      {
+        name: "Location_name_active_idx",
+        on: ["name"],
+        where: "{deletedAt} IS NULL",
+      },
+      {
+        name: "Location_type_active_idx",
+        on: ["type"],
+        where: "{deletedAt} IS NULL",
+      },
+    ],
+    checks: [
+      // `furniture` marks a Product-instance location (the bin or rack
+      // itself). One direction only: a garden bed or planter may link a
+      // Product and keep its own type, so `productId IS NOT NULL` does not
+      // imply `furniture`.
+      {
+        name: "Location_furniture_product_check",
+        sql: "{type} <> 'furniture' OR {productId} IS NOT NULL",
+      },
+    ],
+    relations: {
+      parent: { field: "parentId", relationName: "LocationToLocation" },
+      children: { many: "location", relationName: "LocationToLocation" },
+      inventoryEntries: { many: "inventoryEntry" },
+      images: { many: "entityAttachment" },
+      product: "productId",
+      plantings: { many: "planting" },
+      gardenEntries: { many: "gardenEntry" },
+    },
+  },
   filters: {
     audit: true,
     schema: {

@@ -1617,6 +1617,124 @@ const buildMetadataSchemas = () => {
     })
     .strict();
 
+  /**
+   * Everything about an entity's own table beyond its model columns, so the
+   * generator emits the complete Drizzle `pgTable` and its `relations()`
+   * (`apps/web/src/server/db/generated/entity-tables.gen.ts`). SQL strings
+   * name columns as `{columnKey}`; the generator binds each to the table's
+   * column (`${table.columnKey}`), so Drizzle renders them exactly as a
+   * hand-written `sql` template would.
+   *
+   * Derived, never declared: the whole-table shortcode unique index, the
+   * identity FK to `Entity(id, shortcode)`, and a `<Table>_<column>_idx` index
+   * on every reference column that no declared full (non-partial) index
+   * leads with (opt out with `unindexedReferences`).
+   */
+  const entityTableColumnMetadataSchema = z
+    .object({
+      key: nonEmptyString(),
+      kind: z.enum(["text", "identifier", "timestamp", "json"]),
+      notNull: z.literal(true).optional(),
+      defaultValue: nonEmptyString().optional(),
+      /** An entity key, or `user` for the Better-Auth user table. */
+      reference: nonEmptyString().optional(),
+      /** The TypeScript type the column is narrowed to (`$type<T>()`). */
+      type: sourceRefMetadataSchema.optional(),
+    })
+    .strict();
+
+  const entityTableIndexMetadataSchema = z.union([
+    /** `<Table>_<column>_gin_idx`: a trigram GIN index for ILIKE search. */
+    z.object({ trigram: nonEmptyString() }).strict(),
+    z
+      .object({
+        /** Defaults to `<Table>_<columns>_key` (unique) or `_idx`. */
+        name: nonEmptyString().optional(),
+        on: z
+          .array(
+            z.union([
+              nonEmptyString().transform((column) => ({ column, desc: false })),
+              z
+                .object({ column: nonEmptyString(), desc: z.literal(true) })
+                .strict(),
+              z.object({ sql: nonEmptyString() }).strict(),
+            ]),
+          )
+          .min(1),
+        unique: z.literal(true).optional(),
+        using: z.literal("gin").optional(),
+        where: nonEmptyString().optional(),
+      })
+      .strict(),
+  ]);
+
+  const entityTableCheckMetadataSchema = z.union([
+    z.object({ name: nonEmptyString(), sql: nonEmptyString() }).strict(),
+    /**
+     * `<Table>_<column>_check`: the column stays inside a closed value set.
+     * Values default to the field's declared read enum. A CHECK already
+     * admits NULL, so `nullClause` (a leading `col IS NULL OR`) and `bare`
+     * (unqualified `"col"` rather than `"Table"."col"`) change only the
+     * constraint's text — which Drizzle's snapshot compares, so existing
+     * constraints keep the spelling they were created with.
+     */
+    z
+      .object({
+        name: nonEmptyString().optional(),
+        column: nonEmptyString(),
+        values: z.array(nonEmptyString()).min(1).optional(),
+        nullClause: z.literal(true).optional(),
+        bare: z.literal(true).optional(),
+      })
+      .strict(),
+  ]);
+
+  /**
+   * Drizzle relational-query relations, keyed by the name `with: {}` uses.
+   * A string is a reference column: `one()` to the entity it references.
+   * Targets name Drizzle table exports (`recipeSection`, `inventoryEntry`).
+   */
+  const entityTableRelationMetadataSchema = z.union([
+    nonEmptyString().transform((field) => ({
+      field,
+      relationName: undefined,
+    })),
+    z
+      .object({ field: nonEmptyString(), relationName: nonEmptyString() })
+      .strict(),
+    z
+      .object({
+        one: nonEmptyString(),
+        field: nonEmptyString().optional(),
+        references: nonEmptyString().optional(),
+      })
+      .strict(),
+    z
+      .object({
+        many: nonEmptyString(),
+        relationName: nonEmptyString().optional(),
+      })
+      .strict(),
+  ]);
+
+  const entityTableStorageMetadataSchema = z
+    .object({
+      /** Operational columns no model field declares. */
+      columns: z.array(entityTableColumnMetadataSchema).optional().default([]),
+      indexes: z.array(entityTableIndexMetadataSchema).optional().default([]),
+      checks: z.array(entityTableCheckMetadataSchema).optional().default([]),
+      /** Reference column key → why it has no index of its own. */
+      unindexedReferences: z
+        .record(nonEmptyString(), nonEmptyString())
+        .optional()
+        .default({}),
+      relations: z
+        .record(nonEmptyString(), entityTableRelationMetadataSchema)
+        .optional()
+        .default({}),
+    })
+    .strict();
+
   const documentSearchPorts = {
     projection: {
       module: "~/server/repo/search-document",
@@ -1738,6 +1856,7 @@ const buildMetadataSchemas = () => {
       presentation: entityPresentationMetadataSchema,
       fields: entityContractMetadataSchema.nullable(),
       model: entityFieldModelMetadataSchema.optional(),
+      storage: entityTableStorageMetadataSchema.optional(),
       filters: z
         .object({
           audit: z.boolean({ error: "must be a boolean" }).optional(),
@@ -1809,7 +1928,6 @@ export type EntityDeclaration = z.input<EntityMetadataSchemas["declaration"]>;
 export type EntityDeclarationMetadata = z.output<
   EntityMetadataSchemas["declaration"]
 >;
-
 const pathAt = (context: string, path: readonly PropertyKey[]) =>
   path.length === 0 ? context : `${context}.${path.join(".")}`;
 

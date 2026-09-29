@@ -260,6 +260,24 @@ export default defineEntity({
     list: { module: "@cubby/schemas/recipe", export: "cookbookSummary" },
     detail: { module: "@cubby/schemas/recipe", export: "cookbookSummary" },
   },
+  // The book a set of EPUB-extracted recipes came from. Holds the full
+  // assembled `ImportRecipe[]` JSON so recipes can be re-derived without
+  // re-running the LLM; a cookbook is always born from a full import, so
+  // every content column is NOT NULL. `productId` links it to the physical
+  // book on the shelf. Matching is always human-confirmed — never auto-link on
+  // a title prefix: two books can share a leading title word and differ.
+  storage: {
+    indexes: [
+      { on: ["name"], unique: true, where: "{deletedAt} IS NULL" },
+      { on: ["createdAt"] },
+      { trigram: "name" },
+    ],
+    relations: {
+      recipes: { many: "recipe" },
+      attachments: { many: "entityAttachment" },
+      product: "productId",
+    },
+  },
   filters: { descriptors: [] },
   relations: [
     {

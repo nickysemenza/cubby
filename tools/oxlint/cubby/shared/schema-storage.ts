@@ -26,7 +26,7 @@ function declarations(program: Program) {
  * into a Node guard would execute application code and miss build isolation. */
 export function softDeleteTableCatalog(
   schemaSource: string,
-  columnSources: readonly string[] = [],
+  generatedSources: readonly string[] = [],
 ) {
   const parse = (source: string) => {
     const result = parseSync("schema.ts", source, { lang: "ts" });
@@ -34,10 +34,10 @@ export function softDeleteTableCatalog(
       throw new Error("Cannot inspect invalid storage declarations");
     return result.program;
   };
-  const schema = parse(schemaSource);
-  const allDeclarations = [schema, ...columnSources.map(parse)].flatMap(
-    declarations,
-  );
+  // Tables live in schema.ts and in the generated entity tables module.
+  const allDeclarations = [schemaSource, ...generatedSources]
+    .map(parse)
+    .flatMap(declarations);
   const factories = new Map<string, Expression>();
   for (const declaration of allDeclarations) {
     if (declaration.id.type !== "Identifier" || !declaration.init) continue;
@@ -74,7 +74,7 @@ export function softDeleteTableCatalog(
   const varNames = new Set<string>();
   const sqlNameToVar = new Map<string, string>();
   const varToSqlName = new Map<string, string>();
-  for (const declaration of declarations(schema)) {
+  for (const declaration of allDeclarations) {
     if (declaration.id.type !== "Identifier" || !declaration.init) continue;
     const init = expressionBody(declaration.init);
     if (

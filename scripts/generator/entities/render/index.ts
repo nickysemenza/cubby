@@ -15,9 +15,9 @@ import type {
   FilterDescriptor,
   SourceRef,
 } from "../declarations.ts";
-import { renderEntityColumnsArtifact } from "./columns.ts";
 import { renderFieldExplanationReference } from "./field-explanations-reference.ts";
 import { renderRecord } from "./record.ts";
+import { renderEntityTablesArtifact } from "./tables.ts";
 import { browserRoutes, lowerCamelCase } from "./routes.ts";
 import { kernelEntitiesFor } from "./shared.ts";
 import { hasGenericListOperation } from "../list-capabilities.ts";
@@ -1198,8 +1198,8 @@ export const renderEntityArtifacts = (
         '  (typeof generatedEntitySort)[E]["fields"][number];\n',
     },
     {
-      relativePath: "apps/web/src/server/db/generated/entity-columns.gen.ts",
-      source: renderEntityColumnsArtifact(entities),
+      relativePath: "apps/web/src/server/db/generated/entity-tables.gen.ts",
+      source: renderEntityTablesArtifact(entities),
     },
     ...fieldSchemaArtifacts,
     {

@@ -393,6 +393,36 @@ export default defineEntity({
       export: "financialAccountOut",
     },
   },
+  storage: {
+    indexes: [
+      { on: ["name"] },
+      { on: ["provisional"] },
+      // One live balance per provider and owner, so settlement can resolve a
+      // gift-card leg from (purchase vendor, vendor-account member) alone.
+      // NULL owners stay distinct: a household card coexists with members'
+      // balances.
+      {
+        name: "FinancialAccount_provider_owner_key",
+        on: ["providerVendorId", "ledgerPartyId"],
+        unique: true,
+        where: "{providerVendorId} IS NOT NULL AND {deletedAt} IS NULL",
+      },
+    ],
+    checks: [
+      {
+        name: "FinancialAccount_providerVendor_stored_value_check",
+        sql: "{providerVendorId} IS NULL OR {identity}->>'kind' = 'stored_value'",
+      },
+    ],
+    unindexedReferences: {
+      providerVendorId:
+        "provider lookups read live rows through the partial FinancialAccount_provider_owner_key",
+    },
+    relations: {
+      ledgerParty: "ledgerPartyId",
+      transactions: { many: "financialTransaction" },
+    },
+  },
   filters: {
     audit: true,
     schema: {

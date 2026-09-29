@@ -19,6 +19,7 @@ import {
   compileDataQuality,
   validateDataQualityDeclarations,
 } from "./data-quality.ts";
+import { compileEntityTable, validateEntityTables } from "./table-storage.ts";
 import {
   deriveImageDisplaySources,
   deriveInverseRelations,
@@ -1377,6 +1378,7 @@ export const compileEntity = (
     key,
     declaration.presentation.titleField,
   );
+  const table = compileEntityTable(declaration, declaredFieldModel, context);
   const operationOwners = {
     delete: declaration.capabilities.operationOwners.delete,
     merge: declaration.capabilities.operationOwners.merge,
@@ -1615,6 +1617,7 @@ export const compileEntity = (
     mcpActions: declaration.capabilities.mcp,
     operationOwners,
     fieldModel,
+    table,
     dataQuality,
   };
 };
@@ -2240,6 +2243,7 @@ export const compileEntityDeclarations = (
     ),
   );
   validateEntityIdentities(entities);
+  validateEntityTables(entities);
   validateReferenceScopes(entities);
   validatePhotoCategoryLabels(photoCategories);
   validateImagePolicies(entities);

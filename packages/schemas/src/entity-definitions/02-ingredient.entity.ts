@@ -237,6 +237,33 @@ export default defineEntity({
       export: "ingredientWithFoodMcpEntityOut",
     },
   },
+  storage: {
+    indexes: [
+      // Case-insensitive uniqueness must match the lower(name) matcher to
+      // prevent concurrent duplicate ingredients.
+      {
+        name: "Ingredient_name_key",
+        on: [{ sql: "lower({name})" }],
+        unique: true,
+        where: "{deletedAt} IS NULL AND {recipeId} IS NULL",
+      },
+      { on: ["recipeId"], unique: true, where: "{deletedAt} IS NULL" },
+      { on: ["createdAt"] },
+      { trigram: "name" },
+      {
+        name: "Ingredient_name_active_idx",
+        on: ["name"],
+        where: "{deletedAt} IS NULL",
+      },
+    ],
+    relations: {
+      recipe: "recipeId",
+      recipeSectionIngredient: { many: "recipeSectionIngredient" },
+      product: { many: "product", relationName: "ProductIngredient" },
+      plants: { many: "plant" },
+      mealFoodEntries: { many: "mealFoodEntry" },
+    },
+  },
   filters: {
     audit: true,
     schema: {

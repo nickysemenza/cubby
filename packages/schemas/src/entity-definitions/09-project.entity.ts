@@ -712,6 +712,29 @@ export default defineEntity({
     output: { module: "@cubby/schemas/project", export: "projectOut" },
     list: { module: "@cubby/schemas/project", export: "projectListItemOut" },
   },
+  storage: {
+    indexes: [
+      { on: ["status"] },
+      { on: ["kind"] },
+      { on: ["startDate"] },
+      { trigram: "name" },
+      {
+        name: "Project_name_active_idx",
+        on: ["name"],
+        where: "{deletedAt} IS NULL",
+      },
+    ],
+    relations: {
+      tasks: { many: "task" },
+      expenses: { many: "expense" },
+      images: { many: "entityAttachment" },
+      parentProject: {
+        field: "parentProjectId",
+        relationName: "ProjectToProject",
+      },
+      childProjects: { many: "project", relationName: "ProjectToProject" },
+    },
+  },
   filters: {
     audit: true,
     schema: { module: "@cubby/schemas/project", export: "projectFilterFields" },

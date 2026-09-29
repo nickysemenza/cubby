@@ -456,6 +456,20 @@ export default defineEntity({
     update: { module: "@cubby/schemas/vendor", export: "vendorUpdateData" },
     output: { module: "@cubby/schemas/vendor", export: "vendorOut" },
   },
+  storage: {
+    indexes: [{ on: ["name"], unique: true, where: "{deletedAt} IS NULL" }],
+    checks: [
+      { column: "orderEvidence", nullClause: true },
+      {
+        name: "Vendor_returnWindowDays_check",
+        sql: "{returnWindowDays} IS NULL OR {returnWindowDays} >= 0",
+      },
+    ],
+    relations: {
+      purchases: { many: "purchase" },
+      attachments: { many: "entityAttachment" },
+    },
+  },
   filters: {
     audit: true,
     schema: { module: "@cubby/schemas/vendor", export: "vendorFilterFields" },

@@ -256,6 +256,9 @@ export default defineEntity({
     output: { module: "@cubby/schemas/wish", export: "wishOut" },
     list: { module: "@cubby/schemas/wish", export: "wishListItemOut" },
   },
+  storage: {
+    indexes: [{ on: ["createdAt"] }, { on: ["acquiredAt"] }],
+  },
   filters: {
     audit: true,
     schema: { module: "@cubby/schemas/wish", export: "wishFilterFields" },

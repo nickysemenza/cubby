@@ -325,6 +325,25 @@ export default defineEntity({
       export: "ledgerTransferOut",
     },
   },
+  // A durable movement between ledger parties; it is never spend.
+  storage: {
+    indexes: [{ on: ["date"] }],
+    checks: [
+      {
+        name: "LedgerTransfer_amount_whole_cent_check",
+        sql: "{amount} > 0 AND abs({amount} * 100 - round({amount} * 100)) < 0.0000001",
+      },
+    ],
+    relations: {
+      fromParty: {
+        field: "fromPartyId",
+        relationName: "LedgerTransferFromParty",
+      },
+      toParty: { field: "toPartyId", relationName: "LedgerTransferToParty" },
+      evidenceTransactions: { many: "financialTransaction" },
+      sourceClaims: { many: "ledgerSourceClaim" },
+    },
+  },
   filters: {
     audit: true,
     schema: {

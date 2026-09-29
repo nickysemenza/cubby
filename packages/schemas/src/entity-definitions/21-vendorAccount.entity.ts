@@ -320,6 +320,17 @@ export default defineEntity({
       export: "vendorAccountOut",
     },
   },
+  storage: {
+    indexes: [
+      {
+        name: "VendorAccount_vendor_member_key",
+        on: ["vendorId", "ledgerPartyId"],
+        unique: true,
+        where: "{deletedAt} IS NULL",
+      },
+    ],
+    checks: [{ column: "status" }, { column: "browser" }],
+  },
   filters: {
     audit: true,
     schema: {

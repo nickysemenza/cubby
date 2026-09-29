@@ -30,8 +30,8 @@ const isSchemaTable = (value: SchemaExport): value is SchemaTable =>
 const ALL_TABLES = Object.values(schema).filter(isSchemaTable);
 
 // entity -> its own local pgTable, resolved by matching the manifest's
-// declared `dbTable` name against the real exported tables — derived, not
-// hand-maintained, so the two can't quietly drift apart (see the first test).
+// declared `dbTable` name against the real exported tables (the generator
+// emits each entity's table under exactly that name).
 const ENTITY_TABLE: Partial<Record<Entity, PgTable>> = {};
 for (const entity of entities) {
   const dbTable = entityManifest[entity].dbTable;
@@ -451,20 +451,6 @@ function graphPathEdgeKeys(): ReadonlySet<string> {
 }
 
 describe("entity manifest FK guard", () => {
-  it("every entity's declared dbTable resolves to a real pgTable in schema.ts", () => {
-    for (const entity of entities) {
-      const dbTable = entityManifest[entity].dbTable;
-      if (!dbTable) continue;
-      const table = ENTITY_TABLE[entity];
-      expect(
-        table,
-        `entityManifest.${entity}.dbTable = "${dbTable}" does not match any pgTable exported from schema.ts`,
-      ).toBeDefined();
-      if (!table) continue;
-      expect(getTableConfig(table).name).toBe(dbTable);
-    }
-  });
-
   it("every FK pointing at an entity's table is declared in INCOMING_EDGES", () => {
     const edges = introspectFkEdges().filter(
       (

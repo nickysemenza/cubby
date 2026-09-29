@@ -332,6 +332,14 @@ export default defineEntity({
     update: { module: "@cubby/schemas/plant", export: "plantUpdateData" },
     output: { module: "@cubby/schemas/plant", export: "plantOut" },
   },
+  storage: {
+    indexes: [{ on: ["gardenGuideKey"] }],
+    relations: {
+      ingredient: "ingredientId",
+      plantings: { many: "planting" },
+      products: { many: "product" },
+    },
+  },
   filters: {
     audit: true,
     schema: { module: "@cubby/schemas/plant", export: "plantFilterFields" },
