@@ -372,6 +372,30 @@ export const compileFilterCodec = (
   };
 };
 
+/**
+ * The search param that records a person clearing an entity's declared
+ * default filter (`presentation.list.initialFilter`). Without it an empty
+ * filter URL is indistinguishable from "never touched" and would reopen the
+ * default.
+ */
+export const FILTERS_KEY = "filters";
+export const FILTERS_CLEARED = "none";
+
+/**
+ * The column filters a list opens with: the URL's own when it names any, else
+ * the declared default, unless the URL says the default was cleared.
+ */
+export const resolveOpeningFilters = <TSearch extends {}>(
+  urlFilters: { id: string; value: unknown }[],
+  search: TSearch,
+  initialFilter: { id: string; value: unknown }[],
+): { id: string; value: unknown }[] => {
+  if (urlFilters.length > 0) return urlFilters;
+  return parseFilterSearch(search)[FILTERS_KEY] === FILTERS_CLEARED
+    ? urlFilters
+    : initialFilter;
+};
+
 /** Column-filter state → search params. Absent keys mean "not filtered". */
 export function encodeFilters(
   specs: readonly FilterSpecCore[],

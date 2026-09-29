@@ -3,7 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { infiniteOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
 
-import { ensureEntityListSsr, entityListDefaultSort } from "./entity-list-ssr";
+import {
+  ensureEntityListSsr,
+  entityListDefaultSort,
+  searchWithInitialFilter,
+} from "./entity-list-ssr";
 import { compileEntityListInput, entityListFor } from "./entity-list.functions";
 
 afterEach(() => vi.restoreAllMocks());
@@ -22,6 +26,28 @@ describe("entityListDefaultSort", () => {
       orderBy: "transactionDate",
       direction: "desc",
     });
+  });
+});
+
+describe("searchWithInitialFilter", () => {
+  it("opens the Run list on its declared default until the URL names a filter or clears it", () => {
+    expect(searchWithInitialFilter("run", {})).toMatchObject({
+      trigger: "foreground,discovery,manual,backfill",
+    });
+    expect(searchWithInitialFilter("run", { filters: "none" })).toEqual({
+      filters: "none",
+    });
+    expect(searchWithInitialFilter("run", { trigger: "ephemeral" })).toEqual({
+      trigger: "ephemeral",
+    });
+    expect(searchWithInitialFilter("run", { status: "failed" })).toEqual({
+      status: "failed",
+    });
+  });
+
+  it("leaves an entity without a declared default alone", () => {
+    const search = { sort: "name" };
+    expect(searchWithInitialFilter("product", search)).toBe(search);
   });
 });
 

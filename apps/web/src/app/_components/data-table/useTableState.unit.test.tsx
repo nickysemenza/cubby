@@ -19,6 +19,7 @@ interface TableSearch {
   keep?: string;
   productId?: string;
   vendor?: string;
+  filters?: string;
 }
 
 type TableSearchKey = keyof TableSearch;
@@ -31,6 +32,7 @@ const TABLE_SEARCH_KEYS: readonly TableSearchKey[] = [
   "keep",
   "productId",
   "vendor",
+  "filters",
 ];
 
 let searchState: TableSearch = {};
@@ -290,6 +292,59 @@ describe("useTableState — URL-backed column filters", () => {
       { id: "name", value: "lemon" },
       { id: "trade", value: ["demo", "electrical"] },
     ]);
+  });
+
+  describe("a declared default filter", () => {
+    const initialFilter = [{ id: "trade", value: ["demo"] }];
+
+    it("stays out of the URL, and clearing it is written as filters=none", async () => {
+      searchState = { keep: "yes" };
+      const { result } = await renderHook(() =>
+        useTableState({
+          filterSpecs: URL_BACKED_SPECS,
+          urlSync: true,
+          initialFilter,
+        }),
+      );
+      expect(result.current.columnFilters).toEqual(initialFilter);
+      expect(tableHarness().search()).toEqual({ keep: "yes" });
+
+      await act(async () => {
+        result.current.setColumnFilters([]);
+      });
+      await waitFor(() =>
+        expect(tableHarness().search()).toEqual({
+          keep: "yes",
+          filters: "none",
+        }),
+      );
+    });
+
+    it("opens unfiltered once the URL records clearing it", async () => {
+      searchState = { filters: "none" };
+      const { result } = await renderHook(() =>
+        useTableState({
+          filterSpecs: URL_BACKED_SPECS,
+          urlSync: true,
+          initialFilter,
+        }),
+      );
+      expect(result.current.columnFilters).toEqual([]);
+    });
+
+    it("is replaced by a filter the URL names", async () => {
+      searchState = { trade: "electrical" };
+      const { result } = await renderHook(() =>
+        useTableState({
+          filterSpecs: URL_BACKED_SPECS,
+          urlSync: true,
+          initialFilter,
+        }),
+      );
+      expect(result.current.columnFilters).toEqual([
+        { id: "trade", value: ["electrical"] },
+      ]);
+    });
   });
 
   it("writes interactive filters to the URL and removes cleared keys", async () => {
