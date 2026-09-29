@@ -1,29 +1,4 @@
-/**
- * Unified tracing utilities for consistent span naming and a single span API
- * that works across both runtimes.
- *
- * Two backends, picked at build time via the `__CF_WORKERS__` define so the
- * unused one is dead-code-eliminated:
- *
- *  - Node tests → the global `@opentelemetry/api` tracer. A test may register
- *    its own provider to observe span semantics and W3C context propagation.
- *  - Local and deployed CF Worker → the runtime `cloudflare:workers` `tracing.enterSpan`
- *    API. Its spans nest under CF's automatic platform
- *    spans and flow into the `grafana-traces` OTLP destination — no OTel SDK
- *    runs in the Worker. The CF `Span` is thinner (`setAttribute` only), so
- *    status / exceptions degrade to attributes and context propagation is
- *    handled automatically by the platform (see the helper no-ops below).
- *
- * Call sites use the unified {@link AppSpan} / {@link withTrace} surface and
- * never import `@opentelemetry/api` directly, so the same instrumentation lights
- * up in both runtimes.
- */
-import {
-  context,
-  propagation,
-  SpanStatusCode,
-  trace,
-} from "@opentelemetry/api";
+/** Cloudflare-native custom spans; non-Worker callers run without tracing. */
 import { z } from "zod";
 
 declare const __CF_WORKERS__: boolean | undefined;
@@ -34,12 +9,6 @@ const isCloudflareWorkerBuild = (
 ): flag is true => flag === true;
 const IS_CF = isCloudflareWorkerBuild();
 
-// Single OTel tracer instance — used by the Node `withTrace` backend and by the
-// synchronous WASM spans in `~/lib/wasm.ts` (which can't use the async
-// `withTrace`). In the deployed Worker no OTel provider is registered, so these
-// calls are no-ops; the CF backend below handles prod tracing instead.
-const tracer = trace.getTracer("cubby");
-
 /** Minimal shape of the `cloudflare:workers` `tracing` API we depend on. */
 interface CfSpan {
   setAttribute(key: string, value: string | number | boolean | undefined): void;
@@ -49,6 +18,7 @@ interface CfSpan {
 interface CfTracing {
   enterSpan<T>(name: string, cb: (span: CfSpan) => T): T;
   startActiveSpan<T>(name: string, cb: (span: CfSpan) => T): T;
+  getActiveSpan?(): CfSpan | undefined;
 }
 
 const cfRuntimeModuleSchema = z.object({
@@ -103,9 +73,8 @@ export const TraceNames = {
 type Attr = string | number | boolean | undefined;
 
 /**
- * Minimal span surface our call sites use. Backed by an OTel span in dev and a
- * `cloudflare:workers` span in prod. Status is set automatically by
- * {@link withTrace} (OK on success, errored on throw); callers only need
+ * Minimal span surface our call sites use. Cloudflare spans mark thrown errors
+ * automatically through {@link withTrace}; callers only need
  * `setError` for non-throwing failures (for example, a rejected Start result).
  */
 export interface AppSpan {
@@ -125,33 +94,22 @@ export interface AppSpan {
   recordException<TError>(error: TError): void;
 }
 
-export const getTracer = () => tracer;
-
-const wrapOtel = (span: ReturnType<typeof tracer.startSpan>): AppSpan => ({
-  isRecording: span.isRecording(),
-  setAttribute: (k, v) => {
-    if (v !== undefined) span.setAttribute(k, v);
-  },
-  setAttributes: (attrs) => span.setAttributes(attrs),
-  setError: () => span.setStatus({ code: SpanStatusCode.ERROR }),
-  recordException: (error) => {
-    const parsed = traceExceptionSchema.safeParse(error);
-    span.setAttribute(
-      "error.type",
-      parsed.success
-        ? parsed.data instanceof Error
-          ? parsed.data.name || "Error"
-          : "string"
-        : "NonErrorThrow",
-    );
-  },
-});
+const NOOP_SPAN: AppSpan = {
+  isRecording: false,
+  setAttribute() {},
+  setAttributes() {},
+  setError() {},
+  recordException() {},
+};
 
 const wrapCf = (span: CfSpan): AppSpan => ({
   isRecording: span.isTraced,
-  setAttribute: (k, v) => span.setAttribute(k, v),
+  setAttribute: (k, v) => {
+    if (v !== undefined) span.setAttribute(k, v);
+  },
   setAttributes: (attrs) => {
-    for (const [k, v] of Object.entries(attrs)) span.setAttribute(k, v);
+    for (const [k, v] of Object.entries(attrs))
+      if (v !== undefined) span.setAttribute(k, v);
   },
   setError: () => {
     span.setAttribute("error", true);
@@ -170,8 +128,8 @@ const wrapCf = (span: CfSpan): AppSpan => ({
 });
 
 /**
- * Run `fn` inside a trace span. Sets OK status on success and errored status
- * (+ records the exception) on throw, and ends the span automatically.
+ * Run `fn` inside a Cloudflare span, mark thrown errors, and end it when work
+ * settles. Outside Workers, run directly with a non-recording span.
  */
 export const withTrace = async <T>(
   name: string,
@@ -194,21 +152,7 @@ export const withTrace = async <T>(
     });
   }
 
-  return tracer.startActiveSpan(name, async (otelSpan) => {
-    const span = wrapOtel(otelSpan);
-    if (attributes) span.setAttributes(attributes);
-    try {
-      const result = await fn(span);
-      otelSpan.setStatus({ code: SpanStatusCode.OK });
-      return result;
-    } catch (error) {
-      span.recordException(error);
-      span.setError();
-      throw error;
-    } finally {
-      otelSpan.end();
-    }
-  });
+  return fn(NOOP_SPAN);
 };
 
 /** Run work under a span whose lifetime is explicitly ended by the caller. */
@@ -233,15 +177,24 @@ export const withManualTrace = async <T>(
     });
   }
 
-  return tracer.startActiveSpan(name, async (otelSpan) => {
-    const span = wrapOtel(otelSpan);
-    if (attributes) span.setAttributes(attributes);
+  return fn(NOOP_SPAN, () => {});
+};
+
+/** Synchronous work uses the native runtime warmed by its enclosing span. */
+export const withSynchronousManualTrace = <T>(
+  name: string,
+  fn: (span: AppSpan, end: () => void) => T,
+): T => {
+  const tracing = IS_CF ? cfTracing : undefined;
+  if (!tracing) return fn(NOOP_SPAN, () => {});
+  return tracing.startActiveSpan(name, (cfSpan) => {
+    const span = wrapCf(cfSpan);
     try {
-      return await fn(span, () => otelSpan.end());
+      return fn(span, () => cfSpan.end());
     } catch (error) {
       span.recordException(error);
       span.setError();
-      otelSpan.end();
+      cfSpan.end();
       throw error;
     }
   });
@@ -319,76 +272,22 @@ export const traceAllBounded = async <
   };
 };
 
-/**
- * Trace id of the active span. Undefined in the CF backend — its `Span` exposes
- * no trace id. Module-local on purpose: it is always undefined in prod, so
- * every caller wants {@link getRequestId}, which supplies the `cf-ray`
- * fallback. Exporting it again would re-create the bug where a caller took this
- * value alone and silently emitted nothing on Workers.
- */
-const getActiveTraceId = (): string | undefined =>
-  IS_CF ? undefined : trace.getActiveSpan()?.spanContext().traceId;
-
-/**
- * Correlation id for one request — the single join key between what the user
- * saw, the Sentry event, and the trace.
- *
- * Dev/Node: the OTel trace id of the active span. Deployed CF Worker: there is
- * no accessor for the active span (or any trace id) outside an `enterSpan`
- * callback, so fall back to the request's `cf-ray`. That only resolves to a
- * trace because `cf-server.ts` also records the ray on the `cf.fetch` span as
- * `cloudflare.ray_id`; the two must stay in lockstep or this id becomes
- * unsearchable.
- *
- * Callers pass the inbound request headers; the two ids come from different
- * systems and look nothing alike, so present it neutrally ("Request ID"), never
- * as a trace id.
- */
+/** Request correlation uses the Cloudflare ray recorded on the request span. */
 export const getRequestId = (
   headers?: Pick<Headers, "get">,
-): string | undefined =>
-  getActiveTraceId() ?? headers?.get("cf-ray") ?? undefined;
+): string | undefined => headers?.get("cf-ray") ?? undefined;
 
-/**
- * Inject W3C trace context into outbound request headers for distributed
- * tracing. No-op in the CF backend — the platform propagates trace context
- * across service-binding subrequests automatically.
- */
-export const injectTraceContext = (headers: Record<string, string>): void => {
-  if (IS_CF) return;
-  propagation.inject(context.active(), headers);
-};
-
-/**
- * Extract W3C trace context from inbound headers and run `fn` within it. In the
- * CF backend the platform manages context, so this just runs `fn`.
- */
-export const extractTraceContext = async <T>(
-  headers: Record<string, string>,
-  fn: () => Promise<T>,
-): Promise<T> => {
-  if (IS_CF) return fn();
-  const parent = propagation.extract(context.active(), headers);
-  return context.with(parent, fn);
-};
-
-/**
- * Annotate the currently-active span with error metadata, out-of-band (i.e.
- * without a span reference in hand — used by `createAppError`). No-op in the CF
- * backend, which exposes no accessor for the active span outside an
- * `enterSpan` callback.
- */
+/** Annotate a native active span when the caller has no span reference. */
 export const annotateActiveSpanError = (
   attributes: Record<string, Attr>,
   failure?: { message: string; exception?: unknown },
 ): void => {
-  if (IS_CF) return;
-  const span = trace.getActiveSpan();
-  if (!span) return;
+  const active = IS_CF ? cfTracing?.getActiveSpan?.() : undefined;
+  if (!active) return;
+  const span = wrapCf(active);
   span.setAttributes(attributes);
   if (failure) {
-    span.setStatus({ code: SpanStatusCode.ERROR, message: failure.message });
-    const parsedException = traceExceptionSchema.safeParse(failure.exception);
-    if (parsedException.success) span.recordException(parsedException.data);
+    span.setError();
+    span.recordException(failure.exception);
   }
 };

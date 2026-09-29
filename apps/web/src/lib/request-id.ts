@@ -3,12 +3,12 @@
  *
  * Lives in `lib/` rather than `server/tracing.ts` because the browser needs the
  * header name too, and importing anything under `~/server` from client code
- * would drag OTel — and the server router behind it — into the client bundle
+ * would drag the server router into the client bundle
  * (see `assertNoServerCodeInClient` in scripts/check-client-bundle.ts). Keep
  * this module free of every server import for that reason.
  *
  * The server fills the header via `getRequestId()` in `~/server/tracing`: an
- * OTel trace id in dev, the CF `cf-ray` in prod.
+ * Cloudflare `cf-ray` when available.
  */
 
 import { START_OPERATIONS } from "~/lib/generated/start-operation-registry.gen";

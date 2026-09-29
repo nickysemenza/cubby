@@ -25,7 +25,7 @@ dependency.
 | Semantic vectors              | Cloudflare Vectorize               | `cubby-openai-text-embedding-3-small-1536`                                            |
 | Gmail discovery               | Google Cloud                       | Project `cubby-481519`, Gmail API, OAuth web client                                   |
 | Errors                        | Sentry                             | Web/Workers project represented by the checked-in DSN; separate `cubby-apple` project |
-| Worker logs and traces        | Grafana Cloud                      | Cloudflare OTLP destinations `grafana-logs` and `grafana-traces`                      |
+| Worker logs and traces        | Cloudflare Workers Observability   | Native traces; logs also exported through `grafana-logs`                              |
 | Deployment                    | GitHub Actions                     | `.github/workflows/deploy.yaml` on `main`                                             |
 | Native clients                | Apple Developer/Xcode              | Associated domain `cubby.nickysemenza.com`; locally installed iOS/macOS apps          |
 
@@ -97,24 +97,17 @@ authority. Its checked-in Wrangler configuration declares:
   and private MCP request forwarding;
 - Workers AI binding `AI`, with every orchestration call routed through AI
   Gateway `cubby` by the Flue provider adapter;
-- vars `SENTRY_ENVIRONMENT` (`test` disables Sentry entirely, which is what the
-  workerd harness sets) and `SENTRY_TRACES_SAMPLE_RATE` (Flue agent-tracing
-  spans sent to Sentry; `1` in production).
+- var `SENTRY_ENVIRONMENT` (`test` disables Sentry entirely, which is what the
+  workerd harness sets).
 
-Observability on this Worker has two backends. Native Workers Traces carry the
-platform spans plus Flue's `invoke_agent` / `chat` / `execute_tool` spans and the
-consumer's `job.purchase_agent_event` span (`run.id`, `event.type`,
-`dispatch.outcome`) to Grafana Tempo; `app.ts` installs that instrumentation
-explicitly with `content: false`, because Flue's default install would attach
-prompts, tool arguments, and results as span attributes. Sentry is wired by
-`src/sentry.ts`, a port of Flue's official `tooling/sentry` blueprint: the agent
-Durable Object class is wrapped with `instrumentDurableObjectWithSentry`, the
-queue consumer with `withSentry`, and both report to the shared `cubby` project
-tagged `service:purchase-agent`. Sentry receives the same span hierarchy with
-token usage, Flue `log.*` calls as Sentry Logs, terminal failures (a failed
-top-level agent operation or a failed submission settlement) as issues, and
-coordinator recovery as breadcrumbs. Model and tool content is never recorded on
-either backend.
+Native Workers Traces carry the platform spans plus Flue's `invoke_agent` /
+`chat` / `execute_tool` spans and the consumer's `job.purchase_agent_event` span
+(`run.id`, `event.type`, `dispatch.outcome`) in Cloudflare. `app.ts` installs
+that instrumentation explicitly with `content: false`, because Flue's default
+install would attach prompts, tool arguments, and results as span attributes.
+Sentry remains wired by `src/sentry.ts` for Flue `log.*` calls, terminal failures
+as issues, and coordinator recovery as breadcrumbs. It does not receive traces.
+Model and tool content is never recorded in either destination.
 
 The web Worker has the reverse `PURCHASE_AGENT` service binding solely to proxy
 authenticated conversation history, live updates, prompts, and aborts. This is
@@ -378,7 +371,7 @@ ownership for both projects remain provider-side state.
 Cloudflare joins service-binding, JS RPC, and Durable Object subrequests into
 one trace, so the web Worker's proxy into the purchase agent and the agent's
 `CUBBY_PURCHASE_SERVICE` calls back appear in a single trace in the Cloudflare
-dashboard and in Tempo. A queue delivery starts a new trace in the consumer;
+dashboard. A queue delivery starts a new trace in the consumer;
 `run.id` on the consumer's job span is the join key back to the producer's job
 spans. Trace context never propagates to services outside Cloudflare.
 
@@ -411,16 +404,15 @@ network upload. `SENTRY_IGNORED_ERRORS` (`apps/web/src/lib/sentry-noise.ts`)
 lists known-noise messages dropped via `ignoreErrors` before Sentry ingests
 them, so they never consume the free-plan error quota.
 
-Cloudflare must have two account-level Workers Observability destinations:
+All four production Wrangler configurations persist traces in Workers
+Observability with the current sampling rate. Cloudflare is the only trace
+destination; no Jaeger, Grafana Tempo, or Sentry trace exporter is configured.
+Sentry continues to capture errors on web, Apple, and auxiliary Workers.
 
-- `grafana-logs` -> Grafana Cloud Loki OTLP endpoint.
-- `grafana-traces` -> Grafana Cloud Tempo OTLP endpoint.
-
-All four production Wrangler configurations reference those exact names and
-persist their logs and traces for investigation in Workers Observability.
-The calendar-test Worker is intentionally excluded: it is a local test
-harness and must not export test traffic to the production destinations.
-Destination credentials live in Cloudflare, not GitHub or this repository.
+Worker logs also reference the account-level `grafana-logs` destination for
+Grafana Cloud Loki. The calendar-test Worker is a local test harness and does
+not export test traffic. Destination credentials live in Cloudflare, not GitHub
+or this repository.
 
 ## GitHub and deployment
 

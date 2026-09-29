@@ -5,14 +5,13 @@
  *
  * Minimal custom-span helper over the `cloudflare:workers` `tracing.enterSpan`
  * API. For the downstream Workers (usda-api, upc-lookup),
- * which run on workerd in dev *and* prod — so, unlike apps/web, they need no
- * Node/OTel backend. Mirrors the `wrapCf` shape in
+ * which run on workerd in dev and prod. Mirrors the `wrapCf` shape in
  * apps/web/src/server/tracing.ts.
  *
  * Spans created here auto-nest under the request's root span (and, across a
  * service-binding subrequest, under the calling worker's trace — the CF platform
- * propagates context automatically), and flow to the worker's `grafana-traces`
- * OTLP destination. Requires `observability.traces.enabled` in wrangler.jsonc and
+ * propagates context automatically), and persist in Workers Observability.
+ * Requires `observability.traces.enabled` in wrangler.jsonc and
  * a `compatibility_date >= 2026-06-16`.
  *
  * `enterSpan` ends the span when the callback returns *or its returned promise

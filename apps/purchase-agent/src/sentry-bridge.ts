@@ -13,7 +13,6 @@ import { z } from "zod";
 
 export interface SentryAgentEnv {
   SENTRY_ENVIRONMENT?: string;
-  SENTRY_TRACES_SAMPLE_RATE?: string;
 }
 
 type LogAttributes = NonNullable<Parameters<typeof Sentry.logger.info>[1]>;
@@ -46,8 +45,8 @@ type TerminalFailureContext = {
 };
 
 // Sentry ships integrations that patch AI provider SDKs directly. Flue's
-// instrumentation already emits one `chat` span per model turn, so those
-// integrations would double-count every model call.
+// native instrumentation already owns model spans in Cloudflare. Sentry
+// receives errors and logs without provider span instrumentation.
 const SENTRY_AI_PROVIDER_INTEGRATIONS = new Set([
   "Anthropic_AI",
   "OpenAI",
@@ -60,7 +59,6 @@ const SENTRY_AI_PROVIDER_INTEGRATIONS = new Set([
 /** The Sentry options shared by the agent Durable Object and the queue consumer. */
 export function purchaseAgentSentryOptions(
   bindings: SentryAgentEnv,
-  tracesSampleRate: number,
 ): Sentry.CloudflareOptions {
   return {
     dsn: CUBBY_SENTRY_DSN,
@@ -68,22 +66,14 @@ export function purchaseAgentSentryOptions(
     enabled: bindings.SENTRY_ENVIRONMENT !== "test",
     environment: bindings.SENTRY_ENVIRONMENT,
     sendDefaultPii: false,
-    tracesSampleRate,
+    tracesSampleRate: 0,
+    tracesSampler: () => 0,
     initialScope: { tags: { service: "purchase-agent" } },
     integrations: (defaults) =>
       defaults.filter(
         (integration) => !SENTRY_AI_PROVIDER_INTEGRATIONS.has(integration.name),
       ),
   };
-}
-
-/** A `0`–`1` sample rate from a Worker var; anything else becomes `fallback`. */
-export function clampRate(value: string | undefined, fallback: number): number {
-  if (value === undefined) return fallback;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1
-    ? parsed
-    : fallback;
 }
 
 /**

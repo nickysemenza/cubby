@@ -72,7 +72,7 @@ nonisolated enum Diagnostics {
             // Worker via `sentry-trace`, so matching its 10% keeps traces connected end to end
             // without full-tracing overhead. Errors are captured regardless of this rate.
             // Off in development, as on the web.
-            options.tracesSampleRate = NSNumber(value: environment == "production" ? 0.1 : 0)
+            options.tracesSampleRate = NSNumber(value: 0)
             // Only the Cubby host gets `sentry-trace`/`baggage` (matched by substring). R2
             // presigned PUTs (`PresignedUpload`, which sends only `Content-Type` by contract)
             // and cover-image fetches leave the trace domain and must not carry them.

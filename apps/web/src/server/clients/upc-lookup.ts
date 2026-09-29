@@ -9,7 +9,7 @@ import { chunk } from "es-toolkit";
 
 import { env } from "~/env";
 import { getBindingFetcher } from "~/server/cf-env";
-import { injectTraceContext, TraceNames, withTrace } from "~/server/tracing";
+import { TraceNames, withTrace } from "~/server/tracing";
 
 const DEFAULT_TIMEOUT_MS = 5000;
 
@@ -38,10 +38,6 @@ export class UPCLookupClient {
     const headers: UpcRequestHeaders = {
       "user-agent": "cubby",
     };
-
-    // Inject trace context for distributed tracing (dev only — the CF platform
-    // propagates across service bindings in prod).
-    injectTraceContext(headers);
 
     if (this.apiKey) {
       headers["x-api-key"] = this.apiKey;

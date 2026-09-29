@@ -140,7 +140,7 @@ async function consumeMessage(
 // generated Worker entry composes this default export into the final Worker,
 // so it must stay an object of non-HTTP handlers with no `fetch`.
 export default Sentry.withSentry(
-  (env: CloudflareContext["env"]) => purchaseAgentSentryOptions(env, 0),
+  (env: CloudflareContext["env"]) => purchaseAgentSentryOptions(env),
   {
     async queue(
       batch: MessageBatch<unknown>,

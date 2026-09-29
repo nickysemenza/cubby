@@ -229,9 +229,6 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
               </div>
               {requestId && (
                 <div>
-                  {/* "Request ID", not "Trace ID": this is an OTel trace id in
-                    dev but a Cloudflare ray id in prod — different systems,
-                    different formats, so a generic label is the honest one. */}
                   <span className="text-muted-foreground">Request ID: </span>
                   <span className="text-foreground">{requestId}</span>
                 </div>

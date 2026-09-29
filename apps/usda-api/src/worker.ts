@@ -64,6 +64,7 @@ export default Sentry.withSentry(
     dsn: CUBBY_SENTRY_DSN,
     environment: env.SENTRY_ENVIRONMENT,
     tracesSampleRate: 0,
+    tracesSampler: () => 0,
     initialScope: { tags: { service: "usda-api" } },
   }),
   // Keep the local export raw: Sentry mutates the handler it receives.

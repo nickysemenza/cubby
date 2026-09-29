@@ -1,10 +1,6 @@
-import { SpanStatusCode } from "@opentelemetry/api";
-import { flatten } from "flat";
-import { z } from "zod";
-
 import { FLAGS } from "~/lib/flags";
 import { recordWasmExec } from "~/lib/perf/perf-store";
-import { getTracer, TraceNames } from "~/server/tracing";
+import { TraceNames, withSynchronousManualTrace } from "~/server/tracing";
 
 /** A synchronous WASM call over one 60fps frame can visibly block the UI. */
 const SLOW_WASM_THRESHOLD_MS = 16;
@@ -29,13 +25,6 @@ const summarizeArg = <TArgument>(arg: TArgument): string => {
   return String(arg);
 };
 
-const traceExceptionSchema = z.union([z.instanceof(Error), z.string()]);
-
-const traceException = <TError>(error: TError): Error | string => {
-  const parsed = traceExceptionSchema.safeParse(error);
-  return parsed.success ? parsed.data : "NonErrorThrow";
-};
-
 export function executeWasm<TArgs extends unknown[], TResult>(
   name: string,
   method: (...args: TArgs) => Promise<TResult>,
@@ -46,15 +35,13 @@ export function executeWasm<TArgs extends unknown[], TResult>(
   method: (...args: TArgs) => TResult,
   args: TArgs,
 ): TResult;
-/** Invoke a WASM export while keeping tracing aligned with actual completion. */
+/** Invoke a WASM export while measuring its actual completion for the overlay. */
 export function executeWasm<TArgs extends unknown[], TResult>(
   name: string,
   method: (...args: TArgs) => TResult | Promise<TResult>,
   args: TArgs,
 ): TResult | Promise<TResult> {
-  const tracer = getTracer();
-  return tracer.startActiveSpan(TraceNames.wasm(name), (span) => {
-    const recording = span.isRecording();
+  return withSynchronousManualTrace(TraceNames.wasm(name), (span, end) => {
     const start = performance.now();
     let completed = false;
     const complete = (
@@ -64,15 +51,13 @@ export function executeWasm<TArgs extends unknown[], TResult>(
       if (completed) return;
       completed = true;
       const durationMs = performance.now() - start;
-      if (recording) {
+      if (span.isRecording)
         span.setAttributes({
           "wasm.method": name,
           "wasm.duration_us": Math.round(durationMs * 1000),
           "wasm.execution_mode": executionMode,
           "wasm.threw": threw,
-          data: flatten(args),
         });
-      }
       if (FLAGS.perfOverlay) {
         recordWasmExec(name, durationMs, threw, executionMode);
       }
@@ -86,15 +71,15 @@ export function executeWasm<TArgs extends unknown[], TResult>(
           args.map(summarizeArg).join(", "),
         );
       }
-      span.end();
+      end();
     };
 
     try {
       const result = method(...args);
       if (result instanceof Promise) {
         const reject = <TError>(error: TError): Promise<never> => {
-          span.recordException(traceException(error));
-          span.setStatus({ code: SpanStatusCode.ERROR });
+          span.recordException(error);
+          span.setError();
           complete(true, "async");
           return Promise.reject(error);
         };
@@ -106,8 +91,8 @@ export function executeWasm<TArgs extends unknown[], TResult>(
       complete(false, "sync");
       return result;
     } catch (error) {
-      span.recordException(traceException(error));
-      span.setStatus({ code: SpanStatusCode.ERROR });
+      span.recordException(error);
+      span.setError();
       complete(true, "sync");
       throw error;
     }

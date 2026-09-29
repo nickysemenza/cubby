@@ -8,7 +8,7 @@ import type {
 import { usdaContract } from "@cubby/usda/contract";
 import { initClient } from "@ts-rest/core";
 
-import { injectTraceContext, TraceNames, withTrace } from "~/server/tracing";
+import { TraceNames, withTrace } from "~/server/tracing";
 
 // Per-request abort ceiling for usda-api fetches. Generous for caller-side
 // transport overhead (not handler work): the fetch itself resolves in ~150ms now
@@ -61,21 +61,10 @@ export class USDAClient {
       : hasDefaultCache(cacheStorage)
         ? cacheStorage.default
         : null;
-    // Helper to get trace context headers for each request (dev only — in the
-    // CF Worker the platform propagates trace context across service bindings).
-    const getTraceHeaders = () => {
-      const headers: Record<string, string> = {};
-      injectTraceContext(headers);
-      return headers;
-    };
-
     this.client = initClient(usdaContract, {
       baseUrl: this.baseUrl,
       baseHeaders: {
         "user-agent": "cubby",
-        // Inject OpenTelemetry trace context for distributed tracing
-        traceparent: () => getTraceHeaders().traceparent ?? "",
-        tracestate: () => getTraceHeaders().tracestate ?? "",
       },
       api: async (args) => {
         // The food lookup and dataset counts are stable enough for an edge hit.
