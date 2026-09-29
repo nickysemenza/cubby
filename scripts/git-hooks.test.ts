@@ -66,7 +66,7 @@ function fixture(t: TestContext) {
     ".oxlintrc.json",
     ".oxfmtrc.json",
     "apps/web/src/server/db/schema.ts",
-    "apps/web/src/server/db/generated/entity-columns.gen.ts",
+    "apps/web/src/server/db/generated/entity-tables.gen.ts",
     "scripts/check-outward-text.ts",
     "scripts/generator/ensure.ts",
     "packages/shared/src/shortcode-alphabet.ts",

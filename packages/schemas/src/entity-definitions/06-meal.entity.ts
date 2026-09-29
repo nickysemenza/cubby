@@ -495,6 +495,21 @@ export default defineEntity({
       export: "mealMcpEntityOut",
     },
   },
+  storage: {
+    indexes: [
+      {
+        name: "Meal_date_active_idx",
+        on: ["date"],
+        where: "{deletedAt} IS NULL",
+      },
+    ],
+    relations: {
+      recipes: { many: "mealRecipe" },
+      recipePortions: { many: "mealRecipePortion" },
+      foodEntries: { many: "mealFoodEntry" },
+      images: { many: "entityAttachment" },
+    },
+  },
   filters: {
     audit: true,
     schema: { module: "@cubby/schemas/meal", export: "mealFilterFields" },

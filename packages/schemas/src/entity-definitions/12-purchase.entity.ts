@@ -680,6 +680,36 @@ export default defineEntity({
     output: { module: "@cubby/schemas/purchase", export: "purchaseOut" },
     list: { module: "@cubby/schemas/purchase", export: "purchaseListItemOut" },
   },
+  storage: {
+    columns: [{ key: "runId", kind: "identifier", reference: "run" }],
+    indexes: [
+      // One order = one purchase. PARTIAL on `orderId IS NOT NULL`, which is
+      // what lets the many `(vendorId, null)` purchase events coexist. This
+      // index is also what makes `findOrCreatePurchase` unambiguous (no
+      // "which purchase?" branch on the import hot path) and why no
+      // `splitPurchase` operation is needed at all.
+      {
+        on: ["vendorId", "orderId"],
+        unique: true,
+        where: "{orderId} IS NOT NULL AND {deletedAt} IS NULL",
+      },
+      { on: ["date"] },
+      { trigram: "orderId" },
+      { trigram: "displayLabel" },
+    ],
+    checks: [
+      {
+        name: "Purchase_statedTotal_whole_cent_check",
+        sql: "{statedTotal} IS NULL OR abs({statedTotal} * 100 - round({statedTotal} * 100)) < 0.0000001",
+      },
+    ],
+    relations: {
+      vendor: "vendorId",
+      expenses: { many: "expense" },
+      images: { many: "entityAttachment" },
+      settlementAllocations: { many: "financialTransactionAllocation" },
+    },
+  },
   filters: {
     audit: true,
     schema: {

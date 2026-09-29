@@ -579,6 +579,43 @@ export default defineEntity({
       export: "financialTransactionOut",
     },
   },
+  storage: {
+    indexes: [
+      {
+        name: "FinancialTransaction_ledgerTransferId_positive_evidence_key",
+        on: ["ledgerTransferId"],
+        unique: true,
+        where:
+          "{deletedAt} IS NULL AND {ledgerTransferId} IS NOT NULL AND {amount} > 0",
+      },
+      {
+        name: "FinancialTransaction_ledgerTransferId_negative_evidence_key",
+        on: ["ledgerTransferId"],
+        unique: true,
+        where:
+          "{deletedAt} IS NULL AND {ledgerTransferId} IS NOT NULL AND {amount} < 0",
+      },
+      { on: ["kind"] },
+      { on: ["status"] },
+      { on: ["transactionDate"] },
+      { on: ["postedDate"] },
+    ],
+    checks: [
+      {
+        name: "FinancialTransaction_amount_whole_cent_check",
+        sql: "{amount} <> 0 AND abs({amount} * 100 - round({amount} * 100)) < 0.0000001",
+      },
+      {
+        name: "FinancialTransaction_posted_date_check",
+        sql: "{status} <> 'posted' OR {postedDate} IS NOT NULL",
+      },
+    ],
+    relations: {
+      account: "accountId",
+      allocations: { many: "financialTransactionAllocation" },
+      ledgerTransfer: "ledgerTransferId",
+    },
+  },
   filters: {
     audit: true,
     schema: {

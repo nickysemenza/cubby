@@ -391,6 +391,27 @@ export default defineEntity({
       export: "productCategoryOut",
     },
   },
+  storage: {
+    indexes: [
+      {
+        name: "ProductCategory_parent_name_key",
+        on: ["parentId", "name"],
+        unique: true,
+        where: "{deletedAt} IS NULL",
+      },
+      {
+        name: "ProductCategory_feature_live_unique",
+        on: ["feature"],
+        unique: true,
+        where: "{deletedAt} IS NULL AND {feature} IS NOT NULL",
+      },
+      { on: ["feature"] },
+    ],
+    checks: [
+      { name: "ProductCategory_sortOrder_check", sql: "{sortOrder} >= 0" },
+      { column: "feature", nullClause: true },
+    ],
+  },
   filters: {
     audit: true,
     schema: {

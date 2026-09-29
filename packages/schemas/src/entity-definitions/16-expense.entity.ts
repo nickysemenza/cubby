@@ -902,6 +902,51 @@ export default defineEntity({
     output: { module: "@cubby/schemas/project", export: "expenseOut" },
     list: { module: "@cubby/schemas/project", export: "expenseListItemOut" },
   },
+  storage: {
+    indexes: [
+      { on: ["date"] },
+      { on: ["costType"] },
+      { on: ["lineKind"] },
+      { trigram: "name" },
+    ],
+    checks: [
+      {
+        name: "Expense_date_cost_check",
+        sql: "{date} IS NOT NULL OR ({cost} IS NOT NULL AND {cost} = 0)",
+      },
+      {
+        name: "Expense_live_charge_assignment_check",
+        sql: "{deletedAt} IS NOT NULL OR {lineKind} = 'principal' OR ({projectId} IS NULL AND {purchaseId} IS NOT NULL)",
+      },
+      {
+        name: "Expense_cost_whole_cent_check",
+        sql: "{cost} IS NULL OR abs({cost} * 100 - round({cost} * 100)) < 0.0000001",
+      },
+      // Signed; zero only where the money is known to be negative — see the
+      // ledger rule on `productQuantity`.
+      //
+      // The `cost IS NOT NULL` guard is load-bearing and is NOT redundant with
+      // `cost < 0`. A CHECK rejects only on FALSE, and for an unclassified row
+      // `NULL < 0` is NULL, so `(0 <> 0 OR NULL)` is NULL and the row would be
+      // ADMITTED — quietly allowing the one shape the rule above forbids. The
+      // guard collapses that NULL to FALSE.
+      {
+        name: "Expense_productQuantity_check",
+        sql: "{productQuantity} IS NULL OR ({productId} IS NOT NULL AND ({productQuantity} <> 0 OR ({cost} IS NOT NULL AND {cost} < 0)))",
+      },
+      {
+        name: "Expense_lineKind_productId_check",
+        sql: "{lineKind} = 'principal' OR {productId} IS NULL",
+      },
+    ],
+    relations: {
+      purchase: "purchaseId",
+      project: "projectId",
+      product: "productId",
+      attributions: { many: "expenseAttribution" },
+      sourceClaims: { many: "ledgerSourceClaim" },
+    },
+  },
   filters: {
     audit: true,
     schema: { module: "@cubby/schemas/project", export: "expenseFilterFields" },

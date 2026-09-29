@@ -416,6 +416,41 @@ export default defineEntity({
       export: "inventoryWithLocationAndProductMcpEntityOut",
     },
   },
+  storage: {
+    indexes: [
+      // Placement is part of the key so a spare on the shelf and one wired
+      // into the wall can coexist in the same room — the normal state, not a
+      // duplicate.
+      {
+        name: "InventoryEntry_productId_locationId_key",
+        on: [
+          "productId",
+          "locationId",
+          "placement",
+          "ownershipMode",
+          {
+            sql: "coalesce({ownerLedgerPartyId}, '00000000-0000-0000-0000-000000000000'::uuid)",
+          },
+        ],
+        unique: true,
+        where: "{deletedAt} IS NULL",
+      },
+      { name: "InventoryEntry_owner_idx", on: ["ownerLedgerPartyId"] },
+      { on: ["createdAt"] },
+    ],
+    checks: [
+      { column: "placement" },
+      {
+        name: "InventoryEntry_ownership_valid",
+        sql: "({ownershipMode} = 'person' AND {ownerLedgerPartyId} IS NOT NULL) OR ({ownershipMode} IN ('inherit', 'unassigned') AND {ownerLedgerPartyId} IS NULL)",
+      },
+    ],
+    relations: {
+      owner: "ownerLedgerPartyId",
+      product: "productId",
+      location: "locationId",
+    },
+  },
   filters: {
     audit: true,
     schema: {

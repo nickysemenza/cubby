@@ -1341,6 +1341,55 @@ export default defineEntity({
       export: "productWithFoodMcpEntityOut",
     },
   },
+  storage: {
+    indexes: [
+      {
+        on: ["name", "manufacturer"],
+        unique: true,
+        where: "{deletedAt} IS NULL",
+      },
+      { on: ["createdAt"] },
+      // No GIN on `aliases` (here, Ingredient, or Location): every alias filter
+      // is `unnest(aliases) ILIKE`, which an array GIN cannot serve — those
+      // index @>/&&/= ANY. EXPLAIN confirms a seq scan with a per-row SubPlan
+      // either way, so the index was pure write cost.
+      { trigram: "name" },
+      { trigram: "manufacturer" },
+      { on: ["name", "manufacturer"] },
+      {
+        name: "Product_name_active_idx",
+        on: ["name"],
+        where: "{deletedAt} IS NULL",
+      },
+      {
+        name: "Product_manufacturer_active_idx",
+        on: ["manufacturer"],
+        where: "{deletedAt} IS NULL",
+      },
+    ],
+    relations: {
+      category: "categoryId",
+      ingredient: { field: "ingredientId", relationName: "ProductIngredient" },
+      growsPlant: "growsPlantId",
+      unitMappings: { many: "productUnitMappings" },
+      mealFoodEntries: { many: "mealFoodEntry" },
+      conversionCoverage: { one: "productConversionCoverage" },
+      externalIds: {
+        many: "entityExternalId",
+        relationName: "productExternalIds",
+      },
+      inventoryEntry: { many: "inventoryEntry" },
+      images: { many: "entityAttachment" },
+      expenses: { many: "expense" },
+      // Locations that ARE an instance of this product (a bin, tote, rack).
+      // Distinct from `inventoryEntry`, which is stock held AT a location.
+      locations: { many: "location" },
+      // Cookbooks whose physical copy this product is. `many` only because
+      // Drizzle models the reverse of a nullable FK that way — in practice
+      // it's 0 or 1.
+      cookbooks: { many: "cookbook" },
+    },
+  },
   filters: {
     audit: true,
     schema: { module: "@cubby/schemas/product", export: "productFilterFields" },

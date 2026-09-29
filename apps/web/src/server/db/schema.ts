@@ -35,11 +35,6 @@ import type {
   UserId,
   VendorId,
 } from "@cubby/schemas/identifiers";
-import {
-  imageRenderStatusValues,
-  imageStatusValues,
-  imageStorageStatusValues,
-} from "@cubby/schemas/image";
 import type {
   ImageSightingCamera,
   ImageSightingLocation,
@@ -51,14 +46,12 @@ import {
   type PurchaseDocumentKind,
   purchaseDocumentKindValues,
 } from "@cubby/schemas/purchase";
-import { recipeSourceValues } from "@cubby/schemas/recipe-shared";
-import type { RunInput, RunProgress } from "@cubby/schemas/run-fields";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import type {
   McpToolCallOutcome,
   McpToolCallSurface,
 } from "@cubby/schemas/telemetry";
-import { inventoryPlacementValues, type ShortcodeType } from "@cubby/shared";
+import type { ShortcodeType } from "@cubby/shared";
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -97,7 +90,7 @@ import {
   user,
   verification,
 } from "./auth.schema";
-import { entityIdentity, entityIdentityFk } from "./entity-identity-schema";
+import { entityIdentity } from "./entity-identity-schema";
 import {
   entityLinkKindCheckSql,
   entityLinkNoSelfCheckSql,
@@ -108,32 +101,28 @@ import {
   externalIdPrimaryCheckSql,
 } from "./external-id-schema";
 import {
-  generatedCookbookColumns,
-  generatedDeviceColumns,
-  generatedExpenseColumns,
-  generatedFinancialAccountColumns,
-  generatedFinancialTransactionColumns,
-  generatedImageColumns,
-  generatedIngredientColumns,
-  generatedInventoryColumns,
-  generatedLedgerPartyColumns,
-  generatedLedgerTransferColumns,
-  generatedLocationColumns,
-  generatedMealColumns,
-  generatedProductColumns,
-  generatedPlantColumns,
-  generatedPlantingColumns,
-  generatedGardenEntryColumns,
-  generatedProjectColumns,
-  generatedPurchaseColumns,
-  generatedRecipeColumns,
-  generatedTaskColumns,
-  generatedVendorColumns,
-  generatedRunColumns,
-  generatedVendorAccountColumns,
-  generatedWishColumns,
-} from "./generated/entity-columns.gen";
-import { productCategory } from "./product-category-schema";
+  cookbook,
+  device,
+  expense,
+  financialAccount,
+  financialTransaction,
+  gardenEntry,
+  image,
+  ingredient,
+  ledgerParty,
+  ledgerTransfer,
+  location,
+  meal,
+  product,
+  productCategory,
+  project,
+  purchase,
+  recipe,
+  run,
+  task,
+  vendor,
+  vendorAccount,
+} from "./generated/entity-tables.gen";
 
 export type { Amount };
 export type Instruction = { text: string };
@@ -235,43 +224,6 @@ const entityRefFk = (
   });
 
 /**
- * The entity's public id (`PRD-4K7M`) — what URLs, QR labels, and MCP expose.
- * The uuid PK above stays private to repositories and in-process workflows.
- *
- * Deliberately NOT branded: the Product/Ingredient/Image spike showed that
- * generic Drizzle table unions erase the entity correlation on inserts and
- * comparisons. Repository mapper seams validate stored strings through the
- * entity-specific shortcode schemas instead.
- */
-/**
- * Uniqueness over the WHOLE table, soft-deleted rows included. That is the
- * point: a code must never be reused, so a deleted row's code stays a permanent
- * tombstone rather than becoming available again. A partial index on
- * `deletedAt IS NULL` would let a deleted row's code be handed to a second
- * entity.
- */
-const shortcodeUnique = (tableName: string, column: AnyPgColumn) =>
-  uniqueIndex(`${tableName}_shortcode_unique`).on(column);
-
-/**
- * A text column restricted to a closed set of values, as a CHECK. Drizzle's
- * `text(name, { enum })` types the column but emits no constraint, so every
- * value-set column that used to be a `pgEnum` declares this beside its table.
- * The list is inlined as literals (`sql.raw`), not bound: a bound parameter
- * would render as `$1` in the migration DDL. Values come from the
- * `packages/schemas` arrays, which hold plain identifiers, never user input.
- */
-const enumCheck = (
-  name: string,
-  column: AnyPgColumn,
-  values: readonly string[],
-) =>
-  check(
-    name,
-    sql`${column} IN (${sql.raw(values.map((value) => `'${value}'`).join(", "))})`,
-  );
-
-/**
  * The `{ value, unit }` amount stored as two columns. Both null (an absent
  * optional amount) or both set with a positive finite value and a trimmed,
  * non-empty unit.
@@ -283,81 +235,6 @@ const validAmountColumns = (value: AnyPgColumn, unit: AnyPgColumn) => sql`
     AND length(trim(${unit})) > 0 AND ${unit} = trim(${unit})
   )
 `;
-
-export const recipe = pgTable(
-  "Recipe",
-  generatedRecipeColumns({
-    cookbook: (): AnyPgColumn => cookbook.id,
-    recipe: (): AnyPgColumn => recipe.id,
-  }),
-  (table) => [
-    shortcodeUnique("Recipe", table.shortcode),
-    entityIdentityFk("Recipe", table),
-    // Non-cookbook recipes keep a globally-unique name. Cookbook (Book) and
-    // Notion recipes are excluded — they're keyed by (cookbook, name) and by
-    // their Notion page's EntityExternalId — so the same title can appear
-    // across a cookbook, a Notion page, and a web recipe. `IS DISTINCT FROM`
-    // (not NOT IN) keeps NULL-sourceType legacy rows inside the index.
-    uniqueIndex("Recipe_name_key")
-      .on(table.name)
-      .where(
-        sql`${table.deletedAt} IS NULL AND ${table.sourceType} IS DISTINCT FROM 'Book' AND ${table.sourceType} IS DISTINCT FROM 'Notion'`,
-      ),
-    // A cookbook recipe's identity is (cookbook, title): unique per book, but
-    // the same title may recur across books.
-    uniqueIndex("Recipe_cookbookId_name_key")
-      .on(table.cookbookId, table.name)
-      .where(
-        sql`${table.cookbookId} IS NOT NULL AND ${table.deletedAt} IS NULL`,
-      ),
-    check(
-      "Recipe_sourceType_check",
-      sql.raw(
-        `"sourceType" IS NULL OR "sourceType" IN (${recipeSourceValues.map((value) => `'${value}'`).join(", ")})`,
-      ),
-    ),
-    index("Recipe_sourceType_idx").on(table.sourceType),
-    index("Recipe_cookbookId_idx").on(table.cookbookId),
-    index("Recipe_forkedFromRecipeId_idx").on(table.forkedFromRecipeId),
-    index("Recipe_created_at_desc_idx").on(table.createdAt.desc()),
-    index("Recipe_name_active_idx")
-      .on(table.name)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("Recipe_totals_stale_idx")
-      .on(table.totalsComputedAt)
-      .where(sql`${table.totalsComputedAt} IS NULL`),
-  ],
-);
-
-// Cookbook table — a first-class recipe source (the book a set of EPUB-extracted
-// recipes came from). Holds the full assembled `ImportRecipe[]` JSON so recipes
-// can be re-derived without re-running the LLM, plus OPF metadata. A cookbook is
-// always born from a full import, so every content column is NOT NULL.
-// `productId` links the digital source to the physical book on the shelf. This
-// was deliberately absent until 2026-08: the EPUB set and the shelf genuinely
-// didn't overlap when Cookbook was introduced, but the Amazon backfill landed
-// ~50 cookbooks as Products and the populations now intersect. Matching is
-// always human-confirmed — never auto-link on a title prefix, because
-// "Tartine Book No. 3" and "Tartine: A Classic Revisited" are different books.
-export const cookbook = pgTable(
-  "Cookbook",
-  generatedCookbookColumns({
-    product: (): AnyPgColumn => product.id,
-  }),
-  (table) => [
-    shortcodeUnique("Cookbook", table.shortcode),
-    entityIdentityFk("Cookbook", table),
-    uniqueIndex("Cookbook_name_key")
-      .on(table.name)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("Cookbook_createdAt_idx").on(table.createdAt),
-    index("Cookbook_productId_idx").on(table.productId),
-    index("Cookbook_name_gin_idx").using(
-      "gin",
-      sql`${table.name} gin_trgm_ops`,
-    ),
-  ],
-);
 
 export const recipeSection = pgTable(
   "RecipeSection",
@@ -382,31 +259,6 @@ export const recipeSection = pgTable(
   (table) => [
     index("RecipeSection_recipeId_idx").on(table.recipeId),
     index("RecipeSection_createdAt_idx").on(table.createdAt),
-  ],
-);
-
-export const ingredient = pgTable(
-  "Ingredient",
-  generatedIngredientColumns({ recipe: (): AnyPgColumn => recipe.id }),
-  (table) => [
-    shortcodeUnique("Ingredient", table.shortcode),
-    entityIdentityFk("Ingredient", table),
-    // Case-insensitive uniqueness must match the lower(name) matcher to prevent concurrent duplicate ingredients.
-    uniqueIndex("Ingredient_name_key")
-      .on(sql`lower(${table.name})`)
-      .where(sql`${table.deletedAt} IS NULL AND ${table.recipeId} IS NULL`),
-    uniqueIndex("Ingredient_recipeId_key")
-      .on(table.recipeId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("Ingredient_recipeId_idx").on(table.recipeId),
-    index("Ingredient_createdAt_idx").on(table.createdAt),
-    index("Ingredient_name_gin_idx").using(
-      "gin",
-      sql`${table.name} gin_trgm_ops`,
-    ),
-    index("Ingredient_name_active_idx")
-      .on(table.name)
-      .where(sql`${table.deletedAt} IS NULL`),
   ],
 );
 
@@ -443,14 +295,6 @@ export const recipeSectionIngredient = pgTable(
     index("RecipeSectionIngredient_ingredientId_idx").on(table.ingredientId),
   ],
 );
-
-export const meal = pgTable("Meal", generatedMealColumns(), (table) => [
-  shortcodeUnique("Meal", table.shortcode),
-  entityIdentityFk("Meal", table),
-  index("Meal_date_active_idx")
-    .on(table.date)
-    .where(sql`${table.deletedAt} IS NULL`),
-]);
 
 export const mealRecipe = pgTable(
   "MealRecipe",
@@ -569,43 +413,9 @@ export {
   entityIdentity,
   entityIdentityRelations,
 } from "./entity-identity-schema";
-export { productCategory } from "./product-category-schema";
-
-export const product = pgTable(
-  "Product",
-  generatedProductColumns({
-    ingredient: (): AnyPgColumn => ingredient.id,
-    plant: (): AnyPgColumn => plant.id,
-    productCategory: (): AnyPgColumn => productCategory.id,
-  }),
-  (table) => [
-    shortcodeUnique("Product", table.shortcode),
-    entityIdentityFk("Product", table),
-    index("Product_categoryId_idx").on(table.categoryId),
-    uniqueIndex("Product_name_manufacturer_key")
-      .on(table.name, table.manufacturer)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("Product_ingredientId_idx").on(table.ingredientId),
-    index("Product_growsPlantId_idx").on(table.growsPlantId),
-    index("Product_createdAt_idx").on(table.createdAt),
-    index("Product_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
-    // No GIN on `aliases` (here, Ingredient, or Location): every alias filter
-    // is `unnest(aliases) ILIKE`, which an array GIN cannot serve — those
-    // index @>/&&/= ANY. EXPLAIN confirms a seq scan with a per-row SubPlan
-    // either way, so the index was pure write cost.
-    index("Product_manufacturer_gin_idx").using(
-      "gin",
-      sql`${table.manufacturer} gin_trgm_ops`,
-    ),
-    index("Product_name_manufacturer_idx").on(table.name, table.manufacturer),
-    index("Product_name_active_idx")
-      .on(table.name)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("Product_manufacturer_active_idx")
-      .on(table.manufacturer)
-      .where(sql`${table.deletedAt} IS NULL`),
-  ],
-);
+// Entity tables + relations are generated from their declarations
+// (`packages/schemas/src/entity-definitions/*.entity.ts`, `storage`).
+export * from "./generated/entity-tables.gen";
 
 export const productUnitMappings = pgTable(
   "ProductUnitMapping",
@@ -685,45 +495,6 @@ export const upcLookupCache = pgTable(
   (table) => [
     index("UpcLookupCache_fetchedAt_idx").on(table.fetchedAt),
     index("UpcLookupCache_status_idx").on(table.status),
-  ],
-);
-
-export const location = pgTable(
-  "Location",
-  generatedLocationColumns({
-    location: (): AnyPgColumn => location.id,
-    product: (): AnyPgColumn => product.id,
-  }),
-  (table) => [
-    shortcodeUnique("Location", table.shortcode),
-    entityIdentityFk("Location", table),
-    uniqueIndex("Location_name_key")
-      .on(sql`lower(${table.name})`)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("Location_name_idx").on(table.name),
-    index("Location_tags_idx").using("gin", table.tags),
-    index("Location_productId_idx").on(table.productId),
-    index("Location_parentId_idx").on(table.parentId),
-    index("Location_createdAt_idx").on(table.createdAt),
-    index("Location_lastBulkInventory_idx").on(table.lastBulkInventory),
-    index("Location_name_gin_idx").using(
-      "gin",
-      sql`${table.name} gin_trgm_ops`,
-    ),
-    index("Location_type_name_idx").on(table.type, table.name),
-    index("Location_name_active_idx")
-      .on(table.name)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("Location_type_active_idx")
-      .on(table.type)
-      .where(sql`${table.deletedAt} IS NULL`),
-    // `furniture` marks a Product-instance location (the bin or rack itself).
-    // One direction only: a garden bed or planter may link a Product and keep
-    // its own type, so `productId IS NOT NULL` does not imply `furniture`.
-    check(
-      "Location_furniture_product_check",
-      sql`${table.type} <> 'furniture' OR ${table.productId} IS NOT NULL`,
-    ),
   ],
 );
 
@@ -888,109 +659,6 @@ export const productMatchCandidate = pgTable(
   ],
 );
 
-export const inventoryEntry = pgTable(
-  "InventoryEntry",
-  generatedInventoryColumns({
-    ledgerParty: (): AnyPgColumn => ledgerParty.id,
-    product: (): AnyPgColumn => product.id,
-    location: (): AnyPgColumn => location.id,
-  }),
-  (table) => [
-    shortcodeUnique("InventoryEntry", table.shortcode),
-    entityIdentityFk("InventoryEntry", table),
-    // Placement is part of the key so a spare on the shelf and one wired into
-    // the wall can coexist in the same room — the normal state, not a duplicate.
-    // Strictly more permissive than the old two-column form, so the CREATE can
-    // never fail on existing data.
-    uniqueIndex("InventoryEntry_productId_locationId_key")
-      .on(
-        table.productId,
-        table.locationId,
-        table.placement,
-        table.ownershipMode,
-        sql`coalesce(${table.ownerLedgerPartyId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
-      )
-      .where(sql`${table.deletedAt} IS NULL`),
-    enumCheck(
-      "InventoryEntry_placement_check",
-      table.placement,
-      inventoryPlacementValues,
-    ),
-    check(
-      "InventoryEntry_ownership_valid",
-      sql`(${table.ownershipMode} = 'person' AND ${table.ownerLedgerPartyId} IS NOT NULL) OR (${table.ownershipMode} IN ('inherit', 'unassigned') AND ${table.ownerLedgerPartyId} IS NULL)`,
-    ),
-    index("InventoryEntry_owner_idx").on(table.ownerLedgerPartyId),
-    index("InventoryEntry_productId_idx").on(table.productId),
-    index("InventoryEntry_locationId_idx").on(table.locationId),
-    index("InventoryEntry_createdAt_idx").on(table.createdAt),
-  ],
-);
-
-/** A durable economic participant in the household ledger. */
-export const ledgerParty = pgTable(
-  "LedgerParty",
-  {
-    ...generatedLedgerPartyColumns(),
-    // Auth ownership is intentionally storage-only: a member claims it from
-    // Settings, never through generic ledger-party create/update forms.
-    userId: text("userId")
-      .$type<UserId>()
-      .references(() => user.id),
-  },
-  (table) => [
-    shortcodeUnique("LedgerParty", table.shortcode),
-    entityIdentityFk("LedgerParty", table),
-    index("LedgerParty_kind_idx").on(table.kind),
-    uniqueIndex("LedgerParty_household_singleton_key")
-      .on(table.kind)
-      .where(sql`${table.deletedAt} IS NULL AND ${table.kind} = 'household'`),
-    uniqueIndex("LedgerParty_member_user_key")
-      .on(table.userId)
-      .where(sql`${table.deletedAt} IS NULL AND ${table.userId} IS NOT NULL`),
-    check(
-      "LedgerParty_kind_check",
-      sql`${table.kind} IN ('member', 'guest', 'household')`,
-    ),
-    check(
-      "LedgerParty_user_member_check",
-      sql`${table.userId} IS NULL OR ${table.kind} = 'member'`,
-    ),
-  ],
-);
-
-export const image = pgTable(
-  "Image",
-  generatedImageColumns({
-    ledgerParty: (): AnyPgColumn => ledgerParty.id,
-  }),
-  (table) => [
-    shortcodeUnique("Image", table.shortcode),
-    entityIdentityFk("Image", table),
-    enumCheck("Image_status_check", table.status, imageStatusValues),
-    enumCheck(
-      "Image_renderStatus_check",
-      table.renderStatus,
-      imageRenderStatusValues,
-    ),
-    enumCheck(
-      "Image_storageStatus_check",
-      table.storageStatus,
-      imageStorageStatusValues,
-    ),
-    check(
-      "Image_perceptualHash_format_check",
-      sql`${table.perceptualHash} IS NULL OR ${table.perceptualHash} ~ '^[0-9a-f]{16}$'`,
-    ),
-    uniqueIndex("Image_key_key")
-      .on(table.key)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("Image_createdAt_idx").on(table.createdAt),
-    index("Image_status_idx").on(table.status),
-    index("Image_capturedByPartyId_idx").on(table.capturedByPartyId),
-  ],
-);
-
 /**
  * A reasoned, evidence-bound "this gap does not apply" for one data-quality
  * check on one entity (ADR 0006). Replaces the per-table `dataExceptions`
@@ -1140,115 +808,6 @@ export const entityLink = pgTable(
   ],
 );
 
-export const plant = pgTable(
-  "Plant",
-  generatedPlantColumns({
-    ingredient: (): AnyPgColumn => ingredient.id,
-  }),
-  (table) => [
-    shortcodeUnique("Plant", table.shortcode),
-    entityIdentityFk("Plant", table),
-    index("Plant_ingredientId_idx").on(table.ingredientId),
-    index("Plant_gardenGuideKey_idx").on(table.gardenGuideKey),
-  ],
-);
-
-export const planting = pgTable(
-  "Planting",
-  generatedPlantingColumns({
-    plant: (): AnyPgColumn => plant.id,
-    product: (): AnyPgColumn => product.id,
-    location: (): AnyPgColumn => location.id,
-    task: (): AnyPgColumn => task.id,
-  }),
-  (table) => [
-    shortcodeUnique("Planting", table.shortcode),
-    entityIdentityFk("Planting", table),
-    index("Planting_plantId_idx").on(table.plantId),
-    index("Planting_sourceProductId_idx").on(table.sourceProductId),
-    index("Planting_locationId_idx").on(table.locationId),
-    index("Planting_taskId_idx").on(table.taskId),
-    index("Planting_status_idx").on(table.status),
-  ],
-);
-
-export const gardenEntry = pgTable(
-  "GardenEntry",
-  generatedGardenEntryColumns({
-    location: (): AnyPgColumn => location.id,
-  }),
-  (table) => [
-    shortcodeUnique("GardenEntry", table.shortcode),
-    entityIdentityFk("GardenEntry", table),
-    index("GardenEntry_locationId_idx").on(table.locationId),
-    index("GardenEntry_observedOn_idx").on(table.observedOn),
-  ],
-);
-
-export const project = pgTable(
-  "Project",
-  generatedProjectColumns({ project: (): AnyPgColumn => project.id }),
-  (table) => [
-    shortcodeUnique("Project", table.shortcode),
-    entityIdentityFk("Project", table),
-    index("Project_status_idx").on(table.status),
-    index("Project_kind_idx").on(table.kind),
-    index("Project_startDate_idx").on(table.startDate),
-    index("Project_parentProjectId_idx").on(table.parentProjectId),
-    index("Project_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
-    index("Project_name_active_idx")
-      .on(table.name)
-      .where(sql`${table.deletedAt} IS NULL`),
-  ],
-);
-
-export const wish = pgTable("Wish", generatedWishColumns(), (table) => [
-  shortcodeUnique("Wish", table.shortcode),
-  entityIdentityFk("Wish", table),
-  index("Wish_createdAt_idx").on(table.createdAt),
-  index("Wish_acquiredAt_idx").on(table.acquiredAt),
-]);
-
-export const task = pgTable(
-  "Task",
-  generatedTaskColumns({
-    project: (): AnyPgColumn => project.id,
-    product: (): AnyPgColumn => product.id,
-    task: (): AnyPgColumn => task.id,
-  }),
-  (table) => [
-    shortcodeUnique("Task", table.shortcode),
-    entityIdentityFk("Task", table),
-    index("Task_projectId_idx").on(table.projectId),
-    index("Task_subjectProductId_idx").on(table.subjectProductId),
-    index("Task_status_idx").on(table.status),
-    index("Task_dueDate_idx").on(table.dueDate),
-    index("Task_parentTaskId_idx").on(table.parentTaskId),
-  ],
-);
-
-/**
- * The roster of places money goes. `Vendor ──< Purchase ──< Expense`: this was
- * a free-text `vendor` column repeated on every ledger row until the charge got
- * its own table, which is why a vendor's documents and contractor metadata had
- * nowhere to live.
- */
-export const vendor = pgTable("Vendor", generatedVendorColumns(), (table) => [
-  shortcodeUnique("Vendor", table.shortcode),
-  entityIdentityFk("Vendor", table),
-  uniqueIndex("Vendor_name_key")
-    .on(table.name)
-    .where(sql`${table.deletedAt} IS NULL`),
-  check(
-    "Vendor_orderEvidence_check",
-    sql`${table.orderEvidence} IS NULL OR ${table.orderEvidence} IN ('online_account', 'receipt_only', 'not_expected')`,
-  ),
-  check(
-    "Vendor_returnWindowDays_check",
-    sql`${table.returnWindowDays} IS NULL OR ${table.returnWindowDays} >= 0`,
-  ),
-]);
-
 /**
  * The registry of places an identifier can come from: a vendor's catalog
  * (`amazon`), a provider export (`monarch`), or a system (`notion`). Every
@@ -1325,77 +884,6 @@ export const entityExternalId = pgTable(
   ],
 );
 
-export const financialAccount = pgTable(
-  "FinancialAccount",
-  generatedFinancialAccountColumns({
-    ledgerParty: (): AnyPgColumn => ledgerParty.id,
-    vendor: (): AnyPgColumn => vendor.id,
-  }),
-  (table) => [
-    shortcodeUnique("FinancialAccount", table.shortcode),
-    entityIdentityFk("FinancialAccount", table),
-    index("FinancialAccount_name_idx").on(table.name),
-    index("FinancialAccount_provisional_idx").on(table.provisional),
-    index("FinancialAccount_ledgerPartyId_idx").on(table.ledgerPartyId),
-    // One live balance per provider and owner, so settlement can resolve a
-    // gift-card leg from (purchase vendor, vendor-account member) alone. NULL
-    // owners stay distinct: a household card coexists with members' balances.
-    uniqueIndex("FinancialAccount_provider_owner_key")
-      .on(table.providerVendorId, table.ledgerPartyId)
-      .where(
-        sql`${table.providerVendorId} IS NOT NULL AND ${table.deletedAt} IS NULL`,
-      ),
-    check(
-      "FinancialAccount_providerVendor_stored_value_check",
-      sql`${table.providerVendorId} IS NULL OR ${table.identity}->>'kind' = 'stored_value'`,
-    ),
-  ],
-);
-
-export const vendorAccount = pgTable(
-  "VendorAccount",
-  generatedVendorAccountColumns({
-    vendor: (): AnyPgColumn => vendor.id,
-    ledgerParty: (): AnyPgColumn => ledgerParty.id,
-  }),
-  (table) => [
-    shortcodeUnique("VendorAccount", table.shortcode),
-    entityIdentityFk("VendorAccount", table),
-    uniqueIndex("VendorAccount_vendor_member_key")
-      .on(table.vendorId, table.ledgerPartyId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("VendorAccount_vendorId_idx").on(table.vendorId),
-    index("VendorAccount_ledgerPartyId_idx").on(table.ledgerPartyId),
-    check(
-      "VendorAccount_status_check",
-      sql`${table.status} IN ('active', 'paused_auth', 'paused_offline', 'disabled')`,
-    ),
-    check(
-      "VendorAccount_browser_check",
-      sql`${table.browser} IN ('chrome', 'safari')`,
-    ),
-  ],
-);
-
-/** One install of the native companion app. */
-export const device = pgTable(
-  "Device",
-  generatedDeviceColumns({
-    ledgerParty: (): AnyPgColumn => ledgerParty.id,
-    product: (): AnyPgColumn => product.id,
-  }),
-  (table) => [
-    shortcodeUnique("Device", table.shortcode),
-    entityIdentityFk("Device", table),
-    uniqueIndex("Device_installationId_key")
-      .on(table.installationId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("Device_ledgerPartyId_idx").on(table.ledgerPartyId),
-    index("Device_productId_idx").on(table.productId),
-    check("Device_platform_check", sql`${table.platform} IN ('ios', 'macos')`),
-  ],
-);
-
 /** One report of a stored Image appearing in a member's photo library or
  * cloud asset; see ADR 0005. A child of its Image, not an entity: it has no
  * shortcode or identity row, and its audit history lives on the Image. */
@@ -1464,145 +952,6 @@ export const imageSighting = pgTable(
       "ImageSighting_matchKind_check",
       sql`${table.matchKind} IN ('import', 'libraryMatch')`,
     ),
-  ],
-);
-
-/**
- * One vendor order, receipt, or deliberately separate purchase event — the home
- * for vendor-side truth (literal stated total, documents, and identity).
- *
- * **No money is summed from this table.** Spend is `SUM(expense.cost)`.
- */
-export const purchase = pgTable(
-  "Purchase",
-  {
-    ...generatedPurchaseColumns({
-      project: (): AnyPgColumn => project.id,
-      vendor: (): AnyPgColumn => vendor.id,
-      vendorAccount: (): AnyPgColumn => vendorAccount.id,
-    }),
-    runId: uuid("runId").references((): AnyPgColumn => run.id),
-  },
-  (table) => [
-    shortcodeUnique("Purchase", table.shortcode),
-    entityIdentityFk("Purchase", table),
-    // One order = one purchase. PARTIAL on `orderId IS NOT NULL`, which is what
-    // lets the many `(vendorId, null)` purchase events coexist. This index is
-    // also what makes `findOrCreatePurchase` unambiguous
-    // (no "which purchase?" branch on the import hot path) and why no
-    // `splitPurchase` operation is needed at all.
-    uniqueIndex("Purchase_vendorId_orderId_key")
-      .on(table.vendorId, table.orderId)
-      .where(sql`${table.orderId} IS NOT NULL AND ${table.deletedAt} IS NULL`),
-    index("Purchase_defaultProjectId_idx").on(table.defaultProjectId),
-    index("Purchase_vendorId_idx").on(table.vendorId),
-    index("Purchase_vendorAccountId_idx").on(table.vendorAccountId),
-    index("Purchase_runId_idx").on(table.runId),
-    index("Purchase_date_idx").on(table.date),
-    check(
-      "Purchase_statedTotal_whole_cent_check",
-      sql`${table.statedTotal} IS NULL OR abs(${table.statedTotal} * 100 - round(${table.statedTotal} * 100)) < 0.0000001`,
-    ),
-    index("Purchase_orderId_gin_idx").using(
-      "gin",
-      sql`${table.orderId} gin_trgm_ops`,
-    ),
-    index("Purchase_displayLabel_gin_idx").using(
-      "gin",
-      sql`${table.displayLabel} gin_trgm_ops`,
-    ),
-  ],
-);
-
-/** One durable attempt to discover, fetch, extract, write, and audit evidence. */
-export const run = pgTable(
-  "Run",
-  {
-    ...generatedRunColumns({
-      ledgerParty: (): AnyPgColumn => ledgerParty.id,
-      vendorAccount: (): AnyPgColumn => vendorAccount.id,
-      vendor: (): AnyPgColumn => vendor.id,
-    }),
-    // The actor snapshot, the run's own lineage, dispatch fencing and the
-    // history walk are operational state outside the manifest.
-    actorUserId: text("actorUserId")
-      .notNull()
-      .$type<UserId>()
-      .references(() => user.id),
-    actorEmail: text("actorEmail").notNull(),
-    // Null when the actor has no member party (the system user).
-    actorLedgerPartyShortcode: text("actorLedgerPartyShortcode"),
-    actorLedgerPartyName: text("actorLedgerPartyName"),
-    actorLedgerPartyKind: text("actorLedgerPartyKind"),
-    predecessorRunId: uuid("predecessorRunId")
-      .$type<RunId>()
-      .references((): AnyPgColumn => run.id),
-    /** Stable queue generation; duplicate and late deliveries are fenced to it. */
-    dispatchEventId: text("dispatchEventId"),
-    agentSessionId: text("agentSessionId"),
-    /** The order-history page the walk resumes from; null before the first listing. */
-    historyCursorUrl: text("historyCursorUrl"),
-    /** Set when a listing had no next page or predated the account cursor. */
-    historyExhaustedAt: timestamp("historyExhaustedAt", { mode: "date" }),
-    // Caller attribution for the work the run groups (see `ActorContext`).
-    channel: text("channel").notNull().$type<AuditChannel>().default("web"),
-    // Deliberately not FKs, like `McpToolCall.clientId`: a run keeps naming
-    // the client and install that started it after either is removed.
-    oauthClientId: text("oauthClientId"),
-    deviceId: uuid("deviceId").$type<DeviceId>(),
-    /** Client-minted grouping key, e.g. one Jev pass per page mount. */
-    clientKey: text("clientKey"),
-    /** What the run was asked to do; the shape belongs to its purpose. */
-    input: jsonb("input").$type<RunInput>(),
-    /** Resumable position within `input`; the shape belongs to its purpose. */
-    progress: jsonb("progress").$type<RunProgress>(),
-  },
-  (table) => [
-    shortcodeUnique("Run", table.shortcode),
-    entityIdentityFk("Run", table),
-    index("Run_party_started_idx").on(
-      table.ledgerPartyId,
-      table.startedAt.desc(),
-    ),
-    index("Run_vendorAccount_started_idx").on(
-      table.vendorAccountId,
-      table.startedAt.desc(),
-    ),
-    check(
-      "Run_trigger_check",
-      sql`${table.trigger} IN ('foreground', 'discovery', 'manual', 'backfill', 'ephemeral')`,
-    ),
-    check(
-      "Run_import_party_check",
-      sql`${table.purpose} NOT IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory') OR (${table.ledgerPartyId} IS NOT NULL AND ${table.actorLedgerPartyShortcode} IS NOT NULL)`,
-    ),
-    check(
-      "Run_channel_check",
-      sql`${table.channel} IN ('web', 'api', 'mcp', 'caldav', 'system')`,
-    ),
-    uniqueIndex("Run_clientKey_unique")
-      .on(table.clientKey)
-      .where(sql`${table.clientKey} IS NOT NULL`),
-    check(
-      "Run_status_check",
-      sql`${table.status} IN ('running', 'paused_auth', 'paused_offline', 'paused_approval', 'needs_review', 'completed', 'failed', 'dispatch_failed')`,
-    ),
-    check(
-      "Run_purpose_check",
-      sql`${table.purpose} IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'background', 'file_import', 'mail_search')`,
-    ),
-    check(
-      "Run_photo_inventory_no_vendor_check",
-      sql`${table.purpose} <> 'photo_inventory' OR ${table.vendorAccountId} IS NULL`,
-    ),
-    uniqueIndex("Run_dispatch_event_unique")
-      .on(table.dispatchEventId)
-      .where(sql`${table.dispatchEventId} IS NOT NULL`),
-    uniqueIndex("Run_one_active_vendor_account_key")
-      .on(table.vendorAccountId)
-      .where(
-        sql`${table.vendorAccountId} IS NOT NULL AND ${table.status} IN ('running', 'paused_auth', 'paused_offline', 'paused_approval')`,
-      ),
   ],
 );
 
@@ -2367,48 +1716,6 @@ export const purchasePaymentEvidence = pgTable(
   ],
 );
 
-/**
- * A settlement-side event. Amounts are evidence only: they never participate
- * in spend/project/calendar rollups, which remain derived from Expense.cost.
- */
-export const financialTransaction = pgTable(
-  "FinancialTransaction",
-  generatedFinancialTransactionColumns({
-    financialAccount: (): AnyPgColumn => financialAccount.id,
-    ledgerTransfer: (): AnyPgColumn => ledgerTransfer.id,
-  }),
-  (table) => [
-    shortcodeUnique("FinancialTransaction", table.shortcode),
-    entityIdentityFk("FinancialTransaction", table),
-    index("FinancialTransaction_accountId_idx").on(table.accountId),
-    index("FinancialTransaction_ledgerTransferId_idx").on(
-      table.ledgerTransferId,
-    ),
-    uniqueIndex("FinancialTransaction_ledgerTransferId_positive_evidence_key")
-      .on(table.ledgerTransferId)
-      .where(
-        sql`${table.deletedAt} IS NULL AND ${table.ledgerTransferId} IS NOT NULL AND ${table.amount} > 0`,
-      ),
-    uniqueIndex("FinancialTransaction_ledgerTransferId_negative_evidence_key")
-      .on(table.ledgerTransferId)
-      .where(
-        sql`${table.deletedAt} IS NULL AND ${table.ledgerTransferId} IS NOT NULL AND ${table.amount} < 0`,
-      ),
-    index("FinancialTransaction_kind_idx").on(table.kind),
-    index("FinancialTransaction_status_idx").on(table.status),
-    index("FinancialTransaction_transactionDate_idx").on(table.transactionDate),
-    index("FinancialTransaction_postedDate_idx").on(table.postedDate),
-    check(
-      "FinancialTransaction_amount_whole_cent_check",
-      sql`${table.amount} <> 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
-    ),
-    check(
-      "FinancialTransaction_posted_date_check",
-      sql`${table.status} <> 'posted' OR ${table.postedDate} IS NOT NULL`,
-    ),
-  ],
-);
-
 export const financialTransactionAllocation = pgTable(
   "FinancialTransactionAllocation",
   {
@@ -2450,25 +1757,6 @@ export const financialTransactionAllocation = pgTable(
     check(
       "FinancialTransactionAllocation_amount_whole_cent_check",
       sql`${table.amount} <> 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
-    ),
-  ],
-);
-
-/** A durable movement between ledger parties; it is never spend. */
-export const ledgerTransfer = pgTable(
-  "LedgerTransfer",
-  generatedLedgerTransferColumns({
-    ledgerParty: (): AnyPgColumn => ledgerParty.id,
-  }),
-  (table) => [
-    shortcodeUnique("LedgerTransfer", table.shortcode),
-    entityIdentityFk("LedgerTransfer", table),
-    index("LedgerTransfer_fromPartyId_idx").on(table.fromPartyId),
-    index("LedgerTransfer_toPartyId_idx").on(table.toPartyId),
-    index("LedgerTransfer_date_idx").on(table.date),
-    check(
-      "LedgerTransfer_amount_whole_cent_check",
-      sql`${table.amount} > 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
     ),
   ],
 );
@@ -2644,64 +1932,6 @@ export const statementRow = pgTable(
   ],
 );
 
-export const expense = pgTable(
-  "Expense",
-  generatedExpenseColumns({
-    project: (): AnyPgColumn => project.id,
-    product: (): AnyPgColumn => product.id,
-    purchase: (): AnyPgColumn => purchase.id,
-  }),
-  (table) => [
-    shortcodeUnique("Expense", table.shortcode),
-    entityIdentityFk("Expense", table),
-    // Apply explicitly in production: drizzle-kit push does not diff CHECKs.
-    check(
-      "Expense_date_cost_check",
-      sql`${table.date} IS NOT NULL OR (${table.cost} IS NOT NULL AND ${table.cost} = 0)`,
-    ),
-    check(
-      "Expense_live_charge_assignment_check",
-      sql`${table.deletedAt} IS NOT NULL OR ${table.lineKind} = 'principal' OR (${table.projectId} IS NULL AND ${table.purchaseId} IS NOT NULL)`,
-    ),
-    index("Expense_projectId_idx").on(table.projectId),
-    index("Expense_productId_idx").on(table.productId),
-    index("Expense_date_idx").on(table.date),
-    index("Expense_costType_idx").on(table.costType),
-    index("Expense_lineKind_idx").on(table.lineKind),
-    index("Expense_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
-    index("Expense_purchaseId_idx").on(table.purchaseId),
-    check(
-      "Expense_cost_whole_cent_check",
-      sql`${table.cost} IS NULL OR abs(${table.cost} * 100 - round(${table.cost} * 100)) < 0.0000001`,
-    ),
-    // Signed; zero only where the money is known to be negative — see the
-    // ledger rule on `productQuantity`.
-    //
-    // The `cost IS NOT NULL` guard is load-bearing and is NOT redundant with
-    // `cost < 0`. A CHECK rejects only on FALSE, and for an unclassified row
-    // `NULL < 0` is NULL, so `(0 <> 0 OR NULL)` is NULL and the row would be
-    // ADMITTED — quietly allowing the one shape the rule above forbids. The
-    // guard collapses that NULL to FALSE. (Found in review on #772, where the
-    // first version of this constraint had exactly that hole.)
-    //
-    // NOTE: `drizzle-kit push` does NOT diff CHECK constraints, so editing this
-    // line changes tests (the template is built from schema.ts) and nothing
-    // else. A change here must be applied to production by hand and read back
-    // from `pg_constraint`.
-    check(
-      "Expense_productQuantity_check",
-      sql`${table.productQuantity} IS NULL OR (${table.productId} IS NOT NULL AND (${table.productQuantity} <> 0 OR (${table.cost} IS NOT NULL AND ${table.cost} < 0)))`,
-    ),
-    // NOTE: `drizzle-kit push` does not diff CHECK constraints (see the longer
-    // note on FinancialTransaction_purchase_settlement_check above). This one
-    // requires the same hand-applied ALTER + pg_constraint read-back.
-    check(
-      "Expense_lineKind_productId_check",
-      sql`${table.lineKind} = 'principal' OR ${table.productId} IS NULL`,
-    ),
-  ],
-);
-
 /** Unitless beneficiary/funder weights. Money remains solely on Expense.cost. */
 export const expenseAttribution = pgTable(
   "ExpenseAttribution",
@@ -2803,38 +2033,6 @@ export const ledgerSourceClaim = pgTable(
   ],
 );
 
-export const recipeRelations = relations(recipe, ({ one, many }) => ({
-  sections: many(recipeSection),
-  externalIds: many(entityExternalId, { relationName: "recipeExternalIds" }),
-  pointerIngredient: one(ingredient, {
-    fields: [recipe.id],
-    references: [ingredient.recipeId],
-  }),
-  cookbook: one(cookbook, {
-    fields: [recipe.cookbookId],
-    references: [cookbook.id],
-  }),
-  forkedFrom: one(recipe, {
-    fields: [recipe.forkedFromRecipeId],
-    references: [recipe.id],
-    relationName: "RecipeForkedFrom",
-  }),
-  forks: many(recipe, {
-    relationName: "RecipeForkedFrom",
-  }),
-  images: many(entityAttachment),
-  mealRecipes: many(mealRecipe),
-}));
-
-export const cookbookRelations = relations(cookbook, ({ one, many }) => ({
-  recipes: many(recipe),
-  attachments: many(entityAttachment),
-  product: one(product, {
-    fields: [cookbook.productId],
-    references: [product.id],
-  }),
-}));
-
 export const recipeSectionRelations = relations(
   recipeSection,
   ({ one, many }) => ({
@@ -2845,17 +2043,6 @@ export const recipeSectionRelations = relations(
     ingredients: many(recipeSectionIngredient),
   }),
 );
-
-export const ingredientRelations = relations(ingredient, ({ one, many }) => ({
-  recipe: one(recipe, {
-    fields: [ingredient.recipeId],
-    references: [recipe.id],
-  }),
-  recipeSectionIngredient: many(recipeSectionIngredient),
-  product: many(product, { relationName: "ProductIngredient" }),
-  plants: many(plant),
-  mealFoodEntries: many(mealFoodEntry),
-}));
 
 export const recipeSectionIngredientRelations = relations(
   recipeSectionIngredient,
@@ -2870,13 +2057,6 @@ export const recipeSectionIngredientRelations = relations(
     }),
   }),
 );
-
-export const mealRelations = relations(meal, ({ many }) => ({
-  recipes: many(mealRecipe),
-  recipePortions: many(mealRecipePortion),
-  foodEntries: many(mealFoodEntry),
-  images: many(entityAttachment),
-}));
 
 export const mealRecipeRelations = relations(mealRecipe, ({ one, many }) => ({
   meal: one(meal, {
@@ -2927,35 +2107,6 @@ export const mealFoodEntryRelations = relations(mealFoodEntry, ({ one }) => ({
   }),
 }));
 
-export const productRelations = relations(product, ({ one, many }) => ({
-  category: one(productCategory, {
-    fields: [product.categoryId],
-    references: [productCategory.id],
-  }),
-  ingredient: one(ingredient, {
-    fields: [product.ingredientId],
-    references: [ingredient.id],
-    relationName: "ProductIngredient",
-  }),
-  growsPlant: one(plant, {
-    fields: [product.growsPlantId],
-    references: [plant.id],
-  }),
-  unitMappings: many(productUnitMappings),
-  mealFoodEntries: many(mealFoodEntry),
-  conversionCoverage: one(productConversionCoverage),
-  externalIds: many(entityExternalId, { relationName: "productExternalIds" }),
-  inventoryEntry: many(inventoryEntry),
-  images: many(entityAttachment),
-  expenses: many(expense),
-  // Locations that ARE an instance of this product (a bin, tote, rack).
-  // Distinct from `inventoryEntry`, which is stock held AT a location.
-  locations: many(location),
-  // Cookbooks whose physical copy this product is. `many` only because Drizzle
-  // models the reverse of a nullable FK that way — in practice it's 0 or 1.
-  cookbooks: many(cookbook),
-}));
-
 export const entityExternalIdRelations = relations(
   entityExternalId,
   ({ one }) => ({
@@ -2997,80 +2148,6 @@ export const productConversionCoverageRelations = relations(
     }),
   }),
 );
-
-export const locationRelations = relations(location, ({ one, many }) => ({
-  parent: one(location, {
-    fields: [location.parentId],
-    references: [location.id],
-    relationName: "LocationToLocation",
-  }),
-  children: many(location, {
-    relationName: "LocationToLocation",
-  }),
-  inventoryEntries: many(inventoryEntry),
-  images: many(entityAttachment),
-  product: one(product, {
-    fields: [location.productId],
-    references: [product.id],
-  }),
-  plantings: many(planting),
-  gardenEntries: many(gardenEntry),
-}));
-
-export const plantRelations = relations(plant, ({ one, many }) => ({
-  ingredient: one(ingredient, {
-    fields: [plant.ingredientId],
-    references: [ingredient.id],
-  }),
-  plantings: many(planting),
-  products: many(product),
-}));
-
-export const plantingRelations = relations(planting, ({ one }) => ({
-  plant: one(plant, {
-    fields: [planting.plantId],
-    references: [plant.id],
-  }),
-  sourceProduct: one(product, {
-    fields: [planting.sourceProductId],
-    references: [product.id],
-  }),
-  location: one(location, {
-    fields: [planting.locationId],
-    references: [location.id],
-  }),
-  task: one(task, {
-    fields: [planting.taskId],
-    references: [task.id],
-  }),
-}));
-
-export const gardenEntryRelations = relations(gardenEntry, ({ one, many }) => ({
-  location: one(location, {
-    fields: [gardenEntry.locationId],
-    references: [location.id],
-  }),
-  images: many(entityAttachment),
-}));
-
-export const inventoryEntryRelations = relations(inventoryEntry, ({ one }) => ({
-  owner: one(ledgerParty, {
-    fields: [inventoryEntry.ownerLedgerPartyId],
-    references: [ledgerParty.id],
-  }),
-  product: one(product, {
-    fields: [inventoryEntry.productId],
-    references: [product.id],
-  }),
-  location: one(location, {
-    fields: [inventoryEntry.locationId],
-    references: [location.id],
-  }),
-}));
-
-export const imageRelations = relations(image, ({ many }) => ({
-  attachments: many(entityAttachment),
-}));
 
 /**
  * One relation per subject kind; ids are unique across entity tables, so a
@@ -3126,69 +2203,6 @@ export const entityAttachmentRelations = relations(
   }),
 );
 
-export const projectRelations = relations(project, ({ one, many }) => ({
-  tasks: many(task),
-  expenses: many(expense),
-  images: many(entityAttachment),
-  parentProject: one(project, {
-    fields: [project.parentProjectId],
-    references: [project.id],
-    relationName: "ProjectToProject",
-  }),
-  childProjects: many(project, {
-    relationName: "ProjectToProject",
-  }),
-}));
-
-export const taskRelations = relations(task, ({ one, many }) => ({
-  project: one(project, {
-    fields: [task.projectId],
-    references: [project.id],
-  }),
-  subjectProduct: one(product, {
-    fields: [task.subjectProductId],
-    references: [product.id],
-  }),
-  parentTask: one(task, {
-    fields: [task.parentTaskId],
-    references: [task.id],
-    relationName: "TaskToTask",
-  }),
-  subtasks: many(task, {
-    relationName: "TaskToTask",
-  }),
-  images: many(entityAttachment),
-}));
-
-export const expenseRelations = relations(expense, ({ one, many }) => ({
-  purchase: one(purchase, {
-    fields: [expense.purchaseId],
-    references: [purchase.id],
-  }),
-  project: one(project, {
-    fields: [expense.projectId],
-    references: [project.id],
-  }),
-  product: one(product, {
-    fields: [expense.productId],
-    references: [product.id],
-  }),
-  attributions: many(expenseAttribution),
-  sourceClaims: many(ledgerSourceClaim),
-}));
-
-export const ledgerPartyRelations = relations(ledgerParty, ({ many }) => ({
-  accounts: many(financialAccount),
-  attributions: many(expenseAttribution),
-  mealRecipePortions: many(mealRecipePortion),
-  outgoingTransfers: many(ledgerTransfer, {
-    relationName: "LedgerTransferFromParty",
-  }),
-  incomingTransfers: many(ledgerTransfer, {
-    relationName: "LedgerTransferToParty",
-  }),
-}));
-
 export const expenseAttributionRelations = relations(
   expenseAttribution,
   ({ one }) => ({
@@ -3217,47 +2231,6 @@ export const ledgerSourceClaimRelations = relations(
   }),
 );
 
-export const vendorRelations = relations(vendor, ({ many }) => ({
-  purchases: many(purchase),
-  attachments: many(entityAttachment),
-}));
-
-export const financialAccountRelations = relations(
-  financialAccount,
-  ({ one, many }) => ({
-    ledgerParty: one(ledgerParty, {
-      fields: [financialAccount.ledgerPartyId],
-      references: [ledgerParty.id],
-    }),
-    transactions: many(financialTransaction),
-  }),
-);
-
-export const purchaseRelations = relations(purchase, ({ one, many }) => ({
-  vendor: one(vendor, {
-    fields: [purchase.vendorId],
-    references: [vendor.id],
-  }),
-  expenses: many(expense),
-  images: many(entityAttachment),
-  settlementAllocations: many(financialTransactionAllocation),
-}));
-
-export const financialTransactionRelations = relations(
-  financialTransaction,
-  ({ one, many }) => ({
-    account: one(financialAccount, {
-      fields: [financialTransaction.accountId],
-      references: [financialAccount.id],
-    }),
-    allocations: many(financialTransactionAllocation),
-    ledgerTransfer: one(ledgerTransfer, {
-      fields: [financialTransaction.ledgerTransferId],
-      references: [ledgerTransfer.id],
-    }),
-  }),
-);
-
 export const financialTransactionAllocationRelations = relations(
   financialTransactionAllocation,
   ({ one }) => ({
@@ -3269,24 +2242,6 @@ export const financialTransactionAllocationRelations = relations(
       fields: [financialTransactionAllocation.purchaseId],
       references: [purchase.id],
     }),
-  }),
-);
-
-export const ledgerTransferRelations = relations(
-  ledgerTransfer,
-  ({ one, many }) => ({
-    fromParty: one(ledgerParty, {
-      fields: [ledgerTransfer.fromPartyId],
-      references: [ledgerParty.id],
-      relationName: "LedgerTransferFromParty",
-    }),
-    toParty: one(ledgerParty, {
-      fields: [ledgerTransfer.toPartyId],
-      references: [ledgerParty.id],
-      relationName: "LedgerTransferToParty",
-    }),
-    evidenceTransactions: many(financialTransaction),
-    sourceClaims: many(ledgerSourceClaim),
   }),
 );
 

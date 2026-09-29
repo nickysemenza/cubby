@@ -676,6 +676,16 @@ export default defineEntity({
     output: { module: "@cubby/schemas/project", export: "taskOut" },
     list: { module: "@cubby/schemas/project", export: "taskListItemOut" },
   },
+  storage: {
+    indexes: [{ on: ["status"] }, { on: ["dueDate"] }],
+    relations: {
+      project: "projectId",
+      subjectProduct: "subjectProductId",
+      parentTask: { field: "parentTaskId", relationName: "TaskToTask" },
+      subtasks: { many: "task", relationName: "TaskToTask" },
+      images: { many: "entityAttachment" },
+    },
+  },
   filters: {
     audit: true,
     schema: { module: "@cubby/schemas/project", export: "taskFilterFields" },

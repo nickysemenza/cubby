@@ -260,6 +260,18 @@ export default defineEntity({
     list: { module: "@cubby/schemas/recipe", export: "cookbookSummary" },
     detail: { module: "@cubby/schemas/recipe", export: "cookbookSummary" },
   },
+  storage: {
+    indexes: [
+      { on: ["name"], unique: true, where: "{deletedAt} IS NULL" },
+      { on: ["createdAt"] },
+      { trigram: "name" },
+    ],
+    relations: {
+      recipes: { many: "recipe" },
+      attachments: { many: "entityAttachment" },
+      product: "productId",
+    },
+  },
   filters: { descriptors: [] },
   relations: [
     {

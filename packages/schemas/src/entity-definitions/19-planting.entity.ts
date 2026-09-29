@@ -539,6 +539,15 @@ export default defineEntity({
     output: { module: "@cubby/schemas/planting", export: "plantingOut" },
     list: { module: "@cubby/schemas/planting", export: "plantingListItemOut" },
   },
+  storage: {
+    indexes: [{ on: ["status"] }],
+    relations: {
+      plant: "plantId",
+      sourceProduct: "sourceProductId",
+      location: "locationId",
+      task: "taskId",
+    },
+  },
   filters: {
     audit: true,
     schema: {

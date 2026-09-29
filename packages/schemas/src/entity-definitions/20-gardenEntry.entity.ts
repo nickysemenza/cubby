@@ -328,6 +328,13 @@ export default defineEntity({
       export: "gardenEntryListItemOut",
     },
   },
+  storage: {
+    indexes: [{ on: ["observedOn"] }],
+    relations: {
+      location: "locationId",
+      images: { many: "entityAttachment" },
+    },
+  },
   filters: {
     audit: true,
     schema: {

@@ -6,7 +6,7 @@ import { defineEntityChecks } from "../registry";
 
 type Expense = typeof expense;
 
-// `costType` is `NOT NULL` at the DB level (entity-columns.gen.ts) and
+// `costType` is `NOT NULL` at the DB level (entity-tables.gen.ts) and
 // required (non-nullable, no default) in the create schema — every line,
 // regardless of `lineKind`, always carries one of materials/tools/services.
 // A `costType`-missing check can never fire for any live row, so this entity

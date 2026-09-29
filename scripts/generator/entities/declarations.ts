@@ -273,6 +273,60 @@ export type EntityFieldModel = Readonly<{
   sort: EntityFieldModelSort | null;
   intents: EntityEditIntents | null;
 }>;
+/** An operational column the table stores with no model field. */
+export type EntityTableColumn = Readonly<{
+  key: string;
+  kind: "text" | "identifier" | "timestamp" | "json";
+  notNull: boolean;
+  defaultValue: string | null;
+  /** An entity key, or `user`. */
+  reference: string | null;
+  type: SourceRef | null;
+}>;
+/** SQL with `{columnKey}` placeholders the renderer binds to table columns. */
+export type EntityTableSql = string;
+export type EntityTableIndex = Readonly<{
+  name: string;
+  unique: boolean;
+  using: "btree" | "gin";
+  on: readonly Readonly<
+    { column: string; desc: boolean } | { sql: EntityTableSql }
+  >[];
+  where: EntityTableSql | null;
+}>;
+export type EntityTableCheck = Readonly<{
+  name: string;
+  sql: EntityTableSql;
+  /** Verbatim SQL with bare `"column"` identifiers (`sql.raw`), no placeholders. */
+  bare: boolean;
+}>;
+export type EntityTableRelation = Readonly<
+  | {
+      kind: "one";
+      name: string;
+      /** A Drizzle table export, or the entity a reference column names. */
+      target: Readonly<{ table: string } | { entity: string }>;
+      fields: readonly string[];
+      references: readonly string[];
+      relationName: string | null;
+    }
+  | {
+      kind: "many";
+      name: string;
+      target: Readonly<{ table: string }>;
+      relationName: string | null;
+    }
+>;
+export type CompiledEntityTable = Readonly<{
+  /** The SQL table name. */
+  name: string;
+  /** The Drizzle export (`lowerFirst(name)`): `inventoryEntry`, `product`. */
+  exportName: string;
+  columns: readonly EntityTableColumn[];
+  indexes: readonly EntityTableIndex[];
+  checks: readonly EntityTableCheck[];
+  relations: readonly EntityTableRelation[];
+}>;
 export type CompiledPresentation = CompiledEntityPresentation;
 export type CompiledEntity = Readonly<{
   key: string;
@@ -318,6 +372,8 @@ export type CompiledEntity = Readonly<{
     merge: OperationOwner;
   }>;
   fieldModel: EntityFieldModel;
+  /** The entity's own table, or null for a table-less entity (usda-food). */
+  table: CompiledEntityTable | null;
   /** `capabilities.dataQuality`, or null for an unscored entity. */
   dataQuality: Readonly<{
     checks: readonly Readonly<{

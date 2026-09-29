@@ -14,7 +14,7 @@ import {
 
 /**
  * Value-set columns that used to be pgEnums are text with a CHECK built from
- * the `packages/schemas` value arrays (`enumCheck` in schema.ts). The database
+ * the declared value sets (`storage.checks` in each entity declaration). The database
  * must keep refusing a value outside the set, whichever path writes it.
  */
 describe("text + CHECK value sets", () => {

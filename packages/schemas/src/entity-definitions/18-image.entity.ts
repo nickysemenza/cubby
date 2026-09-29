@@ -626,6 +626,23 @@ export default defineEntity({
       export: "imageWithEntitySchema",
     },
   },
+  storage: {
+    indexes: [
+      { on: ["key"], unique: true, where: "{deletedAt} IS NULL" },
+      { on: ["createdAt"] },
+      { on: ["status"] },
+    ],
+    checks: [
+      { column: "status" },
+      { column: "renderStatus" },
+      { column: "storageStatus" },
+      {
+        name: "Image_perceptualHash_format_check",
+        sql: "{perceptualHash} IS NULL OR {perceptualHash} ~ '^[0-9a-f]{16}$'",
+      },
+    ],
+    relations: { attachments: { many: "entityAttachment" } },
+  },
   filters: {
     schema: { module: "@cubby/schemas/image", export: "imageFilterFields" },
     descriptors: [

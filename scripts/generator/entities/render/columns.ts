@@ -1,14 +1,11 @@
-import { compactLiteral, generatedHeader } from "../../artifacts.ts";
+import { compactLiteral } from "../../artifacts.ts";
 import type {
   CompiledEntity,
   DeclarationValue,
   EntityStorageField,
 } from "../declarations.ts";
 
-const entityColumnFunctionName = (entity: string) =>
-  `generated${entity[0]?.toUpperCase() ?? ""}${entity.slice(1).replaceAll("-", "")}Columns`;
-
-const identifierTypeNames = {
+export const identifierTypeNames = {
   cookbook: "CookbookId",
   device: "DeviceId",
   plant: "PlantId",
@@ -107,10 +104,15 @@ const literalDefaultExpression = (value: DeclarationValue): string => {
   return compactLiteral(value);
 };
 
+/**
+ * One model storage column as a Drizzle column builder. `reference` renders
+ * the FK target thunk for a referenced entity key.
+ */
 // oxlint-disable-next-line eslint/complexity -- Ordered branches mirror the finite storage-column DSL.
-const renderStorageColumn = (
+export const renderStorageColumn = (
   entity: CompiledEntity,
   field: EntityStorageField,
+  reference: (entity: string) => string,
 ): string => {
   const column = JSON.stringify(field.column);
   if (field.specialized === "amount-columns") {
@@ -135,6 +137,9 @@ const renderStorageColumn = (
         ? `uuid(${column}).primaryKey().default(sql\`gen_random_uuid()\`)`
         : `uuid(${column}).primaryKey().default(sql\`gen_random_uuid()\`).$type<${ownIdType}>()`;
   } else if (field.key === "shortcode") {
+    // The public id (`PRD-4K7M`). Deliberately NOT branded: generic Drizzle
+    // table unions erase the entity correlation on inserts and comparisons,
+    // so repository mappers validate it through per-entity shortcode schemas.
     expression = `text(${column}).notNull()`;
   } else if (field.kind === "identifier") {
     expression = `uuid(${column})`;
@@ -183,55 +188,26 @@ const renderStorageColumn = (
   if (field.specialized === "updated-at")
     expression += ".$onUpdate(() => new Date())";
   if (field.reference !== null)
-    expression += `.references(references[${JSON.stringify(field.reference)}])`;
+    expression += `.references(${reference(field.reference)})`;
   return `${JSON.stringify(field.key)}:${expression}`;
 };
 
-export const renderEntityColumnsArtifact = (
-  entities: readonly CompiledEntity[],
-): string => {
-  const columnModels = entities.filter(
-    (entity) => entity.fieldModel.storage.length > 0,
-  );
-  const functions = columnModels
-    .map((entity) => {
-      const references = [
-        ...new Set(
-          entity.fieldModel.storage.flatMap((field) =>
-            field.reference === null ? [] : [field.reference],
-          ),
-        ),
-      ].sort();
-      const parameter =
-        references.length === 0
-          ? ""
-          : `references: Readonly<{${references.map((reference) => `${JSON.stringify(reference)}: () => AnyPgColumn`).join(";")}}>`;
-      return `export const ${entityColumnFunctionName(entity.key)} = (${parameter}) => ({${entity.fieldModel.storage.map((field) => renderStorageColumn(entity, field)).join(",")}});`;
-    })
-    .join("\n\n");
-  return (
-    generatedHeader +
-    'import type { FinancialAccountCardNumber, FinancialAccountIdentity, FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";\n' +
-    `import type { ${Object.values(identifierTypeNames).sort().join(", ")} } from "@cubby/schemas/identifiers";\n` +
-    'import { imageRenderStatusValues, imageStatusValues, imageStorageStatusValues } from "@cubby/schemas/image";\n' +
-    'import type { ImageSourceFingerprint, StoredImageEmbeddedMetadata } from "@cubby/schemas/image";\n' +
-    'import type { ImageCaptureLocation, ImageProvenanceEvidence } from "@cubby/schemas/image-capture-fields";\n' +
-    'import type { CookbookExtraction, CookbookRunReport } from "@cubby/schemas/cookbook";\n' +
-    'import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";\n' +
-    'import { mealKindValues, mealTypeValues } from "@cubby/schemas/meal-classification";\n' +
-    'import type { BaseKind } from "@cubby/schemas/problems";\n' +
-    'import { productCategoryFeatureValues } from "@cubby/schemas/product-category-fields";\n' +
-    'import { costTypeValues, projectKindValues, projectStatusValues, taskStatusValues, tradeValues } from "@cubby/schemas/project";\n' +
-    'import { expenseLineBasisValues, expenseLineKindValues } from "@cubby/schemas/expense-line-kind";\n' +
-    'import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";\n' +
-    'import type { RecipeStoredMeta, RecipeYield, StoredRecipeTotals } from "@cubby/schemas/recipe-shared";\n' +
-    'import { recipeSourceValues } from "@cubby/schemas/recipe-shared";\n' +
-    'import { inventoryOwnershipModeValues } from "@cubby/schemas/inventory-ownership";\n' +
-    'import { inventoryPlacementValues } from "@cubby/shared";\n' +
-    'import { sql } from "drizzle-orm";\n' +
-    'import { type AnyPgColumn, boolean, date, doublePrecision, integer, jsonb, real, text, timestamp, uuid } from "drizzle-orm/pg-core";\n\n' +
-    "\n" +
-    functions +
-    "\n"
-  );
-};
+/** The type and value-array imports the column builders above reference. */
+export const storageColumnImports =
+  'import type { FinancialAccountCardNumber, FinancialAccountIdentity, FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";\n' +
+  `import type { ${Object.values(identifierTypeNames).sort().join(", ")} } from "@cubby/schemas/identifiers";\n` +
+  'import { imageRenderStatusValues, imageStatusValues, imageStorageStatusValues } from "@cubby/schemas/image";\n' +
+  'import type { ImageSourceFingerprint, StoredImageEmbeddedMetadata } from "@cubby/schemas/image";\n' +
+  'import type { ImageCaptureLocation, ImageProvenanceEvidence } from "@cubby/schemas/image-capture-fields";\n' +
+  'import type { CookbookExtraction, CookbookRunReport } from "@cubby/schemas/cookbook";\n' +
+  'import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";\n' +
+  'import { mealKindValues, mealTypeValues } from "@cubby/schemas/meal-classification";\n' +
+  'import type { BaseKind } from "@cubby/schemas/problems";\n' +
+  'import { productCategoryFeatureValues } from "@cubby/schemas/product-category-fields";\n' +
+  'import { costTypeValues, projectKindValues, projectStatusValues, taskStatusValues, tradeValues } from "@cubby/schemas/project";\n' +
+  'import { expenseLineBasisValues, expenseLineKindValues } from "@cubby/schemas/expense-line-kind";\n' +
+  'import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";\n' +
+  'import type { RecipeStoredMeta, RecipeYield, StoredRecipeTotals } from "@cubby/schemas/recipe-shared";\n' +
+  'import { recipeSourceValues } from "@cubby/schemas/recipe-shared";\n' +
+  'import { inventoryOwnershipModeValues } from "@cubby/schemas/inventory-ownership";\n' +
+  'import { inventoryPlacementValues } from "@cubby/shared";\n';

@@ -23,6 +23,7 @@ import { loadEntityDeclarations } from "../../../scripts/generator/entities/decl
 import { deriveImageDisplaySources } from "../../../scripts/generator/entities/derive";
 import { renderEntityArtifacts } from "../../../scripts/generator/entities/render/index";
 import { renderImagePolicyArtifacts } from "../../../scripts/generator/entities/render/image-policy";
+import { renderEntityTablesArtifact } from "../../../scripts/generator/entities/render/tables";
 import {
   generatedBrowserRouteFiles,
   handWrittenBrowserRouteFiles,
@@ -1817,5 +1818,151 @@ describe("photo categories (B1)", () => {
         garden: { classifierLabels: ["trowel"] },
       }),
     ).not.toThrow();
+  });
+});
+
+type TableStorage = NonNullable<EntityDeclaration["storage"]>;
+
+describe("entity table storage", () => {
+  const status = {
+    key: "status",
+    kind: "enum",
+    validation: { read: z.enum(["open", "done"]), create: null, update: null },
+  };
+  const loose = {
+    key: "note",
+    kind: "text",
+    nullable: true,
+    validation: { read: z.string().nullable(), create: null, update: null },
+  };
+  const betaId = {
+    key: "betaId",
+    kind: "identifier",
+    nullable: true,
+    validation: { read: null, create: null, update: null },
+  };
+  const deletedAt = {
+    key: "deletedAt",
+    kind: "timestamp",
+    nullable: true,
+    validation: { read: null, create: null, update: null },
+  };
+  const beta = { ...base, key: "beta", table: "Beta", model };
+  const alpha = (storage: TableStorage) => ({
+    ...base,
+    table: "Alpha",
+    model: {
+      ...model,
+      fields: [...model.fields, status, loose, betaId, deletedAt],
+      storage: [
+        "name",
+        "status",
+        "note",
+        { key: "betaId", reference: "beta" },
+        "deletedAt",
+      ],
+    },
+    storage,
+  });
+  const table = (storage: TableStorage) =>
+    compileEntityDeclarations([alpha(storage), beta])[0]?.table;
+  const indexNames = (storage: TableStorage) =>
+    table(storage)?.indexes.map(({ name }) => name);
+
+  // A reference column with no full index makes every FK check and join on
+  // it a sequential scan; a partial index cannot serve rows it excludes.
+  it("derives an index for each reference column unless a full index leads with it", () => {
+    expect(indexNames({})).toEqual(["Alpha_betaId_idx"]);
+    expect(
+      indexNames({
+        indexes: [
+          { on: ["betaId"], unique: true, where: "{deletedAt} IS NULL" },
+        ],
+      }),
+    ).toEqual(["Alpha_betaId_key", "Alpha_betaId_idx"]);
+    expect(
+      indexNames({
+        indexes: [{ name: "Alpha_beta_idx", on: ["betaId", "name"] }],
+      }),
+    ).toEqual(["Alpha_beta_idx"]);
+    expect(
+      indexNames({ unindexedReferences: { betaId: "never joined" } }),
+    ).toEqual([]);
+  });
+
+  it("rejects an opt-out that is not a reference or is already indexed", () => {
+    expect(() => table({ unindexedReferences: { name: "why" } })).toThrow(
+      "unindexedReferences.name is not a reference column",
+    );
+    expect(() =>
+      table({
+        indexes: [{ on: ["betaId"] }],
+        unindexedReferences: { betaId: "why" },
+      }),
+    ).toThrow("is stale: a declared full index already leads with it");
+  });
+
+  it("rejects SQL, index columns, and relations naming a column the table lacks", () => {
+    expect(() =>
+      table({ checks: [{ name: "Alpha_x_check", sql: "{missing} > 0" }] }),
+    ).toThrow("names missing, which is not a column of Alpha");
+    expect(() => table({ indexes: [{ on: ["missing"] }] })).toThrow(
+      "names missing, which is not a column of Alpha",
+    );
+    expect(() => table({ relations: { owner: "name" } })).toThrow(
+      "names name, which does not reference an entity",
+    );
+  });
+
+  it("builds a value-set check from the field's read enum and requires values otherwise", () => {
+    expect(table({ checks: [{ column: "status" }] })?.checks).toEqual([
+      {
+        name: "Alpha_status_check",
+        sql: "{status} IN ('open', 'done')",
+        bare: false,
+      },
+    ]);
+    expect(
+      table({
+        checks: [
+          { column: "note", values: ["a"], nullClause: true, bare: true },
+        ],
+      })?.checks,
+    ).toEqual([
+      {
+        name: "Alpha_note_check",
+        sql: `"note" IS NULL OR "note" IN ('a')`,
+        bare: true,
+      },
+    ]);
+    expect(() => table({ checks: [{ column: "note" }] })).toThrow(
+      "needs explicit values: note has no declared read enum",
+    );
+  });
+
+  it("binds declared SQL to table columns and emits identity, indexes, and relations", () => {
+    const source = renderEntityTablesArtifact(
+      compileEntityDeclarations([
+        alpha({
+          indexes: [
+            {
+              name: "Alpha_live_idx",
+              on: ["name"],
+              where: "{deletedAt} IS NULL",
+            },
+          ],
+          relations: { beta: "betaId", siblings: { many: "alphaSibling" } },
+        }),
+        beta,
+      ]),
+    );
+    expect(source).toContain(
+      'index("Alpha_live_idx").on(table.name).where(sql`${table.deletedAt} IS NULL`)',
+    );
+    expect(source).toContain('index("Alpha_betaId_idx").on(table.betaId)');
+    expect(source).toContain(
+      "beta: one(beta, { fields: [alpha.betaId], references: [beta.id] })",
+    );
+    expect(source).toContain('import { alphaSibling } from "../schema";');
   });
 });
