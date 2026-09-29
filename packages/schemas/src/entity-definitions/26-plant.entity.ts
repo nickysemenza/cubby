@@ -459,6 +459,7 @@ export default defineEntity({
     bulkUpdate: { fields: ["verdict", "gardenGuideKey"] },
     merge: true,
     operationOwners: { delete: "kernel", merge: "kernel" },
+    resolve: { match: ["name"], createMissing: true },
     mcp: ["get", "list", "create", "update", "delete", "bulkUpdate", "merge"],
     dataQuality: {
       checks: [

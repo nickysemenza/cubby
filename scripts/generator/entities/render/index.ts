@@ -698,15 +698,23 @@ export const renderEntityArtifacts = (
   const lifecycleFor = (entity: CompiledEntity) => entity.lifecycle;
   const kernelActionsFor = (entity: CompiledEntity) => {
     const lifecycle = lifecycleFor(entity);
-    return [
+    const reads = [
       "get",
       "list",
       ...(entity.descriptor.searchable === true ? ["search"] : []),
+    ];
+    const resolve = entity.resolve === null ? [] : ["resolve"];
+    // A read-only entity keeps its other writes in its own workflows; the
+    // kernel serves its reads and nothing else.
+    if (lifecycle.readOnly) return [...reads, ...resolve];
+    return [
+      ...reads,
       ...(entity.contract?.create ? ["create"] : []),
       ...(entity.contract?.update ? ["update"] : []),
       ...(entity.bulkUpdateFields === null ? [] : ["bulkUpdate"]),
       ...(lifecycle.delete === null ? [] : ["delete"]),
       ...(lifecycle.merge === true ? ["merge"] : []),
+      ...resolve,
     ];
   };
   const kernelContractCases = Object.fromEntries(
@@ -1232,7 +1240,7 @@ export const renderEntityArtifacts = (
         '  imageStorage: false | "gallery" | "cover" | "logo";\n' +
         "  displayImages: boolean;\n" +
         "  countable: boolean;\n" +
-        '  kernelActions: readonly ("get" | "list" | "search" | "create" | "update" | "bulkUpdate" | "delete" | "merge")[];\n' +
+        '  kernelActions: readonly ("get" | "list" | "search" | "create" | "update" | "bulkUpdate" | "delete" | "merge" | "resolve")[];\n' +
         "  filterUrlKeys: readonly string[];\n" +
         "  filterDescriptors: readonly EntityFilterDescriptorMetadata[];\n" +
         '  mcpOperations: readonly ("get" | "list" | "search" | "create" | "update" | "delete" | "bulkUpdate" | "merge")[];\n' +
@@ -1572,6 +1580,17 @@ export const renderEntityArtifacts = (
           name: "generatedSearchEntityKernelEntities",
           entries: entitiesForAction("search"),
           comment: "// Generated action rosters stay one line each.",
+        }) +
+        `export const generatedResolveEntityKernelEntities = ${compactLiteral(entitiesForAction("resolve"))} as const;\n` +
+        "\n" +
+        renderRecord({
+          name: "generatedEntityResolveCapabilities",
+          entries: Object.fromEntries(
+            kernelEntities.flatMap((entity) =>
+              entity.resolve === null ? [] : [[entity.key, entity.resolve]],
+            ),
+          ),
+          comment: "// Declared `capabilities.resolve`, one entity per line.",
         }) +
         `export const generatedMergeEntityKernelEntities = ${compactLiteral(entitiesForAction("merge"))} as const;\n`,
     },

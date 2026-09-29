@@ -368,6 +368,9 @@ export default defineEntity({
     bulkUpdate: null,
     merge: false,
     operationOwners: { delete: "workflow", merge: null },
+    // Born only from an EPUB import and deleted with its recipes by that
+    // import workflow; the kernel serves its reads.
+    lifecycle: "readOnly",
     mcp: ["list"],
     dataQuality: {
       checks: [

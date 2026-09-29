@@ -1273,6 +1273,56 @@ const validateTitleField = (
 const HAND_WRITTEN_DETAIL_ROUTES = new Set(["recipe", "usda-food"]);
 
 /**
+ * `lifecycle: "readOnly"` declares no write capability, and a declared
+ * `resolve` matches names over the entity's own stored text columns; it may
+ * create only where a create contract exists.
+ */
+const validateLifecycleAndResolve = (
+  declaration: EntityDeclarationMetadata,
+  fieldModel: EntityFieldModel,
+  hasShortcode: boolean,
+  context: string,
+) => {
+  const { capabilities, fields } = declaration;
+  const readOnly = capabilities.lifecycle === "readOnly";
+  if (
+    readOnly &&
+    (fields?.create != null ||
+      fields?.update != null ||
+      capabilities.bulkUpdate !== null ||
+      capabilities.merge)
+  )
+    throw new EntityDeclarationError(
+      `${context}.capabilities.lifecycle is readOnly but the entity declares a create, update, bulkUpdate or merge capability.`,
+    );
+  const { resolve } = capabilities;
+  if (resolve === null) return;
+  if (!hasShortcode)
+    throw new EntityDeclarationError(
+      `${context}.capabilities.resolve needs a shortcode entity.`,
+    );
+  if (resolve.createMissing && (fields?.create == null || readOnly))
+    throw new EntityDeclarationError(
+      `${context}.capabilities.resolve.createMissing needs a create contract.`,
+    );
+  const stored = new Map(
+    fieldModel.storage.map((entry) => [entry.key, entry.kind] as const),
+  );
+  for (const column of [...resolve.match, ...resolve.scope])
+    if (!stored.has(column))
+      throw new EntityDeclarationError(
+        `${context}.capabilities.resolve names ${column}, which is not a stored field.`,
+      );
+  for (const column of resolve.match) {
+    const kind = stored.get(column);
+    if (kind !== "text" && kind !== "text-array")
+      throw new EntityDeclarationError(
+        `${context}.capabilities.resolve.match ${column} is ${String(kind)}; only text and text-array columns match names.`,
+      );
+  }
+};
+
+/**
  * A route defaults to generated list and detail pages over the
  * generic renderers, which read the kernel's list/detail projections: the
  * detail roster is every entity with create and update contracts, the list
@@ -1619,6 +1669,12 @@ export const compileEntity = (
           ],
   );
   const bulkUpdateFields = declaration.capabilities.bulkUpdate?.fields ?? null;
+  validateLifecycleAndResolve(
+    declaration,
+    fieldModel,
+    shortcode !== null,
+    context,
+  );
   return {
     key,
     overrides: collectEntityOverrides(raw),
@@ -1641,7 +1697,9 @@ export const compileEntity = (
       softDelete: declaration.capabilities.softDelete,
       delete: declaration.capabilities.delete,
       merge: declaration.capabilities.merge,
+      readOnly: declaration.capabilities.lifecycle === "readOnly",
     },
+    resolve: declaration.capabilities.resolve,
     mcpActions: declaration.capabilities.mcp,
     operationOwners,
     fieldModel,
