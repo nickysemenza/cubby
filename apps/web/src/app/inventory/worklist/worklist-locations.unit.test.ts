@@ -13,7 +13,7 @@ describe("locationIdsHoldingProducts", () => {
       },
       { inventoryEntry: [{ placement: "stock", location: { id: "LOC-A" } }] },
     ]);
-    expect([...ids].toSorted()).toEqual(["LOC-A", "LOC-B"]);
+    expect([...ids].sort()).toEqual(["LOC-A", "LOC-B"]);
   });
 
   // The recount snapshot is stock-only, so an installed fixture is not a bin to
