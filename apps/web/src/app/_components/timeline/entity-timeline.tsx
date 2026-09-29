@@ -34,7 +34,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { ViewSwitcher } from "~/components/ui/view-switcher";
+import { ChoiceSwitcher, ViewSwitcher } from "~/components/ui/view-switcher";
 import { entityDetailLink, isBrowserRoutedEntity } from "~/entities/entities";
 import {
   type EntityTimelineFiltersByEntity,
@@ -46,7 +46,7 @@ import type { TimelineEntity } from "~/entities/generated/entity-timelines.gen";
 import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { parsePlainDate } from "~/lib/plain-date";
-import { cn, formatCurrency } from "~/lib/utils";
+import { cn, formatCount, formatCurrency } from "~/lib/utils";
 
 type EntityTimelineMode = "events" | "lifecycles";
 
@@ -76,6 +76,11 @@ export interface EntityTimelineProps<
    * a list page). Without it the controls keep local state seeded from props.
    */
   onControlsChange?: ((patch: EntityTimelineControls) => void) | undefined;
+  /**
+   * Where the controls draw. A list page lifts them into a 40px band under
+   * its workbench band (`"band"`); a detail page keeps them in the body.
+   */
+  controlsPlacement?: "body" | "band" | undefined;
 }
 
 const MODE_OPTIONS = [
@@ -153,6 +158,108 @@ function TimelineLink({
     >
       {children}
     </Link>
+  );
+}
+
+const ORDER_OPTIONS = [
+  { value: "desc", label: "Newest", icon: ArrowDownIcon },
+  { value: "asc", label: "Oldest", icon: ArrowUpIcon },
+] as const satisfies readonly {
+  value: EntityTimelineOrder;
+  label: string;
+  icon: typeof ArrowDownIcon;
+}[];
+
+/** One labelled From / To chip of the band. */
+function BandDate({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: string | undefined;
+  min?: string | undefined;
+  max?: string | undefined;
+  onChange: (value: string | undefined) => void;
+}) {
+  const id = useId();
+  return (
+    <label
+      htmlFor={id}
+      className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+    >
+      {label}
+      <DatePickerInput
+        id={id}
+        value={value ?? null}
+        min={min}
+        max={max}
+        clearable
+        onChange={(next) => onChange(next ?? undefined)}
+        className="w-36"
+      />
+    </label>
+  );
+}
+
+/**
+ * The list page's second band: mode seg, From / To chips, order seg and the
+ * cohort line, in one 40px row under the 44px workbench band. It draws before
+ * the first read resolves so the window can be set while loading.
+ */
+function ControlsBand({
+  state,
+  hasRows,
+  cohort,
+  onChange,
+}: {
+  state: ResolvedControls;
+  hasRows: boolean;
+  cohort: string | undefined;
+  onChange: (patch: EntityTimelineControls) => void;
+}) {
+  return (
+    <div
+      role="toolbar"
+      aria-label="Timeline controls"
+      className="flex h-10 [scrollbar-width:none] items-center gap-3 overflow-x-auto border-b border-border bg-card px-2 [&::-webkit-scrollbar]:hidden"
+    >
+      {hasRows && (
+        <ViewSwitcher
+          ariaLabel="Timeline mode"
+          options={MODE_OPTIONS}
+          value={state.mode}
+          compactOnMobile
+          onValueChange={(value) => onChange({ mode: value })}
+        />
+      )}
+      <BandDate
+        label="From"
+        value={state.from}
+        max={state.to}
+        onChange={(from) => onChange({ from })}
+      />
+      <BandDate
+        label="To"
+        value={state.to}
+        min={state.from}
+        onChange={(to) => onChange({ to })}
+      />
+      <ChoiceSwitcher
+        ariaLabel="Timeline order"
+        options={ORDER_OPTIONS}
+        value={state.order}
+        compactOnMobile
+        onValueChange={(order) => onChange({ order })}
+      />
+      {cohort && (
+        <span className="ml-auto shrink-0 font-mono text-2xs tracking-wider text-slate uppercase tabular-nums">
+          {cohort}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -597,6 +704,7 @@ export function EntityTimeline<E extends TimelineEntity>({
   order,
   mode,
   onControlsChange,
+  controlsPlacement = "body",
   operations = { timeline: entityTimeline.timeline },
 }: EntityTimelineProps<E>) {
   const { state, onChange } = useTimelineControls({
@@ -623,19 +731,35 @@ export function EntityTimeline<E extends TimelineEntity>({
     placeholderData: keepPreviousData,
   });
   const { data, isError, isLoading } = query;
+  const inBand = controlsPlacement === "band";
+  const band = (hasRows: boolean, meta?: EntityTimelineMeta) =>
+    inBand ? (
+      <ControlsBand
+        state={state}
+        hasRows={hasRows}
+        cohort={
+          meta &&
+          `${formatCount(meta.totalCount)} ${meta.totalCount === 1 ? "record" : "records"}`
+        }
+        onChange={onChange}
+      />
+    ) : null;
 
   if (isError)
     return (
-      <ErrorDisplay
-        error={query.error}
-        title="the timeline"
-        onRetry={() => void query.refetch()}
-      />
+      <Stack gap="md">
+        {band(false)}
+        <ErrorDisplay
+          error={query.error}
+          title="the timeline"
+          onRetry={() => void query.refetch()}
+        />
+      </Stack>
     );
   if (isLoading || !data)
     return (
       <Stack gap="md">
-        <Skeleton className="h-10 w-full" />
+        {inBand ? band(false) : <Skeleton className="h-10 w-full" />}
         <StatGrid>
           {[0, 1, 2, 3].map((index) => (
             <Skeleton key={index} className="h-14 w-full" />
@@ -649,14 +773,18 @@ export function EntityTimeline<E extends TimelineEntity>({
   const activeMode: EntityTimelineMode = hasRows ? state.mode : "events";
   return (
     <Stack gap="md">
-      <Controls
-        from={state.from}
-        to={state.to}
-        order={state.order}
-        mode={activeMode}
-        hasRows={hasRows}
-        onChange={onChange}
-      />
+      {inBand ? (
+        band(hasRows, data.meta)
+      ) : (
+        <Controls
+          from={state.from}
+          to={state.to}
+          order={state.order}
+          mode={activeMode}
+          hasRows={hasRows}
+          onChange={onChange}
+        />
+      )}
       {data.stats.length > 0 && (
         <StatGrid>
           {data.stats.map((stat) => (

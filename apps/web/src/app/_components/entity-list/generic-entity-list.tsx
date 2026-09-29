@@ -555,6 +555,7 @@ function ListTimeline({
       to={controls.timelineTo}
       order={controls.timelineOrder ?? "desc"}
       mode={controls.timelineMode ?? "events"}
+      controlsPlacement="band"
       onControlsChange={(patch) => {
         const next: ListSearch = {};
         if ("from" in patch) next.timelineFrom = patch.from;
