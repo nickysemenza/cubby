@@ -142,6 +142,20 @@ const purchaseAgent = {
   mcpTools: toolsOf(PURCHASE_MCP_ACTIONS),
 } satisfies ImportRunAgentConfig;
 
+// Enrichment runs also commit what they verified; `enrichment_commit` is
+// granted to the product_enrichment purpose only (server capability gate).
+const ENRICHMENT_MCP_ACTIONS = [
+  ...PURCHASE_MCP_ACTIONS,
+  "product_enrichment.commit",
+  "product_enrichment.overwrite",
+] as const satisfies readonly CubbyMcpToolAction[];
+
+const enrichmentAgent = {
+  ...purchaseAgent,
+  mcpActions: ENRICHMENT_MCP_ACTIONS,
+  mcpTools: toolsOf(ENRICHMENT_MCP_ACTIONS),
+} satisfies ImportRunAgentConfig;
+
 /**
  * Model, effort, and tools per agent run purpose. Photo grouping moved to Luna
  * after the live eval (`pnpm --dir apps/web eval:flue-models`) matched Sol on
@@ -162,5 +176,5 @@ export const importRunAgentManifest = {
   },
   account_sync: purchaseAgent,
   purchase_validation: purchaseAgent,
-  product_enrichment: purchaseAgent,
+  product_enrichment: enrichmentAgent,
 } as const satisfies Record<FlueImportRunPurpose, ImportRunAgentConfig>;
