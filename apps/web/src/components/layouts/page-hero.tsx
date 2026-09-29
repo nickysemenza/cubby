@@ -18,7 +18,7 @@ import { Card, CardContent } from "~/components/ui/card";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import { copyShortcodes } from "~/lib/clipboard";
-import { HOUSEHOLD_TIMEZONE } from "~/lib/household-date";
+import { formatInstant } from "~/lib/date-format";
 import { cn, formatCount } from "~/lib/utils";
 
 import { WorkbenchBand } from "./workbench-band";
@@ -158,14 +158,8 @@ export function getOnFileSince(
 ): string | null {
   const createdAt = rawData?.createdAt;
   if (createdAt === undefined) return null;
-  const date = new Date(createdAt);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString("en-US", {
-    day: "2-digit",
-    month: "short",
-    timeZone: HOUSEHOLD_TIMEZONE,
-    year: "numeric",
-  });
+  if (Number.isNaN(new Date(createdAt).getTime())) return null;
+  return formatInstant(createdAt, "dateShortPadded");
 }
 
 /**

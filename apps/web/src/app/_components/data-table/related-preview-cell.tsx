@@ -1,10 +1,9 @@
 import type { RelatedPreviewGroup } from "@cubby/schemas/related-view";
 
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityDetailLink, isBrowserRoutedEntity } from "~/entities/entities";
-
-import { TableLink } from "../table/TableLink";
 
 function RelatedEntityLink({
   item,
@@ -15,14 +14,15 @@ function RelatedEntityLink({
 }) {
   if (item.entity === "usda-food") {
     return (
-      <TableLink
+      <EntityRefLink
+        variant="table"
         to="/usda/$id"
         params={{ id: item.id }}
         className={className}
-        variant="muted"
+        tone="muted"
       >
         {item.label}
-      </TableLink>
+      </EntityRefLink>
     );
   }
   if (!isBrowserRoutedEntity(item.entity)) {
@@ -32,14 +32,15 @@ function RelatedEntityLink({
   }
   const link = entityDetailLink(item.entity, item.id);
   return (
-    <TableLink
+    <EntityRefLink
+      variant="table"
       to={link.to}
       params={link.params}
       className={className}
-      variant="muted"
+      tone="muted"
     >
       {item.label}
-    </TableLink>
+    </EntityRefLink>
   );
 }
 

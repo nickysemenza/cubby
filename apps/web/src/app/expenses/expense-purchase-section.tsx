@@ -2,7 +2,6 @@ import type { ExpenseOut } from "@cubby/schemas/project";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { format } from "date-fns";
 import { sumBy } from "es-toolkit";
 import { useMemo, type FC } from "react";
 
@@ -10,14 +9,14 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
 import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { parsePlainDate } from "~/lib/plain-date";
+import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
 
 // Module-level so the fallback keeps a stable reference across renders.
@@ -127,7 +126,7 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
             stated total, and every Expense at once. Its canonical identity comes
             from Purchase, including the purchase date (not this Expense's ledger
             date), so the shared purchase-label ladder stays truthful. */}
-        <EntityInlineLink
+        <EntityRefLink
           displayImage={
             displayImages[
               entityDisplayImageKey({
@@ -159,7 +158,7 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
         <Stack gap="tight">
           {others.map((line) => (
             <Row key={line.id} align="center" justify="between" gap="sm">
-              <EntityInlineLink
+              <EntityRefLink
                 displayImage={
                   displayImages[
                     entityDisplayImageKey({
@@ -179,7 +178,7 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
               >
                 {line.date && (
                   <span className="text-muted-foreground">
-                    {format(parsePlainDate(line.date), "MMM d, yyyy")}
+                    {formatCalendarDay(line.date, "dateShort")}
                   </span>
                 )}
                 {line.cost != null ? formatCurrency(line.cost) : <NoneValue />}

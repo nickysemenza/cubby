@@ -1,7 +1,6 @@
 import type { UnexpandedSubRecipe } from "@cubby/schemas/meal";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
-import { format, parseISO } from "date-fns";
 import { useMemo } from "react";
 
 import { Row } from "~/components/layout";
@@ -11,6 +10,7 @@ import { HEAT_CLASSES, heatBucket } from "~/components/matrix/heat-scale";
 import { totalCell } from "~/components/matrix/matrix-chrome";
 import { Checkbox } from "~/components/ui/checkbox";
 import { entityDetailLink } from "~/entities/entities";
+import { formatCalendarDay } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
 
 import {
@@ -175,7 +175,7 @@ export function ShoppingMatrix({
               {first && (
                 <span className="text-muted-foreground">
                   {" · "}
-                  {format(parseISO(first.date), "EEE M/d")}
+                  {formatCalendarDay(first.date, "weekdayNumeric")}
                 </span>
               )}
             </span>

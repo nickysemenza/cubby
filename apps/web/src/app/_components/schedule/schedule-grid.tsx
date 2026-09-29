@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 
+import { formatInstant } from "~/lib/date-format";
 import { householdLocalDate } from "~/lib/household-date";
 import { cn } from "~/lib/utils";
 
@@ -107,11 +108,7 @@ function dateAt(index: number): Date {
 }
 
 function formatDay(index: number): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  }).format(dateAt(index));
+  return formatInstant(dateAt(index), "monthDay", "UTC");
 }
 
 function segmentDescription(segment: ScheduleSegment): string {
@@ -137,10 +134,7 @@ function monthTicks(start: number, end: number) {
     const day = cursor.getTime() / DAY_MS;
     ticks.push({
       day,
-      label: new Intl.DateTimeFormat(undefined, {
-        month: "short",
-        timeZone: "UTC",
-      }).format(cursor),
+      label: formatInstant(cursor, "monthShort", "UTC"),
       year: cursor.getUTCFullYear(),
     });
     cursor.setUTCMonth(cursor.getUTCMonth() + 1);

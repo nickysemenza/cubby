@@ -1,5 +1,4 @@
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { formatDistanceToNow } from "date-fns";
 import type { ReactNode } from "react";
 
 import { Row, Stack } from "~/components/layout";
@@ -7,6 +6,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Progress } from "~/components/ui/progress";
+import { formatRelative } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
 
 import type { PassCounts } from "./queue-pass";
@@ -105,10 +105,8 @@ export function QueuePassResumePrompt<TExtra>({
         <Stack gap="md">
           <div className="text-base font-medium">{title}</div>
           <Description>
-            Started{" "}
-            {formatDistanceToNow(candidate.startedAt, { addSuffix: true })}. You
-            finished {candidate.completedCount} of {candidate.totalCount}{" "}
-            {itemNoun}
+            Started {formatRelative(candidate.startedAt)}. You finished{" "}
+            {candidate.completedCount} of {candidate.totalCount} {itemNoun}
             {candidate.skippedCount > 0
               ? ` (${candidate.skippedCount} skipped)`
               : ""}

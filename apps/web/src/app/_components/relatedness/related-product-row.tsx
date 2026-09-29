@@ -1,7 +1,7 @@
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { ReactNode } from "react";
 
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 
 /**
@@ -28,7 +28,7 @@ export function RelatedProductRow({
       className="border-b border-border pb-1 last:border-b-0"
     >
       <Stack gap="tight" className="min-w-0">
-        <EntityInlineLink
+        <EntityRefLink
           entity="product"
           data={product}
           displayImage={displayImage}

@@ -1,11 +1,10 @@
 import type { ProjectAttentionItem } from "@cubby/schemas/project";
 import { match } from "ts-pattern";
 
+import { formatCalendarDay } from "~/lib/date-format";
 import { formatCount, formatCurrency } from "~/lib/utils";
 
-import { formatDateWithYear } from "./project-formatting";
-
-const d = formatDateWithYear;
+const d = (date: string) => formatCalendarDay(date, "dateShort");
 const days = (n: number) => `${formatCount(n)} day${n === 1 ? "" : "s"}`;
 
 /**
@@ -20,7 +19,7 @@ const days = (n: number) => `${formatCount(n)} day${n === 1 ? "" : "s"}`;
  * Every date names WHICH date it is. One card grid puts a planned-expense date
  * beside a derived date-window bound; an unlabeled "Jun 4" on each is
  * indistinguishable. Years are always shown — these rows routinely reach back
- * several years, and `formatDate`'s bare "Jun 4" reads as this year.
+ * several years, and the `monthDay` preset's bare "Jun 4" reads as this year.
  */
 export function attentionEvidence(item: ProjectAttentionItem): string {
   return match(item)

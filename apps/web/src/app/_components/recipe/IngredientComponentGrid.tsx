@@ -2,6 +2,10 @@ import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 
 import {
+  EntityRefLink,
+  dottedEntityLink,
+} from "~/components/entity/entity-ref-link";
+import {
   type CrossTabFooterRow,
   CrossTabTable,
 } from "~/components/matrix/cross-tab-table";
@@ -9,7 +13,6 @@ import type { CrossTabColumn } from "~/components/matrix/group-columns";
 import { EMPTY_MARK, totalCell } from "~/components/matrix/matrix-chrome";
 import { formatCurrencyRange } from "~/lib/format-range";
 
-import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
   buildIngredientMatrix,
   flattenComponents,
@@ -126,14 +129,15 @@ export function IngredientComponentGrid({
         return (
           <>
             <div>
-              <EntityPreviewLink
+              <EntityRefLink
+                variant="preview"
                 displayImage={recipeTreeDisplayImage(node.recipe)}
                 entity="recipe"
                 id={node.recipe.id}
                 className={dottedEntityLink}
               >
                 {node.recipe.name}
-              </EntityPreviewLink>
+              </EntityRefLink>
             </div>
             {makes && (
               <div className="text-2xs font-normal tracking-normal text-muted-foreground normal-case">
@@ -144,14 +148,15 @@ export function IngredientComponentGrid({
         );
       }}
       renderRowHeader={({ data: row }) => (
-        <EntityPreviewLink
+        <EntityRefLink
+          variant="preview"
           displayImage={null}
           entity="ingredient"
           id={row.ingredientShortcode}
           className={dottedEntityLink}
         >
           {row.name}
-        </EntityPreviewLink>
+        </EntityRefLink>
       )}
       renderCell={({ data: row }, column) => {
         const grams = row.byComponent.get(column.key);

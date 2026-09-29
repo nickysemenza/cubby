@@ -10,6 +10,7 @@ import { Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import { memo, useMemo } from "react";
 
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { Badge } from "~/components/ui/badge";
@@ -27,7 +28,6 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "../entity-media/entity-display-images";
-import { EntityInlineLink } from "../EntityInlineLink";
 import type { ImportResult, PhotoResult } from "./cookbook-import/types";
 import { CopyImportRecipeParseButton } from "./copy-corpus-button";
 import { CopyJsonButton } from "./copy-debug-button";
@@ -207,7 +207,7 @@ function RecipeImportCardImpl({
             )}
             <Badge variant={badge.variant}>{badge.label}</Badge>
             {existingId && (
-              <EntityInlineLink
+              <EntityRefLink
                 displayImage={
                   existingId
                     ? (existingRecipeImages[

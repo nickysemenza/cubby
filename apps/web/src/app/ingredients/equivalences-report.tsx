@@ -9,6 +9,7 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -30,7 +31,6 @@ import { useHydrated } from "~/hooks/useHydrated";
 import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn } from "~/lib/utils";
 
-import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { equivalenceWorkbenchSearch } from "./equivalence-workbench-link";
 
 // Format a ratio compactly: a few significant figures, no trailing noise.
@@ -176,7 +176,7 @@ export function EquivalencesReport() {
                       rowSpan={group.length}
                       className="border-b align-top"
                     >
-                      <EntityInlineLink
+                      <EntityRefLink
                         displayImage={
                           displayImages[
                             entityDisplayImageKey({
@@ -227,7 +227,7 @@ export function EquivalencesReport() {
                           key={`${ex.recipeId}-${ex.rawLine ?? ex.recipeName}`}
                           className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground"
                         >
-                          <EntityInlineLink
+                          <EntityRefLink
                             displayImage={
                               displayImages[
                                 entityDisplayImageKey({

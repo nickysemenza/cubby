@@ -3,7 +3,6 @@ import type { InfLocation } from "@cubby/schemas/location";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
-import { formatDistanceToNow } from "date-fns";
 import pluralize from "pluralize";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -16,6 +15,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
+import { formatRelative } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
 
 import {
@@ -178,10 +178,8 @@ export function ParentPicker({
                     )}
                   </Row>
                   <Description size="xs">
-                    Started{" "}
-                    {formatDistanceToNow(pass.startedAt, { addSuffix: true })} ·
-                    updated{" "}
-                    {formatDistanceToNow(pass.updatedAt, { addSuffix: true })}
+                    Started {formatRelative(pass.startedAt)} · updated{" "}
+                    {formatRelative(pass.updatedAt)}
                   </Description>
                 </Stack>
                 <Button

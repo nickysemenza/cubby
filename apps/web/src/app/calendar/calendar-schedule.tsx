@@ -7,7 +7,6 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import {
   ScheduleGrid,
   type ScheduleRow,
@@ -15,6 +14,7 @@ import {
   type ScheduleWindow,
 } from "~/app/_components/schedule/schedule-grid";
 import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Description } from "~/components/ui/description";
 import { entityDetailLink } from "~/entities/entities";
 
@@ -124,7 +124,7 @@ export function CalendarSchedule({ data, window }: CalendarScheduleProps) {
     if (row.id.startsWith("task:")) {
       const id = row.id.slice("task:".length);
       return (
-        <EntityInlineLink
+        <EntityRefLink
           entity="task"
           data={{ id, name: row.name }}
           displayImage={
@@ -139,7 +139,7 @@ export function CalendarSchedule({ data, window }: CalendarScheduleProps) {
     if (row.id.startsWith("planting:")) {
       const id = row.id.slice("planting:".length);
       return (
-        <EntityInlineLink
+        <EntityRefLink
           entity="planting"
           data={{ id, name: row.name }}
           displayImage={

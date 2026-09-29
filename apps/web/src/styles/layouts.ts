@@ -86,7 +86,7 @@ export const gridVariants = cva("grid", {
  * under plain block layout, and `flex-col`'s default `align-items: stretch`
  * reproduces that. The exception is a child whose own `display` is
  * `inline-flex`/`inline-block` with no explicit width (a bare `Button`,
- * `EntityInlineLink`, …) — it now stretches to the container's width instead
+ * `EntityRefLink`, …) — it now stretches to the container's width instead
  * of shrinking to its content, where before it kept its natural size.
  */
 export const stackVariants = cva("flex flex-col", {

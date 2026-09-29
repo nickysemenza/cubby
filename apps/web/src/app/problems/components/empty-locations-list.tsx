@@ -1,6 +1,5 @@
 import { ProblemItem } from "@cubby/schemas/problems";
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
-import { formatDistanceToNow } from "date-fns";
 import { type ReactNode, useState } from "react";
 
 import { CardThumbnail } from "~/components/entity/card-thumbnail";
@@ -8,6 +7,7 @@ import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { entityDetailLink } from "~/entities/entities";
+import { formatRelative } from "~/lib/date-format";
 
 import { AddInventoryDialog } from "./add-inventory-dialog";
 import { ProblemSection, type ProblemSectionCoverage } from "./problem-section";
@@ -64,10 +64,7 @@ export function EmptyLocationsList({
                 className="text-sm text-muted-foreground"
               >
                 <CalendarIcon className="size-3" />
-                Last inventory {formatDistanceToNow(
-                  location.lastBulkInventory,
-                )}{" "}
-                ago
+                Last inventory {formatRelative(location.lastBulkInventory)}
               </Row>,
             );
           }

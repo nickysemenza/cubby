@@ -15,8 +15,8 @@ import type {
 import { type FC, useCallback, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { VendorMark } from "~/components/entity/vendor-cell";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
@@ -251,7 +251,7 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
                   );
                 }
                 return (
-                  <EntityInlineLink
+                  <EntityRefLink
                     entity={target.entity}
                     data={{ id: target.id, name: target.label }}
                     displayImage={

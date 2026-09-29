@@ -1,9 +1,9 @@
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { FC } from "react";
 
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
-import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { cn } from "~/lib/utils";
 
 import {
@@ -109,16 +109,17 @@ export const RecipeTagList: FC<RecipeTagListProps> = ({
           />
         );
         return filterable && !onRemove ? (
-          <EntityFilterLink
+          <EntityRefLink
+            variant="filter"
             key={tag}
             to="/recipes"
             search={{ tags: tag }}
             label={`Show all recipes tagged ${tag}`}
-            variant="value"
+            display="value"
             className="no-underline"
           >
             {rendered}
-          </EntityFilterLink>
+          </EntityRefLink>
         ) : (
           <span key={tag}>{rendered}</span>
         );

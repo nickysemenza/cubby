@@ -25,9 +25,9 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { TradeBadge } from "~/app/projects/trade-options";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -210,7 +210,7 @@ export function LinkExpensesDialog({
             cell: (info) => {
               const row = info.row.original;
               return row.projectId && row.projectName ? (
-                <EntityInlineLink
+                <EntityRefLink
                   displayImage={
                     projectImages[
                       entityDisplayImageKey({

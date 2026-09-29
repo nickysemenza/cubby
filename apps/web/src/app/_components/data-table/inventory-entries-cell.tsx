@@ -8,6 +8,7 @@ import type { LocationType } from "@cubby/schemas/location";
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import type { ReactNode } from "react";
 
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
@@ -18,8 +19,6 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImageMap,
 } from "../entity-media/entity-display-images";
-import { EntityInlineLink } from "../EntityInlineLink";
-import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { TruncatedList } from "../TruncatedList";
 import { CELL_EDIT_GROUP_CLASS, CELL_EDIT_PENCIL_CLASS } from "./cell-frame";
@@ -117,7 +116,7 @@ export function InventoryEntriesCell<
       ] ?? null;
     if (entity === "location" && isLocationRelatedEntity(related)) {
       return (
-        <EntityInlineLink
+        <EntityRefLink
           displayImage={displayImage}
           entity="location"
           data={related}
@@ -127,7 +126,7 @@ export function InventoryEntriesCell<
     }
     if (entity === "product" && isProductRelatedEntity(related)) {
       return (
-        <EntityInlineLink
+        <EntityRefLink
           displayImage={displayImage}
           entity="product"
           data={related}
@@ -220,7 +219,7 @@ export function InventoryEntriesCell<
                 </span>
                 <span className="text-muted-foreground/50">@</span>
                 {linkData ? (
-                  <EntityInlineLink
+                  <EntityRefLink
                     displayImage={
                       displayImages[
                         entityDisplayImageKey({
@@ -277,7 +276,8 @@ export function InventoryEntriesCell<
         throw new Error("Unexpected product in a location inventory cell");
       }
       return (
-        <EntityInlineLinkList
+        <EntityRefLink
+          variant="list"
           entity="location"
           items={locations}
           compact
@@ -290,7 +290,8 @@ export function InventoryEntriesCell<
       throw new Error("Unexpected location in a product inventory cell");
     }
     return (
-      <EntityInlineLinkList
+      <EntityRefLink
+        variant="list"
         entity="product"
         items={products}
         compact

@@ -1,6 +1,4 @@
-import { format } from "date-fns";
-
-import { parsePlainDate } from "./plain-date";
+import { formatCalendarDay } from "~/lib/date-format";
 
 /**
  * A purchase's human label.
@@ -9,7 +7,7 @@ import { parsePlainDate } from "./plain-date";
  * date)` (see `packages/schemas/src/purchase.ts`), while `displayLabel` carries
  * optional human-entered context from the original ledger. ~40% of charges
  * never got an order id from the vendor at all. Every surface that renders one
- * (`EntityInlineLink`, the hover preview, an embedded charges table) therefore
+ * (`EntityRefLink`, the hover preview, an embedded charges table) therefore
  * needs the same fallback ladder, or the same charge reads differently in three
  * places.
  *
@@ -40,7 +38,7 @@ export function purchaseIdentityLabel(purchase: PurchaseLabelInput): string {
   return purchase.orderId
     ? purchase.orderId
     : purchase.date
-      ? `${vendor} · ${format(parsePlainDate(purchase.date), "MMM d, yyyy")}`
+      ? `${vendor} · ${formatCalendarDay(purchase.date, "dateShort")}`
       : vendor;
 }
 

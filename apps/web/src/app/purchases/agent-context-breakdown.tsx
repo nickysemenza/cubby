@@ -2,6 +2,14 @@ import type { FlueConversationMessage } from "@flue/sdk";
 import { useId, useMemo } from "react";
 
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
+import {
   contextCallsFromMessages,
   summarizeContextCalls,
 } from "~/lib/agent-context-breakdown";
@@ -160,68 +168,58 @@ export function AgentContextPerCall({
             <summary className="cursor-pointer text-muted-foreground">
               Show as table
             </summary>
-            <div className="mt-1 overflow-x-auto">
-              <table
-                aria-label="Context per call table"
-                className="w-full border-collapse text-xs tabular-nums"
-              >
-                <thead>
-                  <tr className="border-b border-border text-left text-muted-foreground">
-                    <th scope="col" className="py-1 pr-2 font-medium">
-                      Call
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-2 py-1 text-right font-medium"
+            <Table
+              aria-label="Context per call table"
+              containerClassName="mt-1"
+              className="table-auto tabular-nums"
+            >
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="h-auto py-1 pr-2 pl-0">Call</TableHead>
+                  <TableHead className="h-auto px-2 py-1 text-right">
+                    Input
+                  </TableHead>
+                  <TableHead className="h-auto px-2 py-1 text-right">
+                    Cached
+                  </TableHead>
+                  {segments.map((segment) => (
+                    <TableHead
+                      key={segment.key}
+                      className="h-auto px-2 py-1 text-right"
                     >
-                      Input
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-2 py-1 text-right font-medium"
-                    >
-                      Cached
-                    </th>
-                    {segments.map((segment) => (
-                      <th
-                        key={segment.key}
-                        scope="col"
-                        className="px-2 py-1 text-right font-medium whitespace-nowrap"
-                      >
-                        {segment.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr
-                      key={row.call}
-                      className="border-b border-border/70 last:border-0"
-                    >
-                      <th
-                        scope="row"
-                        className="py-1 pr-2 text-left font-medium whitespace-nowrap"
-                      >
-                        Call {row.call}
-                        {row.estimated ? " (estimated)" : null}
-                      </th>
-                      <td className="px-2 py-1 text-right">
-                        {exact.format(row.inputTokens)}
-                      </td>
-                      <td className="px-2 py-1 text-right">
-                        {exact.format(row.cachedTokens)}
-                      </td>
-                      {segments.map((segment) => (
-                        <td key={segment.key} className="px-2 py-1 text-right">
-                          {exact.format(row.values[segment.key] ?? 0)}
-                        </td>
-                      ))}
-                    </tr>
+                      {segment.label}
+                    </TableHead>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => (
+                  <TableRow key={row.call}>
+                    <TableHead
+                      scope="row"
+                      className="h-auto py-1 pr-2 pl-0 text-foreground"
+                    >
+                      Call {row.call}
+                      {row.estimated ? " (estimated)" : null}
+                    </TableHead>
+                    <TableCell className="px-2 py-1 text-right">
+                      {exact.format(row.inputTokens)}
+                    </TableCell>
+                    <TableCell className="px-2 py-1 text-right">
+                      {exact.format(row.cachedTokens)}
+                    </TableCell>
+                    {segments.map((segment) => (
+                      <TableCell
+                        key={segment.key}
+                        className="px-2 py-1 text-right"
+                      >
+                        {exact.format(row.values[segment.key] ?? 0)}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </details>
         </div>
       </details>

@@ -4,12 +4,12 @@ import {
   MEAL_TYPE_LABELS,
   type MealType,
 } from "@cubby/schemas/meal-classification";
-import { format, parseISO } from "date-fns";
 
 import {
   tryFormatAmount,
   tryFormatAmountShopper,
 } from "~/app/_components/inventory/format-amount";
+import { formatCalendarDay } from "~/lib/date-format";
 
 import { formatCostEstimate } from "./meal-nutrition";
 import type { ShoppingRow } from "./shopping-model";
@@ -49,7 +49,7 @@ const formatShopperAmount = (value: number, unit: string | null): string =>
  * about what a nameless row is called.
  */
 export const mealDateLabel = (meal: { date: string }): string =>
-  format(parseISO(meal.date), "EEE, MMM d");
+  formatCalendarDay(meal.date, "weekdayMonthDay");
 
 /**
  * How a meal names itself in a list: its own name, else what's planned in it,

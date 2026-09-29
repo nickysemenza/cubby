@@ -5,7 +5,7 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Stack } from "~/components/layout";
 import { NoneValue } from "~/components/ui/none-value";
 
@@ -35,7 +35,7 @@ function ImageAssociationLink({
     ] ?? null;
   const link = match(association)
     .with({ entityKind: "product" }, ({ entityId, entityName }) => (
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={displayImage}
         entity="product"
         data={{ id: entityId, name: entityName }}
@@ -43,7 +43,7 @@ function ImageAssociationLink({
       />
     ))
     .with({ entityKind: "location" }, ({ entityId, entityName }) => (
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={displayImage}
         entity="location"
         data={{ id: entityId, name: entityName }}
@@ -51,7 +51,7 @@ function ImageAssociationLink({
       />
     ))
     .with({ entityKind: "recipe" }, ({ entityId, entityName }) => (
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={displayImage}
         entity="recipe"
         data={{ id: entityId, name: entityName }}
@@ -59,7 +59,7 @@ function ImageAssociationLink({
       />
     ))
     .with({ entityKind: "cookbook" }, ({ entityId, entityName }) => (
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={displayImage}
         entity="cookbook"
         data={{ id: entityId, name: entityName }}
@@ -67,7 +67,7 @@ function ImageAssociationLink({
       />
     ))
     .with({ entityKind: "project" }, ({ entityId, entityName }) => (
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={displayImage}
         entity="project"
         data={{ id: entityId, name: entityName }}
@@ -75,7 +75,7 @@ function ImageAssociationLink({
       />
     ))
     .with({ entityKind: "purchase" }, ({ entityId, entityName }) => (
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={displayImage}
         entity="purchase"
         data={{ id: entityId, orderId: entityName }}
@@ -83,7 +83,7 @@ function ImageAssociationLink({
       />
     ))
     .with({ entityKind: "vendor" }, ({ entityId, entityName }) => (
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={displayImage}
         entity="vendor"
         data={{ id: entityId, name: entityName }}
@@ -91,7 +91,7 @@ function ImageAssociationLink({
       />
     ))
     .with({ entityKind: "meal" }, ({ entityId, entityName }) => (
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={displayImage}
         entity="meal"
         data={{ id: entityId, name: entityName }}
@@ -99,7 +99,7 @@ function ImageAssociationLink({
       />
     ))
     .with({ entityKind: "task" }, ({ entityId, entityName }) => (
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={displayImage}
         entity="task"
         data={{ id: entityId, name: entityName }}
@@ -107,7 +107,7 @@ function ImageAssociationLink({
       />
     ))
     .with({ entityKind: "gardenEntry" }, ({ entityId, entityName }) => (
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={displayImage}
         entity="gardenEntry"
         data={{ id: entityId, name: entityName }}

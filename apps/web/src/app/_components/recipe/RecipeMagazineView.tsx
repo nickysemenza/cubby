@@ -10,6 +10,10 @@ import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { sumBy } from "es-toolkit";
 import { type ReactNode, useMemo, useState } from "react";
 
+import {
+  EntityRefLink,
+  dottedEntityLink,
+} from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { Eyebrow } from "~/components/ui/eyebrow";
@@ -23,7 +27,6 @@ import type {
 } from "~/lib/recipe-costing";
 import { cn, formatCurrency } from "~/lib/utils";
 
-import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
   buildDisplayQuantities,
   gramMapFromCosting,
@@ -287,14 +290,15 @@ function IngredientLedger({
                     )}
                   >
                     {ref ? (
-                      <EntityPreviewLink
+                      <EntityRefLink
+                        variant="preview"
                         displayImage={null}
                         entity={ref.entity}
                         id={ref.id}
                         className={dottedEntityLink}
                       >
                         {name}
-                      </EntityPreviewLink>
+                      </EntityRefLink>
                     ) : (
                       name
                     )}

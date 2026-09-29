@@ -12,6 +12,7 @@ import {
 } from "date-fns";
 
 import type { CalendarPeriod } from "~/components/reui/event-calendar/event-calendar-types";
+import { formatCalendarDay } from "~/lib/date-format";
 import { HOUSEHOLD_TIMEZONE } from "~/lib/household-date";
 import { parsePlainDate } from "~/lib/plain-date";
 
@@ -71,17 +72,17 @@ function formatCalendarPeriodTitle(
   activeEnd: Date,
 ) {
   if (period === "month" || period === "schedule")
-    return format(anchor, "MMMM yyyy");
+    return formatCalendarDay(anchor, "monthYearLong");
   // Week and fortnight share the compact range label; `anchor` is the period's
   // first day for both, so the branches below need no period of their own.
   const end = addDays(activeEnd, -1);
   if (isSameMonth(anchor, end)) {
-    return `${format(anchor, "MMM d")}–${format(end, "d, yyyy")}`;
+    return `${formatCalendarDay(anchor, "monthDay")}–${format(end, "d, yyyy")}`;
   }
   if (isSameYear(anchor, end)) {
-    return `${format(anchor, "MMM d")}–${format(end, "MMM d, yyyy")}`;
+    return `${formatCalendarDay(anchor, "monthDay")}–${formatCalendarDay(end, "dateShort")}`;
   }
-  return `${format(anchor, "MMM d, yyyy")}–${format(end, "MMM d, yyyy")}`;
+  return `${formatCalendarDay(anchor, "dateShort")}–${formatCalendarDay(end, "dateShort")}`;
 }
 
 export {

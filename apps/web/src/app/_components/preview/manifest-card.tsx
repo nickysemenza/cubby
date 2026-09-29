@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { type ReactNode, useMemo } from "react";
 import { match } from "ts-pattern";
 
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { Eyebrow } from "~/components/ui/eyebrow";
@@ -20,7 +21,6 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "../entity-media/entity-display-images";
-import { EntityInlineLink } from "../EntityInlineLink";
 import { NutrientsSummary } from "../units/NutrientsSummary";
 
 // The single "manifest" hovercard renderer. Every entity preview is expressed
@@ -235,7 +235,7 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
         <SectionLabel>Product{b.products.length === 1 ? "" : "s"}</SectionLabel>
         <div className="flex flex-col gap-1">
           {b.products.slice(0, 4).map((p) => (
-            <EntityInlineLink
+            <EntityRefLink
               displayImage={
                 displayImages[
                   entityDisplayImageKey({

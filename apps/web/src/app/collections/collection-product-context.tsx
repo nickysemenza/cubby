@@ -7,7 +7,6 @@ import { ClipboardIcon } from "@phosphor-icons/react/dist/csr/Clipboard";
 import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
 import { ReceiptIcon } from "@phosphor-icons/react/dist/csr/Receipt";
 import { Link } from "@tanstack/react-router";
-import { format } from "date-fns";
 import { useEffect, useState } from "react";
 
 import { TradeBadge } from "~/app/projects/trade-options";
@@ -19,7 +18,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { copyShortcodes } from "~/lib/clipboard";
-import { parsePlainDate } from "~/lib/plain-date";
+import { formatCalendarDay } from "~/lib/date-format";
 import { purchaseLabel, purchaseLabelUsedVendor } from "~/lib/purchase-label";
 import { cn } from "~/lib/utils";
 
@@ -157,7 +156,7 @@ export function ProductPurchasesPopover({
                   ? `${purchase.vendorName} · `
                   : ""}
                 <time dateTime={purchase.date}>
-                  {format(parsePlainDate(purchase.date), "MMM d, yyyy")}
+                  {formatCalendarDay(purchase.date, "dateShort")}
                 </time>
               </p>
               {purchase.trades.length ? (

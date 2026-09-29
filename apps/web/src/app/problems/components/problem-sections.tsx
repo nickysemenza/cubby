@@ -33,14 +33,13 @@ import { groupBy } from "es-toolkit";
 import type { ReactNode } from "react";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { mealDateLabel } from "~/app/meals/meal-format";
 import { attentionEvidence } from "~/app/projects/attention-presentation";
-import { formatDateWithYear } from "~/app/projects/project-formatting";
 import {
   ReconciliationStatus,
   reconciliationDelta,
 } from "~/app/purchases/purchase-reconciliation";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -60,6 +59,7 @@ import {
   maintenance,
   problems as problemOperations,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatCalendarDay, formatInstant } from "~/lib/date-format";
 import { countLabel } from "~/lib/pluralize";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
@@ -779,8 +779,8 @@ function outsideOwnershipSubtitle(
   // `projectBoundary` already has the detector's grace period applied, so it is
   // not the project's stated date — say "grace" rather than let the reader
   // compare it against the project page and conclude the card is wrong.
-  const tool = formatDateWithYear(row.toolDate);
-  const boundary = `${formatDateWithYear(row.projectBoundary)} (incl. grace)`;
+  const tool = formatCalendarDay(row.toolDate, "dateShort");
+  const boundary = `${formatCalendarDay(row.projectBoundary, "dateShort")} (incl. grace)`;
   return row.conflict === "acquired_after_end"
     ? `${byManufacturer(row.manufacturer)} · acquired ${tool}, after ${row.projectName} ended ${boundary}`
     : `${byManufacturer(row.manufacturer)} · disposed of ${tool}, before ${row.projectName} started ${boundary}`;
@@ -874,7 +874,7 @@ const DECLARED_SECTIONS = [
     renderItem: (finding) => ({
       key: finding.id,
       title: finding.summary,
-      subtitle: `${finding.kind.replaceAll("_", " ")} · ${formatDateWithYear(finding.createdAt.toISOString().slice(0, 10))}`,
+      subtitle: `${finding.kind.replaceAll("_", " ")} · ${formatInstant(finding.createdAt, "dateShort")}`,
       route: finding.purchaseId
         ? entityDetailLink("purchase", finding.purchaseId)
         : undefined,
@@ -1587,7 +1587,8 @@ const DECLARED_SECTIONS = [
             ? [
                 <Row key="order" align="center" gap="xs">
                   <CodeChip>{purchase.orderId}</CodeChip>
-                  <OrderIdLink
+                  <EntityRefLink
+                    variant="order"
                     orderUrl={purchase.orderUrl}
                     orderId={purchase.orderId}
                     vendorName={purchase.vendorName}
@@ -1598,7 +1599,7 @@ const DECLARED_SECTIONS = [
           ...(purchase.date
             ? [
                 <Badge key="date" variant="outline">
-                  Ordered {formatDateWithYear(purchase.date)}
+                  Ordered {formatCalendarDay(purchase.date, "dateShort")}
                 </Badge>,
               ]
             : []),
@@ -1665,10 +1666,10 @@ const DECLARED_SECTIONS = [
         <div key="dates" className="text-sm text-muted-foreground">
           {[
             item.expenseDate
-              ? `Expense ${formatDateWithYear(item.expenseDate)}`
+              ? `Expense ${formatCalendarDay(item.expenseDate, "dateShort")}`
               : "Expense undated",
             item.purchaseDate
-              ? `purchase ${formatDateWithYear(item.purchaseDate)}`
+              ? `purchase ${formatCalendarDay(item.purchaseDate, "dateShort")}`
               : "purchase undated",
           ].join(" · ")}
         </div>,
@@ -1755,7 +1756,7 @@ const DECLARED_SECTIONS = [
         formatCurrency(item.amount),
         `${item.allocationCount} allocation${item.allocationCount === 1 ? "" : "s"} totalling ${formatCurrency(item.allocatedTotal)}`,
         item.postedDate
-          ? `posted ${formatDateWithYear(item.postedDate)}`
+          ? `posted ${formatCalendarDay(item.postedDate, "dateShort")}`
           : null,
       ]
         .filter(Boolean)

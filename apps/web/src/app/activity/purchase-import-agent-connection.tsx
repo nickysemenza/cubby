@@ -12,6 +12,7 @@ import {
 } from "~/components/ui/card";
 import { StatusText } from "~/components/ui/status-text";
 import { run } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatInstant } from "~/lib/date-format";
 import { getErrorMessage } from "~/lib/error-utils";
 import type { PurchaseAgentConnectionStatus } from "~/lib/purchase-import-debug";
 
@@ -66,7 +67,7 @@ export function PurchaseImportAgentConnection({
             <span className="text-sm text-muted-foreground">
               Authorized
               {access.data.expiresAt
-                ? ` until ${new Date(access.data.expiresAt).toLocaleString()}`
+                ? ` until ${formatInstant(access.data.expiresAt, "dateTime")}`
                 : ""}
               .
             </span>

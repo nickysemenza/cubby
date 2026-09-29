@@ -1,6 +1,5 @@
-import { format } from "date-fns";
-
 import { formatCompactRelative } from "~/app/_components/HoverableTimestamp";
+import { formatInstant } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
 
 /**
@@ -64,14 +63,14 @@ export function AuditedHint({
   const stale = Date.now() - at.getTime() > FRESHNESS_MS;
   return (
     <span
-      title={`Last ${label} ${format(at, "yyyy-MM-dd HH:mm")}`}
+      title={`Last ${label} ${formatInstant(at, "isoDateTime")}`}
       className={cn(
         stale ? "text-warning-ink" : "text-muted-foreground",
         className,
       )}
     >
       {stale
-        ? `unverified since ${format(at, "MMM yyyy")}`
+        ? `unverified since ${formatInstant(at, "monthYear")}`
         : `${label} ${formatCompactRelative(at)}`}
     </span>
   );

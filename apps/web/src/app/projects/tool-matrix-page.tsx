@@ -40,14 +40,13 @@ import { format } from "date-fns";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { match } from "ts-pattern";
 
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { EntityPreviewLink } from "~/app/_components/EntityPreviewLink";
 import {
   ProductImageSummariesProvider,
   useHydratedProductImages,
 } from "~/app/_components/products/product-image-summaries";
 import { ProjectMark } from "~/app/projects/project-mark";
 import type { ToolMatrixSearch } from "~/app/tools/tool-search";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 import {
   cellMonoDense,
@@ -669,7 +668,7 @@ function ToolIdentityLink({
   const images = useHydratedProductImages(row.productId);
 
   return (
-    <EntityInlineLink
+    <EntityRefLink
       displayImage={images[0] ?? null}
       entity="product"
       data={{
@@ -766,7 +765,8 @@ function MatrixTable({
               )}
             >
               <div className="relative h-24 w-11 overflow-visible">
-                <EntityPreviewLink
+                <EntityRefLink
+                  variant="preview"
                   displayImage={null}
                   entity="project"
                   id={column.projectId}
@@ -775,7 +775,7 @@ function MatrixTable({
                 >
                   <ProjectMark icon={column.icon} size={12} />
                   <span className="truncate">{column.projectName}</span>
-                </EntityPreviewLink>
+                </EntityRefLink>
               </div>
               <div className="pb-1 text-center text-2xs text-slate">
                 {column.startDate ? `’${column.startDate.slice(2, 4)}` : "—"}

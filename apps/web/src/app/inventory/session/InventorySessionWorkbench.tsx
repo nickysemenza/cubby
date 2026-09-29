@@ -11,7 +11,6 @@ import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { skipToken, useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { formatDistanceToNow } from "date-fns";
 import pluralize from "pluralize";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -41,6 +40,7 @@ import {
   location,
   product,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatRelative } from "~/lib/date-format";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import { LocationReviewPane } from "./_components/LocationReviewPane";
@@ -954,11 +954,7 @@ function SessionComplete({
               <CardTitle>{parent.name} recount complete</CardTitle>
             </h2>
             <Description>
-              Finished a pass started{" "}
-              {formatDistanceToNow(startedAt, {
-                addSuffix: true,
-              })}
-              .
+              Finished a pass started {formatRelative(startedAt)}.
             </Description>
           </div>
         </Row>

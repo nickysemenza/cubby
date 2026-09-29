@@ -20,6 +20,7 @@ import {
   problems,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
+import { formatInstant } from "~/lib/date-format";
 
 const HomeInsights = lazy(async () => {
   const module = await import("~/app/_components/home/HomeInsights");
@@ -95,12 +96,7 @@ function Home() {
       actions={
         now ? (
           <p className="font-mono text-2xs text-muted-foreground uppercase">
-            {now.toLocaleDateString("en-US", {
-              weekday: "short",
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            })}
+            {formatInstant(now, "weekdayDatePadded")}
           </p>
         ) : null
       }

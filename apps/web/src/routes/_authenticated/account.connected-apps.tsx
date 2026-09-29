@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { oauth } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatInstant } from "~/lib/date-format";
 import { pageTitle } from "~/lib/page-title";
 
 // A static sibling of /account/$accountView: TanStack ranks literal segments
@@ -129,12 +130,12 @@ function ConnectedAppsPage() {
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {app.grantedAt
-                    ? new Date(app.grantedAt).toLocaleDateString()
+                    ? formatInstant(app.grantedAt, "dateNumeric")
                     : "—"}
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {app.lastActiveAt
-                    ? new Date(app.lastActiveAt).toLocaleString()
+                    ? formatInstant(app.lastActiveAt, "dateTime")
                     : "never"}
                 </TableCell>
                 <TableCell className="font-mono text-xs">
