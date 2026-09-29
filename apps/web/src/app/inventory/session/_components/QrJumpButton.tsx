@@ -15,14 +15,14 @@ import { classifyScannedLocation } from "../session-utils";
  * sheet — that is the second half of the job this button exists for.
  */
 export function QrJumpButton({
-  parent,
+  roots,
   current,
   onJump,
   onAdopt,
   manualEntry = false,
 }: {
-  /** The recount's root — the tree the classification is read against. */
-  parent: InfLocation;
+  /** The recount's root(s) — the tree the classification is read against. */
+  roots: InfLocation[];
   /** The bin being recounted right now, or null before a stop is chosen. */
   current: InfLocation | null;
   onJump: (locationId: string) => void;
@@ -56,7 +56,7 @@ export function QrJumpButton({
           return false;
         }
 
-        switch (classifyScannedLocation(parent, current, targetId)) {
+        switch (classifyScannedLocation(roots, current, targetId)) {
           case "current":
             toast.info(`You're already at ${current.name}.`);
             return false;
@@ -82,7 +82,7 @@ export function QrJumpButton({
             const options: NonNullable<Parameters<typeof toast>[1]> = {
               action: {
                 label: `Move into ${current.name}`,
-                onClick: () => onAdopt(adoptTarget(parent, targetId, name)),
+                onClick: () => onAdopt(adoptTarget(roots, targetId, name)),
               },
             };
             if (switchAction) options.cancel = switchAction;
@@ -101,12 +101,15 @@ export function QrJumpButton({
  * was, not a hardcoded fallback.
  */
 function adoptTarget(
-  parent: InfLocation,
+  roots: InfLocation[],
   targetId: InfLocation["id"],
   name: string,
 ): Pick<InfLocation, "id" | "name"> {
-  const found = findInTree(parent, targetId);
-  return found ?? { id: targetId, name };
+  for (const root of roots) {
+    const found = findInTree(root, targetId);
+    if (found) return found;
+  }
+  return { id: targetId, name };
 }
 
 function findInTree(node: InfLocation, id: string): InfLocation | null {

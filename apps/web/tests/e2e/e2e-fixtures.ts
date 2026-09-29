@@ -127,7 +127,7 @@ export async function seedConcurrently<Item, Result>(
   return results;
 }
 
-async function createFixture<Input>(
+export async function createFixture<Input>(
   page: Page,
   entity: Extract<EntityBrowserMutationCommand, { action: "create" }>["entity"],
   input: Input,
