@@ -96,7 +96,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - Household projects, tasks, and expenses (the spend ledger) — migrated from Notion into first-class entities
 - Vendor roster and per-transaction `Purchase` records: order id, purchase date, stated total, and invoice PDF, with split/link/merge operations over the Expenses
 - Typed Expense receipt roles (`principal`, tax, shipping, discount, fee, tip, other adjustment) that keep all money in `SUM(Expense.cost)` while excluding ancillary rows from merchandise/category analytics
-- `ProjectToolUsage` — a durable, deliberately coarse edge recording that a reusable tool or software Product was used on a project, for tool lifetime cost / cost-per-project-use rollups
+- `projectTool` link — a durable, deliberately coarse edge recording that a reusable tool or software Product was used on a project, for tool lifetime cost / cost-per-project-use rollups
 - Blocked-by dependency edges between projects and between tasks
 - Dashboard with overview/charts/data/gallery views (spending, timelines, task heatmaps, dependency graph); Data view offers a flat list or an expandable Work-Breakdown-Structure tree, both paginated by project root on the server
 - Detail pages with full inline editing, markdown notes, and image galleries
@@ -185,8 +185,8 @@ MCP / jobs      ───────────────↗
 JSONL routes    →  cancellable workflow streams
 ```
 
-- Typed declarations with real Zod schemas in `packages/schemas/src/entity-definitions/*.entity.ts` compile the exhaustive manifest, schema bindings, browser roster, filter URL catalog, kernel action capabilities, and contract cases. `pnpm generate:check` rejects stale or invalid artifacts; typecheck verifies referenced exports.
-- `executeEntity` is the baseline CRUD/filter/search/relation interface. TanStack Start is the browser entity adapter; MCP and jobs invoke the kernel directly. Explicit Start functions adapt workflows, while typed JSONL routes carry cancellable progress streams.
+- Typed declarations with real Zod schemas in `packages/schemas/src/entity-definitions/*.entity.ts` compile the exhaustive manifest, schema bindings, browser roster, filter URL catalog, kernel action capabilities, and contract cases. `pnpm generate` rejects invalid declarations and `pnpm check:clean` proves generation leaves the tree unchanged; typecheck verifies referenced exports.
+- `executeEntity` is the baseline CRUD/filter/search/relation interface. TanStack Start is the browser entity adapter; MCP and jobs invoke the kernel directly. Every other operation is a contract in `src/contracts/` implemented once in `src/server/operations/<domain>.server.ts`; the browser, HTTP API and MCP are adapters over it, and typed JSONL routes carry cancellable progress streams.
 - Services own workflows and external enrichment such as USDA data. Repositories retain transaction ownership, invariants, and entity-specific SQL.
 - `Database` is a request-scoped handle: routers and services pass it through, while repository helpers are the sanctioned place to resolve its Drizzle client. This keeps the layered architecture by convention and API locality.
 - Adding a baseline entity starts with one compiler spec, followed by the repository adapter and any thin workflow or route extensions; see [docs/entities.md](docs/entities.md).
@@ -203,7 +203,7 @@ See [AGENTS.md](AGENTS.md) for the prescriptive rules (branded IDs, soft delete,
 
 Products can be inventoried — an **Inventory Entry** specifies the amount of a given **Product** at a given **Location**.
 
-The household **Project Tracker** (migrated from Notion) is its own self-contained module: a **Project** groups **Tasks** and **Expenses** (the spend ledger), with blocked-by/blocking dependency edges between projects and between tasks. A soft-deletable **ProjectToolUsage** edge records that a reusable tool or software Product was used on one exact project. Tool lifetime cost and cost-per-project-use, plus software's non-additive shared spend during a project's effective date window, remain derived from Expenses and live usage edges rather than denormalized. Spend/progress rollups are SQL aggregates — never denormalized. Project `locations` is deliberately free-form `text[]` (house names live in data, not committed enums).
+The household **Project Tracker** (migrated from Notion) is its own self-contained module: a **Project** groups **Tasks** and **Expenses** (the spend ledger), with blocked-by/blocking dependency edges between projects and between tasks. A soft-deletable **`projectTool` link** records that a reusable tool or software Product was used on one exact project. Tool lifetime cost and cost-per-project-use, plus software's non-additive shared spend during a project's effective date window, remain derived from Expenses and live usage edges rather than denormalized. Spend/progress rollups are SQL aggregates — never denormalized. Project `locations` is deliberately free-form `text[]` (house names live in data, not committed enums).
 
 Spend itself is three entities, `Vendor ──< Purchase ──< Expense`: a **Vendor** is the roster of places money goes (identity only), a **Purchase** is one vendor order, receipt, or deliberately separate purchase event — its `orderId`, vendor date, literal `statedTotal`, and invoice documents — and an **Expense** is a spend line within that Purchase. `Expense.lineKind` distinguishes `principal` merchandise/services from productless tax, shipping, discounts, fees, tips, and combined adjustments. **All money still lives on `Expense`**: every total reads `SUM(cost)` across every kind, while cost-type/trade/tool analytics classify principal lines only and report adjustments as a signed reconciliation amount. `purchase.statedTotal` is never summed into spend. A partial-unique `(vendorId, orderId)` index makes one order exactly one Purchase. ⚠️ `Purchase` **changed meaning** in this split — the old flat ledger row is now `Expense`; see [docs/terminology.md](docs/terminology.md#vendor-vs-purchase-vs-expense).
 
@@ -619,8 +619,10 @@ NULL`, the embedding text hash, the AI fingerprint cache), so duplicate,
   streaming **Repair index** maintenance action. The daily cron refreshes the
   calendar feed and _asserts_ the awaiting counts are zero (Sentry when not);
   it never repairs, so a lost wakeup stays visible instead of being absorbed.
-  Search projections are written inside the entity write transaction; location
-  valuation is a SQL rollup computed on read; the problem-count badge is a KV
+  Search projections are written inside the entity write transaction; inventory
+  and location valuation are computed on every read (each entry priced through
+  the product's unit-mapping graph, then rolled up the location tree in
+  TypeScript; nothing stores them); the problem-count badge is a KV
   snapshot refreshed behind a read once a mutation marks it dirty; abandoned
   uploads are culled on the next presign.
 - **OTel disabled in production** — only runs in dev via `instrument.server.mjs`.
@@ -739,9 +741,9 @@ native Apple app (`apps/apple`) generates its client from the committed
 document and is the API's consumer of record.
 
 After changing contracts, declarations or schemas, run `pnpm generate` (one
-generator, `scripts/generator/`, running its entity, start-operation and HTTP
-OpenAPI stages in order) and `pnpm generate:check` before a PR; `pnpm check`
-includes it. Operation contracts, entity capabilities, and
+generator, `scripts/generator/`, writing the entity artifacts, then the
+operation-contract and HTTP OpenAPI artifacts) and `pnpm check:clean` before a
+PR; `pnpm check` includes generation. Operation contracts, entity capabilities, and
 runtime schemas remain authoritative; new ordinary operations require no
 HTTP-specific edits. Wire schemas are derived from the domain schemas by
 `toWire` (`apps/web/src/lib/http-api/wire.ts`): Dates become ISO strings, output
@@ -856,8 +858,8 @@ sections there.
 - **Manufacturer spelling snapped on create** — `entity create product` resolves `manufacturer` to the established spelling already used among live Products, closing the drift that let variant spellings accumulate; `entity update product` deliberately does not auto-snap.
 - **Financial accounts & transactions** — a settlement evidence layer, `FinancialAccount ──< FinancialTransaction`, separate from spend: statement activity (pending charges, split tender, installments, refunds), allocated across the Purchases it settles so one card line can cover several orders. `Expense.cost` remains the sole spend source; reconciliation compares linked transactions against Expense lines as `unknown`/`pending`/`match`/`mismatch`. Client-parsed Monarch statement preview drives selective, user-approved creation.
 - **Typed Expense line roles** — `Expense.lineKind` (`principal`, tax, shipping, discount, fee, tip, other adjustment) distinguishes merchandise/services from productless receipt adjustments, all still summed into `SUM(Expense.cost)`, while excluding adjustment rows from merchandise/category analytics.
-- **`ProjectToolUsage`** — a durable, deliberately coarse edge recording that a reusable tool or software Product was used on a project, feeding tool-lifetime-cost and cost-per-project-use rollups without double-counting the original Expense. The `/tools` Usage view adds a tools × projects matrix (three-state toggle cells, grouped by derived trade or manufacturer) for bulk-backfilling usage history, since attaching one project at a time through a dialog had left the ledger largely empty.
-- **Vendor / Purchase / Expense split** — the flat spend ledger became `Vendor ──< Purchase ──< Expense`. The old ledger row is now **`Expense`** (routes `/expenses`, MCP `*_expense(s)` tools); **`Purchase`** is a vendor order/receipt event holding its order id, vendor date, literal never-summed `statedTotal`, and invoice PDF; **`Vendor`** is a real roster. Create/update inputs still take `vendor` (a name) and `orderId` and resolve both on first sight. New operations: `linkExpensesToPurchase`, `splitExpense`, `mergePurchases`.
+- **`projectTool` link** — a durable, deliberately coarse edge recording that a reusable tool or software Product was used on a project, feeding tool-lifetime-cost and cost-per-project-use rollups without double-counting the original Expense. The `/tools` Usage view adds a tools × projects matrix (three-state toggle cells, grouped by derived trade or manufacturer) for bulk-backfilling usage history, since attaching one project at a time through a dialog had left the ledger largely empty.
+- **Vendor / Purchase / Expense split** — the flat spend ledger became `Vendor ──< Purchase ──< Expense`. The old ledger row is now **`Expense`** (routes `/expenses`, the MCP `entity` tool's `expense` actions); **`Purchase`** is a vendor order/receipt event holding its order id, vendor date, literal never-summed `statedTotal`, and invoice PDF; **`Vendor`** is a real roster. Create/update inputs still take `vendor` (a name) and `orderId` and resolve both on first sight. New operations: `linkExpensesToPurchase`, `splitExpense`, `mergePurchases`.
 - **Project tracker migration + maturation** — the household projects/tasks/expenses databases moved from Notion into first-class cubby entities (DB tables, full CRUD UI at `/projects` `/tasks` `/expenses`, MCP tools, dashboard + charts). Follow-ups consolidated the entities onto shared helpers and the entity manifest, added detail pages with full editing UI, wired all three into global search + semantic embeddings, and made them first-class in inline links/hovercards (with mobile dialogs). The one-time import script was removed post-cutover (recoverable from git history).
 - **Unified planning calendar** — meals, task ranges, planned/actual expenses, and project spans share filterable month-overview and week-ledger views with a day drawer, quick-add flows, operational summaries, and selective drag-to-reschedule. The Meals calendar tab reuses the same implementation.
 

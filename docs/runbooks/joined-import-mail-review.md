@@ -3,12 +3,14 @@
 The web Worker reads these columns and the decision table on every vendor mail
 worklist request. Apply this additive SQL to production **before** merging the
 PR that adds the worklist. Use one migration owner and ensure no other schema
-push is running. The deployed Worker can continue using the expanded schema.
+change is running. The deployed Worker can continue using the expanded schema.
 
 ## Preflight
 
 Read the live schema and compare it with the PR snapshot. Stop if an existing
-object has a different definition; do not run `db:push --force`.
+object has a different definition; do not overwrite it. This SQL is the
+historical expand step, already applied; new schema changes ship as committed
+migrations.
 
 ```sql
 SELECT table_name, column_name, data_type, is_nullable, column_default
@@ -66,8 +68,8 @@ COMMIT;
 
 Repeat the preflight queries. Confirm existing Vendor accounts have browser
 sync enabled and the decision table starts empty. Confirm the partial unique
-index predicate and the decision check explicitly; `db:push` does not verify
-these. Keep auto-merge off until the SQL and readback are complete, then require
+index predicate and the decision check explicitly; the readback below is the
+only check. Keep auto-merge off until the SQL and readback are complete, then require
 GitHub Actions on the exact final PR head.
 
 ```sql

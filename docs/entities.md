@@ -35,19 +35,19 @@ Run:
 
 ```bash
 pnpm generate
-pnpm generate:check
+pnpm check:clean
 ```
 
-One generator (`scripts/generator/main.ts`) runs three stages in order: the
-entity stage (`scripts/generator/entities/`), the Start operation stage
-(`scripts/generator/start-operations/`: the operation registry, handler loaders,
-and the browser client catalog that resolves each contract's cache tags and
-invalidation data), and the HTTP OpenAPI document with its native derivations
-(`scripts/generator/http-api/`). `generate:check` fails
-on invalid metadata, duplicate entity keys or routes, invalid relation
-policies, unsupported capabilities, and stale, missing, or extraneous generated
-files from any stage. Typecheck verifies declaration types and referenced
-exports.
+One generator (`scripts/generator/main.ts`) writes the entity artifacts first
+(`scripts/generator/entities/`), then the artifacts derived from the operation
+contracts: the operation registry, handler loaders, the browser client catalog
+that resolves each contract's cache tags and invalidation data
+(`scripts/generator/start-operations/`), and the HTTP OpenAPI document with its
+native derivations (`scripts/generator/http-api/`). Generation fails on invalid
+metadata, duplicate entity keys or routes, invalid relation policies, and
+unsupported capabilities. Generated files are never committed:
+`pnpm check:clean` proves a generate run leaves the tree unchanged. Typecheck
+verifies declaration types and referenced exports.
 
 ## One declaration, several consumers
 
@@ -129,7 +129,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: false, // or "gallery" (an `<Entity>Image` join table) | "cover" (one `coverImageId`) | "logo" (one direct logo FK)
+    images: false, // or "gallery" | "cover" | "logo" — all `EntityAttachment` rows, differing in `role`
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },
@@ -621,10 +621,10 @@ Extensions delegate to those services instead of branching inside the kernel.
 
 Generic detail, list, deferred filter-option, and write operations use one
 authenticated operation dispatcher and generated entity-to-input/output maps.
-Image, USDA Food, and Cookbook retain explicit browser projections because
-their shapes are specialized, but those projections use the same operation
-module for authentication, validation, errors, cancellation checkpoints,
-tracing, and console observability.
+Specialized shapes such as Image and USDA Food are ordinary operations in
+`server/operations/`, so they share the operation module's authentication,
+validation, errors, cancellation checkpoints, tracing, and console
+observability.
 
 Ordinary browser calls POST a SuperJSON operation envelope to
 `/api/browser/dispatch`. The Worker routes this path directly to the shared
@@ -642,17 +642,21 @@ policy: a query transported through POST is still cache-eligible. Each MCP tool
 execution selects a new caller from the same freshness state. Availability reads use the selected database; recipe repairs and
 their immediate follow-up reads remain strong.
 
-Workflow operations are explicit Start functions with no entity business logic in
-the transport adapter. Removing an operation has no deployment shim: a tab loaded
-before that deployment must reload before calling the removed function.
+Operations that are not entity CRUD have one path: an operation contract in
+`src/contracts/`, implemented once in `src/server/operations/<domain>.server.ts`
+with `implementOperationDomain(contract, handlers)`, calling repositories. The
+browser client, HTTP API, and MCP are adapters over that implementation and
+hold no business logic; there is no per-transport `*-browser.server.ts` module.
+Removing an operation has no deployment shim: a tab loaded before that
+deployment must reload before calling the removed function.
 
 MCP invokes `executeEntity` directly through the `entity` tool and publishes its
-machine-readable contract at `entities://catalog`. The `get_entities` capability
-uses the same generated get/list/search contracts with mutation actions excluded
-by its input schema. Workflow-shaped MCP tools remain separate. MCP, jobs, repositories, entity modules, and kernel tests must
-not import browser transport modules. Explicit workflow adapters and typed JSONL
-stream routes are the only transport seams; business behavior remains in
-workflow modules.
+machine-readable contract at `entities://catalog`. `entity_read` uses the same
+generated get/list/search contracts with mutation actions excluded by its input
+schema. Workflow-shaped MCP tools remain separate. MCP, jobs, repositories,
+entity modules, and kernel tests must not import browser transport modules.
+Operation adapters and typed JSONL stream routes are the only transport seams;
+business behavior remains in the operation and workflow modules.
 
 ## Filters and search
 
@@ -747,7 +751,7 @@ exception goes with its entity when the entity is removed or merged away.
 Every logical relation declares its target, cardinality, primary named source,
 provenance path, and inverse path. A relationship may add more named sources;
 for example, `Purchase.products` combines detachable `explicit` evidence from
-`PurchaseProduct` with non-detachable `expense` evidence from acquisition
+`purchaseProduct` links with non-detachable `expense` evidence from acquisition
 Expenses. Mutable sources additionally name a typed item schema, adapter, and
 transport exposure. The compiler rejects duplicate relation/source keys,
 unresolvable mutation sources, invalid inverses, and stale generated bindings.
@@ -793,8 +797,29 @@ The physical graph is composed at read time from `ENTITY_EDGES` and
 `ENTITY_EDGE_OWNERS` (`repo/entity-edge-source.ts`): `(edgeKey, sourceKind,
 sourceId, targetKind, targetId)` with both ends live. It backs the Relations
 tab's Connections, the impact preview, the graph explorer's physical edges,
-the Problems orphan finder, and MCP `get_entity_connections`. Writes never go
+the Problems orphan finder, and the MCP connections read. Writes never go
 through it.
+
+Two generic tables carry the relationships and identifiers that used to have a
+table each (ADR 0007):
+
+- `EntityLink(kind, fromEntityId/fromKind, toEntityId/toKind, quantity)` holds
+  every pure pairing of two entities: `wishCandidate`, `purchaseProduct`,
+  `projectTool`, `gardenEntryPlanting`, `productComponent`, `taskDependency`,
+  `projectDependency`. Link kinds are declared in
+  `packages/schemas/src/entity-links.ts` (endpoint kinds, quantity, self-link and
+  cycle rules, per-end role, label, liveness, and merge collision rule). The
+  table's CHECKs and the edge-source branch per kind derive from that
+  declaration; the write helpers are in `repo/entity-links.ts`. Every query
+  names its `kind` and filters `deletedAt`.
+- `EntityExternalId(entityId/entityKind, source, kind, externalId, url,
+isPrimary)` holds every identifier an outside system gave an entity, and
+  `ExternalSource` registers the source slugs. Kinds and the entity kinds they
+  attach to are declared in `EXTERNAL_ID_KINDS`
+  (`packages/schemas/src/external-id.ts`): product identifiers (`asin`,
+  `retailer_sku`, `gtin_14`, …), `settlement_ref` on financial transactions,
+  `page` (Notion) and `folder` (Drive). A live `(source, kind, externalId)`
+  names one entity; rows soft-delete with their entity.
 
 ## Product classification and photos
 
@@ -870,7 +895,9 @@ precedence rule.
    adds `entityIdentityFk(...)` beside its `shortcodeUnique(...)`; the identity
    triggers follow the roster automatically, and the production cutover for
    an existing database must backfill `Entity`. A new join or child table that
-   carries an edge column names its owner in `ENTITY_EDGE_OWNERS`.
+   carries an edge column names its owner in `ENTITY_EDGE_OWNERS`. A new
+   many-to-many pairing of two entities is a kind in `ENTITY_LINK_KINDS`, not a
+   new table.
 7. Run generated action contracts and the affected PostgreSQL contracts, plus
    UI and built-browser checks for changed presentation. Follow the repository
    validation guide for final gates.

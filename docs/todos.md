@@ -575,13 +575,14 @@ example vegetable` must not resolve to the weight of an entire linked bag
   requires the workerd-backed harness), only an optional local shortcut.
 
 - **Declarative "many, clamped to one" cardinality.** The image-provenance
-  work chose a many-row `ImageSighting` entity plus derived declared-`one`
+  work chose a many-row `ImageSighting` child table plus derived declared-`one`
   Image fields over turning scalar relations into arrays with a runtime
   clamp. Cardinality is a compile-time `one|many` literal
   (`packages/schemas/src/entity-definitions/definition.ts`, relation
   metadata) consumed by the editor branches, `image-policy.gen.ts`'s
   `source-id` vs `source-id-list` bindings, Swift `FieldReference.multiple`,
-  every scalar FK column, and ADR 0001's no-generic-edge rule. Revisit only
+  every scalar FK column, and ADR 0007's rule that only payload-free pairings
+  of two entities are `EntityLink` kinds. Revisit only
   when a second entity needs multi-evidence provenance; the existing
   relation `provenance.sources[]` is the declarative construct to extend
   first.
@@ -1272,11 +1273,12 @@ productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
   TanStack Start supplies equivalent named request/result/error events and trace
   hooks: <https://tanstack.com/start/latest/docs/framework/react/guide/observability>.
   Checked 2026-09-16: the guide still says OpenTelemetry support is coming, and
-  Sentry's global function middleware cannot name spans per operation because
-  every operation multiplexes through one Start function
-  (`start-operation-dispatch.server.ts`); `observed-request.ts` also carries
-  DB metrics and expected-error filtering. Revisit when Start exposes the
-  dispatched operation id to a request hook.
+  Sentry's global function middleware never sees a named operation because every
+  browser operation posts to one route, `/api/browser/dispatch`
+  (`browser-operation-dispatch.ts`, then `start-operation-dispatch.server.ts`),
+  not a Start function; `observed-request.ts` also carries DB metrics and
+  expected-error filtering. Revisit when Start exposes the dispatched operation
+  id to a request hook.
 
 - **USDA duplicate collapsing** — Promote if repeated UPC versions return to useful
   search pages; reuse `dedupeUsdaFoodsByUpc` in the MCP handler rather than changing

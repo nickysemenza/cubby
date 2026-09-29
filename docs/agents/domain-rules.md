@@ -34,8 +34,9 @@ Traps, all seen for real:
 - Migrations from parallel branches can interleave: drizzle skips a journal
   entry older than the last applied one, so regenerate after merging `main`
   (`db:check` rejects an out-of-order journal).
-- Adding a value to a `packages/schemas` pgEnum needs an expand-first
-  `ALTER TYPE` in prod before deploy.
+- Enum-like columns are text with a CHECK generated from a `packages/schemas`
+  value array. Adding a value widens that CHECK, so `db:generate` emits a
+  migration that must reach prod before the code that writes the value deploys.
 - Adding a column needs a full dev-server restart: the Drizzle client is cached
   on `globalThis` across HMR, and a stale schema silently omits the column from
   `SELECT`s (reads as `null`).
