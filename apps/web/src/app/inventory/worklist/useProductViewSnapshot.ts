@@ -20,7 +20,7 @@ import { viewsForEntity } from "~/entities/view-manifest";
  * send it — the view manifest is the one statement of the predicate, so a
  * worklist that runs it here cannot drift from what the view shows.
  */
-export function productViewFilters(viewId: string): FilterPatch {
+function productViewFilters(viewId: string): FilterPatch {
   const view = viewsForEntity("product").find((v) => v.id === viewId);
   if (!view) throw new Error(`Unknown product view: ${viewId}`);
   const values = new Map<string, FilterValue>(

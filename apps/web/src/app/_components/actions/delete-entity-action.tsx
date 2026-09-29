@@ -27,7 +27,7 @@ export type DeleteEntityActionCommands = Pick<
 >;
 
 /** One confirmation sentence for a delete of `count` rows of `label`. */
-export function deleteDescription(label: string, count = 1): string {
+function deleteDescription(label: string, count = 1): string {
   const noun = label.toLowerCase();
   const subject =
     count === 1 ? `this ${noun}` : `${count} ${pluralWord(noun, count)}`;

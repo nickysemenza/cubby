@@ -134,7 +134,7 @@ function ConnectionImpactGroups({
  * Advisory — it never disables or changes the caller's confirm action; the
  * delete itself re-checks before it runs.
  */
-export function DeleteImpactPreview({
+function DeleteImpactPreview({
   id,
   operations,
 }: {

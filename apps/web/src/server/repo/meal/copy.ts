@@ -7,6 +7,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
 
+import { shiftPlainDate } from "~/lib/plain-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   meal,
@@ -25,7 +26,7 @@ import {
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 /** A copy that must stay a plan-sized write: a couple of months of meals. */
-export const MAX_COPY_RANGE_DAYS = 62;
+const MAX_COPY_RANGE_DAYS = 62;
 
 const DAY_MS = 86_400_000;
 
@@ -34,11 +35,8 @@ const utcDay = (date: string) => {
   return Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1);
 };
 
-export const dayDistance = (from: string, to: string) =>
+const dayDistance = (from: string, to: string) =>
   Math.round((utcDay(to) - utcDay(from)) / DAY_MS);
-
-export const shiftDate = (date: string, days: number) =>
-  new Date(utcDay(date) + days * DAY_MS).toISOString().slice(0, 10);
 
 export type CopiedMeals = {
   mealIds: MealId[];
@@ -230,7 +228,7 @@ export const copyMealRange = (
       tx,
       actor,
       inRange.map((row) => row.id),
-      (sourceDate) => shiftDate(sourceDate, offset),
+      (sourceDate) => shiftPlainDate(sourceDate, offset),
     );
   });
 };
