@@ -1234,6 +1234,10 @@ PRs; unordered.
   `hooks/`, `app/_components/hooks/`, `lib/`, `misc/` and `server-functions/`.
   Move to `ui/` (primitives), `features/<domain>/`, `entity/` (generic shells)
   and `lib/` (pure utilities) with one codemod commit and nothing else in flight.
+- **Retire the `server/repo/*/index.ts` barrels.** Kernel repositories bypass
+  them; about 45 re-exported names have no production importer. Rewrite
+  importers per name with an import-aware codemod (not sed), leaving
+  `database-helpers`, which is a real module API with ~350 importers.
 - **One Cargo workspace for `recipebridge` and `cubby-ffi`.** They keep separate
   `Cargo.lock` files. Trap: member `[profile.*]` tables are ignored in a
   workspace and `wasm-pack` takes only `--dev/--profiling/--release`, so
