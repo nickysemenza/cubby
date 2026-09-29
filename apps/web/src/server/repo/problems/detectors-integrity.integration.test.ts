@@ -12,9 +12,11 @@ import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
   entityAttachment,
+  entityExternalId,
   entityIdentity,
   entityLink,
   expenseAttribution,
+  externalSource,
   financialTransactionAllocation,
   imageDerivative,
   imageDescriptionCorrection,
@@ -34,8 +36,6 @@ import {
   orderMailAttachment,
   photoGroupProposal,
   productConversionCoverage,
-  entityExternalId,
-  externalSource,
   productMatchCandidate,
   productUnitMappings,
   purchasePaymentEvidence,
@@ -46,7 +46,6 @@ import {
   runControlEvent,
   runEvidence,
   runFinding,
-  runMutation,
   runOperation,
   runOrderCandidate,
   runProgress,
@@ -276,7 +275,7 @@ const mkImageSighting = async (
     >
   >,
 ) =>
-  insertWithShortcode(db, "imageSighting", {
+  insertAndReturn(db, imageSighting, {
     imageId: values.imageId ?? (await mkImage(db)).id,
     ledgerPartyId: values.ledgerPartyId ?? (await mkLedgerParty(db)).id,
     deviceId: values.deviceId ?? (await mkDevice(db)).id,
@@ -826,7 +825,8 @@ const SOURCE_FACTORIES = {
     return insertWithShortcode(db, "inventory", {
       productId: product.id,
       locationId: location.id,
-      amount: { value: 1, unit: "each" },
+      amountValue: 1,
+      amountUnit: "each",
       ownershipMode: "person",
       ownerLedgerPartyId: parseEntityId("ledgerParty", targetId),
     });
@@ -912,7 +912,8 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: party.id,
       sourceKind: "ingredient",
       ingredientId: parseEntityId("ingredient", targetId),
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -979,7 +980,8 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: party.id,
       sourceKind: "product",
       productId: product.id,
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -997,7 +999,8 @@ const SOURCE_FACTORIES = {
       mealRecipeId: preparation.id,
       mealId: parseEntityId("meal", targetId),
       ledgerPartyId: party.id,
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -1011,7 +1014,8 @@ const SOURCE_FACTORIES = {
       mealRecipeId: preparation.id,
       mealId: meal.id,
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -1022,7 +1026,8 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
       sourceKind: "product",
       productId: product.id,
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -1049,11 +1054,13 @@ const SOURCE_FACTORIES = {
     });
   },
 
-  "ProductUnitMappings.productId": (db, targetId) =>
+  "ProductUnitMapping.productId": (db, targetId) =>
     insertAndReturn(db, productUnitMappings, {
       productId: parseEntityId("product", targetId),
-      a: { value: 1, unit: "cup" },
-      b: { value: 120, unit: "g" },
+      aValue: 1,
+      aUnit: "cup",
+      bValue: 120,
+      bUnit: "g",
     }),
 
   "InventoryEntry.productId": async (db, targetId) => {
@@ -1061,7 +1068,8 @@ const SOURCE_FACTORIES = {
     return insertWithShortcode(db, "inventory", {
       productId: parseEntityId("product", targetId),
       locationId: l.id,
-      amount: { value: 1, unit: "each" },
+      amountValue: 1,
+      amountUnit: "each",
     });
   },
 
@@ -1106,7 +1114,8 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: party.id,
       sourceKind: "product",
       productId: parseEntityId("product", targetId),
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -1149,7 +1158,8 @@ const SOURCE_FACTORIES = {
     return insertWithShortcode(db, "inventory", {
       productId: p.id,
       locationId: parseEntityId("location", targetId),
-      amount: { value: 1, unit: "each" },
+      amountValue: 1,
+      amountUnit: "each",
     });
   },
 
@@ -1177,7 +1187,7 @@ const SOURCE_FACTORIES = {
   "Location.productId": (db, targetId) =>
     insertWithShortcode(db, "location", {
       name: uniq("Location"),
-      type: null,
+      type: "furniture",
       productId: parseEntityId("product", targetId),
     }),
 
@@ -1501,15 +1511,6 @@ const SOURCE_FACTORIES = {
       mediaType: "application/pdf",
     });
   },
-
-  "RunMutation.runId": (db, targetId) =>
-    insertAndReturn(db, runMutation, {
-      runId: parseEntityId("run", targetId),
-      targetKind: "run",
-      targetId,
-      mutationKind: "liveness-fixture",
-      postFingerprint: uniq("post-fingerprint"),
-    }),
 
   "RunOperation.runId": (db, targetId) =>
     insertAndReturn(db, runOperation, {

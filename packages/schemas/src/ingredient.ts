@@ -25,7 +25,7 @@ import {
   recipeUsageRefMcpEntityOut,
   recipeUsageOut,
 } from "./recipe";
-import { mutationSideEffectsSchema } from "./background-jobs";
+import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { displayImagesField } from "./display-images";
 import { ingredientRelatedFilterFields } from "./related-view";
 

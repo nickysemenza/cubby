@@ -11,7 +11,6 @@ import { useQueries } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useId, useMemo, useRef } from "react";
 
-import { recipe } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout/row";
 import { Stack } from "~/components/layout/stack";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
@@ -26,6 +25,7 @@ import {
 import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
+import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { flattenRecipes } from "~/lib/cookbook-graph";
 import { cookbookRecipeSignature } from "~/lib/recipe-signature";
 

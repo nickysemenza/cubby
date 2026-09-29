@@ -40,6 +40,7 @@ import { parseLocationType } from "~/server/repo/location/parse-type";
 import { categorySummarySql } from "~/server/repo/product-category-sql";
 
 import { hydrateImageReadProjection } from "../image-read-projection";
+import { locationAiDescriptionSql } from "./ai-description";
 import { buildLocationWithChildren } from "./helpers";
 import type { LocationWithParentChild } from "./internal-types";
 import { loadStockItemsByLocation } from "./stock-items";
@@ -60,7 +61,7 @@ const locationTreeRowSchema = z.object({
   lastBulkInventory: z.coerce.date().nullable(),
   parentId: locationIdSchema.nullable(),
   productId: productIdSchema.nullable(),
-  type: z.string().nullable(),
+  type: z.string(),
   aiDescription: z.string().nullable(),
   notes: z.string().nullable(),
   depth: z.coerce.number().int().nonnegative(),
@@ -72,7 +73,7 @@ const ancestorRowSchema = z.object({
   depth: z.coerce.number().int().nonnegative(),
   shortcode: z.string(),
   name: z.string(),
-  type: z.string().nullable(),
+  type: z.string(),
 });
 
 const breakdownLocationRowSchema = z.object({
@@ -80,7 +81,7 @@ const breakdownLocationRowSchema = z.object({
   parentId: locationIdSchema.nullable(),
   shortcode: z.string(),
   name: z.string(),
-  type: z.string().nullable(),
+  type: z.string(),
 });
 
 /**
@@ -116,8 +117,9 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
       INNER JOIN location_tree lt ON l."parentId" = lt.id
       WHERE lt.depth < ${MAX_TREE_DEPTH} AND l."deletedAt" IS NULL
     )
-    SELECT * FROM location_tree
-    ORDER BY depth, name
+    SELECT lt.*, ${locationAiDescriptionSql(sql`lt."id"`)} AS "aiDescription"
+    FROM location_tree lt
+    ORDER BY lt.depth, lt.name
   `);
 
   const locationsMap = new Map<LocationId, LocationWithParentChild>();
@@ -333,7 +335,7 @@ export const getLocationInventoryBreakdown = async (
     byId.set(row.id, {
       id: parseShortcodeFor("location", row.shortcode),
       name: row.name,
-      type: parseLocationType(row.type, { id: row.shortcode, name: row.name }),
+      type: parseLocationType(row.type),
       directItemCount: countsByLocationId.get(row.id) ?? 0,
       totalItemCount: 0,
       children: [],
@@ -439,10 +441,7 @@ export const loadLocationAncestorsWithIds = async (
       locationId: row.locationId,
       id: parseShortcodeFor("location", row.shortcode),
       name: row.name,
-      type: parseLocationType(row.type, {
-        id: row.shortcode,
-        name: row.name,
-      }),
+      type: parseLocationType(row.type),
     };
     if (chain) chain.push(rung);
     else byId.set(row.root, [rung]);

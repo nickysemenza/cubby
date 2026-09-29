@@ -25,4 +25,6 @@ export const tableSearchFields = {
    * strict entity-list route preserves an exact Problem deep link.
    */
   worklist: urlStringParam,
+  /** `none`: the person cleared the entity's declared default filter. */
+  filters: z.literal("none").optional().catch(undefined),
 };

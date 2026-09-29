@@ -82,6 +82,26 @@ Notion preview, cookbook comparison, semantic similarity, recommendations, and
 placement declare their read and decision sequences while retaining domain
 computation and provider ports.
 
+## Browser cache policy
+
+Contracts (`apps/web/src/contracts/*.contract.ts`) carry browser cache policy as
+data: a query's `cache: { tags?, profile? }` and a mutation's
+`invalidates: RippleKey[]`. Tags default to `[domain, member]`, so a member
+declares them only when they differ (`tags: []` opts out of tagging).
+`invalidates` names rows of the fan-out table in
+`integrations/tanstack-query/cache-tags.ts`; an empty list is a deliberate no-op.
+The vocabulary types live in `contracts/cache-policy.ts`, which contracts may
+import; no contract holds React, query-client, or input-dependent code.
+
+The Start operation stage of `pnpm generate` resolves that data into one
+generated browser catalog, `integrations/tanstack-query/generated/catalog.gen.ts`,
+with a domain object per contract (`product`, `recipe`, ...) that call sites
+import. Policy that must read the call's input (the per-entity output schema and
+cache profile of `entity.list`/`entity.detail`/`entity.timeline`, the payload-keyed
+fan-out of `entity.mutate`) cannot be data; it lives in
+`integrations/tanstack-query/operation-overrides.ts`, and the catalog spreads it
+onto its member. There are no per-domain client wrapper modules.
+
 ## Compatibility
 
 The migration preserves the 19 entities, 249 operation IDs and kinds, and 111

@@ -25,7 +25,7 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
 import { EntityIcon } from "~/entities/entities";
-import type { recommendations } from "~/lib/recommendations.functions";
+import type { recommendations } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 export interface ProductMatchQueueOperations {
   readonly productMatches: typeof recommendations.productMatches;

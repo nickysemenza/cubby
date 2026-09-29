@@ -2,11 +2,11 @@ import type { CookbookRunReport } from "@cubby/schemas/cookbook";
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 
-import { recipe } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { StatusText } from "~/components/ui/status-text";
+import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 
 /** The handful of facts worth reading months after a book was extracted. */

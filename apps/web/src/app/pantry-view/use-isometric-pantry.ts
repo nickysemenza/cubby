@@ -3,8 +3,8 @@ import { useNavigate } from "@tanstack/react-router";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { location } from "~/app/locations/location.functions";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { useAllInventoryItems } from "../_components/inventory/use-all-inventory-items";
 import {

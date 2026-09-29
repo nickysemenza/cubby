@@ -34,7 +34,6 @@ import {
 import { LocationSweep } from "~/app/_components/inventory/location-sweep/LocationSweepSheet";
 import { useLocationPhotoCapture } from "~/app/_components/locations/use-location-photo-capture";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
-import { product } from "~/app/products/product.functions";
 import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -50,8 +49,11 @@ import {
 import { Spinner } from "~/components/ui/spinner";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { focusOnMount } from "~/hooks/focus-on-mount";
-import { ai } from "~/lib/ai.functions";
-import { imageUpload } from "~/lib/image.functions";
+import {
+  product,
+  ai,
+  imageUpload,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { putPresignedObject } from "~/lib/presigned-upload";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 

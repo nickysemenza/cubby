@@ -8,8 +8,10 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ingredient } from "~/app/ingredients/ingredient.functions";
-import { recipe } from "~/app/recipes/recipe.functions";
+import {
+  ingredient,
+  recipe,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { addWithDependencies } from "~/lib/cookbook-graph";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 

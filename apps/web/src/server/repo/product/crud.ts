@@ -118,7 +118,10 @@ import {
 } from "~/server/repo/expense-aggregate-sql";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
-import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
+import {
+  enrichProductRowsWithInventoryValuations,
+  loadInventoryValuations,
+} from "~/server/repo/inventory/valuation";
 import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
@@ -192,6 +195,7 @@ import {
   quantityVarianceSql,
 } from "./quantity-ledger";
 import type { ProductDeepDB, ProductListDB } from "./types";
+import { unitMappingColumns } from "./unit-mappings";
 import {
   assertNoCanonicalPriceMapping,
   ensureSlotPrimaries,
@@ -412,7 +416,11 @@ const fetchProductById = async (
   const priced = await observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
     "pricing",
-    () => enrichProductRowsWithPricing(db, [row]),
+    async () =>
+      enrichProductRowsWithPricing(
+        db,
+        await enrichProductRowsWithInventoryValuations(db, [row]),
+      ),
   );
   const ledgered = await observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
@@ -584,7 +592,10 @@ export const getProductsByShortcodes = async (
       results.flatMap((row) => productImageShortcodesOf(row.images)),
     ),
   ]);
-  const priced = await enrichProductRowsWithPricing(db, results);
+  const priced = await enrichProductRowsWithPricing(
+    db,
+    await enrichProductRowsWithInventoryValuations(db, results),
+  );
   const ledgered = await hydrateProductLocationBreadcrumbs(
     db,
     await enrichProductRowsWithQuantityLedger(db, priced),
@@ -1259,8 +1270,12 @@ const loadProductListRelations = async (
   for (const row of unitMappings) {
     result.get(row.productId)?.unitMappings.push(row);
   }
+  const valuations = await loadInventoryValuations(db, inventoryEntries);
   for (const row of inventoryEntries) {
-    result.get(row.productId)?.inventoryEntry.push(row);
+    result.get(row.productId)?.inventoryEntry.push({
+      ...row,
+      valuation: valuations.get(row.id) ?? null,
+    });
   }
 
   return result;
@@ -1644,8 +1659,7 @@ export const createProduct = async (
         await tx.insert(productUnitMappings).values(
           unitMappings.map((mapping) => ({
             productId: newProduct.id,
-            a: mapping.a,
-            b: mapping.b,
+            ...unitMappingColumns(mapping),
             source: mapping.source,
           })),
         );
@@ -1881,9 +1895,6 @@ export const updateProduct = async (
       data.labelNutrition !== undefined
     ) {
       await markProductConversionCoverageInputStale(tx, [id]);
-    }
-    if (data.price !== undefined || unitMappings !== undefined) {
-      await syncInventoryValuationsForProduct(tx, id);
     }
     if (externalIds !== undefined) {
       const desired = desiredExternalIds ?? [];

@@ -30,14 +30,17 @@ export const maintenanceContract = defineContract("maintenance", {
   backfillImageProcessing: mutation({
     input: imageProcessingBatchInput,
     output: imageProcessingBatchOutput,
+    invalidates: ["maintenance"],
   }),
   imageProcessing: query({
     input: z.undefined(),
     output: imageProcessingMaintenanceOutput,
+    cache: { tags: [["maintenance"], ["image"]] },
   }),
   configureImageProcessing: mutation({
     input: imageProcessingSettings,
     output: imageProcessingSettings,
+    invalidates: ["maintenance"],
   }),
   // Live operational state.
   awaitingWork: query({
@@ -48,17 +51,21 @@ export const maintenanceContract = defineContract("maintenance", {
   settleAwaitingWork: mutation({
     input: z.undefined(),
     output: settleAwaitingWorkOutSchema,
+    invalidates: ["maintenance"],
   }),
   repairImageDimensions: mutation({
     input: repairImageDimensionsInputSchema,
     output: repairImageDimensionsOutSchema,
+    invalidates: ["maintenance"],
   }),
   classifyImageProvenance: mutation({
     input: classifyImageProvenanceInputSchema,
     output: classifyImageProvenanceOutSchema,
+    invalidates: ["image"],
   }),
   backfillImageMetadata: mutation({
     input: backfillImageMetadataInputSchema,
     output: backfillImageMetadataOutSchema,
+    invalidates: ["image"],
   }),
 });

@@ -8,7 +8,7 @@ import {
   getImageMetadataExtractionRow,
 } from "~/server/repo/image";
 import { applyImageMetadataExtraction } from "~/server/repo/image-metadata";
-import { createImageSighting } from "~/server/repo/image-sighting";
+import { recordImageSightings } from "~/server/repo/image-sighting";
 import { createLedgerParty } from "~/server/repo/ledger-party";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
 import { extractImageMetadata } from "~/server/services/image-metadata";
@@ -229,21 +229,23 @@ describe("image metadata extraction + backfill (real Postgres)", () => {
       },
       ctx.actor,
     );
-    await createImageSighting(
+    await recordImageSightings(
       ctx.db,
-      {
-        imageId: image.shortcode,
-        ledgerPartyId: ana.output.id,
-        deviceId: anaPhone.output.id,
-        assetKey: "ASSET-1",
-        sourceType: "userLibrary",
-        mediaSubtypes: [],
-        hasAdjustments: false,
-        matchKind: "import",
-        observedAt: new Date("2025-06-01T00:00:00Z"),
-        capturedAt: new Date("2025-06-01T08:00:00Z"),
-        location: { lat: 51.5, lng: -0.12 },
-      },
+      [
+        {
+          imageId: image.shortcode,
+          ledgerPartyId: ana.output.id,
+          deviceId: anaPhone.output.id,
+          assetKey: "ASSET-1",
+          sourceType: "userLibrary",
+          mediaSubtypes: [],
+          hasAdjustments: false,
+          matchKind: "import",
+          observedAt: new Date("2025-06-01T00:00:00Z"),
+          capturedAt: new Date("2025-06-01T08:00:00Z"),
+          location: { lat: 51.5, lng: -0.12 },
+        },
+      ],
       ctx.actor,
     );
 

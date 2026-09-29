@@ -3,4 +3,3 @@
 **/drizzle/meta/*.json linguist-generated
 **/migrations/meta/*.json linguist-generated
 **/worker-configuration.d.ts linguist-generated
-apps/web/src/server/db/__snapshots__/application-schema.json linguist-generated

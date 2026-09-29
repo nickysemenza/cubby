@@ -31,7 +31,7 @@ import { Input } from "~/components/ui/input";
 import { entities } from "~/entities/entities";
 import { enumFieldLabel } from "~/entities/enum-field-display";
 import { useIsMobile } from "~/hooks/useMobile";
-import { search } from "~/lib/search.functions";
+import { search } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn } from "~/lib/utils";
 
 import {

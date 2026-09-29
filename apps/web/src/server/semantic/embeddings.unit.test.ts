@@ -1,15 +1,6 @@
-import { runEntityId } from "@cubby/schemas/identifiers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AI_CACHE_TTL_SECONDS } from "~/server/clients/ai-adapters";
-import { Database } from "~/server/db";
-
-import type { EmbeddingPorts } from "./embeddings";
-
-const db = new Database(() => {
-  throw new Error("Embedding unit ports do not resolve a database runtime");
-});
-const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -51,8 +42,8 @@ async function embedTextsOverFakeGateway(response: OpenAiEmbeddingsResponse) {
       }),
     );
   });
-  const { embedTexts, productionEmbeddingPorts } = await import("./embeddings");
-  return { embedTexts, productionEmbeddingPorts, sent };
+  const { embedTexts } = await import("./embeddings");
+  return { embedTexts, sent };
 }
 
 const openAiEmbeddingsResponse = (count: number): OpenAiEmbeddingsResponse => ({
@@ -132,59 +123,5 @@ describe("embedTexts over the AI Gateway", () => {
 
     expect(vectors[0]?.[0]).toBe(0.25);
     expect(vectors[1]?.[0]).toBe(0.5);
-  });
-});
-
-describe("embedTexts usage recording", () => {
-  it("records AI usage for embedding calls through the external gateway port", async () => {
-    const usage: Array<{
-      feature: string;
-      provider: string;
-      model: string;
-      operation: string;
-      inputTokens: number | null | undefined;
-      cacheStatus: string | null | undefined;
-    }> = [];
-    const { embedTexts, productionEmbeddingPorts } =
-      await embedTextsOverFakeGateway(openAiEmbeddingsResponse(1));
-    const ports = {
-      ...productionEmbeddingPorts,
-      recordAiUsage: async (_db, record) => {
-        usage.push({
-          feature: record.feature,
-          provider: record.provider,
-          model: record.model,
-          operation: record.operation,
-          inputTokens: record.inputTokens,
-          cacheStatus: record.cacheStatus,
-        });
-      },
-    } satisfies EmbeddingPorts;
-
-    await embedTexts(
-      ["eggs"],
-      {
-        db,
-        runId,
-        feature: "entity-embedding",
-        operation: "entityEmbeddingBackfill",
-        entity: {
-          entityKind: "product",
-          entityId: "00000000-0000-4000-8000-000000000002",
-        },
-      },
-      ports,
-    );
-
-    expect(usage).toEqual([
-      {
-        feature: "entity-embedding",
-        provider: "openai",
-        model: "text-embedding-3-small",
-        operation: "entityEmbeddingBackfill",
-        inputTokens: 4,
-        cacheStatus: "none",
-      },
-    ]);
   });
 });

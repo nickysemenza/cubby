@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { maintenance } from "~/lib/maintenance.functions";
+import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { countLabel } from "~/lib/pluralize";
 
 const STOPPED_LABEL = {

@@ -3,7 +3,7 @@ import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { EntityMutationTransport } from "~/entities/entity-contracts";
-import { entityMutation } from "~/entities/entity-mutation.functions";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
@@ -29,7 +29,7 @@ function financialAccountMutationPort() {
       action: "update",
       entity: "financialAccount",
       item,
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     }),
   );
   const mutation = entityMutation.mutate.withTransport(transport);

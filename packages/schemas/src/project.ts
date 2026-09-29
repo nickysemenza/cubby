@@ -17,7 +17,7 @@ import {
   projectRelatedFilterFields,
   taskRelatedFilterFields,
 } from "./related-view";
-import { mutationSideEffectsSchema } from "./background-jobs";
+import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import {
   auditDateFilterFields,
   dateRangeFields,
@@ -202,7 +202,7 @@ export type ProjectDateWindow = z.infer<typeof projectDateWindow>;
 
 export const projectRollup = z.object({
   spent: money.describe(
-    "SUM(cost) of live expenses — the blended net (actualSpent + committedSpent − contributions), including planned + offsets",
+    "SUM(cost) of live expenses — the blended net (actualSpent + committedSpent − credits), including planned + offsets",
   ),
   // The `spent` figure above blends three economically distinct quantities;
   // these split it so callers can show a true money-out "Actual" that matches
@@ -213,8 +213,8 @@ export const projectRollup = z.object({
   committedSpent: money.describe(
     "SUM(cost) where cost > 0 and future — planned, not yet spent",
   ),
-  contributions: money.describe(
-    "Legacy field name: SUM(-cost) where cost < 0 — project credits, positive magnitude; unrelated to household funding contributions",
+  credits: money.describe(
+    "SUM(-cost) where cost < 0 — project credits, positive magnitude",
   ),
   expenseCount: z.number().int(),
   taskCount: z.number().int(),
@@ -223,7 +223,7 @@ export const projectRollup = z.object({
     spent: money,
     actualSpent: money,
     committedSpent: money,
-    contributions: money,
+    credits: money,
     expenseCount: z.number().int(),
     taskCount: z.number().int(),
     doneTaskCount: z.number().int(),

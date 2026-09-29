@@ -37,13 +37,13 @@ import {
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { entityDetailLink, isBrowserRoutedEntity } from "~/entities/entities";
 import {
-  entityTimeline,
   type EntityTimelineFiltersByEntity,
   entityTimelineFor,
   type EntityTimelineParams,
   type EntityTimelineWindowByEntity,
-} from "~/entities/entity-timeline.functions";
+} from "~/entities/entity-timeline";
 import type { TimelineEntity } from "~/entities/generated/entity-timelines.gen";
+import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { parsePlainDate } from "~/lib/plain-date";
 import { cn, formatCurrency } from "~/lib/utils";
 

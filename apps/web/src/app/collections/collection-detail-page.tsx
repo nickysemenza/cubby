@@ -41,6 +41,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { Skeleton } from "~/components/ui/skeleton";
+import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import {
   CopyableShortcode,
@@ -48,7 +49,6 @@ import {
   ProductPurchasesPopover,
   ProductTradeBadges,
 } from "./collection-product-context";
-import { collection as collectionOperations } from "./collection.functions";
 
 const PAGE_SIZE = 50;
 const PRODUCT_TABLE_LAYOUT_KEY = "collection:detail-products";

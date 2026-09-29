@@ -57,7 +57,6 @@ import {
   purchasePaymentEvidence,
   run as runTable,
   runFinding,
-  runMutation,
   vendorAccount,
 } from "~/server/db/schema";
 import { assertRunCapabilityById } from "~/server/purchase-import/capabilities";
@@ -75,6 +74,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { sha256Hex } from "~/server/semantic/hash";
 
 import { learnPurchaseProductExternalId } from "./external-id-learning";
+import { recordRunWrites } from "./run-audit";
 import {
   decideLineWrite,
   matchCompletePaymentSet,
@@ -1302,23 +1302,33 @@ export async function importVendorOrder(
         });
       }
     }
-    await tx.insert(runMutation).values({
-      runId: input.runId,
-      targetKind: "purchase",
-      targetId: purchaseId,
-      mutationKind: created ? "create" : "update",
-      fields: ["header", "documents", "expenses", "paymentEvidence"],
-      postFingerprint: claimFingerprint,
-    });
-    if (rowMutations.length > 0) {
-      await tx.insert(runMutation).values(
-        rowMutations.map((mutation) => ({
-          runId: input.runId,
-          ...mutation,
-          postFingerprint: claimFingerprint,
-        })),
-      );
-    }
+    // A soft-deleted aggregate expense is recorded as the update it is: the
+    // audit trail's `delete` needs the removal cascade's witness.
+    await recordRunWrites(
+      tx,
+      buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
+        runId: runEntityId.parse(input.runId),
+      }),
+      [
+        {
+          entityKind: "purchase",
+          entityId: purchaseId,
+          action: created ? "create" : "update",
+          fields: ["header", "documents", "expenses", "paymentEvidence"],
+        },
+        ...rowMutations.map(
+          ({ targetKind, targetId, mutationKind, fields }) => ({
+            entityKind: targetKind,
+            entityId: targetId,
+            action:
+              mutationKind === "create"
+                ? ("create" as const)
+                : ("update" as const),
+            fields,
+          }),
+        ),
+      ],
+    );
     await tx.execute(sql`UPDATE "Run" SET
       "ordersSeen" = "ordersSeen" + 1,
       ${created ? sql`"imported" = "imported" + 1` : sql`"updated" = "updated" + 1`},

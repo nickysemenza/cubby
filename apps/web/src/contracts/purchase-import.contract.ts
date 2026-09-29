@@ -20,6 +20,7 @@ export const purchaseImportContract = defineContract("purchaseImport", {
     input: listReceiptHuntsInput,
     output: listReceiptHuntsOut,
     native: "List receipt hunts awaiting user-confirmed photo evidence",
+    cache: { tags: [] },
   }),
   submitReceiptEvidence: mutation({
     input: submitReceiptEvidenceInput,

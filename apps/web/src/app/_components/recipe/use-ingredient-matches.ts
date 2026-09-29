@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { useMemo } from "react";
 
-import { ingredient } from "~/app/ingredients/ingredient.functions";
+import { ingredient } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 /** A matched ingredient (DB row), or `null` when looked up but not found. */
 export type IngredientMatch = {

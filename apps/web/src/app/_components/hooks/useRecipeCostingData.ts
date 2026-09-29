@@ -5,9 +5,11 @@ import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { chunk, keyBy } from "es-toolkit";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ingredient } from "~/app/ingredients/ingredient.functions";
-import { recipe } from "~/app/recipes/recipe.functions";
 import { showErrorToast } from "~/components/feedback/error-details";
+import {
+  ingredient,
+  recipe,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import {
   collectIngredientIds,
   collectSubRecipeIds,

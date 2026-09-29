@@ -23,21 +23,35 @@ import {
 
 export const productContract = defineContract("product", {
   search: query({ ...productWorkflowSchemas.search }),
-  resolveNames: query({ ...productWorkflowSchemas.resolveNames }),
-  summaries: query({ ...productWorkflowSchemas.summaries }),
+  resolveNames: query({
+    ...productWorkflowSchemas.resolveNames,
+    cache: { tags: [] },
+  }),
+  summaries: query({
+    ...productWorkflowSchemas.summaries,
+    cache: { profile: "derived-summary" },
+  }),
   quantitySummaries: query({ ...productWorkflowSchemas.quantitySummaries }),
   inventoryEntriesByIds: query({
     ...productWorkflowSchemas.inventoryEntriesByIds,
   }),
-  quickCreate: mutation({ ...productWorkflowSchemas.quickCreate }),
-  applyUpcData: mutation({ ...productWorkflowSchemas.applyUpcData }),
+  quickCreate: mutation({
+    ...productWorkflowSchemas.quickCreate,
+    invalidates: ["product"],
+  }),
+  applyUpcData: mutation({
+    ...productWorkflowSchemas.applyUpcData,
+    invalidates: ["productRecipe"],
+  }),
   findOrCreateByUPC: mutation({
     native: "Capture unknown barcode",
     ...productWorkflowSchemas.findOrCreateByUPC,
+    invalidates: ["productLookup"],
   }),
   findOrCreateByCode: mutation({
     native: "Search tab create from a barcode or ISBN",
     ...productWorkflowSchemas.findOrCreateByCode,
+    invalidates: ["productLookup"],
   }),
   categoryDistribution: query({
     ...productWorkflowSchemas.categoryDistribution,
@@ -53,6 +67,7 @@ export const productContract = defineContract("product", {
   mergePreview: query({
     input: mergeProductMatchInput,
     output: productMergePreview,
+    cache: { tags: [] },
   }),
   projectUses: query({
     ...productWorkflowSchemas.projectUses,
@@ -61,13 +76,49 @@ export const productContract = defineContract("product", {
       description:
         "Show every exact project on which a reusable Cubby tool or software Product is explicitly recorded as used. Tool rows include purchase/use economics; software rows include non-additive spend charged during each project's effective window.",
     },
+    cache: {
+      tags: [
+        ["product", "projectUses"],
+        ["project", "resource"],
+      ],
+    },
   }),
   purchases: query({ ...productWorkflowSchemas.purchases }),
-  components: query({ ...productWorkflowSchemas.components }),
-  kitComponentRows: query({ ...productWorkflowSchemas.kitComponentRows }),
-  kitMembership: query({ ...productWorkflowSchemas.kitMembership }),
-  setProjectUses: mutation({ ...productWorkflowSchemas.setProjectUses }),
-  discard: mutation({ ...productWorkflowSchemas.discard }),
+  components: query({
+    ...productWorkflowSchemas.components,
+    cache: {
+      tags: [
+        ["product", "components"],
+        ["product", "component"],
+      ],
+    },
+  }),
+  kitComponentRows: query({
+    ...productWorkflowSchemas.kitComponentRows,
+    cache: {
+      tags: [
+        ["product", "kitComponentRows"],
+        ["product", "component"],
+      ],
+    },
+  }),
+  kitMembership: query({
+    ...productWorkflowSchemas.kitMembership,
+    cache: {
+      tags: [
+        ["product", "kitMembership"],
+        ["product", "component"],
+      ],
+    },
+  }),
+  setProjectUses: mutation({
+    ...productWorkflowSchemas.setProjectUses,
+    invalidates: ["projectResource"],
+  }),
+  discard: mutation({
+    ...productWorkflowSchemas.discard,
+    invalidates: ["expense"],
+  }),
 });
 
 export const productStreamsContract = defineContract("product", {

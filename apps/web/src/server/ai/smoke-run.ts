@@ -555,9 +555,8 @@ export async function runAiSmoke(
   const runId = await ensureRun(
     context.db,
     { ...context.actorContext, runId: null },
-    {
-      purpose: "ai_action",
-    },
+    // Unkeyed: each smoke attempt links its own Run.
+    { purpose: "ai_suggest" },
   );
   const [run] = await getDb(context.db)
     .select({ shortcode: runTable.shortcode })

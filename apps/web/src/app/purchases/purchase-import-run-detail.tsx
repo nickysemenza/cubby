@@ -33,8 +33,11 @@ import { Button } from "~/components/ui/button";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import { StatusText } from "~/components/ui/status-text";
 import type { RunDetail } from "~/contracts/run.contract";
-import { purchaseImport, run as runOperations } from "~/entities/run.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import {
+  purchaseImport,
+  run as runOperations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { putPresignedObject } from "~/lib/presigned-upload";
 import { cn, formatCurrency } from "~/lib/utils";

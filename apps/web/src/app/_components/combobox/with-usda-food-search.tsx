@@ -15,8 +15,10 @@ import { showErrorToast } from "~/components/feedback/error-details";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
-import { usdaFood } from "~/entities/usda.functions";
-import { ai } from "~/lib/ai.functions";
+import {
+  usdaFood,
+  ai,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { parseUsdaFoodRef } from "~/lib/parse-usda-food-ref";
 import { type DedupedFood, dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
 

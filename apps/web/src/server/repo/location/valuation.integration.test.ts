@@ -70,7 +70,7 @@ describe("location valuation — computed on read", () => {
       ctx.db,
       makeLocationInput({
         name: "Crate A",
-        type: null,
+        type: "furniture",
         productId: crateSku.id,
         parentId: room.id,
       }),

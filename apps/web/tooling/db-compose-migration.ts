@@ -8,7 +8,8 @@ import * as schema from "../src/server/db/schema";
 import { MIGRATIONS_FOLDER } from "./db-migrate";
 
 /**
- * `pnpm --dir apps/web exec tsx tooling/db-compose-migration.ts --tag <tag>`
+ * `pnpm --dir apps/web db:compose <tag>` (regenerates entity artifacts first, since
+ * `schema.ts` reads them)
  *
  * Compose an unmerged custom migration (created with `drizzle-kit generate
  * --custom --name <name>`) from hand-written fragments in

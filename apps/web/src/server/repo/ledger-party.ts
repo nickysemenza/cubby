@@ -39,6 +39,8 @@ import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
+  amountJsonSql,
+  amountToColumns,
   buildPartialUpdateValues,
   notDeleted,
   unwrapDb,
@@ -501,7 +503,10 @@ const foldMealRecipePortions = async (
       mealRecipeId: mealRecipePortion.mealRecipeId,
       mealId: mealRecipePortion.mealId,
       ledgerPartyId: mealRecipePortion.ledgerPartyId,
-      amount: mealRecipePortion.amount,
+      amount: amountJsonSql(
+        mealRecipePortion.amountValue,
+        mealRecipePortion.amountUnit,
+      ),
       confirmedAt: mealRecipePortion.confirmedAt,
     })
     .from(mealRecipePortion)
@@ -557,7 +562,7 @@ const foldMealRecipePortions = async (
       mealRecipeId: first.mealRecipeId,
       mealId: first.mealId,
       ledgerPartyId: keepId,
-      amount: foldedAmounts.get(key)!,
+      ...amountToColumns(foldedAmounts.get(key)!),
       confirmedAt: allConfirmed
         ? new Date(
             Math.max(...group.map((portion) => portion.confirmedAt!.getTime())),

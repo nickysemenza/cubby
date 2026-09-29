@@ -10,7 +10,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
-import { relatedData } from "~/lib/related-data.functions";
+import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {

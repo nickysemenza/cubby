@@ -3,6 +3,7 @@ import { imageOut } from "@cubby/schemas/image";
 import { MutationObserver, QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
+import { entityListFor } from "~/entities/entity-list";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { mock } from "~/lib/test/mock-schema";
 import {
@@ -14,7 +15,6 @@ import {
   entityMutationOptionsFactory,
   type EntityMutationTransport,
 } from "./entity-contracts";
-import { entityListFor } from "./entity-list.functions";
 
 function inMemoryMutationTransport(
   result: ReturnType<typeof entityBrowserMutationResultSchema.parse>,
@@ -76,7 +76,7 @@ describe("kernel browser transport", () => {
           { entity: "image", id: "IMG-8J3W" },
         ],
         affectedEdges: [],
-        sideEffects: { backgroundBatches: [] },
+        sideEffects: {},
       }),
     );
     const options = entityMutationOptionsFactory(
@@ -88,7 +88,7 @@ describe("kernel browser transport", () => {
 
     await expect(observer.mutate({ ids: ["PRD-4K7M"] })).resolves.toEqual({
       deleted: 1,
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     });
     expect(adapter.commands).toEqual([
       {
@@ -109,7 +109,7 @@ describe("kernel browser transport", () => {
           { entity: "task", id: "TSK-4K7M" },
         ],
         affectedEdges: [],
-        sideEffects: { backgroundBatches: [] },
+        sideEffects: {},
       }).success,
     ).toBe(false);
   });
@@ -120,7 +120,7 @@ describe("kernel browser transport", () => {
         action: "update",
         entity: "image",
         item: mock(imageOut, { seed: 1 }),
-        sideEffects: { backgroundBatches: [] },
+        sideEffects: {},
       }).success,
     ).toBe(true);
   });

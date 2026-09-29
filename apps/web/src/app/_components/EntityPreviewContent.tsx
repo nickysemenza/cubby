@@ -10,14 +10,13 @@ import { useEffect } from "react";
 import { z } from "zod";
 
 import type { EntityActionRow } from "~/app/_components/actions/entity-actions";
-import { cookbook } from "~/entities/cookbook.functions";
 import {
   EntityIcon,
   entities,
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import { entityPreviewFacts } from "~/entities/entity-display";
 import { fdcIdFromParam } from "~/entities/entity-query";
 import {
@@ -26,8 +25,11 @@ import {
 } from "~/entities/entity-references";
 import { enumFieldLabel, heroChipLabel } from "~/entities/enum-field-display";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
-import { image } from "~/entities/image.functions";
-import { usdaFood } from "~/entities/usda.functions";
+import {
+  cookbook,
+  image,
+  usdaFood,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 
 import {

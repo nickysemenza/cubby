@@ -10,7 +10,10 @@ import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatusText } from "~/components/ui/status-text";
 import type { RunSummary } from "~/contracts/run.contract";
-import { run as runOperations } from "~/entities/run.functions";
+import {
+  run as runOperations,
+  purchase as purchaseOperations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
 
@@ -23,7 +26,6 @@ import {
   ReconciliationStatus,
   ReconciliationNote,
 } from "./purchase-reconciliation";
-import { purchase as purchaseOperations } from "./purchase.functions";
 import { TargetedImportLaunchButton } from "./targeted-import-launch";
 
 const EMPTY_PURCHASE_PRODUCTS: PurchaseProductOut[] = [];
@@ -82,7 +84,7 @@ export const PurchaseOrderMail: DetailSlotComponent<"purchase"> = ({
   );
 };
 
-/** Runs are linked through RunMutation, so replay-only source claims do not appear here. */
+/** Runs are linked through their AuditLog rows, so replay-only source claims do not appear here. */
 export const Runs: DetailSlotComponent<"purchase"> = ({ record: purchase }) => {
   const runsQuery = useQuery(
     runOperations.history.queryOptions({ purchaseId: purchase.id }),

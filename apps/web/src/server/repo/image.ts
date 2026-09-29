@@ -28,6 +28,7 @@ import {
   attachableImageEntityId,
   IMAGE_METADATA_REVISION,
 } from "@cubby/schemas/image";
+import type { ImageSightingOut } from "@cubby/schemas/image-sighting";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
 import { runTargetState } from "@cubby/schemas/purchase-import";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
@@ -119,6 +120,7 @@ import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import {
+  lookupEntityReferences,
   resolveAllPresent,
   resolveFilterIds,
   resolveOrThrow,
@@ -683,6 +685,70 @@ export async function getImageEmbeddedMetadataForCapture(
   return row?.embeddedMetadata ?? null;
 }
 
+/** The live sightings of each image, newest observation first, with the
+ * owner and reporting device named. Images with none are absent. */
+export async function listImageSightings(
+  db: Database | DrizzleTransaction,
+  imageIds: readonly string[],
+): Promise<Map<string, ImageSightingOut[]>> {
+  const grouped = new Map<string, ImageSightingOut[]>();
+  if (imageIds.length === 0) return grouped;
+  const rows = await unwrapDb(db)
+    .select()
+    .from(imageSighting)
+    .where(
+      and(
+        inArray(imageSighting.imageId, [...imageIds]),
+        notDeleted(imageSighting),
+      ),
+    )
+    .orderBy(sql`${imageSighting.observedAt} DESC`, imageSighting.id);
+  const [owners, devices] = await Promise.all([
+    lookupEntityReferences(
+      db,
+      "ledgerParty",
+      rows.map((row) => row.ledgerPartyId),
+      { includeDeleted: true },
+    ),
+    lookupEntityReferences(
+      db,
+      "device",
+      rows.map((row) => row.deviceId),
+      { includeDeleted: true },
+    ),
+  ]);
+  for (const row of rows) {
+    const owner = owners.get(row.ledgerPartyId);
+    const reporter = devices.get(row.deviceId);
+    const list = grouped.get(row.imageId) ?? [];
+    list.push({
+      ledgerPartyId: owner?.id ?? null,
+      ownerName: owner?.name ?? null,
+      deviceId: reporter?.id ?? null,
+      deviceName: reporter?.name ?? null,
+      assetKey: row.assetKey,
+      sourceType: row.sourceType,
+      mediaSubtypes: row.mediaSubtypes,
+      originalFilename: row.originalFilename,
+      pixelWidth: row.pixelWidth,
+      pixelHeight: row.pixelHeight,
+      hasAdjustments: row.hasAdjustments,
+      capturedAt: row.capturedAt,
+      capturedAtOffsetMinutes: row.capturedAtOffsetMinutes,
+      addedAt: row.addedAt,
+      location: row.location,
+      placeName: row.placeName,
+      camera: row.camera,
+      matchKind: row.matchKind,
+      hashDistance: row.hashDistance,
+      aspectGate: row.aspectGate,
+      observedAt: row.observedAt,
+    });
+    grouped.set(row.imageId, list);
+  }
+  return grouped;
+}
+
 export async function getLiveSightingsForCapture(
   db: Database | DrizzleTransaction,
   imageId: ImageId,
@@ -894,23 +960,6 @@ const imageWithRelationsToAPI = (
       return association === null ? [] : [association];
     },
   );
-  const legacyAssociation = associations.find(
-    ({ entityKind }) => entityKind !== "cookbook" && entityKind !== "vendor",
-  );
-  const legacyEntityKind = legacyAssociation
-    ? match(legacyAssociation.entityKind)
-        .with("product", () => "PRODUCT" as const)
-        .with("location", () => "LOCATION" as const)
-        .with("recipe", () => "RECIPE" as const)
-        .with("project", () => "PROJECT" as const)
-        .with("purchase", () => "PURCHASE" as const)
-        .with("gardenEntry", () => "GARDENENTRY" as const)
-        .with("meal", () => "MEAL" as const)
-        .with("task", () => "TASK" as const)
-        .with("cookbook", "vendor", () => null)
-        .exhaustive()
-    : null;
-
   return {
     id: parseShortcodeFor("image", imageData.shortcode),
     url: getR2PublicUrl(imageData.key),
@@ -937,12 +986,6 @@ const imageWithRelationsToAPI = (
     provenanceEvidence: imageData.provenanceEvidence,
     createdAt: imageData.createdAt,
     updatedAt: imageData.updatedAt,
-    entityKind: legacyEntityKind,
-    entityId:
-      legacyEntityKind && legacyAssociation
-        ? attachableImageEntityId.parse(legacyAssociation.entityId)
-        : null,
-    entityName: legacyAssociation?.entityName ?? null,
     associations: associations.sort(
       (a, b) =>
         a.entityKind.localeCompare(b.entityKind) ||
@@ -1329,12 +1372,14 @@ export const getImageById = async (
     analysisSummaries,
     capturedByParties,
     dataQualities,
+    sightings,
   ] = await Promise.all([
     loadImageRepresentations(db, [imageRecord.shortcode]),
     loadImportTargets(db, [imageRecord.shortcode]),
     loadImageAnalysisSummaries(db, [imageRecord.shortcode]),
     loadCapturedByParties(db, [imageRecord.capturedByPartyId]),
     loadDataQualities(db, "image", [imageRecordId]),
+    listImageSightings(db, [imageRecordId]),
   ]);
   const capturedByParty = imageRecord.capturedByPartyId
     ? (capturedByParties.get(imageRecord.capturedByPartyId) ?? null)
@@ -1346,6 +1391,7 @@ export const getImageById = async (
     importTarget: importTargets.get(imageRecord.shortcode) ?? null,
     analysisSummary: analysisSummaries.get(imageRecord.shortcode) ?? null,
     dataQuality: dataQualities.get(imageRecordId),
+    sightings: sightings.get(imageRecordId) ?? [],
   };
 };
 

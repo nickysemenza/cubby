@@ -17,7 +17,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { useHydrated } from "~/hooks/useHydrated";
-import { ai } from "~/lib/ai.functions";
+import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCount, formatCurrency } from "~/lib/utils";
 
 const supportedEntityKinds = [

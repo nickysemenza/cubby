@@ -29,11 +29,11 @@ import { Eyebrow } from "~/components/ui/eyebrow";
 import { StatTile } from "~/components/ui/stat-tile";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
+import { REFERENTIAL_LIVENESS_INPUT } from "~/entities/entity-integrity";
 import {
   entityIntegrity,
   integrityProblems,
-  REFERENTIAL_LIVENESS_INPUT,
-} from "~/entities/entity-integrity.functions";
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import {
   type EntityGraphLens,

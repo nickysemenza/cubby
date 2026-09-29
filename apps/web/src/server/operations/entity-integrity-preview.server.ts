@@ -43,7 +43,7 @@ type PreviewPlan = {
 
 type PreviewInput = { command: GeneratedEntityRelationCommand; now: Date };
 
-export const previewOperation = bindWorkflow(
+const previewWorkflow = bindWorkflow(
   workflow<Database, PreviewInput>("entityIntegrity.previewOperation")
     .parallel("ids", 2, {
       parent: async ({ context }, { input }) =>
@@ -143,11 +143,13 @@ export const previewOperation = bindWorkflow(
         generatedAt: now.toISOString(),
       });
     }),
-  (db: Database, command: GeneratedEntityRelationCommand, now: Date) => ({
-    context: db,
-    input: { command, now },
-  }),
 );
+
+export const previewOperation = (
+  db: Database,
+  command: GeneratedEntityRelationCommand,
+  now: Date,
+) => previewWorkflow(db, { command, now });
 
 const unresolvedBlocker = (entity: string, codes: string[]): ImpactItem => ({
   code: "block-unresolved-target",

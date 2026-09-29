@@ -26,7 +26,6 @@ import {
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { product } from "~/app/products/product.functions";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -40,7 +39,8 @@ import {
 } from "~/components/ui/dialog";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
-import { entityRelationMutationOptions } from "~/entities/entity-mutation.functions";
+import { entityRelationMutationOptions } from "~/entities/entity-mutation";
+import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { purchaseLabel } from "~/lib/purchase-label";
 

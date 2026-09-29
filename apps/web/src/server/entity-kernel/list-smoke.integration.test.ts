@@ -33,7 +33,7 @@
  *
  * The same matrix also guards a second bug class: a filter the list route
  * accepts and validates but never applies. `imageSighting.imageId` shipped
- * that way — the list showed the filter chip and returned every sighting.
+ * that way — the list showed the filter chip and returned every row.
  * For each seeded entity, every id-shaped filter is re-run with a
  * well-formed shortcode that names no row, and must return nothing.
  */

@@ -9,7 +9,6 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { z } from "zod";
 
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
-import { recipe, recipeStreams } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout/row";
 import { Stack } from "~/components/layout/stack";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
@@ -21,6 +20,10 @@ import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Spinner } from "~/components/ui/spinner";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import {
+  recipe,
+  recipeStreams,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { getErrorMessage } from "~/lib/error-utils";
 

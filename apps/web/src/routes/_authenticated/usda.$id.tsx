@@ -6,8 +6,8 @@ import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { usdaFood } from "~/entities/usda.functions";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/usda/$id")({

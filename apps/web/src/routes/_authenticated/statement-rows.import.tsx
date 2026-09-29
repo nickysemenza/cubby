@@ -8,7 +8,6 @@ import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { financialTransaction } from "~/app/finance/finance.functions";
 import {
   type CsvColumnMapping,
   fingerprintStatementCsv,
@@ -22,10 +21,13 @@ import {
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
-import { entityMutation } from "~/entities/entity-mutation.functions";
 import { useHydrationGate } from "~/hooks/useHydrated";
+import {
+  financialTransaction,
+  entityMutation,
+  statementRow,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
-import { statementRow } from "~/lib/statement-row.functions";
 import { formatCurrency } from "~/lib/utils";
 
 type ParsedImport = ReturnType<typeof parseStatementCsv>;

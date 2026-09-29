@@ -47,7 +47,6 @@ import {
   productTreeRowKey,
   productTreeSubRows,
 } from "~/app/products/product-kit-rows";
-import { product as productOperations } from "~/app/products/product.functions";
 import { ProductGtin } from "~/components/entity/product-gtin";
 import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
@@ -65,7 +64,10 @@ import {
   labeledFieldProvenance,
   relationshipFieldProvenance,
 } from "~/entities/field-provenance";
-import { relatedData } from "~/lib/related-data.functions";
+import {
+  product as productOperations,
+  relatedData,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";

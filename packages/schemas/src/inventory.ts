@@ -11,7 +11,7 @@ import {
   plainDate,
   timestampedFields,
 } from "./base-entity";
-import { mutationSideEffectsSchema } from "./background-jobs";
+import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { positiveAmount } from "./codec";
 import { externalIdOut, gtin } from "./external-id";
 import { moneyNullable } from "./money";

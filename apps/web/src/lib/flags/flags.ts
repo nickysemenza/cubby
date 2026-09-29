@@ -13,6 +13,4 @@ export const FLAGS = {
   formDevtools: false,
   queryLogger: BROWSER_DEV,
   wasmSlowWarn: DEV,
-  renderHighlight: false,
-  verboseErrors: false,
 } as const;

@@ -1,15 +1,14 @@
 /**
- * A product's stored conversion rows, read on their own.
+ * A product's stored conversion rows, read on their own, plus the conversion
+ * between a row's `aValue/aUnit/bValue/bUnit` columns and the `{ a, b }`
+ * amounts the rest of the app speaks.
  *
  * Lives outside `product/crud.ts` to keep the module graph acyclic: the
  * inventory valuation path (`repo/inventory/valuation.ts`) needs this read to
- * build a product's unit graph, `repo/inventory/crud.ts` imports that, and
- * `product/crud.ts` imports *back* into `inventory/crud.ts` to resync
- * valuations after a price or mapping edit. Leaving the read in `crud.ts`
- * closed that loop. `product/price-sync.ts` was extracted for the same reason
- * and is the precedent.
+ * build a product's unit graph, and `product/crud.ts` imports inventory code.
  */
 
+import type { Amount } from "@cubby/schemas/codec";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { and, inArray } from "drizzle-orm";
@@ -18,6 +17,31 @@ import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { productUnitMappings } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+
+interface UnitMappingColumns {
+  aValue: number;
+  aUnit: string;
+  bValue: number;
+  bUnit: string;
+}
+
+/** The `{ a, b }` amounts of a stored unit-mapping row. */
+export const unitMappingSides = (row: UnitMappingColumns) =>
+  ({
+    a: { value: row.aValue, unit: row.aUnit },
+    b: { value: row.bValue, unit: row.bUnit },
+  }) satisfies { a: Amount; b: Amount };
+
+/** The columns to write for a `{ a, b }` pair; the inverse of {@link unitMappingSides}. */
+export const unitMappingColumns = (mapping: {
+  a: Amount;
+  b: Amount;
+}): UnitMappingColumns => ({
+  aValue: mapping.a.value,
+  aUnit: mapping.a.unit,
+  bValue: mapping.b.value,
+  bUnit: mapping.b.unit,
+});
 
 /**
  * Stored conversion rows per product uuid, deliberately WITHOUT provenance.
@@ -55,8 +79,7 @@ export const getProductUnitMappingsByProductIds = async (
 
   for (const row of rows) {
     result[row.productId]?.push({
-      a: row.a,
-      b: row.b,
+      ...unitMappingSides(row),
       source: row.source,
     });
   }

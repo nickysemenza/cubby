@@ -64,7 +64,7 @@ export interface FieldSuggestionContextValue {
   isAutoFilled: (field: string) => boolean;
   /** This mount's `ai_suggest` grouping id — a row-level suggestion mounted
    * inside this form (e.g. `ExternalIdKindSuggestion`) reuses it instead of
-   * opening its own `ai_action` run per row. */
+   * filing its call under the actor's hourly run. */
   readonly runKey: string;
 }
 

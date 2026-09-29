@@ -5,17 +5,17 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 
-import { auditLogHandlers } from "~/server/audit-log-browser.server";
 import { entityGraphHandlers } from "~/server/entity-runtime.server";
-import { financialTransactionHandlers } from "~/server/finance-browser.server";
-import { householdContributionHandlers } from "~/server/household-contribution-browser.server";
-import { imageProcessingHandlers } from "~/server/image-processing-browser.server";
-import { mealHandlers } from "~/server/meal-browser.server";
-import { productHandlers } from "~/server/product-browser.server";
-import { projectHandlers } from "~/server/project-browser.server";
-import { purchaseHandlers } from "~/server/purchase-browser.server";
-import { recommendationsHandlers } from "~/server/recommendations-browser.server";
-import { statementRowHandlers } from "~/server/statement-row-browser.server";
+import { auditLogHandlers } from "~/server/operations/audit-log";
+import { financialTransactionHandlers } from "~/server/operations/finance.server";
+import { householdContributionHandlers } from "~/server/operations/household-contribution.server";
+import { imageProcessingHandlers } from "~/server/operations/image-processing.server";
+import { mealHandlers } from "~/server/operations/meal.server";
+import { productHandlers } from "~/server/operations/product.server";
+import { projectHandlers } from "~/server/operations/project.server";
+import { purchaseHandlers } from "~/server/operations/purchase.server";
+import { recommendationsHandlers } from "~/server/operations/recommendations.server";
+import { statementRowHandlers } from "~/server/operations/statement-row.server";
 
 import { registerMcpApps } from "./apps";
 import { installMockStrippedListToolsHandler } from "./tools/_shared";

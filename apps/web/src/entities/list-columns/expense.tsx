@@ -15,7 +15,6 @@ import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFil
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { ExpenseSummaryStrip } from "~/app/expenses/expense-summary-strip";
-import { expense } from "~/app/expenses/expense.functions";
 import {
   expenseOrderIdColumn,
   expenseVendorColumn,
@@ -23,6 +22,7 @@ import {
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
 import { relationshipFieldProvenance } from "~/entities/field-provenance";
+import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { defineListOverride } from "./types";
 

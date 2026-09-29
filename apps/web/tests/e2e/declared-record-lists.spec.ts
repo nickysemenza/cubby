@@ -1,6 +1,7 @@
 import {
   seedPurchaseHeicAttachment,
   seedRecordListDisplayPrerequisite,
+  seedRunHistoryDefaults,
 } from "./e2e-fixtures";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
@@ -101,4 +102,28 @@ test("purchase detail renders an attached HEIC instead of the empty image state"
   await expect(
     page.locator("#images").getByRole("img", { name: fixture.filename }),
   ).toHaveCount(1);
+});
+
+// `presentation.list.initialFilter` on the Run declaration: the history opens
+// without ephemeral AI-grouping runs, and clearing the filter (which the URL
+// remembers, so a reload keeps it) brings them back.
+test("run history hides ephemeral runs by default and shows them once cleared", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const fixture = await seedRunHistoryDefaults(
+    page,
+    `Run defaults ${Date.now()}`,
+  );
+  await gotoAuthenticatedPage(page, "/runs");
+  const table = page.getByRole("table", { name: "Runs and image jobs" });
+  await expect(table).toContainText(fixture.visibleName);
+  await expect(table).not.toContainText(fixture.hiddenName);
+
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
+  await expect(table).toContainText(fixture.hiddenName);
+  await expect(table).toContainText(fixture.visibleName);
+
+  await page.reload();
+  await expect(table).toContainText(fixture.hiddenName);
 });

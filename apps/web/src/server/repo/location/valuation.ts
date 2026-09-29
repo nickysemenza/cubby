@@ -1,31 +1,40 @@
 /**
  * Location valuation — computed on read.
  *
- * There is no persisted rollup: `computeLocationValuations` re-derives the
- * whole tree's valuation (a few hundred rows; milliseconds) from live
- * inventory + location data, via the pure rollup in
- * `services/location-valuation-rollup`. `directValuationSql` is the SQL-level
- * equivalent of one location's `directValuation` — usable directly in a
- * WHERE/ORDER BY on the `location` table — for the list filter/sort, which
- * has no whole-tree rollup to read from.
+ * There is no persisted rollup and no persisted inventory valuation:
+ * `computeLocationValuations` re-derives the whole tree's valuation (a few
+ * hundred locations, about a thousand entries) from live inventory + location
+ * data, via the pure rollup in `services/location-valuation-rollup`, pricing
+ * every entry through `inventory/valuation`. `directValuationSql` hands one
+ * location's `directValuation` back to SQL as a lookup over that same
+ * computed figure — usable in a WHERE/ORDER BY on the `location` table — for
+ * the list filter/sort, which has no whole-tree rollup to read from.
  */
 
-import { type LocationId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  type InventoryId,
+  type LocationId,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import type {
   LocationValuation,
   LocationValuationSummaryOut,
 } from "@cubby/schemas/location";
 import { eq, type SQL, sql } from "drizzle-orm";
-import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
-import { getDb, notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import {
+  type InventoryValuations,
+  loadLiveInventoryValuations,
+} from "~/server/repo/inventory/valuation";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 import { rollupLocationValuations } from "~/server/services/location-valuation-rollup";
 
 interface ValuationInventoryRow {
+  id: InventoryId;
   locationId: LocationId;
   valuation: number | null;
   /** Fixtures roll up apart from countable stock — the rollup splits on this. */
@@ -45,94 +54,70 @@ interface ValuationLocationRow {
 }
 
 /**
- * SQL-level twin of the pure rollup's `directValuation`: the sum of positive
- * valuations of `stock`-placement entries at a location. `correlatedLocationId`
- * is the enclosing row's `location.id` — the ONE thing that must adapt to
- * whichever query this gets embedded in — and everything touching
- * `InventoryEntry`/`Product` is hand-written literal SQL instead of typed
- * column refs.
- *
- * That split isn't style: `locationList`'s `where`/`orderBy` go through
- * `db.query.location.findMany`, whose relational-query layer rewrites every
- * embedded `Column` chunk it finds to point at the PRIMARY table's own alias,
- * regardless of which table the column actually belongs to. A typed
- * `${inventoryEntry.valuation}` here silently became `"location"."valuation"`
- * and every other foreign-table column suffered the same fate — a runtime
- * `column location.valuation does not exist`, invisible to typecheck.
- *
- * Deliberately mirrors `loadLocationValuationInputs`'s entries join exactly:
- * that join does NOT filter `notDeleted(product)`, so this doesn't either —
- * the two must agree on population or a location's list-page valuation could
- * disagree with its detail-page rollup.
+ * Each location's direct valuation, exactly as the pure rollup defines it: the
+ * sum of positive valuations of `stock`-placement entries at the location.
+ * Deliberately mirrors `loadLocationValuationInputs`'s entries join, so the
+ * list-page figure and the detail-page rollup count the same population.
  */
-const directValuationSubquery = (
-  correlatedLocationId: SQL | AnyPgColumn,
-) => sql<number>`COALESCE((
-  SELECT SUM(ie.valuation)
-  FROM "InventoryEntry" ie
-  INNER JOIN "Product" p ON p.id = ie."productId"
-  WHERE ie."locationId" = ${correlatedLocationId}
-    AND ie."deletedAt" IS NULL
-    AND ie.placement = 'stock'
-    AND ie.valuation > 0
-), 0)`;
+const directValuationsByLocation = (
+  entries: readonly ValuationInventoryRow[],
+): Map<LocationId, number> => {
+  const direct = new Map<LocationId, number>();
+  for (const entry of entries) {
+    if (
+      entry.placement !== "stock" ||
+      entry.valuation === null ||
+      entry.valuation <= 0
+    )
+      continue;
+    direct.set(
+      entry.locationId,
+      (direct.get(entry.locationId) ?? 0) + entry.valuation,
+    );
+  }
+  return direct;
+};
 
 /**
- * The `locationList` filter/sort variant: a typed `${location.id}` reference,
- * which survives the relational-query rewrite above unharmed (it already IS
- * the primary table) and also resolves correctly in `countWhere`'s bare
- * `$count(location, ...)`, since `locationList`'s `where` feeds both.
+ * SQL for one location's `directValuation`, for the `locationList` filter and
+ * sort (a WHERE/ORDER BY on the `location` table). The whole computed map
+ * travels as one jsonb parameter and each row does a key lookup — see
+ * `inventoryValuationSql` for why. `location.id` is the primary table's own
+ * typed column, which survives the relational-query layer's alias rewriting.
  */
-export const directValuationSql = directValuationSubquery(location.id);
+export const loadDirectValuationSql = async (
+  db: Database | DrizzleTransaction,
+  entryValuations?: InventoryValuations,
+): Promise<SQL<number>> => {
+  const { entries } = await loadLocationValuationInputs(db, entryValuations);
+  const direct = Object.fromEntries(directValuationsByLocation(entries));
+  return sql<number>`COALESCE((${JSON.stringify(direct)}::jsonb ->> ${location.id}::text)::double precision, 0)`;
+};
 
-/** One compact SQL read for Home; no tree or relation hydration. */
+/** Top locations by direct value, for Home; computed, no tree or relation hydration. */
 export const getLocationValuationSummary = async (
   db: Database,
 ): Promise<LocationValuationSummaryOut> => {
-  // Aggregate each location once. The previous shape embedded the same
-  // correlated InventoryEntry subquery in SELECT, a window expression, WHERE,
-  // and ORDER BY; Postgres could retain several copies of that plan at once on
-  // the small production compute, turning Home into an avoidable OOM trigger.
-  const rows = await getDb(db).execute<{
-    id: string;
-    name: string;
-    value: number;
-    total: number;
-  }>(sql`
-    WITH direct AS (
-      SELECT ie."locationId" AS "locationId",
-             COALESCE(SUM(ie.valuation), 0)::double precision AS value
-      FROM "InventoryEntry" ie
-      INNER JOIN "Product" p ON p.id = ie."productId"
-      WHERE ie."deletedAt" IS NULL
-        AND ie.placement = 'stock'
-        AND ie.valuation > 0
-      GROUP BY ie."locationId"
-    ), values_by_location AS (
-      SELECT l.shortcode AS id,
-             l.name AS name,
-             COALESCE(direct.value, 0)::double precision AS value
-      FROM "Location" l
-      LEFT JOIN direct ON direct."locationId" = l.id
-      WHERE l."deletedAt" IS NULL
-    ), ranked AS (
-      SELECT id, name, value,
-             SUM(value) OVER ()::double precision AS total
-      FROM values_by_location
-      WHERE value > 0
-      ORDER BY value DESC, name
-    )
-    SELECT id, name, value, total
-    FROM ranked
-    LIMIT 5
-  `);
-
+  const { entries } = await loadLocationValuationInputs(db);
+  const direct = directValuationsByLocation(entries);
+  const rows = await unwrapDb(db)
+    .select({
+      id: location.id,
+      shortcode: location.shortcode,
+      name: location.name,
+    })
+    .from(location)
+    .where(notDeleted(location));
+  const valued = rows
+    .map((row) => ({ ...row, value: direct.get(row.id) ?? 0 }))
+    .filter((row) => row.value > 0)
+    .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
   return {
-    total: Number(rows.rows[0]?.total ?? 0),
-    locations: rows.rows.map((row) => ({
-      id: parseShortcodeFor("location", row.id),
+    total: valued.reduce((sum, row) => sum + row.value, 0),
+    locations: valued.slice(0, 5).map((row) => ({
+      id: parseShortcodeFor("location", row.shortcode),
       name: row.name,
-      value: Number(row.value),
+      value: row.value,
     })),
   };
 };
@@ -144,21 +129,27 @@ export const getLocationValuationSummary = async (
  */
 export const loadLocationValuationInputs = async (
   db: Database | DrizzleTransaction,
+  entryValuations?: InventoryValuations,
 ): Promise<{
   entries: ValuationInventoryRow[];
   locations: ValuationLocationRow[];
 }> => {
   const client = unwrapDb(db);
-  const entries = await client
+  const valuations = entryValuations ?? (await loadLiveInventoryValuations(db));
+  const entryRows = await client
     .select({
+      id: inventoryEntry.id,
       locationId: inventoryEntry.locationId,
-      valuation: inventoryEntry.valuation,
       placement: inventoryEntry.placement,
       productName: product.name,
     })
     .from(inventoryEntry)
     .innerJoin(product, eq(inventoryEntry.productId, product.id))
     .where(notDeleted(inventoryEntry));
+  const entries = entryRows.map((row) => ({
+    ...row,
+    valuation: valuations.get(row.id) ?? null,
+  }));
   // Every live location, product-linked or not: the tree must be whole for the
   // rollup to walk it.
   const rows = await client
@@ -196,7 +187,11 @@ export const loadLocationValuationInputs = async (
  */
 export const computeLocationValuations = async (
   db: Database | DrizzleTransaction,
+  entryValuations?: InventoryValuations,
 ): Promise<Map<LocationId, LocationValuation>> => {
-  const { entries, locations } = await loadLocationValuationInputs(db);
+  const { entries, locations } = await loadLocationValuationInputs(
+    db,
+    entryValuations,
+  );
   return rollupLocationValuations(entries, locations);
 };

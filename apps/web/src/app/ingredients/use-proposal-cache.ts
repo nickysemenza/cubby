@@ -2,7 +2,7 @@ import { entityIdSchema, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useCallback, useRef, useState } from "react";
 
 import { showErrorToast } from "~/components/feedback/error-details";
-import { precomputeEnrichmentProposalsStream } from "~/lib/ai.functions";
+import { precomputeEnrichmentProposalsStream } from "~/lib/ai-streams";
 import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
 
 /** One ingredient to pre-compute proposals for. */

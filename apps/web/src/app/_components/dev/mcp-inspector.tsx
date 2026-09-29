@@ -17,7 +17,7 @@ import {
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { mcp } from "~/lib/mcp.functions";
+import { mcp } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { McpUsageDashboard } from "./mcp-usage-dashboard";
 

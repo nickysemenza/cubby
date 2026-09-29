@@ -27,12 +27,10 @@ import {
   browserEntityDefinition,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
-import {
-  type EntityInspectorHealth,
-  entityInspectorHealth,
-} from "~/entities/entity-inspector-health";
+import type { EntityInspectorHealth } from "~/entities/entity-inspector-health";
 import { entityDeclarationOverrides } from "~/entities/generated/entity-overrides.gen";
 import { viewsForEntity } from "~/entities/view-manifest";
+import { entityInspectorHealth } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
 import { ENTITY_NATIVE_COVERAGE } from "~/lib/generated/entity-native-coverage.gen";
 import { cn } from "~/lib/utils";

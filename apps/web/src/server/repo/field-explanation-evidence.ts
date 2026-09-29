@@ -23,6 +23,7 @@ import {
   recipeSectionIngredient,
   vendor,
 } from "~/server/db/schema";
+import { cookbookSourceRecipeCountSql } from "~/server/repo/cookbook-source-count";
 import {
   databaseForTransaction,
   getDb,
@@ -322,7 +323,7 @@ async function loadCookbookSourceRecipeEvidence(
       shortcode: cookbook.shortcode,
       name: cookbook.name,
       sourceLabel: cookbook.sourceLabel,
-      sourceRecipeCount: cookbook.sourceRecipeCount,
+      sourceRecipeCount: cookbookSourceRecipeCountSql(cookbook.rawJson),
       importedAt: cookbook.importedAt,
       rawJson: cookbook.rawJson,
     })
@@ -340,11 +341,12 @@ async function loadCookbookSourceRecipeEvidence(
           entityId: parseShortcodeFor("cookbook", row.shortcode),
         },
         value: {
-          basis: "Stored at import time; this is not a live recipe count.",
+          basis:
+            "Counted from the stored import; this is not a live recipe count.",
           name: row.name,
           sourceLabel: row.sourceLabel,
           importedAt: row.importedAt.toISOString(),
-          storedSourceRecipeCount: row.sourceRecipeCount,
+          sourceRecipeCount: row.sourceRecipeCount,
           rawImportPreview: rawImport.value,
         },
       },

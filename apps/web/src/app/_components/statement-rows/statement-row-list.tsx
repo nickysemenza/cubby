@@ -29,7 +29,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { statementRow } from "~/lib/statement-row.functions";
+import { statementRow } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 
 import {

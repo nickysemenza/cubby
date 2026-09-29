@@ -97,6 +97,7 @@ describe("location storage integrity", () => {
         .insert(location)
         .values({
           name: "Orphaned raw location",
+          type: "area",
           shortcode: parseShortcodeFor("location", "LOC-2345"),
           parentId: parseEntityId(
             "location",
@@ -327,7 +328,7 @@ describe("deleteLocations hierarchy", () => {
         locationId: bed.id,
         kind: "note",
         observedOn: "2026-09-01",
-        note: "Soil turned",
+        notes: "Soil turned",
         pendingImageIds: [],
       },
       ctx.actor,

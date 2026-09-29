@@ -17,8 +17,9 @@ const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
 
 /**
  * One run: a purchase-agent account sync, validation or enrichment, a
- * photo-inventory batch a member uploads for an agent to work, or a group of
- * AI calls (Jev suggestions on a page, one AI action, background work). The record is
+ * photo-inventory batch a member uploads for an agent to work, a Gmail
+ * search, or a group of AI calls (Jev suggestions on a page, an hour of MCP
+ * previews, background work). The record is
  * written only by the run service and the writers; the manifest
  * exposes it read-only so the generic list, detail, inspector and MCP get/list
  * render it like any other record.
@@ -32,7 +33,7 @@ export default defineEntity({
     // generic page reads the run through its own query.
     detailOverride: {
       query: {
-        module: "~/entities/run.functions",
+        module: "~/entities/run-queries",
         export: "runDetailQuery",
       },
     },
@@ -90,6 +91,14 @@ export default defineEntity({
       ],
     },
     list: {
+      // Ephemeral runs only group AI usage (thousands a day); a person opens
+      // the list for the work somebody started. Clearing the filter shows them.
+      initialFilter: [
+        {
+          id: "trigger",
+          value: ["foreground", "discovery", "manual", "backfill"],
+        },
+      ],
       viewOverrides: [
         {
           kind: "slot",
@@ -149,10 +158,9 @@ export default defineEntity({
             { value: "product_enrichment", label: "Product enrichment" },
             { value: "photo_inventory", label: "Photo inventory" },
             { value: "ai_suggest", label: "AI suggestions" },
-            { value: "ai_action", label: "AI action" },
             { value: "background", label: "Background" },
             { value: "file_import", label: "File import" },
-            { value: "legacy", label: "Legacy" },
+            { value: "mail_search", label: "Mail search" },
           ],
         },
         display: { list: true, detail: true, width: "sm" },

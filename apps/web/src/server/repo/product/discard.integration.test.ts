@@ -109,7 +109,7 @@ describe("discardProductUnits", () => {
     const after = await getDb(ctx.db).query.inventoryEntry.findFirst({
       where: eq(inventoryEntry.id, entry.entityId),
     });
-    expect(after?.amount.value).toBe(1);
+    expect(after?.amountValue).toBe(1);
     expect(after?.deletedAt).toBeNull();
   });
 

@@ -128,7 +128,7 @@ describe("findOrCreateByUPC", () => {
     expect(result).toEqual({
       product: existing,
       created: false,
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     });
   });
 
@@ -304,7 +304,7 @@ describe("findOrCreateByCode", () => {
     expect(result).toEqual({
       product: existing,
       created: false,
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     });
   });
 

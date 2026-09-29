@@ -130,6 +130,7 @@ describe("entity graph path repository", () => {
         Array.from({ length: 60 }, (_, index) => ({
           shortcode: testShortcode("location", `LOC-PATH-${index}`),
           name: `Wide path location ${index}`,
+          type: "area" as const,
         })),
       )
       .returning({ id: location.id });
@@ -140,7 +141,8 @@ describe("entity graph path repository", () => {
           shortcode: testShortcode("inventory", `INV-PATH-${index}`),
           productId: product.entityId,
           locationId: locationRow.id,
-          amount: { value: 1, unit: "each" },
+          amountValue: 1,
+          amountUnit: "each",
         })),
       )
       .returning({ shortcode: inventoryEntry.shortcode });

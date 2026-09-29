@@ -1,5 +1,5 @@
 /**
- * The projects x tools matrix behind `/projects/tools` — one read that returns
+ * The projects x tools matrix behind the `/tools` Usage view — one read that returns
  * every column, row, and non-empty cell of the grid.
  *
  * Why it exists: `ProjectToolUsage` records that a tool was used on a project,

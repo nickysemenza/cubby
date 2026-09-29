@@ -90,17 +90,24 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
   // The manifest declares direction alongside the field, so a name-sorted
   // roster opens A→Z instead of the table's blanket descending default.
   const defaultSortDesc = defaultSortDirectionFor(entity) !== "asc";
-  const mergedTableStateOptions = useMemo(
-    () => ({
+  const mergedTableStateOptions = useMemo(() => {
+    const options = {
       initialSort: defaultSort,
       initialSortDesc: defaultSortDesc,
       urlSync: true,
       filterSpecs: getEntityFilters(entity),
       primarySearch: entityInspectorMetadata[entity].primarySearch,
       ...tableStateOptions,
-    }),
-    [defaultSort, defaultSortDesc, entity, tableStateOptions],
-  );
+    };
+    // The declared default filter belongs to the route's own list; a table
+    // embedded beside it (no URL sync) shows what its scope names.
+    return options.urlSync
+      ? {
+          initialFilter: entityInspectorMetadata[entity].list.initialFilter,
+          ...options,
+        }
+      : options;
+  }, [defaultSort, defaultSortDesc, entity, tableStateOptions]);
   const tableState = useTableState(mergedTableStateOptions);
   const currentSelectionScope = selectionScope(tableState);
   const selectionScopeKey = useMemo(

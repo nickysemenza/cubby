@@ -14,17 +14,20 @@ export const usdaFoodContract = defineContract("usda-food", {
     native: "Native USDA food browse",
     input: usdaListInput,
     output: usdaFoodListOut,
+    cache: { tags: [["usda-food"]] },
   }),
   detail: query({
     readPolicy: "strong",
     native: "Native USDA food detail",
     input: usdaFoodIdInput,
     output: foodSummaryWithLinkedProducts.nullable(),
+    cache: { tags: [["usda-food"]], profile: "stable" },
   }),
   // AI and externally hydrated food reads own authoritative database helpers.
   alternateId: query({
     readPolicy: "strong",
     input: usdaFoodLookupInput,
     output: foodSummaryWithLinkedProducts.nullable(),
+    cache: { tags: [["usda-food"]] },
   }),
 });

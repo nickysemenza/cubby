@@ -12,7 +12,6 @@ import {
   contributionGapLabels,
   MoneyCell,
 } from "~/app/_components/household-contribution-format";
-import { householdContribution } from "~/app/finance/household-contribution.functions";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -28,6 +27,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { fieldEnumOptions } from "~/entities/enum-field-display";
+import { householdContribution } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
 

@@ -20,14 +20,13 @@ describe("Run detail slots", () => {
 
   it.each<[RunOut["purpose"], string[]]>([
     ["ai_suggest", ["ai-usage", "changes"]],
-    ["ai_action", ["ai-usage", "changes"]],
+    ["mail_search", ["ai-usage", "changes"]],
     ["background", ["ai-usage", "changes"]],
     ["photo_inventory", ["photo-batch", "ai-usage", "changes"]],
     ["account_sync", ["import-workflow", "ai-usage", "changes"]],
     ["purchase_validation", ["import-workflow", "ai-usage", "changes"]],
     ["product_enrichment", ["import-workflow", "ai-usage", "changes"]],
     ["file_import", ["import-workflow", "ai-usage", "changes"]],
-    ["legacy", ["import-workflow", "ai-usage", "changes"]],
   ])("a %s run renders %j", (purpose, expected) => {
     expect(applying(purpose)).toEqual(["live-progress", ...expected]);
   });

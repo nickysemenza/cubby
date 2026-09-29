@@ -18,10 +18,8 @@ import {
   dismissTagPropagationWorkflow,
   dismissProductRecommendationWorkflow,
 } from "~/server/operations/recommendations.server";
-import {
-  requestEmbeddingRefreshWorkflow,
-  findSimilarEntitiesWorkflow,
-} from "~/server/operations/search.server";
+import { requestEmbeddingRefreshWorkflow } from "~/server/operations/search.server";
+import { findSimilarEntitiesWorkflow } from "~/server/operations/semantic-similarity.server";
 import { getStoredEmbeddingHashes } from "~/server/repo/entity-embedding-refresh";
 import { createExpense } from "~/server/repo/expense";
 import {

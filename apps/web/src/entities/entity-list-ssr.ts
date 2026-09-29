@@ -1,8 +1,18 @@
+import type { Entity } from "@cubby/schemas/entity";
+import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import type { QueryClient } from "@tanstack/react-query";
 
+import { compileEntityListInput, entityListFor } from "~/entities/entity-list";
+
 import { defaultSortDirectionFor, defaultSortFor } from "./entities";
-import { compileEntityListInput, entityListFor } from "./entity-list.functions";
-import type { FilterPatch } from "./filters";
+import { getEntityFilters } from "./filter-manifest";
+import {
+  decodeFilters,
+  encodeFilters,
+  filterGetterFromColumnFilters,
+  type FilterPatch,
+  resolveOpeningFilters,
+} from "./filters";
 import type { ListEntity } from "./generated/entity-lists.gen";
 
 type EntityListLoaderArgs = {
@@ -38,9 +48,11 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
   const defaultSort =
     options.defaultSort ?? entityListDefaultSort(options.entity);
   const query = entityListFor(options.entity).infiniteQueryOptions(
-    compileEntityListInput(options.entity, options.search, {
-      defaultSort,
-    }),
+    compileEntityListInput(
+      options.entity,
+      searchWithInitialFilter(options.entity, options.search),
+      { defaultSort },
+    ),
   );
   const cancelUnobserved = () => {
     const cached = options.queryClient
@@ -73,6 +85,29 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
   } finally {
     removeAbortListener();
   }
+}
+
+/**
+ * Mirrors `useTableState`'s opening filters: the entity's declared default
+ * applies while the URL names no filter and has not recorded clearing it, so
+ * the server-rendered page and the hydrating table share one cache key.
+ */
+export function searchWithInitialFilter(
+  entity: Entity,
+  search: FilterPatch,
+): FilterPatch {
+  const initial = entityInspectorMetadata[entity].list.initialFilter;
+  if (initial.length === 0) return search;
+  const specs = getEntityFilters(entity);
+  if (
+    resolveOpeningFilters(decodeFilters(specs, search), search, initial) !==
+    initial
+  )
+    return search;
+  return {
+    ...search,
+    ...encodeFilters(specs, filterGetterFromColumnFilters(initial)),
+  };
 }
 
 /** Mirrors `useEntityListPresentation`'s opening table-state sort. */

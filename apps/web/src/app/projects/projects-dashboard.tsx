@@ -52,7 +52,11 @@ import { Skeleton } from "~/components/ui/skeleton";
 import type { SummaryItem } from "~/components/ui/stat-tile";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { image, type ProjectImageSummaries } from "~/entities/image.functions";
+import { type ProjectImageSummaries } from "~/entities/image-queries";
+import {
+  image,
+  project,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn, formatCurrency } from "~/lib/utils";
 
@@ -66,7 +70,6 @@ import {
 } from "./dashboard-filter-state";
 import { ActiveScopeSummary, DashboardFilters } from "./dashboard-filters";
 import { NeedsAttention } from "./needs-attention";
-import { project } from "./project.functions";
 import {
   capitalize,
   formatDate,

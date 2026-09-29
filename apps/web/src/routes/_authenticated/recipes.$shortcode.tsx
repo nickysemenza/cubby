@@ -18,7 +18,7 @@ import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { shortcodeHead } from "~/lib/page-title";
 
@@ -31,22 +31,8 @@ const searchSchema = z.object({
   nutritionBasis: nutritionBasisSchema.optional().catch(undefined),
   costingGap: z.boolean().optional().catch(undefined),
   edit: z.boolean().optional().catch(undefined),
-  // The enum accepts the four current views PLUS the five legacy names so old
-  // bookmarks/links don't get stripped; `remapLegacyView` normalizes a legacy
-  // value at render time.
   view: z
-    .enum([
-      "read",
-      "spec",
-      "data",
-      "prep",
-      "flow",
-      "magazine",
-      "table",
-      "charts",
-      "nested",
-      "matrix",
-    ])
+    .enum(["read", "spec", "data", "prep", "flow"])
     .optional()
     .catch(undefined),
   flowLayout: z

@@ -2,6 +2,7 @@ import type { ExpenseAnalyzeReadyOut } from "@cubby/schemas/project";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
@@ -9,7 +10,6 @@ import {
   ExpenseAggregateExplorer,
 } from "./expense-aggregate-explorer";
 import type { ExpenseAnalyzeConfig } from "./expense-analyze-config";
-import { expense as expenseOperations } from "./expense.functions";
 
 const aggregate = { actual: 10, committed: 0, credits: 0, net: 10, count: 1 };
 const ready = {

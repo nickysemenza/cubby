@@ -21,6 +21,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { type CollectionMatrixRow } from "~/app/collections/collection-types";
 import { showErrorToast } from "~/components/feedback/error-details";
 import { Stack } from "~/components/layout";
 import { CrossTabTable } from "~/components/matrix/cross-tab-table";
@@ -41,6 +42,7 @@ import { NativeSelect } from "~/components/ui/native-select";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { EntityIcon, entityDetailLink } from "~/entities/entities";
 import { focusOnMount } from "~/hooks/focus-on-mount";
+import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { IDEMPOTENT_MUTATION_RETRY } from "~/integrations/tanstack-query/query-policy";
 import { cn } from "~/lib/utils";
 
@@ -49,10 +51,6 @@ import {
   CopyableShortcode,
   ProductContextLine,
 } from "./collection-product-context";
-import {
-  type CollectionMatrixRow,
-  collection as collectionOperations,
-} from "./collection.functions";
 
 const SETTLE_MS = 400;
 const MOBILE_PAGE_SIZE = 25;

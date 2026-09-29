@@ -17,10 +17,10 @@ import type * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
+import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { project } from "../projects/project.functions";
 import {
   ToolCard,
   ToolGalleryPage,

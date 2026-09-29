@@ -2,10 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { inspectWorkflow } from "~/server/workflow-runtime/definition";
 
-import {
-  findSimilarEntitiesWorkflow,
-  requestEmbeddingRefreshWorkflow,
-} from "./search.server";
+import { findSimilarEntitiesWorkflow } from "./semantic-similarity.server";
 
 describe("search maintenance workflow graphs", () => {
   it("gates similarity candidates and hydration on embedding readiness", () => {
@@ -24,15 +21,5 @@ describe("search maintenance workflow graphs", () => {
     expect(
       inspectWorkflow(branch.whenTrue).steps.map((step) => step.name),
     ).toEqual(["candidates", "hits"]);
-  });
-  it("publishes an explicit refresh as one committed step after resolving the id", () => {
-    expect(
-      inspectWorkflow(requestEmbeddingRefreshWorkflow.definition).steps.map(
-        (step) => [step.name, step.type],
-      ),
-    ).toEqual([
-      ["resolve", "call"],
-      ["publish", "committedCall"],
-    ]);
   });
 });

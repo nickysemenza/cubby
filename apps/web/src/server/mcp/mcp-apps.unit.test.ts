@@ -121,10 +121,7 @@ describe("MCP App resources", () => {
     expect([...pointedAt].every((uri) => served.has(uri))).toBe(true);
     expect(
       tools.find((tool) => tool.name === USDA_PICKER.toolName)?._meta,
-    ).toMatchObject({
-      ui: { resourceUri: USDA_PICKER.uri },
-      "ui/resourceUri": USDA_PICKER.uri,
-    });
+    ).toEqual({ ui: { resourceUri: USDA_PICKER.uri } });
     for (const name of ["get_shopping_list", "search_usda_foods"]) {
       expect(
         tools.find((tool) => tool.name === name)?.outputSchema,

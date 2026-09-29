@@ -2,8 +2,10 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { inventory } from "~/app/inventory/inventory.functions";
-import { recommendations } from "~/lib/recommendations.functions";
+import {
+  inventory,
+  recommendations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {

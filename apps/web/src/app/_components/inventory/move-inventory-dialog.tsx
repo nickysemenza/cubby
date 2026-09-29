@@ -16,8 +16,8 @@ import {
 } from "~/app/_components/inventory/destination-location-picker";
 import type { InventoryDialogItem } from "~/app/_components/inventory/dialog-item";
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
-import { inventory } from "~/app/inventory/inventory.functions";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
+import { inventory } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 
 type InventoryItem = InventoryDialogItem;

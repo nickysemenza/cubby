@@ -26,8 +26,11 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
-import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
+import {
+  entityFilterOptions,
+  meal,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
 import {
@@ -36,7 +39,6 @@ import {
 } from "~/lib/unit-mapping-utils";
 
 import { FoodAmountEditor } from "./food-amount-editor";
-import { meal } from "./meal.functions";
 
 const MACRO_FIELDS = [
   { key: "kcal", label: "Calories (kcal)" },

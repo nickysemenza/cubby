@@ -60,6 +60,7 @@ import { purchaseImportDebugEvent } from "~/lib/purchase-import-debug";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   aiUsage,
+  auditLog,
   entityAttachment,
   entityExternalId,
   entityIdentity,
@@ -78,7 +79,6 @@ import {
   runControlEvent,
   runEvidence,
   runFinding,
-  runMutation,
   runOperation,
   runOrderCandidate,
   runProgress,
@@ -430,7 +430,7 @@ export async function startOrResumeRun(
     if (!result.created) return { ...run, created: false };
     await tx
       .update(vendorAccount)
-      .set({ status: "active", lastRunAt: new Date(), updatedAt: new Date() })
+      .set({ status: "active", updatedAt: new Date() })
       .where(eq(vendorAccount.id, input.vendorAccountId));
     return { ...run, created: true };
   });
@@ -1535,10 +1535,10 @@ export async function claimNextImportWork(
       productName: product.name,
       startUrl: entityExternalId.url,
     })
-    .from(runMutation)
+    .from(auditLog)
     .innerJoin(
       product,
-      and(eq(product.id, runMutation.targetId), notDeleted(product)),
+      and(eq(product.id, auditLog.entityId), notDeleted(product)),
     )
     .innerJoin(
       entityExternalId,
@@ -1557,8 +1557,8 @@ export async function claimNextImportWork(
     )
     .where(
       and(
-        eq(runMutation.runId, scope.public.runId),
-        eq(runMutation.targetKind, "product"),
+        eq(auditLog.runId, scope.public.runId),
+        eq(auditLog.entityKind, "product"),
         isNull(entityAttachment.id),
       ),
     )
@@ -2701,7 +2701,6 @@ export async function finishRun(
       .update(vendorAccount)
       .set({
         status: "active",
-        lastSuccessAt: run.status === "completed" ? new Date() : undefined,
         updatedAt: new Date(),
       })
       .where(
@@ -2870,16 +2869,13 @@ export async function loadRunDetail(
         displayName: purchase.displayLabel,
         orderId: purchase.orderId,
       })
-      .from(runMutation)
+      .from(auditLog)
       .innerJoin(
         purchase,
-        and(eq(purchase.id, runMutation.targetId), notDeleted(purchase)),
+        and(eq(purchase.id, auditLog.entityId), notDeleted(purchase)),
       )
       .where(
-        and(
-          eq(runMutation.runId, run.id),
-          eq(runMutation.targetKind, "purchase"),
-        ),
+        and(eq(auditLog.runId, run.id), eq(auditLog.entityKind, "purchase")),
       ),
     database
       .select({
@@ -3731,7 +3727,6 @@ export async function controlRun(
             .update(vendorAccount)
             .set({
               status: "active",
-              lastRunAt: new Date(),
               updatedAt: new Date(),
             })
             .where(eq(vendorAccount.id, successorVendorAccountId));

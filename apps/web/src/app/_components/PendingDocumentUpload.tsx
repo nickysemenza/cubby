@@ -12,7 +12,7 @@ import { FileDropField } from "~/components/file-upload/FileDropField";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
-import { imageUpload } from "~/lib/image.functions";
+import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { putPresignedObject } from "~/lib/presigned-upload";
 
 import type { PendingImage } from "./PendingImageUpload";

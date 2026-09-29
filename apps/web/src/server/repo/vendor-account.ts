@@ -14,11 +14,11 @@ import type {
   VendorAccountUpdateData,
 } from "@cubby/schemas/vendor-account";
 import { vendorAccountOut } from "@cubby/schemas/vendor-account";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, max, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { ledgerParty, vendorAccount } from "~/server/db/schema";
+import { ledgerParty, run, vendorAccount } from "~/server/db/schema";
 import { entityRepository } from "~/server/entity-kernel/adapter";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
@@ -35,7 +35,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-export const VENDOR_ACCOUNT_DELETE_EDGE_POLICY = {
+const VENDOR_ACCOUNT_DELETE_EDGE_POLICY = {
   "Purchase.vendorAccountId": {
     code: "block-purchases",
     effect: "block",
@@ -67,6 +67,42 @@ export const VENDOR_ACCOUNT_DELETE_EDGE_POLICY = {
 
 type VendorAccountRow = typeof vendorAccount.$inferSelect;
 
+/**
+ * When each account last ran and last finished a run, read from Run (served by
+ * `Run_vendorAccount_started_idx`) rather than stored on the account, so the
+ * two can never disagree with the run history they summarize.
+ */
+const loadRunActivity = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly VendorAccountId[],
+) => {
+  const activity = new Map<
+    VendorAccountId,
+    { lastRunAt: Date | null; lastSuccessAt: Date | null }
+  >();
+  if (ids.length === 0) return activity;
+  const rows = await unwrapDb(db)
+    .select({
+      vendorAccountId: run.vendorAccountId,
+      lastRunAt: max(run.startedAt),
+      lastSuccessAt:
+        sql<Date | null>`max(${run.endedAt}) FILTER (WHERE ${run.status} = 'completed')`.mapWith(
+          run.endedAt,
+        ),
+    })
+    .from(run)
+    .where(inArray(run.vendorAccountId, [...ids]))
+    .groupBy(run.vendorAccountId);
+  for (const row of rows) {
+    if (row.vendorAccountId === null) continue;
+    activity.set(parseEntityId("vendorAccount", row.vendorAccountId), {
+      lastRunAt: row.lastRunAt,
+      lastSuccessAt: row.lastSuccessAt,
+    });
+  }
+  return activity;
+};
+
 // includes-deleted: both FKs are required, so a tombstoned vendor or party
 // still names the account's scope rather than failing the read.
 const hydrate = async (
@@ -87,11 +123,17 @@ const hydrate = async (
       { includeDeleted: true },
     ),
   ]);
+  const activity = await loadRunActivity(
+    db,
+    rows.map((row) => row.id),
+  );
   return rows.map((row) => {
     const vendor = vendors.get(row.vendorId);
     const party = parties.get(row.ledgerPartyId);
     return vendorAccountOut.parse({
       ...row,
+      lastRunAt: activity.get(row.id)?.lastRunAt ?? null,
+      lastSuccessAt: activity.get(row.id)?.lastSuccessAt ?? null,
       id: parseShortcodeFor("vendorAccount", row.shortcode),
       vendorId: vendor?.id,
       vendorName: vendor?.name,
@@ -111,7 +153,7 @@ type VendorAccountReferencePatch = {
 export const buildVendorAccountWhere = (filters: VendorAccountFilters) =>
   scaffold.where(filters);
 
-export const listVendorAccounts = (
+const listVendorAccounts = (
   db: Database,
   filters: VendorAccountFilters,
   sorts: SortParams[],
@@ -120,7 +162,16 @@ export const listVendorAccounts = (
   scaffold.list(
     db,
     { filters, sorts, pagination },
-    { hydrate: (rows) => hydrate(db, rows) },
+    {
+      hydrate: (rows) => hydrate(db, rows),
+      // `lastRunAt` is computed from Run, not a column.
+      resolveSort: (sort) =>
+        sort.orderBy === "lastRunAt"
+          ? [
+              sql`(SELECT max(r."startedAt") FROM "Run" r WHERE r."vendorAccountId" = ${vendorAccount.id}) ${sql.raw(sort.direction === "asc" ? "asc" : "desc")} nulls last`,
+            ]
+          : null,
+    },
   );
 
 const reader = createEntityReader<
@@ -193,7 +244,7 @@ export async function createVendorAccount(
   return { output: await reader.getByID(db, id), entityId: id };
 }
 
-export async function updateVendorAccount(
+async function updateVendorAccount(
   db: Database,
   shortcode: VendorAccountShortcode,
   data: VendorAccountUpdateData,

@@ -131,7 +131,7 @@ describe("smart Collection live relationships", () => {
         name: "Painting bin",
         parentId: root.id,
         productId: vessel.id,
-        type: null,
+        type: "furniture",
       }),
       ctx.actor,
     );
@@ -168,7 +168,8 @@ describe("smart Collection live relationships", () => {
     await insertWithShortcode(ctx.db, "inventory", {
       productId: vessel.entityId,
       locationId: bin.entityId,
-      amount: { value: 1, unit: "each" },
+      amountValue: 1,
+      amountUnit: "each",
     });
     const page = await detail(painting, 0, 1);
     expect(smartCollectionDetailOut.safeParse(page).success).toBe(true);

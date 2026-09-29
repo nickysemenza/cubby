@@ -1,17 +1,4 @@
-import type {
-  aiLocationIdInput,
-  aiRunUsageInput,
-  aiUsageRecentInput,
-  aiUsageSummaryInput,
-  approveDetectedInventoryItemInput,
-  enrichmentProposalPrecomputeInput,
-  externalIdKindSuggestionInput,
-  fieldSuggestionsInput,
-  ingredientMergeSuggestionBatchInput,
-  productIdentificationInput,
-  usdaFoodSuggestionBatchInput,
-  usdaFoodSuggestionInput,
-} from "@cubby/schemas/ai";
+import type { enrichmentProposalPrecomputeInput } from "@cubby/schemas/ai";
 import {
   parseEntityId,
   type IngredientId,
@@ -20,21 +7,19 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 
+import { aiContract, aiStreamsContract } from "~/contracts/ai.contract";
 import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
-import {
-  listAiUsageForRun,
-  listRecentAiUsage,
-  summarizeAiUsage,
-} from "~/server/repo/ai-usage";
+import { implementOperationDomain } from "~/server/operation-domain.server";
+import { listRecentAiUsage, summarizeAiUsage } from "~/server/repo/ai-usage";
 import {
   resolveAllOrThrow,
   resolveLiveShortcodes,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
-import { ensureRun } from "~/server/runs/ensure-run";
+import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
 import {
   suggestIngredientMerge,
   suggestIngredientMergeBatch,
@@ -52,167 +37,28 @@ import {
   suggestUsdaFoodBatch,
 } from "~/server/services/ai-enrichment/usda-match";
 import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
+import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import {
   bindBulkWorkflow,
   bindCoordinatorStream,
-  bindWorkflow,
   defineBulkWorkflow,
   defineCoordinatorStream,
-  defineWorkflowOperation,
   type BulkWorkflowSummary,
   workflow,
 } from "~/server/workflow-runtime";
 
-type LocationIdInput = z.output<typeof aiLocationIdInput>;
-/** The request's `ai_action` run; `ai-browser.server.ts` mints it once via
- * `ensureRun` before calling in. */
-type AiActionRunContext = { db: Database; runId: RunId };
-export const describeLocationWorkflow = bindWorkflow(
-  workflow<AiActionRunContext, LocationIdInput>("ai.describeLocation")
-    .call("locationId", async ({ context }, { input }) =>
-      resolveOrThrow(context.db, "location", input.locationId),
-    )
-    .commit("description", async ({ context }, { locationId }) =>
-      describeLocation(context.db, locationId, context.runId),
-    )
-    .output(({ description }) => description),
-  (context: AiActionRunContext, input: LocationIdInput) => ({
-    context,
-    input,
-  }),
-);
+/** The actor's AI run for the hour: every AI operation opens it once with
+ * `ensureRun` before calling out. */
+const actorAiRun = (
+  context: Pick<AuthenticatedStartOperationContext, "db" | "actorContext">,
+  options?: { runKey?: string },
+) =>
+  ensureRun(
+    context.db,
+    context.actorContext,
+    aiCallRunInput(context.actorContext, options),
+  );
 
-export const detectInventoryItemsWorkflow = bindWorkflow(
-  workflow<AiActionRunContext, LocationIdInput>("ai.detectInventoryItems")
-    .call("locationId", async ({ context }, { input }) =>
-      resolveOrThrow(context.db, "location", input.locationId),
-    )
-    .commit("inventory", async ({ context }, { locationId }) =>
-      detectInventoryItems(context.db, locationId, context.runId),
-    )
-    .output(({ inventory }) => inventory),
-  (context: AiActionRunContext, input: LocationIdInput) => ({
-    context,
-    input,
-  }),
-);
-
-type ApproveDetectedInput = z.output<typeof approveDetectedInventoryItemInput>;
-export const approveDetectedInventoryItemWorkflow = bindWorkflow(
-  workflow<AuthenticatedStartOperationContext, ApproveDetectedInput>(
-    "ai.approveDetectedInventoryItem",
-  )
-    .call("locationId", async ({ context }, { input }) =>
-      resolveOrThrow(context.db, "location", input.locationId),
-    )
-    .commit("approved", async ({ context }, { input, locationId }) =>
-      approveDetectedInventoryItem(
-        context.db,
-        { ...input, locationId },
-        context.actorContext,
-      ),
-    )
-    .output(({ approved }) => approved),
-  (
-    context: AuthenticatedStartOperationContext,
-    input: ApproveDetectedInput,
-  ) => ({ context, input }),
-);
-export const identifyProductWorkflow = defineWorkflowOperation(
-  "ai.identifyProduct",
-  async (
-    context: AiActionRunContext,
-    input: z.output<typeof productIdentificationInput>,
-  ) =>
-    getAiClient().identifyProduct(input.imageUrls, {
-      db: context.db,
-      runId: context.runId,
-      operation: "identifyProduct",
-      cacheStatus: "none",
-    }),
-);
-type UsdaSuggestionInput = z.output<typeof usdaFoodSuggestionInput>;
-export const suggestUsdaFoodWorkflow = bindWorkflow(
-  workflow<AuthenticatedStartOperationContext, UsdaSuggestionInput>(
-    "ai.suggestUsdaFood",
-  )
-    .call("runId", ({ context }) =>
-      ensureRun(context.db, context.actorContext, { purpose: "ai_action" }),
-    )
-    .call("suggestion", ({ context }, { input, runId }) =>
-      suggestUsdaFood(context.usdaService, context.db, input.ingredientName, {
-        runId,
-      }),
-    )
-    .output(({ suggestion }) => suggestion),
-);
-
-type UsdaBatchInput = z.output<typeof usdaFoodSuggestionBatchInput>;
-export const suggestUsdaFoodBatchWorkflow = bindWorkflow(
-  workflow<AuthenticatedStartOperationContext, UsdaBatchInput>(
-    "ai.suggestUsdaFoodBatch",
-  )
-    .call("runId", ({ context }) =>
-      ensureRun(context.db, context.actorContext, { purpose: "ai_action" }),
-    )
-    .call("ids", async ({ context }, { input }) =>
-      resolveAllOrThrow(
-        context.db,
-        "ingredient",
-        input.ingredients.map((item) => item.id),
-      ),
-    )
-    .call("suggestions", ({ context }, { input, ids, runId }) =>
-      suggestUsdaFoodBatch(
-        context.usdaService,
-        context.db,
-        input.ingredients.map((item, index) => ({
-          id: ids[index]!,
-          name: item.name,
-        })),
-        runId,
-      ),
-    )
-    .output(({ suggestions }) => suggestions),
-);
-
-type IngredientMergeBatchInput = z.output<
-  typeof ingredientMergeSuggestionBatchInput
->;
-export const suggestIngredientMergeBatchWorkflow = bindWorkflow(
-  workflow<AiActionRunContext, IngredientMergeBatchInput>(
-    "ai.suggestIngredientMergeBatch",
-  )
-    .call("ids", async ({ context }, { input }) =>
-      resolveAllOrThrow(
-        context.db,
-        "ingredient",
-        input.ingredients.map((item) => item.id),
-      ),
-    )
-    .call("suggestions", ({ context }, { input, ids }) =>
-      suggestIngredientMergeBatch(
-        context.db,
-        input.ingredients.map((item, index) => ({
-          id: ids[index]!,
-          shortcode: item.id,
-          name: item.name,
-        })),
-        context.runId,
-      ),
-    )
-    .output(({ suggestions }) =>
-      suggestions.map(({ source, target, ...suggestion }) => ({
-        ...suggestion,
-        source: { id: source.shortcode, name: source.name },
-        target: target ? { id: target.shortcode, name: target.name } : null,
-      })),
-    ),
-  (context: AiActionRunContext, input: IngredientMergeBatchInput) => ({
-    context,
-    input,
-  }),
-);
 type EnrichmentPrecomputeInput = z.output<
   typeof enrichmentProposalPrecomputeInput
 >;
@@ -232,12 +78,14 @@ const precomputeEnrichmentDefinition = defineBulkWorkflow({
     EnrichmentPrecomputeInput
   >("ai.precomputeEnrichmentProposals.items")
     .call("resolved", async ({ context }, { input }) => {
-      // One `ai_action` run for the whole precompute request, not one per
-      // item: `resolved` runs once before the item stage fans out, so every
+      // One run for the whole precompute request, not one per item:
+      // `resolved` runs once before the item stage fans out, so every
       // item's usda/merge lookup below carries the same run id.
-      const runId = await ensureRun(context.db, context.actorContext, {
-        purpose: "ai_action",
-      });
+      const runId = await ensureRun(
+        context.db,
+        context.actorContext,
+        aiCallRunInput(context.actorContext),
+      );
       const resolved = await resolveLiveShortcodes(
         context.db,
         input.items.map((item) => item.id),
@@ -349,61 +197,110 @@ export const backfillLocationDescriptionsWorkflow = bindCoordinatorStream(
     signal,
   }),
 );
-export const listAiUsageRecentWorkflow = defineWorkflowOperation(
-  "ai.usageRecent",
-  async (db: Database, input: z.output<typeof aiUsageRecentInput>) =>
-    listRecentAiUsage(db, input.limit),
-);
-export const summarizeAiUsageWorkflow = defineWorkflowOperation(
-  "ai.usageSummary",
-  async (db: Database, input: z.output<typeof aiUsageSummaryInput>) =>
-    summarizeAiUsage(db, input.days),
-);
-export const listRunAiUsageWorkflow = defineWorkflowOperation(
-  "ai.runUsage",
-  async (db: Database, input: z.output<typeof aiRunUsageInput>) =>
-    listAiUsageForRun(db, await resolveOrThrow(db, "run", input.runId), {
-      cursor: input.cursor,
-      limit: input.limit,
+/** AI reads are authoritative: suggestions must see the row just written. */
+export const aiHandlers = implementOperationDomain(aiContract, {
+  describeLocation: async (context, input) => {
+    const runId = await actorAiRun(context);
+    return describeLocation(
+      context.db,
+      await resolveOrThrow(context.db, "location", input.locationId),
+      runId,
+    );
+  },
+  detectInventoryItems: async (context, input) => {
+    const runId = await actorAiRun(context);
+    return detectInventoryItems(
+      context.db,
+      await resolveOrThrow(context.db, "location", input.locationId),
+      runId,
+    );
+  },
+  approveDetectedInventoryItem: async (context, input) =>
+    approveDetectedInventoryItem(
+      context.db,
+      {
+        ...input,
+        locationId: await resolveOrThrow(
+          context.db,
+          "location",
+          input.locationId,
+        ),
+      },
+      context.actorContext,
+    ),
+  identifyProduct: async (context, input) =>
+    getAiClient().identifyProduct(input.imageUrls, {
+      db: context.db,
+      runId: await actorAiRun(context),
+      operation: "identifyProduct",
+      cacheStatus: "none",
     }),
-);
-export const suggestFieldsWorkflow = defineWorkflowOperation(
-  "ai.suggestFields",
-  async (
-    context: AuthenticatedStartOperationContext,
-    input: z.output<typeof fieldSuggestionsInput>,
-  ) => {
+  suggestUsdaFood: async (context, input) =>
+    suggestUsdaFood(context.usdaService, context.db, input.ingredientName, {
+      runId: await actorAiRun(context),
+    }),
+  suggestUsdaFoodBatch: async (context, input) => {
+    const runId = await actorAiRun(context);
+    const ids = await resolveAllOrThrow(
+      context.db,
+      "ingredient",
+      input.ingredients.map((item) => item.id),
+    );
+    return suggestUsdaFoodBatch(
+      context.usdaService,
+      context.db,
+      input.ingredients.map((item, index) => ({
+        id: ids[index]!,
+        name: item.name,
+      })),
+      runId,
+    );
+  },
+  suggestIngredientMergeBatch: async (context, input) => {
+    const runId = await actorAiRun(context);
+    const ids = await resolveAllOrThrow(
+      context.db,
+      "ingredient",
+      input.ingredients.map((item) => item.id),
+    );
+    const suggestions = await suggestIngredientMergeBatch(
+      context.db,
+      input.ingredients.map((item, index) => ({
+        id: ids[index]!,
+        shortcode: item.id,
+        name: item.name,
+      })),
+      runId,
+    );
+    return suggestions.map(({ source, target, ...suggestion }) => ({
+      ...suggestion,
+      source: { id: source.shortcode, name: source.name },
+      target: target ? { id: target.shortcode, name: target.name } : null,
+    }));
+  },
+  suggestFields: async (context, input) =>
     // A page's own `runKey` groups every target it asks about into one
     // `ai_suggest` run; no `runKey` (an older client, a one-off caller)
-    // falls back to a per-call `ai_action` run.
-    const runId = await ensureRun(
+    // shares the actor's run for the hour.
+    suggestFields(
       context.db,
-      context.actorContext,
-      input.runKey
-        ? { purpose: "ai_suggest", clientKey: `jev:${input.runKey}` }
-        : { purpose: "ai_action" },
-    );
-    return suggestFields(context.db, runId, input);
-  },
-);
-export const suggestExternalIdKindWorkflow = defineWorkflowOperation(
-  "ai.suggestExternalIdKind",
-  async (
-    context: AuthenticatedStartOperationContext,
-    input: z.output<typeof externalIdKindSuggestionInput>,
-  ) => {
-    const runId = await ensureRun(
-      context.db,
-      context.actorContext,
-      input.runKey
-        ? { purpose: "ai_suggest", clientKey: `jev:${input.runKey}` }
-        : { purpose: "ai_action" },
-    );
-    return suggestExternalIdKind(input, {
+      await actorAiRun(context, { runKey: input.runKey }),
+      input,
+    ),
+  suggestExternalIdKind: async (context, input) =>
+    suggestExternalIdKind(input, {
       db: context.db,
-      runId,
+      runId: await actorAiRun(context, { runKey: input.runKey }),
       operation: "suggestExternalIdKind",
       cacheStatus: "none",
-    });
-  },
-);
+    }),
+  usageRecent: (context, input) => listRecentAiUsage(context.db, input.limit),
+  usageSummary: (context, input) => summarizeAiUsage(context.db, input.days),
+});
+
+export const aiStreamHandlers = implementSubscriptionDomain(aiStreamsContract, {
+  backfillLocationDescriptions: (context, _input, signal) =>
+    backfillLocationDescriptionsWorkflow(context.db, signal),
+  precomputeEnrichmentProposals: (context, input, signal) =>
+    precomputeEnrichmentProposalsWorkflow(context, input, signal),
+});

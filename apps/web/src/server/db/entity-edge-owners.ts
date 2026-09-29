@@ -26,6 +26,7 @@ import {
   imageDerivative,
   imageDescriptionCorrection,
   imageProcessingJob,
+  imageSighting,
   runTarget,
   mealFoodEntry,
   mealRecipe,
@@ -78,7 +79,7 @@ export const ENTITY_EDGE_OWNERS = {
   MealRecipePortion: { owner: mealRecipePortion.mealId },
   ProductConversionCoverage: { owner: productConversionCoverage.productId },
   EntityExternalId: { ownerIdentity: entityExternalId.entityId },
-  ProductUnitMappings: { owner: productUnitMappings.productId },
+  ProductUnitMapping: { owner: productUnitMappings.productId },
   PurchasePaymentEvidence: { owner: purchasePaymentEvidence.purchaseId },
   RecipeSection: { owner: recipeSection.recipeId },
   RecipeSectionIngredient: {
@@ -95,6 +96,7 @@ export const ENTITY_EDGE_OWNERS = {
   ImageDerivative: { owner: imageDerivative.imageId },
   ImageDescriptionCorrection: { owner: imageDescriptionCorrection.imageId },
   ImageProcessingJob: { owner: imageProcessingJob.imageId },
+  ImageSighting: { owner: imageSighting.imageId },
   AiUsage: { excluded: "Telemetry attribution." },
   ExternalSource: {
     excluded: "Registry metadata naming the vendor a source slug is.",
@@ -106,7 +108,6 @@ export const ENTITY_EDGE_OWNERS = {
   RunApproval: { excluded: WORKFLOW },
   RunControlEvent: { excluded: WORKFLOW },
   RunEvidence: { excluded: WORKFLOW },
-  RunMutation: { excluded: WORKFLOW },
   RunOperation: { excluded: WORKFLOW },
   RunOrderCandidate: { excluded: WORKFLOW },
   RunProgress: { excluded: WORKFLOW },
@@ -117,7 +118,6 @@ export const ENTITY_EDGE_OWNERS = {
   OrderMail: { excluded: WORKFLOW },
   OrderMailCandidateDecision: { excluded: WORKFLOW },
   OrderMailAttachment: { excluded: WORKFLOW },
-  VendorMailSearchJob: { excluded: WORKFLOW },
   ProductMatchCandidate: {
     excluded: "A review queue of possible duplicates, not a relationship.",
   },

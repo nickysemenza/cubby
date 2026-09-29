@@ -105,8 +105,8 @@ export interface UseEntityPreviewOptions {
    * Opt into the workbench presentation: dock at desktop, Sheet at tablet,
    * and canonical navigation-only cards at mobile widths.
    *
-   * Legacy callers that only render PreviewSheet stay Sheet-only at every
-   * viewport so selecting a row never becomes invisible.
+   * Callers that only render PreviewSheet (the search page) stay Sheet-only at
+   * every viewport so selecting a row never becomes invisible.
    */
   responsiveInspector?: boolean;
   /**

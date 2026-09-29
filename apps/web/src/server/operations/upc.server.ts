@@ -1,13 +1,6 @@
-import type { upcLookupInput } from "@cubby/upc-contract";
-import type { z } from "zod";
+import { upcContract } from "~/contracts/upc.contract";
+import { implementOperationDomain } from "~/server/operation-domain.server";
 
-import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
-import { defineWorkflowOperation } from "~/server/workflow-runtime";
-
-export const lookupUpcWorkflow = defineWorkflowOperation(
-  "upc.lookup",
-  (
-    context: Pick<AuthenticatedStartOperationContext, "upcLookupClient">,
-    input: z.output<typeof upcLookupInput>,
-  ) => context.upcLookupClient.lookup(input.upc),
-);
+export const upcHandlers = implementOperationDomain(upcContract, {
+  lookup: (context, input) => context.upcLookupClient.lookup(input.upc),
+});

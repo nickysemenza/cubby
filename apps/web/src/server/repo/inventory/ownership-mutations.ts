@@ -3,7 +3,6 @@ import type { ExpenseId, InventoryId } from "@cubby/schemas/identifiers";
 import type { InventoryOwnershipSelection } from "@cubby/schemas/inventory-ownership";
 import { and, asc, eq } from "drizzle-orm";
 
-import { computeInventoryValuation } from "~/lib/price-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { expense, inventoryEntry } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -15,6 +14,7 @@ import {
   logAuditEntries,
 } from "~/server/repo/audit-log";
 import {
+  amountToColumns,
   notDeleted,
   parseInventoryAmount,
   updateAndReturn,
@@ -27,6 +27,7 @@ import { cascadeRemoval } from "~/server/repo/removal";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { inventoryAuditRow } from "./helpers";
 import {
   assertIndividualOwner,
   loadEffectiveInventoryOwnership,
@@ -35,7 +36,6 @@ import {
   assertValidRawInventoryOwnership,
   type InventoryRawOwnership,
 } from "./slot";
-import { loadValuationGraph } from "./valuation";
 
 const assertValidIndividualOwner = async (
   tx: DrizzleTransaction,
@@ -133,7 +133,7 @@ export const applyInventoryOwnershipInTransaction = async (
       "Inventory changed during ownership reassignment. Refresh and try again.",
     );
   }
-  const sourceAmount = parseInventoryAmount(source.amount, source.id);
+  const sourceAmount = parseInventoryAmount(source);
   const transferValue = quantity ?? sourceAmount.value;
   if (transferValue > sourceAmount.value) {
     throw createAppError(
@@ -153,13 +153,12 @@ export const applyInventoryOwnershipInTransaction = async (
       row.ownershipMode === ownership.ownershipMode &&
       row.ownerLedgerPartyId === ownership.ownerLedgerPartyId,
   );
-  const graph = await loadValuationGraph(tx, source.productId);
   const movedAmount = { value: transferValue, unit: sourceAmount.unit };
   const audit: AuditEntryInput[] = [];
   const resultIds: InventoryId[] = [];
 
   if (target) {
-    const targetAmount = parseInventoryAmount(target.amount, target.id);
+    const targetAmount = parseInventoryAmount(target);
     if (targetAmount.unit !== sourceAmount.unit) {
       throw createAppError(
         "CONSTRAINT_VIOLATION",
@@ -173,13 +172,14 @@ export const applyInventoryOwnershipInTransaction = async (
     const updatedTarget = await updateAndReturn(
       tx,
       inventoryEntry,
-      {
-        amount: nextTargetAmount,
-        valuation: computeInventoryValuation(nextTargetAmount, graph),
-      },
+      amountToColumns(nextTargetAmount),
       eq(inventoryEntry.id, target.id),
     );
-    const changes = computeChanges(target, updatedTarget, ["amount"]);
+    const changes = computeChanges(
+      inventoryAuditRow(target),
+      inventoryAuditRow(updatedTarget),
+      ["amount"],
+    );
     const targetAudit: AuditEntryInput = {
       entityKind: "inventory",
       entityId: target.id,
@@ -213,8 +213,7 @@ export const applyInventoryOwnershipInTransaction = async (
       locationId: source.locationId,
       placement: source.placement,
       ...ownership,
-      amount: movedAmount,
-      valuation: computeInventoryValuation(movedAmount, graph),
+      ...amountToColumns(movedAmount),
     });
     audit.push({
       entityKind: "inventory",
@@ -239,13 +238,14 @@ export const applyInventoryOwnershipInTransaction = async (
     const updatedSource = await updateAndReturn(
       tx,
       inventoryEntry,
-      {
-        amount: remaining,
-        valuation: computeInventoryValuation(remaining, graph),
-      },
+      amountToColumns(remaining),
       eq(inventoryEntry.id, source.id),
     );
-    const changes = computeChanges(source, updatedSource, ["amount"]);
+    const changes = computeChanges(
+      inventoryAuditRow(source),
+      inventoryAuditRow(updatedSource),
+      ["amount"],
+    );
     const sourceAudit: AuditEntryInput = {
       entityKind: "inventory",
       entityId: source.id,

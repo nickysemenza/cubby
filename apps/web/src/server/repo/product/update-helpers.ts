@@ -27,6 +27,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { detachImagesFromEntity } from "~/server/repo/image";
+import { unitMappingColumns } from "~/server/repo/product/unit-mappings";
 import {
   resolveAllPresent,
   resolveLiveShortcodes,
@@ -60,10 +61,10 @@ export function assertNoCanonicalPriceMapping(
  * matching ones are updated. Mappings stay measurement-only — the per-each price
  * lives on `product.price` and is never written here.
  *
- * It does NOT follow that mappings are valuation-neutral: `InventoryEntry.
- * valuation` routes the amount to money THROUGH this graph, so a mapping edit
- * can change every valuation for the product. `updateProduct` therefore calls
- * `syncInventoryValuationsForProduct` after this, not before.
+ * It does NOT follow that mappings are valuation-neutral: inventory valuation
+ * routes the amount to money THROUGH this graph, so a mapping edit changes
+ * every valuation for the product — which needs no fan-out, since valuation is
+ * computed on read.
  */
 export async function syncProductUnitMappings(
   tx: DrizzleTransaction,
@@ -95,8 +96,7 @@ export async function syncProductUnitMappings(
     await tx.insert(productUnitMappings).values(
       toCreate.map((mapping) => ({
         productId,
-        a: mapping.a,
-        b: mapping.b,
+        ...unitMappingColumns(mapping),
         source: mapping.source,
       })),
     );
@@ -106,8 +106,7 @@ export async function syncProductUnitMappings(
     await tx
       .update(productUnitMappings)
       .set({
-        a: mapping.a,
-        b: mapping.b,
+        ...unitMappingColumns(mapping),
         source: mapping.source,
       })
       .where(eq(productUnitMappings.id, mapping.id));

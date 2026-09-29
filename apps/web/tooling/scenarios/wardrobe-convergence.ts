@@ -37,12 +37,12 @@ import {
 import { classifyOrderCapture } from "~/server/purchase-import/order-list";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { productEnrichmentTarget } from "~/server/purchase-import/product-enrichment-target";
+import { recommendationsHandlers } from "~/server/operations/recommendations.server";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { replaceSettlementRefs } from "~/server/repo/entity-external-ids";
 import { recordStatementRows } from "~/server/repo/statement-row";
 import { statementRowExternalId } from "~/server/repo/statement-row-identity";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { recommendationsHandlers } from "~/server/recommendations-browser.server";
 
 import {
   buildKernelContext,
@@ -175,7 +175,7 @@ async function readConvergenceFacts(
         productId: string;
         amount: { value: number; unit: string };
       }>(
-        `SELECT "productId", amount FROM "InventoryEntry"
+        `SELECT "productId", jsonb_build_object('value', "amountValue", 'unit', "amountUnit") AS amount FROM "InventoryEntry"
        WHERE "productId" IN (SELECT id FROM "Product" WHERE shortcode = ANY($1::text[]))
          AND "deletedAt" IS NULL`,
         [[photoProductId, purchaseProductId]],

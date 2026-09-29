@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { EntityMutationTransport } from "~/entities/entity-contracts";
-import { entityMutation } from "~/entities/entity-mutation.functions";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
@@ -46,7 +46,7 @@ async function removeAndReadIssues(error: StartOperationError) {
 
 describe("useEntityCommands structured refusals", () => {
   it("retains side effects on schema-correlated create and update results", async () => {
-    const sideEffects = { backgroundBatches: [] };
+    const sideEffects = {};
     const item = mock(productTopLevelOut, {
       seed: 31,
       overrides: {

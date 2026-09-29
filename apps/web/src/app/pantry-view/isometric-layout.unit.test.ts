@@ -9,7 +9,7 @@ describe("isometric pantry layout", () => {
   const location = (
     id: string,
     name: string,
-    type: "room" | "shelf" | null,
+    type: "room" | "shelf" | "furniture",
     children: InfLocation[] = [],
   ) =>
     infLocation.parse({
@@ -30,11 +30,11 @@ describe("isometric pantry layout", () => {
     });
 
   it("draws a product-linked location as a floor container, not a wall shelf", () => {
-    // A location that IS a Product carries no `type`. Falling through to the
+    // A location that IS a Product is stored as `furniture`. Falling through to the
     // switch default would size it as a 3.8ft back-wall shelving unit, which is
     // what ~82 of the 107 linked locations (crates, totes, packout boxes) are
     // decidedly not.
-    const tote = location("tote-1", "party lighting", null);
+    const tote = location("tote-1", "party lighting", "furniture");
     const room = location("room-1", "Garage", "room", [tote]);
 
     // Contents are required: `buildRooms` skips a subtree whose pieces are all
@@ -48,14 +48,17 @@ describe("isometric pantry layout", () => {
           name: "String lights",
           category: categorySummaryFixture("household"),
         },
-        location: { id: tote.id, name: tote.name, type: null },
+        location: { id: tote.id, name: tote.name, type: "furniture" },
       },
     ];
 
     const rooms = buildRooms([room], inventory, (c: string) => c);
     const piece = rooms[0]?.pieces[0];
 
-    expect(piece).toMatchObject({ name: "party lighting", locationType: null });
+    expect(piece).toMatchObject({
+      name: "party lighting",
+      locationType: "furniture",
+    });
     // The box spec — floor-standing and short, not the 3.8 back-wall default.
     expect(piece?.h).toBe(1.2);
     expect(piece?.shelfLevels).toEqual([0.1]);

@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createEntityMutationPort } from "~/entities/editing/use-entity-commands";
-import { ai } from "~/lib/ai.functions";
+import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import type { EntityBrowserMutationInput } from "~/server/entity-kernel/contracts";
@@ -198,7 +198,7 @@ describe("record suggestions", () => {
                 id: record.id,
                 locationId,
               },
-              sideEffects: { backgroundBatches: [] },
+              sideEffects: {},
             };
           },
         })}
@@ -285,7 +285,7 @@ describe("record suggestions", () => {
               action: "update",
               entity: "product",
               item,
-              sideEffects: { backgroundBatches: [] },
+              sideEffects: {},
             };
           },
         })}
@@ -530,7 +530,7 @@ describe("record suggestions", () => {
                 id: record.id,
                 costType: "tools",
               },
-              sideEffects: { backgroundBatches: [] },
+              sideEffects: {},
             };
           },
         })}

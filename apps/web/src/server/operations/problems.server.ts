@@ -1,309 +1,109 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { integrityProblemsContract } from "~/contracts/entity-integrity.contract";
 import {
-  coverageTotalsSchema,
-  deleteUnusedIngredientsInput,
-  deleteUnusedIngredientsOut,
-  dryRunPruneAliasesOut,
-  dryRunReparseOut,
-  maintenanceCountsSchema,
-  problemsCountSchema,
-  problemsCoverageSchema,
-  problemsFastSchema,
-  problemsTrackerSchema,
-  problemsUpcSchema,
-  problemsViewsSchema,
-  recipeUsageByProductInput,
-  recipeUsageByProductOut,
-  resolveArrivedFindingsInput,
-  resolveArrivedFindingsOut,
-  resolveRunFindingInput,
-  resolveRunFindingOut,
-  PROBLEM_CLASS,
-  type ProblemKey,
-} from "@cubby/schemas/problems";
-import { z } from "zod";
+  problemsContract,
+  problemsStreamsContract,
+} from "~/contracts/problems.contract";
+import { implementOperationDomain } from "~/server/operation-domain.server";
+import { readProblemCounts } from "~/server/operations/problem-counts.server";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 
-import {
-  resolveArrivedFindingsForPurchase,
-  resolveRunFinding,
-} from "~/server/purchase-import/findings";
-import { recipeUsageCountsByProduct } from "~/server/repo/problems";
-import {
-  resolveAllOrThrow,
-  resolveOrThrow,
-} from "~/server/repo/shortcode-resolver";
-import {
-  findAllViewProblemIds,
-  findViewProblems,
-} from "~/server/services/problem-views.service";
-import {
-  deleteUnusedIngredients,
-  dryRunPruneAliases,
-  dryRunReparse,
-  findCoverageProblems,
-  findCoverageTotals,
-  findFastProblems,
-  findMaintenanceCounts,
-  findProblemByType,
-  findTrackerProblems,
-  findUpcProblems,
-  selectIngredientsWithUnusedAliases,
-  selectStaleIngredientParses,
-  pruneUnusedIngredientAliasesBatch,
-  reparseStaleIngredientParsesBatch,
-} from "~/server/services/problems.service";
-import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
-import {
-  bindWorkflow,
-  bindCoordinatorStream,
-  defineCoordinatorStream,
-  defineWorkflowOperation,
-  workflow,
-} from "~/server/workflow-runtime";
+// The homepage counts read normally ends at the Durable Object. Keep the
+// detector graph out of its cold path: every module below is imported only by
+// the operations that need it.
+const problemWorkflows = () =>
+  import("~/server/operations/problem-workflows.server");
+const problemDetectors = () => import("~/server/services/problems.service");
 
-export type ProblemsWorkflowContext = Pick<
-  AuthenticatedStartOperationContext,
-  "db" | "upcLookupClient" | "usdaClient" | "actorContext" | "services"
->;
-
-const problemKeySchema = z.custom<ProblemKey>(
-  (value): value is ProblemKey =>
-    typeof value === "string" && Object.hasOwn(PROBLEM_CLASS, value),
-);
-const problemByTypeSchema = z.object({
-  type: problemKeySchema,
-  items: z.array(z.unknown()),
-  total: z.number().int().nonnegative(),
-});
-const noInput = z.undefined();
-const problemsWorkflowSchemas = {
-  getFast: { input: noInput, output: problemsFastSchema },
-  getCounts: { input: noInput, output: problemsCountSchema },
-  getByType: {
-    input: z.object({ key: problemKeySchema }),
-    output: problemByTypeSchema,
-  },
-  getViews: { input: noInput, output: problemsViewsSchema },
-  getCoverage: { input: noInput, output: problemsCoverageSchema },
-  getUpc: { input: noInput, output: problemsUpcSchema },
-  getTracker: { input: noInput, output: problemsTrackerSchema },
-  getCoverageTotals: { input: noInput, output: coverageTotalsSchema },
-  getMaintenanceCounts: { input: noInput, output: maintenanceCountsSchema },
-  dryRunReparse: { input: noInput, output: dryRunReparseOut },
-  dryRunPruneAliases: { input: noInput, output: dryRunPruneAliasesOut },
-  recipeUsageByProduct: {
-    input: recipeUsageByProductInput,
-    output: recipeUsageByProductOut,
-  },
-  deleteUnused: {
-    input: deleteUnusedIngredientsInput,
-    output: deleteUnusedIngredientsOut,
-  },
-  resolveRunFinding: {
-    input: resolveRunFindingInput,
-    output: resolveRunFindingOut,
-  },
-  resolveArrivedFindings: {
-    input: resolveArrivedFindingsInput,
-    output: resolveArrivedFindingsOut,
-  },
-};
-
-export const findFastProblemsWorkflow = defineWorkflowOperation(
-  "problems.getFast",
-  (c: ProblemsWorkflowContext) => findFastProblems(c.db),
-);
-
-export const findProblemByTypeWorkflow = defineWorkflowOperation(
-  "problems.getByType",
-  (
-    c: ProblemsWorkflowContext,
-    input: z.output<typeof problemsWorkflowSchemas.getByType.input>,
-  ) => findProblemByType(c.db, input.key, c.upcLookupClient, c.usdaClient),
-);
-export const findViewProblemsWorkflow = defineWorkflowOperation(
-  "problems.getViews",
-  (c: ProblemsWorkflowContext) => findViewProblems(c.db),
-);
-export const findCoverageProblemsWorkflow = defineWorkflowOperation(
-  "problems.getCoverage",
-  (c: ProblemsWorkflowContext) => findCoverageProblems(c.db, c.usdaClient),
-);
-export const findUpcProblemsWorkflow = defineWorkflowOperation(
-  "problems.getUpc",
-  (c: ProblemsWorkflowContext) => findUpcProblems(c.db, c.upcLookupClient),
-);
-export const findTrackerProblemsWorkflow = defineWorkflowOperation(
-  "problems.getTracker",
-  (c: ProblemsWorkflowContext) => findTrackerProblems(c.db),
-);
-export const findCoverageTotalsWorkflow = defineWorkflowOperation(
-  "problems.getCoverageTotals",
-  (c: ProblemsWorkflowContext) => findCoverageTotals(c.db),
-);
-export const findMaintenanceCountsWorkflow = defineWorkflowOperation(
-  "problems.getMaintenanceCounts",
-  (c: ProblemsWorkflowContext) => findMaintenanceCounts(c.db),
-);
-export const dryRunReparseWorkflow = defineWorkflowOperation(
-  "problems.dryRunReparse",
-  (c: ProblemsWorkflowContext) => dryRunReparse(c.db),
-);
-export const dryRunPruneAliasesWorkflow = defineWorkflowOperation(
-  "problems.dryRunPruneAliases",
-  (c: ProblemsWorkflowContext) => dryRunPruneAliases(c.db),
-);
-export const recipeUsageByProductWorkflow = defineWorkflowOperation(
-  "problems.recipeUsageByProduct",
-  (
-    c: ProblemsWorkflowContext,
-    input: z.output<typeof recipeUsageByProductInput>,
-  ) => recipeUsageCountsByProduct(c.db, input.productShortcodes),
-);
-type DeleteUnusedIngredientsInput = z.output<
-  typeof deleteUnusedIngredientsInput
->;
-export const deleteUnusedIngredientsWorkflow = bindWorkflow(
-  workflow<ProblemsWorkflowContext, DeleteUnusedIngredientsInput>(
-    "problems.deleteUnused",
-  )
-    .call("shortcodes", async ({ context }, { input }) =>
-      input.ingredientIds
-        ? input.ingredientIds.map((id) => parseShortcodeFor("ingredient", id))
-        : input.allFromProblem
-          ? (await findAllViewProblemIds(context.db, input.allFromProblem)).map(
-              (id) => parseShortcodeFor("ingredient", id),
-            )
-          : [],
-    )
-    .call("entityIds", async ({ context }, { shortcodes }) =>
-      resolveAllOrThrow(context.db, "ingredient", shortcodes),
-    )
-    .commit("deleted", async ({ context }, { input, entityIds }) =>
-      deleteUnusedIngredients(
-        context.db,
-        entityIds,
-        input.alsoDeleteProducts,
-        context.actorContext,
-      ),
-    )
-    .call("presented", async (_, { shortcodes, entityIds, deleted }) => {
-      const shortcodeByEntityId = new Map(
-        shortcodes.map((shortcode, index) => [entityIds[index], shortcode]),
-      );
-      return {
-        deleted: deleted.deleted,
-        failed: deleted.failed.map(({ id, reason }) => {
-          const shortcode = shortcodeByEntityId.get(id);
-          if (!shortcode) {
-            throw new Error(
-              `Deleted ingredient result returned unknown id ${id}.`,
-            );
-          }
-          return { id: shortcode, reason };
-        }),
-      };
-    })
-    .output(({ presented }) => presented),
-);
-
-export const resolveRunFindingWorkflow = defineWorkflowOperation(
-  "problems.resolveRunFinding",
-  (
-    c: ProblemsWorkflowContext,
-    input: z.output<typeof resolveRunFindingInput>,
-  ) => resolveRunFinding(c.db, input, c.actorContext),
-);
-
-export const resolveArrivedFindingsWorkflow = defineWorkflowOperation(
-  "problems.resolveArrivedFindings",
-  async (
-    c: ProblemsWorkflowContext,
-    input: z.output<typeof resolveArrivedFindingsInput>,
-  ) =>
-    resolveArrivedFindingsForPurchase(
-      c.db,
-      { purchaseId: await resolveOrThrow(c.db, "purchase", input.purchaseId) },
-      c.actorContext,
+/** Problem reads are authoritative so fixes disappear on the next fetch. */
+export const problemsHandlers = implementOperationDomain(problemsContract, {
+  getFast: async (context) =>
+    (await problemDetectors()).findFastProblems(context.db),
+  getCounts: (context) => readProblemCounts(context),
+  getViews: async (context) =>
+    (await import("~/server/services/problem-views.service")).findViewProblems(
+      context.db,
     ),
+  getCoverage: async (context) =>
+    (await problemDetectors()).findCoverageProblems(
+      context.db,
+      context.usdaClient,
+    ),
+  getUpc: async (context) =>
+    (await problemDetectors()).findUpcProblems(
+      context.db,
+      context.upcLookupClient,
+    ),
+  getTracker: async (context) =>
+    (await problemDetectors()).findTrackerProblems(context.db),
+  getCoverageTotals: async (context) =>
+    (await problemDetectors()).findCoverageTotals(context.db),
+  getMaintenanceCounts: async (context) =>
+    (await problemDetectors()).findMaintenanceCounts(context.db),
+  dryRunReparse: async (context) =>
+    (await problemDetectors()).dryRunReparse(context.db),
+  dryRunPruneAliases: async (context) =>
+    (await problemDetectors()).dryRunPruneAliases(context.db),
+  recipeUsageByProduct: async (context, input) =>
+    (await import("~/server/repo/problems")).recipeUsageCountsByProduct(
+      context.db,
+      input.productShortcodes,
+    ),
+  deleteUnused: async (context, input) =>
+    (await problemWorkflows()).deleteUnusedIngredientsWorkflow(context, input),
+  resolveRunFinding: async (context, input) =>
+    (await import("~/server/purchase-import/findings")).resolveRunFinding(
+      context.db,
+      input,
+      context.actorContext,
+    ),
+  resolveArrivedFindings: async (context, input) =>
+    (
+      await import("~/server/purchase-import/findings")
+    ).resolveArrivedFindingsForPurchase(
+      context.db,
+      {
+        purchaseId: await resolveOrThrow(
+          context.db,
+          "purchase",
+          input.purchaseId,
+        ),
+      },
+      context.actorContext,
+    ),
+});
+
+export const integrityProblemsHandlers = implementOperationDomain(
+  integrityProblemsContract,
+  {
+    getByType: async (context, input) =>
+      integrityProblemsContract.ops.getByType.output.parse(
+        await (
+          await problemDetectors()
+        ).findProblemByType(
+          context.db,
+          input.key,
+          context.upcLookupClient,
+          context.usdaClient,
+        ),
+      ),
+  },
 );
 
-const reparseStaleDefinition = defineCoordinatorStream({
-  name: "problems.reparseStale",
-  select: workflow<ProblemsWorkflowContext, undefined>(
-    "problems.reparseStale.items",
-  )
-    .call("selected", async ({ context }) =>
-      selectStaleIngredientParses(context.db),
-    )
-    .output(({ selected }) => selected),
-  commit: workflow<
-    ProblemsWorkflowContext,
-    {
-      input: undefined;
-      selection: Awaited<ReturnType<typeof selectStaleIngredientParses>>;
-    }
-  >("problems.reparseStale.commit")
-    .commit("updated", async ({ context }, { input: { selection } }) =>
-      reparseStaleIngredientParsesBatch(context.db, selection),
-    )
-    .effect("recipes", async ({ context }, { updated }) => {
-      await context.services.recipeCosting.dispatchRecompute(
-        updated.recipesAffected,
-        { source: "problems.reparseStale" },
-      );
-      return updated;
-    })
-    .output(({ recipes }) => ({
-      updated: recipes.updated,
-      recipesAffected: recipes.recipesAffected.length,
-    })),
-  total: (selection) => selection.length,
-});
-export const reparseStaleWorkflow = bindCoordinatorStream(
-  reparseStaleDefinition,
-  (
-    context: ProblemsWorkflowContext,
-    _input: undefined = undefined,
-    signal: AbortSignal = new AbortController().signal,
-  ) => ({
-    context,
-    input: undefined,
-    signal,
-  }),
-);
-
-const pruneAllUnusedAliasesDefinition = defineCoordinatorStream({
-  name: "problems.pruneAllUnusedAliases",
-  select: workflow<ProblemsWorkflowContext, undefined>(
-    "problems.pruneAllUnusedAliases.items",
-  )
-    .call("selected", async ({ context }) =>
-      selectIngredientsWithUnusedAliases(context.db),
-    )
-    .output(({ selected }) => selected),
-  commit: workflow<
-    ProblemsWorkflowContext,
-    {
-      input: undefined;
-      selection: Awaited<ReturnType<typeof selectIngredientsWithUnusedAliases>>;
-    }
-  >("problems.pruneAllUnusedAliases.commit")
-    .commit("pruned", async ({ context }, { input: { selection } }) =>
-      pruneUnusedIngredientAliasesBatch(context.db, selection),
-    )
-    .output(({ pruned }) => pruned),
-  total: (selection) => selection.length,
-});
-export const pruneAllUnusedAliasesWorkflow = bindCoordinatorStream(
-  pruneAllUnusedAliasesDefinition,
-  (
-    context: ProblemsWorkflowContext,
-    _input: undefined = undefined,
-    signal: AbortSignal = new AbortController().signal,
-  ) => ({
-    context,
-    input: undefined,
-    signal,
-  }),
+export const problemsStreamHandlers = implementSubscriptionDomain(
+  problemsStreamsContract,
+  {
+    reparseStale: async (context, _input, signal) =>
+      (await problemWorkflows()).reparseStaleWorkflow(
+        context,
+        undefined,
+        signal,
+      ),
+    pruneAllUnusedAliases: async (context, _input, signal) =>
+      (await problemWorkflows()).pruneAllUnusedAliasesWorkflow(
+        context,
+        undefined,
+        signal,
+      ),
+  },
 );

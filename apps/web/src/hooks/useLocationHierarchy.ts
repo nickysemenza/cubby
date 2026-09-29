@@ -9,8 +9,8 @@ import {
   mergePricingStatus,
   type PricingStatus,
 } from "~/app/_components/locations/calculate-inventory-valuation";
-import { location } from "~/app/locations/location.functions";
 import { useHydratedLoading } from "~/hooks/useHydrated";
+import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 // Persisted location.valuation stores pricing as bare counts; the viz nodes use
 // the richer PricingStatus shape (with item-name lists for tooltips). The names

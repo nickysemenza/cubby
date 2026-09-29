@@ -1,4 +1,4 @@
-import type { ActorContext } from "@cubby/schemas/context";
+import { type ActorContext, actorInRun } from "@cubby/schemas/context";
 import {
   GTIN_KIND,
   GTIN_SOURCE,
@@ -51,7 +51,6 @@ import {
   purchase,
   run as runTable,
   runEvidence,
-  runMutation,
   runOperation,
   runTarget,
 } from "~/server/db/schema";
@@ -77,9 +76,10 @@ import { assertRunCapability } from "./capabilities";
 import { learnPurchaseProductExternalId } from "./external-id-learning";
 import {
   attachPendingOrderMailEvidence,
-  type AttachOrderMailFile,
+  type OrderMailEvidencePorts,
 } from "./gmail/process";
 import { productEnrichmentTarget } from "./product-enrichment-target";
+import { recordRunWrites } from "./run-audit";
 import { auditAllImportBatches, loadRunScope } from "./run-service";
 import { buildPurchaseImportPlan, importVendorOrder } from "./writer";
 
@@ -552,7 +552,7 @@ export async function commitPurchaseImport(
   db: Database,
   rawInput: CommitPurchaseImportInput,
   actor: ActorContext,
-  attachMailFile?: AttachOrderMailFile,
+  mailEvidencePorts?: OrderMailEvidencePorts,
 ) {
   const input = commitPurchaseImportInput.parse(rawInput);
   const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
@@ -792,7 +792,7 @@ export async function commitPurchaseImport(
                 purchaseShortcode: written.shortcode,
                 ledgerPartyId: scope.ledgerPartyId,
               },
-              attachMailFile,
+              mailEvidencePorts,
             );
           }
           items.push({
@@ -1372,16 +1372,18 @@ export async function commitProductEnrichment(
             });
           }
         }
-        await tx.insert(runMutation).values({
-          runId: scope.public.runId,
-          targetKind: "product",
-          targetId: productId,
-          mutationKind: "update",
-          fields: changedFields,
-          postFingerprint: await sha256Hex(
-            JSON.stringify({ productId, changes }),
-          ),
-        });
+        await recordRunWrites(
+          tx,
+          actorInRun(actor, runEntityId.parse(scope.public.runId)),
+          [
+            {
+              entityKind: "product",
+              entityId: productId,
+              action: "update",
+              fields: changedFields,
+            },
+          ],
+        );
         await tx
           .update(runTarget)
           .set({

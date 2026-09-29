@@ -33,7 +33,7 @@ export type HandlerDefinition = {
 };
 
 /** The runtime shape of a `defineContract(...)` value, as the generator reads it. */
-type ContractMember = {
+export type ContractMember = {
   kind: Kind;
   observability?: {
     entities?: readonly string[];
@@ -45,10 +45,17 @@ type ContractMember = {
   native?: string;
   /** Keeps a query on the authoritative adapter (see contracts/define.ts). */
   readPolicy?: "strong";
+  /** Browser cache tags / profile of a query (see contracts/cache-policy.ts). */
+  cache?: {
+    tags?: readonly (readonly string[])[];
+    profile?: string;
+  };
+  /** Ripple keys a mutation invalidates (see contracts/cache-policy.ts). */
+  invalidates?: readonly string[];
   input?: z.ZodType;
 };
 type Contract = { domain: string; ops: Record<string, ContractMember> };
-type LoadedContract = { exportName: string; contract: Contract };
+export type LoadedContract = { exportName: string; contract: Contract };
 export type DeclaredOperation = {
   kind: Kind;
   observability: OperationObservability;
@@ -172,7 +179,17 @@ const assertContractPurity = (path: string): void => {
 };
 
 /**
- * `defineOperationDomain` modules are loaded by the browser bundle, so a
+ * The hand-written browser policy that cannot be contract data because it is a
+ * function of the call's input (see `operation-overrides.ts`).
+ */
+export const OPERATION_OVERRIDES_MODULE = join(
+  SOURCE_ROOT,
+  "integrations/tanstack-query/operation-overrides.ts",
+);
+
+/**
+ * `defineOperationDomain` modules (the generated client catalog) and the
+ * operation overrides they import are loaded by the browser bundle, so a
  * runtime dependency on server-only code (or node builtins) would either crash
  * the client build or silently pull server modules into it. Type-only imports
  * are erased and stay legal. `import { type X } from "~/server/…"` is still
@@ -181,16 +198,18 @@ const assertContractPurity = (path: string): void => {
  */
 const assertClientSafeImports = (path: string): void => {
   const program = parseFile(path);
-  const declaresDomain = topLevelVariableDeclarators(program).some(
-    ({ init }) =>
-      init.type === "CallExpression" &&
-      calledName(init.callee) === "defineOperationDomain",
-  );
+  const declaresDomain =
+    path === OPERATION_OVERRIDES_MODULE ||
+    topLevelVariableDeclarators(program).some(
+      ({ init }) =>
+        init.type === "CallExpression" &&
+        calledName(init.callee) === "defineOperationDomain",
+    );
   if (!declaresDomain) return;
   for (const source of runtimeImportSources(program.body)) {
     if (/^~\/server(?:\/|$)/u.test(source) || source.startsWith("node:")) {
       throw new Error(
-        `${relative(ROOT, path)} declares a Start operation domain but has a runtime import of ${JSON.stringify(source)}. Domain modules load in the browser; use \`import type\`, or move the runtime dependency into the domain's implementOperationDomain module.`,
+        `${relative(ROOT, path)} is loaded by the browser bundle but has a runtime import of ${JSON.stringify(source)}. The client operation catalog and its overrides must stay free of server code; use \`import type\`, or move the runtime dependency into the domain's implementOperationDomain module.`,
       );
     }
   }
@@ -222,7 +241,7 @@ let cachedContracts: Promise<LoadedContract[]> | undefined;
  * Every `*.contract.ts` file must be re-exported from the index barrel, and
  * every export of the barrel must be a contract.
  */
-const loadContracts = (): Promise<LoadedContract[]> => {
+export const loadContracts = (): Promise<LoadedContract[]> => {
   cachedContracts ??= (async () => {
     const indexPath = join(CONTRACTS_ROOT, "index.ts");
     const files = readdirSync(CONTRACTS_ROOT)

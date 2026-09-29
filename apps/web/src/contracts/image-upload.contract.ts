@@ -31,9 +31,11 @@ export const imageUploadContract = defineContract("image", {
   importFromUrl: mutation({
     input: importImageFromUrlSchema,
     output: importImageFromUrlResponseSchema,
+    invalidates: ["image"],
   }),
   cullPendingImages: mutation({
     input: cullPendingImagesSchema,
     output: cullPendingImagesResponseSchema,
+    invalidates: ["imageCull"],
   }),
 });

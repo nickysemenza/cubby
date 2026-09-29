@@ -1,35 +1,32 @@
 import { dashboardCountsOut } from "@cubby/schemas/dashboard";
 
+import { dashboardContract } from "~/contracts/dashboard.contract";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
+import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getEntityCounts } from "~/server/repo/dashboard";
-import { bindWorkflow, workflow } from "~/server/workflow-runtime";
 
 type DashboardContext = {
   db: Database;
   usdaClient: Pick<USDAClient, "getCounts">;
 };
 
-export const getDashboardCounts = bindWorkflow(
-  workflow<DashboardContext, void>("dashboard.counts")
-    .parallel("counts", 2, {
-      local: ({ context }) => getEntityCounts(context.db),
-      usda: ({ context }) =>
-        context.usdaClient.getCounts().catch((error) => {
-          // USDA is ancillary: local counts remain useful when its worker is unavailable.
-          console.warn(
-            "[dashboard.counts] USDA count unavailable; using 0",
-            error,
-          );
-          return null;
-        }),
-    })
-    .output(({ counts: { local, usda } }) =>
-      dashboardCountsOut.parse({
-        ...local,
-        usdaFoods: usda?.usda_food ?? 0,
-        usdaFoodsAvailable: usda !== null,
-      }),
-    ),
-  (context: DashboardContext) => ({ context, input: undefined }),
-);
+export async function getDashboardCounts({ db, usdaClient }: DashboardContext) {
+  const [local, usda] = await Promise.all([
+    getEntityCounts(db),
+    usdaClient.getCounts().catch((error) => {
+      // USDA is ancillary: local counts remain useful when its worker is unavailable.
+      console.warn("[dashboard.counts] USDA count unavailable; using 0", error);
+      return null;
+    }),
+  ]);
+  return dashboardCountsOut.parse({
+    ...local,
+    usdaFoods: usda?.usda_food ?? 0,
+    usdaFoodsAvailable: usda !== null,
+  });
+}
+
+export const dashboardHandlers = implementOperationDomain(dashboardContract, {
+  counts: (context) => getDashboardCounts(context),
+});

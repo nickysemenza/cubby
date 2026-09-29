@@ -465,6 +465,7 @@ describe("entity graph repository", () => {
         Array.from({ length: 20 }, (_, index) => ({
           shortcode: testShortcode("location", `graph-${index}`),
           name: `Batched graph location ${index}`,
+          type: "area" as const,
         })),
       )
       .returning({ entityId: location.id });
@@ -499,7 +500,8 @@ describe("entity graph repository", () => {
               ),
               productId: productFixture.entityId,
               locationId: location.entityId,
-              amount: { value: 1, unit: "each" },
+              amountValue: 1,
+              amountUnit: "each",
             })),
           ),
         ),
@@ -661,7 +663,7 @@ describe("entity graph repository", () => {
         locationId: bed.id,
         kind: "note",
         observedOn: "2026-10-06",
-        note: "Whole-bed overview",
+        notes: "Whole-bed overview",
         pendingImageIds: [],
       },
       ctx.actor,
@@ -672,7 +674,7 @@ describe("entity graph repository", () => {
         locationId: bed.id,
         kind: "harvest",
         observedOn: "2026-10-07",
-        note: "First pick",
+        notes: "First pick",
         harvestAmount: "A handful",
         pendingImageIds: [],
       },

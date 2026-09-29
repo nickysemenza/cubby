@@ -13,9 +13,13 @@ import type {
   RowWithOptionalAliasesAndTags,
 } from "~/server/repo/database-helpers";
 
+/**
+ * `aiDescription` is not a column: the read that loaded the row attaches the
+ * latest live `location-description` AiAnalysis text (`ai-description.ts`).
+ */
 type LocationSelect = RowWithOptionalAliasesAndTags<
   typeof location.$inferSelect
->;
+> & { aiDescription?: string | null };
 
 import type { MappableProductExternalId } from "~/server/repo/product/external-id-types";
 
@@ -39,6 +43,8 @@ export type LocationListDB = LocationSelect & {
   children: Array<LocationSelect>;
   inventoryEntries: Array<
     typeof inventoryEntry.$inferSelect & {
+      // Computed on read and attached by the caller.
+      valuation: number | null;
       product: ProductSelect & {
         category: ProductCategorySummary | null;
         externalIds?: MappableProductExternalId[];

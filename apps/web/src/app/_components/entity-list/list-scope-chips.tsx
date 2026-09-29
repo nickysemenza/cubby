@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { ScopeChip } from "~/app/_components/data-table/ScopeChip";
 import { Row } from "~/components/layout";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import { type FilterSpec, getEntityFilters } from "~/entities/filter-manifest";
 import { filterUrlKey } from "~/entities/filters";
 import {

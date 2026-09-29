@@ -79,12 +79,12 @@ const baseInventoryEntry = {
   id: INVENTORY_ID,
   shortcode: "INV-TEST",
   productId: PRODUCT_ID,
-  amount: { value: 2, unit: "each" },
+  amountValue: 2,
+  amountUnit: "each",
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
   deletedAt: DELETED_AT,
   locationId: LOCATION_ID,
-  valuation: 9,
   verifiedAt: null,
   placement: "stock" as const,
   ownershipMode: "inherit" as const,
@@ -95,8 +95,8 @@ describe("inventory mappers", () => {
   it("uses authoritative product pricing instead of reversing rounded valuation", () => {
     const row = {
       ...baseInventoryEntry,
-      amount: { value: 1.3, unit: "each" },
-      valuation: 8.87,
+      amountValue: 1.3,
+      amountUnit: "each",
       product: {
         ...baseProduct,
         price: null,
@@ -109,6 +109,7 @@ describe("inventory mappers", () => {
 
     const result = dbInventoryEntryToAPI(
       row,
+      8.87,
       resolveProductPricing(null, {
         knownCost: 6.83,
         knownExpenseCount: 1,
@@ -133,8 +134,10 @@ describe("inventory mappers", () => {
           {
             id: UNIT_MAPPING_ID,
             productId: PRODUCT_ID,
-            a: { value: 5, unit: "lb" },
-            b: { value: 4.5, unit: "dollar" },
+            aValue: 5,
+            aUnit: "lb",
+            bValue: 4.5,
+            bUnit: "dollar",
             source: "label",
             createdAt: CREATED_AT,
             updatedAt: UPDATED_AT,
@@ -143,8 +146,10 @@ describe("inventory mappers", () => {
           {
             id: DELETED_UNIT_MAPPING_ID,
             productId: PRODUCT_ID,
-            a: { value: 1, unit: "each" },
-            b: { value: 1, unit: "dollar" },
+            aValue: 1,
+            aUnit: "each",
+            bValue: 1,
+            bUnit: "dollar",
             source: "old",
             createdAt: CREATED_AT,
             updatedAt: UPDATED_AT,
@@ -200,6 +205,7 @@ describe("inventory mappers", () => {
     const locationDataQuality = testCompleteDataQuality();
     const result = dbInventoryEntryToAPI(
       row,
+      9,
       resolveProductPricing(4.5),
       testCompleteDataQuality(),
       locationDataQuality,

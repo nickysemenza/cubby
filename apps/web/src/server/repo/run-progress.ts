@@ -1,22 +1,31 @@
 import { runShortcode } from "@cubby/schemas/identifiers";
-import { vendorSearchMailOut } from "@cubby/schemas/order-mail-review";
-import { runStatus } from "@cubby/schemas/run-fields";
+import {
+  mailSearchRunInput,
+  mailSearchRunProgress,
+  runStatus,
+} from "@cubby/schemas/run-fields";
 import { desc, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { run, runProgress, vendorMailSearchJob } from "~/server/db/schema";
+import { run, runProgress } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 
 /** The small, durable progress read shared by every Run detail page. */
 export async function getRunLiveProgress(db: Database, shortcode: string) {
   const database = getDb(db);
   const [record] = await database
-    .select({ run, gmail: vendorMailSearchJob })
+    .select({ run })
     .from(run)
-    .leftJoin(vendorMailSearchJob, eq(vendorMailSearchJob.runId, run.id))
     .where(eq(run.shortcode, runShortcode.parse(shortcode)))
     .limit(1);
   if (!record) return null;
+  const search =
+    record.run.purpose === "mail_search"
+      ? {
+          input: mailSearchRunInput.parse(record.run.input),
+          progress: mailSearchRunProgress.parse(record.run.progress),
+        }
+      : null;
   const events = await database
     .select({
       id: runProgress.eventId,
@@ -35,18 +44,18 @@ export async function getRunLiveProgress(db: Database, shortcode: string) {
       ...event,
       createdAt: event.createdAt.toISOString(),
     })),
-    gmail: record.gmail
+    gmail: search
       ? {
-          status: vendorSearchMailOut.shape.status.parse(record.gmail.status),
-          searched: record.gmail.searched,
-          skipped: record.gmail.skipped,
-          reviewable: record.gmail.reviewable,
-          pagesScanned: record.gmail.pagesScanned,
-          after: record.gmail.after,
-          searchTerms: record.gmail.searchTerms,
-          startedFromOlderPage: record.gmail.pageToken !== null,
-          hasMorePages: record.gmail.nextPageToken !== null,
-          error: record.gmail.error,
+          status: search.progress.phase,
+          searched: search.progress.searched,
+          skipped: record.run.skipped,
+          reviewable: search.progress.reviewable,
+          pagesScanned: search.progress.pagesScanned,
+          after: search.input.after,
+          searchTerms: search.input.searchTerms,
+          startedFromOlderPage: search.progress.pageToken !== null,
+          hasMorePages: search.progress.nextPageToken !== null,
+          error: search.progress.error ?? record.run.dispatchError,
         }
       : null,
   };

@@ -18,9 +18,9 @@ import {
   ripple,
   type InvalidationTagSet,
 } from "~/integrations/tanstack-query/cache-tags";
+import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { getErrorMessage } from "~/lib/error-utils";
-import { problems as problemOperations } from "~/lib/problems.functions";
 
 import { type AutoFixTask, buildAutoFixPlan } from "./auto-fix-registry";
 

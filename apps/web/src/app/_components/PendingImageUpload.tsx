@@ -17,8 +17,8 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { NativeSelect } from "~/components/ui/native-select";
+import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
-import { imageUpload } from "~/lib/image.functions";
 import { putPresignedObject } from "~/lib/presigned-upload";
 import { cn } from "~/lib/utils";
 

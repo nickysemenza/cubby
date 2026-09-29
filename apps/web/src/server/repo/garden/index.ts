@@ -494,7 +494,7 @@ export const createGardenEntry = async (
       locationId,
       kind: data.kind ?? "note",
       observedOn: data.observedOn,
-      note: data.note ?? null,
+      notes: data.notes ?? null,
       harvestAmount: data.harvestAmount ?? null,
     });
     if (data.plantingIds !== undefined) {
@@ -674,7 +674,7 @@ export const updateGardenEntry = async (
       locationId,
       kind: data.kind,
       observedOn: data.observedOn,
-      note: data.note,
+      notes: data.notes,
       harvestAmount: data.harvestAmount,
       // Association-only edits are still edits to the GardenEntry resource;
       // keep its optimistic/concurrency timestamp monotonic even when all

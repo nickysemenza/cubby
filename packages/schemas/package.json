@@ -95,7 +95,7 @@
     "./audit": "./src/audit.ts",
     "./ai": "./src/ai.ts",
     "./ai-smoke": "./src/ai-smoke.ts",
-    "./background-jobs": "./src/background-jobs.ts",
+    "./mutation-side-effects": "./src/mutation-side-effects.ts",
     "./background-tasks": "./src/background-tasks.ts",
     "./maintenance": "./src/maintenance.ts",
     "./queue-messages": "./src/queue-messages.ts",

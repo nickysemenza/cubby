@@ -21,7 +21,6 @@ import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { useEntityListSource } from "~/app/_components/combobox/with-search-hook";
 import { tradeOptions } from "~/app/projects/trade-options";
-import { purchase } from "~/app/purchases/purchase.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -40,6 +39,7 @@ import { NoneValue } from "~/components/ui/none-value";
 import { StatusText } from "~/components/ui/status-text";
 import { entityDetailLink } from "~/entities/entities";
 import { fieldEnumOptions } from "~/entities/enum-field-display";
+import { purchase } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
 

@@ -5,7 +5,7 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { inventoryEntry, location as locationTable } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { amountFromColumns, getDb } from "~/server/repo/database-helpers";
 import {
   createInventoryEntry,
   reconcileLocationSession,
@@ -137,7 +137,10 @@ describe("reconcileLocationSession", () => {
     expect(recomputeNeeded).toBe(true);
 
     const after = await readEntry(entryEntityId);
-    expect(after?.amount).toEqual({ value: 5, unit: "each" });
+    expect(after && amountFromColumns(after)).toEqual({
+      value: 5,
+      unit: "each",
+    });
     expect(after?.verifiedAt).not.toBeNull();
   });
 

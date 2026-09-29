@@ -111,7 +111,7 @@ export default defineEntity({
       ],
       viewAliases: { gallery: "shelf" },
       actionOverrides: ["setStatus", "delete"],
-      links: [{ label: "Tools", path: "/projects/tools" }],
+      links: [{ label: "Tools", path: "/tools" }],
     },
   },
   model: {

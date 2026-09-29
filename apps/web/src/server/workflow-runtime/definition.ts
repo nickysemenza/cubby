@@ -122,12 +122,6 @@ export type WorkflowDefinition<Context, Input, Output> = {
   >;
 };
 
-/** The inspectable identity of a direct operation. Unlike a workflow, it has
- * no graph because its implementation runs as one operation-level unit. */
-export type WorkflowOperationDefinition = {
-  readonly name: string;
-};
-
 export const callStep = <Context, Input, Value, Output>(options: {
   name: string;
   fn: WorkflowFunction<Context, Value, Output>;
@@ -446,17 +440,8 @@ const describeSteps = <Context, Input>(
   });
 
 export const inspectWorkflow = <Context, Input, Output>(
-  definition:
-    | WorkflowDefinition<Context, Input, Output>
-    | WorkflowOperationDefinition,
+  definition: WorkflowDefinition<Context, Input, Output>,
 ): WorkflowDescriptor => {
-  if (!("steps" in definition)) {
-    return {
-      name: definition.name,
-      outputDependencies: [],
-      steps: [],
-    };
-  }
   const descriptor: WorkflowDescriptor = {
     name: definition.name,
     outputDependencies: definition.output.dependencies,

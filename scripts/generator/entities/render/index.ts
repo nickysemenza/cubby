@@ -1406,7 +1406,7 @@ export const renderEntityArtifacts = (
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",
       source:
         generatedHeader +
-        'import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";\n' +
+        'import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";\n' +
         'import { withEntityDetailMedia, withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
         'import { paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +

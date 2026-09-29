@@ -108,11 +108,9 @@ import {
   importHunt,
   importPreparedOrder,
   run as runTable,
-  vendorMailSearchJob,
   runApproval,
   runControlEvent,
   runEvidence,
-  runMutation,
   runOperation,
   runOrderCandidate,
   runProgress,
@@ -696,7 +694,7 @@ export const ENTITY_EDGES = {
           "A recorded product amount whose nutrition is recalculated from the current product source while its entered quantity remains fixed.",
         liveness: { kind: "must-target-live" },
       },
-      "ProductUnitMappings.productId": {
+      "ProductUnitMapping.productId": {
         column: productUnitMappings.productId,
         role: "metadata",
         label: "unit mappings",
@@ -741,7 +739,7 @@ export const ENTITY_EDGES = {
         role: "reference",
         label: "locations",
         description:
-          "A Location that IS an instance of this Product — the bin, tote or rack itself, not stock held in it. Deleting the Product would leave those locations with neither a type nor an identity, since a linked location stops carrying its own `type`.",
+          "A Location that IS an instance of this Product — the bin, tote or rack itself, not stock held in it. Deleting the Product would leave a `furniture` location (whose type only means an instance of a Product) with no identity at all.",
         liveness: { kind: "must-target-live" },
       },
       "Cookbook.productId": {
@@ -1286,16 +1284,6 @@ export const ENTITY_EDGES = {
           "Append-only provenance: a job keeps naming the run that scheduled it.",
       },
     },
-    "VendorMailSearchJob.runId": {
-      column: vendorMailSearchJob.runId,
-      role: "history",
-      label: "Gmail search",
-      description: "The Vendor Gmail search requested by this run.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason: "The search record preserves the run that requested it.",
-      },
-    },
     "Purchase.runId": {
       column: purchase.runId,
       role: "history",
@@ -1331,14 +1319,6 @@ export const ENTITY_EDGES = {
       role: "owned-child",
       label: "evidence",
       description: "Captured evidence filed under this run.",
-      liveness: { kind: "must-target-live" },
-    },
-    "RunMutation.runId": {
-      column: runMutation.runId,
-      role: "owned-child",
-      label: "mutations",
-      description:
-        "An explicit row mutation attributed to this run, independent of AuditLog's actor shape.",
       liveness: { kind: "must-target-live" },
     },
     "RunOperation.runId": {
@@ -1450,5 +1430,4 @@ export const ENTITY_EDGES = {
       },
     },
   }),
-  imageSighting: edges({}),
 } as const satisfies Record<Entity, Record<string, EntityEdge>>;

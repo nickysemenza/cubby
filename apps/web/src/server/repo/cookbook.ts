@@ -45,6 +45,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import { logAuditEntry } from "~/server/repo/audit-log";
+import { cookbookSourceRecipeCountSql } from "~/server/repo/cookbook-source-count";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   getDb,
@@ -116,7 +117,6 @@ export const upsertCookbook = async (
     name: input.name,
     rawJson: input.rawJson,
     report: input.report ?? null,
-    sourceRecipeCount: flattenCookbookRecipes(input.rawJson).length,
     author: input.author ?? [],
     subjects: input.subjects ?? [],
     sourceLabel: input.sourceLabel,
@@ -243,7 +243,7 @@ const readCookbookSummaries = async (
       subjects: cookbook.subjects,
       recipeCount: sql<number>`count(${recipe.id})::int`,
       coverKey: image.key,
-      sourceRecipeCount: cookbook.sourceRecipeCount,
+      sourceRecipeCount: cookbookSourceRecipeCountSql(cookbook.rawJson),
       // Rows from before the book-tree format hold a flat array.
       needsReextract: sql<boolean>`jsonb_typeof(${cookbook.rawJson}) = 'array'`,
       productId: cookbook.productId,

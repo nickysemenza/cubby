@@ -55,6 +55,11 @@ export const activityListInput = z.object({
     .optional(),
   kind: activityKind.optional(),
   trigger: runTrigger.optional(),
+  /**
+   * Hide runs started by these triggers (the list's default hides
+   * `ephemeral`). Image jobs with no parent run have no trigger and stay.
+   */
+  excludeTriggers: z.array(runTrigger).optional(),
   vendorAccountId: z.string().optional(),
   vendorId: z.string().optional(),
   ledgerPartyId: z.string().optional(),

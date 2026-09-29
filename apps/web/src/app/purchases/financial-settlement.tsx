@@ -29,7 +29,7 @@ import {
   type EntityEditDialogRequest,
 } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityListFor } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list";
 import { formatFieldProvenance } from "~/entities/field-provenance";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";

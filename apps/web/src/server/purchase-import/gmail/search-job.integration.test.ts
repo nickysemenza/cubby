@@ -5,7 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { publishBackgroundTasks } from "~/server/background-tasks/publish";
-import { run, runProgress, vendorMailSearchJob } from "~/server/db/schema";
+import { run, runProgress } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { getRunLiveProgress } from "~/server/repo/run-progress";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -21,6 +21,85 @@ import {
 
 describe("Vendor Gmail search jobs", () => {
   const ctx = withTestDb();
+
+  it("persists the search input and page progress on the Run", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic progress member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic progress vendor",
+      website: "https://example.test",
+    });
+    const started = await startVendorMailSearchJob(
+      ctx.db,
+      { vendorId: vendor.shortcode, after: "2025/01/02" },
+      ctx.actor,
+      { publish: async () => ({ transport: "queue", count: 1 }) },
+    );
+    const readRun = async () => {
+      const [row] = await getDb(ctx.db)
+        .select({
+          id: run.id,
+          purpose: run.purpose,
+          status: run.status,
+          input: run.input,
+          progress: run.progress,
+          skipped: run.skipped,
+          dispatchError: run.dispatchError,
+        })
+        .from(run)
+        .where(eq(run.shortcode, started.runShortcode));
+      if (!row) throw new Error("Synthetic Run was not saved");
+      return row;
+    };
+    const queued = await readRun();
+    expect(queued).toMatchObject({
+      purpose: "mail_search",
+      input: { after: "2025/01/02", searchTerms: ["example.test"] },
+      progress: { phase: "queued", pagesScanned: 0 },
+    });
+
+    await runVendorMailSearchJob(ctx.db, queued.id, {
+      search: async () => ({
+        searched: 10,
+        skipped: 6,
+        reviewable: 2,
+        after: "2025/01/02",
+        nextPageToken: "saved-cursor",
+      }),
+      publish: async () => ({ transport: "queue", count: 1 }),
+    });
+    expect(await readRun()).toMatchObject({
+      status: "running",
+      skipped: 6,
+      progress: {
+        phase: "queued",
+        pagesScanned: 1,
+        searched: 10,
+        reviewable: 2,
+        nextPageToken: "saved-cursor",
+      },
+    });
+
+    await runVendorMailSearchJob(ctx.db, queued.id, {
+      page: 1,
+      search: async () => {
+        throw new Error("Synthetic permanent search failure");
+      },
+      reportError: () => "ffffffffffffffffffffffffffffffff",
+    });
+    const failed = await readRun();
+    expect(failed).toMatchObject({
+      status: "failed",
+      // A failed page keeps the last saved checkpoint.
+      progress: { phase: "failed", pagesScanned: 1, searched: 10 },
+      dispatchError: expect.stringContaining(
+        "Synthetic permanent search failure",
+      ),
+    });
+  });
 
   it("keeps a rate-limited page queued with a concise cause for retry", async () => {
     await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -112,9 +191,9 @@ describe("Vendor Gmail search jobs", () => {
       .where(eq(run.shortcode, started.runShortcode));
     if (!saved) throw new Error("Synthetic Run was not saved");
     await getDb(ctx.db)
-      .update(vendorMailSearchJob)
+      .update(run)
       .set({ updatedAt: new Date(Date.now() - 4 * 60_000) })
-      .where(eq(vendorMailSearchJob.runId, saved.runId));
+      .where(eq(run.id, saved.runId));
     await retryStalledVendorMailSearchJob(
       ctx.db,
       started.runShortcode,
@@ -134,9 +213,9 @@ describe("Vendor Gmail search jobs", () => {
     ).rejects.toThrow(/still waiting/u);
     expect(publish).toHaveBeenCalledTimes(2);
     await getDb(ctx.db)
-      .update(vendorMailSearchJob)
+      .update(run)
       .set({ updatedAt: new Date(Date.now() - 4 * 60_000) })
-      .where(eq(vendorMailSearchJob.runId, saved.runId));
+      .where(eq(run.id, saved.runId));
     await expect(
       retryStalledVendorMailSearchJob(ctx.db, started.runShortcode, ctx.actor, {
         publish: async () => {
@@ -225,12 +304,11 @@ describe("Vendor Gmail search jobs", () => {
         vendorId: run.vendorId,
         ledgerPartyId: run.ledgerPartyId,
       })
-      .from(vendorMailSearchJob)
-      .innerJoin(run, eq(vendorMailSearchJob.runId, run.id))
+      .from(run)
       .where(eq(run.vendorId, vendor.id))
       .limit(1);
     expect(ownedRun).toMatchObject({
-      purpose: "background",
+      purpose: "mail_search",
       status: "running",
       vendorId: vendor.id,
       ledgerPartyId: member.id,
@@ -422,21 +500,24 @@ describe("Vendor Gmail search jobs", () => {
       { publish },
     );
     const [saved] = await getDb(ctx.db)
-      .select({ runId: vendorMailSearchJob.runId })
-      .from(vendorMailSearchJob)
-      .innerJoin(run, eq(vendorMailSearchJob.runId, run.id))
+      .select({ runId: run.id })
+      .from(run)
       .where(eq(run.shortcode, started.runShortcode));
     if (!saved) throw new Error("Synthetic job was not saved");
     await getDb(ctx.db)
-      .update(vendorMailSearchJob)
+      .update(run)
       .set({
-        status: "queued",
-        pagesScanned: 1,
-        searched: 10,
-        nextPageToken: "checkpoint",
+        progress: {
+          phase: "queued",
+          pagesScanned: 1,
+          searched: 10,
+          reviewable: 0,
+          pageToken: null,
+          nextPageToken: "checkpoint",
+        },
         updatedAt: new Date(Date.now() - 20 * 60_000),
       })
-      .where(eq(vendorMailSearchJob.runId, saved.runId));
+      .where(eq(run.id, saved.runId));
     await recoverStaleVendorMailSearchJobs(ctx.db, { publish });
     expect(publish).toHaveBeenCalledTimes(2);
     expect(publish.mock.calls[1]?.[1]).toMatchObject([
@@ -468,9 +549,8 @@ describe("Vendor Gmail search jobs", () => {
       { publish: async () => ({ transport: "queue", count: 1 }) },
     );
     const [saved] = await getDb(ctx.db)
-      .select({ runId: vendorMailSearchJob.runId })
-      .from(vendorMailSearchJob)
-      .innerJoin(run, eq(vendorMailSearchJob.runId, run.id))
+      .select({ runId: run.id })
+      .from(run)
       .where(eq(run.shortcode, started.runShortcode));
     if (!saved) throw new Error("Synthetic job was not saved");
     await runVendorMailSearchJob(ctx.db, saved.runId, {

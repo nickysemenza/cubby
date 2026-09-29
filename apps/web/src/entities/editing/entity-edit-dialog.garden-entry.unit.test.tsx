@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EntityMutationTransport } from "~/entities/entity-contracts";
-import { entityMutation } from "~/entities/entity-mutation.functions";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
@@ -27,7 +27,7 @@ function gardenEntryPort(action: "create" | "update" = "create") {
       action,
       entity: "gardenEntry",
       item: created,
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     }),
   );
   const mutation = entityMutation.mutate.withTransport(transport);
@@ -89,7 +89,7 @@ describe("EntityEditDialog generic create", () => {
             plantingIds: ["PLT-4K7M"],
             observedOn: "2026-08-20",
             harvestAmount: "A handful",
-            note: "First harvest",
+            notes: "First harvest",
           }),
         }),
       }),

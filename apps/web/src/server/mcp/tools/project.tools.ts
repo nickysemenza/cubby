@@ -30,19 +30,13 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { sumBy } from "es-toolkit";
 import { z } from "zod";
 
+import { projectRepointUsesWorkflow } from "~/server/operations/project.server";
+import { expenseAnalytics, matchExpenses } from "~/server/repo/expense";
 import {
-  expenseAnalyticsWorkflow,
-  expenseMatchWorkflow,
-} from "~/server/operations/expense.server";
-import {
-  projectDashboardSummaryWorkflow,
-  projectPortfolioAnalyticsWorkflow,
-  projectRepointUsesWorkflow,
-} from "~/server/operations/project.server";
-import {
-  taskListActionableWorkflow,
-  taskSummaryWorkflow,
-} from "~/server/operations/task.server";
+  projectDashboardSummary,
+  projectPortfolioAnalytics,
+} from "~/server/repo/project";
+import { getTaskSummary, listActionableTasks } from "~/server/repo/task";
 
 import {
   READ_ONLY_CLOSED,
@@ -191,7 +185,7 @@ export function registerProjectTools(server: McpServer) {
     // today: `ne(status,'done')` (the old default) is equivalent to
     // `inArray(LIVE_PROJECT_STATUSES)` given exactly 4 statuses.
     call: (context, params) =>
-      projectDashboardSummaryWorkflow(context.db, {
+      projectDashboardSummary(context.db, {
         statusScope: [...LIVE_PROJECT_STATUSES],
         ...params,
       }),
@@ -205,10 +199,7 @@ export function registerProjectTools(server: McpServer) {
     outputSchema: projectBudgetOut,
     annotations: READ_ONLY_CLOSED,
     call: async (context, params) => {
-      const analytics = await projectPortfolioAnalyticsWorkflow(
-        context.db,
-        params,
-      );
+      const analytics = await projectPortfolioAnalytics(context.db, params);
       const projects = analytics.costVsEstimate
         .map((row) => {
           const projected = row.actual + row.committed;
@@ -263,7 +254,7 @@ export function registerProjectTools(server: McpServer) {
     inputSchema: z.object({}),
     outputSchema: actionableTasksOut,
     annotations: READ_ONLY_CLOSED,
-    call: (context) => taskListActionableWorkflow(context.db, undefined),
+    call: (context) => listActionableTasks(context.db, {}),
   });
 
   registerRouterTool(server, {
@@ -273,7 +264,7 @@ export function registerProjectTools(server: McpServer) {
     inputSchema: z.object({}),
     outputSchema: taskSummaryOut,
     annotations: READ_ONLY_CLOSED,
-    call: (context) => taskSummaryWorkflow(context.db),
+    call: (context) => getTaskSummary(context.db),
   });
 
   registerRouterTool(server, {
@@ -290,7 +281,7 @@ export function registerProjectTools(server: McpServer) {
     ),
     outputSchema: expenseAnalyticsOut,
     annotations: READ_ONLY_CLOSED,
-    call: (context, params) => expenseAnalyticsWorkflow(context.db, params),
+    call: (context, params) => expenseAnalytics(context.db, params),
   });
 
   registerRouterTool(server, {
@@ -307,6 +298,6 @@ export function registerProjectTools(server: McpServer) {
     inputSchema: expenseMatchInput,
     outputSchema: expenseMatchMcpOut,
     annotations: READ_ONLY_CLOSED,
-    call: (context, params) => expenseMatchWorkflow(context.db, params),
+    call: (context, params) => matchExpenses(context.db, params),
   });
 }

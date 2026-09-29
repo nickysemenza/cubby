@@ -15,7 +15,7 @@ import {
 } from "./base-entity";
 import { amount } from "./codec";
 import { money, moneyNullable } from "./money";
-import { mutationSideEffectsSchema } from "./background-jobs";
+import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import {
   inventoryShortcode,
   locationShortcode,
@@ -69,6 +69,9 @@ export const locationFilterFields = {
   ),
   imagePresenceFilter: presenceFilter.describe(
     "Filter to locations that do / don't have at least one image (PDF attachments don't count).",
+  ),
+  aiDescriptionPresenceFilter: presenceFilter.describe(
+    "Filter to locations that do / don't have an AI-generated description.",
   ),
   /**
    * Direct children only — `"none"` is the leaf-location worklist. Paired with
@@ -324,10 +327,6 @@ export type LocationWithParentNameOut = z.infer<
 >;
 
 export const locationsWithParentNameOut = z.array(locationWithParentNameOut);
-
-export const recomputeLocationValuationsOut = z.object({
-  updated: z.number().int().nonnegative(),
-});
 
 const inventoryItemForTree = z.object({
   id: inventoryShortcode,

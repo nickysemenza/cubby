@@ -15,16 +15,18 @@ import {
   useEntityDisplayImage,
 } from "~/app/_components/entity-media/entity-display-images";
 import { RelatedProductRow } from "~/app/_components/relatedness/related-product-row";
-import { inventory } from "~/app/inventory/inventory.functions";
 import { DuplicateProductMergeFix } from "~/app/problems/components/tier2-fixes";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityMedia } from "~/entities/entity-media.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import {
+  inventory,
+  entityMedia,
+  recommendations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { recommendations } from "~/lib/recommendations.functions";
 
 import {
   ProductMatchQueue,

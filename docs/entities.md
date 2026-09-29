@@ -39,9 +39,11 @@ pnpm generate:check
 ```
 
 One generator (`scripts/generator/main.ts`) runs three stages in order: the
-entity stage (`scripts/generator/entities/`), the Start operation registry
-(`scripts/generator/start-operations/`), and the HTTP OpenAPI document with
-its native derivations (`scripts/generator/http-api/`). `generate:check` fails
+entity stage (`scripts/generator/entities/`), the Start operation stage
+(`scripts/generator/start-operations/`: the operation registry, handler loaders,
+and the browser client catalog that resolves each contract's cache tags and
+invalidation data), and the HTTP OpenAPI document with its native derivations
+(`scripts/generator/http-api/`). `generate:check` fails
 on invalid metadata, duplicate entity keys or routes, invalid relation
 policies, unsupported capabilities, and stale, missing, or extraneous generated
 files from any stage. Typecheck verifies declaration types and referenced
@@ -627,10 +629,7 @@ tracing, and console observability.
 Ordinary browser calls POST a SuperJSON operation envelope to
 `/api/browser/dispatch`. The Worker routes this path directly to the shared
 dispatcher; operation and entity labels remain in request headers for DevTools
-and tracing. SSR invokes that dispatcher in-process. A browser that reaches an
-older Worker without this endpoint retries through the Start function. That
-function remains available to already-open clients, including its legacy alias
-rewrite at both server entries.
+and tracing. SSR invokes that dispatcher in-process.
 
 The server operation boundary chooses one database adapter before invoking a
 handler and exposes that adapter through both context handles. Ordinary queries
@@ -829,17 +828,21 @@ original bytes remain the analysis source and fallback, and the original can
 be selected explicitly.
 
 An Image's _who took this and when_ is derived, never entered directly.
-`ImageSighting` records each report that a stored Image appears in one Ledger
+`ImageSighting` — a non-entity child table of Image, with no shortcode and no
+identity row — records each report that a stored Image appears in one Ledger
 Party member's photo library or cloud asset store, from one reporting
-`Device` — unique per `(imageId, ledgerPartyId, assetKey)`, so a member's
+`Device`. It is unique per `(imageId, ledgerPartyId, assetKey)`, so a member's
 second device reporting the same synced asset updates the existing sighting
-rather than creating another one. `deriveImageCapture` reduces an image's
+rather than creating another one. Sightings are written only through
+`image.recordSightings` (and a photo-import commit's `library` block), read on
+the Image detail as `sightings`, and their audit history lives on the parent
+Image. `deriveImageCapture` reduces an image's
 live sightings, and failing those its embedded EXIF, to Image's own
 `capturedAt`, `captureLocation`, `capturePlaceName`, `captureDeviceLabel`, and
 `capturedByPartyId` fields, recording how confidently in
 `captureAttribution` (`none`, `derived`, `ambiguous` when several members'
 evidence ties, or `confirmed` once a member sets it by hand — confirmed is
-never recomputed). Every sighting create, update, or delete re-runs this
+never recomputed). Every sighting write or reporting-device delete re-runs this
 derivation for its image in the same transaction. See ADR 0005 for the full
 precedence rule.
 

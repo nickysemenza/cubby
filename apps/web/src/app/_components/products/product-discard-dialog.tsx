@@ -29,7 +29,6 @@ import { z } from "zod";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { DiscardLineFields } from "~/app/_components/inventory/discard-line-fields";
-import { product as productOperations } from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -41,6 +40,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { NullableNumericField, SelectField } from "../form-utils";
 

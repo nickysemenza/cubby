@@ -138,13 +138,23 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records the Run that scheduled a queued image-processing job",
   },
-  "VendorMailSearchJob.runId": {
-    classification: "metadata",
-    reason: "records the Run and its Vendor Gmail search progress",
-  },
   "RunTarget.deviceWorkDeviceId": {
     classification: "metadata",
     reason: "records the device that last reported on-device processing",
+  },
+  // ImageSighting is a child table of Image, not an entity, so no relation
+  // path can start from it; the Image detail reads its sightings directly.
+  "ImageSighting.imageId": {
+    classification: "ownership",
+    reason: "a sighting is a child row of the Image it reports on",
+  },
+  "ImageSighting.ledgerPartyId": {
+    classification: "metadata",
+    reason: "the member whose photo library reported the sighting",
+  },
+  "ImageSighting.deviceId": {
+    classification: "metadata",
+    reason: "the native install that reported the sighting",
   },
   "PhotoGroupProposal.runId": {
     classification: "ownership",
@@ -194,10 +204,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
   "RunEvidence.runId": {
     classification: "ownership",
     reason: "captured evidence filed under its run",
-  },
-  "RunMutation.runId": {
-    classification: "ownership",
-    reason: "an explicit row-mutation record attributed to its run",
   },
   "RunOperation.runId": {
     classification: "ownership",
@@ -344,7 +350,7 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "names the Vendor a source slug is; registry metadata",
   },
-  "ProductUnitMappings.productId": {
+  "ProductUnitMapping.productId": {
     classification: "ownership",
     reason: "derived unit-mapping state owned by the product",
   },

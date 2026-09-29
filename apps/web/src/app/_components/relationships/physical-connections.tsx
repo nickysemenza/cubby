@@ -11,7 +11,7 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
-import { entityGraph } from "~/entities/entity-graph.functions";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 /**
  * One-hop physical connections (the runtime edge source, ADR 0006)

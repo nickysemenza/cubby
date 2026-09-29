@@ -5,7 +5,10 @@ import type {
   splitExpenseInput,
 } from "@cubby/schemas/purchase";
 
+import { purchaseContract } from "~/contracts/purchase.contract";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
+import { implementOperationDomain } from "~/server/operation-domain.server";
+import { listPurchaseOrderMail } from "~/server/purchase-import/gmail/review";
 import { linkExpensesToPurchase, splitExpense } from "~/server/repo/purchase";
 import { listPurchaseProducts } from "~/server/repo/purchase-products";
 import {
@@ -37,10 +40,6 @@ export const linkExpensesToPurchaseWorkflow = bindWorkflow(
       ),
     )
     .output(({ link }) => link),
-  (
-    ctx: EntityKernelContext,
-    input: typeof linkExpensesToPurchaseInput._output,
-  ) => ({ context: ctx, input }),
 );
 
 export const splitExpenseWorkflow = bindWorkflow(
@@ -86,25 +85,21 @@ export const splitExpenseWorkflow = bindWorkflow(
       }
     })
     .output(({ split }) => split.items),
-  (ctx: EntityKernelContext, input: typeof splitExpenseInput._output) => ({
-    context: ctx,
-    input,
-  }),
 );
 
-export const purchaseProductsWorkflow = bindWorkflow(
-  workflow<EntityKernelContext, typeof purchaseProductsInput._output>(
-    "purchase.products",
-  )
-    .call("purchaseId", async ({ context }, { input }) =>
-      resolveOrThrow(context.db, "purchase", input.purchaseId),
-    )
-    .call("products", async ({ context }, { purchaseId }) =>
-      listPurchaseProducts(context.db, purchaseId),
-    )
-    .output(({ products }) => products),
-  (ctx: EntityKernelContext, input: typeof purchaseProductsInput._output) => ({
-    context: ctx,
-    input,
-  }),
-);
+export async function purchaseProductsWorkflow(
+  context: EntityKernelContext,
+  input: typeof purchaseProductsInput._output,
+) {
+  return listPurchaseProducts(
+    context.db,
+    await resolveOrThrow(context.db, "purchase", input.purchaseId),
+  );
+}
+
+export const purchaseHandlers = implementOperationDomain(purchaseContract, {
+  orderMail: (context, input) => listPurchaseOrderMail(context.db, input),
+  products: (context, input) => purchaseProductsWorkflow(context, input),
+  link: (context, input) => linkExpensesToPurchaseWorkflow(context, input),
+  split: (context, input) => splitExpenseWorkflow(context, input),
+});

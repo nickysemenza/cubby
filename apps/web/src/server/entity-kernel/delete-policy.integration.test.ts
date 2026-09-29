@@ -743,7 +743,8 @@ async function seedMealChildRows(db: Database, ids: StagingIds) {
       ledgerPartyId,
       productId,
       sourceKind: "product",
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     }).catch(() => undefined);
   if (ingredientId)
     await insertAndReturn(db, mealFoodEntry, {
@@ -751,7 +752,8 @@ async function seedMealChildRows(db: Database, ids: StagingIds) {
       ledgerPartyId,
       ingredientId,
       sourceKind: "ingredient",
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     }).catch(() => undefined);
   if (!recipeId) return;
   const recipe = await insertAndReturn(db, mealRecipe, {
@@ -763,7 +765,8 @@ async function seedMealChildRows(db: Database, ids: StagingIds) {
       mealRecipeId: recipe.id,
       mealId,
       ledgerPartyId,
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     }).catch(() => undefined);
 }
 
@@ -886,7 +889,8 @@ async function seedCookbookExpenseAttributionInventory(
   if (productId && locationId && ledgerPartyId)
     await insertWithShortcode(db, "inventory", {
       productId,
-      amount: { value: 1, unit: "each" },
+      amountValue: 1,
+      amountUnit: "each",
       locationId,
       ownershipMode: "person",
       ownerLedgerPartyId: ledgerPartyId,

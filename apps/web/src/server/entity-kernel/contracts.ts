@@ -1,10 +1,10 @@
-import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";
 import { operationEffectSchema } from "@cubby/schemas/entity-integrity";
 import { anyShortcodeSchema } from "@cubby/schemas/identifiers";
 import {
   mcpResultDetail,
   mcpResultDetailFields,
 } from "@cubby/schemas/mcp-detail";
+import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";
 import {
   MAX_PAGE_SIZE,
   MAX_SORTS,

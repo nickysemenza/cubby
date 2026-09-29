@@ -14,8 +14,8 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
+import { problems } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { countLabel } from "~/lib/pluralize";
-import { problems } from "~/lib/problems.functions";
 
 /**
  * Per-card and bulk cleanup actions for the three ingredient problem sections.

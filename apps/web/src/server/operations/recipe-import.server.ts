@@ -61,6 +61,7 @@ import { findParentRecipeIdsBatch } from "~/server/repo/recipe/totals";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import {
   actorWithRun,
+  aiCallRunInput,
   cookbookRunInput,
   ensureRun,
 } from "~/server/runs/ensure-run";
@@ -94,7 +95,6 @@ import {
   bindBulkWorkflow,
   bindWorkflow,
   defineBulkWorkflow,
-  defineWorkflowOperation,
   executeBulkWorkflow,
   executeWorkflow,
   type BulkWorkflowSummary,
@@ -105,15 +105,11 @@ const cookbookShortcodes = bindShortcodeResolver("cookbook");
 const productShortcodes = bindShortcodeResolver("product");
 const recipeShortcodes = bindShortcodeResolver("recipe");
 
-export const scrapeWorkflow = defineWorkflowOperation(
-  "recipe.scrape",
-  (input: z.output<typeof scrapeRecipeInput>) => scrapeToImportRecipe(input),
-);
-export const parseHtmlWorkflow = defineWorkflowOperation(
-  "recipe.parseHtml",
-  (input: z.output<typeof parseRecipeHtmlInput>) =>
-    Promise.resolve(htmlToImportRecipe(input.html, input.url)),
-);
+export const scrapeWorkflow = (input: z.output<typeof scrapeRecipeInput>) =>
+  scrapeToImportRecipe(input);
+export const parseHtmlWorkflow = async (
+  input: z.output<typeof parseRecipeHtmlInput>,
+) => htmlToImportRecipe(input.html, input.url);
 
 export interface RecipeImportWorkflowPorts {
   importImageFromUrl: ImageUrlImportPort;
@@ -128,7 +124,7 @@ type ImportRecipeContext = {
   operation: AuthenticatedStartOperationContext;
   ports: RecipeImportWorkflowPorts;
 };
-export const insertImportWorkflow = bindWorkflow(
+const insertImport = bindWorkflow(
   workflow<ImportRecipeContext, ImportRecipeInput>("recipe.insertImport")
     .commit("imported", async ({ context }, { input }) =>
       upsertImportRecipe(
@@ -168,11 +164,14 @@ export const insertImportWorkflow = bindWorkflow(
     .output(({ imported }) => ({
       id: parseShortcodeFor("recipe", imported.shortcode),
     })),
+);
+export const insertImportWorkflow = Object.assign(
   (
     operation: AuthenticatedStartOperationContext,
     input: ImportRecipeInput,
     ports: RecipeImportWorkflowPorts = productionRecipeImportWorkflowPorts,
-  ) => ({ context: { operation, ports }, input }),
+  ) => insertImport({ operation, ports }, input),
+  { definition: insertImport.definition },
 );
 
 type UpsertCookbookInput = z.output<typeof upsertCookbookInput>;
@@ -227,21 +226,16 @@ export const upsertCookbookWorkflow = bindWorkflow(
 );
 
 type CookbookIdInput = z.output<typeof cookbookIdInput>;
-export const getCookbookSourceWorkflow = bindWorkflow(
-  workflow<AuthenticatedStartOperationContext, CookbookIdInput>(
-    "recipe.getCookbookSource",
-  )
-    .call("cookbookId", ({ context }, { input }) =>
-      cookbookShortcodes.one(context.db, input.cookbookId),
-    )
-    .call("source", ({ context }, { input, cookbookId }) =>
-      getCookbookSource(context.db, cookbookId).then((source) => ({
-        ...source,
-        id: input.cookbookId,
-      })),
-    )
-    .output(({ source }) => source),
-);
+export async function getCookbookSourceWorkflow(
+  context: AuthenticatedStartOperationContext,
+  input: CookbookIdInput,
+) {
+  const source = await getCookbookSource(
+    context.db,
+    await cookbookShortcodes.one(context.db, input.cookbookId),
+  );
+  return { ...source, id: input.cookbookId };
+}
 
 type CookbookRecipePhotoInput = z.output<typeof attachCookbookRecipePhotoInput>;
 
@@ -257,7 +251,7 @@ type PhotoWorkflowContext = {
   db: AuthenticatedStartOperationContext["db"];
   ports: CookbookRecipePhotoPorts;
 };
-export const attachCookbookRecipePhotoWorkflow = bindWorkflow(
+const attachCookbookRecipePhoto = bindWorkflow(
   workflow<PhotoWorkflowContext, CookbookRecipePhotoInput>(
     "recipe.attachCookbookRecipePhoto",
   )
@@ -339,13 +333,13 @@ export const attachCookbookRecipePhotoWorkflow = bindWorkflow(
           .output(({ attached }) => attached),
     })
     .output(({ attachment }) => attachment),
-  (
-    context: Pick<AuthenticatedStartOperationContext, "db"> &
-      Partial<Pick<AuthenticatedStartOperationContext, "actorContext">>,
-    input: CookbookRecipePhotoInput,
-    ports: CookbookRecipePhotoPorts = productionCookbookRecipePhotoPorts,
-  ) => ({ context: { db: context.db, ports }, input }),
 );
+export const attachCookbookRecipePhotoWorkflow = (
+  context: Pick<AuthenticatedStartOperationContext, "db"> &
+    Partial<Pick<AuthenticatedStartOperationContext, "actorContext">>,
+  input: CookbookRecipePhotoInput,
+  ports: CookbookRecipePhotoPorts = productionCookbookRecipePhotoPorts,
+) => attachCookbookRecipePhoto({ db: context.db, ports }, input);
 
 type ImportSummary = { succeeded: number; failed: number };
 type CookbookImportItem = {
@@ -472,29 +466,13 @@ export const importCookbookWorkflow = bindBulkWorkflow(
 );
 
 type CookbookDiffInput = z.output<typeof cookbookDiffInput>;
-export const getCookbookDiffWorkflow = bindWorkflow(
-  workflow<AuthenticatedStartOperationContext, CookbookDiffInput>(
-    "recipe.getCookbookDiff",
-  )
-    .call(
-      "cookbook",
-      async ({ context }, { input }) =>
-        await getCookbookByName(context.db, input.book),
-    )
-    .branch("recipes", {
-      when: async (_, { cookbook }) => cookbook != null,
-      whenTrue: (branch) =>
-        branch
-          .call("read", async ({ context }, { input }) =>
-            input.cookbook
-              ? await getCookbookRecipesForDiff(context.db, input.cookbook.id)
-              : [],
-          )
-          .output(({ read }) => read),
-      whenFalse: (branch) => branch.output(() => []),
-    })
-    .output(({ recipes }) => recipes),
-);
+export async function getCookbookDiffWorkflow(
+  context: AuthenticatedStartOperationContext,
+  input: CookbookDiffInput,
+) {
+  const cookbook = await getCookbookByName(context.db, input.book);
+  return cookbook ? getCookbookRecipesForDiff(context.db, cookbook.id) : [];
+}
 
 const normalizeNotionId = (id: string) => id.replace(/-/g, "");
 const previewNotionSyncDefinition = workflow<
@@ -558,13 +536,10 @@ const previewNotionSyncDefinition = workflow<
   })
   .output(({ client }) => client);
 
-export const previewNotionSyncWorkflow = bindWorkflow(
-  previewNotionSyncDefinition,
-  (context: AuthenticatedStartOperationContext) => ({
-    context,
-    input: undefined,
-  }),
-);
+const previewNotionSync = bindWorkflow(previewNotionSyncDefinition);
+export const previewNotionSyncWorkflow = (
+  context: AuthenticatedStartOperationContext,
+) => previewNotionSync(context, undefined);
 
 type NotionSummary = { succeeded: number; failed: number };
 type NotionImportItem = {
@@ -697,32 +672,21 @@ export const importNotionSyncWorkflow = bindBulkWorkflow(
 );
 
 type SetCookbookProductInput = z.output<typeof setCookbookProductInput>;
-export const setCookbookProductWorkflow = bindWorkflow(
-  workflow<AuthenticatedStartOperationContext, SetCookbookProductInput>(
-    "recipe.setCookbookProduct",
-  )
-    .call("cookbookId", ({ context }, { input }) =>
-      cookbookShortcodes.one(context.db, input.cookbookId),
-    )
-    .call("productId", async ({ context }, { input }) =>
-      input.productId
-        ? productShortcodes.one(context.db, input.productId)
-        : null,
-    )
-    .commit("updated", ({ context }, { cookbookId, productId }) =>
-      setCookbookProduct(
-        context.db,
-        context.actorContext,
-        cookbookId,
-        productId,
-      ),
-    )
-    .output(({ updated }) => updated),
-  (
-    context: AuthenticatedStartOperationContext,
-    input: SetCookbookProductInput,
-  ) => ({ context, input }),
-);
+export async function setCookbookProductWorkflow(
+  context: AuthenticatedStartOperationContext,
+  input: SetCookbookProductInput,
+) {
+  const cookbookId = await cookbookShortcodes.one(context.db, input.cookbookId);
+  const productId = input.productId
+    ? await productShortcodes.one(context.db, input.productId)
+    : null;
+  return setCookbookProduct(
+    context.db,
+    context.actorContext,
+    cookbookId,
+    productId,
+  );
+}
 
 type DeleteCookbookInput = z.output<typeof cookbookIdInput>;
 export const deleteCookbookWorkflow = bindWorkflow(
@@ -861,19 +825,18 @@ export const reprocessCookbookWorkflow = Object.assign(
   { definition: reprocessCookbookDefinition },
 );
 type GatewayForwardInput = z.output<typeof gatewayForwardInput>;
-export const forwardGatewayRequestWorkflow = defineWorkflowOperation(
-  "recipe.forwardGatewayRequest",
-  async (
-    context: AuthenticatedStartOperationContext,
-    input: GatewayForwardInput,
-  ) => {
-    const runId = await ensureRun(context.db, context.actorContext, {
-      purpose: "ai_action",
-    });
-    return forwardGatewayRequest(input, {
-      db: context.db,
-      runId,
-      feature: "cookbook-epub-parsing",
-    });
-  },
-);
+export async function forwardGatewayRequestWorkflow(
+  context: AuthenticatedStartOperationContext,
+  input: GatewayForwardInput,
+) {
+  const runId = await ensureRun(
+    context.db,
+    context.actorContext,
+    aiCallRunInput(context.actorContext),
+  );
+  return forwardGatewayRequest(input, {
+    db: context.db,
+    runId,
+    feature: "cookbook-epub-parsing",
+  });
+}

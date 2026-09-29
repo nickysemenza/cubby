@@ -57,6 +57,7 @@ import {
   linkValues,
   liveLinks,
 } from "~/server/repo/entity-links";
+import { enrichProductRowsWithInventoryValuations } from "~/server/repo/inventory/valuation";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { markProductConversionCoverageInputStale } from "~/server/repo/product/conversion-coverage";
 import { enrichProductListItems } from "~/server/repo/product/list-enrichment";
@@ -185,7 +186,8 @@ export async function listKitComponentRows(
     "product",
     rows.map((row) => row.id),
   );
-  const priced = await enrichProductRowsWithPricing(db, rows);
+  const valued = await enrichProductRowsWithInventoryValuations(db, rows);
+  const priced = await enrichProductRowsWithPricing(db, valued);
   const ledgered = await enrichProductRowsWithQuantityLedger(db, priced);
   const projectedItems = await withDisplayImages(
     db,

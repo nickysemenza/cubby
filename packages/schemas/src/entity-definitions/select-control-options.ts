@@ -59,6 +59,7 @@ export const selectControlOptions = {
     drawer: "drawer",
     cart: "cart",
     cabinet: "cabinet",
+    furniture: "furniture",
   }),
   mealType: labeled(mealTypeValues, MEAL_TYPE_LABELS),
   // `cooked` is the overwhelming default, so tone is spent on the exceptions:

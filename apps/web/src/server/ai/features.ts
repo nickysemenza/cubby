@@ -58,18 +58,13 @@ import {
 import type { CompatEffort, OpenAiEffort } from "~/server/clients/ai-adapters";
 
 /** Embeddings share the catalog, while retaining their vector runner. */
-export type AiTier =
-  | "fast"
-  | "visionBatch"
-  | "reasoning"
-  | "decision"
-  | "embedding";
+type AiTier = "fast" | "visionBatch" | "reasoning" | "decision" | "embedding";
 
 /**
  * The single place a tier's model is written down. `models.ts` owns the
  * constants; this owns which tier reaches for which.
  */
-export const MODEL_FOR_TIER = {
+const MODEL_FOR_TIER = {
   fast: FAST_MODEL,
   visionBatch: VISION_BATCH_MODEL,
   reasoning: REASONING_MODEL,

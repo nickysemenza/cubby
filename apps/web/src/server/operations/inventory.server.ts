@@ -1,4 +1,3 @@
-import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import {
@@ -22,16 +21,15 @@ import {
   type InventoryOwnershipSelection,
   setInventoryOwnershipInput,
 } from "@cubby/schemas/inventory-ownership";
-import {
-  resolveScanStraysInput,
-  scanAtLocationInput,
-} from "@cubby/schemas/scan";
+import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
 import { uniq } from "es-toolkit";
 import { match } from "ts-pattern";
 import type { z } from "zod";
 
+import { inventoryContract } from "~/contracts/inventory.contract";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
+import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   addInventoryEntries,
   bulkMoveInventoryEntries,
@@ -61,11 +59,7 @@ import {
   resolveScanStrays as resolveScanStraysService,
   scanAtLocation as scanAtLocationService,
 } from "~/server/services/scan-into-location.service";
-import {
-  bindWorkflow,
-  defineWorkflowOperation,
-  workflow,
-} from "~/server/workflow-runtime";
+import { bindWorkflow, workflow } from "~/server/workflow-runtime";
 
 type InventoryMutationContext = { db: Database; actorContext: ActorContext };
 const inventoryMutation = <
@@ -81,8 +75,8 @@ const inventoryMutation = <
     input: Input,
     resolved: Resolved,
   ) => Promise<Result>,
-) =>
-  bindWorkflow(
+) => {
+  const bound = bindWorkflow(
     workflow<InventoryMutationContext, Input>(name)
       .call("resolved", async ({ context }, { input }) =>
         resolve(context.db, input),
@@ -106,11 +100,10 @@ const inventoryMutation = <
         ...written,
         sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
       })),
-    (db: Database, actorContext: ActorContext, input: Input) => ({
-      context: { db, actorContext },
-      input,
-    }),
   );
+  return (db: Database, actorContext: ActorContext, input: Input) =>
+    bound({ db, actorContext }, input);
+};
 
 const locationShortcodes = bindShortcodeResolver("location");
 const inventoryShortcodes = bindShortcodeResolver("inventory");
@@ -319,10 +312,6 @@ export const bulkDiscardInventoryWorkflow = bindWorkflow(
       })),
       sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
     })),
-  (
-    context: DiscardContext,
-    input: z.output<typeof inventoryBulkDiscardPayload>,
-  ) => ({ context, input }),
 );
 
 export const bulkMoveInventoryWorkflow = inventoryMutation(
@@ -419,7 +408,7 @@ export const moveInventoryEntriesWorkflow = inventoryMutation(
   },
 );
 
-export const reconcileInventorySessionWorkflow = bindWorkflow(
+const reconcileSessionWorkflow = bindWorkflow(
   workflow<InventoryMutationContext, z.output<typeof reconcileSessionPayload>>(
     "inventory.reconcileSession",
   )
@@ -522,162 +511,130 @@ export const reconcileInventorySessionWorkflow = bindWorkflow(
       items,
       sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
     })),
-  (
-    db: Database,
-    actorContext: ActorContext,
-    input: z.output<typeof reconcileSessionPayload>,
-  ) => ({ context: { db, actorContext }, input }),
 );
 
-export const findInventoryDuplicatesWorkflow = bindWorkflow(
-  workflow<Database, z.output<typeof inventoryFindDuplicatesInput>>(
-    "inventory.findDuplicates",
-  )
-    .call("excludeLocationId", async ({ context }, { input }) =>
-      input.excludeLocationId
-        ? locationShortcodes.one(context, input.excludeLocationId)
-        : undefined,
-    )
-    .call("duplicates", async ({ context }, { excludeLocationId }) =>
-      findDuplicateUniqueProducts(context, { excludeLocationId }),
-    )
-    .output(({ duplicates }) =>
-      duplicates.map((product) => ({
-        id: parseShortcodeFor("product", product.shortcode),
-        name: product.name,
-        manufacturer: product.manufacturer,
-        expectedQuantity: product.expectedQuantity,
-        locations: product.inventoryEntry.map((entry) => ({
-          id: parseShortcodeFor("location", entry.location.shortcode),
-          name: entry.location.name,
-        })),
-      })),
+async function findInventoryDuplicates(
+  db: Database,
+  input: z.output<typeof inventoryFindDuplicatesInput>,
+) {
+  const excludeLocationId = input.excludeLocationId
+    ? await locationShortcodes.one(db, input.excludeLocationId)
+    : undefined;
+  const duplicates = await findDuplicateUniqueProducts(db, {
+    excludeLocationId,
+  });
+  return duplicates.map((product) => ({
+    id: parseShortcodeFor("product", product.shortcode),
+    name: product.name,
+    manufacturer: product.manufacturer,
+    expectedQuantity: product.expectedQuantity,
+    locations: product.inventoryEntry.map((entry) => ({
+      id: parseShortcodeFor("location", entry.location.shortcode),
+      name: entry.location.name,
+    })),
+  }));
+}
+
+async function getInventoryByLocationShortcodes(
+  db: Database,
+  input: z.output<typeof inventoryLocationIdsInput>,
+) {
+  const resolved = await resolveEntityIds(db, input.locationIds, "location");
+  return getInventoryByLocationIds(
+    db,
+    input.locationIds.map((shortcode) =>
+      parseEntityId("location", resolved.get(shortcode)!),
     ),
-  (db: Database, input: z.output<typeof inventoryFindDuplicatesInput>) => ({
-    context: db,
-    input,
-  }),
-);
-export const getInventoryByLocationIdsWorkflow = bindWorkflow(
-  workflow<Database, z.output<typeof inventoryLocationIdsInput>>(
-    "inventory.getByLocationIds",
-  )
-    .call("resolved", async ({ context }, { input }) =>
-      resolveEntityIds(context, input.locationIds, "location"),
-    )
-    .call("inventory", async ({ context }, { input, resolved }) =>
-      getInventoryByLocationIds(
-        context,
-        input.locationIds.map((shortcode) =>
-          parseEntityId("location", resolved.get(shortcode)!),
-        ),
-        { placement: input.placement },
-      ),
-    )
-    .output(({ inventory }) => inventory),
-  (db: Database, input: z.output<typeof inventoryLocationIdsInput>) => ({
-    context: db,
-    input,
-  }),
-);
+    { placement: input.placement },
+  );
+}
 
-export const getInventoryLocationSnapshotWorkflow = defineWorkflowOperation(
-  "inventory.locationSnapshot",
-  async (
-    db: Database,
-    input: z.output<typeof inventoryLocationSnapshotInput>,
-  ) => {
-    const locationId = await locationShortcodes.one(db, input.locationId);
-    // Token first: a write after this read makes the token stale and the
-    // eventual destructive reconcile refuse; reversing the reads could hand a
-    // caller a current token for rows absent from its visible snapshot.
-    const snapshotToken = await getInventoryLocationSnapshotToken(
-      db,
-      locationId,
-      input.placement,
-    );
-    const items = await getInventoryByLocationIds(db, [locationId], {
-      placement: input.placement,
-    });
-    return { items, snapshotToken };
-  },
-);
+async function getInventoryLocationSnapshot(
+  db: Database,
+  input: z.output<typeof inventoryLocationSnapshotInput>,
+) {
+  const locationId = await locationShortcodes.one(db, input.locationId);
+  // Token first: a write after this read makes the token stale and the
+  // eventual destructive reconcile refuse; reversing the reads could hand a
+  // caller a current token for rows absent from its visible snapshot.
+  const snapshotToken = await getInventoryLocationSnapshotToken(
+    db,
+    locationId,
+    input.placement,
+  );
+  const items = await getInventoryByLocationIds(db, [locationId], {
+    placement: input.placement,
+  });
+  return { items, snapshotToken };
+}
 
-export const setInventoryOwnershipWorkflow = defineWorkflowOperation(
-  "inventory.setOwnership",
-  async (
-    context: InventoryMutationContext,
-    input: z.output<typeof setInventoryOwnershipInput>,
-  ) => {
-    const id = await inventoryShortcodes.one(
-      context.db,
-      input.inventoryEntryId,
-    );
-    const ids = await setInventoryOwnership(
-      context.db,
-      id,
-      input.ownership,
-      input.quantity,
-      context.actorContext,
-    );
-    await runMutationSideEffectsForEntities(
-      context.db,
-      mutationEvents("inventory", "updated", ids, "inventory.setOwnership"),
-    );
-    return { entries: await inventoryCodesForIds(context.db, ids) };
-  },
-);
+async function setOwnership(
+  context: InventoryMutationContext,
+  input: z.output<typeof setInventoryOwnershipInput>,
+) {
+  const id = await inventoryShortcodes.one(context.db, input.inventoryEntryId);
+  const ids = await setInventoryOwnership(
+    context.db,
+    id,
+    input.ownership,
+    input.quantity,
+    context.actorContext,
+  );
+  await runMutationSideEffectsForEntities(
+    context.db,
+    mutationEvents("inventory", "updated", ids, "inventory.setOwnership"),
+  );
+  return { entries: await inventoryCodesForIds(context.db, ids) };
+}
 
-export const confirmInventoryOwnershipWorkflow = defineWorkflowOperation(
-  "inventory.confirmOwnership",
-  async (
-    context: InventoryMutationContext,
-    input: z.output<typeof confirmInventoryOwnershipInput>,
-  ) => {
-    const id = await inventoryShortcodes.one(
-      context.db,
-      input.inventoryEntryId,
-    );
-    const ids = await confirmInventoryOwnership(
-      context.db,
-      id,
-      input.evidenceFingerprint,
-      input.quantity,
-      context.actorContext,
-    );
-    await runMutationSideEffectsForEntities(
-      context.db,
-      mutationEvents("inventory", "updated", ids, "inventory.confirmOwnership"),
-    );
-    return { entries: await inventoryCodesForIds(context.db, ids) };
-  },
-);
+async function confirmOwnership(
+  context: InventoryMutationContext,
+  input: z.output<typeof confirmInventoryOwnershipInput>,
+) {
+  const id = await inventoryShortcodes.one(context.db, input.inventoryEntryId);
+  const ids = await confirmInventoryOwnership(
+    context.db,
+    id,
+    input.evidenceFingerprint,
+    input.quantity,
+    context.actorContext,
+  );
+  await runMutationSideEffectsForEntities(
+    context.db,
+    mutationEvents("inventory", "updated", ids, "inventory.confirmOwnership"),
+  );
+  return { entries: await inventoryCodesForIds(context.db, ids) };
+}
 
-export const scanInventoryAtLocationWorkflow = defineWorkflowOperation(
-  "inventory.scanAtLocation",
-  async (
-    context: {
-      db: Database;
-      usdaClient: Parameters<typeof scanAtLocationService>[1];
-      upcLookupClient: Parameters<typeof scanAtLocationService>[2];
-      actorContext: ActorContext;
-    },
-    input: z.output<typeof scanAtLocationInput>,
-  ) =>
-    await scanAtLocationService(
+export const inventoryHandlers = implementOperationDomain(inventoryContract, {
+  bulkAdd: (context, input) =>
+    bulkAddInventoryWorkflow(context.db, context.actorContext, input),
+  bulkDiscard: (context, input) => bulkDiscardInventoryWorkflow(context, input),
+  bulkMove: (context, input) =>
+    bulkMoveInventoryWorkflow(context.db, context.actorContext, input),
+  moveEntries: (context, input) =>
+    moveInventoryEntriesWorkflow(context.db, context.actorContext, input),
+  reconcileSession: (context, input) =>
+    reconcileSessionWorkflow(
+      { db: context.db, actorContext: context.actorContext },
+      input,
+    ),
+  scanAtLocation: (context, input) =>
+    scanAtLocationService(
       context.db,
       context.usdaClient,
       context.upcLookupClient,
       input,
       context.actorContext,
     ),
-);
-
-export const resolveInventoryScanStraysWorkflow = defineWorkflowOperation(
-  "inventory.resolveScanStrays",
-  async (
-    db: Database,
-    actorContext: ActorContext,
-    input: z.output<typeof resolveScanStraysInput>,
-  ) => await resolveScanStraysService(db, input, actorContext),
-);
+  resolveScanStrays: (context, input) =>
+    resolveScanStraysService(context.db, input, context.actorContext),
+  findDuplicates: (context, input) =>
+    findInventoryDuplicates(context.db, input),
+  getByLocationIds: (context, input) =>
+    getInventoryByLocationShortcodes(context.db, input),
+  locationSnapshot: (context, input) =>
+    getInventoryLocationSnapshot(context.db, input),
+  setOwnership: (context, input) => setOwnership(context, input),
+  confirmOwnership: (context, input) => confirmOwnership(context, input),
+});

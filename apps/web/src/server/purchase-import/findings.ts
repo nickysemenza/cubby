@@ -1,7 +1,7 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import type { ActorContext } from "@cubby/schemas/context";
 import { costTypeSchema } from "@cubby/schemas/expense-fields";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
 import {
   resolveRunFindingInput,
   resolveRunFindingOut,
@@ -12,7 +12,18 @@ import {
   type ProposedImportFix,
 } from "@cubby/schemas/purchase-import";
 import { tradeSchema } from "@cubby/schemas/task-fields";
-import { and, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
@@ -20,7 +31,6 @@ import {
   auditLog,
   runFinding,
   importHunt,
-  runMutation,
   importSourceClaim,
   inventoryEntry,
   ledgerParty,
@@ -165,26 +175,26 @@ const assertRunProvenance = async (
   },
 ) => {
   if (!finding.runId) return;
+  const auditEntity = auditEntitySchema.parse(finding.entityKind);
+  const runId = runEntityId.parse(finding.runId);
+  // The run's newest audit row for the target is its last write to it.
   const [mutation] = await tx
-    .select({
-      id: runMutation.id,
-      createdAt: runMutation.createdAt,
-    })
-    .from(runMutation)
+    .select({ createdAt: auditLog.createdAt })
+    .from(auditLog)
     .where(
       and(
-        eq(runMutation.runId, finding.runId),
-        eq(runMutation.targetKind, finding.entityKind),
-        eq(runMutation.targetId, finding.entityId),
+        eq(auditLog.runId, runId),
+        eq(auditLog.entityKind, auditEntity),
+        eq(auditLog.entityId, finding.entityId),
       ),
     )
+    .orderBy(desc(auditLog.createdAt))
     .limit(1);
   if (!mutation) {
     throw new Error(
       "The import run did not write this finding's target; refusing a stale automated fix.",
     );
   }
-  const auditEntity = auditEntitySchema.parse(finding.entityKind);
   const [laterHumanWrite] = await tx
     .select({ id: auditLog.id })
     .from(auditLog)
@@ -193,6 +203,7 @@ const assertRunProvenance = async (
         eq(auditLog.entityKind, auditEntity),
         eq(auditLog.entityId, finding.entityId),
         gt(auditLog.createdAt, mutation.createdAt),
+        or(isNull(auditLog.runId), ne(auditLog.runId, runId)),
       ),
     )
     .limit(1);

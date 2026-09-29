@@ -31,7 +31,7 @@ import {
 import {
   pruneAllUnusedAliasesWorkflow,
   reparseStaleWorkflow,
-} from "../operations/problems.server";
+} from "../operations/problem-workflows.server";
 import { requireActor } from "../request-context";
 import { runDiagnostic } from "../services/problem-diagnostics.service";
 import { findViewProblems } from "../services/problem-views.service";

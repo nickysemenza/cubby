@@ -9,14 +9,25 @@ export const mealContract = defineContract("meal", {
     native: "Meal and daily macro summaries",
     input: schemas.mealNutritionInput,
     output: schemas.mealNutritionOut,
+    cache: {
+      tags: [
+        ["meal", "getNutrition"],
+        ["product"],
+        ["ingredient"],
+        ["recipe"],
+        ["ledgerParty"],
+      ],
+    },
   }),
   saveFood: mutation({
     input: schemas.saveMealFoodInput,
     output: schemas.mealFoodMutationOut,
+    invalidates: ["meal"],
   }),
   removeFood: mutation({
     input: schemas.removeMealFoodInput,
     output: schemas.mealFoodMutationOut,
+    invalidates: ["meal"],
   }),
   getByDateRange: query({
     input: schemas.mealDateRange,
@@ -30,6 +41,7 @@ export const mealContract = defineContract("meal", {
   getPreparations: query({
     input: schemas.getMealPreparationsInput,
     output: schemas.getMealPreparationsOut,
+    cache: { tags: [["meal", "getPreparations"], ["recipe"]] },
   }),
   getShoppingList: query({
     mcp: {
@@ -43,14 +55,17 @@ export const mealContract = defineContract("meal", {
   addRecipe: mutation({
     input: schemas.mealAddRecipeInput,
     output: schemas.mealOut,
+    invalidates: ["meal"],
   }),
   updateRecipe: mutation({
     input: schemas.mealUpdateRecipeInput,
     output: schemas.mealOut,
+    invalidates: ["meal"],
   }),
   removeRecipe: mutation({
     input: schemas.mealRecipeIdInput,
     output: schemas.mealOut,
+    invalidates: ["meal"],
   }),
   savePreparation: mutation({
     mcp: {
@@ -60,5 +75,6 @@ export const mealContract = defineContract("meal", {
     },
     input: schemas.saveMealRecipePreparationInput,
     output: schemas.saveMealRecipePreparationOut,
+    invalidates: ["meal"],
   }),
 });

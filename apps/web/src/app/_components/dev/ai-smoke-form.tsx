@@ -13,8 +13,10 @@ import { referenceEntitySearch } from "~/app/_components/combobox/reference-enti
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
-import { image } from "~/entities/image.functions";
-import { run } from "~/entities/run.functions";
+import {
+  image,
+  run,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 
 const smokePropertySchema = z.object({
   type: z.string().optional(),

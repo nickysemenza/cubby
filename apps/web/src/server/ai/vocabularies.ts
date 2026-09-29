@@ -40,6 +40,10 @@ export const LOCATION_TYPE_DESCRIPTIONS = {
   bed: "Outdoor in-ground or raised garden beds: raised bed 1, front garden bed",
   planter:
     "Outdoor pots and containers for growing: patio planter, hanging planter",
+  // Never offered to the model: `furniture` is what the server stores for a
+  // location that is an instance of a catalogued Product (it needs a productId).
+  furniture:
+    "A specific catalogued product used as a place: a labelled tote, bin or rack",
 } satisfies Record<LocationType, string>;
 
 /** The location-type rules; the types themselves are the Jev choices. */

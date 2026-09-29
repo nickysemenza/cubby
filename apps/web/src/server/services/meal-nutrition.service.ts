@@ -1,3 +1,4 @@
+import { optionalAmountFromColumns } from "@cubby/schemas/codec";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   mealNutritionFood,
@@ -128,7 +129,7 @@ export async function getMealNutrition(
   }
   for (const row of rows.foods) {
     const e = row.entry;
-    const amount = e.amount;
+    const amount = optionalAmountFromColumns(e);
     const common = { id: e.id, meal: meals.get(e.mealId), amount };
     if (e.sourceKind === "product" && row.productId && row.productName) {
       const source =

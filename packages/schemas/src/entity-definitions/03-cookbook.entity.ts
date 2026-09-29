@@ -10,7 +10,7 @@ export default defineEntity({
     // No kernel `get`: the detail reads the cookbook summary query.
     detailOverride: {
       query: {
-        module: "~/entities/cookbook.functions",
+        module: "~/entities/cookbook-queries",
         export: "cookbookDetailQuery",
       },
     },
@@ -227,9 +227,6 @@ export default defineEntity({
       "sourceLabel",
       { key: "rawJson", specialized: "json:rawJson" },
       { key: "report", specialized: "json:report" },
-      // Stored at upsert (recipe items in the tree), so browse and problem
-      // detection never walk the JSON.
-      { key: "sourceRecipeCount", defaultValue: 0 },
       { key: "productId", reference: "product" },
       { key: "importedAt", defaultOverride: "now" },
       { key: "createdAt" },

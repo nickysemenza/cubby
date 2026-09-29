@@ -14,8 +14,8 @@ import {
   imageAttachExistingOutput,
 } from "@cubby/schemas/image";
 import {
-  imageSightingBulkInput,
-  imageSightingBulkOut,
+  imageRecordSightingsInput,
+  imageRecordSightingsOut,
 } from "@cubby/schemas/image-sighting";
 import { z } from "zod";
 
@@ -26,25 +26,29 @@ import {
 } from "~/contracts/photo-import.contract";
 
 export const imageContract = defineContract("image", {
-  bulkSightings: mutation({
+  recordSightings: mutation({
     native: "Bounded, replay-safe library sighting pages",
-    input: imageSightingBulkInput,
-    output: imageSightingBulkOut,
+    input: imageRecordSightingsInput,
+    output: imageRecordSightingsOut,
+    invalidates: ["image"],
   }),
   list: query({
     native: "Native photo browse",
     input: imageBrowserListInput,
     output: imageBrowserListOut,
+    cache: { tags: [["image"]] },
   }),
   detail: query({
     native: "Native photo detail",
     input: z.object({ id: z.string() }),
     output: imageWithEntitySchema.nullable(),
+    cache: { tags: [["image"]] },
   }),
   analysis: query({
     native: "Native photo diagnostics",
     input: z.object({ id: z.string() }),
     output: localPhotoAnalysisSchema.nullable(),
+    cache: { tags: [] },
   }),
   recordAnalysis: mutation({
     native: "Native photo diagnostics backfill",
@@ -61,23 +65,28 @@ export const imageContract = defineContract("image", {
   update: mutation({
     input: imageBrowserUpdateInput,
     output: imageWithEntitySchema,
+    invalidates: ["image"],
   }),
   attachExisting: mutation({
     input: imageAttachExistingInput,
     output: imageAttachExistingOutput,
+    invalidates: ["image"],
   }),
   delete: mutation({
     input: imageBrowserDeleteInput,
     output: imageBrowserDeleteOut,
+    invalidates: ["image"],
   }),
   projectSummaries: query({
     input: projectImageSummariesInput,
     output: projectImageSummariesOut,
+    cache: { profile: "stable" },
   }),
   hashIndex: query({
     native: "Native photo deduplication index",
     input: z.undefined(),
     output: imageHashIndexSchema,
+    cache: { tags: [] },
   }),
   setPerceptualHashes: mutation({
     native: "Native legacy photo hash repair",

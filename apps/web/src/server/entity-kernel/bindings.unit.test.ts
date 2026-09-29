@@ -153,7 +153,7 @@ describe("entity kernel bindings", () => {
               binding.entity === "product" ? { externalIds: [] } : undefined,
           }),
           mergeSummary: { merged: 1 },
-          sideEffects: { backgroundBatches: [] },
+          sideEffects: {},
         }).success,
       ).toBe(true);
     }
@@ -179,7 +179,7 @@ describe("entity kernel bindings", () => {
           changed: 2,
         },
       ],
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     };
     expect(entityDeleteResultSchema.safeParse(result).success).toBe(true);
     expect(

@@ -6,7 +6,7 @@ import {
   numericRangeFields,
   timestampedFields,
 } from "./base-entity";
-import { mutationSideEffectsSchema } from "./background-jobs";
+import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { generatedCookbookFieldSchemas } from "./generated/entity-field-schemas.cookbook.gen";
 import {
   generatedRecipeFieldSchemas,

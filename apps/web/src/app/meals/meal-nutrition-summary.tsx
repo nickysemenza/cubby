@@ -21,13 +21,13 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { entityDetailLink } from "~/entities/entities";
+import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 
 import { AddFoodDialog } from "./add-food-dialog";
 import { FoodAmountReadout } from "./food-amount-editor";
 import { MealNutritionEstimates } from "./meal-nutrition";
-import { meal } from "./meal.functions";
 
 const MACROS = [
   { key: "kcal", label: "Calories", unit: "kcal" },

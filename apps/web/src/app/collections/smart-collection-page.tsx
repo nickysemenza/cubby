@@ -24,9 +24,9 @@ import {
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Skeleton } from "~/components/ui/skeleton";
+import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { CollectionProductsTable } from "./collection-detail-page";
-import { collection as collectionOperations } from "./collection.functions";
 import {
   getSmartCollectionStarter,
   isStarterDefinition,

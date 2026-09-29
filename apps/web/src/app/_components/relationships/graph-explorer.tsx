@@ -25,8 +25,8 @@ import {
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
-import { entityGraph } from "~/entities/entity-graph.functions";
 import { useIsMobile } from "~/hooks/useMobile";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn } from "~/lib/utils";
 
 import { EntityGraphPicker } from "./entity-graph-picker";

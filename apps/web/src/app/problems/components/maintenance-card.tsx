@@ -3,10 +3,7 @@ import type { MaintenanceCounts } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-import {
-  openRecipeRecomputeAllStream,
-  recipe,
-} from "~/app/recipes/recipe.functions";
+import { openRecipeRecomputeAllStream } from "~/app/recipes/recipe-streams";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -19,13 +16,16 @@ import {
 import { Description } from "~/components/ui/description";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import {
+  recipe,
+  problems,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { countLabel } from "~/lib/pluralize";
 import {
   openProblemsPruneAliasesStream,
   openProblemsReparseStream,
-  problems,
-} from "~/lib/problems.functions";
-import { openSearchIndexRepairStream } from "~/lib/search.functions";
+} from "~/lib/problems-streams";
+import { openSearchIndexRepairStream } from "~/lib/search-streams";
 
 import { BACKFILL } from "./backfill-registry";
 import { ImageMetadataMaintenance } from "./image-metadata-maintenance";

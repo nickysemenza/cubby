@@ -116,15 +116,13 @@ interface FurnitureSpec {
 /**
  * `type` is the location's form factor and `productId` is a separate identity
  * link — a product-linked location can still carry its own `type` (e.g.
- * "box", "shelf") and hits that case directly. A null `type` just means
- * unknown, not "this location is a product".
- *
- * Null gets the box spec explicitly rather than falling through to `default`,
+ * "box", "shelf") and hits that case directly. `furniture` (a location that IS
+ * a Product and declares no form factor of its own) — like a type-less hint —
+ * gets the box spec explicitly rather than falling through to `default`,
  * which is the back-wall shelving unit: a tote drawn 3.8 ft tall against the
- * wall is worse than a wrong-sized floor box. Of the locations with no
- * declared type, most are the crates, totes and packout boxes that predate
- * `type` being set on product-linked locations, so a floor box is right for
- * most and wrong for the handful of racks, carts and the one table.
+ * wall is worse than a wrong-sized floor box. Most furniture locations are the
+ * crates, totes and packout boxes, so a floor box is right for most and wrong
+ * for the handful of racks, carts and the one table.
  *
  * Getting those right needs a coarse shape on the Product, which it does not
  * carry — the deliberate trade in #749, where per-type glyphs were dropped
@@ -134,6 +132,7 @@ interface FurnitureSpec {
 function getFurnitureSpec(type: LocationType | null): FurnitureSpec {
   switch (type) {
     case null:
+    case "furniture":
       return { w: 1.6, d: 1.6, h: 1.2, zone: "floor", shelfLevels: [0.1] };
     case "shelf":
       return {

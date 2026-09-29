@@ -1,4 +1,3 @@
-import { amount } from "@cubby/schemas/codec";
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
@@ -28,8 +27,8 @@ import {
   discardProductWorkflow,
   getProductInventoryEntriesWorkflow,
 } from "~/server/operations/product.server";
-import { getPlacementRecommendationWorkflow } from "~/server/operations/recommendations.server";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { amountFromColumns } from "~/server/repo/database-helpers";
 import {
   addInventoryEntries,
   createInventoryEntry,
@@ -45,6 +44,7 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { requireActor } from "~/server/request-context";
+import { getPlacementRecommendation } from "~/server/services/placement-recommendation.service";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**
@@ -257,11 +257,17 @@ describe("addInventoryEntries", () => {
         eq(inventoryEntry.locationId, locationId),
         notDeleted(inventoryEntry),
       ),
-      columns: { id: true, productId: true, amount: true, placement: true },
+      columns: {
+        id: true,
+        productId: true,
+        amountValue: true,
+        amountUnit: true,
+        placement: true,
+      },
     });
     return rows
       .map((row) => {
-        const parsedAmount = amount.parse(row.amount);
+        const parsedAmount = amountFromColumns(row);
         return {
           id: row.id,
           productId: row.productId,
@@ -410,7 +416,7 @@ describe("placement recommendation workflow", () => {
     const parkedId = parked.items[0]?.id;
     if (!parkedId) throw new Error("Parked fixture missing");
     await expect(
-      getPlacementRecommendationWorkflow(ctx.db, { inventoryId: parkedId }),
+      getPlacementRecommendation(ctx.db, parkedId),
     ).resolves.toMatchObject({
       inventoryId: parkedId,
       sourceLocation: { name: "Unknown" },

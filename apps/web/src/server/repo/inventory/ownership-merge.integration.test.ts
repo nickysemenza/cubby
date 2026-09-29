@@ -1,4 +1,3 @@
-import { amount } from "@cubby/schemas/codec";
 import type {
   LedgerPartyId,
   LocationId,
@@ -10,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import { inventoryEntry } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { amountFromColumns } from "~/server/repo/database-helpers";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import {
   createLedgerParty,
@@ -116,7 +116,7 @@ describe("inventory ownership through product and ledger-party merges", () => {
       ownershipMode: "person",
       ownerLedgerPartyId: owner.entityId,
     });
-    expect(amount.parse(rows[0]!.amount)).toEqual({
+    expect(amountFromColumns(rows[0]!)).toEqual({
       value: 5,
       unit: "each",
     });
@@ -158,7 +158,7 @@ describe("inventory ownership through product and ledger-party merges", () => {
       rows.map((row) => ({
         ownerLedgerPartyId: row.ownerLedgerPartyId,
         ownershipMode: row.ownershipMode,
-        amount: amount.parse(row.amount),
+        amount: amountFromColumns(row),
       })),
     ).toEqual(
       expect.arrayContaining([
@@ -258,7 +258,7 @@ describe("inventory ownership through product and ledger-party merges", () => {
       ownershipMode: "person",
       ownerLedgerPartyId: keeperOwner.entityId,
     });
-    expect(amount.parse(rows[0]!.amount)).toEqual({
+    expect(amountFromColumns(rows[0]!)).toEqual({
       value: 5,
       unit: "each",
     });
@@ -312,7 +312,7 @@ describe("inventory ownership through product and ledger-party merges", () => {
     expect(
       rows.map((row) => ({
         ownerLedgerPartyId: row.ownerLedgerPartyId,
-        amount: amount.parse(row.amount),
+        amount: amountFromColumns(row),
       })),
     ).toEqual(
       expect.arrayContaining([

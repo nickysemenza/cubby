@@ -30,7 +30,7 @@ import type { EditableEntity } from "~/entities/editing/types";
 import type { EntityMutationPort } from "~/entities/editing/types";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import type { StandardEntity } from "~/entities/entity-contracts";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import { readReferenceField } from "~/entities/entity-references";
 import { enumFieldLabel } from "~/entities/enum-field-display";
 import { generatedBrowserCrudEntities } from "~/entities/generated/entity-routes.gen";

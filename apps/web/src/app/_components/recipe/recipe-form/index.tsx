@@ -12,7 +12,6 @@ import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { recipe as recipeOperations } from "~/app/recipes/recipe.functions";
 import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import {
@@ -29,6 +28,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { EntityPrimitiveFields } from "~/entities/editing/entity-primitive-fields";
 import { useImageState } from "~/hooks/useImageState";
+import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
 

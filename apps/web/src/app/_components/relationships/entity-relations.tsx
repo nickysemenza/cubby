@@ -24,7 +24,6 @@ import {
 } from "~/app/_components/relatedness/entity-recommendations";
 import { EntityGraphPicker } from "~/app/_components/relationships/entity-graph-picker";
 import { PhysicalConnectionsPanel } from "~/app/_components/relationships/physical-connections";
-import { inventory } from "~/app/inventory/inventory.functions";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -42,8 +41,11 @@ import {
   entityMutationOptionsFactory,
   type EntityMutationOptionsFactory,
 } from "~/entities/entity-contracts";
-import { entityGraph } from "~/entities/entity-graph.functions";
 import { useHydratedLoading } from "~/hooks/useHydrated";
+import {
+  inventory,
+  entityGraph,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 
 import {

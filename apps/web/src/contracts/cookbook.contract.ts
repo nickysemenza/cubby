@@ -10,10 +10,12 @@ export const cookbookContract = defineContract("cookbook", {
     native: "Native cookbook browse",
     input: z.null(),
     output: cookbookSummariesOut,
+    cache: { tags: [["cookbook"]], profile: "browse" },
   }),
   detail: query({
     native: "Native cookbook detail",
     input: z.object({ shortcode: cookbookShortcode }),
     output: cookbookSummary.nullable(),
+    cache: { tags: [["cookbook"]] },
   }),
 });

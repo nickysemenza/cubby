@@ -21,12 +21,11 @@ export interface PlacementRecommendationPorts {
   readonly resolveOrThrow: typeof resolveOrThrow;
 }
 
-export const productionPlacementRecommendationPorts: PlacementRecommendationPorts =
-  {
-    getInventoryEntryByShortcode,
-    getProductStockRows,
-    resolveOrThrow,
-  };
+const productionPlacementRecommendationPorts: PlacementRecommendationPorts = {
+  getInventoryEntryByShortcode,
+  getProductStockRows,
+  resolveOrThrow,
+};
 
 /**
  * A parked row earns a destination only when its exact Product already has one
@@ -39,7 +38,7 @@ type PlacementRecommendationContext = {
 };
 type PlacementInput = z.output<typeof placementRecommendationInput>;
 /** Inspectable read-only graph for the placement suggestion. */
-export const placementRecommendationWorkflowDefinition = workflow<
+const placementRecommendationWorkflowDefinition = workflow<
   PlacementRecommendationContext,
   PlacementInput
 >("recommendations.placement")
@@ -94,14 +93,11 @@ export const placementRecommendationWorkflowDefinition = workflow<
   })
   .output(({ eligible }) => eligible);
 
-export const getPlacementRecommendation = bindWorkflow(
+const placementRecommendation = bindWorkflow(
   placementRecommendationWorkflowDefinition,
-  (
-    db: Database,
-    inventoryId: InventoryShortcode,
-    ports: PlacementRecommendationPorts = productionPlacementRecommendationPorts,
-  ) => ({
-    context: { db, ports },
-    input: { inventoryId },
-  }),
 );
+export const getPlacementRecommendation = (
+  db: Database,
+  inventoryId: InventoryShortcode,
+  ports: PlacementRecommendationPorts = productionPlacementRecommendationPorts,
+) => placementRecommendation({ db, ports }, { inventoryId });

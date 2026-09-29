@@ -17,7 +17,7 @@ import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTab
 import { useImageUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { ImageAssociationLinks } from "~/app/_components/images/image-associations";
 import { labeledFieldProvenance } from "~/entities/field-provenance";
-import { image } from "~/entities/image.functions";
+import { image } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { defineListOverride } from "./types";
 

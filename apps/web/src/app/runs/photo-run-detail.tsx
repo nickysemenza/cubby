@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Progress } from "~/components/ui/progress";
 import { StatusText } from "~/components/ui/status-text";
 import type { RunDetail } from "~/contracts/run.contract";
-import { photoImport } from "~/entities/run.functions";
+import { photoImport } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { PhotoGroupReview, usePhotoRunReview } from "./photo-group-review";
 

@@ -1,13 +1,15 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { QueryClient } from "@tanstack/react-query";
 
+import { entityDetailFor } from "~/entities/entity-detail";
+import {
+  cookbook,
+  image,
+  usdaFood,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import type { CubbyOperationMeta } from "~/integrations/tanstack-query/operation-meta";
 
-import { cookbook } from "./cookbook.functions";
 import { isGeneratedBrowserCrudEntity } from "./entity-contracts";
-import { entityDetailFor } from "./entity-detail.functions";
-import { image } from "./image.functions";
-import { usdaFood } from "./usda.functions";
 
 export const fdcIdFromParam = (id: string): number => Number.parseInt(id, 10);
 export const usdaRouteId = (fdcId: number): string => String(fdcId);

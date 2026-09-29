@@ -82,8 +82,8 @@ USDAFood  ←(loose link, fdc_id/barcode)──  Product  ──(optional FK, in
     barcode scan).
   - **Misc collection** — an opaque placeholder, name only, prefixed `misc:`.
 
-  A Product carries the unit mappings (`ProductUnitMappings`: an `a = b` amount
-  pair) that drive cross-unit/price conversions. A Product may point to **one**
+  A Product carries the unit mappings (`ProductUnitMapping`: an `a = b` amount
+  pair, stored as `aValue/aUnit/bValue/bUnit`) that drive cross-unit/price conversions. A Product may point to **one**
   Ingredient (`product.ingredientId`) and may be loosely linked to **one** USDA
   food (`product.fdc_id`, else barcode resolution — `fdc_id` wins).
 
@@ -95,8 +95,10 @@ USDAFood  ←(loose link, fdc_id/barcode)──  Product  ──(optional FK, in
   off it.
 
 - **InventoryEntry** (`InventoryEntry`) — a physical fact: `amount` of one
-  Product at one Location. Unique per `(productId, locationId)`. Carries a
-  precomputed `valuation` (`amount.value × product.price`). **Not** the same as
+  Product at one Location. Unique per `(productId, locationId)`. Its
+  `amount` is stored as `amountValue/amountUnit`; its `valuation` is computed on
+  every read (the amount routed through the Product's unit mappings to its
+  current price). **Not** the same as
   a Product: the Product is the _what_, the InventoryEntry is the _how much,
   where_.
 

@@ -41,8 +41,8 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
-import { problems as problemOperations } from "~/lib/problems.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
+import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 const formSchema = z.object({
   location: optionalLocationField,

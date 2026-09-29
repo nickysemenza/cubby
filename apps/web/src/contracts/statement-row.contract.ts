@@ -20,6 +20,7 @@ export const statementRowContract = defineContract("statementRow", {
     native: "Preview local statement CSV in Apple apps using the shared parser",
     input: statementCsvFileInput,
     output: statementCsvPreviewOut,
+    cache: { tags: [] },
   }),
   commitCsv: mutation({
     native: "Confirm statement CSV rows from Apple apps",
@@ -34,6 +35,7 @@ export const statementRowContract = defineContract("statementRow", {
     },
     input: recordStatementRowsInput,
     output: recordStatementRowsOut,
+    invalidates: ["statementRow"],
   }),
   list: query({
     readPolicy: "strong",

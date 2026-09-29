@@ -363,7 +363,7 @@ const financialTransactionReader = createEntityReader<
 });
 
 const getFinancialTransactionByID = financialTransactionReader.getByID;
-export const getFinancialTransactionByShortcode =
+const getFinancialTransactionByShortcode =
   financialTransactionReader.getByShortcode;
 
 async function resolveForeignKeys(
@@ -707,7 +707,7 @@ export async function updateFinancialTransaction(
   return { output: await getFinancialTransactionByID(db, id), entityId: id };
 }
 
-export const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
+const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
   "ImportHunt.financialTransactionId": {
     code: "block-import-hunt",
     effect: "block",

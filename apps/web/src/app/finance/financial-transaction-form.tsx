@@ -20,9 +20,9 @@ import {
   requiredFieldModel,
 } from "~/entities/editing/entity-primitive-fields";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { TableLink } from "../_components/table/TableLink";
-import { financialTransaction } from "./finance.functions";
 
 const AccountSearch = referenceEntitySearch("financialAccount");
 const PurchaseSearch = referenceEntitySearch("purchase");

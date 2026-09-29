@@ -45,7 +45,6 @@ import {
   type QueuePassPersistence,
   useQueuePass,
 } from "~/app/_components/queue-pass/useQueuePass";
-import { location } from "~/app/locations/location.functions";
 import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -58,7 +57,8 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
+import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import type { PhotoPassSearch } from "./photo-pass-search";

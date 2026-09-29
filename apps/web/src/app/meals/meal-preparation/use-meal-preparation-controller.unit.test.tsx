@@ -14,10 +14,12 @@ import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { expect, it } from "vitest";
 
-import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
+import {
+  entityFilterOptions,
+  meal,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { mock } from "~/lib/test/mock-schema";
 
-import { meal } from "../meal.functions";
 import { useMealPreparationController } from "./use-meal-preparation-controller";
 
 it("loads allocation choices only after an editor opens", async () => {

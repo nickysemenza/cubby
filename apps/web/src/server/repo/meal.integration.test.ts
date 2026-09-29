@@ -15,7 +15,6 @@ import { describe, expect, it } from "vitest";
 
 import { inventoryEntry, recipe } from "~/server/db/schema";
 import {
-  getMealPreparationsWorkflow,
   getShoppingListWorkflow,
   saveMealRecipePreparationWorkflow,
 } from "~/server/operations/meal.server";
@@ -199,7 +198,7 @@ describe("meal recipe preparations", () => {
       { mealRecipeId: second.mealRecipeId, actualYieldGrams: 200, changes: [] },
       ctx.actor,
     );
-    const preparations = await getMealPreparationsWorkflow(
+    const preparations = await getMealPreparations(
       ctx.db,
       { mealId: source.output.id },
       createTestRequestContext(ctx.db).services.recipeCosting,
@@ -286,7 +285,7 @@ describe("meal recipe preparations", () => {
     if (!occurrence || !eater.output) throw new Error("fixture setup failed");
 
     await saveMealRecipePreparationWorkflow(
-      ctx.db,
+      { db: ctx.db, actorContext: ctx.actor },
       {
         mealRecipeId: occurrence.id,
         estimatedYieldGrams: 450,
@@ -308,12 +307,11 @@ describe("meal recipe preparations", () => {
           },
         ],
       },
-      ctx.actor,
     );
 
     const [sourceRead, targetRead, inventoryAfter] = await Promise.all([
-      getMealPreparationsWorkflow(ctx.db, { mealId: source.id }),
-      getMealPreparationsWorkflow(ctx.db, { mealId: target.id }),
+      getMealPreparations(ctx.db, { mealId: source.id }),
+      getMealPreparations(ctx.db, { mealId: target.id }),
       getDb(ctx.db).query.inventoryEntry.findFirst({
         where: eq(inventoryEntry.id, inventoryBefore.id),
       }),
@@ -345,7 +343,8 @@ describe("meal recipe preparations", () => {
         },
       },
     });
-    expect(inventoryAfter?.amount).toEqual(inventoryBefore.amount);
+    expect(inventoryAfter?.amountValue).toEqual(inventoryBefore.amountValue);
+    expect(inventoryAfter?.amountUnit).toEqual(inventoryBefore.amountUnit);
     expect(inventoryAfter?.deletedAt).toBeNull();
 
     const recorded = requirePortionForMeal(sourceRead, source.id);

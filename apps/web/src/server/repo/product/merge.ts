@@ -59,6 +59,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { type AuditEntryInput, logAuditEntries } from "~/server/repo/audit-log";
 import {
+  amountToColumns,
   buildPartialUpdateValues,
   getDb,
   lockAndValidateForDelete,
@@ -67,7 +68,6 @@ import {
 } from "~/server/repo/database-helpers";
 import { linkQuantity, liveLinks } from "~/server/repo/entity-links";
 import { impact, present, sideEffect } from "~/server/repo/impact";
-import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import {
   assertDistinctMergeTargets,
   finalizeMerge,
@@ -81,6 +81,7 @@ import {
   resolveProductCategory,
 } from "~/server/repo/product-category";
 import { repointProductMatchCandidatesTx } from "~/server/repo/product-match-candidate";
+import { unitMappingSides } from "~/server/repo/product/unit-mappings";
 import { cascadeRemoval } from "~/server/repo/removal";
 
 import { validateLiveEffectiveTrades } from "../inheritance-validation";
@@ -99,7 +100,7 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     description:
       "A merged product's external ids move onto the survivor; one that would collide on a (source, kind) slot the survivor already fills is discarded and named in the audit trail.",
   },
-  "ProductUnitMappings.productId": {
+  "ProductUnitMapping.productId": {
     code: "repoint-or-discard-conflicting-conversion",
     effect: "move-dedupe",
     description:
@@ -469,7 +470,7 @@ const sameRatio = (left: number | null, right: number | null): boolean =>
  * `previewMergeProducts` run one implementation — the same reason
  * `planInventoryFold` exists.
  *
- * Note there is NO unique index on `ProductUnitMappings`, so unlike every other
+ * Note there is NO unique index on `ProductUnitMapping`, so unlike every other
  * slotted edge here nothing in the database would have refused the duplicate:
  * before this fold a merge simply accumulated both edges, and the survivor
  * quietly held two contradictory answers for one conversion.
@@ -823,13 +824,15 @@ async function buildProductMergePlan(
         placement: true,
         ownershipMode: true,
         ownerLedgerPartyId: true,
-        amount: true,
+        amountValue: true,
+        amountUnit: true,
       },
     })
-  ).map((row): InventoryRow => ({
+  ).map(({ amountValue, amountUnit, ...row }): InventoryRow => ({
     ...row,
     id: parseEntityId("inventory", row.id),
     productId: parseEntityId("product", row.productId),
+    amount: { value: amountValue, unit: amountUnit },
   }));
   const componentRows = await loadComponentRows(db);
   const unitMappingRows = (
@@ -838,15 +841,25 @@ async function buildProductMergePlan(
         inArray(productUnitMappings.productId, ids),
         notDeleted(productUnitMappings),
       ),
-      columns: { id: true, productId: true, a: true, b: true, source: true },
+      columns: {
+        id: true,
+        productId: true,
+        aValue: true,
+        aUnit: true,
+        bValue: true,
+        bUnit: true,
+        source: true,
+      },
       orderBy: [
         asc(productUnitMappings.createdAt),
         asc(productUnitMappings.id),
       ],
     })
   ).map((row): UnitMappingRow => ({
-    ...row,
+    id: row.id,
     productId: parseEntityId("product", row.productId),
+    ...unitMappingSides(row),
+    source: row.source,
   }));
   const externalIdRows = (
     await db.query.entityExternalId.findMany({
@@ -1398,7 +1411,7 @@ export const mergeProducts = async (
       const to = { ...into.amount, value: into.amount.value + absorbed };
       await tx
         .update(inventoryEntry)
-        .set({ amount: to })
+        .set(amountToColumns(to))
         .where(eq(inventoryEntry.id, into.id));
       const absorbedIds = rows.map((row) => row.id);
       await tx
@@ -1771,10 +1784,6 @@ export const mergeProducts = async (
     summary.merged = removed;
     await validateLiveEffectiveTrades(tx);
 
-    // Every moved entry now values at the KEEPER's effective price; without
-    // this a re-pointed row keeps a valuation derived from a product that no
-    // longer exists, and the location rollup silently reports the old number.
-    await syncInventoryValuationsForProduct(tx, keepId);
     // Moved mappings, adopted food identity and kit composition all change the
     // survivor's effective conversion graph. Absorbed rows are no longer live;
     // the survivor must wait for the shared rebuild before it can match a
@@ -2087,8 +2096,8 @@ const previewMergeProductsFromPlan = async (
       byTargetId: byProduct(plan.expenses),
     }),
     impact({
-      disposition: PRODUCT_MERGE_EDGE_POLICY["ProductUnitMappings.productId"],
-      edgeKey: "ProductUnitMappings.productId",
+      disposition: PRODUCT_MERGE_EDGE_POLICY["ProductUnitMapping.productId"],
+      edgeKey: "ProductUnitMapping.productId",
       label: "unit mappings re-pointed",
       byTargetId: byProduct(unitMappingPlan.repoint),
     }),
@@ -2099,7 +2108,7 @@ const previewMergeProductsFromPlan = async (
         description:
           "A conversion the survivor already states at the same ratio is dropped as a true duplicate.",
       },
-      edgeKey: "ProductUnitMappings.productId",
+      edgeKey: "ProductUnitMapping.productId",
       label: "duplicate unit mappings dropped",
       byTargetId: byProduct(
         unitMappingPlan.absorbed
@@ -2118,7 +2127,7 @@ const previewMergeProductsFromPlan = async (
         description:
           "The survivor already answers this unit pair with a DIFFERENT ratio. Its edge stands; the merged product's is dropped and named in the audit trail.",
       },
-      edgeKey: "ProductUnitMappings.productId",
+      edgeKey: "ProductUnitMapping.productId",
       label: "conflicting unit mappings discarded (survivor's ratio wins)",
       byTargetId: byProduct(
         unitMappingPlan.absorbed

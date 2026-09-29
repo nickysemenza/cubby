@@ -133,7 +133,9 @@ async function loadProductPlacements(db: Database, productIds: string[]) {
     sql`
       WITH RECURSIVE requested("productId") AS (VALUES ${values}),
       live_placements AS (
-        SELECT ie.id, ie.shortcode, ie."productId", ie."locationId", ie.amount, ie.placement
+        SELECT ie.id, ie.shortcode, ie."productId", ie."locationId",
+          jsonb_build_object('value', ie."amountValue", 'unit', ie."amountUnit") AS amount,
+          ie.placement
         FROM "InventoryEntry" ie
         JOIN requested r ON r."productId" = ie."productId"
         JOIN "Product" p ON p.id = ie."productId" AND p."deletedAt" IS NULL
