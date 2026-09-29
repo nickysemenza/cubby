@@ -5,7 +5,7 @@ import {
   mailSearchRunInput,
   mailSearchRunProgress,
 } from "@cubby/schemas/run-fields";
-import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 
 import {
   describeErrorCauses,
@@ -30,7 +30,12 @@ import { vendorSearchTerms } from "./vendor-identity";
  */
 const activePhases = ["queued", "running"];
 
-const mailSearchRun = eq(runTable.purpose, "mail_search");
+// A Run whose `input`/`progress` were never written (its opening transaction
+// failed after `ensureRun` committed it) is not a search and stays invisible.
+const mailSearchRun = and(
+  eq(runTable.purpose, "mail_search"),
+  isNotNull(runTable.progress),
+);
 const phaseIs = (phase: string) =>
   sql`${runTable.progress}->>'phase' = ${phase}`;
 const phaseIn = (phases: readonly string[]) =>
