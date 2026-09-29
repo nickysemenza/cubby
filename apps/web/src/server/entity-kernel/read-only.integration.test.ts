@@ -10,12 +10,13 @@ import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**
- * A `lifecycle: "readOnly"` declaration is served by the kernel for get,
- * list and search only. Failure modes: a readOnly entity missing from the
- * kernel roster (its bespoke reads survive), or a write reaching its
- * repository because only the MCP exposure — not the kernel — gates it.
+ * A `lifecycle: "readOnly"` declaration (run) is served by the kernel for
+ * get, list and search only; a cookbook is kernel-read and edit-only, with
+ * no create. Failure modes: an entity missing from the kernel roster (its
+ * bespoke reads survive), or a write reaching its repository because only the
+ * MCP exposure — not the kernel — gates it.
  */
-describe("read-only kernel entities", () => {
+describe("kernel read-only boundaries", () => {
   const ctx = withTestDb();
   const context = () =>
     entityKernelContextSchema.parse(
@@ -69,29 +70,28 @@ describe("read-only kernel entities", () => {
     });
   });
 
-  it("refuses create, update and delete for a read-only entity", async () => {
+  it("refuses cookbook create and every write to a read-only entity", async () => {
     const id = await seedCookbook("Refused Writes");
-    // No create/update command variant exists for a read-only entity, so the
-    // command schema refuses those before any repository is reached.
-    for (const command of [
-      { action: "create", entity: "cookbook", data: { name: "x" } },
-      { action: "update", entity: "cookbook", id, data: { name: "x" } },
-    ] as const) {
-      // SAFETY: deliberately invalid commands exercise the kernel refusal.
-      await expect(executeEntity(context(), command as never)).rejects.toThrow(
-        /cookbook|invalid/i,
-      );
-    }
+    // Cookbooks are born from an EPUB import: no create command variant
+    // exists, so the command schema refuses it before any repository.
+    const create = {
+      action: "create",
+      entity: "cookbook",
+      data: { name: "x" },
+    };
+    // SAFETY: a deliberately invalid command exercises the kernel refusal.
+    await expect(executeEntity(context(), create as never)).rejects.toThrow(
+      /cookbook|invalid/i,
+    );
     // Delete is one command shape for every kernel entity; the kernel itself
     // refuses it for a read-only declaration.
-    for (const [entity, code] of [
-      ["cookbook", id],
-      ["run", "RUN-4K7M"],
-    ] as const) {
-      await expect(
-        executeEntity(context(), { action: "delete", entity, ids: [code] }),
-      ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
-    }
+    await expect(
+      executeEntity(context(), {
+        action: "delete",
+        entity: "run",
+        ids: ["RUN-4K7M"],
+      }),
+    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
     const detail = await executeEntity(context(), {
       action: "get",
       entity: "cookbook",
