@@ -83,7 +83,9 @@ describe("repository writes publish after their commit", () => {
     const verdictsAtPublish: (string | null | undefined)[] = [];
     const published = recordingQueue(async (task) => {
       if (task.kind !== "entity-embedding.refresh") return;
-      const plant = [first, second][ids.indexOf(task.entityId ?? "")];
+      const plant = [first, second][
+        ids.findIndex((id) => id === task.entityId)
+      ];
       if (plant)
         verdictsAtPublish.push(
           (await getPlantByShortcode(ctx.db, plant.id))?.verdict,

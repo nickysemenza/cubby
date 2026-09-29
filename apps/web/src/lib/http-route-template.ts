@@ -16,9 +16,9 @@ const ENTITY_ROUTES = Object.values(generatedBrowserRoutes);
 
 const STATIC_TRACE_ROUTES = new Set([
   ...ENTITY_ROUTES.map(({ routes }) => routes.list),
-  ...ENTITY_ROUTES.filter(({ routes }) => routes.create === "dialog").map(
-    ({ routes }) => `${routes.list}/new`,
-  ),
+  ...ENTITY_ROUTES.filter(
+    ({ routes }) => "create" in routes && routes.create === "dialog",
+  ).map(({ routes }) => `${routes.list}/new`),
   "/",
   "/.well-known/apple-app-site-association",
   "/.well-known/oauth-authorization-server",

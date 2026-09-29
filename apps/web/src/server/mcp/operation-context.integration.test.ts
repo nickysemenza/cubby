@@ -145,7 +145,7 @@ describe("MCP operation transaction", () => {
         {
           action: "create",
           entity: "location",
-          data: { name: "Agent rollback shelf", type: "area" },
+          data: { name: "Agent rollback shelf", type: "area", aliases: [] },
         },
       );
       if (created.action !== "create") throw new Error("expected create");

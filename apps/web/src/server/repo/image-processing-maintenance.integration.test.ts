@@ -1,3 +1,4 @@
+import { imageId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -38,15 +39,13 @@ describe("backfillImageProcessing", () => {
     return row;
   };
 
-  const jobKinds = async (imageId: string) =>
-    (
-      await getDb(ctx.db)
-        .select({ kind: imageProcessingJob.kind })
-        .from(imageProcessingJob)
-        .where(eq(imageProcessingJob.imageId, imageId))
-    )
-      .map((job) => job.kind)
-      .toSorted();
+  const jobKinds = async (id: string) => {
+    const rows = await getDb(ctx.db)
+      .select({ kind: imageProcessingJob.kind })
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.imageId, imageId.parse(id)));
+    return rows.map((job) => job.kind).sort();
+  };
 
   it("reports paused explicitly and schedules nothing under the default settings", async () => {
     const row = await seedImage();
