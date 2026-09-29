@@ -4,7 +4,6 @@
  */
 
 import {
-  type LocationId,
   type LocationShortcode,
   type ProductId,
   parseEntityId,
@@ -14,7 +13,6 @@ import type {
   InfLocation,
   LocationAncestorOut,
   LocationOut,
-  LocationType,
 } from "@cubby/schemas/location";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
@@ -31,20 +29,13 @@ import {
 import type { Database } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { loadDataQualities } from "~/server/repo/data-quality";
-import {
-  findOrCreate,
-  getDb,
-  notDeleted,
-  relations,
-} from "~/server/repo/database-helpers";
+import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
 import { stockOnly } from "~/server/repo/inventory/placement";
 import { categorySummarySql } from "~/server/repo/product-category-sql";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
-import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { getLocationById } from "./crud";
 import { dbLocationToAPI } from "./helpers";
-import { getHomeLocation } from "./home";
 import { parseLocationType } from "./parse-type";
 import { loadLocationAncestors } from "./tree";
 import { computeLocationValuations } from "./valuation";
@@ -92,68 +83,6 @@ export const getLocationsByShortcodes = async (
     ...dbLocationToAPI(r, valuations, dataQualities.get(r.id)!),
     parentName: r.parent?.name ?? null,
   }));
-};
-
-/**
- * Find or create a location by name with optional parent
- * If location exists, returns its ID (does not update type/parent)
- * If location doesn't exist, creates it with the given type and parent
- */
-export const findOrCreateLocationByName = async (
-  db: Database,
-  name: string,
-  parentId: LocationId | null,
-  type: LocationType,
-  options?: {
-    /** Optional timestamps to restore from sheet import */
-    createdAt?: Date | null;
-    updatedAt?: Date | null;
-    /** Optional shortcode from import (preserves sheet shortcodes) */
-    shortcode?: string;
-  },
-): Promise<{ locationId: LocationId; created: boolean }> => {
-  const resolvedParentId = parentId ?? (await getHomeLocation(db)).id;
-  // Atomic find-or-create. The `Location_name_key` unique index is on
-  // lower(name) (partial, WHERE deletedAt IS NULL); the match is written as
-  // lower(name) = lower(value) (not ilike) so the planner can actually use that
-  // functional index. The shortcode thunk only runs on the create path, so
-  // existing locations don't burn a shortcode. See findOrCreate.
-  const where = and(
-    eq(sql`lower(${location.name})`, name.toLowerCase()),
-    notDeleted(location),
-  );
-
-  // An import/restore replaying an existing shortcode must have it honoured
-  // verbatim rather than routed through the fresh-code-per-retry helper below —
-  // `findOrCreateWithShortcode` always mints its own code, which would silently
-  // drop the caller's.
-  if (options?.shortcode !== undefined) {
-    const explicitShortcode = options.shortcode;
-    const { row, created } = await findOrCreate(db, location, {
-      where,
-      values: () => ({
-        name,
-        type,
-        parentId: resolvedParentId,
-        shortcode: explicitShortcode,
-        ...(options?.createdAt && { createdAt: options.createdAt }),
-        ...(options?.updatedAt && { updatedAt: options.updatedAt }),
-      }),
-    });
-    return { locationId: row.id, created };
-  }
-
-  const { row, created } = await findOrCreateWithShortcode(db, "location", {
-    where,
-    values: () => ({
-      name,
-      type,
-      parentId: resolvedParentId,
-      ...(options?.createdAt && { createdAt: options.createdAt }),
-      ...(options?.updatedAt && { updatedAt: options.updatedAt }),
-    }),
-  });
-  return { locationId: row.id, created };
 };
 
 /**

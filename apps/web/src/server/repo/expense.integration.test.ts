@@ -35,9 +35,9 @@ import {
   expenseTradeAffinity,
   getExpenseByShortcode,
   setExpensesCostType,
-  setExpensesTrade,
   updateExpense,
 } from "~/server/repo/expense";
+import { updateExpensesInBulk } from "~/server/repo/expense/crud";
 import { createProduct } from "~/server/repo/product";
 import { createProject } from "~/server/repo/project";
 import { getPurchaseExpenses, purchaseList } from "~/server/repo/purchase";
@@ -601,7 +601,7 @@ describe("expense repository — bulk trade / cost-type writes", () => {
     field: "trade" | "costType",
   ) => (entry ? auditChangeFor(entry.changes, field) : undefined);
 
-  it("setExpensesTrade writes the trade over the listed ids only, and audits just the rows that changed", async () => {
+  it("a bulk trade patch writes the listed ids only, and audits just the rows that changed", async () => {
     const { output: a, entityId: aId } = await line("bulk trade a", {
       trade: "other",
     });
@@ -616,17 +616,21 @@ describe("expense repository — bulk trade / cost-type writes", () => {
       trade: "plumbing",
     });
 
-    const updated = await setExpensesTrade(
+    const { updatedShortcodes } = await updateExpensesInBulk(
       ctx.db,
-      { ids: [a.id, b.id, already.id], trade: "electrical" },
+      [a.id, b.id, already.id],
+      { trade: "electrical" },
       ctx.actor,
     );
 
-    expect(updated.map((row) => row.trade)).toEqual([
-      "electrical",
-      "electrical",
-      "electrical",
-    ]);
+    expect(updatedShortcodes).toEqual(
+      expect.arrayContaining([a.id, b.id, already.id]),
+    );
+    for (const id of [a.id, b.id, already.id]) {
+      expect((await getExpenseByShortcode(ctx.db, id))?.trade).toBe(
+        "electrical",
+      );
+    }
     expect((await getExpenseByShortcode(ctx.db, untouched.id))?.trade).toBe(
       "plumbing",
     );

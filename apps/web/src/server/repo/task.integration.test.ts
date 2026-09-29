@@ -20,11 +20,11 @@ import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import {
   createTask,
   getTaskByShortcode,
-  setTasksStatus,
   taskList,
   updateTask,
 } from "~/server/repo/task";
 import { listActionableTasks } from "~/server/repo/task/actionable";
+import { updateTasksInBulk } from "~/server/repo/task/crud";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -445,10 +445,10 @@ describe("task kernel — bulkUpdate", () => {
   });
 });
 
-describe("setTasksStatus", () => {
+describe("updateTasksInBulk status patch", () => {
   const ctx = withTestDb();
 
-  it("returns mixed selections, audits only changes, and skips missing IDs", async () => {
+  it("accepts mixed selections, audits only changes, and refuses a missing ID", async () => {
     const changed = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "Bulk status pending" }),
@@ -465,16 +465,12 @@ describe("setTasksStatus", () => {
     );
     const ids = [changed.output.id, unchanged.output.id];
 
-    expect(
-      (await setTasksStatus(ctx.db, { ids, status: "done" }, ctx.actor)).map(
-        (task) => task.id,
-      ),
-    ).toEqual(expect.arrayContaining(ids));
-    expect(
-      (await setTasksStatus(ctx.db, { ids, status: "done" }, ctx.actor)).map(
-        (task) => task.id,
-      ),
-    ).toEqual(expect.arrayContaining(ids));
+    for (const _attempt of [1, 2]) {
+      expect(
+        (await updateTasksInBulk(ctx.db, ids, { status: "done" }, ctx.actor))
+          .updatedShortcodes,
+      ).toEqual(expect.arrayContaining(ids));
+    }
 
     const changedId = await resolveLiveShortcode(
       ctx.db,
@@ -504,14 +500,13 @@ describe("setTasksStatus", () => {
       audits.filter((audit) => audit.entityId === unchangedId),
     ).toHaveLength(0);
 
-    const partial = await setTasksStatus(
-      ctx.db,
-      {
-        ids: [changed.output.id, testShortcode("task", "TSK-MISSING")],
-        status: "done",
-      },
-      ctx.actor,
-    );
-    expect(partial.map((task) => task.id)).toEqual([changed.output.id]);
+    await expect(
+      updateTasksInBulk(
+        ctx.db,
+        [changed.output.id, testShortcode("task", "TSK-MISSING")],
+        { status: "done" },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(testShortcode("task", "TSK-MISSING"));
   });
 });

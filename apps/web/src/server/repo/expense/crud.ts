@@ -20,7 +20,6 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   DeleteExpensesWithPurchaseEffectsOut,
   ExpenseBulkCostTypeInput,
-  ExpenseBulkTradeInput,
   ExpenseCreateInput,
   ExpenseOut,
   ExpenseUpdateInput,
@@ -982,49 +981,6 @@ export const createExpense = async (
     entityId: result.id,
     priceAffectedProductIds: result.priceAffectedProductIds,
   };
-};
-
-export const setExpensesTrade = async (
-  db: Database,
-  input: ExpenseBulkTradeInput,
-  actor: ActorContext,
-): Promise<ExpenseOut[]> => {
-  const { trade } = input;
-
-  const updatedIds = await withTransaction(db, async (tx) => {
-    const ids = await resolveLiveExpenseIds(tx, input.ids);
-    if (ids.length === 0) return [];
-
-    const rows = await tx.query.expense.findMany({
-      where: and(inArray(expense.id, ids), notDeleted(expense)),
-      columns: {
-        lineKind: true,
-        projectId: true,
-        productId: true,
-        purchaseId: true,
-      },
-    });
-    for (const row of rows) {
-      await validateExpenseInheritance(tx, { ...row, trade });
-    }
-
-    await patchEntityRows(
-      tx,
-      actor,
-      {
-        entity: "expense",
-        table: expense,
-        fields: entityFieldModels.expense.bulk,
-      },
-      ids,
-      { trade },
-    );
-    // Preserve the convenience setter's all-live-selection result even when
-    // patchEntityRows finds no changed rows.
-    return ids;
-  });
-
-  return getExpensesByIDs(db, updatedIds);
 };
 
 export const setExpensesCostType = async (

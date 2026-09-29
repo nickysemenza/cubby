@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
-import { computeRecipeUsages, dbRecipeToAPIShallow } from "./recipe";
+import { computeRecipeUsages } from "./recipe";
 import {
   dbRecipeToAPI,
   dbRecipeToAPIGraph,
@@ -165,18 +165,6 @@ const fullRecipeRow = {
   ],
 } satisfies RecipeDeepDB;
 
-// dbRecipeToAPIShallow produces the shared topLevel+totals base that
-// dbRecipeToAPI/dbRecipeToAPIGraph/dbRecipeToListAPI each layer their own
-// remaining fields on top of — it deliberately omits the list-only
-// `meals`/`sectionCount`/`displayImages` extras (see dbRecipeToListAPI),
-// so validate its output against recipeListItemOut minus those three.
-const recipeShallowOut = recipeListItemOut.omit({
-  meals: true,
-  sectionCount: true,
-  displayImages: true,
-  dataQuality: true,
-});
-
 describe("recipe repository helpers", () => {
   it("returns the declared meals count without the former mealCount field", () => {
     const result = dbRecipeToListAPI(
@@ -190,9 +178,16 @@ describe("recipe repository helpers", () => {
     expect(recipeListItemOut.parse(result)).toEqual(result);
   });
 
-  describe("dbRecipeToAPIShallow", () => {
+  describe("dbRecipeToListAPI base fields", () => {
+    const listOf = (recipe: typeof baseRecipe) =>
+      dbRecipeToListAPI(
+        { ...recipe, mealCount: 0, sectionCount: 0 },
+        [],
+        testCompleteDataQuality(),
+      );
+
     it("converts website recipe with URL without leaking DB-only fields", () => {
-      const result = dbRecipeToAPIShallow(baseRecipe);
+      const result = listOf(baseRecipe);
 
       expect(result).toEqual({
         id: "RCP-A3F2",
@@ -237,16 +232,20 @@ describe("recipe repository helpers", () => {
           type: "website",
           url: "https://example.com/recipe",
         },
+        meals: 0,
+        sectionCount: 0,
+        displayImages: [],
+        dataQuality: testCompleteDataQuality(),
       });
       expect(result).not.toHaveProperty("deletedAt");
       expect(result).not.toHaveProperty("totalsComputedAt");
       expect(result).not.toHaveProperty("sourceType");
       expect(result).not.toHaveProperty("sourceUrl");
-      expect(recipeShallowOut.parse(result)).toEqual(result);
+      expect(recipeListItemOut.parse(result)).toEqual(result);
     });
 
     it("converts non-website recipe without URL", () => {
-      const result = dbRecipeToAPIShallow({
+      const result = listOf({
         ...baseRecipe,
         sourceType: "Other",
         sourceUrl: null,
@@ -259,7 +258,7 @@ describe("recipe repository helpers", () => {
         meta: { url: null },
         source: { type: "other" },
       });
-      expect(recipeShallowOut.parse(result)).toEqual(result);
+      expect(recipeListItemOut.parse(result)).toEqual(result);
     });
   });
 
