@@ -296,6 +296,15 @@ Signed in on the production web app and through the MCP server:
       local build pointing at production), one sync reports sightings without
       error.
 - [ ] MCP `entity` read of one product returns, with its external identifiers.
+- [ ] The purchase agent runs its deterministic fixture on the deployed build
+      (tool calls now use the 21 action tools); the URLs and cookie are
+      described in `apps/purchase-agent/evals/purchase-import.eval.ts`:
+
+```bash
+PURCHASE_AGENT_EVAL_AGENT_URL=... PURCHASE_AGENT_EVAL_RESULT_URL=... \
+  PURCHASE_AGENT_EVAL_SESSION_COOKIE=... pnpm --dir apps/purchase-agent eval:live
+```
+
 - [ ] No new errors in Sentry for the release.
 
 - [ ] Tell the household the app is back.
