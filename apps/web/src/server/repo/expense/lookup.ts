@@ -2,7 +2,10 @@ import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { expenseListItemOut } from "@cubby/schemas/project";
-import type { ExpenseFilters } from "@cubby/schemas/project";
+import type {
+  ExpenseFilters,
+  ExpenseListItemOut,
+} from "@cubby/schemas/project";
 import {
   and,
   gt,
@@ -590,7 +593,11 @@ export const expenseList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
-) => {
+): Promise<{
+  data: ExpenseListItemOut[];
+  count: number;
+  sums?: { cost: number };
+}> => {
   const page = await expenseListRead(
     db,
     filters,
@@ -602,7 +609,6 @@ export const expenseList = async (
   return {
     ...page,
     data: page.data.map((row) => expenseListItemOut.parse(row)),
-    sums: "sums" in page ? page.sums : undefined,
   };
 };
 export const expenseListSummary = async (

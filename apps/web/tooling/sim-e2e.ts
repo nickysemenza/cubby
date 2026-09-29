@@ -68,6 +68,8 @@ const lane = layout
         : watch
           ? "sim-dev"
           : "sim-e2e";
+// Database bootstrap validates the caller's environment before simulation-only overrides.
+const bootstrapEnvironment = { ...process.env };
 for (const [key, value] of Object.entries({
   R2_ACCESS_KEY_ID: "cubby-sim",
   R2_SECRET_ACCESS_KEY: "cubby-sim",
@@ -371,6 +373,7 @@ async function run(
   cwd = repoRoot,
   stdoutFile?: string,
   allowInterrupted = false,
+  environment: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
   if (interrupted && !allowInterrupted)
     throw new Error(`${lane} interrupted by ${interrupted}`);
@@ -381,7 +384,7 @@ async function run(
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
-      env: process.env,
+      env: environment,
       stdio: ["ignore", "pipe", "pipe"],
     });
     activeChild = child;
@@ -1300,7 +1303,14 @@ async function main(): Promise<void> {
     phase = "database";
     const databaseStarted = performance.now();
     if (process.env.CUBBY_SIM_DB_EXTERNAL !== "1")
-      await run("node", ["scripts/dev-db.ts", "up"]);
+      await run(
+        "node",
+        ["scripts/dev-db.ts", "up"],
+        repoRoot,
+        undefined,
+        false,
+        bootstrapEnvironment,
+      );
     await admin.query(`CREATE DATABASE "${simName}"`);
     created = true;
     console.log(`[${lane}] Disposable database ${simName}`);
