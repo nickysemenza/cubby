@@ -1,3 +1,4 @@
+import { productShortcode } from "@cubby/schemas/identifiers";
 import { mcpPaginationFields } from "@cubby/schemas/pagination";
 import {
   foodSummaryWithLinkedProducts,
@@ -13,6 +14,23 @@ import { defineContract, query } from "~/contracts/define";
 
 const usdaFoodResult = z.object({
   food: foodSummaryWithLinkedProducts.nullable(),
+});
+
+export const usdaSuggestionReason = z.enum([
+  "upc",
+  "name_manufacturer",
+  "name",
+]);
+
+export const usdaProductSuggestionsOut = z.object({
+  /** The product's current USDA link, so an agent sees what a pick replaces. */
+  currentFdcId: z.number().int().nullable(),
+  candidates: z.array(
+    z.object({
+      reason: usdaSuggestionReason,
+      food: foodSummaryWithLinkedProducts,
+    }),
+  ),
 });
 
 export const usdaFoodContract = defineContract("usda-food", {
@@ -66,5 +84,11 @@ export const usdaFoodContract = defineContract("usda-food", {
         { message: "Provide exactly one of `upc` or `ndbNumber`." },
       ),
     output: usdaFoodResult,
+  }),
+  /** Agent-facing: USDA foods that plausibly describe one Product. */
+  suggestForProduct: query({
+    http: false,
+    input: z.object({ productId: productShortcode }),
+    output: usdaProductSuggestionsOut,
   }),
 });

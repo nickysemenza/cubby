@@ -1,5 +1,6 @@
 import { inventoryMcpBulkMoveOut } from "@cubby/schemas/inventory";
 import {
+  mcpUsdaFoodListItemOut,
   recipeAvailabilityMcpOut,
   usdaFoodMcpListOut,
   usdaFoodMcpOut,
@@ -64,7 +65,10 @@ import { recommendationsContract } from "~/contracts/recommendations.contract";
 import { searchContract } from "~/contracts/search.contract";
 import { statementRowContract } from "~/contracts/statement-row.contract";
 import { taskContract } from "~/contracts/task.contract";
-import { usdaFoodContract } from "~/contracts/usda.contract";
+import {
+  usdaFoodContract,
+  usdaSuggestionReason,
+} from "~/contracts/usda.contract";
 import { vendorContract } from "~/contracts/vendor.contract";
 
 /**
@@ -126,7 +130,7 @@ export const MCP_TOOLS = defineMcpTools({
       resolve: mcpAction({
         op: kernelAction("resolve", "query"),
         description:
-          '`{entity: "product", names}`: which names already exist as Products, WITHOUT creating anything. Each name gets `exact: true` with the case-insensitive name/alias matches, or `exact: false` with up to 3 contains-search candidates to read by hand. The dedup pass before an import creates Products (a receipt\'s lines in one call); the create stays a deliberate entity.create or entity.commands call. Unlike entity.resolve this never mints a row, because a Product is identity plus cost basis, not just a name.',
+          '`{entity: "product", names}`: which names already exist as Products, WITHOUT creating anything. Each name gets `exact: true` with the case-insensitive name/alias matches, or `exact: false` with up to 3 ranked candidates to read by hand (lexical search: the name contains the request, the request contains the name, any shared word, or a near spelling). The dedup pass before an import creates Products (a receipt\'s lines in one call); the create stays a deliberate entity.create or entity.commands call. Unlike entity.resolve this never mints a row, because a Product is identity plus cost basis, not just a name.',
       }),
     },
   },
@@ -179,7 +183,7 @@ export const MCP_TOOLS = defineMcpTools({
       resolve: mcpAction({
         op: kernelAction("resolveOrCreate", "mutation"),
         description:
-          'Resolve names to ids in one call, creating what is missing. `{entity: "ingredient", names}` matches case-insensitively, aliases included. `{entity: "plant", plants: [{name, gardenGuideKey?, ingredientName?}]}` matches a live Plant by name within the crop key when given, returning `created` per row; `ingredientName` only fills a created Plant\'s informational ingredient link. Resolve cultivars before creating Plantings — a Planting names its Plant, never free-text variety.',
+          'Resolve names to ids in one call, creating what is missing. `{entity: "ingredient", names, linkProductId?}` matches case-insensitively, aliases included; each result carries `candidateProducts` (up to 5 live Products with no ingredient link whose name contains every word of the ingredient, best first) and `linkProductId` (exactly one name) links one of them to the ingredient through the normal Product update. `{entity: "plant", plants: [{name, gardenGuideKey?, ingredientName?}]}` matches a live Plant by name within the crop key when given, returning `created` per row; `ingredientName` only fills a created Plant\'s informational ingredient link. Resolve cultivars before creating Plantings — a Planting names its Plant, never free-text variety.',
       }),
       move_inventory: mcpAction({
         op: inventoryContract.ops.moveEntries,
@@ -246,6 +250,28 @@ export const MCP_TOOLS = defineMcpTools({
         output: usdaFoodLookupOut,
         description:
           "One USDA food by barcode (UPC/GTIN, 12-14 digits) or NDB number; provide exactly one.",
+      }),
+      suggest_for_product: mcpAction({
+        op: usdaFoodContract.ops.suggestForProduct,
+        openWorld: true,
+        project: (output) => ({
+          currentFdcId: output.currentFdcId,
+          candidates: output.candidates.map((candidate) => ({
+            reason: candidate.reason,
+            food: slimUsdaFoodListItem(candidate.food),
+          })),
+        }),
+        output: z.object({
+          currentFdcId: z.number().int().nullable(),
+          candidates: z.array(
+            z.object({
+              reason: usdaSuggestionReason,
+              food: mcpUsdaFoodListItemOut,
+            }),
+          ),
+        }),
+        description:
+          'USDA foods that plausibly describe one Cubby Product (`productId` shortcode), best evidence first: an exact barcode hit (`reason: "upc"`), then a name + manufacturer search (`name_manufacturer`), then the bare name (`name`, only when the qualified search found nothing). `currentFdcId` is the Product\'s existing link, if any. Advisory: it never links anything; set `fdc_id` with entity.update after choosing, and treat a `name` match as a lead to confirm, not an identity.',
       }),
     },
   },
