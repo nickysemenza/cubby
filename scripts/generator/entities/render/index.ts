@@ -24,6 +24,7 @@ import { hasGenericListOperation } from "../list-capabilities.ts";
 import { renderSwiftEntityCatalog } from "./swift-catalog.ts";
 import { renderDataQualityArtifacts } from "./data-quality.ts";
 import { renderImagePolicyArtifacts } from "./image-policy.ts";
+import { renderSchemaWrapperArtifacts } from "./schema-wrappers.ts";
 
 type ContractEntity = CompiledEntity & {
   contract: NonNullable<CompiledEntity["contract"]>;
@@ -1005,6 +1006,7 @@ export const renderEntityArtifacts = (
     .join("\n");
   return [
     ...renderDataQualityArtifacts(entities),
+    ...renderSchemaWrapperArtifacts(entities),
     ...renderImagePolicyArtifacts(entities),
     ...renderFieldExplanationReference(entities),
     {

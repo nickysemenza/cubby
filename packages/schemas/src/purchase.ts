@@ -1,10 +1,7 @@
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import {
-  generatedPurchaseFieldSchemas,
-  generatedPurchaseFilterFields,
-} from "./generated/entity-field-schemas.purchase.gen";
-import { auditDateFilterFields, uniqueBy } from "./base-entity";
+import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.purchase.gen";
+import { uniqueBy } from "./base-entity";
 import {
   expenseShortcode,
   imageShortcode,
@@ -14,7 +11,6 @@ import {
   vendorShortcode,
 } from "./identifiers";
 import { expenseLineKindSchema } from "./expense-line-kind";
-import { purchaseRelatedFilterFields } from "./related-view";
 import {
   createPaginatedResponseSchema,
   entityFilterList,
@@ -29,7 +25,22 @@ import {
   PRODUCT_QUANTITY_DESCRIPTION,
   tradeSchema,
 } from "./project";
-import { displayImagesField } from "./display-images";
+import {
+  purchaseBaseFilterFields,
+  purchaseOut,
+} from "./generated/purchase.gen";
+
+/**
+ * The purchase read shape is exactly the declaration's read projection —
+ * every computed field (vendor join, order URL, expense rollups,
+ * reconciliation, documents) is declared there with its constraints.
+ */
+export {
+  purchaseOut,
+  purchaseListItemOut,
+  type PurchaseOut,
+  type PurchaseListItemOut,
+} from "./generated/purchase.gen";
 
 export const splitExpenseOut = z.array(expenseOut);
 
@@ -117,10 +128,8 @@ export const primaryPurchaseDocumentKinds = [
 ] as const satisfies readonly PurchaseDocumentKind[];
 
 export const purchaseFilterFields = {
-  ...auditDateFilterFields,
-  ...generatedPurchaseFilterFields,
+  ...purchaseBaseFilterFields,
   vendorId: entityFilterList(vendorShortcode).optional(),
-  ...purchaseRelatedFilterFields,
   orderId: oneOrMany(z.string()).optional(),
   /** `"none"` matches purchases with no order id — the ~40% the vendor never issued one for. */
   orderIdPresenceFilter: presenceFilter,
@@ -134,19 +143,6 @@ export const purchaseFiltersSchema = z.object(purchaseFilterFields);
 export type PurchaseFilters = z.infer<typeof purchaseFiltersSchema>;
 
 export type PurchaseSortField = GeneratedEntitySortField<"purchase">;
-
-/**
- * The purchase read shape is exactly the declaration's read projection —
- * every computed field (vendor join, order URL, expense rollups,
- * reconciliation, documents) is declared there with its constraints.
- */
-export const purchaseOut = z.object(generatedPurchaseFieldSchemas.read);
-export type PurchaseOut = z.infer<typeof purchaseOut>;
-
-export const purchaseListItemOut = purchaseOut.extend({
-  displayImages: displayImagesField,
-});
-export type PurchaseListItemOut = z.infer<typeof purchaseListItemOut>;
 
 export const purchaseListResponse = createPaginatedResponseSchema(purchaseOut);
 export type PurchaseListResponse = z.infer<typeof purchaseListResponse>;

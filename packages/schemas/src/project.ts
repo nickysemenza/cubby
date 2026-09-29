@@ -12,32 +12,61 @@ import {
   positiveMoney,
   positiveMoneyNullable,
 } from "./money";
-import {
-  expenseRelatedFilterFields,
-  projectRelatedFilterFields,
-  taskRelatedFilterFields,
-} from "./related-view";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
-import {
-  auditDateFilterFields,
-  dateRangeFields,
-  plainDate,
-} from "./base-entity";
-import {
-  generatedTaskFieldSchemas,
-  generatedTaskFilterFields,
-} from "./generated/entity-field-schemas.task.gen";
-import {
-  generatedExpenseFieldSchemas,
-  generatedExpenseFilterFields,
-} from "./generated/entity-field-schemas.expense.gen";
-import {
-  generatedProjectFieldSchemas,
-  generatedProjectFilterFields,
-} from "./generated/entity-field-schemas.project.gen";
+import { dateRangeFields, plainDate } from "./base-entity";
+import { generatedExpenseFieldSchemas } from "./generated/entity-field-schemas.expense.gen";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { projectKindSchema, projectStatusSchema } from "./project-fields";
 import { taskStatusSchema, tradeSchema } from "./task-fields";
+import { expenseBaseFilterFields, expenseOut } from "./generated/expense.gen";
+import {
+  projectBaseFilterFields,
+  projectCreateInput,
+  projectOut,
+  projectListItemOut,
+} from "./generated/project.gen";
+import {
+  taskBaseFilterFields,
+  taskOut,
+  type TaskOut,
+} from "./generated/task.gen";
+
+export {
+  taskCreateInput,
+  taskUpdateData,
+  taskUpdateInput,
+  taskOut,
+  taskListItemOut,
+  type TaskCreateInput,
+  type TaskUpdateData,
+  type TaskUpdateInput,
+  type TaskOut,
+  type TaskListItemOut,
+} from "./generated/task.gen";
+
+export {
+  projectCreateInput,
+  projectUpdateData,
+  projectUpdateInput,
+  projectOut,
+  projectListItemOut,
+  type ProjectCreateInput,
+  type ProjectUpdateData,
+  type ProjectUpdateInput,
+  type ProjectOut,
+  type ProjectListItemOut,
+} from "./generated/project.gen";
+
+export {
+  expenseUpdateData,
+  expenseUpdateInput,
+  expenseOut,
+  expenseListItemOut,
+  type ExpenseUpdateData,
+  type ExpenseUpdateInput,
+  type ExpenseOut,
+  type ExpenseListItemOut,
+} from "./generated/expense.gen";
 export { TRADE_LABELS } from "./task-fields";
 import type { ShortcodeEntity } from "./entity-manifest";
 import {
@@ -101,7 +130,6 @@ export const taskCompletionSchema = z.enum(taskCompletionValues);
 export type TaskCompletion = z.infer<typeof taskCompletionSchema>;
 
 import { costTypeSchema } from "./expense-fields";
-import { displayImagesField } from "./display-images";
 export { costTypeValues, costTypeSchema } from "./expense-fields";
 export type { CostType } from "./expense-fields";
 
@@ -125,19 +153,6 @@ export const UNKNOWN_MANUFACTURER_LABEL = "Unknown manufacturer";
  * they drift.
  */
 export const MAX_PROJECT_TREE_DEPTH = 100;
-
-const projectCreateFields = generatedProjectFieldSchemas.create;
-
-export const projectCreateInput = z.object(projectCreateFields);
-export type ProjectCreateInput = z.infer<typeof projectCreateInput>;
-
-export const projectUpdateData = z.object(generatedProjectFieldSchemas.update);
-export type ProjectUpdateData = z.infer<typeof projectUpdateData>;
-export const projectUpdateInput = z.object({
-  id: projectShortcode,
-  data: projectUpdateData,
-});
-export type ProjectUpdateInput = z.infer<typeof projectUpdateInput>;
 
 export const projectOptionsOut = z.object({
   id: projectShortcode,
@@ -164,9 +179,7 @@ export const embeddedProjectScopeSchema = z.object({
 export type EmbeddedProjectScope = z.infer<typeof embeddedProjectScopeSchema>;
 
 export const projectFilterFields = {
-  ...auditDateFilterFields,
-  ...projectRelatedFilterFields,
-  ...generatedProjectFilterFields,
+  ...projectBaseFilterFields,
   ...dateRangeFields("date"),
   completionYear,
   parentProjectPresenceFilter: presenceFilter,
@@ -235,16 +248,6 @@ export const projectRollup = z.object({
 });
 export type ProjectRollup = z.infer<typeof projectRollup>;
 
-export const projectOut = z.object({
-  ...generatedProjectFieldSchemas.read,
-});
-export type ProjectOut = z.infer<typeof projectOut>;
-
-export const projectListItemOut = projectOut.extend({
-  displayImages: displayImagesField,
-});
-export type ProjectListItemOut = z.infer<typeof projectListItemOut>;
-
 export const projectTreeInput = z.object({
   filters: projectFiltersSchema,
   ...sortPaginationFields,
@@ -253,19 +256,6 @@ export const projectTreeOut = createPaginatedResponseSchemaWithContext(
   projectListItemOut,
   "project",
 );
-
-const taskCreateFields = generatedTaskFieldSchemas.create;
-
-export const taskCreateInput = z.object(taskCreateFields);
-export type TaskCreateInput = z.infer<typeof taskCreateInput>;
-
-export const taskUpdateData = z.object(generatedTaskFieldSchemas.update);
-export type TaskUpdateData = z.infer<typeof taskUpdateData>;
-export const taskUpdateInput = z.object({
-  id: taskShortcode,
-  data: taskUpdateData,
-});
-export type TaskUpdateInput = z.infer<typeof taskUpdateInput>;
 
 export const taskBulkMoveInput = z.object({
   ids: z.array(taskShortcode).min(1),
@@ -317,9 +307,7 @@ export const taskBulkReorderInput = z.object({
 export type TaskBulkReorderInput = z.infer<typeof taskBulkReorderInput>;
 
 export const taskFilterFields = {
-  ...auditDateFilterFields,
-  ...taskRelatedFilterFields,
-  ...generatedTaskFilterFields,
+  ...taskBaseFilterFields,
   projectId: entityFilterList(projectShortcode).optional(),
   subjectProductId: entityFilterList(productShortcode).optional(),
   topLevelOnly: z.boolean().optional(),
@@ -342,15 +330,6 @@ export const taskFiltersSchema = z.object(taskFilterFields);
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;
 
 export type TaskSortField = GeneratedEntitySortField<"task">;
-
-export const taskOut = z.object(generatedTaskFieldSchemas.read);
-export type TaskOut = z.infer<typeof taskOut>;
-
-/** List-row projection: `taskOut` plus the server-resolved gallery cover(s). */
-export const taskListItemOut = taskOut.extend({
-  displayImages: displayImagesField,
-});
-export type TaskListItemOut = z.infer<typeof taskListItemOut>;
 
 export const taskListAndSideEffectsOut = z.object({
   items: z.array(taskOut),
@@ -475,14 +454,6 @@ export const expenseCreateInput = z
   });
 export type ExpenseCreateInput = z.infer<typeof expenseCreateInput>;
 
-export const expenseUpdateData = z.object(generatedExpenseFieldSchemas.update);
-export type ExpenseUpdateData = z.infer<typeof expenseUpdateData>;
-export const expenseUpdateInput = z.object({
-  id: expenseShortcode,
-  data: expenseUpdateData,
-});
-export type ExpenseUpdateInput = z.infer<typeof expenseUpdateInput>;
-
 export const expenseBulkMoveInput = z.object({
   ids: z.array(expenseShortcode).min(1),
   projectId: projectShortcode.nullable(),
@@ -502,9 +473,7 @@ export const expenseBulkCostTypeInput = z.object({
 export type ExpenseBulkCostTypeInput = z.infer<typeof expenseBulkCostTypeInput>;
 
 export const expenseFilterFields = {
-  ...auditDateFilterFields,
-  ...expenseRelatedFilterFields,
-  ...generatedExpenseFilterFields,
+  ...expenseBaseFilterFields,
   /** Expenses attributed to the given ledger part(ies) (`ExpenseAttribution`). */
   ledgerPartyId: oneOrMany(ledgerPartyShortcode).optional(),
   projectId: entityFilterList(projectShortcode).optional(),
@@ -599,14 +568,6 @@ export const expenseFiltersSchema = z.object(expenseFilterFields);
 export type ExpenseFilters = z.infer<typeof expenseFiltersSchema>;
 
 export type ExpenseSortField = GeneratedEntitySortField<"expense">;
-
-export const expenseOut = z.object(generatedExpenseFieldSchemas.read);
-export type ExpenseOut = z.infer<typeof expenseOut>;
-
-export const expenseListItemOut = expenseOut.extend({
-  displayImages: displayImagesField,
-});
-export type ExpenseListItemOut = z.infer<typeof expenseListItemOut>;
 
 export const expenseChargeContextOut = z
   .object({

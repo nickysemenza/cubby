@@ -1,11 +1,19 @@
 import { z } from "zod";
+import { mealBaseFilterFields } from "./generated/meal.gen";
+
+export {
+  mealCreateInput,
+  mealUpdateData,
+  mealUpdateInput,
+  type MealCreateInput,
+  type MealUpdateInput,
+} from "./generated/meal.gen";
 export * from "./meal-nutrition";
 export * from "./meal-amount";
 import { mealFoodAmount } from "./meal-amount";
 import { recipeYieldSchema } from "./recipe-shared";
-import { auditDateFilterFields, uniqueBy } from "./base-entity";
+import { uniqueBy } from "./base-entity";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import { mealRelatedFilterFields } from "./related-view";
 import {
   aggregatedNeedOut,
   needViaOut,
@@ -30,10 +38,7 @@ import {
 } from "./nutrition";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import { mealRecipeOut, mealTotals } from "./meal-fields";
-import {
-  generatedMealFieldSchemas,
-  generatedMealFilterFields,
-} from "./generated/entity-field-schemas.meal.gen";
+import { generatedMealFieldSchemas } from "./generated/entity-field-schemas.meal.gen";
 export {
   mealRecipeInput,
   type MealRecipeInput,
@@ -74,16 +79,6 @@ export {
  */
 export type MealSortField = GeneratedEntitySortField<"meal">;
 
-export const mealCreateInput = z.object(generatedMealFieldSchemas.create);
-export type MealCreateInput = z.infer<typeof mealCreateInput>;
-
-export const mealUpdateData = z.object(generatedMealFieldSchemas.update);
-export const mealUpdateInput = z.object({
-  id: mealShortcode,
-  data: mealUpdateData,
-});
-export type MealUpdateInput = z.infer<typeof mealUpdateInput>;
-
 export const mealAddRecipeInput = z.object({
   mealId: mealShortcode,
   recipeId: recipeShortcode.describe("Recipe ID to plan into the meal"),
@@ -107,8 +102,7 @@ export const mealRecipeIdInput = z.object({
 });
 
 export const mealFilterFields = {
-  ...auditDateFilterFields,
-  ...generatedMealFilterFields,
+  ...mealBaseFilterFields,
   /**
    * `meal.mealType` is nullable, so `"none"` is the unslotted worklist. OR-ed
    * with `mealType` rather than narrowing it (see
@@ -123,7 +117,6 @@ export const mealFilterFields = {
     ),
   from: mealDate.optional().describe("Only meals on or after this day"),
   to: mealDate.optional().describe("Only meals on or before this day"),
-  ...mealRelatedFilterFields,
 };
 
 export const mealFiltersSchema = z.object(mealFilterFields);

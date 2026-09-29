@@ -1,33 +1,28 @@
 import { z } from "zod";
 
-import { auditDateFilterFields } from "./base-entity";
-import {
-  generatedPlantFieldSchemas,
-  generatedPlantFilterFields,
-} from "./generated/entity-field-schemas.plant.gen";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { ingredientShortcode, plantShortcode } from "./identifiers";
 import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
 import { gardenCropKey } from "./garden-practice";
+import { plantBaseFilterFields, plantOut } from "./generated/plant.gen";
 
-export const plantCreateInput = z.object(generatedPlantFieldSchemas.create);
-export type PlantCreateInput = z.infer<typeof plantCreateInput>;
-
-export const plantUpdateData = z.object(generatedPlantFieldSchemas.update);
-export type PlantUpdateData = z.infer<typeof plantUpdateData>;
+export {
+  plantCreateInput,
+  plantUpdateData,
+  plantOut,
+  type PlantCreateInput,
+  type PlantUpdateData,
+  type PlantOut,
+} from "./generated/plant.gen";
 
 export const plantFilterFields = {
-  ...auditDateFilterFields,
-  ...generatedPlantFilterFields,
+  ...plantBaseFilterFields,
   ingredientId: oneOrMany(ingredientShortcode).optional(),
 };
 export const plantFiltersSchema = z.object(plantFilterFields);
 export type PlantFilters = z.infer<typeof plantFiltersSchema>;
 
 export type PlantSortField = GeneratedEntitySortField<"plant">;
-
-export const plantOut = z.object({ ...generatedPlantFieldSchemas.read });
-export type PlantOut = z.infer<typeof plantOut>;
 
 export const plantListResponse = createPaginatedResponseSchema(plantOut);
 

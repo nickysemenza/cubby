@@ -1,8 +1,5 @@
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import { financialAccountRelatedFilterFields } from "./related-view";
-import { auditDateFilterFields } from "./base-entity";
-import { financialAccountShortcode } from "./identifiers";
 import {
   createPaginatedResponseSchema,
   oneOrMany,
@@ -13,9 +10,20 @@ import {
   financialAccountLast4 as last4,
 } from "./financial-account-fields";
 import {
-  generatedFinancialAccountFieldSchemas,
-  generatedFinancialAccountFilterFields,
-} from "./generated/entity-field-schemas.financialAccount.gen";
+  financialAccountBaseFilterFields,
+  financialAccountOut,
+} from "./generated/financialAccount.gen";
+
+export {
+  financialAccountCreateInput,
+  financialAccountUpdateData,
+  financialAccountUpdateInput,
+  financialAccountOut,
+  type FinancialAccountCreateInput,
+  type FinancialAccountUpdateData,
+  type FinancialAccountUpdateInput,
+  type FinancialAccountOut,
+} from "./generated/financialAccount.gen";
 
 export {
   cardLastFoursOn,
@@ -34,34 +42,8 @@ export {
   type FinancialAccountSourceAlias,
 } from "./financial-account-fields";
 
-const financialAccountCreateFields =
-  generatedFinancialAccountFieldSchemas.create;
-
-export const financialAccountCreateInput = z.object(
-  financialAccountCreateFields,
-);
-export type FinancialAccountCreateInput = z.infer<
-  typeof financialAccountCreateInput
->;
-
-export const financialAccountUpdateData = z.object(
-  generatedFinancialAccountFieldSchemas.update,
-);
-export type FinancialAccountUpdateData = z.infer<
-  typeof financialAccountUpdateData
->;
-export const financialAccountUpdateInput = z.object({
-  id: financialAccountShortcode,
-  data: financialAccountUpdateData,
-});
-export type FinancialAccountUpdateInput = z.infer<
-  typeof financialAccountUpdateInput
->;
-
 export const financialAccountFilterFields = {
-  ...auditDateFilterFields,
-  ...financialAccountRelatedFilterFields,
-  ...generatedFinancialAccountFilterFields,
+  ...financialAccountBaseFilterFields,
   identityKind: oneOrMany(financialAccountIdentityKind).optional(),
   last4: last4.optional(),
   source: oneOrMany(z.string().min(1)).optional(),
@@ -77,11 +59,6 @@ export type FinancialAccountFilters = z.infer<
 
 export type FinancialAccountSortField =
   GeneratedEntitySortField<"financialAccount">;
-
-export const financialAccountOut = z.object(
-  generatedFinancialAccountFieldSchemas.read,
-);
-export type FinancialAccountOut = z.infer<typeof financialAccountOut>;
 
 export const financialAccountListResponse =
   createPaginatedResponseSchema(financialAccountOut);

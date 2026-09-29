@@ -1,34 +1,18 @@
-import { z } from "zod";
-
-import { auditDateFilterFields } from "./base-entity";
-import {
-  generatedDeviceFieldSchemas,
-  generatedDeviceFilterFields,
-} from "./generated/entity-field-schemas.device.gen";
-import { deviceShortcode } from "./identifiers";
+import { deviceOut } from "./generated/device.gen";
 import { createPaginatedResponseSchema } from "./pagination";
 
+export {
+  deviceCreateInput,
+  deviceFilterFields,
+  deviceFilters,
+  deviceOut,
+  deviceUpdateData,
+  deviceUpdateInput,
+  type DeviceCreateInput,
+  type DeviceFilters,
+  type DeviceOut,
+  type DeviceUpdateData,
+} from "./generated/device.gen";
 export type { DevicePlatform } from "./device-fields";
 
-export const deviceCreateInput = z.object(generatedDeviceFieldSchemas.create);
-export type DeviceCreateInput = z.infer<typeof deviceCreateInput>;
-
-export const deviceUpdateData = z.object(generatedDeviceFieldSchemas.update);
-export type DeviceUpdateData = z.infer<typeof deviceUpdateData>;
-
-export const deviceUpdateInput = z.object({
-  id: deviceShortcode,
-  data: deviceUpdateData,
-});
-
-export const deviceOut = z.object(generatedDeviceFieldSchemas.read);
-export type DeviceOut = z.infer<typeof deviceOut>;
-
 export const deviceListResponse = createPaginatedResponseSchema(deviceOut);
-
-export const deviceFilterFields = {
-  ...auditDateFilterFields,
-  ...generatedDeviceFilterFields,
-};
-export const deviceFilters = z.object(deviceFilterFields);
-export type DeviceFilters = z.infer<typeof deviceFilters>;

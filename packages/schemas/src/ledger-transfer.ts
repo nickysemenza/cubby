@@ -1,12 +1,22 @@
 import { z } from "zod";
-import { auditDateFilterFields } from "./base-entity";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import { ledgerPartyShortcode, ledgerTransferShortcode } from "./identifiers";
+import { ledgerPartyShortcode } from "./identifiers";
 import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
 import {
-  generatedLedgerTransferFieldSchemas,
-  generatedLedgerTransferFilterFields,
-} from "./generated/entity-field-schemas.ledgerTransfer.gen";
+  ledgerTransferBaseFilterFields,
+  ledgerTransferOut,
+} from "./generated/ledgerTransfer.gen";
+
+export {
+  ledgerTransferCreateInput,
+  ledgerTransferUpdateData,
+  ledgerTransferUpdateInput,
+  ledgerTransferOut,
+  type LedgerTransferCreateInput,
+  type LedgerTransferUpdateData,
+  type LedgerTransferUpdateInput,
+  type LedgerTransferOut,
+} from "./generated/ledgerTransfer.gen";
 export {
   ledgerSourceClaimInput,
   ledgerSourceClaimNormalizedEvidence,
@@ -20,29 +30,8 @@ export {
   type LedgerSourceClaimReconciliation,
 } from "./ledger-transfer-fields";
 
-const ledgerTransferCreateFields = generatedLedgerTransferFieldSchemas.create;
-
-export const ledgerTransferCreateInput = z.object(ledgerTransferCreateFields);
-export type LedgerTransferCreateInput = z.infer<
-  typeof ledgerTransferCreateInput
->;
-
-export const ledgerTransferUpdateData = z.object(
-  generatedLedgerTransferFieldSchemas.update,
-);
-export type LedgerTransferUpdateData = z.infer<typeof ledgerTransferUpdateData>;
-
-export const ledgerTransferUpdateInput = z.object({
-  id: ledgerTransferShortcode,
-  data: ledgerTransferUpdateData,
-});
-export type LedgerTransferUpdateInput = z.infer<
-  typeof ledgerTransferUpdateInput
->;
-
 export const ledgerTransferFilterFields = {
-  ...auditDateFilterFields,
-  ...generatedLedgerTransferFilterFields,
+  ...ledgerTransferBaseFilterFields,
   fromPartyId: oneOrMany(ledgerPartyShortcode).optional(),
   toPartyId: oneOrMany(ledgerPartyShortcode).optional(),
 };
@@ -51,11 +40,6 @@ export type LedgerTransferFilters = z.infer<typeof ledgerTransferFiltersSchema>;
 
 export type LedgerTransferSortField =
   GeneratedEntitySortField<"ledgerTransfer">;
-
-export const ledgerTransferOut = z.object({
-  ...generatedLedgerTransferFieldSchemas.read,
-});
-export type LedgerTransferOut = z.infer<typeof ledgerTransferOut>;
 
 export const ledgerTransferListResponse =
   createPaginatedResponseSchema(ledgerTransferOut);

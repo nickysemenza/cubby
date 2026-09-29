@@ -1,17 +1,9 @@
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import { recipeRelatedFilterFields } from "./related-view";
-import {
-  auditDateFilterFields,
-  numericRangeFields,
-  timestampedFields,
-} from "./base-entity";
+import { numericRangeFields, timestampedFields } from "./base-entity";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { generatedCookbookFieldSchemas } from "./generated/entity-field-schemas.cookbook.gen";
-import {
-  generatedRecipeFieldSchemas,
-  generatedRecipeFilterFields,
-} from "./generated/entity-field-schemas.recipe.gen";
+import { generatedRecipeFieldSchemas } from "./generated/entity-field-schemas.recipe.gen";
 import { amount } from "./codec";
 import {
   cookbookShortcode,
@@ -33,6 +25,15 @@ import {
   recipeTotals,
 } from "./recipe-shared";
 import { recipeIngredientInput, recipeSectionsOut } from "./recipe-fields";
+import { recipeBaseFilterFields } from "./generated/recipe.gen";
+
+export {
+  recipeCreateInput,
+  recipeUpdateData,
+  recipeUpdateInput,
+  type RecipeCreateInput,
+  type RecipeUpdateInput,
+} from "./generated/recipe.gen";
 export {
   recipeIngredientInput,
   recipeInstructionInput,
@@ -243,9 +244,7 @@ export type SectionIngredientType = z.infer<
 export type RecipeIngredientInput = z.infer<typeof recipeIngredientInput>;
 
 export const recipeFilterFields = {
-  ...auditDateFilterFields,
-  ...recipeRelatedFilterFields,
-  ...generatedRecipeFilterFields,
+  ...recipeBaseFilterFields,
   cookbookId: entityFilterList(cookbookShortcode).optional(),
   cookbookPresenceFilter: presenceFilter,
   /**
@@ -295,15 +294,6 @@ export const recipeListFilterFields = {
   nameFilter: recipeFilterFields.nameFilter,
 };
 
-export const recipeCreateInput = z.object(generatedRecipeFieldSchemas.create);
-
-export const recipeUpdateData = z.object(generatedRecipeFieldSchemas.update);
-
-export const recipeUpdateInput = z.object({
-  id: recipeShortcode,
-  data: recipeUpdateData,
-});
-
 export const recipeShortcodeInput = z.object({
   shortcode: recipeShortcode,
 });
@@ -327,9 +317,6 @@ export const recipeCookbookScopeInput = z
 export const recipeIdInput = z.object({
   id: recipeShortcode,
 });
-
-export type RecipeCreateInput = z.infer<typeof recipeCreateInput>;
-export type RecipeUpdateInput = z.infer<typeof recipeUpdateInput>;
 
 /**
  * Slim MCP projection of a recipe list row — built from the same field map as

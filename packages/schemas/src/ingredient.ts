@@ -1,10 +1,6 @@
 import { z } from "zod";
-import { auditDateFilterFields } from "./base-entity";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import {
-  generatedIngredientFieldSchemas,
-  generatedIngredientFilterFields,
-} from "./generated/entity-field-schemas.ingredient.gen";
+import { generatedIngredientFieldSchemas } from "./generated/entity-field-schemas.ingredient.gen";
 import {
   ingredientShortcode,
   productShortcode,
@@ -27,7 +23,15 @@ import {
 } from "./recipe";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { displayImagesField } from "./display-images";
-import { ingredientRelatedFilterFields } from "./related-view";
+import { ingredientBaseFilterFields } from "./generated/ingredient.gen";
+
+export {
+  ingredientCreateInput,
+  ingredientUpdateData,
+  ingredientUpdateInput,
+  type IngredientCreateInput,
+  type IngredientUpdateInput,
+} from "./generated/ingredient.gen";
 
 export const ingredientBaseFields = {
   name: generatedIngredientFieldSchemas.read.name,
@@ -37,8 +41,7 @@ export const ingredientBaseFields = {
 export const ingredientBase = z.object(ingredientBaseFields);
 
 export const ingredientFilterFields = {
-  ...auditDateFilterFields,
-  ...generatedIngredientFilterFields,
+  ...ingredientBaseFilterFields,
   productPresenceFilter: presenceFilter,
   /**
    * `"none"` is the orphaned-ingredient worklist. The list already excludes
@@ -60,7 +63,6 @@ export const ingredientFilterFields = {
   recipePresenceFilter: presenceFilter.describe(
     "Filter to ingredients that are / aren't used by at least one live recipe",
   ),
-  ...ingredientRelatedFilterFields,
 };
 
 export const ingredientFiltersSchema = z.object(ingredientFilterFields);
@@ -243,25 +245,6 @@ export const enrichmentWorkbenchInput = z
   .optional();
 
 export const ingredientWithFoodLeanListOut = z.array(ingredientWithFoodLeanOut);
-
-/**
- * Input schema for creating ingredients. Overrides the base `name` (lax for
- * reads) with a non-empty constraint; keep the mock hint for test fixtures.
- */
-const ingredientCreateFields = generatedIngredientFieldSchemas.create;
-export const ingredientCreateInput = z.object(ingredientCreateFields);
-export type IngredientCreateInput = z.infer<typeof ingredientCreateInput>;
-
-export const ingredientUpdateData = z.object(
-  generatedIngredientFieldSchemas.update,
-);
-
-export const ingredientUpdateInput = z.object({
-  id: ingredientShortcode,
-  data: ingredientUpdateData,
-});
-
-export type IngredientUpdateInput = z.infer<typeof ingredientUpdateInput>;
 
 export const ingredientMergeInput = z.object({
   keepId: ingredientShortcode,
