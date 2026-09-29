@@ -439,6 +439,20 @@ Storage objects also name `kindOverride`, `nullableOverride`, and
 Stored-field order and create/update/output/bulk/audit rosters remain explicit:
 presentation defaults never grant mutation capabilities or introduce columns.
 
+The declaration's top-level `storage` block owns the rest of the entity's table,
+and the generator emits the complete Drizzle `pgTable` plus its `relations()`
+into `apps/web/src/server/db/generated/entity-tables.gen.ts`, re-exported by
+`schema.ts` under the same names. `storage.columns` adds operational columns
+no model field declares; `indexes`, `checks` (a named SQL check, or a
+value-set check whose values default to the field's read enum), and
+`relations` (the `with: {}` names; a string is a reference column) name
+columns as `{columnKey}` in SQL. Derived without declaring: the shortcode
+unique index, the identity FK to `Entity(id, shortcode)`, and a
+`<Table>_<column>_idx` index on every reference column no full index leads
+with (`unindexedReferences` opts one out with a reason). Constraint names are
+part of the committed migration snapshot, so a declared name is never changed
+casually.
+
 The `model.fields` roster owns field kinds, read keys, labels, validation,
 controls, and display membership. `EntityBasicInfo` reads `display.detail`;
 `createEntityDisplayColumns` reads `display.list`. A field's
@@ -854,10 +868,11 @@ precedence rule.
    if the entity's natural title can be empty, declare a storage-less
    read-only `displayName` field instead (see above) and point `titleField`
    at it rather than at a nullable name column.
-2. Add its branded id and compose its table and canonical input/output schemas
-   from the generated factories. Keep indexes, constraints, domain refinements,
-   and relationship projections explicit. A physical change still requires a
-   compatible migration; generation does not apply production DDL.
+2. Add its branded id, declare its table's indexes, checks, and Drizzle
+   relations in `storage`, and compose canonical input/output schemas from
+   the generated factories. Keep domain refinements and relationship
+   projections explicit. A physical change still requires a compatible
+   migration; generation does not apply production DDL.
 3. Add a kernel repository adapter for the capabilities the spec declares.
 4. Set `route.basePath` for the generic pages (`listOverride: null`
    hand-writes the list route module; detail is always generic, with
@@ -867,7 +882,7 @@ precedence rule.
 5. Run `pnpm generate`; review generated source like handwritten source.
 6. Declare physical edge semantics and operation-specific lifecycle policies,
    when the entity participates in deletion or merge. A new shortcode table
-   adds `entityIdentityFk(...)` beside its `shortcodeUnique(...)`; the identity
+   gets its identity FK and shortcode index generated; the identity
    triggers follow the roster automatically, and the production cutover for
    an existing database must backfill `Entity`. A new join or child table that
    carries an edge column names its owner in `ENTITY_EDGE_OWNERS`.
