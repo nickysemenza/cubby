@@ -335,6 +335,7 @@ export type CompiledEntity = Readonly<{
       weight: number;
       label: string;
       message: string;
+      coverage?: string;
     }>[];
     exceptions: boolean;
     related: readonly string[];

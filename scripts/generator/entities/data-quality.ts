@@ -15,6 +15,7 @@ type CompiledDataQualityCheck = Readonly<{
   weight: number;
   label: string;
   message: string;
+  coverage?: string;
 }>;
 
 type CompiledDataQuality = Readonly<{
@@ -61,6 +62,7 @@ export const compileDataQuality = (
       weight: number;
       label: string;
       message: string;
+      coverage?: string;
     }[];
     exceptions: boolean;
     related: readonly string[];

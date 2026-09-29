@@ -1424,6 +1424,12 @@ const buildMetadataSchemas = () => {
       label: nonEmptyString(),
       /** `gap.message` shown beside the check. */
       message: nonEmptyString(),
+      /**
+       * The Problems coverage meter (`coverageTotalsSchema` key) whose
+       * denominator is this check's `expected` population; the generator
+       * counts it instead of a hand-written query.
+       */
+      coverage: nonEmptyString().optional(),
     })
     .strict();
 

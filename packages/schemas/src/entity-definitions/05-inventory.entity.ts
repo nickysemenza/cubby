@@ -662,6 +662,7 @@ export default defineEntity({
           weight: 1,
           label: "Verified",
           message: "This stock entry has never been verified.",
+          coverage: "neverVerifiedInventory",
         },
       ],
     },

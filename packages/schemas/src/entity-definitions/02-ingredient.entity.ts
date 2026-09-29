@@ -515,6 +515,7 @@ export default defineEntity({
           weight: 2,
           label: "Product link",
           message: "No product is linked to this ingredient.",
+          coverage: "ingredientsWithoutProduct",
         },
       ],
     },

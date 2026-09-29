@@ -24,6 +24,7 @@ import { hasGenericListOperation } from "../list-capabilities.ts";
 import { renderSwiftEntityCatalog } from "./swift-catalog.ts";
 import { renderDataQualityArtifacts } from "./data-quality.ts";
 import { renderImagePolicyArtifacts } from "./image-policy.ts";
+import { renderCoverageTotalsArtifacts } from "./coverage-totals.ts";
 import { renderSchemaWrapperArtifacts } from "./schema-wrappers.ts";
 
 type ContractEntity = CompiledEntity & {
@@ -1015,6 +1016,7 @@ export const renderEntityArtifacts = (
   return [
     ...renderDataQualityArtifacts(entities),
     ...renderSchemaWrapperArtifacts(entities),
+    ...renderCoverageTotalsArtifacts(entities),
     ...renderImagePolicyArtifacts(entities),
     ...renderFieldExplanationReference(entities),
     {

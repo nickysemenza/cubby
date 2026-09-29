@@ -819,6 +819,7 @@ export default defineEntity({
           weight: 1,
           label: "Logo",
           message: "No logo is recorded for this vendor.",
+          coverage: "vendorsWithPurchases",
         },
         {
           id: "vendor_website",
