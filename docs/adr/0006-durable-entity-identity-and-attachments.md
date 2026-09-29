@@ -1,6 +1,6 @@
 # ADR 0006: Durable entity identity and one attachment table
 
-Status: Accepted
+Status: Accepted. Superseded in part by ADR 0007 (generic `EntityLink` table; `RunMutation` and `ImageSighting` amendments below).
 
 ## Context
 
@@ -84,3 +84,21 @@ remains per-operation policy, and there is no generic edge table.
 `EntityAttachment.entityId` and `RunTarget.entityId` are the edge keys that
 target several entities; the relatedness traversal resolves its outgoing direction from the
 path's destination.
+
+## Amendment (ADR 0007 and the 2026-09 consolidation)
+
+- The "no generic edge table" rejection above no longer holds for the seven
+  same-shaped pairings; see ADR 0007. `EntityAttachment` and the other
+  payload-carrying edges stay typed tables.
+- `(entityType, entityId)` on `AuditLog`, `SearchDocument`, and
+  `EntityEmbedding` is `(entityKind, entityId)`, like every other pointer
+  named here. `RunMutation` no longer exists: its rows are `AuditLog` rows
+  keyed by `runId`.
+- Schema, including the identity triggers, reaches every database through the
+  committed migrations in `apps/web/drizzle/`; `db:push` no longer exists.
+- Deliberate exception to "Entity rows are never deleted": `ImageSighting` is
+  a plain child table of Image, not an entity. Its audit rows were moved onto
+  the parent Image (`entityKind = 'image'`, nested under
+  `changes.sightings[<sighting id>]`) and then its `Entity` rows were deleted;
+  the `IMS-` prefix left the shortcode registry. ADR 0005's amendment records
+  the same change from the sighting side.
