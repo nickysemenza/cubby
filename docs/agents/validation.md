@@ -17,7 +17,8 @@ src/...`. Read a failed run's ending and
 unchanged tier to rediscover its failures.
 
 Before a PR, run only what CI cannot: `pnpm test:e2e:local` for the
-local-only native/simulator lanes, plus focused tests for the change. CI runs
+local-only native/simulator lanes (one lane: `pnpm test:e2e:sim -- <flags>`, see
+README), plus focused tests for the change. CI runs
 the PostgreSQL, fast, typecheck, lint, and knip tiers on every PR; do not
 repeat them locally as a gate.
 

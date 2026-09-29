@@ -7,20 +7,20 @@ booted and the relevant build artifacts warm while working on one feature.
 | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Pure `CubbyKit` logic, parsing, patching, or state                     | Run a focused Swift test with `swift test --package-path apps/apple/CubbyKit --filter <test-name>` | The real package code on macOS; no server or simulator.                                                                   |
 | An ad hoc native API or local-file question                            | `pnpm apple cli <command>`                                                                         | A small `CubbyKit` executable, without building or launching the app. Use `pnpm apple cli --help` to see commands.        |
-| Native API/auth/search/edit behavior                                   | `pnpm test:e2e:headless:watch`, then press Enter to rerun                                          | The `cubby` CLI against workerd and a disposable seeded database. It does not run `AppModel`, navigation, or SwiftUI.     |
+| Native API/auth/search/edit behavior                                   | `pnpm test:e2e:sim -- --headless --watch`, then press Enter to rerun                               | The `cubby` CLI against workerd and a disposable seeded database. It does not run `AppModel`, navigation, or SwiftUI.     |
 | One SwiftUI screen or state                                            | Render that file's `#Preview` with Xcode MCP `RenderPreview`                                       | The view with synthetic, in-memory `PreviewFixtures`; no server or login. Inspect the returned PNG in Codex.              |
 | App model or navigation logic                                          | Xcode MCP `RunSomeTests` for a focused app test                                                    | App-target code that the `CubbyKit` package tests and headless CLI do not compile or execute.                             |
-| Repeated simulator UI edits against real API data                      | `pnpm dev:sim:watch`, then press Enter to replay                                                   | One Debug app installation, workerd server, and disposable seeded database; a new product and database check each run.    |
+| Repeated simulator UI edits against real API data                      | `pnpm test:e2e:sim -- --watch`, then press Enter to replay                                         | One Debug app installation, workerd server, and disposable seeded database; a new product and database check each run.    |
 | Taps, navigation, sheets, keyboard, or accessibility                   | Use Xcode MCP device interaction or `agent-device` on an already installed simulator app           | The running app and its UI tree. Use `pnpm apple sim` to rebuild and install after code changes.                          |
 | A repeatable native user journey against a fresh database              | `pnpm test:e2e:sim`                                                                                | Debug iOS app, real auth, workerd, synthetic seed, agent-device assertions, and database readback.                        |
-| A reviewable recording of that journey                                 | `pnpm test:e2e:sim:video`                                                                          | The same flow plus `run.mp4` and a timestamped `contact-sheet.png` under `artifacts/sim-e2e/`. Open either file in Codex. |
+| A reviewable recording of that journey                                 | `pnpm test:e2e:sim -- --video`                                                                     | The same flow plus `run.mp4` and a timestamped `contact-sheet.png` under `artifacts/sim-e2e/`. Open either file in Codex. |
 | Device-only behavior (camera, permissions, performance, installed app) | `pnpm apple ios` on a paired iPhone                                                                | Real device behavior; use Xcode/agent-device for interaction and diagnostics.                                             |
 | Mac-specific UI                                                        | `pnpm apple mac` and Mac previews/tests                                                            | The native macOS shell and window behavior.                                                                               |
 
 ## Recommended loop
 
 1. Edit a `CubbyKit` algorithm or model and run its focused Swift test. For a
-   networked native change, start `pnpm test:e2e:headless:watch` once, then press
+   networked native change, start `pnpm test:e2e:sim -- --headless --watch` once, then press
    Enter after each edit. The first run builds workerd and the CLI; later runs
    reuse the server and database, seed a new synthetic product, and rebuild the
    CLI only when Swift sources changed. Restart after web or Rust FFI changes.
@@ -29,14 +29,14 @@ booted and the relevant build artifacts warm while working on one feature.
    block network reads. Add focused states such as empty, loading, error, dark,
    and large text when they expose the change. The generated fixture JSON comes
    from `pnpm generate`.
-3. When the change needs repeated real interactions, start `pnpm dev:sim:watch`.
+3. When the change needs repeated real interactions, start `pnpm test:e2e:sim -- --watch`.
    The first run builds and installs the Debug app, then signs in and edits a
    synthetic product. Press Enter to seed another product and replay the shorter
    deep-link flow. It rebuilds and reinstalls only after Apple Swift sources or
    the Xcode project specification change. The printed agent-device session can
    be inspected interactively between runs. Restart watch after web server,
    generated API, or Rust FFI changes.
-4. Run the scripted simulator flow for a cross-layer journey. Add `:video` when
+4. Run the scripted simulator flow for a cross-layer journey. Add `--video` when
    a human should review the exact UI actions. The database is unique per run
    and dropped afterward; artifacts stay under `artifacts/sim-e2e/`.
 
@@ -48,7 +48,7 @@ fixtures, so editing the local database does not change a preview.
 
 ## Inspect and repair a warm simulator run
 
-While `dev:sim:watch` waits for Enter, use the session name, simulator UDID,
+While `test:e2e:sim -- --watch` waits for Enter, use the session name, simulator UDID,
 and agent-device state directory printed by the command in a second terminal.
 For example:
 
@@ -70,7 +70,7 @@ Ctrl-C closes the runner's agent-device session and drops its database. The
 detached watchdog closes the session and drops that database if the runner is
 killed. Simulator runs leave evidence under `artifacts/sim-dev/<database>/`,
 including a screenshot and UI tree after replay failure; use
-`test:e2e:sim:video` when a reviewable MP4 and contact sheet are needed.
+`test:e2e:sim -- --video` when a reviewable MP4 and contact sheet are needed.
 
 ## Timing on one local Mac
 

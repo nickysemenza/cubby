@@ -350,18 +350,19 @@ drops the database after the run. Set
 failure artifacts are under `artifacts/sim-e2e/`. The manual `CI` workflow
 dispatch option `simulator_e2e` runs the same command with native PostgreSQL
 17 and pgvector on a hosted macOS runner. This lane is not a required PR check.
-`pnpm test:e2e:sim:video` also saves `run.mp4` and a timestamped
-`contact-sheet.png` in that run's artifact directory for review in Codex. See the
+`pnpm test:e2e:sim -- --video` also saves `run.mp4` and a timestamped
+`contact-sheet.png` in that run's artifact directory for review in Codex, and
+`-- --layout` runs the layout-only journey. See the
 [fast native iteration guide](apps/apple/ITERATION.md) for which loop to use.
 
-`pnpm dev:sim:watch` keeps a disposable database, workerd, and the installed
+`pnpm test:e2e:sim -- --watch` keeps a disposable database, workerd, and the installed
 Debug app alive for local UI iteration. Press Enter to seed a new product and
 replay a short deep-link edit flow; the app rebuilds after Apple source changes.
 The command prints an agent-device session for interactive inspection. Ctrl-C
 closes the session and drops the database. See the [iteration guide](apps/apple/ITERATION.md)
 for snapshot, screenshot, and replay commands.
 
-`pnpm test:e2e:headless` uses the same disposable database, synthetic product,
+`pnpm test:e2e:sim -- --headless` uses the same disposable database, synthetic product,
 and workerd harness. The `cubby` CLI signs in through `AuthFlow`, searches,
 builds an `EntityPatch`, updates through `CubbyClient`, and checks native readback
 plus the database row. It skips Xcode, installation, and UI automation for a
@@ -370,7 +371,7 @@ The [local journey coverage map](docs/agents/core-journey-e2e.md) tracks
 input-first checks for Product, photo, order, statement, inventory, and other
 documented core flows, including their remaining UI gaps.
 Headless failure logs are under `artifacts/headless-e2e/`.
-For repeated native changes, `pnpm test:e2e:headless:watch` keeps that database
+For repeated native changes, `pnpm test:e2e:sim -- --headless --watch` keeps that database
 and workerd harness running. Press Enter to seed a fresh product and rerun the
 CLI scenario; Ctrl-C drops the database. Restart watch mode after changing web
 server or Rust FFI code so it rebuilds those bundles. Watch mode runs the built
