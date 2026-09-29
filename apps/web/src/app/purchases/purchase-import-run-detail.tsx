@@ -22,6 +22,7 @@ import {
 } from "react";
 import { z } from "zod";
 
+import { useSectionVisible } from "~/app/_components/data-table/detail-page";
 import { runHref } from "~/app/purchases/purchase-import-links";
 import { usePhotoRunReview } from "~/app/runs/photo-group-review";
 import { PhotoImportRunView } from "~/app/runs/photo-run-detail";
@@ -763,7 +764,6 @@ const memberName = (member: RunDetail["actor"]) =>
 function RunProgress({ run }: { run: RunDetail }) {
   return (
     <Section
-      title="Run progress"
       description={
         run.latestProgress ? (
           <ShortcodeProse>{`${run.latestProgress.phase}${run.latestProgress.detail ? ` · ${run.latestProgress.detail}` : ""}`}</ShortcodeProse>
@@ -826,10 +826,7 @@ function TerminalAgentSurface({ run }: { run: RunDetail }) {
     queryFn: () => client.history(),
   });
   return (
-    <Section
-      title="Agent history"
-      description="This terminal run is view-only. The complete materialized conversation remains available as durable evidence."
-    >
+    <Section description="This terminal run is view-only. The complete materialized conversation remains available as durable evidence.">
       {history.isLoading ? (
         <StatusText>Loading agent history…</StatusText>
       ) : null}
@@ -892,23 +889,16 @@ function ActiveAgentSurface({ run }: { run: RunDetail }) {
   const messages = agent.conversation?.messages ?? [];
 
   return (
-    <Section
-      title={
-        <Row gap="sm" align="center">
-          {awaitingReview ? "Awaiting review" : "Live agent"}
-          <Badge
-            variant={
-              !awaitingReview && agent.phase === "live"
-                ? "positive"
-                : "secondary"
-            }
-          >
-            {awaitingReview ? "Review" : agent.phase}
-          </Badge>
-        </Row>
-      }
-      description="The durable operation timeline is below; this conversation stays current through the agent stream."
-    >
+    <Section description="The durable operation timeline is below; this conversation stays current through the agent stream.">
+      <Row gap="sm" align="center">
+        <Badge
+          variant={
+            !awaitingReview && agent.phase === "live" ? "positive" : "secondary"
+          }
+        >
+          {awaitingReview ? "Awaiting review" : agent.phase}
+        </Badge>
+      </Row>
       {agent.phase === "absent" ? (
         <p className="text-sm text-muted-foreground">
           The agent conversation is not available yet. This view will connect
@@ -1121,10 +1111,16 @@ function ToolValue({ label, value }: { label: string; value: unknown }) {
   );
 }
 
-function RunTimeline({ run }: { run: RunDetail }) {
+function RunTimeline({
+  run,
+  titled = true,
+}: {
+  run: RunDetail;
+  titled?: boolean;
+}) {
   return (
     <Section
-      title="Durable transcript"
+      title={titled ? "Durable transcript" : undefined}
       description="Oldest first. System and Mac events are retained as structured operation evidence; sensitive page content and credentials are excluded."
     >
       {run.operations.length > 0 ? (
@@ -1162,20 +1158,18 @@ function RunTimeline({ run }: { run: RunDetail }) {
 
 /** One titled list of run records, or its empty copy. */
 function RunRecordList<T>({
-  title,
   description,
   items,
   empty,
   render,
 }: {
-  title: string;
   description?: string;
   items: readonly T[];
   empty: string;
   render: (item: T) => { key: string; body: ReactNode };
 }) {
   return (
-    <Section title={title} description={description}>
+    <Section description={description}>
       {items.length ? (
         <Stack gap="sm">
           {items.map((item) => {
@@ -1200,9 +1194,11 @@ function RunRecordList<T>({
 function RunDebugLog({
   runId,
   active,
+  titled = true,
 }: {
   runId: RunDetail["publicId"];
   active: boolean;
+  titled?: boolean;
 }) {
   const log = useQuery({
     ...runOperations.logs.queryOptions({ runId }),
@@ -1210,7 +1206,7 @@ function RunDebugLog({
   });
   return (
     <Section
-      title="System and Mac log"
+      title={titled ? "System and Mac log" : undefined}
       description="Structured server and browser-bridge events are retained when the agent conversation cannot explain a transition."
     >
       {log.isLoading ? <StatusText>Loading structured log…</StatusText> : null}
@@ -1254,8 +1250,8 @@ function RunDebugLog({
 }
 
 /**
- * The import run's live read (agent transcript, operations, evidence), polled
- * while the run is active. Both import slots share it through the cache.
+ * The run's live read (agent transcript, operations, evidence), polled while
+ * the run is active. Every run slot shares it through this one query key.
  */
 function useRun(runId: RunOut["id"]) {
   return useQuery({
@@ -1267,6 +1263,22 @@ function useRun(runId: RunOut["id"]) {
   });
 }
 
+/**
+ * `useRun`, plus — for the one slot that owns it — a refresh of the Run
+ * record once the run moves on (a control action, or the agent finishing):
+ * the hero and fields read the record, not this poll.
+ */
+function useSyncedRun(record: RunOut, syncRecord: boolean) {
+  const runQuery = useRun(record.id);
+  const queryClient = useQueryClient();
+  const liveStatus = runQuery.data?.status;
+  useEffect(() => {
+    if (syncRecord && liveStatus !== undefined && liveStatus !== record.status)
+      void invalidateOperationTags(queryClient, ripple.runOnly);
+  }, [syncRecord, liveStatus, record.status, queryClient]);
+  return runQuery;
+}
+
 function RunGate({
   record,
   children,
@@ -1274,113 +1286,166 @@ function RunGate({
   record: RunOut;
   children: (run: RunDetail) => ReactNode;
 }) {
-  const runQuery = useRun(record.id);
-  const queryClient = useQueryClient();
-  const liveStatus = runQuery.data?.status;
-  // The page's hero and fields read the Run record, not this poll: refresh
-  // it once the run moves on (a control action, or the agent finishing).
-  useEffect(() => {
-    if (liveStatus !== undefined && liveStatus !== record.status)
-      void invalidateOperationTags(queryClient, ripple.runOnly);
-  }, [liveStatus, record.status, queryClient]);
+  const runQuery = useSyncedRun(record, true);
   if (runQuery.isLoading) return <StatusText>Loading import run…</StatusText>;
   if (runQuery.isError)
     return <StatusText tone="destructive">{runQuery.error.message}</StatusText>;
   return runQuery.data ? children(runQuery.data) : null;
 }
 
-/** Run detail slot: the account-sync / validation / enrichment workflow. */
-export function RunImportWorkflow({ record }: { record: RunOut }) {
-  return <RunGate record={record}>{(run) => <RunContent run={run} />}</RunGate>;
+const isActiveRun = (run: RunDetail) => ACTIVE_RUN_STATUSES.has(run.status);
+const isStoppedRun = (run: RunDetail) => !isActiveRun(run);
+const hasTargetsOrEvidence = (run: RunDetail) =>
+  run.targets.length > 0 || run.evidence.length > 0;
+
+/** Whether the controls slot has anything to offer for this run's state. */
+function hasRunControls(run: RunDetail): boolean {
+  return (
+    run.status === "paused_auth" ||
+    run.status === "paused_offline" ||
+    runActions(run).length > 0 ||
+    Boolean(
+      run.restartInputs ||
+      run.predecessorRunPublicId ||
+      run.successorRunPublicId,
+    ) ||
+    (run.purpose === "purchase_validation" &&
+      run.status === "dispatch_failed" &&
+      run.targets.some((item) => item.state === "needs_evidence"))
+  );
 }
 
 /**
- * Run detail slot for an agent-proposed photo review.
+ * One declared import-run slot. Each slot gates its own visibility on the
+ * shared run read: a slot that does not apply renders nothing and hides its
+ * section card. The `primary` slot also owns the loading and error copy and
+ * the record refresh, so the rest stay quiet until the run has loaded.
  */
-export function RunPhotoBatch({ record }: { record: RunOut }) {
-  return (
-    <RunGate record={record}>
-      {(run) => (
-        <>
-          <RunControls run={run} />
-          <PhotoImportRunView run={run} />
-          {run.dispatch?.eventId ? <AgentSurface run={run} /> : null}
-          <details className="border border-border bg-card p-4">
-            <summary className="cursor-pointer font-medium">
-              Timeline and system log
-            </summary>
-            <div className="mt-4 grid gap-4">
-              <RunTimeline run={run} />
-              <RunDebugLog
-                runId={run.publicId}
-                active={ACTIVE_RUN_STATUSES.has(run.status)}
-              />
-            </div>
-          </details>
-        </>
-      )}
-    </RunGate>
-  );
-}
-
-function RunOperationalSections({
-  run,
-  placement,
+function ImportRunSlot({
+  record,
+  visible = () => true,
+  primary = false,
+  children,
 }: {
-  run: RunDetail;
-  placement: "active" | "terminal";
+  record: RunOut;
+  visible?: (run: RunDetail) => boolean;
+  primary?: boolean;
+  children: (run: RunDetail) => ReactNode;
 }) {
-  if (ACTIVE_RUN_STATUSES.has(run.status) !== (placement === "active"))
-    return null;
+  const runQuery = useSyncedRun(record, primary);
+  const run = runQuery.data;
+  const shown = run ? visible(run) : primary;
+  useSectionVisible(shown);
+  if (!run) {
+    if (!primary) return null;
+    if (runQuery.isError)
+      return (
+        <StatusText tone="destructive">{runQuery.error.message}</StatusText>
+      );
+    return <StatusText>Loading import run…</StatusText>;
+  }
+  return shown ? children(run) : null;
+}
+
+/** Run detail slot: sign-in handoffs, control actions, lineage and restart inputs. */
+export function RunImportControls({ record }: { record: RunOut }) {
   return (
-    <>
-      <RunProgress run={run} />
-      <AgentSurface run={run} />
-    </>
+    <ImportRunSlot record={record} visible={hasRunControls}>
+      {(run) => <RunControls run={run} />}
+    </ImportRunSlot>
   );
 }
 
-// The operational record intentionally renders every durable evidence family
-// together so terminal history cannot silently omit one during refactors. The
-// run record's own fields (trigger, vendor, dispatch, lineage, runtime) render
-// in the generic Run detail around this slot.
-function RunContent({ run }: { run: RunDetail }) {
+/** Run detail slot: the order counts. Owns the shared read's loading and error copy. */
+export function RunImportStats({ record }: { record: RunOut }) {
   return (
-    <Stack gap="lg">
-      <RunControls run={run} />
-      <StatGrid>
-        <StatTile label="Orders seen">{run.ordersSeen}</StatTile>
-        <StatTile label="Imported">{run.imported}</StatTile>
-        <StatTile label="Updated">{run.updated}</StatTile>
-        <StatTile label="Skipped">{run.skipped}</StatTile>
-      </StatGrid>
+    <ImportRunSlot record={record} primary>
+      {(run) => (
+        <StatGrid>
+          <StatTile label="Orders seen">{run.ordersSeen}</StatTile>
+          <StatTile label="Imported">{run.imported}</StatTile>
+          <StatTile label="Updated">{run.updated}</StatTile>
+          <StatTile label="Skipped">{run.skipped}</StatTile>
+        </StatGrid>
+      )}
+    </ImportRunSlot>
+  );
+}
 
-      <RunOperationalSections run={run} placement="active" />
+// A live run leads with its progress and agent; a stopped run carries the
+// same two after its evidence. Both placements are declared, and each shows
+// only in its own state.
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Section title="Purchases changed">
-          {run.affectedPurchases.length > 0 ? (
-            <Stack gap="sm">
-              {run.affectedPurchases.map((purchase) => (
-                <EntityRefLink
-                  key={purchase.shortcode}
-                  entity="purchase"
-                  data={{
-                    id: purchase.shortcode,
-                    orderId: purchase.orderId,
-                    displayLabel: purchase.displayName,
-                  }}
-                  displayImage={null}
-                />
-              ))}
-            </Stack>
-          ) : (
-            <StatusText>No purchases were changed by this run.</StatusText>
-          )}
-        </Section>
+/** Run detail slot: progress and control history while the run is live. */
+export function RunImportProgressActive({ record }: { record: RunOut }) {
+  return (
+    <ImportRunSlot record={record} visible={isActiveRun}>
+      {(run) => <RunProgress run={run} />}
+    </ImportRunSlot>
+  );
+}
 
+/** Run detail slot: the live agent conversation while the run is live. */
+export function RunImportAgentActive({ record }: { record: RunOut }) {
+  return (
+    <ImportRunSlot record={record} visible={isActiveRun}>
+      {(run) => <ActiveAgentSurface run={run} />}
+    </ImportRunSlot>
+  );
+}
+
+/** Run detail slot: progress and control history once the run has stopped. */
+export function RunImportProgressStopped({ record }: { record: RunOut }) {
+  return (
+    <ImportRunSlot record={record} visible={isStoppedRun}>
+      {(run) => <RunProgress run={run} />}
+    </ImportRunSlot>
+  );
+}
+
+/** Run detail slot: the view-only agent history once the run has stopped. */
+export function RunImportAgentStopped({ record }: { record: RunOut }) {
+  return (
+    <ImportRunSlot record={record} visible={isStoppedRun}>
+      {(run) => <TerminalAgentSurface run={run} />}
+    </ImportRunSlot>
+  );
+}
+
+/** Run detail slot: the purchases this run wrote. */
+export function RunImportPurchases({ record }: { record: RunOut }) {
+  return (
+    <ImportRunSlot record={record}>
+      {(run) =>
+        run.affectedPurchases.length > 0 ? (
+          <Stack gap="sm">
+            {run.affectedPurchases.map((purchase) => (
+              <EntityRefLink
+                key={purchase.shortcode}
+                entity="purchase"
+                data={{
+                  id: purchase.shortcode,
+                  orderId: purchase.orderId,
+                  displayLabel: purchase.displayName,
+                }}
+                displayImage={null}
+              />
+            ))}
+          </Stack>
+        ) : (
+          <StatusText>No purchases were changed by this run.</StatusText>
+        )
+      }
+    </ImportRunSlot>
+  );
+}
+
+/** Run detail slot: approval proposals, with grant and reject while pending. */
+export function RunImportApprovals({ record }: { record: RunOut }) {
+  return (
+    <ImportRunSlot record={record}>
+      {(run) => (
         <RunRecordList
-          title="Approvals"
           items={run.approvals}
           empty="No approvals were required for this run."
           render={(approval) => ({
@@ -1418,137 +1483,217 @@ function RunContent({ run }: { run: RunDetail }) {
             ),
           })}
         />
-      </div>
-
-      <RunRecordList
-        title="Findings"
-        items={run.findings}
-        empty="No findings were recorded for this run."
-        render={(finding) => ({
-          key: finding.id,
-          body: (
-            <>
-              <Row wrap gap="sm" align="center">
-                <Badge variant={statusBadgeVariant(finding.status)}>
-                  {finding.status}
-                </Badge>
-                <code className="text-xs">{finding.kind}</code>
-                {finding.autoApplied ? (
-                  <Badge variant="outline">auto-applied</Badge>
-                ) : null}
-              </Row>
-              <p>
-                <ShortcodeProse>{finding.summary}</ShortcodeProse>
-              </p>
-              <p className="font-mono text-xs text-muted-foreground">
-                {formatMoment(finding.createdAt)}
-                {finding.probability == null
-                  ? ""
-                  : ` · ${(finding.probability * 100).toFixed(0)}%`}
-                {finding.expiresAt
-                  ? ` · expires ${formatMoment(finding.expiresAt)}`
-                  : ""}
-              </p>
-            </>
-          ),
-        })}
-      />
-
-      {(run.targets.length > 0 || run.evidence.length > 0) && (
-        <div className="grid gap-4 xl:grid-cols-2">
-          <RunRecordList
-            title="Targets and outcome"
-            description="The selected source and target are frozen for this run."
-            items={run.targets}
-            empty="No explicit targets were recorded for this account sync."
-            render={(target) => ({
-              key: target.id,
-              body: (
-                <>
-                  <Row wrap gap="sm" align="center">
-                    <Badge variant={statusBadgeVariant(target.state)}>
-                      {target.state}
-                    </Badge>
-                    <span className="font-medium">
-                      {target.targetName ??
-                        target.targetShortcode ??
-                        target.targetType}
-                    </span>
-                  </Row>
-                  <p className="text-xs text-muted-foreground">
-                    {target.sourceLabel ?? "No source selected"}
-                    {target.vendorAccountLabel
-                      ? ` · ${target.vendorAccountLabel}`
-                      : ""}
-                  </p>
-                  {target.outcome ? <p>Outcome: {target.outcome}</p> : null}
-                  {target.warning ? (
-                    <StatusText tone="warning">{target.warning}</StatusText>
-                  ) : null}
-                  {target.diff !== null ? (
-                    <details className="border border-border bg-muted/30 p-2 text-xs">
-                      <summary className="cursor-pointer font-medium">
-                        Review semantic difference
-                      </summary>
-                      <ToolValue label="Difference" value={target.diff} />
-                    </details>
-                  ) : null}
-                </>
-              ),
-            })}
-          />
-          <RunRecordList
-            title="Run evidence"
-            description="This evidence belongs to the run. Validation does not attach it to a purchase or product."
-            items={run.evidence}
-            empty="No run-scoped evidence was retained."
-            render={(evidence) => ({
-              key: evidence.id,
-              body: (
-                <>
-                  <span className="font-medium">
-                    {evidence.filename ?? evidence.sourceKind}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {evidence.sourceKind}
-                    {evidence.mediaType ? ` · ${evidence.mediaType}` : ""}
-                    {evidence.checksum ? ` · ${evidence.checksum}` : ""}
-                  </span>
-                </>
-              ),
-            })}
-          />
-        </div>
       )}
+    </ImportRunSlot>
+  );
+}
 
-      <RunRecordList
-        title="Prepared orders"
-        items={run.preparedOrders}
-        empty="No orders were prepared."
-        render={(order) => ({
-          key: order.stableOrderId,
-          body: (
-            <Row wrap gap="sm" align="baseline" justify="between">
-              <span>
-                {order.sourceKind} ·{" "}
-                <code className="text-xs">
-                  {order.externalKey ?? order.stableOrderId}
-                </code>
-              </span>
-              <span className="font-mono text-xs text-muted-foreground tabular-nums">
-                {order.lineCount} lines · {formatMoment(order.preparedAt)}
-              </span>
-            </Row>
-          ),
-        })}
-      />
-      <RunOperationalSections run={run} placement="terminal" />
-      <RunTimeline run={run} />
-      <RunDebugLog
-        runId={run.publicId}
-        active={ACTIVE_RUN_STATUSES.has(run.status)}
-      />
-    </Stack>
+/** Run detail slot: findings the run recorded. */
+export function RunImportFindings({ record }: { record: RunOut }) {
+  return (
+    <ImportRunSlot record={record}>
+      {(run) => (
+        <RunRecordList
+          items={run.findings}
+          empty="No findings were recorded for this run."
+          render={(finding) => ({
+            key: finding.id,
+            body: (
+              <>
+                <Row wrap gap="sm" align="center">
+                  <Badge variant={statusBadgeVariant(finding.status)}>
+                    {finding.status}
+                  </Badge>
+                  <code className="text-xs">{finding.kind}</code>
+                  {finding.autoApplied ? (
+                    <Badge variant="outline">auto-applied</Badge>
+                  ) : null}
+                </Row>
+                <p>
+                  <ShortcodeProse>{finding.summary}</ShortcodeProse>
+                </p>
+                <p className="font-mono text-xs text-muted-foreground">
+                  {formatMoment(finding.createdAt)}
+                  {finding.probability == null
+                    ? ""
+                    : ` · ${(finding.probability * 100).toFixed(0)}%`}
+                  {finding.expiresAt
+                    ? ` · expires ${formatMoment(finding.expiresAt)}`
+                    : ""}
+                </p>
+              </>
+            ),
+          })}
+        />
+      )}
+    </ImportRunSlot>
+  );
+}
+
+/** Run detail slot: the frozen source and target of each account-sync target. */
+export function RunImportTargets({ record }: { record: RunOut }) {
+  return (
+    <ImportRunSlot record={record} visible={hasTargetsOrEvidence}>
+      {(run) => (
+        <RunRecordList
+          description="The selected source and target are frozen for this run."
+          items={run.targets}
+          empty="No explicit targets were recorded for this account sync."
+          render={(target) => ({
+            key: target.id,
+            body: (
+              <>
+                <Row wrap gap="sm" align="center">
+                  <Badge variant={statusBadgeVariant(target.state)}>
+                    {target.state}
+                  </Badge>
+                  <span className="font-medium">
+                    {target.targetName ??
+                      target.targetShortcode ??
+                      target.targetType}
+                  </span>
+                </Row>
+                <p className="text-xs text-muted-foreground">
+                  {target.sourceLabel ?? "No source selected"}
+                  {target.vendorAccountLabel
+                    ? ` · ${target.vendorAccountLabel}`
+                    : ""}
+                </p>
+                {target.outcome ? <p>Outcome: {target.outcome}</p> : null}
+                {target.warning ? (
+                  <StatusText tone="warning">{target.warning}</StatusText>
+                ) : null}
+                {target.diff !== null ? (
+                  <details className="border border-border bg-muted/30 p-2 text-xs">
+                    <summary className="cursor-pointer font-medium">
+                      Review semantic difference
+                    </summary>
+                    <ToolValue label="Difference" value={target.diff} />
+                  </details>
+                ) : null}
+              </>
+            ),
+          })}
+        />
+      )}
+    </ImportRunSlot>
+  );
+}
+
+/** Run detail slot: evidence retained by the run itself. */
+export function RunImportEvidence({ record }: { record: RunOut }) {
+  return (
+    <ImportRunSlot record={record} visible={hasTargetsOrEvidence}>
+      {(run) => (
+        <RunRecordList
+          description="This evidence belongs to the run. Validation does not attach it to a purchase or product."
+          items={run.evidence}
+          empty="No run-scoped evidence was retained."
+          render={(evidence) => ({
+            key: evidence.id,
+            body: (
+              <>
+                <span className="font-medium">
+                  {evidence.filename ?? evidence.sourceKind}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {evidence.sourceKind}
+                  {evidence.mediaType ? ` · ${evidence.mediaType}` : ""}
+                  {evidence.checksum ? ` · ${evidence.checksum}` : ""}
+                </span>
+              </>
+            ),
+          })}
+        />
+      )}
+    </ImportRunSlot>
+  );
+}
+
+/** Run detail slot: orders the agent prepared for import. */
+export function RunImportPreparedOrders({ record }: { record: RunOut }) {
+  return (
+    <ImportRunSlot record={record}>
+      {(run) => (
+        <RunRecordList
+          items={run.preparedOrders}
+          empty="No orders were prepared."
+          render={(order) => ({
+            key: order.stableOrderId,
+            body: (
+              <Row wrap gap="sm" align="baseline" justify="between">
+                <span>
+                  {order.sourceKind} ·{" "}
+                  <code className="text-xs">
+                    {order.externalKey ?? order.stableOrderId}
+                  </code>
+                </span>
+                <span className="font-mono text-xs text-muted-foreground tabular-nums">
+                  {order.lineCount} lines · {formatMoment(order.preparedAt)}
+                </span>
+              </Row>
+            ),
+          })}
+        />
+      )}
+    </ImportRunSlot>
+  );
+}
+
+/** Run detail slot: the durable operation transcript. */
+export function RunImportTimeline({ record }: { record: RunOut }) {
+  return (
+    <ImportRunSlot record={record}>
+      {(run) => <RunTimeline run={run} titled={false} />}
+    </ImportRunSlot>
+  );
+}
+
+/** Run detail slot: structured server and browser-bridge events. */
+export function RunImportDebugLog({ record }: { record: RunOut }) {
+  return (
+    <ImportRunSlot record={record}>
+      {(run) => (
+        <RunDebugLog
+          runId={run.publicId}
+          active={ACTIVE_RUN_STATUSES.has(run.status)}
+          titled={false}
+        />
+      )}
+    </ImportRunSlot>
+  );
+}
+
+/**
+ * Run detail slot for an agent-proposed photo review.
+ */
+export function RunPhotoBatch({ record }: { record: RunOut }) {
+  return (
+    <RunGate record={record}>
+      {(run) => (
+        <>
+          <RunControls run={run} />
+          <PhotoImportRunView run={run} />
+          {run.dispatch?.eventId ? (
+            <Section title={isActiveRun(run) ? "Live agent" : "Agent history"}>
+              <AgentSurface run={run} />
+            </Section>
+          ) : null}
+          <details className="border border-border bg-card p-4">
+            <summary className="cursor-pointer font-medium">
+              Timeline and system log
+            </summary>
+            <div className="mt-4 grid gap-4">
+              <RunTimeline run={run} />
+              <RunDebugLog
+                runId={run.publicId}
+                active={ACTIVE_RUN_STATUSES.has(run.status)}
+              />
+            </div>
+          </details>
+        </>
+      )}
+    </RunGate>
   );
 }
 
