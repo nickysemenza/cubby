@@ -48,7 +48,7 @@ export interface Queryable {
   ): Promise<{ rows: Row[] }>;
 }
 
-export interface Mismatch {
+interface Mismatch {
   id: string;
   key: string;
   reason: string;

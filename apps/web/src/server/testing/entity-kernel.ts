@@ -11,7 +11,7 @@ import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";
 import { createTestRequestContext } from "./request-context";
 
 /** The kernel context every repository method takes, acting as `actor`. */
-export const createTestKernelContext = (
+const createTestKernelContext = (
   db: Database,
   actor: ActorContext,
 ): EntityKernelContext =>

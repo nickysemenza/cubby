@@ -48,7 +48,7 @@ import { getProductUnitMappingsByProductIds } from "~/server/repo/product/unit-m
  * effective unit price — the cent-rounded `pricing.effectivePrice` would leak
  * its rounding into every multiplied valuation.
  */
-export const loadValuationGraphs = async (
+const loadValuationGraphs = async (
   db: Database | DrizzleTransaction,
   productIds: readonly ProductId[],
 ): Promise<ReadonlyMap<ProductId, UnitMapping[]>> => {
@@ -89,13 +89,6 @@ export const loadValuationGraphs = async (
     ]),
   );
 };
-
-/** {@link loadValuationGraphs} for a single Product; `[]` when it has none. */
-export const loadValuationGraph = async (
-  db: Database | DrizzleTransaction,
-  productId: ProductId,
-): Promise<UnitMapping[]> =>
-  (await loadValuationGraphs(db, [productId])).get(productId) ?? [];
 
 /** The columns valuing one inventory row needs. */
 export interface InventoryValuationRow {

@@ -80,7 +80,7 @@ const auditSightingChangesSchema = z.object({
  * as `sightings.<field>` entries, or a lone `sighting` entry when the report
  * changed no tracked field, so the row still says what happened.
  */
-export function readStoredChanges(stored: unknown) {
+function readStoredChanges(stored: unknown) {
   const nested = auditSightingChangesSchema.safeParse(stored);
   if (!nested.success) return auditChangesSchema.parse(stored);
   const fields = Object.values(nested.data.sightings).flatMap((diff) =>

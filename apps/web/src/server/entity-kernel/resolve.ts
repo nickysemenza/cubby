@@ -51,7 +51,7 @@ export interface ResolveRequest<E extends ResolvableEntity> {
   values?: () => Promise<Partial<InferInsertModel<ShortcodeTableFor<E>>>>;
 }
 
-export interface ResolvedRow<E extends ResolvableEntity> {
+interface ResolvedRow<E extends ResolvableEntity> {
   id: EntityId<E>;
   shortcode: string;
   name: string;

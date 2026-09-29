@@ -57,7 +57,7 @@ import {
 
 const cents = (value: number) => Math.round(value * 100);
 
-export type AttachOrderMailFile = typeof attachFileToEntity;
+type AttachOrderMailFile = typeof attachFileToEntity;
 
 /** External seams of the mail pipeline: the classifier model and object storage. */
 export interface OrderMailPorts {
