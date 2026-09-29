@@ -1,11 +1,7 @@
 import type { UserId } from "@cubby/schemas/identifiers";
-import { BACKGROUND_TASK_MESSAGE_VERSION } from "@cubby/schemas/queue-messages";
 
-import {
-  getBackgroundQueue,
-  getCalendarFeedNamespace,
-  getExecutionCtx,
-} from "~/server/cf-env";
+import { enqueueBackgroundTask } from "~/server/background-tasks/publish";
+import { getCalendarFeedNamespace, getExecutionCtx } from "~/server/cf-env";
 
 import type { CalendarFeedState, CalendarCredentialState } from "./contracts";
 
@@ -108,23 +104,16 @@ async function enqueueMarkDirtyFallback(
   origin: string,
   reason: string,
 ): Promise<void> {
-  const queue = getBackgroundQueue();
-  if (!queue) return;
   try {
-    await queue.sendBatch([
+    await enqueueBackgroundTask(
       {
-        body: {
-          version: BACKGROUND_TASK_MESSAGE_VERSION,
-          queueType: "background",
-          task: {
-            kind: "calendar-feed.mark-dirty",
-            requestedAt: new Date().toISOString(),
-            origin,
-            reason,
-          },
-        },
+        kind: "calendar-feed.mark-dirty",
+        requestedAt: new Date().toISOString(),
+        origin,
+        reason,
       },
-    ]);
+      { source: "calendar-feed.mark-dirty-fallback" },
+    );
   } catch (error) {
     // SILENT: the last resort — the in-request retries and the queue both
     // failed inside a committed `waitUntil`, so there is no caller left to
