@@ -141,12 +141,13 @@ export const MCP_TOOLS = defineMcpTools({
     actions: {
       create: mcpAction({
         op: kernelAction("create", "mutation"),
-        description: "Create one record; `data` is that kind's create schema.",
+        description:
+          "Create one record; `data` is that kind's create schema. A recipe also returns `lineCoverage`: per ingredient line, which of price/weight/nutrients are still missing, so an unmapped line is visible before costing is read.",
       }),
       update: mcpAction({
         op: kernelAction("update", "mutation"),
         description:
-          "Patch one record by `id`; fields left out of `data` are unchanged.",
+          "Patch one record by `id`; fields left out of `data` are unchanged. A recipe also returns `lineCoverage` (see create).",
       }),
       delete: mcpAction({
         op: kernelAction("delete", "mutation"),

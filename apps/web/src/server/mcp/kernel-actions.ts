@@ -54,6 +54,7 @@ import {
 } from "~/server/generated/entity-relation-contracts.gen";
 import { previewOperation } from "~/server/operations/entity-integrity-preview.server";
 import { resolveWithProductCandidatesWorkflow } from "~/server/operations/ingredient.server";
+import { recipeLineCoverage } from "~/server/operations/recipe.server";
 import { resolveOrCreatePlants } from "~/server/repo/plant";
 import { resolveProductNames } from "~/server/repo/product";
 
@@ -117,30 +118,58 @@ export type McpEntityExecutor = (
   command: McpEntityCommand,
 ) => Promise<z.output<z.ZodType>>;
 
+const recipeWriteIdentity = z.object({
+  entity: z.literal("recipe"),
+  item: z.object({ id: z.string() }),
+});
+
+/**
+ * A recipe create/update answers with `lineCoverage` beside the entity: per
+ * costed line, which of price / weight / nutrients are still missing. It
+ * lives on the MCP projection only — the entity output schema is unchanged.
+ */
+const recipeLineCoverageOut = z.object({
+  lineCoverage: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        missing: z.array(z.enum(["price", "weight", "nutrients"])),
+      }),
+    )
+    .optional(),
+});
+
 /** A kernel command run through the executor, then projected by `resultDetail`. */
 const commandAction = (
   execute: McpEntityExecutor,
   verb: string,
   input: z.ZodType,
   output: z.ZodType,
+  options: { recipeLineCoverage?: boolean } = {},
 ): KernelMcpAction => ({
   verb,
   input,
   output,
   run: async (raw, extra) => {
     const command = commandWithDetail.parse(raw);
+    const context = getEntityKernelContext(extra);
     const result = z
       .object({ action: z.string(), entity: z.string() })
       .passthrough()
-      .parse(
-        await execute(getEntityKernelContext(extra), kernelCommand(command)),
-      );
+      .parse(await execute(context, kernelCommand(command)));
     // SAFETY: every kernel result names its entity; the projection reads only
     // the manifest title field for it and the published output re-parses.
-    return projectEntityResult(
+    const projected = projectEntityResult(
       command,
       result as Parameters<typeof projectEntityResult>[1],
     );
+    const written = recipeWriteIdentity.safeParse(projected);
+    if (!options.recipeLineCoverage || !written.success) return projected;
+    return {
+      ...projected,
+      lineCoverage: await recipeLineCoverage(context, written.data.item.id),
+    };
   },
 });
 
@@ -260,18 +289,20 @@ export const createKernelMcpActions = (
       "create",
       entityMcpCreateCommandSchema,
       z.union([
-        generatedMcpEntityMutationCreateResultSchema,
+        generatedMcpEntityMutationCreateResultSchema.and(recipeLineCoverageOut),
         entitySummaryResultSchema,
       ]),
+      { recipeLineCoverage: true },
     ),
     update: commandAction(
       execute,
       "update",
       entityMcpUpdateCommandSchema,
       z.union([
-        generatedMcpEntityMutationUpdateResultSchema,
+        generatedMcpEntityMutationUpdateResultSchema.and(recipeLineCoverageOut),
         entitySummaryResultSchema,
       ]),
+      { recipeLineCoverage: true },
     ),
     merge: commandAction(
       execute,

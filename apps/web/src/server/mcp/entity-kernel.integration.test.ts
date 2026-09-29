@@ -12,9 +12,12 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { createMcpServer, listMcpToolCatalog } from "~/server/mcp/server";
+import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import {
   createProductFixture,
+  ingredientRef,
   makeProductInput,
+  makeRecipeInput,
 } from "~/server/repo/repo.fixtures";
 import { refreshSearchDocument } from "~/server/repo/search-document";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -429,6 +432,86 @@ describe("MCP entity kernel boundary", () => {
         { entityKernel },
       );
       expect(result.isError).toBe(true);
+    });
+  });
+
+  describe("recipe write coverage", () => {
+    const lineCoverageSchema = z.object({
+      item: z.object({ id: z.string() }).passthrough(),
+      lineCoverage: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          missing: z.array(z.enum(["price", "weight", "nutrients"])),
+        }),
+      ),
+    });
+
+    it("reports per line what stops costing on create, update, and full detail", async () => {
+      const entityKernel = entityKernelContextSchema.parse(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: testUserId("test-user-id") },
+        }),
+      );
+      const call = (args: ToolArguments) =>
+        callMcpTool(
+          createMcpServer(),
+          "entity",
+          args,
+          kernelRequestContext(entityKernel),
+          { entityKernel },
+        );
+      const [leek, thyme] = await Promise.all(
+        ["coverage leek", "coverage thyme"].map((name) =>
+          findOrCreateIngredient(ctx.db, name),
+        ),
+      );
+
+      const created = await call({
+        action: "create",
+        entity: "recipe",
+        data: makeRecipeInput({
+          name: "Coverage soup",
+          sections: [
+            {
+              name: "Soup",
+              ingredients: [
+                ingredientRef(leek!.shortcode, {
+                  amounts: [{ value: 2, unit: "whole" }],
+                }),
+                ingredientRef(thyme!.shortcode, {
+                  amounts: [{ value: 1, unit: "sprig" }],
+                }),
+              ],
+              instructions: [{ instruction: "Simmer." }],
+            },
+          ],
+        }),
+      });
+      expect(created.isError).not.toBe(true);
+      const summary = lineCoverageSchema.parse(created.structuredContent);
+      expect(summary.lineCoverage.map((line) => line.name)).toEqual([
+        "coverage leek",
+        "coverage thyme",
+      ]);
+      // No product backs either ingredient: nothing to price, weigh or
+      // count nutrients from.
+      expect(summary.lineCoverage.map((line) => line.missing)).toEqual([
+        ["price", "weight", "nutrients"],
+        ["price", "weight", "nutrients"],
+      ]);
+
+      const renamed = await call({
+        action: "update",
+        entity: "recipe",
+        id: summary.item.id,
+        data: { name: "Coverage soup, renamed" },
+        resultDetail: "full",
+      });
+      expect(renamed.isError).not.toBe(true);
+      expect(
+        lineCoverageSchema.parse(renamed.structuredContent).lineCoverage,
+      ).toHaveLength(2);
     });
   });
 });
