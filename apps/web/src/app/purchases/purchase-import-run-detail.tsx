@@ -24,6 +24,11 @@ import { z } from "zod";
 
 import { useSectionVisible } from "~/app/_components/data-table/detail-page";
 import { runHref } from "~/app/purchases/purchase-import-links";
+import {
+  agentUrl,
+  runHasAgent,
+  useAgentObservation,
+} from "~/app/runs/agent-observation";
 import { usePhotoRunReview } from "~/app/runs/photo-group-review";
 import { PhotoImportRunView } from "~/app/runs/photo-run-detail";
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
@@ -661,7 +666,7 @@ function PhotoAgentWorkOverview({
   run: RunDetail;
   messages: readonly FlueConversationMessage[];
 }) {
-  const review = usePhotoRunReview(run.publicId, run.status);
+  const review = usePhotoRunReview(run.publicId, run.status, runHasAgent(run));
   const descriptionWork = summarizePhotoDescriptions(
     review.data?.images ?? [],
     run.startedAt,
@@ -814,10 +819,7 @@ function RunProgress({ run }: { run: RunDetail }) {
 
 function TerminalAgentSurface({ run }: { run: RunDetail }) {
   const client = useMemo(
-    () =>
-      createFlueClient({
-        url: `/api/import/runs/${encodeURIComponent(run.publicId)}/agent`,
-      }),
+    () => createFlueClient({ url: agentUrl(run.publicId) }),
     [run.publicId],
   );
   // The Flue conversation route, not a Cubby operation.
@@ -854,14 +856,11 @@ function ActiveAgentSurface({ run }: { run: RunDetail }) {
   const [prompt, setPrompt] = useState("");
   const queryClient = useQueryClient();
   const client = useMemo(
-    () =>
-      createFlueClient({
-        url: `/api/import/runs/${encodeURIComponent(run.publicId)}/agent`,
-      }),
+    () => createFlueClient({ url: agentUrl(run.publicId) }),
     [run.publicId],
   );
-  const observation = useMemo(() => client.observe({ live: "sse" }), [client]);
-  useEffect(() => () => observation.close(), [observation]);
+  // Shared with the photo review, which refreshes from the same stream.
+  const observation = useAgentObservation(run.publicId);
   const agent = useSyncExternalStore(
     observation.subscribe,
     observation.getSnapshot,
