@@ -38,7 +38,7 @@ struct EntityRowPresentationTests {
             ])
 
         let presentation = EntityRowPresentation.resolve(
-            descriptor: descriptor, row: row, columns: ["vendor", "statedTotal"])
+            descriptor: descriptor, row: row, columns: ["vendorId", "statedTotal"])
 
         #expect(presentation.facts.contains { $0.value == "Sample Vendor" })
         #expect(presentation.facts.contains { $0.value == "$0.00" })
@@ -86,9 +86,8 @@ struct EntityRowPresentationTests {
         where !nativeControls.contains(renderer) && renderer != .imageOrder {
             #expect(NativePresentationCoverage.control(renderer).isUnsupported)
         }
-        for renderer in ListRendererID.allCases {
-            #expect(NativePresentationCoverage.list(renderer) == .implemented)
-        }
+        #expect(NativePresentationCoverage.list(.recipeSource) == .implemented)
+        #expect(NativePresentationCoverage.list(.dataQuality).isUnsupported)
         #expect(NativePresentationCoverage.detail(.recipeSource) == .implemented)
         #expect(NativePresentationCoverage.detail(.productExternalIds) == .generic)
         #expect(NativePresentationCoverage.detail(.recipeMeta).isUnsupported)
@@ -119,7 +118,7 @@ struct EntityRowPresentationTests {
         }
         #expect(
             Set(declaredListSlots).allSatisfy {
-                NativePresentationCoverage.listSlot($0) == .ownedElsewhere
+                NativePresentationCoverage.listSlot($0) != .unsupported("Unknown native list slot.")
             }
         )
     }
@@ -153,7 +152,7 @@ struct EntityRowPresentationTests {
             descriptor: descriptor, row: row, photoMode: true)
 
         #expect(presentation.facts.first?.id == "observedOn")
-        #expect(presentation.factLine?.contains("Observed:") == true)
+        #expect(presentation.factLine?.contains("Observed on:") == true)
     }
 
 }

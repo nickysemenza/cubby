@@ -184,14 +184,16 @@ struct LibraryMetadataSyncTests {
         for _ in 0..<200 where sync.isRunning { try await Task.sleep(for: .milliseconds(10)) }
         #expect(
             try await !store.librarySightingSent(
-                host: "cubby.example", localIdentifier: "asset-0", imageId: "IMG-0", version: 1,
+                host: "cubby.example", localIdentifier: "asset-0", imageId: "IMG-0",
+                version: LibraryMetadataSync.version,
                 modificationDate: Date(timeIntervalSince1970: 1_700_000_200)))
         sync.reconcile()
         for _ in 0..<200 where sync.isRunning { try await Task.sleep(for: .milliseconds(10)) }
         #expect(attempts.withLock { $0 } == 2)
         #expect(
             try await store.librarySightingSent(
-                host: "cubby.example", localIdentifier: "asset-0", imageId: "IMG-0", version: 1,
+                host: "cubby.example", localIdentifier: "asset-0", imageId: "IMG-0",
+                version: LibraryMetadataSync.version,
                 modificationDate: Date(timeIntervalSince1970: 1_700_000_200)))
     }
 
@@ -236,7 +238,8 @@ struct LibraryMetadataSyncTests {
         #expect(sentInputs.withLock { $0 }.count == 1)
 
         let alreadySent = try await store.librarySightingSent(
-            host: "cubby.example", localIdentifier: "asset-1", imageId: "IMG-1", version: 1,
+            host: "cubby.example", localIdentifier: "asset-1", imageId: "IMG-1",
+            version: LibraryMetadataSync.version,
             modificationDate: Date(timeIntervalSince1970: 1_700_000_200))
         #expect(alreadySent)
 
@@ -254,7 +257,8 @@ struct LibraryMetadataSyncTests {
     @Test func alreadySentCandidatesAreExcludedFromTheTotal() async throws {
         let store = try PhotoAnalysisStore.make(inMemory: true)
         try await store.markLibrarySightingSent(
-            host: "cubby.example", localIdentifier: "asset-a", imageId: "IMG-A", version: 1,
+            host: "cubby.example", localIdentifier: "asset-a", imageId: "IMG-A",
+            version: LibraryMetadataSync.version,
             modificationDate: Date(timeIntervalSince1970: 1_700_000_200), cloudIdentifier: nil)
         let sentInputs = Mutex<[ImageSightingRecordItem]>([])
         let sync = makeSync(
