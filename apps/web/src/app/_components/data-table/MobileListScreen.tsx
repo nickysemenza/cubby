@@ -1,12 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
-import { ListDashesIcon } from "@phosphor-icons/react/dist/csr/ListDashes";
 import type { RowData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
-import { Button } from "~/components/ui/button";
 import { PullToRefresh } from "~/components/ui/pull-to-refresh";
 import { useHydrated } from "~/hooks/useHydrated";
 import { cn } from "~/lib/utils";
@@ -85,30 +82,17 @@ export function MobileListScreen<TItem extends RowData>({
   // up. Without it a phone's first paint is a clipped desktop table.
   const hydrated = useHydrated();
 
-  const groupToggle =
-    groupConfig && onGroupedChange ? (
-      <Button
-        variant="ghost"
-        size="icon-lg"
-        className="size-11 shrink-0"
-        onClick={() => onGroupedChange(!grouped)}
-        aria-label={grouped ? "Show flat list" : "Show grouped list"}
-      >
-        {grouped ? (
-          <ListIcon className="size-4" />
-        ) : (
-          <ListDashesIcon className="size-4" />
-        )}
-      </Button>
-    ) : null;
+  // The band is seg, search and Filter only: grouping is a row of the Filter
+  // sheet (see `MobileFilterTier`), not an icon button beside them.
+  const grouping =
+    groupConfig && onGroupedChange
+      ? { grouped, onChange: onGroupedChange }
+      : undefined;
 
   // The desktop table header doesn't render filter controls; this shared
   // toolbar gives phones the same filter builder.
   const toolbarContent = (
-    <div className="flex items-center gap-2">
-      {additionalToolbarContent}
-      {groupToggle}
-    </div>
+    <div className="flex items-center gap-2">{additionalToolbarContent}</div>
   );
 
   return (
@@ -126,6 +110,7 @@ export function MobileListScreen<TItem extends RowData>({
           table={table}
           entity={entity}
           additionalContent={toolbarContent}
+          grouping={grouping}
           actions={actions}
           bulkActionBar={bulkActionBar}
           showViewOptions={showViewOptions}
