@@ -1,9 +1,14 @@
-import { seedInventoryPrerequisites } from "./e2e-fixtures";
+import {
+  seedInventoryPrerequisites,
+  seedLocationPrerequisite,
+} from "./e2e-fixtures";
+import { seedLedgerProduct } from "./inventory-flow-fixtures";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import {
   SHORTCODE,
   gotoAuthenticatedPage,
   reloadAuthenticatedPage,
+  uniqueName,
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
@@ -103,4 +108,72 @@ test("recount is current-pass scoped, resumable, and completes with a summary", 
   await expect(
     page.getByRole("button", { name: "Finish — rest are present (2)" }),
   ).toBeVisible();
+});
+
+test("variance recount queues exactly the locations holding disagreeing products", async ({
+  page,
+}, testInfo) => {
+  const disagreeingBin = uniqueName(testInfo, "Variance bin");
+  const otherDisagreeingBin = uniqueName(testInfo, "Variance shelf");
+  const agreeingBin = uniqueName(testInfo, "Agreeing bin");
+  const [disagreeing, otherDisagreeing, agreeing] = await Promise.all([
+    seedLocationPrerequisite(page, disagreeingBin),
+    seedLocationPrerequisite(page, otherDisagreeingBin),
+    seedLocationPrerequisite(page, agreeingBin),
+  ]);
+  const driftedProduct = uniqueName(testInfo, "Drifted wrench");
+  // Bought three, one on the shelf: the shelf disagrees with the ledger.
+  await seedLedgerProduct(page, {
+    name: driftedProduct,
+    bought: 3,
+    stocked: { locationId: disagreeing.id, quantity: 1 },
+  });
+  await seedLedgerProduct(page, {
+    name: uniqueName(testInfo, "Drifted clamp"),
+    bought: 2,
+    stocked: { locationId: otherDisagreeing.id, quantity: 1 },
+  });
+  // Bought one, one on the shelf: agrees, so its bin is not a stop.
+  await seedLedgerProduct(page, {
+    name: uniqueName(testInfo, "Settled level"),
+    bought: 1,
+    stocked: { locationId: agreeing.id, quantity: 1 },
+  });
+
+  const binButton = (name: string) =>
+    page.getByRole("button", { name: new RegExp(name) });
+  await gotoAuthenticatedPage(
+    page,
+    "/inventory/session?worklist=shelf-disagrees",
+    binButton(disagreeingBin),
+  );
+  await expect(binButton(otherDisagreeingBin)).toBeVisible();
+  await expect(binButton(agreeingBin)).toHaveCount(0);
+
+  // Full bins, the existing workbench: opening a stop shows its whole contents
+  // and Finish commits the recount for that bin only.
+  await binButton(disagreeingBin).click();
+  await expect(
+    page.getByRole("main").getByText(driftedProduct, { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Finish — rest are present (1)" })
+    .click();
+  await expect(page.getByText("Bin recount saved.")).toBeVisible({
+    timeout: 15000,
+  });
+});
+
+test("the shelf-disagrees view offers a recount of its worklist", async ({
+  page,
+}) => {
+  await gotoAuthenticatedPage(
+    page,
+    "/products",
+    page.getByRole("button", { name: "Actions" }),
+  );
+  await page.getByRole("button", { name: "Actions" }).click();
+  await page.getByRole("menuitem", { name: /Saved views/ }).click();
+  await page.getByRole("menuitem", { name: /Recount these/ }).click();
+  await expect(page).toHaveURL(/\/inventory\/session\?worklist=shelf-disagrees/);
 });

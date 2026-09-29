@@ -43,6 +43,7 @@ import {
 import { formatRelative } from "~/lib/date-format";
 import { getErrorMessage } from "~/lib/error-utils";
 
+import type { RecountWorklist } from "../worklist/worklist-locations";
 import { LocationReviewPane } from "./_components/LocationReviewPane";
 import { MoveToDialog } from "./_components/MoveToDialog";
 import { ParentPicker } from "./_components/ParentPicker";
@@ -57,17 +58,24 @@ import type {
 } from "./_components/types";
 import {
   findLocationInTree,
-  findLocationInTreeByShortcode,
   findParentLocation,
-  flattenAuditableLocations,
   getUnknownChildLocations,
   type SessionLocation,
 } from "./session-utils";
 import { useSessionMutations } from "./useSessionMutations";
 import { useSessionProgress } from "./useSessionProgress";
+import { type SessionScope, useSessionScope } from "./useSessionScope";
 
 interface InventorySessionWorkbenchProps {
   initialParentShortcode?: LocationShortcode;
+  /** Recount a saved view's products instead of a location's subtree. */
+  worklist?: RecountWorklist;
+}
+
+interface LoadFailure {
+  title: string;
+  error: unknown;
+  onRetry: () => void;
 }
 
 type SessionProgressState = ReturnType<typeof useSessionProgress>;
@@ -75,12 +83,10 @@ type SessionSummary = SessionProgressState["summary"];
 type ResumeCandidate = SessionProgressState["resumeCandidate"];
 
 interface InventorySessionContentProps {
-  treeLoading: boolean;
-  treeFailed: boolean;
-  treeError: unknown;
-  onRetryTree: () => void;
+  scopeLoading: boolean;
+  loadFailure: LoadFailure | null;
   treeLocations: InfLocation[];
-  parent: InfLocation | null;
+  scope: SessionScope | null;
   locations: SessionLocation[];
   initialParentShortcode?: LocationShortcode;
   inventoryError: unknown;
@@ -96,6 +102,7 @@ interface InventorySessionContentProps {
   onStartNew: () => void;
   onRevisitSkipped: () => void;
   onSelectLocation: (shortcode: LocationShortcode) => void;
+  onSelectWorklist: (worklist: RecountWorklist) => void;
   passLocations: SessionLocation[];
   currentIndex: number;
   currentLocation: SessionLocation | null;
@@ -135,6 +142,7 @@ interface InventorySessionContentProps {
 
 export function InventorySessionWorkbench({
   initialParentShortcode,
+  worklist,
 }: InventorySessionWorkbenchProps) {
   const navigate = useNavigate();
   const ensureUnknownStarted = useRef(false);
@@ -153,16 +161,12 @@ export function InventorySessionWorkbench({
     ensureUnknown.mutate(undefined);
   }, [ensureUnknown]);
 
-  const parent = useMemo(
-    () => findLocationInTreeByShortcode(tree, initialParentShortcode),
-    [tree, initialParentShortcode],
-  );
-  const sessionLocations = useMemo(
-    () => (parent ? flattenAuditableLocations(parent) : []),
-    [parent],
-  );
-
-  const rootId = parent?.id ?? null;
+  const { sessionLocations, scope, rootId, worklistLoading, worklistFailure } =
+    useSessionScope({
+      tree,
+      initialParentShortcode,
+      worklist,
+    });
 
   const {
     startedAt,
@@ -581,17 +585,30 @@ export function InventorySessionWorkbench({
     });
   };
 
+  const selectWorklist = (next: RecountWorklist) => {
+    void navigate({
+      to: "/inventory/session",
+      search: { worklist: next },
+    });
+  };
+
   // Resolved by the pass, against the queue the cursor actually indexes.
   const jumpToLocation = jumpToId;
 
   return (
     <InventorySessionContent
-      treeLoading={treeLoading}
-      treeFailed={treeQuery.isError}
-      treeError={treeQuery.isError ? treeQuery.error : null}
-      onRetryTree={() => void treeQuery.refetch()}
+      scopeLoading={treeLoading || worklistLoading}
+      loadFailure={
+        treeQuery.isError
+          ? {
+              title: "Couldn't load locations for a recount",
+              error: treeQuery.error,
+              onRetry: () => void treeQuery.refetch(),
+            }
+          : worklistFailure
+      }
       treeLocations={tree ?? []}
-      parent={parent}
+      scope={scope}
       locations={sessionLocations}
       initialParentShortcode={initialParentShortcode}
       inventoryError={inventoryQuery.error ?? trayInventoryQuery.error}
@@ -610,6 +627,7 @@ export function InventorySessionWorkbench({
       onStartNew={startNewPass}
       onRevisitSkipped={revisitSkipped}
       onSelectLocation={selectParent}
+      onSelectWorklist={selectWorklist}
       passLocations={passLocations}
       currentIndex={currentIndex}
       currentLocation={currentLocation}
@@ -655,12 +673,10 @@ export function InventorySessionWorkbench({
 
 function InventorySessionContent(props: InventorySessionContentProps) {
   const {
-    treeLoading,
-    treeFailed,
-    treeError,
-    onRetryTree,
+    scopeLoading,
+    loadFailure,
     treeLocations,
-    parent,
+    scope,
     locations,
     initialParentShortcode,
     inventoryError,
@@ -676,8 +692,9 @@ function InventorySessionContent(props: InventorySessionContentProps) {
     onStartNew,
     onRevisitSkipped,
     onSelectLocation,
+    onSelectWorklist,
   } = props;
-  if (treeLoading) {
+  if (scopeLoading) {
     return (
       <Row align="center" justify="center" className="min-h-80">
         <Spinner />
@@ -685,25 +702,27 @@ function InventorySessionContent(props: InventorySessionContentProps) {
     );
   }
 
-  // The location tree names the frozen session scope. Do not turn a failed
-  // tree into an empty picker, because choosing or resuming then would present
-  // a recount against an unknown set of physical locations.
-  if (treeFailed) {
+  // The location tree (and, for a worklist, its product snapshot) names the
+  // frozen session scope. Do not turn a failed read into an empty picker or an
+  // empty worklist, because choosing or resuming then would present a recount
+  // against an unknown set of physical locations.
+  if (loadFailure) {
     return (
       <InventorySessionLoadError
-        title="Couldn't load locations for a recount"
-        detail={getErrorMessage(treeError)}
-        onRetry={onRetryTree}
+        title={loadFailure.title}
+        detail={getErrorMessage(loadFailure.error)}
+        onRetry={loadFailure.onRetry}
       />
     );
   }
 
-  if (!parent) {
+  if (!scope) {
     return (
       <ParentPicker
         locations={treeLocations}
         initialParentShortcode={initialParentShortcode}
         onSelect={onSelectLocation}
+        onSelectWorklist={onSelectWorklist}
       />
     );
   }
@@ -712,12 +731,17 @@ function InventorySessionContent(props: InventorySessionContentProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>No auditable locations under {parent.name}</CardTitle>
+          <CardTitle>
+            {scope.worklist
+              ? `Nothing to recount for ${scope.title}`
+              : `No auditable locations under ${scope.title}`}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Description>
-            Add shelves, bins, drawers, cabinets, boxes, crates, carts, tables,
-            or bags under this location before starting a session.
+            {scope.worklist
+              ? "No stocked product currently disagrees with its ledger count, or none of them has a shelf entry to count."
+              : "Add shelves, bins, drawers, cabinets, boxes, crates, carts, tables, or bags under this location before starting a session."}
           </Description>
         </CardContent>
       </Card>
@@ -729,7 +753,7 @@ function InventorySessionContent(props: InventorySessionContentProps) {
   if (inventoryFailed) {
     return (
       <InventorySessionLoadError
-        title={`Couldn't load inventory for ${parent.name}`}
+        title={`Couldn't load inventory for ${scope.title}`}
         detail={getErrorMessage(inventoryError)}
         onRetry={onRetryInventory}
       />
@@ -745,7 +769,7 @@ function InventorySessionContent(props: InventorySessionContentProps) {
           // tree is the better answer in that case.
           totalCount: resumeCandidate.totalCount || locations.length,
         }}
-        title={`Resume ${parent.name} recount?`}
+        title={`Resume ${scope.title} recount?`}
         itemNoun="locations"
         detail="Staged choices are still waiting on this device."
         resumeLabel="Resume recount"
@@ -767,7 +791,7 @@ function InventorySessionContent(props: InventorySessionContentProps) {
   if (passComplete) {
     return (
       <SessionComplete
-        parent={parent}
+        title={scope.title}
         startedAt={startedAt}
         summary={summary}
         skippedCount={skippedCount}
@@ -778,11 +802,11 @@ function InventorySessionContent(props: InventorySessionContentProps) {
     );
   }
 
-  return <InventorySessionActive {...props} parent={parent} />;
+  return <InventorySessionActive {...props} scope={scope} />;
 }
 
 function InventorySessionActive({
-  parent,
+  scope,
   passLocations,
   currentIndex,
   currentLocation,
@@ -814,14 +838,14 @@ function InventorySessionActive({
   onCloseMoveTarget,
   moveTarget,
   onConfirmMoveTo,
-}: InventorySessionContentProps & { parent: InfLocation }) {
+}: InventorySessionContentProps & { scope: SessionScope }) {
   return (
     <Stack
       gap="md"
       className="min-w-0 pb-[calc(var(--app-chrome-bottom)+1rem)] md:pb-0"
     >
       <MobileLocationSwitcher
-        parent={parent}
+        title={scope.title}
         locations={passLocations}
         currentId={currentLocation?.id ?? null}
         currentIndex={currentIndex}
@@ -831,14 +855,14 @@ function InventorySessionActive({
         skippedLocationIds={skippedLocationIds}
         onSelect={onJumpToLocation}
         onScanJump={onScanJump}
-        parentLocation={parent}
+        scopeRoots={scope.roots}
         currentLocation={currentLocation?.location ?? null}
         onAdoptLocation={onAdoptLocation}
       />
 
       <div className="grid min-h-[calc(100dvh-10rem)] min-w-0 gap-4 lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start">
         <LocationWorkbenchSidebar
-          parent={parent}
+          title={scope.title}
           locations={passLocations}
           currentId={currentLocation?.id ?? null}
           inventoryByLocation={inventoryByLocation}
@@ -847,14 +871,14 @@ function InventorySessionActive({
           skippedLocationIds={skippedLocationIds}
           onSelect={onJumpToLocation}
           onScanJump={onScanJump}
-          parentLocation={parent}
+          scopeRoots={scope.roots}
           currentLocation={currentLocation?.location ?? null}
           onAdoptLocation={onAdoptLocation}
         />
 
         {currentLocation && (
           <LocationReviewPane
-            parent={parent}
+            scopeRoots={scope.roots}
             location={currentLocation}
             items={inventoryByLocation.get(currentLocation.id) ?? []}
             quantitySummaries={quantitySummaries}
@@ -927,7 +951,7 @@ function InventorySessionLoadError({
 }
 
 function SessionComplete({
-  parent,
+  title,
   startedAt,
   summary,
   skippedCount,
@@ -935,7 +959,7 @@ function SessionComplete({
   onRevisitSkipped,
   onSelectLocation,
 }: {
-  parent: InfLocation;
+  title: string;
   startedAt: number;
   summary: ReturnType<typeof useSessionProgress>["summary"];
   skippedCount: number;
@@ -951,7 +975,7 @@ function SessionComplete({
           <CheckCircleIcon className="size-6 text-positive" />
           <div>
             <h2>
-              <CardTitle>{parent.name} recount complete</CardTitle>
+              <CardTitle>{title} recount complete</CardTitle>
             </h2>
             <Description>
               Finished a pass started {formatRelative(startedAt)}.
@@ -997,7 +1021,7 @@ function SessionComplete({
               onClick={onStartNew}
             >
               <ArrowCounterClockwiseIcon />
-              Recount {parent.name} again
+              Recount {title} again
             </Button>
             <Link
               to="/inventory"

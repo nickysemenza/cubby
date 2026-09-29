@@ -86,11 +86,23 @@ interface ViewProblem {
   emptyMessage: string;
 }
 
+/**
+ * A guided pass a view leads into, offered beside the view in the saved-views
+ * menu. A declaration, not a route: this module stays dependency-free, and the
+ * menu owns the mapping from `kind` to a typed link.
+ */
+interface ViewFlow {
+  kind: "recount-worklist";
+  label: string;
+}
+
 export interface ViewDefinition {
   id: string;
   label: string;
   description: string;
   filters: ViewFilter[];
+  /** The guided pass this view's rows can be worked through. */
+  flow?: ViewFlow;
   sort?: Array<{ id: string; desc: boolean }>;
   /** Optional curated layout. Applying it replaces every layout slice after
    * normalization against the table's current code-defined columns. */
@@ -277,6 +289,9 @@ export const viewManifest = defineViewManifest({
       // narrower acquisition-history gap — more recorded units gone than
       // arrived — is surfaced separately as `negativeExpectedQuantity`.
       filters: [{ id: "quantityVariance", value: "mismatched" }],
+      // Snapshots this product set, then recounts every location holding it —
+      // full bins, so the pass confirms the whole shelf rather than one row.
+      flow: { kind: "recount-worklist", label: "Recount these" },
       // Both hidden by default on a table this wide, so the view has to reveal
       // them — otherwise it selects rows on a signal nothing on screen explains.
       // `servingAsLocations` joins them because a product can now be short

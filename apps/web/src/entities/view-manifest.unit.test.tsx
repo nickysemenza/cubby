@@ -3,6 +3,8 @@ import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 import { recipeSourceValues } from "@cubby/schemas/recipe";
 import { describe, expect, it } from "vitest";
 
+import { RECOUNT_WORKLISTS } from "~/app/inventory/worklist/worklist-locations";
+
 import { getEntityFilters } from "./filter-manifest";
 import {
   buildFiltersFromManifest,
@@ -571,4 +573,16 @@ describe("optional scratch views", () => {
       expect(Object.hasOwn(PROBLEM_CLASS, key)).toBe(false);
     },
   );
+});
+
+// The saved-views menu maps a view flow to a fixed route search, so each flow
+// kind is only valid on a view the destination route can scope to.
+describe("views that lead into a guided pass", () => {
+  it("declares the recount flow only on a view the session can scope to", () => {
+    const flowViews = (viewManifest.product ?? []).filter(
+      (view) => view.flow?.kind === "recount-worklist",
+    );
+    expect(flowViews.map((view) => view.id)).toEqual(["shelf-disagrees"]);
+    for (const view of flowViews) expect(RECOUNT_WORKLISTS).toContain(view.id);
+  });
 });

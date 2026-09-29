@@ -145,6 +145,26 @@ export function getUnknownChildLocations(
   return unknownLocation?.children ?? [];
 }
 
+function toSessionLocation(
+  node: InfLocation,
+  path: string[],
+  depth: number,
+): SessionLocation {
+  return {
+    id: node.id,
+    name: node.name,
+    type: node.type,
+    product: node.product,
+    shortcode: node.id,
+    lastBulkInventory: node.lastBulkInventory,
+    aiDescription: node.aiDescription,
+    imageCount: node.images?.length ?? 0,
+    path,
+    depth,
+    location: node,
+  };
+}
+
 export function flattenAuditableLocations(
   parent: InfLocation,
 ): SessionLocation[] {
@@ -156,19 +176,7 @@ export function flattenAuditableLocations(
     // has no snapshot to confirm, so it is not a stop and receives no implicit
     // audit stamp. Its stocked descendants still remain independent stops.
     if ((node.directItemCount ?? 0) > 0) {
-      out.push({
-        id: node.id,
-        name: node.name,
-        type: node.type,
-        product: node.product,
-        shortcode: node.id,
-        lastBulkInventory: node.lastBulkInventory,
-        aiDescription: node.aiDescription,
-        imageCount: node.images?.length ?? 0,
-        path: nextPath,
-        depth,
-        location: node,
-      });
+      out.push(toSessionLocation(node, nextPath, depth));
     }
 
     for (const child of node.children ?? []) {
@@ -178,6 +186,30 @@ export function flattenAuditableLocations(
 
   visit(parent, [], 0);
 
+  return out;
+}
+
+/**
+ * The stops for a worklist scope: exactly the named locations, in tree order.
+ *
+ * Unlike {@link flattenAuditableLocations} this does not require a rooted
+ * subtree — the ids come from a product-set snapshot and can sit anywhere — and
+ * it does not re-apply the `directItemCount` gate, because the set was resolved
+ * from live stock entries. `depth` is 0 for every stop: the worklist list is
+ * flat, and indenting by tree depth would imply a hierarchy the pass ignores.
+ * An id the tree no longer holds is dropped rather than rendered as a hole.
+ */
+export function sessionLocationsForIds(
+  tree: readonly InfLocation[],
+  ids: ReadonlySet<string>,
+): SessionLocation[] {
+  const out: SessionLocation[] = [];
+  const visit = (node: InfLocation, path: string[]) => {
+    const nextPath = [...path, node.name];
+    if (ids.has(node.id)) out.push(toSessionLocation(node, nextPath, 0));
+    for (const child of node.children ?? []) visit(child, nextPath);
+  };
+  for (const root of tree) visit(root, []);
   return out;
 }
 
@@ -254,7 +286,7 @@ export type ScannedLocationRelation =
   | "elsewhere";
 
 export function classifyScannedLocation(
-  root: InfLocation,
+  root: InfLocation | InfLocation[],
   current: InfLocation,
   targetId: string,
 ): ScannedLocationRelation {
@@ -264,7 +296,9 @@ export function classifyScannedLocation(
   // An ancestor is any node on the path from the tree root down to `current`.
   // Reading it off the tree beats walking `parentId` links, which the session's
   // in-memory nodes do not all carry.
-  const ancestors = flattenAllLocations([root]).filter(
+  const ancestors = flattenAllLocations(
+    Array.isArray(root) ? root : [root],
+  ).filter(
     (node) => node.id !== current.id && isDescendantLocation(node, current.id),
   );
   if (ancestors.some((node) => node.id === targetId)) return "ancestor";
@@ -301,15 +335,26 @@ function locationPathFromRoot(
   return [];
 }
 
+/**
+ * The path to a stop, read from the scope's root — or, for a worklist scope,
+ * from whichever tree root holds it.
+ */
 export function sessionBreadcrumbSegments(
-  parent: InfLocation,
+  root: InfLocation | InfLocation[],
   locationId: string,
 ) {
-  return locationPathFromRoot(parent, locationId).map((location) => ({
-    id: location.id,
-    name: location.name,
-    type: location.type,
-  }));
+  const roots = Array.isArray(root) ? root : [root];
+  for (const candidate of roots) {
+    const path = locationPathFromRoot(candidate, locationId);
+    if (path.length > 0) {
+      return path.map((location) => ({
+        id: location.id,
+        name: location.name,
+        type: location.type,
+      }));
+    }
+  }
+  return [];
 }
 
 export function formatChildCount(count: number) {
