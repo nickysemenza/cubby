@@ -426,6 +426,15 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
+    file: "finance-itemization.spec.ts",
+    globs: [
+      `${WEB}/src/routes/_authenticated/financial-transactions.index.tsx`,
+      `${WEB}/src/entities/list-columns/finance.tsx`,
+      `${WEB}/src/server/repo/financial-transaction.ts`,
+      `${WEB}/src/server/repo/financial-reconciliation.ts`,
+    ],
+  },
+  {
     file: "purchase-split-settlement.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/purchases.$shortcode.tsx`,
