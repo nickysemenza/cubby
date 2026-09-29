@@ -27,6 +27,8 @@ import {
   type addRecipeNutritionDetail,
   type compactEstimate,
   type dailyIntakeInput,
+  type mealCopyRangeInput,
+  type mealDuplicateInput,
   mealContract,
 } from "~/contracts/meal.contract";
 import { householdLocalDate } from "~/lib/household-date";
@@ -41,6 +43,8 @@ import {
   saveMealRecipePreparation,
   updateMealRecipeWithEntityId,
 } from "~/server/repo/meal";
+import { getMealByID } from "~/server/repo/meal";
+import { copyMealRange, duplicateMeal } from "~/server/repo/meal/copy";
 import { saveMealFood, removeMealFood } from "~/server/repo/meal/food";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import type {
@@ -109,6 +113,43 @@ export const addRecipeToMealWorkflow = bindWorkflow(
       refreshMealEmbedding(context.db, mealId, "meal.addRecipe"),
     )
     .output(({ updated }) => updated),
+);
+
+export const duplicateMealWorkflow = bindWorkflow(
+  workflow<MealMutationContext, typeof mealDuplicateInput._output>(
+    "meal.duplicate",
+  )
+    .call("mealId", async ({ context }, { input }) =>
+      mealShortcodes.one(context.db, input.mealId),
+    )
+    .commit("copied", async ({ context }, { input, mealId }) =>
+      duplicateMeal(context.db, context.actorContext, mealId, input.date),
+    )
+    .effect("embeddings", async ({ context }, { copied }) =>
+      Promise.all(
+        copied.mealIds.map((id) =>
+          refreshMealEmbedding(context.db, id, "meal.duplicate"),
+        ),
+      ),
+    )
+    .output(({ copied }) => copied),
+);
+
+export const copyMealRangeWorkflow = bindWorkflow(
+  workflow<MealMutationContext, typeof mealCopyRangeInput._output>(
+    "meal.copyRange",
+  )
+    .commit("copied", async ({ context }, { input }) =>
+      copyMealRange(context.db, context.actorContext, input),
+    )
+    .effect("embeddings", async ({ context }, { copied }) =>
+      Promise.all(
+        copied.mealIds.map((id) =>
+          refreshMealEmbedding(context.db, id, "meal.copyRange"),
+        ),
+      ),
+    )
+    .output(({ copied }) => copied),
 );
 
 export async function updateMealRecipeWorkflow(
@@ -293,6 +334,20 @@ export const mealHandlers = implementOperationDomain(mealContract, {
     getShoppingListWorkflow(context.db, input, context.services.availability),
   addRecipe: async (context, input) =>
     (await addRecipeToMealWorkflow(context, input)).meal,
+  duplicate: async (context, input) => {
+    const copied = await duplicateMealWorkflow(context, input);
+    const created = await getMealByID(context.db, copied.mealIds[0]!);
+    if (!created) throw new Error("Duplicated meal could not be reloaded");
+    return created;
+  },
+  copyRange: async (context, input) => {
+    const copied = await copyMealRangeWorkflow(context, input);
+    return {
+      copied: copied.mealIds.length,
+      mealIds: copied.mealShortcodes,
+      skippedPortions: copied.skippedPortions,
+    };
+  },
   updateRecipe: (context, input) => updateMealRecipeWorkflow(context, input),
   removeRecipe: (context, input) => removeMealRecipeWorkflow(context, input),
   savePreparation: (context, input) =>
