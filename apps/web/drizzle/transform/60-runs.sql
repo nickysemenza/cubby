@@ -29,16 +29,23 @@ ALTER TABLE "Run" DROP CONSTRAINT "Run_purpose_check";
 -- an already-migrated hour joins its keeper.
 CREATE TEMP TABLE "_runs_ai_action" ON COMMIT DROP AS
 SELECT
-  r."id",
-  first_value(r."id") OVER (
-    PARTITION BY r."actorUserId", r."channel", date_trunc('hour', r."startedAt")
-    ORDER BY r."startedAt", r."id"
+  k."id",
+  -- Partition by the key itself: the system channel omits the actor, so
+  -- partitioning by actor could give two keepers the same unique clientKey.
+  first_value(k."id") OVER (
+    PARTITION BY k."clientKey" ORDER BY k."startedAt", k."id"
   ) AS "keeperId",
-  r."channel" || ':'
-    || CASE WHEN r."channel" = 'system' THEN '' ELSE r."actorUserId" || ':' END
-    || to_char(date_trunc('hour', r."startedAt"), 'YYYY-MM-DD"T"HH24') AS "clientKey"
-FROM "Run" r
-WHERE r."purpose" = 'ai_action';
+  k."clientKey"
+FROM (
+  SELECT
+    r."id",
+    r."startedAt",
+    r."channel" || ':'
+      || CASE WHEN r."channel" = 'system' THEN '' ELSE r."actorUserId" || ':' END
+      || to_char(date_trunc('hour', r."startedAt"), 'YYYY-MM-DD"T"HH24') AS "clientKey"
+  FROM "Run" r
+  WHERE r."purpose" = 'ai_action'
+) k;
 
 -- Point every single-column reference to a run being merged at its keeper
 -- (AiUsage.runId has no ON DELETE; AuditLog.runId would silently null).

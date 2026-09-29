@@ -101,8 +101,8 @@ async function commonMetrics(db: Queryable, m: Metrics): Promise<void> {
   await grouped(
     db,
     "spend",
-    `SELECT to_char(date_trunc('month', "date"), 'YYYY-MM') || (CASE WHEN "deletedAt" IS NULL THEN ':live' ELSE ':deleted' END) AS k,
-            count(*) || '/' || coalesce(sum("cost"), 0)::text AS n
+    `SELECT coalesce(to_char(date_trunc('month', "date"), 'YYYY-MM'), 'undated') || (CASE WHEN "deletedAt" IS NULL THEN ':live' ELSE ':deleted' END) AS k,
+            count(*) || '/' || coalesce(sum("cost"::numeric), 0)::text AS n
      FROM "Expense" GROUP BY 1`,
     m,
   );
@@ -178,13 +178,22 @@ export async function snapshot(db: Queryable): Promise<Metrics> {
   );
   m["locationDescription.live"] = await one(
     db,
-    `SELECT count(*) AS n FROM "Location" WHERE "aiDescription" IS NOT NULL`,
+    `SELECT count(*) AS n FROM "Location" WHERE btrim(coalesce("aiDescription", '')) <> ''`,
   );
   m["run.mailSearch"] = await one(
     db,
     `SELECT count(*) AS n FROM "VendorMailSearchJob"`,
   );
   m["run.total"] = await one(db, `SELECT count(*) AS n FROM "Run"`);
+  m["run.aiAction"] = await one(
+    db,
+    `SELECT count(*) AS n FROM "Run" WHERE purpose = 'ai_action'`,
+  );
+  // One keeper per clientKey, exactly as 60-runs groups them.
+  m["run.aiActionGroups"] = await one(
+    db,
+    `SELECT count(DISTINCT channel || ':' || CASE WHEN channel = 'system' THEN '' ELSE "actorUserId" || ':' END || to_char(date_trunc('hour', "startedAt"), 'YYYY-MM-DD"T"HH24')) AS n FROM "Run" WHERE purpose = 'ai_action'`,
+  );
   m["orderMail.pendingBytes"] = await one(
     db,
     `SELECT count(*) AS n FROM "OrderMailAttachment" WHERE "pendingDataBase64Url" IS NOT NULL`,
@@ -284,6 +293,8 @@ export function compare(pre: Metrics, post: Metrics): string[] {
     "audit.imageSighting",
     "audit.unmirroredRunMutation",
     "run.total",
+    "run.aiAction",
+    "run.aiActionGroups",
   ]);
   const keys = new Set([...Object.keys(pre), ...Object.keys(post)]);
   for (const key of keys) {
@@ -313,13 +324,15 @@ export function compare(pre: Metrics, post: Metrics): string[] {
   expect("entity.imageSighting", 0, post["entity.imageSighting"]);
   expect("run.entityMismatch", 0, post["run.entityMismatch"]);
   expect("aiUsage.orphanRun", 0, post["aiUsage.orphanRun"]);
-  if (
-    Number(post["run.total"]) >
-    Number(pre["run.total"]) + Number(pre["run.mailSearch"])
-  )
-    problems.push(
-      `run.total grew unexpectedly: ${pre["run.total"]} -> ${post["run.total"]}`,
-    );
+  // Throwaway ai_action runs collapse onto one keeper per group; mail-search
+  // jobs already had their own Run, so they add none.
+  expect(
+    "run.total",
+    Number(pre["run.total"]) -
+      Number(pre["run.aiAction"]) +
+      Number(pre["run.aiActionGroups"]),
+    post["run.total"],
+  );
   return problems;
 }
 

@@ -175,7 +175,9 @@ SELECT id, created_at FROM drizzle.__drizzle_migrations ORDER BY id;
 
 - [ ] In one transaction, replace them with the baseline row, then assert the
       table holds exactly one row. Substitute the two values printed above;
-      do not reuse values from any other database or checkout.
+      do not reuse values from any other database or checkout. Paste the whole
+      block at once: production ends a session that sits idle inside a
+      transaction for 5 minutes.
 
 ```sql
 BEGIN;

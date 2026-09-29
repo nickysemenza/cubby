@@ -9,8 +9,8 @@ BEGIN
   INTO drift
   FROM "_cleanup_pre_money" pre
   FULL JOIN (
-    SELECT date_trunc('month', "date") AS "month", ("deletedAt" IS NULL) AS "live",
-      count(*) AS "lines", coalesce(sum("cost"), 0) AS "cost"
+    SELECT coalesce(date_trunc('month', "date"), '-infinity') AS "month", ("deletedAt" IS NULL) AS "live",
+      count(*) AS "lines", coalesce(sum("cost"::numeric), 0) AS "cost"
     FROM "Expense" GROUP BY 1, 2
   ) post USING ("month", "live")
   WHERE pre."lines" IS DISTINCT FROM post."lines"

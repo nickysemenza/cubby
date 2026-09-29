@@ -1166,21 +1166,6 @@
           "method": "btree",
           "with": {}
         },
-        "Cookbook_productId_idx": {
-          "name": "Cookbook_productId_idx",
-          "columns": [
-            {
-              "expression": "productId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "Cookbook_name_gin_idx": {
           "name": "Cookbook_name_gin_idx",
           "columns": [
@@ -1194,6 +1179,21 @@
           "isUnique": false,
           "concurrently": false,
           "method": "gin",
+          "with": {}
+        },
+        "Cookbook_productId_idx": {
+          "name": "Cookbook_productId_idx",
+          "columns": [
+            {
+              "expression": "productId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
           "with": {}
         }
       },
@@ -2625,36 +2625,6 @@
           "method": "btree",
           "with": {}
         },
-        "Expense_projectId_idx": {
-          "name": "Expense_projectId_idx",
-          "columns": [
-            {
-              "expression": "projectId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Expense_productId_idx": {
-          "name": "Expense_productId_idx",
-          "columns": [
-            {
-              "expression": "productId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "Expense_date_idx": {
           "name": "Expense_date_idx",
           "columns": [
@@ -2713,6 +2683,36 @@
           "isUnique": false,
           "concurrently": false,
           "method": "gin",
+          "with": {}
+        },
+        "Expense_projectId_idx": {
+          "name": "Expense_projectId_idx",
+          "columns": [
+            {
+              "expression": "projectId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Expense_productId_idx": {
+          "name": "Expense_productId_idx",
+          "columns": [
+            {
+              "expression": "productId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
           "with": {}
         },
         "Expense_purchaseId_idx": {
@@ -3194,21 +3194,6 @@
           "method": "btree",
           "with": {}
         },
-        "FinancialAccount_ledgerPartyId_idx": {
-          "name": "FinancialAccount_ledgerPartyId_idx",
-          "columns": [
-            {
-              "expression": "ledgerPartyId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "FinancialAccount_provider_owner_key": {
           "name": "FinancialAccount_provider_owner_key",
           "columns": [
@@ -3227,6 +3212,21 @@
           ],
           "isUnique": true,
           "where": "\"FinancialAccount\".\"providerVendorId\" IS NOT NULL AND \"FinancialAccount\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "FinancialAccount_ledgerPartyId_idx": {
+          "name": "FinancialAccount_ledgerPartyId_idx",
+          "columns": [
+            {
+              "expression": "ledgerPartyId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -3406,36 +3406,6 @@
           "method": "btree",
           "with": {}
         },
-        "FinancialTransaction_accountId_idx": {
-          "name": "FinancialTransaction_accountId_idx",
-          "columns": [
-            {
-              "expression": "accountId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "FinancialTransaction_ledgerTransferId_idx": {
-          "name": "FinancialTransaction_ledgerTransferId_idx",
-          "columns": [
-            {
-              "expression": "ledgerTransferId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "FinancialTransaction_ledgerTransferId_positive_evidence_key": {
           "name": "FinancialTransaction_ledgerTransferId_positive_evidence_key",
           "columns": [
@@ -3518,6 +3488,36 @@
           "columns": [
             {
               "expression": "postedDate",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "FinancialTransaction_accountId_idx": {
+          "name": "FinancialTransaction_accountId_idx",
+          "columns": [
+            {
+              "expression": "accountId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "FinancialTransaction_ledgerTransferId_idx": {
+          "name": "FinancialTransaction_ledgerTransferId_idx",
+          "columns": [
+            {
+              "expression": "ledgerTransferId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3815,11 +3815,11 @@
           "method": "btree",
           "with": {}
         },
-        "GardenEntry_locationId_idx": {
-          "name": "GardenEntry_locationId_idx",
+        "GardenEntry_observedOn_idx": {
+          "name": "GardenEntry_observedOn_idx",
           "columns": [
             {
-              "expression": "locationId",
+              "expression": "observedOn",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3830,11 +3830,11 @@
           "method": "btree",
           "with": {}
         },
-        "GardenEntry_observedOn_idx": {
-          "name": "GardenEntry_observedOn_idx",
+        "GardenEntry_locationId_idx": {
+          "name": "GardenEntry_locationId_idx",
           "columns": [
             {
-              "expression": "observedOn",
+              "expression": "locationId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -6609,21 +6609,6 @@
           "method": "btree",
           "with": {}
         },
-        "Ingredient_recipeId_idx": {
-          "name": "Ingredient_recipeId_idx",
-          "columns": [
-            {
-              "expression": "recipeId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "Ingredient_createdAt_idx": {
           "name": "Ingredient_createdAt_idx",
           "columns": [
@@ -6666,6 +6651,21 @@
           ],
           "isUnique": false,
           "where": "\"Ingredient\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Ingredient_recipeId_idx": {
+          "name": "Ingredient_recipeId_idx",
+          "columns": [
+            {
+              "expression": "recipeId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -6866,6 +6866,21 @@
           "method": "btree",
           "with": {}
         },
+        "InventoryEntry_createdAt_idx": {
+          "name": "InventoryEntry_createdAt_idx",
+          "columns": [
+            {
+              "expression": "createdAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "InventoryEntry_productId_idx": {
           "name": "InventoryEntry_productId_idx",
           "columns": [
@@ -6886,21 +6901,6 @@
           "columns": [
             {
               "expression": "locationId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "InventoryEntry_createdAt_idx": {
-          "name": "InventoryEntry_createdAt_idx",
-          "columns": [
-            {
-              "expression": "createdAt",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -7496,6 +7496,21 @@
           "method": "btree",
           "with": {}
         },
+        "LedgerTransfer_date_idx": {
+          "name": "LedgerTransfer_date_idx",
+          "columns": [
+            {
+              "expression": "date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "LedgerTransfer_fromPartyId_idx": {
           "name": "LedgerTransfer_fromPartyId_idx",
           "columns": [
@@ -7516,21 +7531,6 @@
           "columns": [
             {
               "expression": "toPartyId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "LedgerTransfer_date_idx": {
-          "name": "LedgerTransfer_date_idx",
-          "columns": [
-            {
-              "expression": "date",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -7746,36 +7746,6 @@
           "method": "gin",
           "with": {}
         },
-        "Location_productId_idx": {
-          "name": "Location_productId_idx",
-          "columns": [
-            {
-              "expression": "productId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Location_parentId_idx": {
-          "name": "Location_parentId_idx",
-          "columns": [
-            {
-              "expression": "parentId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "Location_createdAt_idx": {
           "name": "Location_createdAt_idx",
           "columns": [
@@ -7870,6 +7840,36 @@
           ],
           "isUnique": false,
           "where": "\"Location\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Location_parentId_idx": {
+          "name": "Location_parentId_idx",
+          "columns": [
+            {
+              "expression": "parentId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Location_productId_idx": {
+          "name": "Location_productId_idx",
+          "columns": [
+            {
+              "expression": "productId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -11256,11 +11256,11 @@
           "method": "btree",
           "with": {}
         },
-        "Plant_ingredientId_idx": {
-          "name": "Plant_ingredientId_idx",
+        "Plant_gardenGuideKey_idx": {
+          "name": "Plant_gardenGuideKey_idx",
           "columns": [
             {
-              "expression": "ingredientId",
+              "expression": "gardenGuideKey",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -11271,11 +11271,11 @@
           "method": "btree",
           "with": {}
         },
-        "Plant_gardenGuideKey_idx": {
-          "name": "Plant_gardenGuideKey_idx",
+        "Plant_ingredientId_idx": {
+          "name": "Plant_ingredientId_idx",
           "columns": [
             {
-              "expression": "gardenGuideKey",
+              "expression": "ingredientId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -11450,6 +11450,21 @@
           "method": "btree",
           "with": {}
         },
+        "Planting_status_idx": {
+          "name": "Planting_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "Planting_plantId_idx": {
           "name": "Planting_plantId_idx",
           "columns": [
@@ -11500,21 +11515,6 @@
           "columns": [
             {
               "expression": "taskId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Planting_status_idx": {
-          "name": "Planting_status_idx",
-          "columns": [
-            {
-              "expression": "status",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -11747,21 +11747,6 @@
           "method": "btree",
           "with": {}
         },
-        "Product_categoryId_idx": {
-          "name": "Product_categoryId_idx",
-          "columns": [
-            {
-              "expression": "categoryId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "Product_name_manufacturer_key": {
           "name": "Product_name_manufacturer_key",
           "columns": [
@@ -11780,36 +11765,6 @@
           ],
           "isUnique": true,
           "where": "\"Product\".\"deletedAt\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Product_ingredientId_idx": {
-          "name": "Product_ingredientId_idx",
-          "columns": [
-            {
-              "expression": "ingredientId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Product_growsPlantId_idx": {
-          "name": "Product_growsPlantId_idx",
-          "columns": [
-            {
-              "expression": "growsPlantId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -11908,6 +11863,51 @@
           ],
           "isUnique": false,
           "where": "\"Product\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Product_ingredientId_idx": {
+          "name": "Product_ingredientId_idx",
+          "columns": [
+            {
+              "expression": "ingredientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Product_growsPlantId_idx": {
+          "name": "Product_growsPlantId_idx",
+          "columns": [
+            {
+              "expression": "growsPlantId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Product_categoryId_idx": {
+          "name": "Product_categoryId_idx",
+          "columns": [
+            {
+              "expression": "categoryId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -12105,11 +12105,11 @@
           "method": "btree",
           "with": {}
         },
-        "ProductCategory_parentId_idx": {
-          "name": "ProductCategory_parentId_idx",
+        "ProductCategory_feature_idx": {
+          "name": "ProductCategory_feature_idx",
           "columns": [
             {
-              "expression": "parentId",
+              "expression": "feature",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -12120,11 +12120,11 @@
           "method": "btree",
           "with": {}
         },
-        "ProductCategory_feature_idx": {
-          "name": "ProductCategory_feature_idx",
+        "ProductCategory_parentId_idx": {
+          "name": "ProductCategory_parentId_idx",
           "columns": [
             {
-              "expression": "feature",
+              "expression": "parentId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -12734,21 +12734,6 @@
           "method": "btree",
           "with": {}
         },
-        "Project_parentProjectId_idx": {
-          "name": "Project_parentProjectId_idx",
-          "columns": [
-            {
-              "expression": "parentProjectId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "Project_name_gin_idx": {
           "name": "Project_name_gin_idx",
           "columns": [
@@ -12776,6 +12761,21 @@
           ],
           "isUnique": false,
           "where": "\"Project\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Project_parentProjectId_idx": {
+          "name": "Project_parentProjectId_idx",
+          "columns": [
+            {
+              "expression": "parentProjectId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -12953,66 +12953,6 @@
           "method": "btree",
           "with": {}
         },
-        "Purchase_defaultProjectId_idx": {
-          "name": "Purchase_defaultProjectId_idx",
-          "columns": [
-            {
-              "expression": "defaultProjectId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Purchase_vendorId_idx": {
-          "name": "Purchase_vendorId_idx",
-          "columns": [
-            {
-              "expression": "vendorId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Purchase_vendorAccountId_idx": {
-          "name": "Purchase_vendorAccountId_idx",
-          "columns": [
-            {
-              "expression": "vendorAccountId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Purchase_runId_idx": {
-          "name": "Purchase_runId_idx",
-          "columns": [
-            {
-              "expression": "runId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "Purchase_date_idx": {
           "name": "Purchase_date_idx",
           "columns": [
@@ -13056,6 +12996,66 @@
           "isUnique": false,
           "concurrently": false,
           "method": "gin",
+          "with": {}
+        },
+        "Purchase_vendorId_idx": {
+          "name": "Purchase_vendorId_idx",
+          "columns": [
+            {
+              "expression": "vendorId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Purchase_vendorAccountId_idx": {
+          "name": "Purchase_vendorAccountId_idx",
+          "columns": [
+            {
+              "expression": "vendorAccountId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Purchase_defaultProjectId_idx": {
+          "name": "Purchase_defaultProjectId_idx",
+          "columns": [
+            {
+              "expression": "defaultProjectId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Purchase_runId_idx": {
+          "name": "Purchase_runId_idx",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
           "with": {}
         }
       },
@@ -13477,36 +13477,6 @@
           "method": "btree",
           "with": {}
         },
-        "Recipe_cookbookId_idx": {
-          "name": "Recipe_cookbookId_idx",
-          "columns": [
-            {
-              "expression": "cookbookId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Recipe_forkedFromRecipeId_idx": {
-          "name": "Recipe_forkedFromRecipeId_idx",
-          "columns": [
-            {
-              "expression": "forkedFromRecipeId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "Recipe_created_at_desc_idx": {
           "name": "Recipe_created_at_desc_idx",
           "columns": [
@@ -13550,6 +13520,36 @@
           ],
           "isUnique": false,
           "where": "\"Recipe\".\"totalsComputedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Recipe_cookbookId_idx": {
+          "name": "Recipe_cookbookId_idx",
+          "columns": [
+            {
+              "expression": "cookbookId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Recipe_forkedFromRecipeId_idx": {
+          "name": "Recipe_forkedFromRecipeId_idx",
+          "columns": [
+            {
+              "expression": "forkedFromRecipeId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -16817,36 +16817,6 @@
           "method": "btree",
           "with": {}
         },
-        "Task_projectId_idx": {
-          "name": "Task_projectId_idx",
-          "columns": [
-            {
-              "expression": "projectId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Task_subjectProductId_idx": {
-          "name": "Task_subjectProductId_idx",
-          "columns": [
-            {
-              "expression": "subjectProductId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "Task_status_idx": {
           "name": "Task_status_idx",
           "columns": [
@@ -16867,6 +16837,36 @@
           "columns": [
             {
               "expression": "dueDate",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Task_projectId_idx": {
+          "name": "Task_projectId_idx",
+          "columns": [
+            {
+              "expression": "projectId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Task_subjectProductId_idx": {
+          "name": "Task_subjectProductId_idx",
+          "columns": [
+            {
+              "expression": "subjectProductId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

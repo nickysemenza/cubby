@@ -4,10 +4,12 @@
 -- production expectations live in the external verification script.
 CREATE TEMP TABLE "_cleanup_pre_money" ON COMMIT DROP AS
 SELECT
-  date_trunc('month', "date") AS "month",
+  coalesce(date_trunc('month', "date"), '-infinity') AS "month",
   ("deletedAt" IS NULL) AS "live",
   count(*) AS "lines",
-  coalesce(sum("cost"), 0) AS "cost"
+  -- numeric, not the double precision column: a float sum's value depends on
+  -- scan order (parallel aggregates), which would false-fail the post-check.
+  coalesce(sum("cost"::numeric), 0) AS "cost"
 FROM "Expense"
 GROUP BY 1, 2;
 --> statement-breakpoint
