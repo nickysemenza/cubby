@@ -59,11 +59,11 @@ const chunks = <T>(items: readonly T[], size: number): T[][] => {
 };
 
 const trailKey = (trail: Trail): string =>
-  `${trail.nodeRefs.map((ref) => entityRefKey(ref.entityType, ref.entityId)).join(">")}|${trail.edgeIds.join(">")}`;
+  `${trail.nodeRefs.map((ref) => entityRefKey(ref.entityKind, ref.entityId)).join(">")}|${trail.edgeIds.join(">")}`;
 
 const recordSequenceKey = (trail: Trail): string =>
   trail.nodeRefs
-    .map((ref) => entityRefKey(ref.entityType, ref.entityId))
+    .map((ref) => entityRefKey(ref.entityKind, ref.entityId))
     .join(">");
 
 const addTrail = (visit: Visit, trail: Trail, maxPaths: number): void => {
@@ -134,8 +134,8 @@ const pathEdges = (
         const previous = path.nodeRefs[index];
         if (!previous) throw new Error("Path is missing its previous node");
         return [
-          entityRefKey(previous.entityType, previous.entityId),
-          entityRefKey(node.entityType, node.entityId),
+          entityRefKey(previous.entityKind, previous.entityId),
+          entityRefKey(node.entityKind, node.entityId),
         ]
           .sort()
           .join("|");
@@ -145,8 +145,8 @@ const pathEdges = (
   return [...edges.values()].filter((edge) =>
     pairs.has(
       [
-        entityRefKey(edge.source.entityType, edge.source.entityId),
-        entityRefKey(edge.target.entityType, edge.target.entityId),
+        entityRefKey(edge.source.entityKind, edge.source.entityId),
+        entityRefKey(edge.target.entityKind, edge.target.entityId),
       ]
         .sort()
         .join("|"),
@@ -174,9 +174,9 @@ export async function searchEntityGraphPaths(
   const limits = { ...DEFAULT_LIMITS, ...options.limits };
   const now = options.now ?? Date.now;
   const deadline = now() + limits.deadlineMs;
-  const startKey = entityRefKey(start.entityType, start.entityId);
+  const startKey = entityRefKey(start.entityKind, start.entityId);
   const destinationKey = entityRefKey(
-    destination.entityType,
+    destination.entityKind,
     destination.entityId,
   );
   if (startKey === destinationKey) {
@@ -193,7 +193,7 @@ export async function searchEntityGraphPaths(
     depth: 0,
     visits: new Map([
       [
-        entityRefKey(origin.entityType, origin.entityId),
+        entityRefKey(origin.entityKind, origin.entityId),
         { distance: 0, trails: [{ nodeRefs: [origin], edgeIds: [] }] },
       ],
     ]),
@@ -238,7 +238,7 @@ export async function searchEntityGraphPaths(
         reads += 1;
         const page = await readFrontier(roots, offset, limits.pageSize);
         for (const node of page.nodes) {
-          seenNodes.add(entityRefKey(node.entityType, node.entityId));
+          seenNodes.add(entityRefKey(node.entityKind, node.entityId));
         }
         for (const edge of page.edges) seenEdges.set(edge.id, edge);
         if (
@@ -251,15 +251,15 @@ export async function searchEntityGraphPaths(
         }
 
         const rootKeys = new Set(
-          roots.map((root) => entityRefKey(root.entityType, root.entityId)),
+          roots.map((root) => entityRefKey(root.entityKind, root.entityId)),
         );
         for (const edge of page.edges) {
           const sourceKey = entityRefKey(
-            edge.source.entityType,
+            edge.source.entityKind,
             edge.source.entityId,
           );
           const targetKey = entityRefKey(
-            edge.target.entityType,
+            edge.target.entityKind,
             edge.target.entityId,
           );
           const orientations: [string, EntityRef, EntityRef][] = [];
@@ -273,7 +273,7 @@ export async function searchEntityGraphPaths(
             const rootVisit = side.visits.get(rootKey);
             if (!rootVisit || rootVisit.distance !== side.depth) continue;
             const neighborKey = entityRefKey(
-              neighbor.entityType,
+              neighbor.entityKind,
               neighbor.entityId,
             );
             const distance = side.depth + 1;

@@ -1,7 +1,3 @@
-import {
-  EMPTY_MUTATION_SIDE_EFFECTS,
-  mutationSideEffectsWithWarnings,
-} from "@cubby/schemas/background-jobs";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   ENTITY_LABEL,
@@ -9,11 +5,16 @@ import {
   parseEntityRef,
 } from "@cubby/schemas/identifiers";
 import {
+  EMPTY_MUTATION_SIDE_EFFECTS,
+  mutationSideEffectsWithWarnings,
+} from "@cubby/schemas/mutation-side-effects";
+import {
   buildPaginatedResponse,
   listGroupSummarySchema,
   normalizeSorts,
   type PaginationParams,
 } from "@cubby/schemas/pagination";
+import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
 import { deferPublications } from "~/server/background-tasks/publish";
@@ -78,14 +79,19 @@ const listRestrictedToIds = async <
   requested: PaginationParams,
   ids: readonly string[],
 ) => {
-  const wanted = new Set(ids);
+  // Codes are accepted in any casing (`parseShortcode` canonicalizes).
+  const wanted = new Set(ids.map((id) => parseShortcode(id)?.shortcode ?? id));
+  // A repository on the list scaffold applies `ids` itself, so the scan
+  // below reads one page; any other still pages its own rows.
+  const restriction = { ids: [...wanted] };
+  const restricted = Object.assign({}, filters, restriction);
   const matching: z.output<S["repositoryList"]>[] = [];
   let pageIndex = 0;
   let totalCount = 0;
   do {
     const page = await binding.repository.list(
       context,
-      filters,
+      restricted,
       sorts,
       { pageIndex, pageSize: LIST_ID_SCAN_PAGE_SIZE },
       groupBy,
@@ -279,19 +285,18 @@ export const defineEntityOperations = <
         parseSchema<S["id"], string>(binding.schemas.id, input.id),
       )
       .call("found", async ({ context }, { input, id }) => {
-        const readContext = { ...context, db: context.readDb };
-        const item = await binding.repository.get(readContext, id);
+        const item = await binding.repository.get(context, id);
         if (item !== null)
           return { item, redirectedFrom: null, missingMessage: null };
         // A merged-away code reads as its survivor (ADR 0006). Mutations never
         // follow this redirect; they refuse with the survivor's code instead.
-        const identity = await resolveEntityIdentity(context.readDb, input.id);
+        const identity = await resolveEntityIdentity(context.db, input.id);
         const canonical =
           identity.state === "redirected" &&
           identity.kind === binding.entity &&
           identity.canonicalDeletedAt === null
             ? await binding.repository.get(
-                readContext,
+                context,
                 parseSchema<S["id"], string>(
                   binding.schemas.id,
                   identity.canonicalShortcode,
@@ -309,7 +314,7 @@ export const defineEntityOperations = <
           redirectedFrom: null,
           missingMessage: isShortcodeEntity(binding.entity)
             ? await describeUnresolvableCode(
-                context.readDb,
+                context.db,
                 binding.entity,
                 input.id,
               )
@@ -322,7 +327,7 @@ export const defineEntityOperations = <
           : {
               ...(
                 await withUniversalEntityMedia(
-                  context.readDb,
+                  context.db,
                   binding.entity,
                   [found.item],
                   true,
@@ -350,10 +355,6 @@ export const defineEntityOperations = <
                 ),
         });
       }),
-    (
-      context: EntityKernelContext,
-      input: { id: string; missing: "error" | "null" },
-    ) => ({ context, input }),
   ),
   list: bindWorkflow(
     workflow<EntityKernelContext, EntityListInput>(`${binding.entity}.list`)
@@ -379,14 +380,10 @@ export const defineEntityOperations = <
         };
       })
       .call("page", async ({ context }, { validated }) => {
-        const readContext =
-          context.readDb === context.db
-            ? context
-            : { ...context, db: context.readDb };
         return validated.ids
           ? listRestrictedToIds(
               binding,
-              readContext,
+              context,
               validated.filters,
               validated.sorts,
               validated.groupBy,
@@ -394,7 +391,7 @@ export const defineEntityOperations = <
               validated.ids,
             )
           : binding.repository.list(
-              readContext,
+              context,
               validated.filters,
               validated.sorts,
               validated.pagination,
@@ -403,11 +400,7 @@ export const defineEntityOperations = <
       })
       .call("mediaPage", async ({ context }, { page }) => ({
         ...page,
-        data: await withListEntityMedia(
-          context.readDb,
-          binding.entity,
-          page.data,
-        ),
+        data: await withListEntityMedia(context.db, binding.entity, page.data),
       }))
       .output(({ validated, mediaPage }) =>
         entityQueryResultSchema.parse({
@@ -432,10 +425,6 @@ export const defineEntityOperations = <
           ),
         }),
       ),
-    <TFilters>(
-      context: EntityKernelContext,
-      input: EntityListInput<TFilters>,
-    ) => ({ context, input }),
   ),
   create: bindWorkflow(
     workflow<EntityKernelContext, unknown>(`${binding.entity}.create`)
@@ -484,10 +473,6 @@ export const defineEntityOperations = <
           sideEffects: mutationSideEffectsWithWarnings(created.warnings),
         }),
       ),
-    <TInput>(context: EntityKernelContext, input: TInput) => ({
-      context,
-      input,
-    }),
   ),
   update: bindWorkflow(
     workflow<EntityKernelContext, { id: string; data: unknown }>(
@@ -543,18 +528,25 @@ export const defineEntityOperations = <
           sideEffects: mutationSideEffectsWithWarnings(updated.warnings),
         }),
       ),
-    <TInput>(context: EntityKernelContext, id: string, data: TInput) => ({
-      context,
-      input: { id, data },
-    }),
   ),
   delete: bindWorkflow(
     workflow<EntityKernelContext, string[]>(`${binding.entity}.delete`)
-      .call("ids", async (_, { input }) =>
-        input.map((id) => parseSchema<S["id"], string>(binding.schemas.id, id)),
-      )
-      .commit("deleted", async ({ context }, { ids }) =>
-        binding.repository.delete(context, ids),
+      .call("validated", async (_, { input }) => {
+        const run = binding.repository.delete;
+        if (!run)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            `${ENTITY_LABEL[binding.entity]} does not support delete`,
+          );
+        return {
+          run,
+          ids: input.map((id) =>
+            parseSchema<S["id"], string>(binding.schemas.id, id),
+          ),
+        };
+      })
+      .commit("deleted", async ({ context }, { validated }) =>
+        validated.run(context, validated.ids),
       )
       .effect("receipt", async (_, { deleted }) => {
         if (!deleted.affectedEdges)
@@ -575,7 +567,6 @@ export const defineEntityOperations = <
           sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
         }),
       ),
-    (context: EntityKernelContext, input: string[]) => ({ context, input }),
   ),
   bulkUpdate: bindWorkflow(
     workflow<EntityKernelContext, { ids: string[]; data: unknown }>(
@@ -614,9 +605,5 @@ export const defineEntityOperations = <
           sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
         }),
       ),
-    <TInput>(context: EntityKernelContext, ids: string[], data: TInput) => ({
-      context,
-      input: { ids, data },
-    }),
   ),
 });

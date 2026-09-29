@@ -4,8 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { entityLabel } from "~/entities/entities";
+import { search } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getAppErrorDetails } from "~/lib/error-utils";
-import { search } from "~/lib/search.functions";
 
 import { EntityPicker } from "../combobox/entity-picker";
 
@@ -33,7 +33,7 @@ export function EntityGraphPicker({
       (results.data ?? []).map((hit) => ({
         id: hit.id,
         name: hit.title,
-        secondary: entityLabel(hit.entityType),
+        secondary: entityLabel(hit.entityKind),
         detail: hit.subtitle ?? undefined,
       })),
     [results.data],
@@ -49,7 +49,7 @@ export function EntityGraphPicker({
       error={results.isError ? getAppErrorDetails(results.error).message : null}
       setValue={(item) => {
         const hit = results.data?.find((result) => result.id === item?.id);
-        if (hit) onSelect({ entity: hit.entityType, id: hit.id });
+        if (hit) onSelect({ entity: hit.entityKind, id: hit.id });
       }}
     />
   );

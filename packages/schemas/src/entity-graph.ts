@@ -11,7 +11,7 @@ import { imageUrlSummary } from "./image-summary";
 export const entityGraphRootSchema = entityRefSchema.superRefine(
   (root, context) => {
     const parsed = parseShortcode(root.entityId);
-    if (!parsed || parsed.type !== root.entityType) {
+    if (!parsed || parsed.type !== root.entityKind) {
       context.addIssue({
         code: "custom",
         message: "expected a shortcode for the declared entity",
@@ -25,7 +25,7 @@ export const entityGraphInputSchema = z.object({
   /** Relationship keys declared by the source entity's manifest. */
   relationshipKeys: z.array(z.string().min(1)).max(50).optional(),
   /** Restrict expansions to these target entity kinds. */
-  entityTypes: z.array(entitySchema).max(20).optional(),
+  entityKinds: z.array(entitySchema).max(20).optional(),
   offset: z.number().int().nonnegative().default(0),
   limit: z.number().int().min(1).max(25).default(25),
 });

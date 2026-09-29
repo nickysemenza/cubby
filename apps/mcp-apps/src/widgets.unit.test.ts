@@ -112,8 +112,9 @@ describe("USDA picker", () => {
     await flush();
 
     expect(app.callServerTool).toHaveBeenCalledWith({
-      name: "search_usda_foods",
+      name: "usda_food",
       arguments: {
+        action: "search",
         query: "salted butter",
         dataType: "foundation_food",
         pageIndex: 0,

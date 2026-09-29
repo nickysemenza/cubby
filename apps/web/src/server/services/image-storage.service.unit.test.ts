@@ -60,14 +60,14 @@ class MemoryImageStorage {
         filename: string;
         contentType: string;
         status: string;
-        entityType: string | null;
+        associations: { entityKind: string }[];
       }
     | Error = {
     key: "cubby/images/staged.png",
     filename: "staged.png",
     contentType: "image/png",
     status: "PENDING",
-    entityType: null,
+    associations: [],
   };
   stagedObject: Response = new Response(Buffer.from(PNG_BASE64, "base64"));
   fetchedResponse: Response | Error = new Response(
@@ -206,9 +206,9 @@ function setup() {
 }
 
 const attachmentTarget = {
-  entityType: "product",
+  entityKind: "product",
   entityId: "PRD-TEST",
-} satisfies Pick<McpAttachFileInput, "entityType" | "entityId">;
+} satisfies Pick<McpAttachFileInput, "entityKind" | "entityId">;
 
 describe("image storage ports", () => {
   it("persists optional native hash metadata on the pending upload row", async () => {
@@ -294,7 +294,7 @@ describe("image storage ports", () => {
       filename: "blender-manual.pdf",
       contentType: "application/pdf",
       size: 1024,
-      entityType: "PRODUCT",
+      entityKind: "PRODUCT",
       folder: "P-0123",
     });
 
@@ -582,7 +582,7 @@ describe("attachFileToEntity", () => {
         ...attachmentTarget,
         uploadId: stagedUploadCode,
       }),
-    ).rejects.toThrow("Call create_file_uploads first");
+    ).rejects.toThrow("Call image.create_uploads first");
     expect(storage.uploaded).toEqual([]);
   });
 
@@ -604,7 +604,7 @@ describe("attachFileToEntity", () => {
       filename: "existing.png",
       contentType: "image/png",
       status: "UPLOADED",
-      entityType: "PRODUCT",
+      associations: [{ entityKind: "product" }],
     };
     await expect(
       service.attachFileToEntity(database, {
@@ -618,7 +618,7 @@ describe("attachFileToEntity", () => {
         ...attachmentTarget,
         uploadId: testShortcode("image", "IMG-4444"),
       }),
-    ).rejects.toThrow(/Call create_file_uploads first/);
+    ).rejects.toThrow(/Call image.create_uploads first/);
     expect(storage.uploaded).toEqual([]);
   });
 
@@ -628,7 +628,7 @@ describe("attachFileToEntity", () => {
       filename: "standalone.png",
       contentType: "image/png",
       status: "UPLOADED",
-      entityType: null,
+      associations: [],
     };
 
     await expect(

@@ -1,6 +1,7 @@
 import { taskStatusSchema } from "@cubby/schemas/task-fields";
+import { format, startOfYear, subDays, subMonths } from "date-fns";
+import { match } from "ts-pattern";
 
-import { resolveDateRange } from "~/app/expenses/expense-options";
 import { resolveDueRange } from "~/app/tasks/task-options";
 import type { FilterPatch } from "~/entities/filters";
 
@@ -14,6 +15,28 @@ type ProductPurchaseDateFilters = FilterPatch &
     | { purchaseDatePresenceFilter: "has" | "none" }
     | ProductPurchaseDateRangeFilters
   );
+
+/**
+ * Resolves a date-range preset (as read off a date column filter) into
+ * inclusive "YYYY-MM-DD" bounds anchored on today's local date. An
+ * unknown/undefined preset resolves to `{}` — no bound, matching every date
+ * (see `plainDate` in `@cubby/schemas/project`; the dates are timezone-free,
+ * so bounds are computed from local `today`, never UTC).
+ */
+export function resolveDateRange(preset: string | undefined): {
+  dateFrom?: string;
+  dateTo?: string;
+} {
+  const today = new Date();
+  const dateTo = format(today, "yyyy-MM-dd");
+  const dateFrom = match(preset)
+    .with("30d", () => format(subDays(today, 30), "yyyy-MM-dd"))
+    .with("90d", () => format(subDays(today, 90), "yyyy-MM-dd"))
+    .with("ytd", () => format(startOfYear(today), "yyyy-MM-dd"))
+    .with("1y", () => format(subMonths(today, 12), "yyyy-MM-dd"))
+    .otherwise(() => undefined);
+  return dateFrom ? { dateFrom, dateTo } : {};
+}
 
 export const resolveProductPurchaseDateFilter = (
   preset: string | undefined,
@@ -35,54 +58,6 @@ export const resolveExpenseCount = (value: string | undefined) =>
       ? { expenseCountMin: Number(value) }
       : {};
 
-export const resolveNetBasis = (value: string | undefined) => {
-  if (value === "positive") return { expenseTotalMin: 0.01 };
-  if (value === "zero") return { expenseTotalMin: 0, expenseTotalMax: 0 };
-  if (value === "negative") return { expenseTotalMax: -0.01 };
-  if (value === "gte100") return { expenseTotalMin: 100 };
-  if (value === "gte500") return { expenseTotalMin: 500 };
-  return {};
-};
-
-export const resolvePrice = (value: string | undefined) => {
-  if (value === "has" || value === "none") {
-    return { pricePresenceFilter: value };
-  }
-  // `misc:` buckets have no meaningful unit price, so keep them separate from
-  // real unpriced products instead of making that worklist permanently red.
-  if (value === "none-real") {
-    return {
-      pricePresenceFilter: "none" as const,
-      miscBucketFilter: "none" as const,
-    };
-  }
-  if (value === "none-bucket") {
-    return {
-      pricePresenceFilter: "none" as const,
-      miscBucketFilter: "has" as const,
-    };
-  }
-  return {};
-};
-
-export const resolveExpectedQuantity = (value: string | undefined) => {
-  if (value === "negative") return { expectedQuantityMax: -1 };
-  if (value === "zero") {
-    return { expectedQuantityMin: 0, expectedQuantityMax: 0 };
-  }
-  if (value === "positive") return { expectedQuantityMin: 1 };
-  if (value === "gte5") return { expectedQuantityMin: 5 };
-  if (value === "unknown") {
-    return { unknownQuantityLinesFilter: "has" as const };
-  }
-  return {};
-};
-
-export const resolveQuantityVariance = (value: string | undefined) =>
-  value === "mismatched" || value === "matched"
-    ? { quantityVarianceFilter: value }
-    : {};
-
 export const resolveVendorPurchases = (value: string | undefined) =>
   value === "none"
     ? { purchaseCountMax: 0 }
@@ -91,15 +66,6 @@ export const resolveVendorPurchases = (value: string | undefined) =>
       : value
         ? { purchaseCountMin: Number(value) }
         : {};
-
-export const resolveVendorSpend = (value: string | undefined) => {
-  if (value === "positive") return { spendMin: 0.01 };
-  if (value === "zero") return { spendMin: 0, spendMax: 0 };
-  if (value === "negative") return { spendMax: -0.01 };
-  if (value === "gte100") return { spendMin: 100 };
-  if (value === "gte500") return { spendMin: 500 };
-  return {};
-};
 
 export const resolveLatestPurchaseDate = (preset: string | undefined) => {
   if (preset === "has" || preset === "none") {
@@ -153,42 +119,6 @@ export const resolveLocationItems = (value: string | undefined) =>
       ? { directItemCountMin: 1 }
       : value
         ? { directItemCountMin: Number(value) }
-        : {};
-
-export const resolveLocationValuation = (value: string | undefined) => {
-  if (value === "positive") return { valuationMin: 0.01 };
-  if (value === "zero") return { valuationMin: 0, valuationMax: 0 };
-  if (value === "negative") return { valuationMax: -0.01 };
-  if (value === "gte100") return { valuationMin: 100 };
-  if (value === "gte500") return { valuationMin: 500 };
-  return {};
-};
-
-export const resolveRecipeCost = (value: string | undefined) =>
-  value === "under10"
-    ? { costTotalMax: 10 }
-    : value === "10to25"
-      ? { costTotalMin: 10, costTotalMax: 25 }
-      : value === "25plus"
-        ? { costTotalMin: 25 }
-        : {};
-
-export const resolveRecipeTotalTime = (value: string | undefined) =>
-  value === "under30"
-    ? { totalMinutesMax: 30 }
-    : value === "30to60"
-      ? { totalMinutesMin: 30, totalMinutesMax: 60 }
-      : value === "60plus"
-        ? { totalMinutesMin: 60 }
-        : {};
-
-export const resolveCalories = (value: string | undefined) =>
-  value === "under500"
-    ? { caloriesTotalMax: 500 }
-    : value === "500to1000"
-      ? { caloriesTotalMin: 500, caloriesTotalMax: 1000 }
-      : value === "1000plus"
-        ? { caloriesTotalMin: 1000 }
         : {};
 
 export const resolvePostedDate = (preset: string | undefined) => {

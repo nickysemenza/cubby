@@ -37,13 +37,14 @@ import {
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { entityDetailLink, isBrowserRoutedEntity } from "~/entities/entities";
 import {
-  entityTimeline,
   type EntityTimelineFiltersByEntity,
   entityTimelineFor,
   type EntityTimelineParams,
   type EntityTimelineWindowByEntity,
-} from "~/entities/entity-timeline.functions";
+} from "~/entities/entity-timeline";
 import type { TimelineEntity } from "~/entities/generated/entity-timelines.gen";
+import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatCalendarDay } from "~/lib/date-format";
 import { parsePlainDate } from "~/lib/plain-date";
 import { cn, formatCurrency } from "~/lib/utils";
 
@@ -126,13 +127,6 @@ const kindColor = (kind: string) =>
 const kindLabel = (kind: string) =>
   known(KIND_LABEL, kind) ??
   (kind.startsWith("field:") ? kind.slice("field:".length) : kind);
-
-const formatDate = (date: string) =>
-  new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(parsePlainDate(date));
 
 /** A routed entity link, or plain text when the target has no browser route. */
 function TimelineLink({
@@ -284,7 +278,9 @@ function EventGroup({
       <Row align="baseline" wrap gap="sm" className="pb-1">
         {showDate ? (
           <span className="font-mono text-sm tabular-nums">
-            {group.date === null ? "Date unknown" : formatDate(group.date)}
+            {group.date === null
+              ? "Date unknown"
+              : formatCalendarDay(group.date, "dateShort")}
           </span>
         ) : null}
         {group.label && (
@@ -369,8 +365,8 @@ function LifecyclesView({
               Record
             </div>
             <Row justify="between" className="p-2 font-mono text-xs">
-              <span>{formatDate(extent.from)}</span>
-              <span>{formatDate(extent.to)}</span>
+              <span>{formatCalendarDay(extent.from, "dateShort")}</span>
+              <span>{formatCalendarDay(extent.to, "dateShort")}</span>
             </Row>
           </div>
           {rows.map((row) => (
@@ -413,8 +409,8 @@ function LifecyclesView({
                       key={`${interval.start}:${interval.end ?? "open"}`}
                       title={
                         interval.confident
-                          ? `${formatDate(interval.start)} – ${interval.end ? formatDate(interval.end) : "open"}`
-                          : `Uncertain after ${formatDate(interval.start)}`
+                          ? `${formatCalendarDay(interval.start, "dateShort")} – ${interval.end ? formatCalendarDay(interval.end, "dateShort") : "open"}`
+                          : `Uncertain after ${formatCalendarDay(interval.start, "dateShort")}`
                       }
                       className={cn(
                         "absolute top-5 h-2 rounded-full",
@@ -445,7 +441,8 @@ function LifecyclesView({
                       }
                     />
                     <TooltipContent>
-                      {formatDate(marker.date)} · {kindLabel(marker.kind)}
+                      {formatCalendarDay(marker.date, "dateShort")} ·{" "}
+                      {kindLabel(marker.kind)}
                     </TooltipContent>
                   </Tooltip>
                 ))}

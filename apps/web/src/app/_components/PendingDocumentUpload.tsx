@@ -12,7 +12,7 @@ import { FileDropField } from "~/components/file-upload/FileDropField";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
-import { imageUpload } from "~/lib/image.functions";
+import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { putPresignedObject } from "~/lib/presigned-upload";
 
 import type { PendingImage } from "./PendingImageUpload";
@@ -25,7 +25,7 @@ export interface PendingDocument extends PendingImage {
 const EMPTY_DOCUMENTS: PendingDocument[] = [];
 
 interface PendingDocumentUploadProps {
-  entityType: EntityImage;
+  entityKind: EntityImage;
   /**
    * R2 key folder for uploaded documents — the owning entity's shortcode
    * (e.g. "P-0123") so URLs read as .../documents/P-0123/manual.pdf. Omit in
@@ -87,7 +87,7 @@ function DocumentRow({
  * applies here.
  */
 export function PendingDocumentUpload({
-  entityType,
+  entityKind,
   folder,
   onDocumentsChange,
   existingDocuments = EMPTY_DOCUMENTS,
@@ -137,7 +137,7 @@ export function PendingDocumentUpload({
           filename: file.name,
           contentType: PDF_CONTENT_TYPE,
           size: file.size,
-          entityType,
+          entityKind,
           folder,
         });
 
@@ -161,7 +161,7 @@ export function PendingDocumentUpload({
       }
     },
     [
-      entityType,
+      entityKind,
       folder,
       uploadDocumentMutation,
       pendingDocuments,

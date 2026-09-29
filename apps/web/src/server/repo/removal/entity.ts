@@ -70,12 +70,11 @@ type SoftDeletableTable = PgTable & { deletedAt: PgColumn };
  * The columns on a child table that point at the parent. Non-empty by type, so
  * the OR below always has at least one clause.
  *
- * A list rather than a single column because a dependency edge
- * (`ProjectDependency`, `TaskDependency`) references the parent from *either*
- * end, and both ends die with it. Deliberately a column list and not an
- * arbitrary predicate: an escape hatch that took a `SQL` would let a caller
- * remove rows the declared edge does not describe, which is the hand-written
- * delete this module exists to replace.
+ * A list rather than a single column because a child row may reference the
+ * parent from more than one column, and every one dies with it. Deliberately
+ * a column list; the only predicate a child adds is its edge's declared
+ * `scope` (an `EntityLink` kind), never a caller-written filter that could
+ * remove rows the declared edge does not describe.
  */
 type ParentColumns = readonly [PgColumn, ...PgColumn[]];
 
@@ -84,9 +83,9 @@ type ParentColumns = readonly [PgColumn, ...PgColumn[]];
  *
  * The two arms differ in more than a flag. `auditKey` exists only on the soft
  * arm because counting a child means `countByTarget`, which *throws* on a table
- * with no `deletedAt` — the hard-delete-only tables (`ProjectDependency`,
- * `TaskDependency`) are exactly the ones that can't be counted. Encoding that
- * in the union makes the mismatch a compile error instead of a runtime one.
+ * with no `deletedAt` — hard-delete-only tables are exactly the ones that
+ * can't be counted. Encoding that in the union makes the mismatch a compile
+ * error instead of a runtime one.
  */
 export type ChildCascade =
   | {
@@ -95,6 +94,8 @@ export type ChildCascade =
       mode?: "soft";
       /** Audit-change key for the per-parent count, e.g. `cascadedImages`. */
       auditKey?: string;
+      /** Narrows the table to this edge's rows (an `EntityLink` kind). */
+      where?: SQL;
     }
   | {
       table: PgTable;
@@ -102,6 +103,8 @@ export type ChildCascade =
       mode: "hard";
       /** Unreachable: see {@link ChildCascade}. */
       auditKey?: never;
+      /** Narrows the table to this edge's rows (an `EntityLink` kind). */
+      where?: SQL;
     };
 
 /** `ids` matched against any of the edge's parent columns. */
@@ -174,7 +177,10 @@ const collectCascadingImageIds = async (
   for (const child of children) {
     const imageColumn = imageJoinColumnFor(child.table);
     if (!imageColumn) continue;
-    const parentPredicate = parentMatches(child.parentColumns, ids);
+    const parentPredicate = and(
+      parentMatches(child.parentColumns, ids),
+      child.where,
+    );
     const childPredicate =
       child.mode === "hard"
         ? parentPredicate
@@ -262,7 +268,9 @@ export const removeEntity = async <E extends RemovableEntity>(
       const perColumn: Record<string, number> = {};
       for (const column of child.parentColumns) {
         for (const [id, n] of Object.entries(
-          await countByTarget(tx, child.table, column, ids),
+          await countByTarget(tx, child.table, column, ids, {
+            extraWhere: child.where,
+          }),
         )) {
           perColumn[id] = (perColumn[id] ?? 0) + n;
         }
@@ -275,7 +283,8 @@ export const removeEntity = async <E extends RemovableEntity>(
 
     const now = new Date();
     for (const child of children) {
-      const where = parentMatches(child.parentColumns, ids);
+      const parent = parentMatches(child.parentColumns, ids);
+      const where = (child.where && and(parent, child.where)) ?? parent;
       if (child.mode === "hard") {
         await removeRows(tx, { table: child.table, where, mode: "hard" }, now);
       } else {

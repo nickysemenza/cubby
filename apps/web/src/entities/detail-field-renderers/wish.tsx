@@ -5,7 +5,7 @@ import {
   useHydratedProductImages,
 } from "~/app/_components/products/product-image-summaries";
 import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
-import { TableLink } from "~/app/_components/table/TableLink";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { entities, entityDetailParams } from "~/entities/entities";
@@ -33,13 +33,14 @@ function WishCandidateRow({ candidate }: { candidate: WishCandidateOut }) {
             />
           </span>
           <span className="min-w-0">
-            <TableLink
+            <EntityRefLink
+              variant="table"
               to={entities.product.routes.detail}
               params={entityDetailParams(candidate.id)}
               className="block truncate"
             >
               {candidate.name}
-            </TableLink>
+            </EntityRefLink>
             <span className="block truncate text-muted-foreground">
               {candidate.manufacturer}
               {candidate.model ? ` · ${candidate.model}` : ""}

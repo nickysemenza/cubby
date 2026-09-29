@@ -31,7 +31,7 @@ function seedProduct(id: string, name: string) {
 describe("UsageEntityLink", () => {
   it("renders the fallback, not a link, when entityId is a raw uuid", () => {
     // AiUsage.entityId is recorded from queue/side-effect payloads that carry
-    // private uuids — EntityInlineLinkById expects a public shortcode, and
+    // private uuids — EntityRefLink (byId) expects a public shortcode, and
     // sending a uuid across that boundary previously resolved nothing.
     render(
       <UsageEntityLink
@@ -60,7 +60,7 @@ describe("UsageEntityLink", () => {
     ).toHaveAttribute("href", "/products/PRD-4K7M");
   });
 
-  it("renders the fallback when the shortcode's type does not match entityType", () => {
+  it("renders the fallback when the shortcode's type does not match entityKind", () => {
     render(
       <UsageEntityLink row={{ entityKind: "product", entityId: "LOC-4K7M" }} />,
       { wrapper: harness.wrapper },

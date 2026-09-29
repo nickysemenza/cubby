@@ -14,8 +14,8 @@ import {
   useState,
 } from "react";
 
-import { recipe } from "~/app/recipes/recipe.functions";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getAppErrorDetails } from "~/lib/error-utils";
 
 import { VisualizationPlaceholder } from "./visualization-placeholder";

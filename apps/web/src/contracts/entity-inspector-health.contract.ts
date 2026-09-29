@@ -14,7 +14,9 @@ export const entityInspectorHealthSchema = z.object({
 });
 
 export const entityInspectorHealthContract = defineContract("entity", {
+  // Interactive inventory work and integrity/repair diagnostics.
   inspectorHealth: query({
+    readPolicy: "strong",
     input: z.null(),
     output: entityInspectorHealthSchema,
   }),

@@ -54,6 +54,12 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   not know and an installed build survives a server deploy that adds one. Request bodies
   stay closed. Never hand-add `additionalProperties: false` to an output, and never rely on
   the client to reject an unknown response key.
+- The server refuses a `cubby-apple` build older than `MINIMUM_APPLE_CLIENT_VERSION`
+  (`apps/web/src/server/apple-client-gate.ts`) with 426, `reason: CLIENT_UPDATE_REQUIRED`, before
+  any operation runs; `RequestTrace` latches it and `RootView` shows `UpdateRequiredView`. A
+  wire-breaking PR bumps that constant and `MARKETING_VERSION` in `project.yml` together (a unit
+  test compares them; the TestFlight workflow takes its version from the release tag, which must
+  be at least the constant).
 - Always pass `serverURL` explicitly when constructing a generated `Client`. The spec's `servers`
   entry is `"/"`, which is not a usable absolute URL on its own.
 
@@ -126,7 +132,8 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   `update`/image-attach switches with `EntityKey.httpActions`/`nativeActions` and the generated
   filter arms (one per list/timeline query parameter, from
   `scripts/generator/http-api/swift-operations.ts`; a parameter schema shape outside its table
-  fails generation), the `CubbyClient` methods that are exactly one call with the JSON body as
+  fails generation), the `CubbyClient` methods that are exactly one call with the JSON body — or, for a GET, the
+  generated `Input.Query` aliased `<Method>Query` (`client.runAiUsage(.init(runId: id))`) — as
   their only argument (`CLIENT_PASSTHROUGH_METHODS` in the same file — a new such method is a
   table entry, not hand-written Swift; anything that maps or branches stays in
   `API/CubbyClient.swift`), and the public aliases for every generated type the native client carries,

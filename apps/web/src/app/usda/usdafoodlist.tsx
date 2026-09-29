@@ -23,6 +23,7 @@ import {
   useListSearch,
 } from "~/app/_components/entity-list/generic-entity-list";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
@@ -31,7 +32,7 @@ import {
   buildFiltersFromManifest,
   filterGetterFromColumnFilters,
 } from "~/entities/filters";
-import { usdaFood } from "~/entities/usda.functions";
+import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";
@@ -39,7 +40,6 @@ import { nutrientCount } from "~/lib/usda-food-stats";
 import { createEntityInlineLinkColumn } from "../_components/data-table/columnHelpers";
 import type { TableStateReturn } from "../_components/data-table/useTableState";
 import type { ListQueryOptionsFn } from "../_components/hooks/usePaginatedTableCore";
-import { TableLink } from "../_components/table/TableLink";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { CoreNutrientCoverage } from "../_components/usda/core-nutrient-coverage";
 
@@ -167,12 +167,13 @@ export function USDAFoodList({
               mobile: { slot: "trailing", priority: 20 },
             },
             cell: (info) => (
-              <TableLink
+              <EntityRefLink
+                variant="table"
                 to="/usda/$id"
                 params={{ id: String(info.getValue()) }}
               >
                 {info.getValue()}
-              </TableLink>
+              </EntityRefLink>
             ),
           }),
         );
@@ -229,13 +230,14 @@ export function USDAFoodList({
                   {brandedFood.gtin_upc && (
                     <div className="font-mono text-xs">
                       UPC:{" "}
-                      <TableLink
+                      <EntityRefLink
+                        variant="table"
                         to="/usda/upc/$code"
                         params={{ code: brandedFood.gtin_upc }}
-                        variant="mono"
+                        tone="mono"
                       >
                         {brandedFood.gtin_upc}
-                      </TableLink>
+                      </EntityRefLink>
                     </div>
                   )}
                 </div>

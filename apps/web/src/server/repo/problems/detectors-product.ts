@@ -12,7 +12,7 @@ import type {
   ProductId,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ProblemItem } from "@cubby/schemas/problems";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { isMiscProduct } from "@cubby/shared";
@@ -41,9 +41,10 @@ import {
   cookbook,
   device,
   entityAttachment,
+  entityExternalId,
+  entityLink,
   expense,
   image,
-  runTarget,
   ingredient,
   inventoryEntry,
   location,
@@ -51,19 +52,16 @@ import {
   photoGroupProposal,
   planting,
   product,
-  productComponent,
-  productExternalId,
   productUnitMappings,
   project,
-  projectToolUsage,
-  purchaseProduct,
   recipe,
   recipeSection,
   recipeSectionIngredient,
+  runTarget,
   task,
-  wishCandidate,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { canonicalLabelKey } from "~/server/repo/label-canonical";
 import {
@@ -84,6 +82,7 @@ import {
   ownershipExitExpensePredicate,
 } from "~/server/repo/product/ownership";
 import { loadProductPricing } from "~/server/repo/product/pricing";
+import { unitMappingSides } from "~/server/repo/product/unit-mappings";
 import { loadProjectDateWindows } from "~/server/repo/project/subtree";
 import { buildTimelineGates } from "~/server/repo/project/tools";
 import { effectiveTaskSubjectProductSql } from "~/server/repo/task-project-inheritance";
@@ -100,12 +99,12 @@ type ProductWithUpcGapCandidate = {
 
 /** Orphan suggestions are not a saved predicate: delete eligibility must use the canonical incoming-edge policy. */
 const PRODUCT_RETAINING_NOT_EXISTS = {
-  "RunTarget.productId": (dbClient) =>
+  "RunTarget.entityId": (dbClient) =>
     notExists(
       dbClient
         .select({ id: sql`1` })
         .from(runTarget)
-        .where(eq(runTarget.productId, product.id)),
+        .where(eq(runTarget.entityId, product.id)),
     ),
   "Planting.sourceProductId": (dbClient) =>
     notExists(
@@ -151,27 +150,24 @@ const PRODUCT_RETAINING_NOT_EXISTS = {
           ),
         ),
     ),
-  "ProjectToolUsage.productId": (dbClient) =>
+  "EntityLink[projectTool].to": (dbClient) =>
     notExists(
       dbClient
         .select({ id: sql`1` })
-        .from(projectToolUsage)
+        .from(entityLink)
         .where(
-          and(
-            eq(projectToolUsage.productId, product.id),
-            notDeleted(projectToolUsage),
-          ),
+          and(eq(entityLink.toEntityId, product.id), liveLinks("projectTool")),
         ),
     ),
-  "PurchaseProduct.productId": (dbClient) =>
+  "EntityLink[purchaseProduct].to": (dbClient) =>
     notExists(
       dbClient
         .select({ id: sql`1` })
-        .from(purchaseProduct)
+        .from(entityLink)
         .where(
           and(
-            eq(purchaseProduct.productId, product.id),
-            notDeleted(purchaseProduct),
+            eq(entityLink.toEntityId, product.id),
+            liveLinks("purchaseProduct"),
           ),
         ),
     ),
@@ -187,15 +183,15 @@ const PRODUCT_RETAINING_NOT_EXISTS = {
           ),
         ),
     ),
-  "WishCandidate.productId": (dbClient) =>
+  "EntityLink[wishCandidate].to": (dbClient) =>
     notExists(
       dbClient
         .select({ id: sql`1` })
-        .from(wishCandidate)
+        .from(entityLink)
         .where(
           and(
-            eq(wishCandidate.productId, product.id),
-            notDeleted(wishCandidate),
+            eq(entityLink.toEntityId, product.id),
+            liveLinks("wishCandidate"),
           ),
         ),
     ),
@@ -213,15 +209,15 @@ const PRODUCT_RETAINING_NOT_EXISTS = {
         .from(cookbook)
         .where(and(eq(cookbook.productId, product.id), notDeleted(cookbook))),
     ),
-  "ProductComponent.componentProductId": (dbClient) =>
+  "EntityLink[productComponent].to": (dbClient) =>
     notExists(
       dbClient
         .select({ id: sql`1` })
-        .from(productComponent)
+        .from(entityLink)
         .where(
           and(
-            eq(productComponent.componentProductId, product.id),
-            notDeleted(productComponent),
+            eq(entityLink.toEntityId, product.id),
+            liveLinks("productComponent"),
           ),
         ),
     ),
@@ -271,17 +267,17 @@ export const findOrphanedProducts = async (
           .filter(isRetainingEdgeKey)
           .map((key) => PRODUCT_RETAINING_NOT_EXISTS[key](dbClient)),
         // A composition parent owns no retaining incoming edge: deleting it
-        // merely removes its ProductComponent rows. It is still a meaningful
+        // merely removes its `productComponent` links. It is still a meaningful
         // live product, though, so offering it as an orphan would discard the
         // kit or multi-pack identity represented by those rows.
         notExists(
           dbClient
             .select({ id: sql`1` })
-            .from(productComponent)
+            .from(entityLink)
             .where(
               and(
-                eq(productComponent.parentProductId, product.id),
-                notDeleted(productComponent),
+                eq(entityLink.fromEntityId, product.id),
+                liveLinks("productComponent"),
               ),
             ),
         ),
@@ -379,24 +375,31 @@ export const findToolsUsedOutsideOwnership = async (
 
   const edges = await dbClient
     .select({
-      projectId: projectToolUsage.projectId,
+      projectId: entityLink.fromEntityId,
       projectShortcode: project.shortcode,
       projectName: project.name,
-      productId: projectToolUsage.productId,
+      productId: entityLink.toEntityId,
       productShortcode: product.shortcode,
       productName: product.name,
       manufacturer: product.manufacturer,
     })
-    .from(projectToolUsage)
+    .from(entityLink)
     .innerJoin(
       project,
-      and(eq(project.id, projectToolUsage.projectId), notDeleted(project)),
+      and(eq(project.id, entityLink.fromEntityId), notDeleted(project)),
     )
     .innerJoin(
       product,
-      and(eq(product.id, projectToolUsage.productId), notDeleted(product)),
+      and(eq(product.id, entityLink.toEntityId), notDeleted(product)),
     )
-    .where(notDeleted(projectToolUsage));
+    .where(liveLinks("projectTool"))
+    .then((rows) =>
+      rows.map((row) => ({
+        ...row,
+        projectId: parseEntityId("project", row.projectId),
+        productId: parseEntityId("product", row.productId),
+      })),
+    );
   if (edges.length === 0) return [];
 
   const [loadedWindows, ownership] = await Promise.all([
@@ -546,19 +549,19 @@ export const findDuplicateProductIdentities = async (
 
   const identifiers = await dbClient
     .select({
-      productId: productExternalId.productId,
-      source: productExternalId.source,
-      kind: productExternalId.kind,
-      externalId: productExternalId.externalId,
+      productId: entityExternalId.entityId,
+      source: entityExternalId.source,
+      kind: entityExternalId.kind,
+      externalId: entityExternalId.externalId,
     })
-    .from(productExternalId)
+    .from(entityExternalId)
     .where(
       and(
         inArray(
-          productExternalId.productId,
+          entityExternalId.entityId,
           candidates.map((row) => row.id),
         ),
-        notDeleted(productExternalId),
+        notDeleted(entityExternalId),
       ),
     );
 
@@ -685,7 +688,7 @@ export const findProductsWithUpcGaps = async (
           )
           .where(
             and(
-              eq(entityAttachment.subjectEntityId, product.id),
+              eq(entityAttachment.entityId, product.id),
               notDeleted(entityAttachment),
               displayableImageWhere,
             ),
@@ -817,7 +820,13 @@ export const loadProductsForCoverage = async (
     with: {
       unitMappings: {
         where: notDeleted(productUnitMappings),
-        columns: { a: true, b: true, source: true },
+        columns: {
+          aValue: true,
+          aUnit: true,
+          bValue: true,
+          bUnit: true,
+          source: true,
+        },
       },
       // The linked ingredient's N/A opt-outs, so partial coverage grades only the
       // kinds that apply (a count-only item isn't flagged for a volume it never uses).
@@ -833,6 +842,10 @@ export const loadProductsForCoverage = async (
   );
   return rows.map((row) => ({
     ...row,
+    unitMappings: row.unitMappings.map((mapping) => ({
+      ...unitMappingSides(mapping),
+      source: mapping.source,
+    })),
     price: pricing.get(row.id)?.effectivePrice ?? null,
     primaryGtin: gtins.get(row.id) ?? null,
   }));

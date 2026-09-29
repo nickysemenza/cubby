@@ -4,10 +4,12 @@ import { vendorOut } from "@cubby/schemas/vendor";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { entityGraph } from "~/entities/entity-graph.functions";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
-import { image } from "~/entities/image.functions";
-import { recommendations } from "~/lib/recommendations.functions";
+import {
+  entityGraph,
+  image,
+  recommendations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityWorkbenchInspector } from "./entity-workbench-inspector";
@@ -71,15 +73,15 @@ const imageRecord = imageWithEntitySchema.parse({
   provenanceEvidence: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
   updatedAt: new Date("2026-01-01T00:00:00Z"),
-  entityType: null,
+  entityKind: null,
   entityId: null,
   entityName: null,
   associations: [],
 });
 
-const vendorRoot = { entityType: "vendor" as const, entityId: VENDOR_ID };
+const vendorRoot = { entityKind: "vendor" as const, entityId: VENDOR_ID };
 const purchaseRef = {
-  entityType: "purchase" as const,
+  entityKind: "purchase" as const,
   entityId: testShortcode("purchase", "PUR-WORK"),
 };
 const vendorRelationships = {
@@ -169,13 +171,13 @@ function seedImageInspector() {
   harness.queryClient.setQueryData(detailOptions.queryKey, imageRecord);
   harness.queryClient.setQueryData(
     entityGraph.graph.queryOptions({
-      roots: [{ entityType: "image", entityId: IMAGE_ID }],
+      roots: [{ entityKind: "image", entityId: IMAGE_ID }],
       limit: 12,
     }).queryKey,
     {
       nodes: [
         {
-          entityType: "image",
+          entityKind: "image",
           entityId: IMAGE_ID,
           label: "fixture.jpg",
           metadata: {},

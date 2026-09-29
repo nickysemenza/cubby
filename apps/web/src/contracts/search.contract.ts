@@ -1,5 +1,11 @@
 import { searchIndexRepairEventSchema } from "@cubby/schemas/maintenance";
 import {
+  globalSearchMcpInputSchema,
+  globalSearchMcpOut,
+  similarEntitiesMcpOut,
+} from "@cubby/schemas/mcp";
+import {
+  similarEntitiesInputSchema,
   relatedSearchGroupsOutSchema,
   relatedSearchOutSchema,
   requestEmbeddingRefreshInputSchema,
@@ -36,13 +42,29 @@ export const searchContract = defineContract("search", {
     input: searchQueryInputSchema,
     output: relatedSearchGroupsOutSchema,
   }),
+  // Integrity/repair diagnostics.
   debug: query({
+    readPolicy: "strong",
     input: searchQueryInputSchema,
     output: searchDebugOutSchema,
   }),
   requestEmbeddingRefresh: mutation({
     input: requestEmbeddingRefreshInputSchema,
     output: requestEmbeddingRefreshOutSchema,
+    invalidates: [],
+  }),
+  // Agent-facing (MCP `search`): off the HTTP API.
+  /** Lexical hits plus, on request, semantic related hits kept separate. */
+  global: query({
+    http: false,
+    input: globalSearchMcpInputSchema,
+    output: globalSearchMcpOut,
+  }),
+  /** Nearest stored embeddings to one seed; ranks, never verifies. */
+  similar: query({
+    http: false,
+    input: similarEntitiesInputSchema,
+    output: similarEntitiesMcpOut,
   }),
 });
 

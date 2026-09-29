@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { readReferenceField } from "~/entities/entity-references";
-import { ai } from "~/lib/ai.functions";
+import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 /**
  * User's call, snappy by design: every typing pause longer than this fires
@@ -214,7 +214,7 @@ export interface FieldSuggestionSource {
   readonly targets: readonly string[];
   readonly basis: Record<string, string | null>;
   /** One id per page mount, grouping every call this page makes into one
-   * `ai_suggest` run. Omit to fall back to a per-call `ai_action` run. */
+   * `ai_suggest` run. Omit to share the actor's run for the hour. */
   readonly runKey?: string;
 }
 

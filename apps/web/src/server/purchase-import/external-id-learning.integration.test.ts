@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { productExternalId } from "~/server/db/schema";
+import { entityExternalId } from "~/server/db/schema";
 import {
   getDb,
   notDeleted,
@@ -45,19 +45,19 @@ describe("purchase import learned product identifiers", () => {
 
     const rows = await getDb(ctx.db)
       .select({
-        externalId: productExternalId.externalId,
-        isPrimary: productExternalId.isPrimary,
+        externalId: entityExternalId.externalId,
+        isPrimary: entityExternalId.isPrimary,
       })
-      .from(productExternalId)
+      .from(entityExternalId)
       .where(
         and(
-          eq(productExternalId.productId, product.entityId),
-          eq(productExternalId.source, "example-vendor"),
-          eq(productExternalId.kind, "retailer_sku"),
-          notDeleted(productExternalId),
+          eq(entityExternalId.entityId, product.entityId),
+          eq(entityExternalId.source, "example-vendor"),
+          eq(entityExternalId.kind, "retailer_sku"),
+          notDeleted(entityExternalId),
         ),
       )
-      .orderBy(productExternalId.externalId);
+      .orderBy(entityExternalId.externalId);
 
     expect(rows).toEqual([
       { externalId: "SKU-ONE", isPrimary: true },

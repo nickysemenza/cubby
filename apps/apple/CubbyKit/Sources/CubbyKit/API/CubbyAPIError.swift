@@ -30,6 +30,15 @@ public struct CubbyAPIError: Error, LocalizedError, Sendable {
         status == 409 && detail?.reason == "INVENTORY_STALE"
     }
 
+    /// The server's version gate (`apple-client-gate.ts`) refused this build: 426 before any
+    /// operation ran. Status alone decides it so a proxy that drops the body still shows the
+    /// update instruction.
+    public var isClientUpdateRequired: Bool {
+        status == Self.clientUpdateRequiredStatus
+    }
+
+    public static let clientUpdateRequiredStatus = 426
+
     /// The body's `reason`, when the server sent one.
     public var reason: String? { detail?.reason }
 
@@ -48,6 +57,8 @@ public struct CubbyAPIError: Error, LocalizedError, Sendable {
         switch status {
         case 401:
             "Sign in again, then retry."
+        case Self.clientUpdateRequiredStatus:
+            "Update Cubby from TestFlight."
         case 409:
             "Refresh the record, review the latest values, and retry."
         case 429:

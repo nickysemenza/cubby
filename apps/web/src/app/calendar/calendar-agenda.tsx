@@ -2,6 +2,8 @@ import type { CalendarItem } from "@cubby/schemas/calendar";
 import { addDays, format, parseISO } from "date-fns";
 import { Fragment } from "react";
 
+import { formatCalendarDay } from "~/lib/date-format";
+
 /**
  * The phone form of the planning calendar.
  *
@@ -113,7 +115,7 @@ export function CalendarAgenda({
               >
                 {group.day === today
                   ? "Today"
-                  : format(parseISO(group.day), "EEE MMM d")}
+                  : formatCalendarDay(group.day, "weekdayMonthDay")}
               </span>
               <span className="ml-auto text-slate tabular-nums">
                 {group.items.length}

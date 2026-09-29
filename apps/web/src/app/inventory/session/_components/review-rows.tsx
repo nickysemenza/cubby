@@ -3,9 +3,9 @@ import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { InfLocation } from "@cubby/schemas/location";
 import type { ReactNode } from "react";
 
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
@@ -52,7 +52,7 @@ export function LocationReviewCard({
         </div>
         <div className="min-w-0 flex-1">
           <Row align="baseline" gap="xs" wrap className="min-w-0">
-            <EntityInlineLink
+            <EntityRefLink
               displayImage={null}
               showIdentityMark={false}
               entity="location"
@@ -107,7 +107,7 @@ export function ItemReviewCard({
           />
           <div className="min-w-0 flex-1">
             <Row align="baseline" gap="xs" wrap className="min-w-0">
-              <EntityInlineLink
+              <EntityRefLink
                 displayImage={null}
                 showIdentityMark={false}
                 entity="product"

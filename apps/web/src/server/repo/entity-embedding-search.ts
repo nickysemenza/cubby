@@ -26,15 +26,15 @@ export async function getEntityEmbeddingReadiness(
   config: SemanticEmbeddingConfig,
 ): Promise<Exclude<EmbeddingReadiness, "unavailable">> {
   const [document, storedHashes] = await Promise.all([
-    getSearchDocumentEmbeddingText(db, ref.entityType, ref.entityId),
+    getSearchDocumentEmbeddingText(db, ref.entityKind, ref.entityId),
     getStoredEmbeddingHashes(db, [ref], config),
   ]);
   const storedHash = storedHashes.get(
-    entityRefKey(ref.entityType, ref.entityId),
+    entityRefKey(ref.entityKind, ref.entityId),
   );
   if (!document || !storedHash) return "uncomputed";
   const expectedHash = await embeddingTextHash({
-    entityType: ref.entityType,
+    entityKind: ref.entityKind,
     provider: config.provider,
     model: config.model,
     dimensions: config.dimensions,
@@ -47,10 +47,10 @@ export async function getEntityEmbeddingReadiness(
 export async function findSemanticEntityCandidates(
   vectorStore: VectorStorePort,
   queryEmbedding: number[],
-  opts: { entityTypes?: SearchableEntity[]; limit: number },
+  opts: { entityKinds?: SearchableEntity[]; limit: number },
 ): Promise<EntityEmbeddingCandidate[]> {
   return vectorStore.query(queryEmbedding, {
-    entityTypes: opts.entityTypes,
+    entityKinds: opts.entityKinds,
     topK: opts.limit,
   });
 }
@@ -73,7 +73,7 @@ export async function findSimilarEntities(
   opts: { targetType: SearchableEntity; limit: number },
 ): Promise<EntityEmbeddingCandidate[]> {
   const candidates = await vectorStore.queryById(seed, {
-    entityTypes: [opts.targetType],
+    entityKinds: [opts.targetType],
     topK: opts.limit + 1,
   });
 
@@ -81,7 +81,7 @@ export async function findSimilarEntities(
     .filter(
       (candidate) =>
         !(
-          candidate.entityType === seed.entityType &&
+          candidate.entityKind === seed.entityKind &&
           candidate.entityId === seed.entityId
         ),
     )

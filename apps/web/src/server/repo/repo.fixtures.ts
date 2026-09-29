@@ -27,13 +27,19 @@ import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 import type { SearchableEntity } from "@cubby/schemas/search";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
 import { wasm } from "~/lib/wasm";
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { type image, product, recipe } from "~/server/db/schema";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import {
+  entityAttachment,
+  entityIdentity,
+  type image,
+  product,
+  recipe,
+} from "~/server/db/schema";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { getDb } from "./database-helpers";
@@ -229,23 +235,23 @@ export const seedEntityTombstonesFixtureRaw = async (
  */
 export const seedSearchDocumentsFixtureRaw = async (
   db: Database,
-  entityType: SearchableEntity,
+  entityKind: SearchableEntity,
   count: number,
 ): Promise<void> => {
   await getDb(db).execute(sql`
     WITH identity AS (
       INSERT INTO "Entity" (id, kind, "deletedAt")
-      SELECT gen_random_uuid(), ${entityType}, now()
+      SELECT gen_random_uuid(), ${entityKind}, now()
       FROM generate_series(1, ${count})
       RETURNING id
     ), numbered AS (
       SELECT id, row_number() OVER (ORDER BY id) AS i FROM identity
     )
     INSERT INTO "SearchDocument" (
-      "entityType", "entityId", "shortcode", title, body,
+      "entityKind", "entityId", title, body,
       "semanticText", "normalizedText", "searchVector", "sourceHash"
     )
-    SELECT ${entityType}, id, 'SEED-' || i,
+    SELECT ${entityKind}, id,
       'Seed fixture ' || i, 'Seed fixture body ' || i,
       'Seed fixture body ' || i, 'seed fixture body ' || i,
       to_tsvector('simple', 'seed fixture ' || i), 'seed-fixture-' || i
@@ -658,4 +664,43 @@ export const createImageFixture = async (
     ...overrides,
   });
   return { ...row, url: getR2PublicUrl(row.key) };
+};
+
+type AttachmentFixtureRow = Omit<
+  typeof entityAttachment.$inferInsert,
+  "entityKind"
+>;
+
+/**
+ * Attach images to entities without each test naming the entity's kind: the
+ * kind is read from `Entity`, so the fixture always agrees with the composite
+ * FK (the identity integration test covers the refusal itself).
+ */
+export const insertEntityAttachments = async (
+  db: Database | DrizzleClient,
+  rows: AttachmentFixtureRow | readonly AttachmentFixtureRow[],
+) => {
+  const values = "length" in rows ? rows : [rows];
+  const client = "select" in db ? db : getDb(db);
+  const identities = await client
+    .select({ id: entityIdentity.id, kind: entityIdentity.kind })
+    .from(entityIdentity)
+    .where(
+      inArray(
+        entityIdentity.id,
+        values.map((row) => row.entityId),
+      ),
+    );
+  const kindById = new Map(identities.map((row) => [row.id, row.kind]));
+  return client
+    .insert(entityAttachment)
+    .values(
+      values.map((row) => {
+        const entityKind = kindById.get(row.entityId);
+        if (!entityKind)
+          throw new Error(`No Entity row for attachment ${row.entityId}`);
+        return { ...row, entityKind };
+      }),
+    )
+    .returning();
 };

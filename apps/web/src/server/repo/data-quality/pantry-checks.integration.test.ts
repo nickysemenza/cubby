@@ -6,9 +6,7 @@ import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { entityAttachment } from "~/server/db/schema";
 import { upsertCookbook } from "~/server/repo/cookbook";
-import { getDb } from "~/server/repo/database-helpers";
 import { updateLocationAiDescription } from "~/server/repo/location/crud";
 import { createMealWithEntityId } from "~/server/repo/meal/crud";
 import {
@@ -29,6 +27,7 @@ import {
   makeLocationInput,
   makeProductInput,
   makeRecipeInput,
+  insertEntityAttachments,
 } from "~/server/repo/repo.fixtures";
 
 import { loadDataQualities } from "./hydrate";
@@ -196,15 +195,15 @@ describe("data quality: pantry and garden entities", () => {
     });
   });
 
-  it("location: AI description and type", async () => {
+  it("location: AI description", async () => {
     const gap = await createLocationFixture(
       ctx.db,
-      makeLocationInput({ name: "DQ location gap", type: null }),
+      makeLocationInput({ name: "DQ location gap" }),
       TEST_ACTOR,
     );
     const gapImage = await createImageFixture(ctx.db, "dq-location-gap");
-    await getDb(ctx.db).insert(entityAttachment).values({
-      subjectEntityId: gap.entityId,
+    await insertEntityAttachments(ctx.db, {
+      entityId: gap.entityId,
       imageId: gapImage.id,
       sortOrder: 0,
     });
@@ -218,8 +217,8 @@ describe("data quality: pantry and garden entities", () => {
       ctx.db,
       "dq-location-complete",
     );
-    await getDb(ctx.db).insert(entityAttachment).values({
-      subjectEntityId: complete.entityId,
+    await insertEntityAttachments(ctx.db, {
+      entityId: complete.entityId,
       imageId: completeImage.id,
       sortOrder: 0,
     });
@@ -235,7 +234,6 @@ describe("data quality: pantry and garden entities", () => {
     ]);
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("location_ai_description");
-    expect(gapChecks).toContain("location_type");
     expect(hydrated.get(gap.entityId)?.status).toBe("needs_data");
 
     expect(hydrated.get(complete.entityId)).toMatchObject({

@@ -128,10 +128,10 @@ retain one modification version per asset, and prune deleted assets.
 
 A strong match (hash distance 0–2, or 3–6 inside the aspect gate) from a
 member's own library is also reported to the server as an `ImageSighting`
-(`IMS-`): one row per (image, member, cloud asset) carrying the asset's
-capture date and offset, location, camera, media subtypes and match
-evidence, written through the generic `resources.imageSighting.create` (the
-adapter upserts on the unique key) by `LibraryMetadataSync` in bounded
+(a child row of the Image, not an entity): one row per (image, member, cloud
+asset) carrying the asset's capture date and offset, location, camera, media
+subtypes and match evidence, written through the native `image.recordSightings`
+operation (idempotent on the asset key) by `LibraryMetadataSync` in bounded
 batches, only while the install participates in automatic work. The server
 derives the image's capture fields and capturer from its sightings — see
 [ADR 0005](adr/0005-image-capture-provenance-from-sightings.md).

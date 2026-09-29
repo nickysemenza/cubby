@@ -41,13 +41,11 @@ import { runJevChoice, type JevChoiceResult } from "~/server/ai/jev";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   entityAttachment,
+  entityExternalId,
   expense,
   financialAccount,
   financialTransaction,
   financialTransactionAllocation,
-  runFinding,
-  run as runTable,
-  runMutation,
   importSourceClaim,
   ledgerParty,
   ledgerSourceClaim,
@@ -55,9 +53,10 @@ import {
   orderMailAttachment,
   orderMailEvent,
   product,
-  productExternalId,
   purchase,
   purchasePaymentEvidence,
+  run as runTable,
+  runFinding,
   vendorAccount,
 } from "~/server/db/schema";
 import { assertRunCapabilityById } from "~/server/purchase-import/capabilities";
@@ -75,6 +74,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { sha256Hex } from "~/server/semantic/hash";
 
 import { learnPurchaseProductExternalId } from "./external-id-learning";
+import { recordRunWrites } from "./run-audit";
 import {
   decideLineWrite,
   matchCompletePaymentSet,
@@ -240,7 +240,8 @@ async function attachEvidence(
     await tx
       .insert(entityAttachment)
       .values({
-        subjectEntityId: purchaseId,
+        entityId: purchaseId,
+        entityKind: "purchase",
         role: "attachment",
         imageId: attachment.imageId,
         documentKind: attachment.documentKind,
@@ -283,7 +284,8 @@ async function attachPendingMailEvidence(
     await tx
       .insert(entityAttachment)
       .values({
-        subjectEntityId: purchaseId,
+        entityId: purchaseId,
+        entityKind: "purchase",
         role: "attachment",
         imageId: attachment.imageId,
         documentKind: attachment.filename.toLowerCase().includes("receipt")
@@ -477,27 +479,24 @@ async function decideLineIdentities(
     const identifiers = lineIdentifiers(line);
     const [externalMatch] = identifiers.length
       ? await database
-          .select({ productId: productExternalId.productId })
-          .from(productExternalId)
+          .select({ productId: entityExternalId.entityId })
+          .from(entityExternalId)
           .innerJoin(
             product,
-            and(
-              eq(product.id, productExternalId.productId),
-              notDeleted(product),
-            ),
+            and(eq(product.id, entityExternalId.entityId), notDeleted(product)),
           )
           .where(
             and(
-              eq(productExternalId.source, source),
+              eq(entityExternalId.source, source),
               or(
                 ...identifiers.map((identifier) =>
                   and(
-                    eq(productExternalId.kind, identifier.kind),
-                    eq(productExternalId.externalId, identifier.externalId),
+                    eq(entityExternalId.kind, identifier.kind),
+                    eq(entityExternalId.externalId, identifier.externalId),
                   ),
                 ),
               ),
-              notDeleted(productExternalId),
+              notDeleted(entityExternalId),
             ),
           )
           .limit(1)
@@ -600,7 +599,7 @@ type ExplicitProductResolution = NonNullable<
 >[number];
 
 /**
- * Resolve the explicit `commit_purchase_import` path's caller-supplied
+ * Resolve the explicit `purchase_import.commit` path's caller-supplied
  * resolutions into the same shape `decideLineIdentities` produces. Adjustment
  * lines (tax/shipping/discount/etc.) never carry a Product, so the resolution
  * roster the MCP layer builds is keyed to principal lines only — a missing
@@ -726,8 +725,8 @@ async function fileFinding(
     .values({
       runId: input.runId,
       ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
-      targetKind: "purchase",
-      targetId: purchaseId,
+      entityKind: "purchase",
+      entityId: purchaseId,
       kind,
       summary,
       proposedFix,
@@ -742,7 +741,7 @@ async function fileFinding(
         runFinding.ledgerPartyId,
         parseEntityId("ledgerParty", input.ledgerPartyId),
       ),
-      eq(runFinding.targetId, purchaseId),
+      eq(runFinding.entityId, purchaseId),
       eq(runFinding.kind, kind),
       eq(runFinding.evidenceFingerprint, evidenceFingerprint),
       eq(runFinding.status, "open"),
@@ -1303,23 +1302,33 @@ export async function importVendorOrder(
         });
       }
     }
-    await tx.insert(runMutation).values({
-      runId: input.runId,
-      targetKind: "purchase",
-      targetId: purchaseId,
-      mutationKind: created ? "create" : "update",
-      fields: ["header", "documents", "expenses", "paymentEvidence"],
-      postFingerprint: claimFingerprint,
-    });
-    if (rowMutations.length > 0) {
-      await tx.insert(runMutation).values(
-        rowMutations.map((mutation) => ({
-          runId: input.runId,
-          ...mutation,
-          postFingerprint: claimFingerprint,
-        })),
-      );
-    }
+    // A soft-deleted aggregate expense is recorded as the update it is: the
+    // audit trail's `delete` needs the removal cascade's witness.
+    await recordRunWrites(
+      tx,
+      buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
+        runId: runEntityId.parse(input.runId),
+      }),
+      [
+        {
+          entityKind: "purchase",
+          entityId: purchaseId,
+          action: created ? "create" : "update",
+          fields: ["header", "documents", "expenses", "paymentEvidence"],
+        },
+        ...rowMutations.map(
+          ({ targetKind, targetId, mutationKind, fields }) => ({
+            entityKind: targetKind,
+            entityId: targetId,
+            action:
+              mutationKind === "create"
+                ? ("create" as const)
+                : ("update" as const),
+            fields,
+          }),
+        ),
+      ],
+    );
     await tx.execute(sql`UPDATE "Run" SET
       "ordersSeen" = "ordersSeen" + 1,
       ${created ? sql`"imported" = "imported" + 1` : sql`"updated" = "updated" + 1`},

@@ -33,15 +33,13 @@ import { groupBy } from "es-toolkit";
 import type { ReactNode } from "react";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { mealDateLabel } from "~/app/meals/meal-format";
-import { product as productOperations } from "~/app/products/product.functions";
 import { attentionEvidence } from "~/app/projects/attention-presentation";
-import { formatDateWithYear } from "~/app/projects/project-formatting";
 import {
   ReconciliationStatus,
   reconciliationDelta,
 } from "~/app/purchases/purchase-reconciliation";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -56,9 +54,13 @@ import {
 import { humanize } from "~/entities/filters";
 import type { ProblemQuery } from "~/entities/problem-query";
 import { problemQuery } from "~/entities/problem-registry";
-import { maintenance } from "~/lib/maintenance.functions";
+import {
+  product as productOperations,
+  maintenance,
+  problems as problemOperations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatCalendarDay, formatInstant } from "~/lib/date-format";
 import { countLabel } from "~/lib/pluralize";
-import { problems as problemOperations } from "~/lib/problems.functions";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
 
@@ -584,7 +586,7 @@ function renderTrackerItem(item: ProjectAttentionItem): RenderedProblemItem {
         : [],
     details: missingBudgetDetail(item),
     route: { href: item.href },
-    editLabel: `Open ${item.entityType}`,
+    editLabel: `Open ${item.entityKind}`,
   };
 }
 
@@ -777,8 +779,8 @@ function outsideOwnershipSubtitle(
   // `projectBoundary` already has the detector's grace period applied, so it is
   // not the project's stated date — say "grace" rather than let the reader
   // compare it against the project page and conclude the card is wrong.
-  const tool = formatDateWithYear(row.toolDate);
-  const boundary = `${formatDateWithYear(row.projectBoundary)} (incl. grace)`;
+  const tool = formatCalendarDay(row.toolDate, "dateShort");
+  const boundary = `${formatCalendarDay(row.projectBoundary, "dateShort")} (incl. grace)`;
   return row.conflict === "acquired_after_end"
     ? `${byManufacturer(row.manufacturer)} · acquired ${tool}, after ${row.projectName} ended ${boundary}`
     : `${byManufacturer(row.manufacturer)} · disposed of ${tool}, before ${row.projectName} started ${boundary}`;
@@ -872,7 +874,7 @@ const DECLARED_SECTIONS = [
     renderItem: (finding) => ({
       key: finding.id,
       title: finding.summary,
-      subtitle: `${finding.kind.replaceAll("_", " ")} · ${formatDateWithYear(finding.createdAt.toISOString().slice(0, 10))}`,
+      subtitle: `${finding.kind.replaceAll("_", " ")} · ${formatInstant(finding.createdAt, "dateShort")}`,
       route: finding.purchaseId
         ? entityDetailLink("purchase", finding.purchaseId)
         : undefined,
@@ -1316,16 +1318,16 @@ const DECLARED_SECTIONS = [
     icon: WrenchIcon,
     headerAction: <MissingEmbeddingsBackfillAction />,
     renderItem: (entity) => ({
-      key: `${entity.entityType}:${entity.entityId}`,
+      key: `${entity.entityKind}:${entity.entityId}`,
       // The WHOLE shortcode. This was `.slice(0, 8)`, copied from the orphaned
       // sibling — where the id really is a uuid and truncating it is right. Here
       // it is a public shortcode, so slicing only risked cutting a real code in
       // half for no gain.
       title: entity.entityId,
-      subtitle: `${entities[entity.entityType].label} · not in the search index`,
+      subtitle: `${entities[entity.entityKind].label} · not in the search index`,
       // Live entity ⇒ always resolvable to a real page, unlike the orphaned
       // side of this pair — see the note on `entityMissingEmbeddingSchema`.
-      route: entityDetailLink(entity.entityType, entity.entityId),
+      route: entityDetailLink(entity.entityKind, entity.entityId),
     }),
   }),
   section({
@@ -1585,7 +1587,8 @@ const DECLARED_SECTIONS = [
             ? [
                 <Row key="order" align="center" gap="xs">
                   <CodeChip>{purchase.orderId}</CodeChip>
-                  <OrderIdLink
+                  <EntityRefLink
+                    variant="order"
                     orderUrl={purchase.orderUrl}
                     orderId={purchase.orderId}
                     vendorName={purchase.vendorName}
@@ -1596,7 +1599,7 @@ const DECLARED_SECTIONS = [
           ...(purchase.date
             ? [
                 <Badge key="date" variant="outline">
-                  Ordered {formatDateWithYear(purchase.date)}
+                  Ordered {formatCalendarDay(purchase.date, "dateShort")}
                 </Badge>,
               ]
             : []),
@@ -1663,10 +1666,10 @@ const DECLARED_SECTIONS = [
         <div key="dates" className="text-sm text-muted-foreground">
           {[
             item.expenseDate
-              ? `Expense ${formatDateWithYear(item.expenseDate)}`
+              ? `Expense ${formatCalendarDay(item.expenseDate, "dateShort")}`
               : "Expense undated",
             item.purchaseDate
-              ? `purchase ${formatDateWithYear(item.purchaseDate)}`
+              ? `purchase ${formatCalendarDay(item.purchaseDate, "dateShort")}`
               : "purchase undated",
           ].join(" · ")}
         </div>,
@@ -1753,7 +1756,7 @@ const DECLARED_SECTIONS = [
         formatCurrency(item.amount),
         `${item.allocationCount} allocation${item.allocationCount === 1 ? "" : "s"} totalling ${formatCurrency(item.allocatedTotal)}`,
         item.postedDate
-          ? `posted ${formatDateWithYear(item.postedDate)}`
+          ? `posted ${formatCalendarDay(item.postedDate, "dateShort")}`
           : null,
       ]
         .filter(Boolean)

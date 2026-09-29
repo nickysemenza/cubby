@@ -16,7 +16,7 @@ import type { ReactNode } from "react";
 import { z } from "zod";
 
 import type { BulkAction } from "~/app/_components/data-table/bulk-actions.types";
-import { EntityInlineLinkById } from "~/app/_components/EntityInlineLinkById";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Button } from "~/components/ui/button";
 import { parseEntityEditUpdateInput } from "~/entities/editing/mutation-data";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
@@ -175,7 +175,7 @@ function resolutionPhrase(resolution: FieldResolution): string {
   switch (resolution.mode) {
     case "inherit":
       return resolution.sourceEntity
-        ? `From ${resolution.sourceEntity.entityType === "task" ? "parent task" : entitySummary[resolution.sourceEntity.entityType].singular.toLowerCase()}`
+        ? `From ${resolution.sourceEntity.entityKind === "task" ? "parent task" : entitySummary[resolution.sourceEntity.entityKind].singular.toLowerCase()}`
         : sentenceCase(resolution.source);
     case "allocated":
       return "Allocated from";
@@ -353,7 +353,7 @@ export function FieldResolutionStatus({
   const redundant =
     resolution.mode === "explicit" && resolution.matchesFallback;
   const sourceEntity = resolution.sourceEntity
-    ? auditEntitySchema.safeParse(resolution.sourceEntity.entityType)
+    ? auditEntitySchema.safeParse(resolution.sourceEntity.entityKind)
     : null;
   if (compact) {
     const Icon = resolutionIcon(resolution);
@@ -388,8 +388,9 @@ export function FieldResolutionStatus({
         // Its own flex item: a long source name wraps to a full line
         // before it truncates.
         <span className="flex max-w-full min-w-0">
-          <EntityInlineLinkById
-            entityType={sourceEntity.data}
+          <EntityRefLink
+            variant="byId"
+            entityKind={sourceEntity.data}
             entityId={resolution.sourceEntity.entityId}
             name={resolution.sourceEntity.name}
           />

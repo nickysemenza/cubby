@@ -15,8 +15,8 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { focusOnMount } from "~/hooks/focus-on-mount";
+import { collection } from "~/integrations/tanstack-query/generated/catalog.gen";
 
-import { collection } from "./collection.functions";
 import { useSmartCollections } from "./smart-collection-state";
 
 type CollectionsIndexOperations = Pick<

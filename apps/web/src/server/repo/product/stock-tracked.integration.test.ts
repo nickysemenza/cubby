@@ -79,7 +79,7 @@ describe("setProductsStockTracked", () => {
       .from(auditLog)
       .where(
         and(
-          eq(auditLog.entityType, "product"),
+          eq(auditLog.entityKind, "product"),
           inArray(auditLog.entityId, [changed.entityId, unchanged.entityId]),
           eq(auditLog.action, "update"),
         ),

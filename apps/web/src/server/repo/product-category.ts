@@ -27,7 +27,6 @@ import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { product, productCategory } from "~/server/db/schema";
-import { entityRepository } from "~/server/entity-kernel/adapter";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
@@ -35,8 +34,14 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
+import {
+  asActor,
+  defineRepository,
+  listOn,
+  onDb,
+} from "~/server/repo/repository";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   lookupEntityReferences,
   resolveOrThrow,
@@ -45,7 +50,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { categoryDescendantsSql } from "./product-category-sql";
 
-export const PRODUCT_CATEGORY_DELETE_EDGE_POLICY = {
+const PRODUCT_CATEGORY_DELETE_EDGE_POLICY = {
   "ProductCategory.parentId": {
     code: "block-child-categories",
     effect: "block",
@@ -220,7 +225,7 @@ const inheritedFeatureResolution = (
       fallbackValue: feature,
       source: source.name,
       sourceEntity: {
-        entityType: "productCategory",
+        entityKind: "productCategory",
         entityId: source.id,
         name: source.name,
       },
@@ -411,7 +416,7 @@ export async function createProductCategory(
       feature: data.feature,
     });
     await logAuditEntry(tx, actor, {
-      entityType: "productCategory",
+      entityKind: "productCategory",
       entityId: row.id,
       action: "create",
     });
@@ -472,7 +477,7 @@ export async function updateProductCategory(
       await assertAffectedProductsRemainAdmissible(tx, id);
     }
     await logAuditEntry(tx, actor, {
-      entityType: "productCategory",
+      entityKind: "productCategory",
       entityId: id,
       action: "update",
     });
@@ -618,11 +623,11 @@ export async function loadCategorySummaries(
   );
 }
 
-export const productCategoryRepository = entityRepository("productCategory", {
+export const productCategoryRepository = defineRepository("productCategory", {
   lifecycle: { delete: PRODUCT_CATEGORY_DELETE_EDGE_POLICY },
-  get: getProductCategoryByShortcode,
-  list: listProductCategories,
-  create: createProductCategory,
-  update: updateProductCategory,
+  get: onDb(getProductCategoryByShortcode),
+  list: listOn(listProductCategories),
+  create: asActor(createProductCategory),
+  update: asActor(updateProductCategory),
   deleteHooks: { beforeDelete: refuseBoundCategories },
 });

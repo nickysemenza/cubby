@@ -16,16 +16,16 @@ import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
 import { ProductVariantEvidence } from "~/app/_components/product-variant-evidence";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
 import { EntityIcon } from "~/entities/entities";
-import type { recommendations } from "~/lib/recommendations.functions";
+import type { recommendations } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 export interface ProductMatchQueueOperations {
   readonly productMatches: typeof recommendations.productMatches;
@@ -68,8 +68,8 @@ export function ProductMatchQueue({
   const refs = useMemo(
     () =>
       items.flatMap((item) => [
-        { entityType: "product" as const, entityId: item.keeper.id },
-        { entityType: "product" as const, entityId: item.other.id },
+        { entityKind: "product" as const, entityId: item.keeper.id },
+        { entityKind: "product" as const, entityId: item.other.id },
       ]),
     [items],
   );
@@ -249,7 +249,7 @@ function MatchSide({
   caption: string;
 }) {
   const displayImage = useEntityDisplayImage({
-    entityType: "product",
+    entityKind: "product",
     entityId: side.id,
   });
   const details = [
@@ -277,7 +277,7 @@ function MatchSide({
         )}
       </div>
       <div className="min-w-0">
-        <EntityInlineLink
+        <EntityRefLink
           entity="product"
           data={{ id: side.id, name: side.name }}
           displayImage={displayImage}

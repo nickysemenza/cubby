@@ -99,7 +99,7 @@ describe("vendor declared scalar updates", () => {
       .from(auditLog)
       .where(
         and(
-          eq(auditLog.entityType, "vendor"),
+          eq(auditLog.entityKind, "vendor"),
           eq(auditLog.entityId, id),
           eq(auditLog.action, "update"),
         ),
@@ -117,7 +117,7 @@ describe("vendor declared scalar updates", () => {
       .from(auditLog)
       .where(
         and(
-          eq(auditLog.entityType, "vendor"),
+          eq(auditLog.entityKind, "vendor"),
           eq(auditLog.entityId, id),
           eq(auditLog.action, "update"),
         ),
@@ -295,7 +295,7 @@ describe("vendor repository — mergeVendors", () => {
   };
 
   const auditRows = async (
-    entityType: "vendor" | "purchase" | "expense",
+    entityKind: "vendor" | "purchase" | "expense",
     entityId: string,
     action: "create" | "update" | "delete",
   ) =>
@@ -304,7 +304,7 @@ describe("vendor repository — mergeVendors", () => {
       .from(auditLog)
       .where(
         and(
-          eq(auditLog.entityType, entityType),
+          eq(auditLog.entityKind, entityKind),
           eq(auditLog.entityId, entityId),
           eq(auditLog.action, action),
         ),
@@ -343,7 +343,8 @@ describe("vendor repository — mergeVendors", () => {
       status: "UPLOADED",
     });
     const join = await insertAndReturn(ctx.db, entityAttachment, {
-      subjectEntityId: purchaseId,
+      entityId: purchaseId,
+      entityKind: "purchase",
       imageId: img.id,
     });
     return { imageId: img.id, joinId: join.id };
@@ -477,7 +478,7 @@ describe("vendor repository — mergeVendors", () => {
 
     const survivorDocs = await getDb(ctx.db).query.entityAttachment.findMany({
       where: and(
-        eq(entityAttachment.subjectEntityId, survivor),
+        eq(entityAttachment.entityId, survivor),
         notDeleted(entityAttachment),
       ),
     });

@@ -6,9 +6,7 @@ import { inventoryPlacementValues } from "@cubby/shared";
 import { foodSummary, foodSummaryMcpOut, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import { productRelatedFilterFields } from "./related-view";
 import {
-  auditDateFilterFields,
   dateRangeFields,
   numericRangeFields,
   timestampedFields,
@@ -47,11 +45,8 @@ import {
 import { baseKind } from "./problems";
 import { plainDate, taskStatusSchema } from "./project";
 import { recipeUsageMcpEntityOut, recipeUsageOut } from "./recipe";
-import { mutationSideEffectsSchema } from "./background-jobs";
-import {
-  generatedProductFieldSchemas,
-  generatedProductFilterFields,
-} from "./generated/entity-field-schemas.product.gen";
+import { mutationSideEffectsSchema } from "./mutation-side-effects";
+import { generatedProductFieldSchemas } from "./generated/entity-field-schemas.product.gen";
 import {
   mcpUnitMappingOut,
   unitMappingOut,
@@ -59,6 +54,18 @@ import {
 } from "./unitmapping";
 import { productCategory, productPricingOut } from "./product-fields";
 import type { ProductCategorySummary } from "./product-category-fields";
+import {
+  productBaseFilterFields,
+  productCreateInput,
+} from "./generated/product.gen";
+
+export {
+  productCreateInput,
+  productUpdateData,
+  productUpdateInput,
+  type ProductCreateInput,
+  type ProductUpdateInput,
+} from "./generated/product.gen";
 
 export { productPricingOut } from "./product-fields";
 
@@ -80,14 +87,6 @@ export const hasFoodIndicators = (product: {
 }): boolean =>
   hasFdcLink(product.fdc_id) ||
   (product.ingredientId != null && product.ingredientId.length > 0);
-
-export const productCreateInput = z.object(generatedProductFieldSchemas.create);
-export const productUpdateData = z.object(generatedProductFieldSchemas.update);
-
-export const productUpdateInput = z.object({
-  id: productShortcode,
-  data: productUpdateData,
-});
 
 export const productBulkStockTrackedInput = z.object({
   ids: z.array(productShortcode).min(1),
@@ -129,7 +128,10 @@ export const productApplyUpcInput = z.object({
 
 export const productFindOrCreateByUPCInput = z.object({
   upc,
-  defaultName: z.string().optional(),
+  defaultName: z
+    .string()
+    .optional()
+    .describe("Fallback name if not found in any database"),
 });
 
 /**
@@ -168,7 +170,7 @@ export const productCreateManyInput = z
 /**
  * Lookup-only name resolution for imports: "which of these receipt lines already
  * has a Product?" without minting anything. The ingredient twin
- * (`resolve_ingredients`) creates on miss because an ingredient is just a
+ * (`entity.resolve`) creates on miss because an ingredient is just a
  * name; a Product is identity plus cost basis, so the create stays a separate,
  * deliberate call after the agent has read the candidates.
  */
@@ -209,12 +211,10 @@ export const productMarkUsdaUnavailableManyInput = z.object({
 });
 
 export const productFilterFields = {
-  ...auditDateFilterFields,
-  ...productRelatedFilterFields,
-  ...generatedProductFilterFields,
-  /** Components of the given kit(s): products on their `ProductComponent` rows. */
+  ...productBaseFilterFields,
+  /** Components of the given kit(s): products on their `productComponent` links. */
   kitId: oneOrMany(productShortcode).optional(),
-  /** Kits containing the given component(s): the parents on their `ProductComponent` rows. */
+  /** Kits containing the given component(s): the parents on their `productComponent` links. */
   componentId: oneOrMany(productShortcode).optional(),
   upcPresenceFilter: presenceFilter,
   externalIdSource: oneOrMany(externalIdSource).optional(),
@@ -528,8 +528,6 @@ export type ProductTopLevelOut = z.infer<typeof productTopLevelOut>;
 export type ProductFindOrCreateByUPCOut = z.infer<
   typeof productFindOrCreateByUPCOut
 >;
-export type ProductCreateInput = z.infer<typeof productCreateInput>;
-export type ProductUpdateInput = z.infer<typeof productUpdateInput>;
 
 const productIngredientOut = z.object({
   id: ingredientShortcode,
@@ -611,7 +609,7 @@ const productExternalIdMcpEntityOut = externalIdOut.omit({ id: true });
  * `syncProductUnitMappings` (repo/product/update-helpers.ts) accepts to update
  * an existing row in place — a mapping resent without it is hard-deleted and
  * reinserted, losing `createdAt`/`updatedAt` and its audit trail. External-id
- * rows have their own slot-addressed patch tool (`patch_products_external_ids`)
+ * rows have their own slot-addressed patch tool (`product_enrichment.patch_external_ids`)
  * and stay id-less, but a unit mapping has no such tool, so this child row
  * keeps its raw uuid across the MCP boundary — the same "id is the follow-up
  * write handle" carve-out as mealRecipe `id` and recipe section `lineId` (see
@@ -695,7 +693,7 @@ export const productWithIngredientAndInventoryAndMappingsOut = z.object({
    */
   servingAsLocations: z.array(productLocationRefOut),
   /**
-   * Live `ProductComponent` edges where this product is the parent — non-zero
+   * Live `productComponent` links where this product is the parent — non-zero
    * means it is a kit or multi-pack. Counts distinct components, not units.
    *
    * Embedded here rather than read from `product.components` beside it, for the
@@ -751,7 +749,7 @@ export const productListItemOut = z.object({
   ingredient: productIngredientOut.nullable(),
   inventoryEntry: z.array(productListInventoryEntryOut),
   expenseCount: z.number().int(),
-  // Live `ProductComponent` edges where this product is the parent — non-zero
+  // Live `productComponent` links where this product is the parent — non-zero
   // means it's a kit or multi-pack. Counts distinct components, not units: a
   // 4-pack stored as one edge with `quantity: 4` reads as 1.
   componentCount: z.number().int().nonnegative(),
@@ -782,7 +780,7 @@ export const productWithFoodOut = z.object({
   inventoryEntry: z.array(productInventoryWithLocationOut),
   servingAsLocations: z.array(productLocationRefOut),
   /**
-   * Live `ProductComponent` edges where this product is the parent — non-zero
+   * Live `productComponent` links where this product is the parent — non-zero
    * means it is a kit or multi-pack. Counts distinct components, not units.
    *
    * Embedded here rather than read from `product.components` beside it, for the

@@ -15,8 +15,8 @@ import {
   type EntityDisplayImageMap,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { formatDateRange } from "~/app/projects/shared";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -38,9 +38,8 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { fieldEnumOptions } from "~/entities/enum-field-display";
+import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
-
-import { task } from "./task.functions";
 
 /** A single chain node (task or project) as a linked breadcrumb chip. */
 function ChainNodeLink({
@@ -58,11 +57,11 @@ function ChainNodeLink({
 }) {
   const displayImage =
     displayImages[
-      entityDisplayImageKey({ entityType: node.type, entityId: node.id })
+      entityDisplayImageKey({ entityKind: node.type, entityId: node.id })
     ] ?? null;
   return match(node.type)
     .with("task", () => (
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={displayImage}
         entity="task"
         data={{ id: node.id, name: node.name }}
@@ -70,7 +69,7 @@ function ChainNodeLink({
       />
     ))
     .with("project", () => (
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={displayImage}
         entity="project"
         data={{ id: node.id, name: node.name }}
@@ -132,11 +131,11 @@ function TaskRows({
           <TableRow key={t.id}>
             <TableCell>
               <Row align="center" gap="xs" className="min-w-0">
-                <EntityInlineLink
+                <EntityRefLink
                   displayImage={
                     displayImages[
                       entityDisplayImageKey({
-                        entityType: "task",
+                        entityKind: "task",
                         entityId: t.id,
                       })
                     ] ?? null
@@ -157,11 +156,11 @@ function TaskRows({
             </TableCell>
             <TableCell>
               {t.projectId && t.projectName && t.projectId ? (
-                <EntityInlineLink
+                <EntityRefLink
                   displayImage={
                     displayImages[
                       entityDisplayImageKey({
-                        entityType: "project",
+                        entityKind: "project",
                         entityId: t.projectId,
                       })
                     ] ?? null
@@ -219,29 +218,29 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
   const imageRefs = useMemo(
     () => [
       ...data.next.map((task) => ({
-        entityType: "task" as const,
+        entityKind: "task" as const,
         entityId: task.id,
       })),
       ...data.later.map((task) => ({
-        entityType: "task" as const,
+        entityKind: "task" as const,
         entityId: task.id,
       })),
       ...data.next.flatMap((task) =>
         task.projectId
-          ? [{ entityType: "project" as const, entityId: task.projectId }]
+          ? [{ entityKind: "project" as const, entityId: task.projectId }]
           : [],
       ),
       ...data.later.flatMap((task) =>
         task.projectId
-          ? [{ entityType: "project" as const, entityId: task.projectId }]
+          ? [{ entityKind: "project" as const, entityId: task.projectId }]
           : [],
       ),
       ...data.blocked.flatMap((blocked) => [
-        { entityType: "task" as const, entityId: blocked.task.id },
+        { entityKind: "task" as const, entityId: blocked.task.id },
         ...blocked.reasons.flatMap((reason) =>
           reason.kind !== "manual"
             ? reason.chain.map((node) => ({
-                entityType: node.type,
+                entityKind: node.type,
                 entityId: node.id,
               }))
             : [],
@@ -291,11 +290,11 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
             {data.blocked.map((bt) => (
               <Stack key={bt.task.id} gap="xs">
                 <Row gap="sm" align="center">
-                  <EntityInlineLink
+                  <EntityRefLink
                     displayImage={
                       displayImages[
                         entityDisplayImageKey({
-                          entityType: "task",
+                          entityKind: "task",
                           entityId: bt.task.id,
                         })
                       ] ?? null

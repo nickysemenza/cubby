@@ -24,7 +24,7 @@ import {
 } from "~/components/ui/collapsible";
 import { Spinner } from "~/components/ui/spinner";
 import { useHydratedLoading } from "~/hooks/useHydrated";
-import { problems as problemOperations } from "~/lib/problems.functions";
+import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { AutoFixButton, useAutoFixPlan } from "./components/auto-fix-button";
 import { AUTO_FIX_SECTION_IDS } from "./components/auto-fix-registry";

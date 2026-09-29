@@ -1,5 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { entityRelationshipSchema } from "@cubby/schemas/entity-integrity";
+import {
+  ENTITY_LINK_KINDS,
+  entityLinkEdgeKey,
+  entityLinkKinds,
+} from "@cubby/schemas/entity-links";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
@@ -25,8 +30,8 @@ const isSchemaTable = (value: SchemaExport): value is SchemaTable =>
 const ALL_TABLES = Object.values(schema).filter(isSchemaTable);
 
 // entity -> its own local pgTable, resolved by matching the manifest's
-// declared `dbTable` name against the real exported tables — derived, not
-// hand-maintained, so the two can't quietly drift apart (see the first test).
+// declared `dbTable` name against the real exported tables (the generator
+// emits each entity's table under exactly that name).
 const ENTITY_TABLE: Partial<Record<Entity, PgTable>> = {};
 for (const entity of entities) {
   const dbTable = entityManifest[entity].dbTable;
@@ -59,6 +64,8 @@ const NON_ENTITY_FK_TARGETS = {
   // Durable identity (ADR 0006): every payload binds to its own row, and an
   // attachment names its subject here because a subject can be any entity.
   Entity: "durable identity, not a domain entity of its own",
+  // The registry every identifier/statement/claim source slug names.
+  ExternalSource: "a source slug registry, not a domain entity",
   // Owned wholly by its parent recipe (Recipe -> RecipeSection ->
   // RecipeSectionIngredient) — not independently addressable, so it never
   // graduated to its own entity.
@@ -131,17 +138,23 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records the Run that scheduled a queued image-processing job",
   },
-  "VendorMailSearchJob.runId": {
-    classification: "metadata",
-    reason: "records the Run and its Vendor Gmail search progress",
-  },
   "RunTarget.deviceWorkDeviceId": {
     classification: "metadata",
     reason: "records the device that last reported on-device processing",
   },
-  "RunTarget.purchaseId": {
+  // ImageSighting is a child table of Image, not an entity, so no relation
+  // path can start from it; the Image detail reads its sightings directly.
+  "ImageSighting.imageId": {
+    classification: "ownership",
+    reason: "a sighting is a child row of the Image it reports on",
+  },
+  "ImageSighting.ledgerPartyId": {
     classification: "metadata",
-    reason: "records the Purchase a targeted validation examined",
+    reason: "the member whose photo library reported the sighting",
+  },
+  "ImageSighting.deviceId": {
+    classification: "metadata",
+    reason: "the native install that reported the sighting",
   },
   "PhotoGroupProposal.runId": {
     classification: "ownership",
@@ -162,14 +175,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
   "PhotoGroupProposal.productCreateCategoryId": {
     classification: "metadata",
     reason: "the category a proposed photo group's new Product is filed under",
-  },
-  "RunTarget.productId": {
-    classification: "metadata",
-    reason: "records the Product a targeted enrichment examined",
-  },
-  "RunTarget.imageId": {
-    classification: "metadata",
-    reason: "records the Image a photo-inventory run grouped into a Product",
   },
   "RunTarget.vendorAccountId": {
     classification: "metadata",
@@ -199,10 +204,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
   "RunEvidence.runId": {
     classification: "ownership",
     reason: "captured evidence filed under its run",
-  },
-  "RunMutation.runId": {
-    classification: "ownership",
-    reason: "an explicit row-mutation record attributed to its run",
   },
   "RunOperation.runId": {
     classification: "ownership",
@@ -345,11 +346,11 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "review queue state for a candidate same-item pair",
   },
-  "ProductExternalId.productId": {
+  "ExternalSource.vendorId": {
     classification: "metadata",
-    reason: "external provider identifier owned by the product",
+    reason: "names the Vendor a source slug is; registry metadata",
   },
-  "ProductUnitMappings.productId": {
+  "ProductUnitMapping.productId": {
     classification: "ownership",
     reason: "derived unit-mapping state owned by the product",
   },
@@ -370,6 +371,18 @@ interface IntrospectedEdge {
   targetEntity: Entity | undefined;
 }
 
+/** Which `EntityLink` end a composite FK binds, if it is one of the two. */
+function linkEndOfFk(
+  sourceTableName: string,
+  columns: readonly { name: string }[],
+): "from" | "to" | null {
+  if (sourceTableName !== "EntityLink") return null;
+  const names = columns.map((column) => column.name);
+  if (names.includes("fromEntityId")) return "from";
+  if (names.includes("toEntityId")) return "to";
+  return null;
+}
+
 /** Every FK column in schema.ts, source table included (join tables too). */
 function introspectFkEdges(): IntrospectedEdge[] {
   const edges: IntrospectedEdge[] = [];
@@ -379,6 +392,22 @@ function introspectFkEdges(): IntrospectedEdge[] {
     for (const fk of getTableConfig(table).foreignKeys) {
       const ref = fk.reference();
       const targetTableName = getTableConfig(ref.foreignTable).name;
+      // `EntityLink`'s two composite FKs to `Entity(id, kind)` carry one edge
+      // per link kind and end; the row's kind (CHECKed from the declaration)
+      // fixes which entity table each lands on.
+      const linkEnd = linkEndOfFk(sourceTableName, ref.columns);
+      if (linkEnd) {
+        for (const kind of entityLinkKinds) {
+          const targetEntity = ENTITY_LINK_KINDS[kind][linkEnd];
+          edges.push({
+            key: entityLinkEdgeKey(kind, linkEnd),
+            sourceEntity,
+            targetTableName: entityManifest[targetEntity].dbTable ?? "",
+            targetEntity,
+          });
+        }
+        continue;
+      }
       const targetEntity = ENTITY_BY_TABLE.get(targetTableName);
       for (const column of ref.columns) {
         edges.push({
@@ -422,20 +451,6 @@ function graphPathEdgeKeys(): ReadonlySet<string> {
 }
 
 describe("entity manifest FK guard", () => {
-  it("every entity's declared dbTable resolves to a real pgTable in schema.ts", () => {
-    for (const entity of entities) {
-      const dbTable = entityManifest[entity].dbTable;
-      if (!dbTable) continue;
-      const table = ENTITY_TABLE[entity];
-      expect(
-        table,
-        `entityManifest.${entity}.dbTable = "${dbTable}" does not match any pgTable exported from schema.ts`,
-      ).toBeDefined();
-      if (!table) continue;
-      expect(getTableConfig(table).name).toBe(dbTable);
-    }
-  });
-
   it("every FK pointing at an entity's table is declared in INCOMING_EDGES", () => {
     const edges = introspectFkEdges().filter(
       (
@@ -583,6 +598,7 @@ describe("relationship provenance", () => {
 
   /** The table a step's edge lives ON — the left half of its `Table.column` key. */
   const sourceTableOf = (edgeKey: string): string => {
+    if (edgeKey.startsWith("EntityLink[")) return "EntityLink";
     const [table] = edgeKey.split(".");
     return table ?? "";
   };

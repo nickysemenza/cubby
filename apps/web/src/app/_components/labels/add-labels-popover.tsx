@@ -11,7 +11,6 @@ import { toast } from "sonner";
 
 import { LocationPickerThumb } from "~/app/_components/locations/location-picker-thumb";
 import { typeSupportsQrCode } from "~/app/_components/locations/location-type-theme";
-import { location } from "~/app/locations/location.functions";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import {
@@ -19,7 +18,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
+import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 export function AddLabelsPopover({
   codes,

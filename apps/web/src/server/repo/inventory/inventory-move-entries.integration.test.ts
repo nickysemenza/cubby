@@ -1,4 +1,3 @@
-import { amount } from "@cubby/schemas/codec";
 import type {
   InventoryId,
   LocationId,
@@ -11,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import { auditLog, inventoryEntry } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { amountFromColumns } from "~/server/repo/database-helpers";
 import {
   createInventoryEntry,
   moveInventoryEntries,
@@ -84,12 +84,17 @@ describe("moveInventoryEntries", () => {
         eq(inventoryEntry.locationId, locationId),
         notDeleted(inventoryEntry),
       ),
-      columns: { id: true, productId: true, amount: true },
+      columns: {
+        id: true,
+        productId: true,
+        amountValue: true,
+        amountUnit: true,
+      },
     });
     return rows
       .map((row) => ({
         productId: row.productId,
-        value: amount.parse(row.amount).value,
+        value: amountFromColumns(row).value,
       }))
       .sort((a, b) => a.value - b.value);
   };
@@ -97,7 +102,7 @@ describe("moveInventoryEntries", () => {
   const auditFor = (entityId: InventoryId) =>
     getDb(ctx.db).query.auditLog.findMany({
       where: and(
-        eq(auditLog.entityType, "inventory"),
+        eq(auditLog.entityKind, "inventory"),
         eq(auditLog.entityId, entityId),
       ),
       columns: { action: true },

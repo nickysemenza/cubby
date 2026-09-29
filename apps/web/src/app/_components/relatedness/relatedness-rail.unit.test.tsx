@@ -3,8 +3,10 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { recommendations } from "~/lib/recommendations.functions";
-import { search } from "~/lib/search.functions";
+import {
+  recommendations,
+  search,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { entityDisplayImageKey } from "../entity-media/entity-display-images";
@@ -65,7 +67,7 @@ function result(
 ): EntityRecommendationsOut {
   return {
     source: {
-      entityType: "product",
+      entityKind: "product",
       entityId: testShortcode("product", "PRD-SOURCE"),
     },
     basisKey: `basis-${status}`,
@@ -184,7 +186,7 @@ describe("RelatednessRail", () => {
         operations={adapter.operations}
         seededDisplayImages={{
           [entityDisplayImageKey({
-            entityType: "product",
+            entityKind: "product",
             entityId: pictured,
           })]: { url: "https://images.example/cover.jpg" },
         }}

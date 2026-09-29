@@ -25,7 +25,6 @@ import {
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { deleteImages } from "~/server/repo/image";
 import { mergeLedgerParties } from "~/server/repo/ledger-party";
-import { productCategoryRepository } from "~/server/repo/product-category";
 import { mergeProducts } from "~/server/repo/product/merge";
 import {
   createImageFixture,
@@ -35,6 +34,7 @@ import {
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 
 import {
   approvePhotoGroupProposals,
@@ -88,7 +88,8 @@ describe("photo group proposals", () => {
       .values(
         images.map((image, index) => ({
           runId: run.id,
-          imageId: parseEntityId("image", image.id),
+          entityKind: "image" as const,
+          entityId: parseEntityId("image", image.id),
           position: index,
           state: "pending" as const,
           targetFingerprint: `fixture-${crypto.randomUUID()}`,
@@ -730,7 +731,7 @@ describe("photo group proposals", () => {
       .from(runTarget)
       .where(
         eq(
-          runTarget.imageId,
+          runTarget.entityId,
           parseEntityId(
             "image",
             (await readRow(run.id, "junk"))!.images[0]!.imageId,
@@ -838,11 +839,9 @@ describe("photo group proposals", () => {
       },
       ctx.actor,
     );
-    await productCategoryRepository.delete(
-      ctx.db,
-      [parseShortcodeFor("productCategory", category.shortcode)],
-      ctx.actor,
-    );
+    await deleteThroughKernel(ctx.db, ctx.actor, "productCategory", [
+      parseShortcodeFor("productCategory", category.shortcode),
+    ]);
 
     const [view] = (await listPhotoGroupProposals(ctx.db, run.shortcode))
       .proposals;
@@ -904,7 +903,7 @@ describe("photo group proposals", () => {
     for (const deleted of deletedIds)
       await getDb(ctx.db)
         .delete(runTarget)
-        .where(eq(runTarget.imageId, parseEntityId("image", deleted)));
+        .where(eq(runTarget.entityId, parseEntityId("image", deleted)));
 
     const listed = await listPhotoGroupProposals(ctx.db, run.shortcode);
     const kept = listed.proposals.find((entry) => entry.groupKey === "kept");
@@ -958,12 +957,12 @@ describe("photo group proposals", () => {
     // reused across tests, so the trigger is dropped in `finally`.
     const firstId = (await readRow(run.id, "hat"))!.images[0]!.imageId;
     const [other] = await getDb(ctx.db)
-      .select({ imageId: runTarget.imageId })
+      .select({ imageId: runTarget.entityId })
       .from(runTarget)
       .where(
         and(
           eq(runTarget.runId, run.id),
-          sql`${runTarget.imageId} <> ${firstId}`,
+          sql`${runTarget.entityId} <> ${firstId}`,
         ),
       );
     const db = getDb(ctx.db);

@@ -28,13 +28,13 @@ records just to have somewhere to put it.
 
 ## Task (one per calendar row, one per shopping-list line)
 
-| Plan concept                                                                      | Field              |
-| --------------------------------------------------------------------------------- | ------------------ |
-| The row's action ("Direct-sow fava beans", "Buy mesh drawstring bags ×20")        | `name`             |
-| The season Project                                                                | `projectId`        |
-| The heading date the row sits under                                               | `dueDate`          |
-| A matching existing Product (checked with `resolve_products`, never created here) | `subjectProductId` |
-| A trade/category the plan implies (rare)                                          | `trade`            |
+| Plan concept                                                                         | Field              |
+| ------------------------------------------------------------------------------------ | ------------------ |
+| The row's action ("Direct-sow fava beans", "Buy mesh drawstring bags ×20")           | `name`             |
+| The season Project                                                                   | `projectId`        |
+| The heading date the row sits under                                                  | `dueDate`          |
+| A matching existing Product (checked with `entity_read.resolve`, never created here) | `subjectProductId` |
+| A trade/category the plan implies (rare)                                             | `trade`            |
 
 Group by the plan's own headings — a "November" section becomes Tasks with
 `dueDate` somewhere in November; a "Shopping list" section becomes Tasks with
@@ -44,7 +44,7 @@ no planting attached, just the purchase itself as the action.
 
 | Plan concept                                       | Field                                                                                                          |
 | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| The cultivar (or species)                          | `plantId`, resolved in batch via `resolve_plants` with its crop `gardenGuideKey`                               |
+| The cultivar (or species)                          | `plantId`, resolved in batch via `entity.resolve` with its crop `gardenGuideKey`                               |
 | The bed/pot it goes in                             | `locationId` — leave `null` if the plan hasn't assigned a bed yet                                              |
 | Count or weight ("×3", "¾ lb")                     | `quantity` (text, as stated — never parsed into a number)                                                      |
 | Stated timing ("plant now", "Nov", "early spring") | `plannedWindow` (text, as stated)                                                                              |
@@ -69,7 +69,7 @@ belong on the GardenEntry the household logs later.
 | Undecided between cultivars ("DiCicco or Belstar")                    | Resolve the top pick; name the alternate in `Plant.notes`                                                                |
 | Grow / maybe / skip lists, "never X here"                             | `verdict: yes \| maybe \| no`; the reason in `notes`. A crop-level "never" is a species Plant ("Okra") with verdict `no` |
 | Days to maturity from a cited packet or listing                       | `daysFromSowMin/Max` or `daysFromTransplantMin/Max`, URL in `notes`; crop estimates stay in `garden-practice.ts`         |
-| The cooking ingredient the harvest becomes                            | `ingredientId` (informational only; pass `ingredientName` to `resolve_plants`)                                           |
+| The cooking ingredient the harvest becomes                            | `ingredientId` (informational only; pass `ingredientName` to `entity.resolve`)                                           |
 
 The Plant's `routes` read out how and when each practice start route
 applies this month, and a Planting's `expectedHarvest` is computed from its
@@ -81,6 +81,6 @@ A shopping-list line for seeds is a Task, not a Product — Cubby only creates
 a Product once something is actually bought (the `purchase-import` skill's
 job). When the household later buys a plan's seed packets, hand the receipt
 to `purchase-import`, set the resulting Product's `growsPlantId`, and set its
-shortcode as the matching Planting's `sourceProductId` with `entity update
+shortcode as the matching Planting's `sourceProductId` with `entity.update
 planting`. Vendor URLs and prices for unbought lines stay in the shopping
 Task's notes.

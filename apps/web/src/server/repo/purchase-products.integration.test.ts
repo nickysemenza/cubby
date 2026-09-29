@@ -11,9 +11,10 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { purchaseProduct } from "~/server/db/schema";
+import { entityLink } from "~/server/db/schema";
+import { liveLinks } from "~/server/repo/entity-links";
 
-import { getDb, notDeleted } from "./database-helpers";
+import { getDb } from "./database-helpers";
 import { createExpense } from "./expense";
 import { mergeProducts } from "./product/merge";
 import {
@@ -44,12 +45,12 @@ describe("purchase ↔ product links", () => {
 
   const livePairs = (purchaseId: PurchaseId) =>
     getDb(ctx.db)
-      .select({ productId: purchaseProduct.productId })
-      .from(purchaseProduct)
+      .select({ productId: entityLink.toEntityId })
+      .from(entityLink)
       .where(
         and(
-          eq(purchaseProduct.purchaseId, purchaseId),
-          notDeleted(purchaseProduct),
+          eq(entityLink.fromEntityId, purchaseId),
+          liveLinks("purchaseProduct"),
         ),
       );
 

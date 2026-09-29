@@ -1,4 +1,4 @@
-import type { AuditEntityType } from "@cubby/schemas/audit";
+import type { AuditEntityKind } from "@cubby/schemas/audit";
 import type { AuditChannel } from "@cubby/schemas/context";
 import { PulseIcon } from "@phosphor-icons/react/dist/csr/Pulse";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
@@ -18,7 +18,8 @@ import {
 } from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
 import { useHydrated } from "~/hooks/useHydrated";
-import { auditLog, auditLogListOptions } from "~/lib/audit-log.functions";
+import { auditLog } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { auditLogListOptions } from "~/lib/audit-log-list";
 import { authClient } from "~/lib/auth-client";
 import { getErrorMessage } from "~/lib/error-utils";
 
@@ -38,7 +39,7 @@ const productionOperations: AuditLogListOperations = {
 };
 
 interface AuditLogListProps {
-  entityType?: AuditEntityType;
+  entityKind?: AuditEntityKind;
   entityId?: string;
   /** Everything one Run wrote (a RUN- shortcode). */
   runId?: string;
@@ -55,7 +56,7 @@ interface AuditLogListProps {
 }
 
 export function AuditLogList({
-  entityType,
+  entityKind,
   entityId,
   runId,
   channel,
@@ -87,7 +88,7 @@ export function AuditLogList({
   } = useInfiniteQuery({
     ...auditLogListOptions(
       {
-        entityType,
+        entityKind,
         entityId,
         runId,
         channel,

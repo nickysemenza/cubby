@@ -11,9 +11,9 @@ import {
   safeNormalizeRecipeFlowAiPlan,
 } from "@cubby/schemas/recipe-flow";
 
-import { recordAiUsage } from "~/server/ai-usage";
 import { RECIPE_FLOW_PRIMARY_FEATURE } from "~/server/ai/features";
-import { providerFor, type SupportedChatModel } from "~/server/ai/models";
+import { type SupportedChatModel } from "~/server/ai/models";
+import { recordFeatureUsage } from "~/server/ai/run-feature";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
@@ -54,7 +54,7 @@ export interface RecipeFlowPorts {
     recipeId: RecipeId,
     input: PersistFlowArtifactInput,
   ) => Promise<RecipeFlowArtifact>;
-  readonly recordAiUsage: typeof recordAiUsage;
+  readonly recordFeatureUsage: typeof recordFeatureUsage;
   readonly generateRecipeFlow: ReturnType<
     typeof getAiClient
   >["generateRecipeFlow"];
@@ -93,7 +93,7 @@ const productionRecipeFlowPorts: RecipeFlowPorts = {
       artifact,
     );
   },
-  recordAiUsage,
+  recordFeatureUsage,
   generateRecipeFlow: (...args) => getAiClient().generateRecipeFlow(...args),
 };
 
@@ -278,16 +278,16 @@ async function recordFlowCacheHit(
     (candidateFeature) => candidateFeature.model === candidate.model,
   );
   if (!feature) return;
-  await ports.recordAiUsage(db, {
-    feature: feature.feature,
-    provider: providerFor(feature.model),
-    model: feature.model,
-    operation: "generateRecipeFlow",
-    runId,
-    durationMs: 0,
-    cacheStatus: "hit",
-    entity: { entityKind: "recipe", entityId: recipeId },
-  });
+  await ports.recordFeatureUsage(
+    feature,
+    {
+      db,
+      runId,
+      operation: "generateRecipeFlow",
+      entity: { entityKind: "recipe", entityId: recipeId },
+    },
+    { durationMs: 0, cacheStatus: "hit" },
+  );
 }
 
 async function persistFlowArtifact(

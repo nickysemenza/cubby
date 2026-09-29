@@ -678,11 +678,6 @@ export default defineEntity({
       },
       { key: "shortcode", kind: "text" },
       {
-        key: "notionPageId",
-        kind: "text",
-        nullable: true,
-      },
-      {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
@@ -716,7 +711,6 @@ export default defineEntity({
       { key: "productId", reference: "product" },
       { key: "productQuantity", specialized: "double-precision" },
       { key: "purchaseId", reference: "purchase" },
-      "notionPageId",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
@@ -908,6 +902,51 @@ export default defineEntity({
     output: { module: "@cubby/schemas/project", export: "expenseOut" },
     list: { module: "@cubby/schemas/project", export: "expenseListItemOut" },
   },
+  storage: {
+    indexes: [
+      { on: ["date"] },
+      { on: ["costType"] },
+      { on: ["lineKind"] },
+      { trigram: "name" },
+    ],
+    checks: [
+      {
+        name: "Expense_date_cost_check",
+        sql: "{date} IS NOT NULL OR ({cost} IS NOT NULL AND {cost} = 0)",
+      },
+      {
+        name: "Expense_live_charge_assignment_check",
+        sql: "{deletedAt} IS NOT NULL OR {lineKind} = 'principal' OR ({projectId} IS NULL AND {purchaseId} IS NOT NULL)",
+      },
+      {
+        name: "Expense_cost_whole_cent_check",
+        sql: "{cost} IS NULL OR abs({cost} * 100 - round({cost} * 100)) < 0.0000001",
+      },
+      // Signed; zero only where the money is known to be negative — see the
+      // ledger rule on `productQuantity`.
+      //
+      // The `cost IS NOT NULL` guard is load-bearing and is NOT redundant with
+      // `cost < 0`. A CHECK rejects only on FALSE, and for an unclassified row
+      // `NULL < 0` is NULL, so `(0 <> 0 OR NULL)` is NULL and the row would be
+      // ADMITTED — quietly allowing the one shape the rule above forbids. The
+      // guard collapses that NULL to FALSE.
+      {
+        name: "Expense_productQuantity_check",
+        sql: "{productQuantity} IS NULL OR ({productId} IS NOT NULL AND ({productQuantity} <> 0 OR ({cost} IS NOT NULL AND {cost} < 0)))",
+      },
+      {
+        name: "Expense_lineKind_productId_check",
+        sql: "{lineKind} = 'principal' OR {productId} IS NULL",
+      },
+    ],
+    relations: {
+      purchase: "purchaseId",
+      project: "projectId",
+      product: "productId",
+      attributions: { many: "expenseAttribution" },
+      sourceClaims: { many: "ledgerSourceClaim" },
+    },
+  },
   filters: {
     audit: true,
     schema: { module: "@cubby/schemas/project", export: "expenseFilterFields" },
@@ -938,7 +977,7 @@ export default defineEntity({
           { value: "1y", label: "Last 12 months" },
         ],
         expandRef: {
-          module: "~/app/expenses/expense-options",
+          module: "~/entities/filter-behavior",
           export: "resolveDateRange",
         },
       },
@@ -1067,17 +1106,23 @@ export default defineEntity({
           },
         },
         options: [
-          { value: "has", label: "Has cost", meta: true },
-          { value: "none", label: "(none)", meta: true },
-          { value: "gte500", label: "$500 and up" },
-          { value: "gte200", label: "$200 and up" },
-          { value: "gte100", label: "$100 and up" },
-          { value: "credits", label: "Credits (≤ $0)" },
+          {
+            value: "has",
+            label: "Has cost",
+            meta: true,
+            expand: { costPresenceFilter: "has" },
+          },
+          {
+            value: "none",
+            label: "(none)",
+            meta: true,
+            expand: { costPresenceFilter: "none" },
+          },
+          { value: "gte500", label: "$500 and up", expand: { costMin: 500 } },
+          { value: "gte200", label: "$200 and up", expand: { costMin: 200 } },
+          { value: "gte100", label: "$100 and up", expand: { costMin: 100 } },
+          { value: "credits", label: "Credits (≤ $0)", expand: { costMax: 0 } },
         ],
-        expandRef: {
-          module: "~/app/expenses/expense-options",
-          export: "resolveCostFilter",
-        },
       },
       {
         columnId: "costMin",
@@ -1118,16 +1163,34 @@ export default defineEntity({
           },
         },
         options: [
-          { value: "has", label: "Has quantity", meta: true },
-          { value: "none", label: "(none)", meta: true },
-          { value: "exactly1", label: "Exactly 1" },
-          { value: "gte2", label: "2+ units" },
-          { value: "gte5", label: "5+ units" },
+          {
+            value: "has",
+            label: "Has quantity",
+            meta: true,
+            expand: { productQuantityPresenceFilter: "has" },
+          },
+          {
+            value: "none",
+            label: "(none)",
+            meta: true,
+            expand: { productQuantityPresenceFilter: "none" },
+          },
+          {
+            value: "exactly1",
+            label: "Exactly 1",
+            expand: { productQuantityMin: 1, productQuantityMax: 1 },
+          },
+          {
+            value: "gte2",
+            label: "2+ units",
+            expand: { productQuantityMin: 2 },
+          },
+          {
+            value: "gte5",
+            label: "5+ units",
+            expand: { productQuantityMin: 5 },
+          },
         ],
-        expandRef: {
-          module: "~/app/expenses/expense-options",
-          export: "resolveProductQuantityFilter",
-        },
       },
       {
         columnId: "productQuantityMin",
@@ -1417,8 +1480,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/expense/entity-adapter",
-        export: "expenseEntityAdapter",
+        module: "~/server/repo/expense/repository",
+        export: "expenseRepository",
       },
       search: "document",
     },

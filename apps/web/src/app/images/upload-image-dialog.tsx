@@ -21,8 +21,8 @@ import {
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { imageUpload } from "~/lib/image.functions";
 
 import { PhotoGrid } from "../_components/photos/photo-grid";
 import { PhotoViewer } from "../_components/photos/photo-viewer";

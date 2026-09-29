@@ -1,4 +1,5 @@
 import { activityKind, activityRunId } from "@cubby/schemas/activity";
+import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import { runTrigger } from "@cubby/schemas/run-fields";
 import { z } from "zod";
 
@@ -31,12 +32,40 @@ const searchSchema = z.object({
   from: z.iso.datetime().optional().catch(undefined),
   to: z.iso.datetime().optional().catch(undefined),
   sort: z.enum(["newest", "oldest"]).optional().catch(undefined),
+  filters: z.literal("none").optional().catch(undefined),
 });
+
+/**
+ * The Run declaration's default filter, as the triggers it hides: the
+ * history opens without them until the URL names a filter of its own or
+ * records clearing the default (`filters=none`), like every declared list.
+ */
+const declaredTriggers = entityInspectorMetadata.run.list.initialFilter.flatMap(
+  (filter) =>
+    filter.id === "trigger" && Array.isArray(filter.value)
+      ? [filter.value]
+      : [],
+)[0];
+const shownByDefault = new Set<string>(declaredTriggers);
+const hiddenByDefault = declaredTriggers
+  ? runTrigger.options.filter((trigger) => !shownByDefault.has(trigger))
+  : [];
 
 function RunHistorySlot({ search, navigate }: ListSlotProps) {
   const parsed = searchSchema.parse(search);
+  // Any filter the URL names (the entity's own, or the history's Work type)
+  // is the person's choice of what to see; the default only opens a bare list.
+  const namesFilter =
+    Boolean(parsed.kind) ||
+    entityInspectorMetadata.run.filterUrlKeys.some((key) =>
+      Boolean(search[key]),
+    );
+  const hideDefault =
+    hiddenByDefault.length > 0 && !namesFilter && parsed.filters !== "none";
   const filters = {
     ...parsed,
+    excludeTriggers: hideDefault ? hiddenByDefault : undefined,
+    hasDefaultFilter: hiddenByDefault.length > 0,
     kind: parsed.kind ?? activityKind.safeParse(parsed.purpose).data,
     state: parsed.state ?? parsed.status,
   };
@@ -47,6 +76,8 @@ function RunHistorySlot({ search, navigate }: ListSlotProps) {
         const next: ListSearch = { ...patch };
         if (Object.hasOwn(patch, "kind")) next.purpose = undefined;
         if (Object.hasOwn(patch, "state")) next.status = undefined;
+        // Naming a filter of your own replaces the default outright.
+        if (patch.trigger !== undefined) next.filters = undefined;
         navigate(next);
       }}
       onSelect={(id) => navigate({ selected: id })}

@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { imageUpload } from "~/lib/image.functions";
+import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { UploadImageDialog } from "./upload-image-dialog";
@@ -60,7 +60,7 @@ function uploadedImageRow(imageId: ImageShortcode, file: File) {
     provenanceEvidence: null,
     createdAt: new Date(),
     updatedAt: new Date(),
-    entityType: null,
+    entityKind: null,
     entityId: null,
     entityName: null,
     associations: [],

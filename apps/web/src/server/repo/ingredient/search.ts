@@ -50,13 +50,13 @@ import {
   notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
+import { recipeSourceRelations } from "~/server/repo/database-helpers/relations";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import {
   enrichProductRowsWithPricing,
   loadProductPricingForIngredientIds,
 } from "~/server/repo/product/pricing";
-import { relatedWhereConditions } from "~/server/repo/related-view";
 
 import { categorySummarySql } from "../product-category-sql";
 import { productClassificationEvidenceSql } from "../product/classification-evidence";
@@ -187,7 +187,7 @@ export const getRecipeUsagesForIngredient = async (
     ),
     with: {
       recipeSection: {
-        with: { recipe: true },
+        with: { recipe: { with: recipeSourceRelations } },
       },
     },
   });
@@ -522,7 +522,6 @@ export const buildIngredientListWhere = async (
       filters.ownRecipePresenceFilter,
       ingredientIdsInOwnRecipes,
     ),
-    ...relatedWhereConditions("ingredient", filters, ingredient.id),
   );
 
   const whereClause = ingredientScaffold.where(filters, computed);

@@ -101,7 +101,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/server.ts`,
       `${WEB}/src/server/start-operation-dispatch.contract.ts`,
       `${WEB}/src/server/start-operation.contract.ts`,
-      `${WEB}/src/server/workflows/audit-log.ts`,
+      `${WEB}/src/server/operations/audit-log.ts`,
       `${WEB}/src/server/repo/vendor.ts`,
     ],
   },
@@ -147,7 +147,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/server/repo/recipe/**`,
       `${WEB}/src/server/repo/image.ts`,
       `${WEB}/src/server/repo/import-recipe-convert.ts`,
-      `${WEB}/src/entities/cookbook.functions.ts`,
+      `${WEB}/src/contracts/cookbook.contract.ts`,
     ],
   },
   {
@@ -399,7 +399,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/server/repo/product/**`,
       `${WEB}/src/server/repo/image.ts`,
       `${WEB}/src/server/services/image-storage.service.ts`,
-      `${WEB}/src/lib/image.functions.ts`,
+      `${WEB}/src/contracts/image-upload.contract.ts`,
     ],
   },
   {
@@ -481,7 +481,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/app/finance/statement-csv.ts`,
       `${WEB}/src/server/repo/statement-row.ts`,
       `${WEB}/src/server/repo/financial-transaction.ts`,
-      `${WEB}/src/server/workflows/statement-row.server.ts`,
+      `${WEB}/src/server/operations/statement-row.server.ts`,
     ],
   },
   {
@@ -497,7 +497,6 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
   {
     file: "tools-flow.spec.ts",
     globs: [
-      `${WEB}/src/routes/_authenticated/projects.tools.tsx`,
       `${WEB}/src/app/tools/**`,
       `${WEB}/src/app/projects/**`,
       `${WEB}/src/server/repo/project-tools.integration.test.ts`,

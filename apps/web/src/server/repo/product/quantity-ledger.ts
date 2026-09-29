@@ -16,6 +16,7 @@ import {
   unwrapDb,
   uuidArrayParam,
 } from "~/server/repo/database-helpers";
+import { inventoryAmountSql } from "~/server/repo/inventory/helpers";
 import {
   kitAncestorCteSql,
   kitAncestorCteText,
@@ -93,8 +94,8 @@ export const onHandUnitsSql = (productAlias = '"product"') =>
              ELSE COALESCE(ohu_inv.qty, 0) + ohu_loc.n
            END::double precision
       FROM (SELECT count(*) AS n,
-                   count(DISTINCT ohu_i."amount"->>'unit') AS units,
-                   sum((ohu_i."amount"->>'value')::numeric) AS qty
+                   count(DISTINCT ohu_i."amountUnit") AS units,
+                   sum(ohu_i."amountValue"::numeric) AS qty
               FROM "InventoryEntry" ohu_i
               JOIN "Location" ohu_l
                 ON ohu_l."id" = ohu_i."locationId" AND ohu_l."deletedAt" IS NULL
@@ -131,8 +132,8 @@ export const onHandUnitsFilterSql = (productId: AnyColumn) =>
                 ELSE COALESCE(ohu_inv.qty, 0) + ohu_loc.n
               END::double precision
          FROM (SELECT count(*) AS n,
-                      count(DISTINCT ohu_i."amount"->>'unit') AS units,
-                      sum((ohu_i."amount"->>'value')::numeric) AS qty
+                      count(DISTINCT ohu_i."amountUnit") AS units,
+                      sum(ohu_i."amountValue"::numeric) AS qty
                  FROM "InventoryEntry" ohu_i
                  JOIN "Location" ohu_l
                    ON ohu_l."id" = ohu_i."locationId" AND ohu_l."deletedAt" IS NULL
@@ -375,7 +376,7 @@ export const loadProductPickerQuantities = async (
   const inventoryRows = await unwrapDb(db)
     .select({
       productId: inventoryEntry.productId,
-      amount: inventoryEntry.amount,
+      amount: inventoryAmountSql,
     })
     .from(inventoryEntry)
     .innerJoin(

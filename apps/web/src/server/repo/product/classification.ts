@@ -8,13 +8,14 @@ import { and, eq } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import {
-  product,
-  productExternalId,
-  projectToolUsage,
+  entityExternalId,
+  entityLink,
   planting,
+  product,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { notDeleted } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import {
   getCategoryFeature,
   resolveProductCategory,
@@ -37,10 +38,10 @@ export async function assertProductCategoryChange(
     columns: { fdc_id: true, ingredientId: true },
   });
   if (!current) throw createAppError("PRODUCT_NOT_FOUND", "Product not found");
-  const externalIds = await tx.query.productExternalId.findMany({
+  const externalIds = await tx.query.entityExternalId.findMany({
     where: and(
-      eq(productExternalId.productId, productId),
-      notDeleted(productExternalId),
+      eq(entityExternalId.entityId, productId),
+      notDeleted(entityExternalId),
     ),
   });
   const requiredFeature = hasFoodIndicators({
@@ -57,11 +58,8 @@ export async function assertProductCategoryChange(
     requiredFeature,
   );
   const feature = await getCategoryFeature(tx, categoryId);
-  const projectUsage = await tx.query.projectToolUsage.findFirst({
-    where: and(
-      eq(projectToolUsage.productId, productId),
-      notDeleted(projectToolUsage),
-    ),
+  const projectUsage = await tx.query.entityLink.findFirst({
+    where: and(eq(entityLink.toEntityId, productId), liveLinks("projectTool")),
     columns: { id: true },
   });
   if (projectUsage && !isProjectResourceFeature(feature)) {

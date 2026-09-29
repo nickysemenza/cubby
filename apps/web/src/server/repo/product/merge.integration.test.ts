@@ -8,10 +8,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   entityAttachment,
+  entityExternalId,
   inventoryEntry,
   planting,
   product,
-  productExternalId,
   productUnitMappings,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -39,6 +39,7 @@ import {
   createPlantFixture,
   makeLocationInput,
   makeProductInput,
+  insertEntityAttachments,
 } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
@@ -107,8 +108,8 @@ describe("mergeProducts", () => {
         contentType: "image/jpeg",
         size: 100,
       });
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: item.id,
+      await insertEntityAttachments(ctx.db, {
+        entityId: item.id,
         imageId: photo.id,
       });
     }
@@ -146,10 +147,10 @@ describe("mergeProducts", () => {
   });
 
   const liveExternalIds = (productId: ProductId) =>
-    getDb(ctx.db).query.productExternalId.findMany({
+    getDb(ctx.db).query.entityExternalId.findMany({
       where: and(
-        eq(productExternalId.productId, productId),
-        notDeleted(productExternalId),
+        eq(entityExternalId.entityId, productId),
+        notDeleted(entityExternalId),
       ),
       columns: {
         source: true,
@@ -166,7 +167,12 @@ describe("mergeProducts", () => {
         eq(inventoryEntry.productId, productId),
         notDeleted(inventoryEntry),
       ),
-      columns: { id: true, locationId: true, amount: true },
+      columns: {
+        id: true,
+        locationId: true,
+        amountValue: true,
+        amountUnit: true,
+      },
     });
 
   it("refuses to merge different ISBN editions", async () => {
@@ -378,11 +384,11 @@ describe("mergeProducts", () => {
     expect(survivor?.price).toBe(199);
     expect(survivor?.notes).toBe("From the retailer import");
     expect(summary.carriedFields).not.toContain("upc");
-    const survivorGtins = await getDb(ctx.db).query.productExternalId.findMany({
+    const survivorGtins = await getDb(ctx.db).query.entityExternalId.findMany({
       where: and(
-        eq(productExternalId.productId, keeper.id),
-        eq(productExternalId.source, GTIN_SOURCE),
-        notDeleted(productExternalId),
+        eq(entityExternalId.entityId, keeper.id),
+        eq(entityExternalId.source, GTIN_SOURCE),
+        notDeleted(entityExternalId),
       ),
       columns: { externalId: true, isPrimary: true },
     });
@@ -459,12 +465,10 @@ describe("mergeProducts", () => {
       size: 100,
       sha256,
     });
-    await getDb(ctx.db)
-      .insert(entityAttachment)
-      .values([
-        { subjectEntityId: keeper.id, imageId: keeperImage.id },
-        { subjectEntityId: loser.id, imageId: loserImage.id },
-      ]);
+    await insertEntityAttachments(ctx.db, [
+      { entityId: keeper.id, imageId: keeperImage.id },
+      { entityId: loser.id, imageId: loserImage.id },
+    ]);
 
     await mergeProducts(
       ctx.db,
@@ -474,7 +478,7 @@ describe("mergeProducts", () => {
 
     const liveImages = await getDb(ctx.db).query.entityAttachment.findMany({
       where: and(
-        eq(entityAttachment.subjectEntityId, keeper.id),
+        eq(entityAttachment.entityId, keeper.id),
         notDeleted(entityAttachment),
       ),
       columns: { imageId: true },
@@ -491,12 +495,10 @@ describe("mergeProducts", () => {
       contentType: "image/jpeg",
       size: 100,
     });
-    await getDb(ctx.db)
-      .insert(entityAttachment)
-      .values([
-        { subjectEntityId: keeper.id, imageId: image.id, purpose: null },
-        { subjectEntityId: loser.id, imageId: image.id, purpose: "label" },
-      ]);
+    await insertEntityAttachments(ctx.db, [
+      { entityId: keeper.id, imageId: image.id, purpose: null },
+      { entityId: loser.id, imageId: image.id, purpose: "label" },
+    ]);
 
     await mergeProducts(
       ctx.db,
@@ -506,7 +508,7 @@ describe("mergeProducts", () => {
 
     const [surviving] = await getDb(ctx.db).query.entityAttachment.findMany({
       where: and(
-        eq(entityAttachment.subjectEntityId, keeper.id),
+        eq(entityAttachment.entityId, keeper.id),
         eq(entityAttachment.imageId, image.id),
         notDeleted(entityAttachment),
       ),
@@ -647,8 +649,8 @@ describe("mergeProducts", () => {
     expect(entries).toHaveLength(2);
     // The colliding entry ADDS rather than one row winning or the insert
     // erroring — the whole point of the fold.
-    expect(entries.find((e) => e.locationId === shelf)?.amount.value).toBe(5);
-    expect(entries.find((e) => e.locationId === otherShelf)?.amount.value).toBe(
+    expect(entries.find((e) => e.locationId === shelf)?.amountValue).toBe(5);
+    expect(entries.find((e) => e.locationId === otherShelf)?.amountValue).toBe(
       5,
     );
     expect(await liveEntries(loser.id)).toHaveLength(0);
@@ -872,7 +874,7 @@ describe("mergeProducts", () => {
   });
 
   /**
-   * `ProductUnitMappings` has no unique index, so nothing in the database would
+   * `ProductUnitMapping` has no unique index, so nothing in the database would
    * have refused these — the write path is the only place the duplicate can be
    * stopped, which is exactly why these are integration rather than unit tests.
    */

@@ -319,6 +319,12 @@ export default defineEntity({
       export: "deviceOut",
     },
   },
+  storage: {
+    indexes: [
+      { on: ["installationId"], unique: true, where: "{deletedAt} IS NULL" },
+    ],
+    checks: [{ column: "platform" }],
+  },
   filters: {
     audit: true,
     schema: {

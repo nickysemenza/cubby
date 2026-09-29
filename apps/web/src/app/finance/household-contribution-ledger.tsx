@@ -30,10 +30,9 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { fieldEnumOptions } from "~/entities/enum-field-display";
+import { householdContribution } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
-
-import { householdContribution } from "./household-contribution.functions";
 
 function CheckMark({ ok }: { ok: boolean }) {
   return ok ? (

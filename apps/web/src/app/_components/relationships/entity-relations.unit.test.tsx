@@ -15,17 +15,19 @@ import {
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { inventory } from "~/app/inventory/inventory.functions";
-import { entityGraph } from "~/entities/entity-graph.functions";
-import { recommendations } from "~/lib/recommendations.functions";
+import {
+  inventory,
+  entityGraph,
+  recommendations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
 import { EntityRelations, type EntityRelationsState } from "./entity-relations";
 
-const root = { entityType: "cookbook", entityId: "CKB-4K7M" } as const;
-const recipe = { entityType: "recipe", entityId: "RCP-4K7M" } as const;
-const ingredient = { entityType: "ingredient", entityId: "ING-4K7M" } as const;
+const root = { entityKind: "cookbook", entityId: "CKB-4K7M" } as const;
+const recipe = { entityKind: "recipe", entityId: "RCP-4K7M" } as const;
+const ingredient = { entityKind: "ingredient", entityId: "ING-4K7M" } as const;
 const initial: EntityGraphExploreOutput = {
   nodes: [
     { ...root, label: "Weeknight cookbook", metadata: {} },
@@ -93,7 +95,7 @@ describe("shared entity Relations", () => {
   it("keeps a full-page project proposal read-only until its reviewed change is applied", async () => {
     const expenseId = testShortcode("expense", "EXP-PROJ");
     const projectId = testShortcode("project", "PRJ-KTCN");
-    const expenseRoot = { entityType: "expense", entityId: expenseId } as const;
+    const expenseRoot = { entityKind: "expense", entityId: expenseId } as const;
     const graph: EntityGraphExploreOutput = {
       nodes: [{ ...expenseRoot, label: "Fixture purchase", metadata: {} }],
       edges: [],
@@ -111,7 +113,7 @@ describe("shared entity Relations", () => {
         seed: 12,
         overrides: { id: expenseId, projectId },
       }),
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     }));
 
     render(
@@ -233,7 +235,7 @@ describe("shared entity Relations", () => {
       explore: entityGraph.explore.withTransport(async ({ input }) => {
         requests.push({ id: input.root.entityId, depth: input.depth });
         const focused =
-          input.root.entityType === "recipe"
+          input.root.entityKind === "recipe"
             ? {
                 ...initial,
                 nodes: [
@@ -301,9 +303,9 @@ describe("shared entity Relations", () => {
   });
 
   it("loads each selected neighborhood and keeps visit history", async () => {
-    const product = { entityType: "product", entityId: "PRD-4K7M" } as const;
+    const product = { entityKind: "product", entityId: "PRD-4K7M" } as const;
     const inventory = {
-      entityType: "inventory",
+      entityKind: "inventory",
       entityId: "INV-4K7M",
     } as const;
     const chain = [root, recipe, ingredient, product, inventory];
@@ -321,7 +323,7 @@ describe("shared entity Relations", () => {
         return {
           nodes: [source, ...(target ? [target] : [])].map((ref) => ({
             ...ref,
-            label: ref.entityType,
+            label: ref.entityKind,
             metadata: {},
           })),
           edges: target
@@ -342,7 +344,7 @@ describe("shared entity Relations", () => {
               root: source,
               relationshipKey: "next",
               label: "Next",
-              target: target?.entityType ?? "inventory",
+              target: target?.entityKind ?? "inventory",
               items: target ? [target] : [],
               edgeIds: target ? [source.entityId] : [],
               totalCount: target ? 1 : 0,
@@ -368,7 +370,7 @@ describe("shared entity Relations", () => {
         return {
           nodes: [source, ...(target ? [target] : [])].map((ref) => ({
             ...ref,
-            label: ref.entityType,
+            label: ref.entityKind,
             metadata: {},
           })),
           edges: target
@@ -389,7 +391,7 @@ describe("shared entity Relations", () => {
               root: source,
               relationshipKey: "next",
               label: "Next",
-              target: target?.entityType ?? "inventory",
+              target: target?.entityKind ?? "inventory",
               items: target ? [target] : [],
               edgeIds: target ? [source.entityId] : [],
               totalCount: target ? 1 : 0,
@@ -434,7 +436,7 @@ describe("shared entity Relations", () => {
       ...entityGraph,
       explore: entityGraph.explore.withTransport(async () => initial),
       graph: entityGraph.graph.withTransport(async ({ input }) =>
-        input.roots[0]?.entityType === "recipe"
+        input.roots[0]?.entityKind === "recipe"
           ? {
               nodes: [
                 { ...recipe, label: "Roast vegetables", metadata: {} },
@@ -508,7 +510,7 @@ describe("shared entity Relations", () => {
       ...entityGraph,
       explore: entityGraph.explore.withTransport(async ({ input }) => {
         requests.push(input.root.entityId);
-        return input.root.entityType === "recipe"
+        return input.root.entityKind === "recipe"
           ? {
               nodes: [
                 { ...recipe, label: "Roast vegetables", metadata: {} },
@@ -539,7 +541,7 @@ describe("shared entity Relations", () => {
       }),
       graph: entityGraph.graph.withTransport(async ({ input }) => {
         requests.push(input.roots[0]!.entityId);
-        return input.roots[0]!.entityType === "recipe"
+        return input.roots[0]!.entityKind === "recipe"
           ? {
               nodes: [
                 { ...recipe, label: "Roast vegetables", metadata: {} },
@@ -585,7 +587,7 @@ describe("shared entity Relations", () => {
 
   it("restores a selected record hidden inside a counted branch", async () => {
     const hiddenRecipe = {
-      entityType: "recipe",
+      entityKind: "recipe",
       entityId: testShortcode("recipe", "hidden-counted-branch"),
     } as const;
     const hiddenEdge: EntityGraphOutput["edges"][number] = {
@@ -718,7 +720,7 @@ describe("shared entity Relations", () => {
       })),
       graph: entityGraph.graph.withTransport(async ({ input }) => {
         if (input.relationshipKeys) return branchRequest;
-        if (input.roots[0]!.entityType === "recipe")
+        if (input.roots[0]!.entityKind === "recipe")
           return {
             nodes: [{ ...recipe, label: "Roast vegetables", metadata: {} }],
             edges: [],
@@ -765,7 +767,7 @@ describe("shared entity Relations", () => {
   });
 
   it("shows physical connections separately from derived relationships", async () => {
-    const image = { entityType: "image", entityId: "IMG-4K7M" } as const;
+    const image = { entityKind: "image", entityId: "IMG-4K7M" } as const;
     const operations = {
       ...entityGraph,
       explore: entityGraph.explore.withTransport(async () => initial),

@@ -1,6 +1,6 @@
 # ADR 0001: Entity relationship authority
 
-Status: Accepted
+Status: Accepted. Superseded in part by ADR 0007 (generic `EntityLink` table).
 
 ## Context
 
@@ -46,3 +46,14 @@ tables (`Entity`, `EntityAttachment`, `DataException`); see ADR 0006. That
 does not change this decision: domain edges stay typed FKs and joins, and the
 physical graph is a read-only projection composed from the edge registry, not
 a stored edge table.
+
+## Amendment (ADR 0007)
+
+Pure pairings of two entities — wish candidates, purchase products, project
+tools, garden entry plantings, kit components, task and project dependencies —
+now share one generic `EntityLink` table whose kinds are declared in
+`packages/schemas/src/entity-links.ts`. That reverses this ADR's "no generic
+edge table" for those seven pairings only. Everything else here holds: other
+edges stay typed foreign keys, lifecycle stays a per-operation policy, and a
+link kind's merge collision rule is declared per end, not on the logical
+relationship.

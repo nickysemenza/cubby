@@ -17,14 +17,14 @@ import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTab
 import { useImageUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { ImageAssociationLinks } from "~/app/_components/images/image-associations";
 import { labeledFieldProvenance } from "~/entities/field-provenance";
-import { image } from "~/entities/image.functions";
+import { image } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { defineListOverride } from "./types";
 
 // Image association types use uppercase storage labels; the list preview is
 // keyed by the page's known "image" entity, so that storage-only field is not
 // part of its browser row contract.
-type ImageListRow = Omit<ImageWithEntity, "entityType">;
+type ImageListRow = Omit<ImageWithEntity, "entityKind">;
 
 const columnHelper = createCubbyColumnHelper<ImageListRow>();
 

@@ -1,5 +1,5 @@
 import { testServiceConfig } from "./test-service-config";
-import { schemaTemplateInputs } from "./schema-template-inputs";
+import { hashSchemaTemplateInputs } from "./schema-template-inputs";
 import { taxonomyRootFixtures } from "./product-category-fixtures";
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
@@ -36,8 +36,7 @@ import type {
   EntityPublicOutput,
 } from "../src/server/entity-kernel/adapter";
 import type { EntityKernelEntity } from "../src/server/entity-kernel/contracts";
-import { ensureDbExtensions } from "./db-extensions";
-import { toPushSchemaDatabase } from "./drizzle-kit-interop";
+import { migrateDatabase } from "./db-migrate";
 import { z } from "zod";
 
 let client: IntegreSQLClient | undefined;
@@ -139,7 +138,7 @@ export const TEST_ACTOR: ActorContext = buildActorContext(
 );
 
 async function getTemplateHash(): Promise<string> {
-  return getIntegreSQL().hashFiles(schemaTemplateInputs);
+  return hashSchemaTemplateInputs();
 }
 
 export async function setup() {
@@ -152,37 +151,13 @@ export async function setup() {
       remapDBConfig(databaseConfig),
     );
 
-    console.log("Pushing schema to template database");
+    console.log("Migrating template database");
     const pool = new Pool({ connectionString: connectionUrl });
-    const db = drizzle(pool);
-
     try {
-      // Imported lazily, and deliberately. `pushSchema` is only ever needed
-      // HERE, in `setup()` — which is the integration project's `globalSetup`
-      // and so runs once per `vitest run`. But this module is also reached by
-      // every one of the 69 integration test files, because
-      // `tooling/integration-teardown.ts` (a `setupFiles` entry) imports
-      // `closeTestDb` from it. A top-level import therefore loaded the whole
-      // 9.8 MB drizzle-kit migration engine 69 times to use it once: measured
-      // **565ms per file**, ~39s of cumulative worker time. Keep this dynamic.
-      const { pushSchema } = await import("drizzle-kit/api");
-
-      // pushSchema doesn't manage extensions; create them before pushing
-      // (mirrors db:push and E2E setup).
-      await ensureDbExtensions(db);
-      // `db` and drizzle-kit are typed against different physical copies of
-      // drizzle-orm (an @opentelemetry/api peer-dep dupe), so bridge the
-      // structurally-identical PgDatabase types. Runtime parity is covered by
-      // the integration + E2E suites.
-      const { apply } = await pushSchema(schema, toPushSchemaDatabase(db), [
-        "public",
-      ]);
-      await apply();
-      // drizzle-kit push does not manage triggers (ADR 0006).
-      await schema.installEntityIdentityTriggers(db);
-      console.log("Template database schema pushed");
+      await migrateDatabase(drizzle(pool));
+      console.log("Template database migrated");
     } catch (err) {
-      console.error("Schema push failed:", err);
+      console.error("Template migration failed:", err);
       throw err;
     } finally {
       await pool.end();
@@ -320,7 +295,7 @@ async function getFileDb() {
   truncateTargets = rows[0]?.list ?? "";
   if (!truncateTargets) {
     throw new Error(
-      "test-setup: found no public tables to truncate — is the IntegreSQL template schema pushed?",
+      "test-setup: found no public tables to truncate — is the IntegreSQL template migrated?",
     );
   }
 

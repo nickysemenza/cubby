@@ -144,7 +144,7 @@ export const renderRelationArtifacts = (
   const relationListCases = relationMutations
     .map(
       ({ entity, relation, adapter }) =>
-        `    case ${JSON.stringify(`${entity}:${relation}`)}: return {...command,entity:${JSON.stringify(entity)},relation:${JSON.stringify(relation)},items:await ${adapter.export}.list(ctx.readDb,command.id)};`,
+        `    case ${JSON.stringify(`${entity}:${relation}`)}: return {...command,entity:${JSON.stringify(entity)},relation:${JSON.stringify(relation)},items:await ${adapter.export}.list(ctx.db,command.id)};`,
     )
     .join("\n");
   const relationAdapterImports = [

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   bindWorkflow,
-  defineWorkflowOperation,
   executeWorkflow,
   inspectWorkflow,
   workflow,
@@ -15,28 +14,10 @@ const flow = workflow<undefined, number>("arithmetic")
   .output(({ doubled }) => doubled);
 
 describe("workflow execution", () => {
-  it("keeps operation inspection separate from execution", async () => {
-    const direct = defineWorkflowOperation("direct", async (value: number) => {
-      if (value < 0) {
-        throw new Error("source failure");
-      }
-      return value * 2;
-    });
-    expect(inspectWorkflow(direct.definition)).toEqual({
-      name: "direct",
-      outputDependencies: [],
-      steps: [],
-    });
-    expect(await direct(4)).toBe(8);
-    await expect(direct(-1)).rejects.toThrow("source failure");
-
-    const bound = bindWorkflow(flow, (value: number) => ({
-      context: undefined,
-      input: value,
-    }));
+  it("binds a definition to (context, input) and keeps it inspectable", async () => {
+    const bound = bindWorkflow(flow);
     expect(inspectWorkflow(bound.definition).name).toBe("arithmetic");
-    expect(await bound(4)).toBe(8);
-    expect(await bindWorkflow(flow)(undefined, 4)).toBe(8);
+    expect(await bound(undefined, 4)).toBe(8);
   });
 
   it("translates application failures while preserving runtime cancellation and effect evidence", async () => {

@@ -192,6 +192,9 @@ async function resolveForkedFromRecipeIdUpdate(
  * actually touched it, so `updateRecipe`'s audit diff can compare uuids on
  * both sides without a second query.
  */
+/** `Recipe.tags` is NOT NULL: a cleared tag list is stored empty. */
+const tagsOrEmpty = (tags: string[] | null): string[] => tags ?? [];
+
 export async function updateRecipeBasicProperties(
   tx: DrizzleTransaction,
   recipeId: RecipeId,
@@ -218,22 +221,23 @@ export async function updateRecipeBasicProperties(
   );
 
   // A url edit re-derives Website provenance; without one the existing
-  // SourceType is preserved (a manual edit must not clobber Book/Notion).
+  // sourceType is preserved (a manual edit must not clobber Book/Notion, whose
+  // book and page identity live outside `sourceUrl`).
   const sourceType = updates.meta?.url
     ? webProvenance(updates.meta.url).sourceType
-    : existingRecipe.SourceType || "Other";
-  const sourceData =
+    : existingRecipe.sourceType || "Other";
+  const sourceUrl =
     updates.meta?.url !== undefined
       ? updates.meta.url
-      : existingRecipe.SourceData;
+      : existingRecipe.sourceUrl;
 
   const updateData: {
     name?: string;
-    SourceType?: "Book" | "Website" | "Other" | "Notion";
-    SourceData?: string | null;
+    sourceType?: "Book" | "Website" | "Other" | "Notion";
+    sourceUrl?: string | null;
     yield?: RecipeYield | null;
     servings?: number | null;
-    tags?: string[] | null;
+    tags?: string[];
     notes?: string | null;
     forkedFromRecipeId?: RecipeId | null;
   } & Partial<RecipeMetaColumns> = {};
@@ -242,8 +246,8 @@ export async function updateRecipeBasicProperties(
     updateData.name = updates.name;
   }
   if (updates.meta !== undefined) {
-    updateData.SourceType = sourceType;
-    updateData.SourceData = sourceData;
+    updateData.sourceType = sourceType;
+    updateData.sourceUrl = sourceUrl;
     // `meta` is edited as a whole object, so the times/equipment/page columns
     // are rewritten from it wholesale — omitting a time in the submitted meta
     // means "no longer set", exactly like clearing the url.
@@ -256,7 +260,7 @@ export async function updateRecipeBasicProperties(
     updateData.servings = updates.servings;
   }
   if (updates.tags !== undefined) {
-    updateData.tags = updates.tags;
+    updateData.tags = tagsOrEmpty(updates.tags);
   }
   if (updates.notes !== undefined) {
     updateData.notes = updates.notes;

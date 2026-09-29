@@ -6,13 +6,13 @@ describe("auditLogListInput window filters", () => {
   it("accepts public entity shortcodes and rejects UUID filters", () => {
     expect(
       auditLogListInput.safeParse({
-        entityType: "product",
+        entityKind: "product",
         entityId: "PRD-2CRC",
       }).success,
     ).toBe(true);
     expect(
       auditLogListInput.safeParse({
-        entityType: "product",
+        entityKind: "product",
         entityId: "3f2504e0-4f89-41d3-9a0c-0305e82c3302",
       }).success,
     ).toBe(false);
@@ -38,7 +38,7 @@ describe("auditLogListInput window filters", () => {
 
 const entry = (channel: string) => ({
   entryKey: `test:${channel}`,
-  entityType: "product" as const,
+  entityKind: "product" as const,
   entityId: "PRD-2CRC",
   canonicalEntityId: null,
   entityName: "Track Saw Rail",

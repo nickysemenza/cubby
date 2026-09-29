@@ -8,9 +8,9 @@ import {
   EntityRecommendations,
   type EntityRecommendationOperations,
 } from "~/app/_components/relatedness/entity-recommendations";
-import { inventory } from "~/app/inventory/inventory.functions";
 import { entityDetailLink } from "~/entities/entities";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
+import { inventory } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 interface InventoryPlacementSuggestionProps {
   inventoryitem: InventoryWithLocationAndProductOut;
@@ -77,7 +77,7 @@ export function InventoryPlacementSuggestion({
   return (
     <div className="mt-3">
       <EntityRecommendations
-        source={{ entityType: "inventory", entityId: inventoryitem.id }}
+        source={{ entityKind: "inventory", entityId: inventoryitem.id }}
         operations={recommendationOperations}
         compact
         pending={placement.isPending}

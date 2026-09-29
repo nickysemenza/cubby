@@ -14,9 +14,9 @@ import {
   UnifiedTextField,
 } from "~/app/_components/form-utils";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { project } from "~/app/projects/project.functions";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { fieldEnumOptions } from "~/entities/enum-field-display";
+import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 
 const quickAddSchema = z.object({

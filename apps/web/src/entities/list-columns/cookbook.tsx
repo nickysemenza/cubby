@@ -15,12 +15,12 @@ import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
-import { cookbook } from "~/entities/cookbook.functions";
 import { relationshipFieldProvenance } from "~/entities/field-provenance";
+import { cookbook } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { defineListOverride } from "./types";
 
@@ -43,11 +43,11 @@ function CookbookProductLink({
   product: NonNullable<CookbookSummary["product"]>;
 }) {
   const displayImage = useEntityDisplayImage({
-    entityType: "product",
+    entityKind: "product",
     entityId: product.id,
   });
   return (
-    <EntityInlineLink
+    <EntityRefLink
       displayImage={displayImage}
       entity="product"
       data={product}
@@ -167,7 +167,7 @@ export const cookbookListOverride = defineListOverride<CookbookSummary, object>(
           <EntityDisplayImagesProvider
             refs={data.flatMap((row) =>
               row.product
-                ? [{ entityType: "product" as const, entityId: row.product.id }]
+                ? [{ entityKind: "product" as const, entityId: row.product.id }]
                 : [],
             )}
           >

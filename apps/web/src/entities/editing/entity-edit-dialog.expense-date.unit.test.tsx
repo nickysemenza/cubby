@@ -2,7 +2,7 @@ import { expenseOut } from "@cubby/schemas/project";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { entityMutation } from "~/entities/entity-mutation.functions";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
@@ -25,7 +25,7 @@ function renderExpense(intent: "date" | "cost", date: string | null) {
       action: "update",
       entity: "expense",
       item: record,
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     }),
   );
   const mutation = entityMutation.mutate.withTransport(transport);

@@ -7,10 +7,10 @@ import { useRouter } from "@tanstack/react-router";
 import { useMemo } from "react";
 
 import { useEntityOptions } from "~/app/_components/hooks/useEntityOptions";
-import { project } from "~/app/projects/project.functions";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { NativeSelect } from "~/components/ui/native-select";
+import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { householdLocalDate } from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 

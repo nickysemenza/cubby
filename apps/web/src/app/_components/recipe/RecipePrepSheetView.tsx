@@ -2,13 +2,16 @@ import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
 import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
 import { memo, useMemo, useState } from "react";
 
+import {
+  EntityRefLink,
+  dottedEntityLink,
+} from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { formatCurrencyRange } from "~/lib/format-range";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
 import { formatCurrency } from "~/lib/utils";
 
-import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import { IngredientComponentGrid } from "./IngredientComponentGrid";
 import {
   buildDisplayQuantities,
@@ -76,14 +79,15 @@ function ShoppingList({
             className="border-b border-dashed border-border/50 py-1"
           >
             <span className="truncate" title={need.name}>
-              <EntityPreviewLink
+              <EntityRefLink
+                variant="preview"
                 displayImage={null}
                 entity="ingredient"
                 id={need.ingredientShortcode}
                 className={dottedEntityLink}
               >
                 {need.name}
-              </EntityPreviewLink>
+              </EntityRefLink>
             </span>
             <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
               {need.grams != null ? gramText(need.grams) : "—"}
@@ -146,7 +150,8 @@ function PrepRow({
           </span>
         )}
         {ref ? (
-          <EntityPreviewLink
+          <EntityRefLink
+            variant="preview"
             displayImage={
               row.kind === "subrecipe"
                 ? recipeTreeDisplayImage(row.child.recipe)
@@ -157,7 +162,7 @@ function PrepRow({
             className={dottedEntityLink}
           >
             {name}
-          </EntityPreviewLink>
+          </EntityRefLink>
         ) : (
           name
         )}
@@ -211,14 +216,15 @@ function Component({
           {index + 1}
         </span>
         <h3 className="my-0 font-heading text-base leading-tight font-medium tracking-tight">
-          <EntityPreviewLink
+          <EntityRefLink
+            variant="preview"
             displayImage={recipeTreeDisplayImage(node.recipe)}
             entity="recipe"
             id={node.recipe.id}
             className={dottedEntityLink}
           >
             {node.recipe.name}
-          </EntityPreviewLink>
+          </EntityRefLink>
         </h3>
         <div className="ml-auto text-right font-mono text-2xs leading-tight tracking-wider text-slate uppercase">
           {makes && (

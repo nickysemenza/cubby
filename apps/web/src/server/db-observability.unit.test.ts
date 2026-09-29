@@ -24,13 +24,11 @@ describe("database operation metrics", () => {
 
       expect(metrics).toMatchObject({
         queryCount: 3,
-        queryDurationMs: 18,
         queryDurationSumMs: 18,
         queryActiveWallMs: 13,
         queryMaxDurationMs: 10,
         queryMaxConcurrency: 2,
         acquireCount: 2,
-        acquireDurationMs: 9,
         acquireDurationSumMs: 9,
         acquireActiveWallMs: 6,
         acquireMaxDurationMs: 5,

@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { CUBBY_SENTRY_DSN } from "@cubby/worker-tracing/sentry-dsn";
 import * as Sentry from "@sentry/cloudflare";
 // CF Workers production entry point.
 //
@@ -19,11 +20,9 @@ import {
 } from "./lib/http-cache";
 import { httpRouteTemplate } from "./lib/http-route-template";
 import { observeResponseBody } from "./lib/response-body-observer";
-import { SENTRY_DSN } from "./lib/sentry-dsn";
 import { resolveWorkerSentryEnvironment } from "./lib/sentry-environment";
 import { SENTRY_IGNORED_ERRORS } from "./lib/sentry-noise";
 import { scrubSentryEvent } from "./lib/sentry-scrub";
-import { rewriteLegacyStartRequest } from "./lib/start-dispatch-url";
 import {
   readStartOperationTraceContext,
   startOperationTraceAttributes,
@@ -42,6 +41,7 @@ import {
   withErrorReporting,
 } from "./server/errors/report-error";
 import { withUnhandledErrorBody } from "./server/errors/unhandled-error-body";
+import { isMaintenanceMode, maintenanceResponse } from "./server/maintenance";
 import {
   resolvePurchaseAgentBrowserOperation,
   type PurchaseAgentCommand,
@@ -119,6 +119,7 @@ const handler = {
     // Expose service bindings to server code (clients pick binding fetch
     // over public URLs when present).
     setCfEnv(env);
+    if (isMaintenanceMode(env)) return maintenanceResponse(request);
 
     // Entry span at the very top of our handler body. The CF platform's auto
     // root span covers the whole invocation incl. queue/dispatch BEFORE our code
@@ -280,8 +281,7 @@ const handler = {
                           async () =>
                             runWithExecutionCtx(
                               ctx,
-                              async () =>
-                                invoke(rewriteLegacyStartRequest(request)),
+                              async () => invoke(request),
                               url.origin,
                             ),
                         );
@@ -459,6 +459,10 @@ const handler = {
     env: Env,
   ) {
     setCfEnv(env);
+    if (isMaintenanceMode(env)) {
+      console.warn("[cron] skipped: maintenance mode");
+      return;
+    }
     if (controller.cron !== "0 12 * * *")
       throw new Error(`Unexpected cron trigger: ${controller.cron}`);
     await Sentry.withMonitor(
@@ -1058,7 +1062,7 @@ export { SearchIndexRepairWorkflow } from "./server/search-index-repair-workflow
 
 export default Sentry.withSentry(
   (env: Env) => ({
-    dsn: SENTRY_DSN,
+    dsn: CUBBY_SENTRY_DSN,
     // The e2e harness identity (see `tests/e2e/e2e-worker-runtime.ts`) must
     // never ship envelopes to the real DSN.
     enabled: env.E2E_AUTH_TEST_MODE !== "true",

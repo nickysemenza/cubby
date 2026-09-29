@@ -1,6 +1,7 @@
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
   imageShortcode,
+  ledgerPartyShortcode,
   runShortcode,
   expenseShortcode,
   productCategoryShortcode,
@@ -9,6 +10,14 @@ import {
 import { ImageStatus, imageAssociationSchema } from "@cubby/schemas/image";
 import { imageSightingReportFields } from "@cubby/schemas/image-sighting";
 import {
+  commitPhotoGroupInput,
+  commitPhotoGroupOutput,
+  listPhotoGroupProposalsInput,
+  photoGroupProposalList,
+  photoProductCandidateSearchInput,
+  photoRunContextImage,
+  proposePhotoGroupsInput,
+  proposePhotoGroupsOutput,
   photoProductCandidatesResponse,
   photoRunReviewResponse,
   reviewPhotoGroupsAction,
@@ -23,6 +32,13 @@ import { z } from "zod";
 import { defineContract, mutation, query } from "~/contracts/define";
 
 const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
+
+/**
+ * Every photo-context page stays in the coordinator's context for the rest of
+ * the run, so a page is bounded: 100 photos (the native picker's maximum) stay
+ * well inside the photo model's context window.
+ */
+const PHOTO_CONTEXT_PAGE_MAX = 100;
 const perceptualHashSchema = z.string().regex(/^[0-9a-f]{16}$/);
 
 const stagedPhotoSchema = z.object({
@@ -256,11 +272,13 @@ export const photoImportContract = defineContract("photoImport", {
       /** Pending photos whose description is still queued or running; grouping waits for them. */
       waitingForAnalysis: z.number().int().nonnegative(),
     }),
+    invalidates: ["runOnly"],
   }),
   review: query({
     native: "Review proposed photo groups and processing status in Apple apps",
     input: z.object({ runId: runShortcode }),
     output: photoRunReviewResponse,
+    cache: { tags: [["run"]] },
   }),
   candidates: query({
     native: "Explain possible Product matches for a proposed photo group",
@@ -292,6 +310,7 @@ export const photoImportContract = defineContract("photoImport", {
         }),
       ),
     }),
+    cache: { tags: [["run"]] },
   }),
   linkExpense: mutation({
     input: z.object({
@@ -303,6 +322,7 @@ export const photoImportContract = defineContract("photoImport", {
       expenseId: expenseShortcode,
       productId: productShortcode,
     }),
+    invalidates: ["runOnly"],
   }),
   chooseExisting: mutation({
     native: "Select an existing Product for a proposed photo group",
@@ -343,6 +363,7 @@ export const photoImportContract = defineContract("photoImport", {
         .optional(),
     }),
     output: reviewPhotoGroupsOutput,
+    invalidates: ["runOnly"],
   }),
   discardGroup: mutation({
     native: "Discard a proposed photo group in Apple apps",
@@ -351,12 +372,14 @@ export const photoImportContract = defineContract("photoImport", {
       groupKey: z.string().min(1).max(200),
     }),
     output: reviewPhotoGroupsOutput,
+    invalidates: ["runOnly"],
   }),
   saveGroups: mutation({
     input: saveGroupsAction
       .omit({ action: true })
       .extend({ runId: runShortcode }),
     output: reviewPhotoGroupsOutput,
+    invalidates: ["runOnly"],
   }),
   stage: mutation({
     native: "Manifest photo import staging",
@@ -382,5 +405,49 @@ export const photoImportContract = defineContract("photoImport", {
     native: "Lock-aware photo import reconciliation",
     input: photoImportReconcileInputSchema,
     output: photoImportReconcileOutputSchema,
+  }),
+  // Agent-facing (MCP `imports_read`, `photo_run`): the photo agent's reads
+  // and bounded writers, off the HTTP API.
+  /** One bounded page of a run's photos in shot order, with owner and notes. */
+  runContext: query({
+    http: false,
+    input: z.object({
+      runId: runShortcode,
+      cursor: z.number().int().nonnegative().optional(),
+      limit: z.number().int().min(1).max(PHOTO_CONTEXT_PAGE_MAX).optional(),
+      withImageUrls: z.boolean().optional(),
+    }),
+    output: z.object({
+      runId: runShortcode,
+      ledgerPartyId: ledgerPartyShortcode,
+      notes: z.string().nullable(),
+      totalImages: z.number().int().nonnegative(),
+      nextCursor: z.number().int().nonnegative().nullable(),
+      images: z.array(photoRunContextImage),
+    }),
+  }),
+  productCandidates: query({
+    http: false,
+    input: photoProductCandidateSearchInput,
+    output: photoProductCandidatesResponse,
+  }),
+  proposals: query({
+    http: false,
+    input: listPhotoGroupProposalsInput,
+    output: photoGroupProposalList,
+  }),
+  /** Upsert proposed groups for human review; writes no Product or Inventory. */
+  proposeGroups: mutation({
+    http: false,
+    input: proposePhotoGroupsInput,
+    output: proposePhotoGroupsOutput,
+    invalidates: ["runOnly"],
+  }),
+  /** The bounded writer approval runs; idempotent per (runId, groupKey). */
+  commitGroup: mutation({
+    http: false,
+    input: commitPhotoGroupInput,
+    output: commitPhotoGroupOutput,
+    invalidates: ["runOnly"],
   }),
 });

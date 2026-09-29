@@ -17,8 +17,9 @@ const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
 
 /**
  * One run: a purchase-agent account sync, validation or enrichment, a
- * photo-inventory batch a member uploads for an agent to work, or a group of
- * AI calls (Jev suggestions on a page, one AI action, background work). The record is
+ * photo-inventory batch a member uploads for an agent to work, a Gmail
+ * search, or a group of AI calls (Jev suggestions on a page, an hour of MCP
+ * previews, background work). The record is
  * written only by the run service and the writers; the manifest
  * exposes it read-only so the generic list, detail, inspector and MCP get/list
  * render it like any other record.
@@ -32,7 +33,7 @@ export default defineEntity({
     // generic page reads the run through its own query.
     detailOverride: {
       query: {
-        module: "~/entities/run.functions",
+        module: "~/entities/run-queries",
         export: "runDetailQuery",
       },
     },
@@ -90,6 +91,14 @@ export default defineEntity({
       ],
     },
     list: {
+      // Ephemeral runs only group AI usage (thousands a day); a person opens
+      // the list for the work somebody started. Clearing the filter shows them.
+      initialFilter: [
+        {
+          id: "trigger",
+          value: ["foreground", "discovery", "manual", "backfill"],
+        },
+      ],
       viewOverrides: [
         {
           kind: "slot",
@@ -149,10 +158,9 @@ export default defineEntity({
             { value: "product_enrichment", label: "Product enrichment" },
             { value: "photo_inventory", label: "Photo inventory" },
             { value: "ai_suggest", label: "AI suggestions" },
-            { value: "ai_action", label: "AI action" },
             { value: "background", label: "Background" },
             { value: "file_import", label: "File import" },
-            { value: "legacy", label: "Legacy" },
+            { value: "mail_search", label: "Mail search" },
           ],
         },
         display: { list: true, detail: true, width: "sm" },
@@ -496,6 +504,120 @@ export default defineEntity({
       export: "runOut",
     },
   },
+  // One durable attempt to discover, fetch, extract, write, and audit evidence.
+  storage: {
+    // The actor snapshot, the run's own lineage, dispatch fencing and the
+    // history walk are operational state outside the model.
+    columns: [
+      {
+        key: "actorUserId",
+        kind: "text",
+        notNull: true,
+        type: { module: "@cubby/schemas/identifiers", export: "UserId" },
+        reference: "user",
+      },
+      { key: "actorEmail", kind: "text", notNull: true },
+      // Null when the actor has no member party (the system user).
+      { key: "actorLedgerPartyShortcode", kind: "text" },
+      { key: "actorLedgerPartyName", kind: "text" },
+      { key: "actorLedgerPartyKind", kind: "text" },
+      {
+        key: "predecessorRunId",
+        kind: "identifier",
+        type: { module: "@cubby/schemas/identifiers", export: "RunId" },
+        reference: "run",
+      },
+      // Stable queue generation; duplicate and late deliveries are fenced to it.
+      { key: "dispatchEventId", kind: "text" },
+      { key: "agentSessionId", kind: "text" },
+      // The order-history page the walk resumes from; null before the first
+      // listing.
+      { key: "historyCursorUrl", kind: "text" },
+      // Set when a listing had no next page or predated the account cursor.
+      { key: "historyExhaustedAt", kind: "timestamp" },
+      // Caller attribution for the work the run groups (see `ActorContext`).
+      {
+        key: "channel",
+        kind: "text",
+        notNull: true,
+        type: { module: "@cubby/schemas/context", export: "AuditChannel" },
+        defaultValue: "web",
+      },
+      // Deliberately not FKs, like `McpToolCall.clientId`: a run keeps naming
+      // the client and install that started it after either is removed.
+      { key: "oauthClientId", kind: "text" },
+      {
+        key: "deviceId",
+        kind: "identifier",
+        type: { module: "@cubby/schemas/identifiers", export: "DeviceId" },
+      },
+      // Client-minted grouping key, e.g. one Jev pass per page mount.
+      { key: "clientKey", kind: "text" },
+      // What the run was asked to do; the shape belongs to its purpose.
+      {
+        key: "input",
+        kind: "json",
+        type: { module: "@cubby/schemas/run-fields", export: "RunInput" },
+      },
+      // Resumable position within `input`; the shape belongs to its purpose.
+      {
+        key: "progress",
+        kind: "json",
+        type: { module: "@cubby/schemas/run-fields", export: "RunProgress" },
+      },
+    ],
+    indexes: [
+      {
+        name: "Run_party_started_idx",
+        on: ["ledgerPartyId", { column: "startedAt", desc: true }],
+      },
+      {
+        name: "Run_vendorAccount_started_idx",
+        on: ["vendorAccountId", { column: "startedAt", desc: true }],
+      },
+      {
+        name: "Run_clientKey_unique",
+        on: ["clientKey"],
+        unique: true,
+        where: "{clientKey} IS NOT NULL",
+      },
+      {
+        name: "Run_dispatch_event_unique",
+        on: ["dispatchEventId"],
+        unique: true,
+        where: "{dispatchEventId} IS NOT NULL",
+      },
+      {
+        name: "Run_one_active_vendor_account_key",
+        on: ["vendorAccountId"],
+        unique: true,
+        where:
+          "{vendorAccountId} IS NOT NULL AND {status} IN ('running', 'paused_auth', 'paused_offline', 'paused_approval')",
+      },
+    ],
+    checks: [
+      { column: "trigger" },
+      {
+        name: "Run_import_party_check",
+        sql: "{purpose} NOT IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory') OR ({ledgerPartyId} IS NOT NULL AND {actorLedgerPartyShortcode} IS NOT NULL)",
+      },
+      {
+        column: "channel",
+        values: ["web", "api", "mcp", "caldav", "system"],
+      },
+      { column: "status" },
+      { column: "purpose" },
+      {
+        name: "Run_photo_inventory_no_vendor_check",
+        sql: "{purpose} <> 'photo_inventory' OR {vendorAccountId} IS NULL",
+      },
+    ],
+    unindexedReferences: {
+      vendorId: "runs are listed by vendor account, never by vendor alone",
+      predecessorRunId: "lineage is walked forward from a known run only",
+      actorUserId: "runs are listed by ledger party; the user is a snapshot",
+    },
+  },
   filters: {
     schema: {
       module: "@cubby/schemas/run",
@@ -666,6 +788,8 @@ export default defineEntity({
     bulkUpdate: null,
     merge: false,
     operationOwners: { delete: null, merge: null },
+    // The run service and import writers own every write.
+    lifecycle: "readOnly",
     mcp: ["get", "list"],
   },
   extensions: {

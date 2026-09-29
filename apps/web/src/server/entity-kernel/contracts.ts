@@ -1,10 +1,10 @@
-import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";
 import { operationEffectSchema } from "@cubby/schemas/entity-integrity";
 import { anyShortcodeSchema } from "@cubby/schemas/identifiers";
 import {
   mcpResultDetail,
   mcpResultDetailFields,
 } from "@cubby/schemas/mcp-detail";
+import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";
 import {
   MAX_PAGE_SIZE,
   MAX_SORTS,
@@ -39,6 +39,7 @@ import {
   generatedEntityKernelEntities,
   generatedMergeEntityKernelEntities,
   generatedMcpEntityActionEntities,
+  generatedResolveEntityKernelEntities,
   generatedSearchEntityKernelEntities,
 } from "~/server/generated/entity-kernel-entities.gen";
 import {
@@ -164,6 +165,21 @@ const bulkUpdateCommandSchema = generatedEntityBulkUpdateCommandSchema(
   uniqueEntityIdsSchema,
 );
 
+const resolvableEntitySchema = z.enum(generatedResolveEntityKernelEntities);
+
+/**
+ * `capabilities.resolve`: names → live rows; `create: true` inserts the
+ * misses (refused when the declaration says `createMissing: false`). Served
+ * by `resolveEntity`, beside `entityCommandSchema` rather than in it, so the
+ * transports' exhaustive command/result unions opt in explicitly.
+ */
+export const entityResolveCommandSchema = z.object({
+  action: z.literal("resolve"),
+  entity: resolvableEntitySchema,
+  names: z.array(z.string().max(500)).min(1).max(500),
+  create: z.boolean().default(false),
+});
+
 /** Strictly serializable commands exposed by the generic browser transport. */
 export const entityBrowserMutationCommandSchema = z.union([
   generatedEntityCreateCommandSchema,
@@ -184,44 +200,58 @@ export const entityCommandSchema = z.union([
   entityBrowserMutationCommandSchema,
 ]);
 
-export const entityMcpReadCommandSchema = z.union([
-  z.object({
-    action: z.literal("get"),
-    entity: z.enum(generatedMcpEntityActionEntities.get),
-    id: anyShortcodeSchema(generatedMcpEntityActionEntities.get),
-    missing: z.enum(["error", "null"]).default("error"),
-    resultDetail,
-  }),
-  mcpListCommandSchema,
-  z.object({
-    action: z.literal("search"),
-    entity: z.enum(generatedMcpEntityActionEntities.search),
-    query: z.string().trim().min(1).max(100),
-    limit: z.number().int().min(1).max(50).default(5),
-    semantic: z.boolean().default(true),
-  }),
-]);
-
-const mcpDeleteCommandSchema = deleteCommandSchema.extend({
+/**
+ * MCP ingress, one schema per kernel verb (`server/mcp/kernel-actions.ts`
+ * binds each to an `entity_read` / `entity` action). Generated from the
+ * executable actions each literal exposes.
+ */
+export const entityMcpGetCommandSchema = z.object({
+  action: z.literal("get"),
+  entity: z.enum(generatedMcpEntityActionEntities.get),
+  id: anyShortcodeSchema(generatedMcpEntityActionEntities.get),
+  missing: z.enum(["error", "null"]).default("error"),
+  resultDetail,
+});
+export const entityMcpListCommandSchema = mcpListCommandSchema;
+export const entityMcpSearchCommandSchema = z.object({
+  action: z.literal("search"),
+  entity: z.enum(generatedMcpEntityActionEntities.search),
+  query: z.string().trim().min(1).max(100),
+  limit: z.number().int().min(1).max(50).default(5),
+  semantic: z.boolean().default(true),
+});
+export const entityMcpCreateCommandSchema =
+  generatedMcpEntityCreateCommandSchema.and(resultDetailFields);
+export const entityMcpUpdateCommandSchema =
+  generatedMcpEntityUpdateCommandSchema.and(resultDetailFields);
+export const entityMcpDeleteCommandSchema = deleteCommandSchema.extend({
   entity: z.enum(generatedMcpEntityActionEntities.delete),
 });
-
-const mcpMergeCommandSchema = z.object({
+export const entityMcpBulkUpdateCommandSchema =
+  generatedMcpEntityBulkUpdateCommandSchema(uniqueEntityIdsSchema);
+export const entityMcpRelationCommandSchema =
+  generatedMcpEntityRelationCommandSchema;
+export const entityMcpMergeCommandSchema = z.object({
   action: z.literal("merge"),
   entity: z.enum(generatedMcpEntityActionEntities.merge),
   data: z.record(z.string(), z.unknown()),
   resultDetail,
 });
 
-/** MCP ingress is generated from executable actions each literal exposes. */
+export const entityMcpReadCommandSchema = z.union([
+  entityMcpGetCommandSchema,
+  entityMcpListCommandSchema,
+  entityMcpSearchCommandSchema,
+]);
+
 export const entityMcpCommandSchema = z.union([
   entityMcpReadCommandSchema,
-  generatedMcpEntityCreateCommandSchema.and(resultDetailFields),
-  generatedMcpEntityUpdateCommandSchema.and(resultDetailFields),
-  mcpDeleteCommandSchema,
-  generatedMcpEntityBulkUpdateCommandSchema(uniqueEntityIdsSchema),
-  generatedMcpEntityRelationCommandSchema,
-  mcpMergeCommandSchema,
+  entityMcpCreateCommandSchema,
+  entityMcpUpdateCommandSchema,
+  entityMcpDeleteCommandSchema,
+  entityMcpBulkUpdateCommandSchema,
+  entityMcpRelationCommandSchema,
+  entityMcpMergeCommandSchema,
 ]);
 
 export type EntityQueryCommand = z.infer<typeof entityQueryCommandSchema>;
@@ -291,6 +321,27 @@ export const entityBulkUpdateResultSchema = z.object({
 });
 export const entityRelationMutationResultSchema =
   generatedEntityRelationMutationResultSchema;
+
+export type EntityResolveCommand = z.input<typeof entityResolveCommandSchema>;
+
+export const entityResolveResultSchema = z.object({
+  action: z.literal("resolve"),
+  entity: resolvableEntitySchema,
+  /** One item per non-blank requested name, in request order. */
+  items: z.array(
+    z.object({
+      name: z.string(),
+      /** The matched or created row; null for an unresolved miss. */
+      id: z.string().nullable(),
+      /** An existing row matched the name or one of its declared aliases. */
+      matched: z.boolean(),
+      created: z.boolean(),
+      /** Further exact matches, or a miss's closest contains-matches. */
+      candidates: z.array(z.object({ id: z.string(), name: z.string() })),
+    }),
+  ),
+  sideEffects: mutationSideEffectsSchema,
+});
 
 /** Strict wire result for browser mutations. */
 export const entityBrowserMutationResultSchema = z.union([

@@ -1,0 +1,5 @@
+{
+  "code": "UPGRADE_REQUIRED",
+  "message": "Cubby 1.0 is too old for this server (minimum 2.0). Update Cubby from TestFlight.",
+  "reason": "CLIENT_UPDATE_REQUIRED"
+}

@@ -15,8 +15,8 @@ const isOwnRecipe = (t: Recipe) => sql`${t.cookbookId} IS NULL`;
 // recipe): Book/Notion recipes carry their text in the source, not here, so
 // the check never lights up a book you own or a Notion page you sync.
 const expectsInstructions = (t: Recipe) => sql`(${isOwnRecipe(t)}
-  AND ${t.SourceType} IS DISTINCT FROM 'Book'
-  AND ${t.SourceType} IS DISTINCT FROM 'Notion')`;
+  AND ${t.sourceType} IS DISTINCT FROM 'Book'
+  AND ${t.sourceType} IS DISTINCT FROM 'Notion')`;
 
 const hasIngredientLines = (t: Recipe) => sql`EXISTS (
   SELECT 1 FROM "RecipeSection" dq_rec_sec
@@ -48,11 +48,11 @@ export const recipeChecks = defineEntityChecks({
     },
     recipe_source: {
       expected: isOwnRecipe,
-      // `webProvenance(null)` (source/source.ts) stamps a URL-less manual
-      // recipe as SourceType 'Other' with a null SourceData, not a null
-      // SourceType — a genuinely untyped legacy row is the other, rarer half.
+      // `webProvenance(null)` (recipe/source.ts) stamps a URL-less manual
+      // recipe as sourceType 'Other' with no url or label, not a null
+      // sourceType — a genuinely untyped legacy row is the other, rarer half.
       missing: (t) =>
-        sql`(${t.SourceType} IS NULL OR (${t.SourceType} = 'Other' AND ${t.SourceData} IS NULL))`,
+        sql`(${t.sourceType} IS NULL OR (${t.sourceType} = 'Other' AND ${t.sourceUrl} IS NULL AND ${t.sourceLabel} IS NULL))`,
     },
   },
 });

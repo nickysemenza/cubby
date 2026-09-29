@@ -12,10 +12,10 @@ import {
   makeExpenseInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 
 import {
   createProductCategory,
-  productCategoryRepository,
   getProductCategoryByShortcode,
   listProductCategories,
   listProductCategoryTreeOptions,
@@ -92,7 +92,7 @@ describe("product category hierarchy", () => {
       mode: "inherit",
       value: "tools",
       sourceEntity: {
-        entityType: "productCategory",
+        entityKind: "productCategory",
         entityId: taxonomyShortcode("tools"),
       },
     });
@@ -240,11 +240,9 @@ describe("product category hierarchy", () => {
     expect(option?.feature).toBe("tool-consumables");
 
     await expect(
-      productCategoryRepository.delete(
-        ctx.db,
-        [taxonomyShortcode("tool-consumables")],
-        ctx.actor,
-      ),
+      deleteThroughKernel(ctx.db, ctx.actor, "productCategory", [
+        taxonomyShortcode("tool-consumables"),
+      ]),
     ).rejects.toThrow("behavior binding");
     await expect(
       updateProductCategory(
@@ -255,11 +253,9 @@ describe("product category hierarchy", () => {
       ),
     ).rejects.toThrow("behavior binding");
     await expect(
-      productCategoryRepository.delete(
-        ctx.db,
-        [taxonomyShortcode("food")],
-        ctx.actor,
-      ),
+      deleteThroughKernel(ctx.db, ctx.actor, "productCategory", [
+        taxonomyShortcode("food"),
+      ]),
     ).rejects.toThrow("behavior binding");
 
     await expect(

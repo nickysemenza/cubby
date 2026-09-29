@@ -12,7 +12,6 @@ import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { entityAttachment } from "~/server/db/schema";
 import { createExpense } from "~/server/repo/expense";
 import { createFinancialAccount } from "~/server/repo/financial-account";
 import { createFinancialTransaction } from "~/server/repo/financial-transaction";
@@ -28,6 +27,7 @@ import {
   createProductFixture,
   makeLocationInput,
   makeProductInput,
+  insertEntityAttachments,
 } from "~/server/repo/repo.fixtures";
 import { createTask } from "~/server/repo/task";
 import {
@@ -38,7 +38,6 @@ import {
 } from "~/server/repo/vendor";
 import { createWish } from "~/server/repo/wish";
 
-import { getDb } from "../database-helpers";
 import { resolveLiveShortcode } from "../shortcode-resolver";
 import { insertWithShortcode } from "../shortcode-utils";
 import { setDataException } from "./exceptions";
@@ -168,8 +167,8 @@ describe("data quality: finance and project entities", () => {
       ctx.actor,
     );
     const logo = await createImageFixture(ctx.db, "dq-vendor-logo");
-    await getDb(ctx.db).insert(entityAttachment).values({
-      subjectEntityId: complete.entityId,
+    await insertEntityAttachments(ctx.db, {
+      entityId: complete.entityId,
       role: "logo",
       imageId: logo.id,
     });
@@ -452,7 +451,7 @@ describe("data quality: finance and project entities", () => {
         locationId: bed.id,
         kind: "note",
         observedOn: "2026-08-01",
-        note: null,
+        notes: null,
         pendingImageIds: [],
       },
       TEST_ACTOR,
@@ -463,7 +462,7 @@ describe("data quality: finance and project entities", () => {
         locationId: bed.id,
         kind: "note",
         observedOn: "2026-08-01",
-        note: "Everything looks healthy",
+        notes: "Everything looks healthy",
         pendingImageIds: [],
       },
       TEST_ACTOR,

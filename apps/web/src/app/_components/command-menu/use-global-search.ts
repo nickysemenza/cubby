@@ -6,8 +6,8 @@ import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 
+import { search } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { recordCommandSearch } from "~/lib/perf/perf-store";
-import { search } from "~/lib/search.functions";
 
 import { type QuickAction, quickActions } from "./quick-actions";
 
@@ -27,7 +27,7 @@ interface UseGlobalSearchResult {
 /** The command palette is deliberately lexical-only: it is a jump surface. */
 export function useGlobalSearch(
   searchQuery: string,
-  entityType?: SearchableEntity,
+  entityKind?: SearchableEntity,
 ): UseGlobalSearchResult {
   const measurement = useRef({
     query: searchQuery,
@@ -52,7 +52,7 @@ export function useGlobalSearch(
   const lexical = useQuery({
     ...search.grouped.queryOptions({
       query: queryInput,
-      entityTypes: entityType ? [entityType] : undefined,
+      entityKinds: entityKind ? [entityKind] : undefined,
       limit: COMMAND_SEARCH_RESULT_LIMIT,
     }),
     enabled: shouldSearch,
@@ -76,11 +76,11 @@ export function useGlobalSearch(
       phase: "lexical",
       durationMs: performance.now() - current.startedAt,
       resultCount: lexical.data?.length ?? 0,
-      scoped: Boolean(entityType),
+      scoped: Boolean(entityKind),
       queryLength: searchQuery.trim().length,
     });
   }, [
-    entityType,
+    entityKind,
     lexical.data,
     lexical.isFetching,
     lexical.isPlaceholderData,
@@ -89,7 +89,7 @@ export function useGlobalSearch(
   ]);
 
   const filteredActions = useMemo(() => {
-    if (entityType) return [];
+    if (entityKind) return [];
     if (!searchQuery) return quickActions;
     const normalized = searchQuery.toLowerCase();
     return quickActions.filter(
@@ -99,7 +99,7 @@ export function useGlobalSearch(
           keyword.toLowerCase().includes(normalized),
         ),
     );
-  }, [entityType, searchQuery]);
+  }, [entityKind, searchQuery]);
 
   const results = shouldSearch ? lexical.data : undefined;
   return {

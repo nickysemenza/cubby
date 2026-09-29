@@ -6,6 +6,7 @@ import {
   recipeMeta,
   recipeNotes,
   recipeServings,
+  recipeSourceValues,
   recipeTags,
   recipeTopLevelFields,
   recipeTotals,
@@ -450,13 +451,22 @@ export default defineEntity({
         nullable: true,
       },
       {
-        key: "SourceType",
+        key: "sourceType",
         kind: "enum",
         nullable: true,
         readKeyOverride: "source",
       },
       {
-        key: "SourceData",
+        // A Website recipe's page. A Notion recipe's page id is an
+        // EntityExternalId; a cookbook recipe names its Cookbook.
+        key: "sourceUrl",
+        kind: "text",
+        nullable: true,
+        readKeyOverride: "source",
+      },
+      {
+        // The book a Book recipe came from when no Cookbook row exists.
+        key: "sourceLabel",
         kind: "text",
         nullable: true,
         readKeyOverride: "source",
@@ -533,13 +543,19 @@ export default defineEntity({
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
-      { key: "SourceType", specialized: "enum:RecipeSource" },
-      "SourceData",
+      { key: "sourceType", specialized: "enum:sourceType" },
+      "sourceUrl",
+      "sourceLabel",
       { key: "cookbookId", reference: "cookbook" },
       { key: "forkedFromRecipeId", reference: "recipe" },
       { key: "yield", specialized: "json:yield" },
       "servings",
-      { key: "tags", specialized: "text-array" },
+      {
+        key: "tags",
+        nullableOverride: false,
+        defaultValue: "'{}'::text[]",
+        specialized: "text-array",
+      },
       "notes",
       { key: "totals", specialized: "json:totals" },
       "totalsComputedAt",
@@ -638,6 +654,71 @@ export default defineEntity({
       export: "recipeMcpEntityOut",
     },
   },
+  storage: {
+    indexes: [
+      // Non-cookbook recipes keep a globally-unique name. Cookbook (Book) and
+      // Notion recipes are excluded — they're keyed by (cookbook, name) and by
+      // their Notion page's EntityExternalId — so the same title can appear
+      // across a cookbook, a Notion page, and a web recipe. `IS DISTINCT FROM`
+      // (not NOT IN) keeps NULL-sourceType legacy rows inside the index.
+      {
+        on: ["name"],
+        unique: true,
+        where:
+          "{deletedAt} IS NULL AND {sourceType} IS DISTINCT FROM 'Book' AND {sourceType} IS DISTINCT FROM 'Notion'",
+      },
+      // A cookbook recipe's identity is (cookbook, title): unique per book, but
+      // the same title may recur across books.
+      {
+        on: ["cookbookId", "name"],
+        unique: true,
+        where: "{cookbookId} IS NOT NULL AND {deletedAt} IS NULL",
+      },
+      { on: ["sourceType"] },
+      {
+        name: "Recipe_created_at_desc_idx",
+        on: [{ column: "createdAt", desc: true }],
+      },
+      {
+        name: "Recipe_name_active_idx",
+        on: ["name"],
+        where: "{deletedAt} IS NULL",
+      },
+      {
+        name: "Recipe_totals_stale_idx",
+        on: ["totalsComputedAt"],
+        where: "{totalsComputedAt} IS NULL",
+      },
+    ],
+    checks: [
+      {
+        column: "sourceType",
+        values: [...recipeSourceValues],
+        nullClause: true,
+        bare: true,
+      },
+    ],
+    relations: {
+      sections: { many: "recipeSection" },
+      externalIds: {
+        many: "entityExternalId",
+        relationName: "recipeExternalIds",
+      },
+      pointerIngredient: {
+        one: "ingredient",
+        field: "id",
+        references: "recipeId",
+      },
+      cookbook: "cookbookId",
+      forkedFrom: {
+        field: "forkedFromRecipeId",
+        relationName: "RecipeForkedFrom",
+      },
+      forks: { many: "recipe", relationName: "RecipeForkedFrom" },
+      images: { many: "entityAttachment" },
+      mealRecipes: { many: "mealRecipe" },
+    },
+  },
   filters: {
     audit: true,
     schema: { module: "@cubby/schemas/recipe", export: "recipeFilterFields" },
@@ -716,28 +797,44 @@ export default defineEntity({
         kind: "range",
         placeholder: "Filter recipe cost...",
         options: [
-          { value: "under10", label: "Under $10" },
-          { value: "10to25", label: "$10–$25" },
-          { value: "25plus", label: "$25 and up" },
+          {
+            value: "under10",
+            label: "Under $10",
+            expand: { costTotalMax: 10 },
+          },
+          {
+            value: "10to25",
+            label: "$10–$25",
+            expand: { costTotalMin: 10, costTotalMax: 25 },
+          },
+          {
+            value: "25plus",
+            label: "$25 and up",
+            expand: { costTotalMin: 25 },
+          },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveRecipeCost",
-        },
       },
       {
         columnId: "caloriesTotal",
         kind: "range",
         placeholder: "Filter calories...",
         options: [
-          { value: "under500", label: "Under 500 cal" },
-          { value: "500to1000", label: "500–1,000 cal" },
-          { value: "1000plus", label: "1,000+ cal" },
+          {
+            value: "under500",
+            label: "Under 500 cal",
+            expand: { caloriesTotalMax: 500 },
+          },
+          {
+            value: "500to1000",
+            label: "500–1,000 cal",
+            expand: { caloriesTotalMin: 500, caloriesTotalMax: 1000 },
+          },
+          {
+            value: "1000plus",
+            label: "1,000+ cal",
+            expand: { caloriesTotalMin: 1000 },
+          },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveCalories",
-        },
       },
       {
         columnId: "totalMinutes",
@@ -746,14 +843,22 @@ export default defineEntity({
         deriveSchema: true,
         stored: true,
         options: [
-          { value: "under30", label: "Under 30 min" },
-          { value: "30to60", label: "30–60 min" },
-          { value: "60plus", label: "Over an hour" },
+          {
+            value: "under30",
+            label: "Under 30 min",
+            expand: { totalMinutesMax: 30 },
+          },
+          {
+            value: "30to60",
+            label: "30–60 min",
+            expand: { totalMinutesMin: 30, totalMinutesMax: 60 },
+          },
+          {
+            value: "60plus",
+            label: "Over an hour",
+            expand: { totalMinutesMin: 60 },
+          },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveRecipeTotalTime",
-        },
       },
       {
         columnId: "related:recipe.ingredients",
@@ -824,14 +929,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "EntityAttachment.subjectEntityId", direction: "incoming" },
+          { edge: "EntityAttachment.entityId", direction: "incoming" },
           { edge: "EntityAttachment.imageId", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
           { edge: "EntityAttachment.imageId", direction: "incoming" },
-          { edge: "EntityAttachment.subjectEntityId", direction: "outgoing" },
+          { edge: "EntityAttachment.entityId", direction: "outgoing" },
         ],
       },
     },
@@ -1040,8 +1145,8 @@ export default defineEntity({
     mcpNames: { overrides: { delete: "delete_recipe" } },
     ports: {
       repository: {
-        module: "~/server/repo/recipe/entity-adapter",
-        export: "recipeEntityAdapter",
+        module: "~/server/repo/recipe/repository",
+        export: "recipeRepository",
       },
       search: "document",
     },

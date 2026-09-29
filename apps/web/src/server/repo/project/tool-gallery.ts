@@ -17,6 +17,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { inventoryAmountSql } from "~/server/repo/inventory/helpers";
 import { loadLocationAncestors } from "~/server/repo/location/tree";
 import { getProductImagesByProductIds } from "~/server/repo/product";
 import { categoryFeatureSql } from "~/server/repo/product-category-sql";
@@ -191,7 +192,7 @@ export async function projectToolGallery(
       manufacturer: product.manufacturer,
       model: product.model,
       inventoryId: inventoryEntry.shortcode,
-      amount: inventoryEntry.amount,
+      amount: inventoryAmountSql,
       placement: inventoryEntry.placement,
       locationId: location.id,
       locationCode: location.shortcode,

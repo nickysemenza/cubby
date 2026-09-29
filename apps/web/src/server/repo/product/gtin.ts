@@ -1,5 +1,5 @@
 /**
- * Barcodes, as `ProductExternalId` rows.
+ * Barcodes, as `EntityExternalId` rows.
  *
  * A product carries a SET of barcodes, not one: a manufacturer reissues a SKU,
  * a retailer relabels, two listings of one item disagree. `Product.upc` could
@@ -16,33 +16,39 @@ import {
   GTIN_SOURCE,
   normalizeGtin,
 } from "@cubby/schemas/external-id";
-import type { ProductId } from "@cubby/schemas/identifiers";
+import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 
 import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { product, productExternalId } from "~/server/db/schema";
+import { entityExternalId, product } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 
 const liveGtinRows = (db: Database | DrizzleTransaction, ids: ProductId[]) =>
   unwrapDb(db)
     .select({
-      productId: productExternalId.productId,
-      externalId: productExternalId.externalId,
-      isPrimary: productExternalId.isPrimary,
+      productId: entityExternalId.entityId,
+      externalId: entityExternalId.externalId,
+      isPrimary: entityExternalId.isPrimary,
     })
-    .from(productExternalId)
+    .from(entityExternalId)
     .where(
       and(
-        inArray(productExternalId.productId, ids),
-        eq(productExternalId.source, GTIN_SOURCE),
-        notDeleted(productExternalId),
+        inArray(entityExternalId.entityId, ids),
+        eq(entityExternalId.source, GTIN_SOURCE),
+        notDeleted(entityExternalId),
       ),
     )
     .orderBy(
-      sql`${productExternalId.isPrimary} DESC`,
-      productExternalId.createdAt,
-      productExternalId.id,
+      sql`${entityExternalId.isPrimary} DESC`,
+      entityExternalId.createdAt,
+      entityExternalId.id,
+    )
+    .then((rows) =>
+      rows.map((row) => ({
+        ...row,
+        productId: parseEntityId("product", row.productId),
+      })),
     );
 
 /**
@@ -51,7 +57,7 @@ const liveGtinRows = (db: Database | DrizzleTransaction, ids: ProductId[]) =>
  * Modelled on `loadProductDataQualities` / `getProductImagesByProductIds`
  * rather than a correlated subquery on purpose: drizzle strips table prefixes
  * from interpolated columns inside a `sql` SELECT field on a single-table
- * select, so a correlated scalar over `ProductExternalId` silently self-joins
+ * select, so a correlated scalar over `EntityExternalId` silently self-joins
  * and returns NULL with no error.
  */
 export const loadPrimaryGtins = async (
@@ -106,8 +112,8 @@ export const loadAllGtins = async (
 export const productMatchesGtinTerm = (term: string): SQL => {
   const terms = [...new Set(wasm.product_code_search_terms(term.trim()))];
   return sql`EXISTS (
-    SELECT 1 FROM "ProductExternalId" pei
-    WHERE pei."productId" = ${product.id}
+    SELECT 1 FROM "EntityExternalId" pei
+    WHERE pei."entityId" = ${product.id}
       AND pei."source" = ${GTIN_SOURCE}
       AND pei."deletedAt" IS NULL
       AND (${sql.join(
@@ -119,8 +125,8 @@ export const productMatchesGtinTerm = (term: string): SQL => {
 };
 
 export const productHasAnyGtin = (): SQL => sql`EXISTS (
-  SELECT 1 FROM "ProductExternalId" pei
-  WHERE pei."productId" = ${product.id}
+  SELECT 1 FROM "EntityExternalId" pei
+  WHERE pei."entityId" = ${product.id}
     AND pei."source" = ${GTIN_SOURCE}
     AND pei."deletedAt" IS NULL)`;
 
@@ -128,8 +134,8 @@ export const productHasGtin = (value: string): SQL => {
   const normalized = normalizeGtin(value);
   if (normalized === null) return sql`false`;
   return sql`EXISTS (
-    SELECT 1 FROM "ProductExternalId" pei
-    WHERE pei."productId" = ${product.id}
+    SELECT 1 FROM "EntityExternalId" pei
+    WHERE pei."entityId" = ${product.id}
       AND pei."source" = ${GTIN_SOURCE}
       AND pei."kind" = ${GTIN_KIND}
       AND pei."deletedAt" IS NULL

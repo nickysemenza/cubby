@@ -3,7 +3,7 @@ import { testEntityId, testUserId } from "@cubby/schemas/testing";
 import { describe, it } from "vitest";
 
 import type { DrizzleTransaction } from "~/server/db";
-import { taskDependency } from "~/server/db/schema";
+import { runProgress } from "~/server/db/schema";
 // `ChildCascade` deliberately comes through the barrel: these assertions lock
 // the interface callers use, not this module's private implementation.
 import type { ChildCascade } from "~/server/repo/removal";
@@ -21,20 +21,20 @@ describe("removeEntity — type-level interface locks", () => {
   it("refuses an auditKey on a hard-delete child", () => {
     // @ts-expect-error a hard-delete child cannot be counted, so it has no audit key
     const child: ChildCascade = {
-      table: taskDependency,
-      parentColumns: [taskDependency.taskId],
+      table: runProgress,
+      parentColumns: [runProgress.runId],
       mode: "hard",
-      auditKey: "cascadedDependencies",
+      auditKey: "cascadedProgress",
     };
     void child;
   });
 
   // oxlint-disable-next-line vitest/expect-expect -- Compile-time @ts-expect-error contract.
   it("refuses a soft-delete child whose table has no deletedAt", () => {
-    // @ts-expect-error TaskDependency has no deletedAt, so it cannot be soft-deleted
+    // @ts-expect-error RunProgress has no deletedAt, so it cannot be soft-deleted
     const child: ChildCascade = {
-      table: taskDependency,
-      parentColumns: [taskDependency.taskId],
+      table: runProgress,
+      parentColumns: [runProgress.runId],
     };
     void child;
   });

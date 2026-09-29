@@ -4,7 +4,6 @@ import {
   runShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -13,8 +12,8 @@ import { z } from "zod";
 import { imageProcessingJob } from "~/server/db/image-processing-schema";
 import { aiUsage, image, run as runTable, runTarget } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { callMcpTool } from "~/server/mcp/mcp-test-utils";
-import { registerPhotoImportTools } from "~/server/mcp/tools/photo-import.tools";
+import { callMcpTool, kernelRequestContext } from "~/server/mcp/mcp-test-utils";
+import { createMcpServer } from "~/server/mcp/server";
 import { getDb } from "~/server/repo/database-helpers";
 import { updateImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
@@ -61,8 +60,7 @@ describe("photo import finalize", () => {
 
   it("gives the agent a bounded run and owner read through MCP", async () => {
     const run = await startRun();
-    const server = new McpServer({ name: "photo-test", version: "1.0.0" });
-    registerPhotoImportTools(server);
+    const server = createMcpServer();
     const entityKernel = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, {
         auth: { userId: ctx.actor.userId },
@@ -70,9 +68,9 @@ describe("photo import finalize", () => {
     );
     const response = await callMcpTool(
       server,
-      "get_photo_run_context",
-      { runId: run.publicId },
-      {},
+      "imports_read",
+      { action: "photo_context", runId: run.publicId },
+      kernelRequestContext(entityKernel),
       { entityKernel },
     );
 
@@ -97,14 +95,14 @@ describe("photo import finalize", () => {
         .insert(runTarget)
         .values({
           runId: run.id,
-          imageId: parseImageId.parse(photo.id),
+          entityKind: "image",
+          entityId: parseImageId.parse(photo.id),
           position,
           state: "pending",
           targetFingerprint: String(position).repeat(64),
         });
     }
-    const server = new McpServer({ name: "photo-test", version: "1.0.0" });
-    registerPhotoImportTools(server);
+    const server = createMcpServer();
     const entityKernel = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, {
         auth: { userId: ctx.actor.userId },
@@ -113,9 +111,9 @@ describe("photo import finalize", () => {
     const page = async (cursor: number) => {
       const response = await callMcpTool(
         server,
-        "get_photo_run_context",
-        { runId: run.publicId, limit: 2, cursor },
-        {},
+        "imports_read",
+        { action: "photo_context", runId: run.publicId, limit: 2, cursor },
+        kernelRequestContext(entityKernel),
         { entityKernel },
       );
       expect(response.isError).not.toBe(true);
@@ -181,7 +179,8 @@ describe("photo import finalize", () => {
       .insert(runTarget)
       .values({
         runId: original.id,
-        imageId: parseImageId.parse(photo.id),
+        entityKind: "image",
+        entityId: parseImageId.parse(photo.id),
         position: 0,
         state: "completed",
         targetFingerprint: "e".repeat(64),
@@ -230,11 +229,11 @@ describe("photo import finalize", () => {
     const targets = await getDb(ctx.db)
       .select({
         runId: runTarget.runId,
-        imageId: runTarget.imageId,
+        imageId: runTarget.entityId,
         state: runTarget.state,
       })
       .from(runTarget)
-      .where(eq(runTarget.imageId, parseImageId.parse(photo.id)));
+      .where(eq(runTarget.entityId, parseImageId.parse(photo.id)));
     expect(targets).toEqual(
       expect.arrayContaining([
         { runId: original.id, imageId: photo.id, state: "completed" },
@@ -300,7 +299,7 @@ describe("photo import finalize", () => {
         targetFingerprint: runTarget.targetFingerprint,
       })
       .from(runTarget)
-      .where(eq(runTarget.imageId, parseImageId.parse(staged.id)));
+      .where(eq(runTarget.entityId, parseImageId.parse(staged.id)));
     expect(targets).toEqual([
       { state: "pending", position: 0, targetFingerprint: sha256 },
     ]);
@@ -361,7 +360,7 @@ describe("photo import finalize", () => {
     const targets = await getDb(ctx.db)
       .select({ id: runTarget.id })
       .from(runTarget)
-      .where(eq(runTarget.imageId, parseImageId.parse(staged.id)));
+      .where(eq(runTarget.entityId, parseImageId.parse(staged.id)));
     expect(targets).toHaveLength(1);
   });
 

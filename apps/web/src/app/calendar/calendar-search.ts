@@ -24,7 +24,7 @@ const calendarViewPeriodParam = z
  * TanStack JSON-parses every search param, so `?future=true` arrives as the
  * BOOLEAN `true` — and a bare `z.string()` rejects it straight into
  * `.catch(undefined)`, leaving an unfiltered calendar that reads as a real
- * answer. `futureFilterOptions`' values are literally `"true"` / `"false"`,
+ * answer. The expense `future` filter roster's values are literally `"true"` / `"false"`,
  * so this is the live case, not a hypothetical one.
  *
  * Keys must match `calendarFilterSpecs`' URL keys exactly — a strict `z.object`

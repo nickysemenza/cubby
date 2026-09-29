@@ -456,6 +456,20 @@ export default defineEntity({
     update: { module: "@cubby/schemas/vendor", export: "vendorUpdateData" },
     output: { module: "@cubby/schemas/vendor", export: "vendorOut" },
   },
+  storage: {
+    indexes: [{ on: ["name"], unique: true, where: "{deletedAt} IS NULL" }],
+    checks: [
+      { column: "orderEvidence", nullClause: true },
+      {
+        name: "Vendor_returnWindowDays_check",
+        sql: "{returnWindowDays} IS NULL OR {returnWindowDays} >= 0",
+      },
+    ],
+    relations: {
+      purchases: { many: "purchase" },
+      attachments: { many: "entityAttachment" },
+    },
+  },
   filters: {
     audit: true,
     schema: { module: "@cubby/schemas/vendor", export: "vendorFilterFields" },
@@ -493,16 +507,24 @@ export default defineEntity({
         placeholder: "Filter spend...",
         deriveSchema: true,
         options: [
-          { value: "positive", label: "Positive basis" },
-          { value: "zero", label: "Zero basis" },
-          { value: "negative", label: "Credit / negative" },
-          { value: "gte100", label: "$100 and up" },
-          { value: "gte500", label: "$500 and up" },
+          {
+            value: "positive",
+            label: "Positive basis",
+            expand: { spendMin: 0.01 },
+          },
+          {
+            value: "zero",
+            label: "Zero basis",
+            expand: { spendMin: 0, spendMax: 0 },
+          },
+          {
+            value: "negative",
+            label: "Credit / negative",
+            expand: { spendMax: -0.01 },
+          },
+          { value: "gte100", label: "$100 and up", expand: { spendMin: 100 } },
+          { value: "gte500", label: "$500 and up", expand: { spendMin: 500 } },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveVendorSpend",
-        },
       },
       {
         columnId: "latestPurchaseDate",
@@ -643,14 +665,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "EntityAttachment.subjectEntityId", direction: "incoming" },
+          { edge: "EntityAttachment.entityId", direction: "incoming" },
           { edge: "EntityAttachment.imageId", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
           { edge: "EntityAttachment.imageId", direction: "incoming" },
-          { edge: "EntityAttachment.subjectEntityId", direction: "outgoing" },
+          { edge: "EntityAttachment.entityId", direction: "outgoing" },
         ],
       },
     },
@@ -811,6 +833,7 @@ export default defineEntity({
           weight: 1,
           label: "Logo",
           message: "No logo is recorded for this vendor.",
+          coverage: "vendorsWithPurchases",
         },
         {
           id: "vendor_website",
@@ -828,8 +851,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/vendor.entity-adapter",
-        export: "vendorEntityAdapter",
+        module: "~/server/repo/vendor.repository",
+        export: "vendorRepository",
       },
       search: "document",
     },

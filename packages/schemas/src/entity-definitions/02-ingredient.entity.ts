@@ -237,6 +237,33 @@ export default defineEntity({
       export: "ingredientWithFoodMcpEntityOut",
     },
   },
+  storage: {
+    indexes: [
+      // Case-insensitive uniqueness must match the lower(name) matcher to
+      // prevent concurrent duplicate ingredients.
+      {
+        name: "Ingredient_name_key",
+        on: [{ sql: "lower({name})" }],
+        unique: true,
+        where: "{deletedAt} IS NULL AND {recipeId} IS NULL",
+      },
+      { on: ["recipeId"], unique: true, where: "{deletedAt} IS NULL" },
+      { on: ["createdAt"] },
+      { trigram: "name" },
+      {
+        name: "Ingredient_name_active_idx",
+        on: ["name"],
+        where: "{deletedAt} IS NULL",
+      },
+    ],
+    relations: {
+      recipe: "recipeId",
+      recipeSectionIngredient: { many: "recipeSectionIngredient" },
+      product: { many: "product", relationName: "ProductIngredient" },
+      plants: { many: "plant" },
+      mealFoodEntries: { many: "mealFoodEntry" },
+    },
+  },
   filters: {
     audit: true,
     schema: {
@@ -497,6 +524,13 @@ export default defineEntity({
     bulkUpdate: { fields: ["usuallyOnHand"] },
     merge: true,
     operationOwners: { delete: "kernel", merge: "kernel" },
+    // Standalone ingredients only: a recipe's own ingredient rows (`recipeId`
+    // set) are never a resolve target.
+    resolve: {
+      match: ["name", "aliases"],
+      createMissing: true,
+      scope: ["recipeId"],
+    },
     mcp: [
       "get",
       "list",
@@ -515,6 +549,7 @@ export default defineEntity({
           weight: 2,
           label: "Product link",
           message: "No product is linked to this ingredient.",
+          coverage: "ingredientsWithoutProduct",
         },
       ],
     },
@@ -524,8 +559,8 @@ export default defineEntity({
     mcpNames: { overrides: { list: "search_ingredients" } },
     ports: {
       repository: {
-        module: "~/server/repo/ingredient/entity-adapter",
-        export: "ingredientEntityAdapter",
+        module: "~/server/repo/ingredient/repository",
+        export: "ingredientRepository",
       },
       search: "document",
     },

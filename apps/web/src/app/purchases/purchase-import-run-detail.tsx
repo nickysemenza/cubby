@@ -22,20 +22,32 @@ import {
 } from "react";
 import { z } from "zod";
 
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { runHref } from "~/app/purchases/purchase-import-links";
 import { usePhotoRunReview } from "~/app/runs/photo-group-review";
 import { PhotoImportRunView } from "~/app/runs/photo-run-detail";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Section, Stack } from "~/components/layout";
 import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import { StatusText } from "~/components/ui/status-text";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import type { RunDetail } from "~/contracts/run.contract";
-import { purchaseImport, run as runOperations } from "~/entities/run.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import {
+  purchaseImport,
+  run as runOperations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { formatInstant } from "~/lib/date-format";
 import { putPresignedObject } from "~/lib/presigned-upload";
 import { cn, formatCurrency } from "~/lib/utils";
 
@@ -72,7 +84,7 @@ const statusBadgeVariant = (status: string): BadgeVariant => {
 };
 
 const formatMoment = (value: string | null): string =>
-  value ? new Date(value).toLocaleString() : "Still active";
+  value ? formatInstant(value, "dateTime") : "Still active";
 
 const EMPTY_AGENT_SNAPSHOT: AgentConversationObservationSnapshot = {
   conversation: undefined,
@@ -441,10 +453,10 @@ function AgentWorkOverview({
       <AgentContextPerCall messages={messages} />
       {work.length || plannedSteps.length || run.agentModelMs > 0 ? (
         <section
-          className="mt-3 overflow-x-auto border-t border-border pt-2"
+          className="mt-3 border-t border-border pt-2"
           aria-label="Run step timing table"
         >
-          <table className="w-full min-w-[760px] table-fixed border-collapse text-xs tabular-nums">
+          <Table className="min-w-[760px] tabular-nums">
             <colgroup>
               <col className="w-[26%]" />
               <col className="w-[14%]" />
@@ -453,29 +465,27 @@ function AgentWorkOverview({
               <col className="w-[13%]" />
               <col className="w-[18%]" />
             </colgroup>
-            <thead>
-              <tr className="border-b border-border text-left text-muted-foreground">
-                <th scope="col" className="py-2 pr-3 font-medium">
-                  Step
-                </th>
-                <th scope="col" className="px-2 py-2 text-right font-medium">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="h-auto py-2 pr-3 pl-0">Step</TableHead>
+                <TableHead className="h-auto py-2 text-right">
                   Lookups / items
-                </th>
-                <th scope="col" className="px-2 py-2 text-right font-medium">
+                </TableHead>
+                <TableHead className="h-auto py-2 text-right">
                   Tool / attempt
-                </th>
-                <th scope="col" className="px-2 py-2 text-right font-medium">
+                </TableHead>
+                <TableHead className="h-auto py-2 text-right">
                   Agent model
-                </th>
-                <th scope="col" className="px-2 py-2 text-right font-medium">
+                </TableHead>
+                <TableHead className="h-auto py-2 text-right">
                   Waiting
-                </th>
-                <th scope="col" className="py-2 pl-2 text-right font-medium">
+                </TableHead>
+                <TableHead className="h-auto py-2 pr-0 text-right">
                   Total wall
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {work.map((item) => {
                 const Icon = item.completed
                   ? CheckCircleIcon
@@ -487,11 +497,11 @@ function AgentWorkOverview({
                 const elapsedMs =
                   item.timing === "elapsed" ? item.durationMs : null;
                 return (
-                  <tr
-                    key={item.kind}
-                    className="border-b border-border/70 last:border-0"
-                  >
-                    <th scope="row" className="py-2 pr-3 text-left font-medium">
+                  <TableRow key={item.kind}>
+                    <TableHead
+                      scope="row"
+                      className="h-auto py-2 pr-3 pl-0 whitespace-normal text-foreground"
+                    >
                       <span className="flex items-center gap-2">
                         <Icon
                           className={`size-3.5 shrink-0 ${item.failed && !item.completed ? "text-destructive" : item.completed ? "text-positive" : "text-muted-foreground"}`}
@@ -499,20 +509,20 @@ function AgentWorkOverview({
                         />
                         {item.label}
                       </span>
-                    </th>
-                    <td className="px-2 py-2 text-right text-muted-foreground">
+                    </TableHead>
+                    <TableCell className="text-right text-muted-foreground">
                       {workCount(item) ?? "—"}
-                    </td>
-                    <td className="px-2 py-2 text-right">
+                    </TableCell>
+                    <TableCell className="text-right">
                       {toolMs === null || toolMs === undefined
                         ? "—"
                         : formatWorkDuration(toolMs)}
-                    </td>
-                    <td className="px-2 py-2 text-right text-muted-foreground">
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
                       —
-                    </td>
-                    <td
-                      className="px-2 py-2 text-right"
+                    </TableCell>
+                    <TableCell
+                      className="text-right"
                       title={
                         item.waitingMs === undefined
                           ? "No waiting interval recorded"
@@ -522,9 +532,9 @@ function AgentWorkOverview({
                       {item.waitingMs === null || item.waitingMs === undefined
                         ? "—"
                         : `≥${formatWorkDuration(item.waitingMs)}`}
-                    </td>
-                    <td
-                      className="py-2 pl-2 text-right"
+                    </TableCell>
+                    <TableCell
+                      className="pr-0 text-right"
                       title={
                         item.timing === "tool"
                           ? "Lower bound: summed tool calls; agent time is unmeasured"
@@ -536,16 +546,19 @@ function AgentWorkOverview({
                         : toolMs !== null && toolMs !== undefined
                           ? `≥${formatWorkDuration(toolMs)}`
                           : "—"}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
               {plannedSteps.map((step) => (
-                <tr
+                <TableRow
                   key={`planned-${step.kind}`}
-                  className="border-b border-border/70 text-muted-foreground last:border-0"
+                  className="text-muted-foreground"
                 >
-                  <th scope="row" className="py-2 pr-3 text-left font-medium">
+                  <TableHead
+                    scope="row"
+                    className="h-auto py-2 pr-3 pl-0 whitespace-normal"
+                  >
                     <span className="flex items-center gap-2">
                       <CircleIcon
                         className="size-3.5 shrink-0"
@@ -553,17 +566,20 @@ function AgentWorkOverview({
                       />
                       <span>{step.label}</span>
                     </span>
-                  </th>
-                  <td className="px-2 py-2 text-left" colSpan={5}>
+                  </TableHead>
+                  <TableCell colSpan={5}>
                     {step.status === "waiting_for_you"
                       ? "Waiting for your review"
                       : "Upcoming"}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
               {run.agentModelMs > 0 ? (
-                <tr className="border-b border-border/70 last:border-0">
-                  <th scope="row" className="py-2 pr-3 text-left font-medium">
+                <TableRow>
+                  <TableHead
+                    scope="row"
+                    className="h-auto py-2 pr-3 pl-0 whitespace-normal text-foreground"
+                  >
                     <span className="flex items-center gap-2">
                       <CheckCircleIcon
                         className="size-3.5 shrink-0 text-positive"
@@ -571,47 +587,56 @@ function AgentWorkOverview({
                       />
                       Agent model turns
                     </span>
-                  </th>
-                  <td className="px-2 py-2 text-right text-muted-foreground">
+                  </TableHead>
+                  <TableCell className="text-right text-muted-foreground">
                     —
-                  </td>
-                  <td className="px-2 py-2 text-right text-muted-foreground">
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground">
                     —
-                  </td>
-                  <td className="px-2 py-2 text-right">
+                  </TableCell>
+                  <TableCell className="text-right">
                     {formatWorkDuration(run.agentModelMs)}
-                  </td>
-                  <td className="px-2 py-2 text-right text-muted-foreground">
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground">
                     —
-                  </td>
-                  <td
-                    className="py-2 pl-2 text-right"
+                  </TableCell>
+                  <TableCell
+                    className="pr-0 text-right"
                     title="Lower bound: measured model calls only"
                   >
                     ≥{formatWorkDuration(run.agentModelMs)}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ) : messages.length && run.endedAt ? (
-                <tr className="border-b border-border/70 last:border-0">
-                  <th scope="row" className="py-2 pr-3 text-left font-medium">
+                <TableRow>
+                  <TableHead
+                    scope="row"
+                    className="h-auto py-2 pr-3 pl-0 whitespace-normal text-foreground"
+                  >
                     Agent model turns
-                  </th>
-                  <td colSpan={2} className="text-right text-muted-foreground">
+                  </TableHead>
+                  <TableCell
+                    colSpan={2}
+                    className="p-0 text-right text-muted-foreground"
+                  >
                     —
-                  </td>
-                  <td
-                    className="px-2 py-2 text-right text-muted-foreground"
+                  </TableCell>
+                  <TableCell
+                    className="text-right text-muted-foreground"
                     title="No model-turn duration was stored for this run"
                   >
                     Not recorded
-                  </td>
-                  <td colSpan={2} className="text-right text-muted-foreground">
+                  </TableCell>
+                  <TableCell
+                    colSpan={2}
+                    className="p-0 text-right text-muted-foreground"
+                  >
                     —
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ) : null}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </section>
       ) : (
         <p className="mt-2 text-xs text-muted-foreground">
@@ -1337,7 +1362,7 @@ function RunContent({ run }: { run: RunDetail }) {
           {run.affectedPurchases.length > 0 ? (
             <Stack gap="sm">
               {run.affectedPurchases.map((purchase) => (
-                <EntityInlineLink
+                <EntityRefLink
                   key={purchase.shortcode}
                   entity="purchase"
                   data={{

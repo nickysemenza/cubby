@@ -149,7 +149,7 @@ const SQL_RELATED_VIEWS = {
   // (`repo/project/tools.ts` `listProjectResources`) additionally restricts to
   // Products whose inherited category feature is tools or software; this column does not. Zero live
   // edges differ today, and that card's own comment explains why it filters —
-  // `ProjectToolUsage` is durable history that may predate a legitimate
+  // `projectTool` is durable history that may predate a legitimate
   // category correction. It will diverge the first time a product with
   // tool-usage history is recategorized; that is the accepted trade, not an
   // oversight.
@@ -185,7 +185,7 @@ const SQL_RELATED_VIEWS = {
   ),
   // Via-spend, exactly like its mirror `product.purchases`: reached through a
   // money row, and only an acquiring one. The 10 pairs whose sole evidence is a
-  // `PurchaseProduct` link with no qualifying Expense stay out of this view on
+  // `purchaseProduct` link with no qualifying Expense stay out of this view on
   // purpose — `listPurchaseProducts` (repo/purchase-products.ts) unions that
   // second leg for the detail card, which is where an allocation-based order's
   // goods belong.
@@ -414,7 +414,7 @@ export async function loadRelatedPreviews(
     loaded.flatMap(({ relationKey, rows }) => {
       const targetEntity = sqlRelatedView(relationKey).targetEntity;
       return rows.map((row) => ({
-        entityType: targetEntity,
+        entityKind: targetEntity,
         entityId: row.targetEntityId,
       }));
     }),
@@ -478,7 +478,7 @@ export async function loadRelatedBranch(
   const displayImages = await resolveEntityDisplayImages(
     db,
     rows.map((row) => ({
-      entityType: view.targetEntity,
+      entityKind: view.targetEntity,
       entityId: row.targetEntityId,
     })),
   );
@@ -746,7 +746,7 @@ export async function loadRelatedSummary(
         SELECT i."id", i."key", i."filename", i."contentType"
         FROM "EntityAttachment" ti
         JOIN "Image" i ON i."id" = ti."imageId" AND i."deletedAt" IS NULL
-        WHERE ti."subjectEntityId" = t."id"
+        WHERE ti."entityId" = t."id"
           AND ti."deletedAt" IS NULL
           AND i."contentType" <> 'application/pdf'
           AND (i."renderStatus" IS NULL OR i."renderStatus" <> 'failed')

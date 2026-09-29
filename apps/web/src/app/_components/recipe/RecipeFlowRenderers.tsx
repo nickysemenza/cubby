@@ -10,11 +10,14 @@ import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
 import { useId, useMemo } from "react";
 
+import {
+  EntityRefLink,
+  dottedEntityLink,
+} from "~/components/entity/entity-ref-link";
 import { Badge } from "~/components/ui/badge";
 import { Table, TableBody, TableCell, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
 
-import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
   buildDisplayQuantities,
   IngredientModifier,
@@ -93,7 +96,8 @@ export function FlowSourceContent({
             {name}
           </Link>
         ) : (
-          <EntityPreviewLink
+          <EntityRefLink
+            variant="preview"
             displayImage={null}
             entity="ingredient"
             id={id}
@@ -103,7 +107,7 @@ export function FlowSourceContent({
             )}
           >
             {name}
-          </EntityPreviewLink>
+          </EntityRefLink>
         )}
         <IngredientModifier modifier={usage.modifier} />
         {source.role && (

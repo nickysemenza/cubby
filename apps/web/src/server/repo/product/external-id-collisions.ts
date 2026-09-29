@@ -1,11 +1,11 @@
 import { externalIdKind } from "@cubby/schemas/external-id";
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
 import type { Database } from "~/server/db";
-import { product, productExternalId } from "~/server/db/schema";
+import { entityExternalId, product } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 const externalIdCollisionKey = (value: {
@@ -33,30 +33,30 @@ export const findProductExternalIdCollisions = async (
   }));
   const rows = await getDb(db)
     .select({
-      source: productExternalId.source,
-      kind: productExternalId.kind,
-      externalId: productExternalId.externalId,
+      source: entityExternalId.source,
+      kind: entityExternalId.kind,
+      externalId: entityExternalId.externalId,
       productId: product.id,
       productShortcode: product.shortcode,
       productName: product.name,
     })
-    .from(productExternalId)
+    .from(entityExternalId)
     .innerJoin(
       product,
-      and(eq(product.id, productExternalId.productId), notDeleted(product)),
+      and(eq(product.id, entityExternalId.entityId), notDeleted(product)),
     )
     .where(
       and(
-        notDeleted(productExternalId),
+        notDeleted(entityExternalId),
         selected && selected.length > 0
-          ? inArray(productExternalId.source, selected)
+          ? inArray(entityExternalId.source, selected)
           : identifiers && identifiers.length > 0
             ? or(
                 ...identifiers.map((identifier) =>
                   and(
-                    eq(productExternalId.source, identifier.source),
-                    eq(productExternalId.kind, identifier.kind),
-                    eq(productExternalId.externalId, identifier.externalId),
+                    eq(entityExternalId.source, identifier.source),
+                    sql`${entityExternalId.kind} = ${identifier.kind}`,
+                    eq(entityExternalId.externalId, identifier.externalId),
                   ),
                 ),
               )

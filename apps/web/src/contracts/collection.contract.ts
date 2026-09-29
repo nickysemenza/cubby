@@ -22,14 +22,49 @@ export const collectionContract = defineContract("collection", {
     native: "Collection by reference",
     input: smartCollectionReferenceInput,
     output: smartCollectionDetailOut,
+    cache: {
+      tags: [
+        ["product"],
+        ["inventory"],
+        ["location"],
+        ["expense"],
+        ["purchase"],
+        ["financialAccount"],
+        ["vendorAccount"],
+        ["ledgerParty"],
+      ],
+      profile: "live-status",
+    },
   }),
   smartList: query({
     input: smartCollectionListInput,
     output: z.array(smartCollectionSummary),
+    cache: {
+      tags: [
+        ["collection", "smartList"],
+        ["product"],
+        ["location"],
+        ["inventory"],
+        ["expense"],
+        ["purchase"],
+      ],
+      profile: "live-status",
+    },
   }),
   smartDetail: query({
     input: smartCollectionDetailInput,
     output: smartCollectionDetailOut,
+    cache: {
+      tags: [
+        ["collection", "smartDetail"],
+        ["product"],
+        ["location"],
+        ["inventory"],
+        ["expense"],
+        ["purchase"],
+      ],
+      profile: "live-status",
+    },
   }),
   list: query({
     input: z.null(),
@@ -46,9 +81,11 @@ export const collectionContract = defineContract("collection", {
   set: mutation({
     input: collectionTagSetInput,
     output: collectionTagSetOut,
+    invalidates: ["collection"],
   }),
   create: mutation({
     input: collectionCreateInput,
     output: collectionSummaryOut,
+    invalidates: ["collection"],
   }),
 });

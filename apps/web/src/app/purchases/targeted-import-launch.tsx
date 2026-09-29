@@ -28,7 +28,7 @@ import type {
   TargetedImportStartInput,
   TargetedProductCandidate,
 } from "~/contracts/run.contract";
-import { run as runOperations } from "~/entities/run.functions";
+import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 const startTargetedImport = (input: TargetedImportStartInput) =>
   runOperations.startTargeted.call(input);

@@ -1,8 +1,8 @@
 /**
- * Full-replacement helper for self-referencing "blocked by" dependency edge
- * tables (`projectDependency`, `taskDependency`): both project/crud.ts and
- * task/crud.ts hand-rolled the same delete-then-insert replacement set before
- * this was extracted.
+ * "Blocked by" dependency links (`taskDependency`, `projectDependency` in
+ * `EntityLink`): the full-replacement write both task/crud.ts and
+ * project/crud.ts use, and its batched read twin. `from` is the blocked
+ * entity, `to` the blocker. Removal soft-deletes the link.
  */
 
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
@@ -12,56 +12,53 @@ import {
   type EntityId,
   parseEntityId,
 } from "@cubby/schemas/identifiers";
-import type { InferInsertModel } from "drizzle-orm";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, inArray } from "drizzle-orm";
 import type { AnyPgColumn, AnyPgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { entityLink } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import {
+  assertLinkSetAcyclic,
+  liveLinks,
+  replaceLinkSet,
+} from "~/server/repo/entity-links";
 
-import { getDb, unwrapDb } from "./core";
-import { findDirectedDependencyCycles } from "./dependency-graph";
+import { getDb } from "./core";
 import { notDeleted } from "./query";
 
+type DependencyEntity = Extract<ShortcodeEntity, "project" | "task">;
+
+const DEPENDENCY_KIND = {
+  project: "projectDependency",
+  task: "taskDependency",
+} as const satisfies Record<DependencyEntity, string>;
+
 /**
- * Replace the full `blockedByIds` edge set for one entity, inside the
- * caller's transaction:
+ * Replace the full `blockedByIds` set for one entity, inside the caller's
+ * transaction:
  *
  *   1. Dedupe `newIds`.
- *   2. Reject a self-reference (`id` blocked by itself) — BAD_REQUEST.
- *   3. Serialize writers in the Project or Task family with a transaction
- *      advisory lock.
- *   4. Verify every id is a live row in `opts.entityTable` — throws
+ *   2. Reject a self-reference (`id` blocked by itself) — SELF_DEPENDENCY.
+ *   3. Verify every id is a live row in `opts.entityTable` — throws
  *      `ENTITY_NOT_FOUND_REASON[opts.entity]` listing the missing ids if not.
- *   5. Reject any cycle in the whole resulting graph — BAD_REQUEST.
- *   6. Delete `id`'s existing edges, then insert the (deduped) new set.
+ *   4. Serialize writers of the family and reject any cycle in the whole
+ *      resulting graph — DEPENDENCY_CYCLE.
+ *   5. Soft-delete links no longer named, insert the new ones.
  */
-export async function replaceDependencyEdges<
-  TEdge extends AnyPgTable,
-  E extends Extract<ShortcodeEntity, "project" | "task">,
->(
+export async function replaceDependencyEdges<E extends DependencyEntity>(
   tx: DrizzleTransaction,
-  edgeTable: TEdge,
   opts: {
-    /** Column on `edgeTable` identifying the "owning" side (`id`'s row). */
-    ownColumn: AnyPgColumn;
-    /** Column on `edgeTable` identifying the "blocked-by" side (`newIds`). */
-    blockedByColumn: AnyPgColumn;
-    /** Build one edge row to insert from (ownId, blockedById). */
-    buildRow: (
-      ownId: EntityId<E>,
-      blockedById: EntityId<E>,
-    ) => InferInsertModel<TEdge>;
     /** Table the incoming ids must exist (live) in. */
     entityTable: AnyPgTable & {
       id: AnyPgColumn;
       deletedAt: AnyPgColumn;
     };
     /**
-     * Drives both the error label (`ENTITY_LABEL[entity]`) and the
+     * Drives the link kind, the error label (`ENTITY_LABEL[entity]`) and the
      * AppErrorReason (`ENTITY_NOT_FOUND_REASON[entity]`) thrown when an
-     * incoming id doesn't exist, so the pair can't drift out of sync.
+     * incoming id doesn't exist, so they can't drift out of sync.
      */
     entity: E;
   },
@@ -82,16 +79,6 @@ export async function replaceDependencyEdges<
       `${article} ${lowerLabel} cannot be blocked by itself.`,
     );
   }
-
-  // Every writer in one dependency family takes the same transaction-scoped
-  // lock before reading the graph. Row locks cannot serialize two new opposite
-  // edges because neither row exists yet; without this lock, concurrent A->B
-  // and B->A replacements can both validate an empty snapshot and commit a
-  // cycle. Project and Task use separate keys so unrelated families proceed.
-  const lockKey = `cubby:${opts.entity}-dependency-graph`;
-  await unwrapDb(tx).execute(
-    sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
-  );
 
   if (deduped.length > 0) {
     const live = await tx
@@ -115,56 +102,26 @@ export async function replaceDependencyEdges<
     }
   }
 
-  const currentEdges = await tx
-    .select({ own: opts.ownColumn, blockedBy: opts.blockedByColumn })
-    .from(opts.ownColumn.table);
-  const resultingEdges = [
-    ...currentEdges
-      .filter((edge) => edge.own !== id)
-      .map((edge) => ({ from: String(edge.own), to: String(edge.blockedBy) })),
-    ...deduped.map((blockedById) => ({
-      from: String(id),
-      to: String(blockedById),
-    })),
-  ];
-  if (findDirectedDependencyCycles(resultingEdges).length > 0) {
+  const kind = DEPENDENCY_KIND[opts.entity];
+  // The per-kind advisory lock inside serializes every writer of the family:
+  // row locks cannot, because two new opposite links both start absent.
+  if (!(await assertLinkSetAcyclic(tx, kind, id, deduped))) {
     throw createAppError(
       "DEPENDENCY_CYCLE",
       `${label} dependencies must remain acyclic.`,
     );
   }
-
-  await tx.delete(edgeTable).where(eq(opts.ownColumn, id));
-  if (deduped.length > 0) {
-    await tx
-      .insert(edgeTable)
-      .values(deduped.map((blockedById) => opts.buildRow(id, blockedById)));
-  }
+  await replaceLinkSet(tx, kind, id, deduped);
 }
 
 /**
  * Read-side twin of {@link replaceDependencyEdges}: batched blocked-by /
- * blocking id lookups for a set of entities sharing one self-referencing edge
- * table, one query per direction (never one query per entity). Mirrors the
- * same generic-typing style (`TEdge extends PgTable`, `AnyColumn` params, the
- * same lint-suppressed cast pattern for Drizzle's narrow `AnyColumn` typing)
- * — takes a plain `Database` (not a transaction), since both call sites are
- * read paths.
- *
- * `edgeTable` rows are directed: `ownColumn` is blocked by `blockedByColumn`.
- * "blocking" is the reverse read of the same rows — which entities does THIS
- * entity block.
+ * blocking id lookups for a set of entities, one query per direction (never
+ * one query per entity). Live links only.
  */
-export async function dependencyIdsFor<E extends ShortcodeEntity>(
+export async function dependencyIdsFor<E extends DependencyEntity>(
   db: Database,
-  opts: {
-    /** Column on `edgeTable` identifying the "owning" side (`ids`' rows). */
-    ownColumn: AnyPgColumn;
-    /** Column on `edgeTable` identifying the "blocked-by" side. */
-    blockedByColumn: AnyPgColumn;
-    /** Entity schema used to validate the raw projection at this repo seam. */
-    entity: E;
-  },
+  entity: E,
   ids: EntityId<E>[],
 ): Promise<{
   blockedBy: Map<EntityId<E>, EntityId<E>[]>;
@@ -174,35 +131,31 @@ export async function dependencyIdsFor<E extends ShortcodeEntity>(
   const blocking = new Map<EntityId<E>, EntityId<E>[]>();
   if (ids.length === 0) return { blockedBy, blocking };
 
+  const kind = DEPENDENCY_KIND[entity];
   const selectCols = {
-    own: opts.ownColumn,
-    blockedBy: opts.blockedByColumn,
+    own: entityLink.fromEntityId,
+    blockedBy: entityLink.toEntityId,
   };
-
   const [blockedByRows, blockingRows] = await Promise.all([
     getDb(db)
       .select(selectCols)
-      .from(opts.ownColumn.table)
-      .where(inArray(opts.ownColumn, ids)),
+      .from(entityLink)
+      .where(and(liveLinks(kind), inArray(entityLink.fromEntityId, ids))),
     getDb(db)
       .select(selectCols)
-      .from(opts.blockedByColumn.table)
-      .where(inArray(opts.blockedByColumn, ids)),
+      .from(entityLink)
+      .where(and(liveLinks(kind), inArray(entityLink.toEntityId, ids))),
   ]);
 
   for (const row of blockedByRows) {
-    const own = parseEntityId(opts.entity, row.own);
-    const blockedById = parseEntityId(opts.entity, row.blockedBy);
-    const arr = blockedBy.get(own) ?? [];
-    arr.push(blockedById);
-    blockedBy.set(own, arr);
+    const own = parseEntityId(entity, row.own);
+    const blockedById = parseEntityId(entity, row.blockedBy);
+    blockedBy.set(own, [...(blockedBy.get(own) ?? []), blockedById]);
   }
   for (const row of blockingRows) {
-    const own = parseEntityId(opts.entity, row.own);
-    const blockedById = parseEntityId(opts.entity, row.blockedBy);
-    const arr = blocking.get(blockedById) ?? [];
-    arr.push(own);
-    blocking.set(blockedById, arr);
+    const own = parseEntityId(entity, row.own);
+    const blockedById = parseEntityId(entity, row.blockedBy);
+    blocking.set(blockedById, [...(blocking.get(blockedById) ?? []), own]);
   }
   return { blockedBy, blocking };
 }

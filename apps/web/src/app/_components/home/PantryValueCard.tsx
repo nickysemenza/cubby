@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useId } from "react";
 
-import { location } from "~/app/locations/location.functions";
 import { Row } from "~/components/layout";
 import {
   CardActionLink,
@@ -11,6 +10,7 @@ import {
 } from "~/components/layout/dashboard-card";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
+import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 
 // Ink ladder, not the accent. Rank here is already carried by bar height and

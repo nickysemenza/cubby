@@ -88,7 +88,6 @@ export const plantingId = ENTITY_ID_SCHEMA.planting;
 export const gardenEntryId = ENTITY_ID_SCHEMA.gardenEntry;
 export const deviceId = ENTITY_ID_SCHEMA.device;
 export const plantId = ENTITY_ID_SCHEMA.plant;
-export const imageSightingId = ENTITY_ID_SCHEMA.imageSighting;
 
 export type RecipeId = EntityId<"recipe">;
 export type ImageId = EntityId<"image">;
@@ -115,7 +114,6 @@ export type PlantingId = EntityId<"planting">;
 export type GardenEntryId = EntityId<"gardenEntry">;
 export type DeviceId = EntityId<"device">;
 export type PlantId = EntityId<"plant">;
-export type ImageSightingId = EntityId<"imageSighting">;
 
 type AnyEntityId = {
   [E in ShortcodeEntity]: EntityId<E>;
@@ -141,7 +139,7 @@ export function parseEntityId(
 
 /**
  * An internal private-UUID reference. This is separate from the public/general
- * `{ entityType, entityId }` wire shape in `entity.ts`, whose string value may
+ * `{ entityKind, entityId }` wire shape in `entity.ts`, whose string value may
  * be a shortcode or a non-local identifier such as `usda-food`.
  */
 export type EntityRef<E extends ShortcodeEntity = ShortcodeEntity> = {
@@ -193,7 +191,6 @@ const PARSE_ENTITY_REF = {
   wish: entityRefParser("wish"),
   device: entityRefParser("device"),
   plant: entityRefParser("plant"),
-  imageSighting: entityRefParser("imageSighting"),
 } as const satisfies { [E in ShortcodeEntity]: EntityRefParser<E> };
 
 /** Parse and correlate an internal entity discriminator with its UUID brand. */
@@ -240,7 +237,6 @@ export {
   gardenEntryShortcode,
   deviceShortcode,
   plantShortcode,
-  imageSightingShortcode,
 } from "@cubby/shared";
 export type {
   CookbookShortcode,
@@ -267,5 +263,4 @@ export type {
   WishShortcode,
   DeviceShortcode,
   PlantShortcode,
-  ImageSightingShortcode,
 } from "@cubby/shared";

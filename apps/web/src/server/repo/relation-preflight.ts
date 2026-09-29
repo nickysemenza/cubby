@@ -1,6 +1,6 @@
 /**
  * The shared pre-validation behind the three `<parent> ← product` relation
- * families — `ProductComponent`, `ProjectToolUsage`, and `PurchaseProduct`.
+ * families — `productComponent`, `projectTool`, and `purchaseProduct`.
  *
  * All three used to spell the same refusal as `liveX.length !== requested.length
  * → throw`, which computes exactly the failing set and then discards it: the
@@ -69,7 +69,7 @@ export interface RelationPreflight {
   missing: ProductId[];
   /**
    * Live products the parent's category gate rejects. Project resources only —
-   * a `ProjectToolUsage` row may only name a Product whose resolved category
+   * a `projectTool` link may only name a Product whose resolved category
    * grants the project-resource capability. Kept apart from `missing` because
    * conflating them is the defect this
    * module exists to fix: `PRODUCT_NOT_FOUND` for a product that plainly
@@ -83,11 +83,11 @@ export interface RelationPreflight {
    * before the write instead of inferred from the row count after it.
    */
   alreadySatisfied: ProductId[];
-  /** The parent named among its own components. `ProductComponent` only. */
+  /** The parent named among its own components. `productComponent` only. */
   selfReference: ProductId[];
   /**
    * Rendered shortcode path of the component cycle the attach would close, or
-   * `null`. `ProductComponent` only.
+   * `null`. `productComponent` only.
    */
   cyclePath: string | null;
   /**

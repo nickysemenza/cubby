@@ -41,6 +41,7 @@ import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
+  aiAnalysis,
   entityAttachment,
   image,
   inventoryEntry,
@@ -83,10 +84,13 @@ import {
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { stockOnly } from "~/server/repo/inventory/placement";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import {
+  attachInventoryValuations,
+  loadLiveInventoryValuations,
+} from "~/server/repo/inventory/valuation";
+import { listScaffold } from "~/server/repo/list";
 import { parseLocationType } from "~/server/repo/location/parse-type";
 import { loadProductPricing } from "~/server/repo/product/pricing";
-import { relatedWhereConditions } from "~/server/repo/related-view";
 import { deleteByPolicy } from "~/server/repo/removal";
 import {
   resolveAllPresent,
@@ -96,6 +100,10 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { hydrateImageReadProjection } from "../image-read-projection";
+import {
+  LOCATION_DESCRIPTION_FEATURE_ID,
+  locationAiDescriptionSql,
+} from "./ai-description";
 import { buildLocationWithChildren, dbLocationToListAPI } from "./helpers";
 import { getHomeLocation } from "./home";
 import type {
@@ -104,7 +112,7 @@ import type {
 } from "./internal-types";
 import { loadStockItemsByLocation } from "./stock-items";
 import { loadLocationAncestors, wouldCreateParentCycle } from "./tree";
-import { computeLocationValuations, directValuationSql } from "./valuation";
+import { computeLocationValuations, loadDirectValuationSql } from "./valuation";
 
 export const LOCATION_DELETE_EDGE_POLICY = {
   "InventoryEntry.locationId": {
@@ -113,7 +121,7 @@ export const LOCATION_DELETE_EDGE_POLICY = {
     description:
       "A location still holding inventory can't be deleted — move or remove the inventory first.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -207,6 +215,24 @@ const raiseMissingProduct = (): never => {
   );
 };
 
+/**
+ * A location with no Product to be an instance of has no form factor unless the
+ * caller names one, and `type` is NOT NULL.
+ */
+const raiseMissingType = (): never => {
+  throw createAppError(
+    "CONSTRAINT_VIOLATION",
+    "A location needs a type unless it is an instance of a Product (which is stored as furniture).",
+  );
+};
+
+const raiseFurnitureWithoutProduct = (): never => {
+  throw createAppError(
+    "CONSTRAINT_VIOLATION",
+    "A furniture location is an instance of a Product. Link a Product, or choose another type.",
+  );
+};
+
 const createLocationTx = async (
   db: Database,
   data: LocationCreateInput,
@@ -240,14 +266,16 @@ const createLocationTx = async (
             raiseMissingProduct(),
         )
       : null;
+    const type = data.type ?? (productId ? "furniture" : raiseMissingType());
+    if (type === "furniture" && !productId) raiseFurnitureWithoutProduct();
     const newLocation = await insertWithShortcode(tx, "location", {
       name: data.name,
       aliases: data.aliases,
       tags: data.tags ?? [],
       // `type` is the physical form factor; `productId` is identity. A
       // product-linked location can still carry a type (e.g. a raised bed
-      // that is also a specific product).
-      type: data.type ?? null,
+      // that is also a specific product); without one it is `furniture`.
+      type,
       notes: data.notes ?? null,
       productId,
       parentId,
@@ -268,7 +296,7 @@ const createLocationTx = async (
     }
 
     await logAuditEntry(tx, actor, {
-      entityType: "location",
+      entityKind: "location",
       entityId: newLocation.id,
       action: "create",
     });
@@ -406,6 +434,13 @@ export const updateLocation = async (
     // `type` (form factor) and `productId` (identity) are independent facts
     // now — neither write clears the other.
     const productId = await resolveUpdatedProductId(tx);
+    // `furniture` IS "an instance of a Product": unlinking the Product (or
+    // retyping to furniture with none) must say which form factor is left.
+    const nextType = data.type ?? before?.type;
+    const nextProductId =
+      productId === undefined ? before?.productId : productId;
+    if (nextType === "furniture" && !nextProductId)
+      raiseFurnitureWithoutProduct();
 
     const updateValues = buildPartialUpdateValues({
       name: data.name,
@@ -434,7 +469,7 @@ export const updateLocation = async (
       ]);
       if (changes) {
         await logAuditEntry(tx, actor, {
-          entityType: "location",
+          entityKind: "location",
           entityId: id,
           action: "update",
           changes,
@@ -538,7 +573,7 @@ export const bulkReparentLocations = async (
       tx,
       actor,
       changed.map((row) => ({
-        entityType: "location" as const,
+        entityKind: "location" as const,
         entityId: row.id,
         action: "update" as const,
         changes: { parentId: { from: row.parentId, to: parentId } },
@@ -664,6 +699,12 @@ export const buildLocationWhere = async (
           filters.parentPresenceFilter,
         );
   const productCondition = await locationProductCondition(db, filters);
+  // Valuation is computed on read, so a range filter needs the computed map.
+  const directValuation =
+    filters.valuationMin !== undefined || filters.valuationMax !== undefined
+      ? await loadDirectValuationSql(db)
+      : undefined;
+  const aiDescription = locationAiDescriptionSql(location.id);
   // Uncorrelated subquery of location ids holding live inventory. Inner-joins
   // Product (notDeleted) because dbLocationToListAPI drops inventory entries
   // whose product is soft-deleted — without that join, a shelf holding only
@@ -692,7 +733,7 @@ export const buildLocationWhere = async (
     .from(childLocation)
     .where(and(notDeleted(childLocation), isNotNull(childLocation.parentId)));
   const locationIdsWithImages = getDb(db)
-    .select({ locationId: entityAttachment.subjectEntityId })
+    .select({ locationId: entityAttachment.entityId })
     .from(entityAttachment)
     .innerJoin(
       image,
@@ -720,10 +761,10 @@ export const buildLocationWhere = async (
     .groupBy(inventoryEntry.locationId)
     .having(sql`count(*) > ${filters.directItemCountMax ?? 0}`);
 
-  // `nameFilter`, `type` and `aiDescriptionPresenceFilter` are declared stored
-  // filters — applied by `locationScaffold.where` before the conditions below.
+  // `nameFilter` and `type` are declared stored filters — applied by
+  // `locationScaffold.where` before the conditions below. The description is
+  // computed from AiAnalysis, so its presence filter is written here.
   return locationScaffold.where(filters, [
-    ...relatedWhereConditions("location", filters, location.id),
     parentCondition,
     productCondition,
     idSetPresence(
@@ -753,7 +794,14 @@ export const buildLocationWhere = async (
     filters.directItemCountMax !== undefined
       ? notInArray(location.id, locationIdsExceedingInventoryMaximum)
       : undefined,
-    ...rangeConditions(directValuationSql, filters, "valuation"),
+    filters.aiDescriptionPresenceFilter === "has"
+      ? sql`${aiDescription} IS NOT NULL`
+      : filters.aiDescriptionPresenceFilter === "none"
+        ? sql`${aiDescription} IS NULL`
+        : undefined,
+    ...(directValuation
+      ? rangeConditions(directValuation, filters, "valuation")
+      : []),
   ]);
 };
 
@@ -773,6 +821,13 @@ export const locationList = async (
   readIntent: ListReadIntent = "page",
 ) => {
   const whereClause = await buildLocationWhere(db, filters);
+  // One computed valuation per inventory entry serves the list's valuation
+  // sort, its rows' entry valuations, and the whole-tree rollup.
+  const entryValuations =
+    readIntent === "count" ? undefined : await loadLiveInventoryValuations(db);
+  const directValuation = sorts.some((sort) => sort.orderBy === "valuation")
+    ? await loadDirectValuationSql(db, entryValuations)
+    : undefined;
 
   const orderByClause = locationScaffold.orderBy(
     sorts,
@@ -783,11 +838,11 @@ export const locationList = async (
       resolve: (s) => {
         const dirSql =
           s.direction === "asc" ? "asc nulls last" : "desc nulls last";
-        if (s.orderBy === "valuation")
+        if (s.orderBy === "valuation" && directValuation)
           return [
             s.direction === "asc"
-              ? sql`${directValuationSql} asc nulls last`
-              : sql`${directValuationSql} desc nulls last`,
+              ? sql`${directValuation} asc nulls last`
+              : sql`${directValuation} desc nulls last`,
           ];
         if (s.orderBy === "inventoryEntries")
           return [
@@ -860,14 +915,21 @@ export const locationList = async (
     // One whole-tree compute per page, not per row: valuation is a rollup over
     // the WHOLE subtree beneath each location, which a page-scoped query
     // cannot produce on its own.
-    computeLocationValuations(db),
+    computeLocationValuations(db, entryValuations),
     loadDataQualities(
       db,
       "location",
       results.map((row) => row.id),
     ),
   ]);
-  const items = await withDisplayImages(db, "location", results, (row) =>
+  const valuedResults = results.map((row) => ({
+    ...row,
+    inventoryEntries: attachInventoryValuations(
+      row.inventoryEntries,
+      entryValuations ?? new Map(),
+    ),
+  }));
+  const items = await withDisplayImages(db, "location", valuedResults, (row) =>
     dbLocationToListAPI(
       row,
       pricingByProductId,
@@ -907,7 +969,7 @@ const loadLocationCoverImages = async (
 
   const rows = await getDb(db).query.entityAttachment.findMany({
     where: and(
-      inArray(entityAttachment.subjectEntityId, ids),
+      inArray(entityAttachment.entityId, ids),
       notDeleted(entityAttachment),
     ),
     orderBy: imageOrder,
@@ -915,7 +977,7 @@ const loadLocationCoverImages = async (
   });
 
   for (const row of rows) {
-    const locationId = parseEntityId("location", row.subjectEntityId);
+    const locationId = parseEntityId("location", row.entityId);
     if (byId.has(locationId)) continue;
     const [mapped] = mapImages([row]);
     if (mapped && isDisplayableImageFile(mapped)) {
@@ -1100,7 +1162,7 @@ const locationRosterPage = async (
   const data = results.map((row) => ({
     id: parseShortcodeFor("location", row.shortcode),
     name: row.name,
-    type: parseLocationType(row.type, { id: row.id, name: row.name }),
+    type: parseLocationType(row.type),
     aliases: row.aliases ?? [],
     ancestors: ancestorsById.get(row.id) ?? [],
   }));
@@ -1150,12 +1212,42 @@ export const locationSearch = async (
   };
 };
 
+/**
+ * Set or clear a location's AI description outside the model run. The
+ * description is the latest live `location-description` AiAnalysis, so
+ * "clear" retires those analyses (a location whose last photo was removed has
+ * nothing left to describe) and "set" records a manual one that outranks the
+ * older analyses without disturbing their cache. `describeLocation` writes
+ * its own analysis through `upsertAiAnalysis` and never needs this.
+ */
 export const updateLocationAiDescription = async (
   db: Database,
   id: LocationId,
   aiDescription: string | null,
 ) => {
-  await updateLiveAndReturn(db, location, { aiDescription }, id);
+  const client = getDb(db);
+  await client
+    .update(aiAnalysis)
+    .set({ deletedAt: new Date() })
+    .where(
+      and(
+        eq(aiAnalysis.entityKind, "location"),
+        eq(aiAnalysis.entityId, id),
+        eq(aiAnalysis.feature, LOCATION_DESCRIPTION_FEATURE_ID),
+        aiDescription === null ? undefined : eq(aiAnalysis.model, "manual"),
+        notDeleted(aiAnalysis),
+      ),
+    );
+  if (aiDescription === null) return;
+  await client.insert(aiAnalysis).values({
+    entityKind: "location",
+    entityId: id,
+    feature: LOCATION_DESCRIPTION_FEATURE_ID,
+    model: "manual",
+    promptVersion: "manual",
+    inputFingerprint: `manual:${id}`,
+    result: { description: aiDescription, confidence: "low" },
+  });
 };
 
 /**
@@ -1168,7 +1260,10 @@ export const findLocationsNeedingAiDescription = async (
   const dbClient = getDb(db);
 
   const locations = await dbClient.query.location.findMany({
-    where: and(notDeleted(location), isNull(location.aiDescription)),
+    where: and(
+      notDeleted(location),
+      sql`${locationAiDescriptionSql(location.id)} IS NULL`,
+    ),
     columns: { id: true, name: true },
     with: {
       images: {

@@ -122,13 +122,10 @@ export const entityIdentityFk = (
  * path — repository, workflow, cutover script, or test fixture — can create,
  * soft-delete, or hard-delete an entity without its identity row following.
  *
- * `drizzle-kit push` does not manage triggers, so every place that builds a
- * database from `schema.ts` applies these statements afterwards: the
- * IntegreSQL template (`tooling/test-setup.ts`) and the local dev push
- * (`tooling/dev-db-push.ts`). Production already has the triggers; a new
- * shortcode entity needs its trigger installed before writes begin.
- * It lives beside the table so `tooling/test-setup.ts`, which may only load
- * the schema modules eagerly, can reach it through `schema.ts`.
+ * Drizzle does not model triggers, so this SQL reaches databases as derived
+ * DDL (`derived-ddl.ts`): `pnpm db:generate` emits a migration whenever the
+ * rendered SQL changes, so a new shortcode entity gets its triggers in the
+ * same migration series as its table.
  *
  * Trigger names start with an uppercase `E` on purpose. Postgres fires same-
  * event triggers in name order, internal FK checks included
@@ -187,18 +184,7 @@ CREATE OR REPLACE TRIGGER "Entity_identity_delete" AFTER DELETE ON "${table}"
   FOR EACH ROW EXECUTE FUNCTION "entity_identity_on_delete"();`;
 
 /** Every function and trigger, idempotent, as one script. */
-const entityIdentityTriggerSql = (): string =>
+export const entityIdentityTriggerSql = (): string =>
   [ENTITY_IDENTITY_FUNCTIONS, ...identityTables().map(tableTriggers)].join(
     "\n\n",
   );
-
-interface SqlExecutor {
-  execute(query: SQL): Promise<object>;
-}
-
-/** Install the identity triggers after a `drizzle-kit push`. */
-export async function installEntityIdentityTriggers(
-  db: SqlExecutor,
-): Promise<void> {
-  await db.execute(sql.raw(entityIdentityTriggerSql()));
-}

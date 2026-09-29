@@ -56,7 +56,7 @@ Findings from the current dataset that shaped the design:
 6. **Funding attribution has visible gaps** (expenses with no allocation path
    to a charge, and accounts with no owner). A flow diagram with an explicit
    Unknown-funder node makes that gap legible and shows it shrink.
-7. **Transfer evidence has no one-step accept.** `suggest_financial_transfer_pairs`
+7. **Transfer evidence has no one-step accept.** `finance_read.transfer_pairs`
    proposes candidates, but recording one takes separate writes, and transfers
    between two accounts with the same owner have no documented treatment.
 
@@ -82,7 +82,7 @@ Findings from the current dataset that shaped the design:
 | 16  | Scenario storage            | URL/page state only. Structural presets (horizon, toggles, category subset) are declared views in `view-manifest.ts`; scenario values never enter the repository. `AppSettings` is the upgrade path if URL-only proves annoying. |
 | 17  | Scenario shape              | `{ label, date, amount, direction: inflow \| outflow, recurrence: once \| monthly, until? }`. Inflows exist only as scenarios; the page never claims to show real income.                                                        |
 | 18  | Surfaces                    | Category chart + filter and the Sankey on `expense-analytics-view.tsx`; projection on a new `/cash-flow` route; calibration on the Problems page.                                                                                |
-| 19  | MCP                         | `get_cash_flow_projection` (read), `accept_financial_transfer_pair` (mutation), category breakdown added to `get_expense_analytics`. Gap deep links are web-only.                                                                |
+| 19  | MCP                         | `get_cash_flow_projection` (read), `accept_financial_transfer_pair` (mutation), category breakdown added to `project_overview.expense_analytics`. Gap deep links are web-only.                                                   |
 | 20  | Forward Sankey              | **Rejected.** Forward figures are baseline, envelopes, and scenarios; a Sankey over them hides timing, which is the point of the page.                                                                                           |
 
 ## 4. Phase 1 — read-side foundations
@@ -114,7 +114,7 @@ which principal receives a cent.
   click writes back to the Ledger.
 - `expense-analytics-view.tsx` gets a root-category breakdown chart next to the
   trade and vendor charts.
-- `get_expense_analytics` returns the same breakdown.
+- `project_overview.expense_analytics` returns the same breakdown.
 
 ### 4.3 Historical Sankey
 

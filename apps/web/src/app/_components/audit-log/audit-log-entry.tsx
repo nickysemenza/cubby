@@ -6,6 +6,7 @@ import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";
 import { sortBy } from "es-toolkit";
 import { useState } from "react";
 
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import {
@@ -23,13 +24,12 @@ import {
 } from "~/components/ui/collapsible";
 import { Description } from "~/components/ui/description";
 import { EntityIcon, entityLabel } from "~/entities/entities";
-import type { AuditLogEntry } from "~/lib/audit-log.functions";
+import type { AuditLogEntry } from "~/lib/audit-log-list";
 import { countLabel } from "~/lib/pluralize";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
 
 import { HoverableTimestamp } from "../HoverableTimestamp";
-import { AuditEntityLink } from "./audit-entity-link";
 
 type AuditChanges = NonNullable<AuditLogEntry["changes"]>;
 type AuditJsonObject = { [key: string]: AuditJsonValue };
@@ -67,15 +67,12 @@ function formatChangeValue(value: AuditJsonValue | undefined): string {
  * lose the fight for the one line a row gets.
  */
 const LOW_SIGNAL_CHANGE_FIELDS = new Set([
-  "SourceData",
-  "dataExceptions",
   "embedding",
-  "notionPageId",
+  "externalIds",
   "sortOrder",
   "sourceRefs",
   "totals",
   "updatedAt",
-  "valuation",
 ]);
 
 /** Column names whose camel-case split still doesn't read as English. */
@@ -177,7 +174,7 @@ export function summarizeChanges(
   ]);
   const shown = ranked.slice(0, LEDGER_MAX_FIELDS);
   // Counted against every changed field, not just the renderable ones. A
-  // field with no glanceable rendering (an object-valued `totals`/`valuation`
+  // field with no glanceable rendering (an object-valued `totals`
   // diff, which is exactly what a recompute-style update touches) is dropped
   // from the line — but dropping it from the count too would let the row claim
   // it changed less than it did, which is the one thing this disclosure exists
@@ -263,7 +260,7 @@ function LedgerAuditEntry({
   showEntityLink,
   step,
 }: Omit<AuditLogEntryProps, "variant">) {
-  const fallbackEntityLabel = entityLabel(entry.entityType);
+  const fallbackEntityLabel = entityLabel(entry.entityKind);
   const action = getStatusBadgeProps("audit", entry.action);
   const summary =
     entry.action === "update" ? summarizeChanges(entry.changes) : null;
@@ -280,8 +277,9 @@ function LedgerAuditEntry({
         >
           <Row align="center" gap="sm" className="min-w-0">
             {showEntityLink && entry.entityId ? (
-              <AuditEntityLink
-                entityType={entry.entityType}
+              <EntityRefLink
+                variant="audit"
+                entityKind={entry.entityKind}
                 entityId={entry.entityId}
                 name={entry.entityName}
                 displayImage={entry.displayImage}
@@ -290,7 +288,7 @@ function LedgerAuditEntry({
             ) : (
               <>
                 <EntityIcon
-                  entity={entry.entityType}
+                  entity={entry.entityKind}
                   colored
                   className="size-4 flex-shrink-0"
                 />
@@ -364,7 +362,7 @@ export function AuditLogEntryComponent({
   const changes = entry.changes;
   const hasChanges = changes !== null && Object.keys(changes).length > 0;
 
-  const fallbackEntityLabel = entityLabel(entry.entityType);
+  const fallbackEntityLabel = entityLabel(entry.entityKind);
   const action = getStatusBadgeProps("audit", entry.action);
 
   if (variant === "ledger") {
@@ -406,8 +404,9 @@ export function AuditLogEntryComponent({
             <div className="min-w-0 flex-1">
               <Row align="center" gap="sm" wrap>
                 {showEntityLink && entry.entityId ? (
-                  <AuditEntityLink
-                    entityType={entry.entityType}
+                  <EntityRefLink
+                    variant="audit"
+                    entityKind={entry.entityKind}
                     entityId={entry.entityId}
                     name={entry.entityName}
                     displayImage={entry.displayImage}
@@ -416,7 +415,7 @@ export function AuditLogEntryComponent({
                 ) : (
                   <>
                     <EntityIcon
-                      entity={entry.entityType}
+                      entity={entry.entityKind}
                       colored
                       className="size-4 flex-shrink-0"
                     />

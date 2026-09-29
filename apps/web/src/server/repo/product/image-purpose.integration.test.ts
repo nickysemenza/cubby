@@ -87,7 +87,7 @@ describe("pending Product image roles", () => {
 
     const row = await getDb(ctx.db).query.entityAttachment.findFirst({
       where: and(
-        eq(entityAttachment.subjectEntityId, product.entityId),
+        eq(entityAttachment.entityId, product.entityId),
         eq(entityAttachment.imageId, label.id),
         notDeleted(entityAttachment),
       ),

@@ -20,7 +20,7 @@ import { ScanSheet } from "~/app/_components/inventory/scan-sheet";
 import { showErrorToast } from "~/components/feedback/error-details";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import { resolveLocationScan } from "~/lib/scan-code";
 
 /**

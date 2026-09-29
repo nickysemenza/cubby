@@ -16,7 +16,9 @@ export const taskContract = defineContract("task", {
     input: z.undefined(),
     output: schemas.taskSummaryOut,
   }),
+  // Bounded Home summary; see expense.monthlySummary.
   todayBriefing: query({
+    readPolicy: "strong",
     native: "Today tasks",
     input: z.undefined(),
     output: schemas.taskTodayBriefingOut,
@@ -34,5 +36,6 @@ export const taskContract = defineContract("task", {
     native: "Task board ordering",
     input: schemas.taskBulkReorderInput,
     output: schemas.taskBulkMutationOut,
+    invalidates: ["task"],
   }),
 });

@@ -107,7 +107,7 @@ describe("canGoMissing", () => {
   });
 
   it("counts a product-identity bin, which is a vessel by definition", () => {
-    expect(canGoMissing(child(null))).toBe(true);
+    expect(canGoMissing(child("furniture"))).toBe(true);
   });
 
   /**

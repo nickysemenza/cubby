@@ -9,7 +9,7 @@ interface PushSchemaRuntime {
 
 /**
  * Restore the database type expected by drizzle-kit's private Drizzle copy.
- * Keep this dependency-identity boundary in one place for every schema setup.
+ * Only `db:check`'s reference build (schema.ts pushed) still needs it.
  */
 export function toPushSchemaDatabase(
   value: PushSchemaRuntime,

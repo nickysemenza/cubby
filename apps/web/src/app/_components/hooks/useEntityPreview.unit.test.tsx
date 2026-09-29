@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -60,7 +60,7 @@ class MemoryPreviewPresentation implements PreviewPresentationPort {
 
 const renderTestInspector = ({ preview }: EntityPreviewRendererProps) => (
   <div data-testid="workbench-inspector">
-    {preview.entityType}:{preview.id}
+    {preview.entityKind}:{preview.id}
   </div>
 );
 
@@ -101,7 +101,7 @@ describe("useEntityPreview intent prefetch", () => {
     act(() => result.current.inspectRow(row("PRD-4K7M")));
 
     expect(result.current.preview).toMatchObject({
-      entityType: "product",
+      entityKind: "product",
       id: "PRD-4K7M",
     });
     expect(result.current.isInspectorOpen).toBe(true);
@@ -234,7 +234,7 @@ describe("useEntityPreview intent prefetch", () => {
     act(() => vi.advanceTimersByTime(200));
 
     expect(result.current.preview).toEqual({
-      entityType: "product",
+      entityKind: "product",
       id: "PRD-4K7M",
       rowKey: "PRD-4K7M",
     });
@@ -294,7 +294,7 @@ describe("useEntityPreview intent prefetch", () => {
       </>,
     );
     expect(result.current.preview).toEqual({
-      entityType: "product",
+      entityKind: "product",
       id: "PRD-4K7M",
       rowKey: "PRD-4K7M",
     });
@@ -375,7 +375,7 @@ describe("useEntityPreview intent prefetch", () => {
     render(<result.current.PreviewSheet />);
 
     expect(result.current.preview).toEqual({
-      entityType: "product",
+      entityKind: "product",
       id: "PRD-4K7M",
       rowKey: "PRD-4K7M",
     });
@@ -454,14 +454,14 @@ describe("useEntityPreview intent prefetch", () => {
       original: {
         id: "WSH-8F2",
         previewId: "PRD-4K7M",
-        entityType: "product" as const,
+        entityKind: "product" as const,
       },
     };
 
     act(() => result.current.onRowClick(candidateRow));
 
     expect(result.current.preview).toEqual({
-      entityType: "product",
+      entityKind: "product",
       id: "PRD-4K7M",
       rowKey: "WSH-8F2:PRD-4K7M",
     });

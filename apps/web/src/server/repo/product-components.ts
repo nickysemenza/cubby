@@ -1,9 +1,10 @@
 /**
- * What's inside a kit (`ProductComponent`) — one Product's own component
- * list, and the transpose (which kits a Product is listed inside).
+ * What's inside a kit (`productComponent` links in `EntityLink`) — one
+ * Product's own component list, and the transpose (which kits a Product is
+ * listed inside).
  *
  * A combo tool kit or a multi-pack is a Product like any other: it keeps its
- * own UPC, model, ASIN, image, and purchase history. `ProductComponent` is
+ * own UPC, model, ASIN, image, and purchase history. Its component links are
  * the only place that records what it's made of, so splitting a kit no
  * longer means deleting the kit Product outright (destroying that identity
  * and provenance) — the kit survives, and this table says what came out of
@@ -15,7 +16,7 @@
  * extra `quantity` field allows: same transaction shape, same liveness
  * checks, same partial-unique-index insert, same before/after audit diff.
  * Quantity is set at attach time; changing it is detach-then-reattach, not an
- * in-place update — the same "no edit path" precedent `PurchaseProduct`
+ * in-place update — the same "no edit path" precedent `purchaseProduct`
  * sets, kept for the same reason: one fewer write shape to keep consistent
  * with the audit diff.
  */
@@ -36,11 +37,10 @@ import { uniq, uniqBy } from "es-toolkit";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
+  entityLink,
   expense,
   product,
-  productComponent,
   purchase,
-  purchaseProduct,
   vendor,
 } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
@@ -52,6 +52,12 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
+import {
+  linkQuantity,
+  linkValues,
+  liveLinks,
+} from "~/server/repo/entity-links";
+import { enrichProductRowsWithInventoryValuations } from "~/server/repo/inventory/valuation";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { markProductConversionCoverageInputStale } from "~/server/repo/product/conversion-coverage";
 import { enrichProductListItems } from "~/server/repo/product/list-enrichment";
@@ -75,20 +81,14 @@ import {
 // shared rather than restated, so a kit's purchase link and the Purchases panel
 // can never disagree about which orders count.
 import { expensePairPredicate } from "~/server/repo/purchase-products";
-import type { EntityRelationMutationAdapter } from "~/server/repo/relation-mutation-adapter";
+import { linkRelationAdapter } from "~/server/repo/relation-mutation-adapter";
 import {
   emptyPreflight,
   loadRelationProducts,
-  planRelationAttach,
-  planRelationDetach,
   type RelationPreflight,
   relationImpact,
   throwRelationRefusal,
 } from "~/server/repo/relation-preflight";
-import {
-  resolveAllOrThrow,
-  resolveOrThrow,
-} from "~/server/repo/shortcode-resolver";
 import type { UsdaFoodBatchPort } from "~/server/services/usda-helpers";
 
 export interface ProductComponentEntry {
@@ -135,35 +135,37 @@ export async function listKitComponentRows(
   // uuid is a repo-private detail and must never cross the API boundary, and
   // the caller keys child rows by `${parentShortcode}:${componentShortcode}`.
   const parentProduct = alias(product, "kitParentProduct");
-  const edges = await dbc
+  const linkRows = await dbc
     .select({
       parentProductId: parentProduct.shortcode,
-      componentProductId: productComponent.componentProductId,
-      quantity: productComponent.quantity,
+      componentProductId: entityLink.toEntityId,
+      quantity: entityLink.quantity,
       componentName: product.name,
     })
-    .from(productComponent)
+    .from(entityLink)
     .innerJoin(
       product,
-      and(
-        eq(product.id, productComponent.componentProductId),
-        notDeleted(product),
-      ),
+      and(eq(product.id, entityLink.toEntityId), notDeleted(product)),
     )
     .innerJoin(
       parentProduct,
       and(
-        eq(parentProduct.id, productComponent.parentProductId),
+        eq(parentProduct.id, entityLink.fromEntityId),
         notDeleted(parentProduct),
       ),
     )
     .where(
       and(
-        inArray(productComponent.parentProductId, parentProductIds),
-        notDeleted(productComponent),
+        inArray(entityLink.fromEntityId, parentProductIds),
+        liveLinks("productComponent"),
       ),
     )
     .orderBy(asc(product.name));
+  const edges = linkRows.map((edge) => ({
+    ...edge,
+    componentProductId: parseEntityId("product", edge.componentProductId),
+    quantity: linkQuantity(edge.quantity),
+  }));
 
   if (edges.length === 0) return [];
 
@@ -178,7 +180,8 @@ export async function listKitComponentRows(
     "product",
     rows.map((row) => row.id),
   );
-  const priced = await enrichProductRowsWithPricing(db, rows);
+  const valued = await enrichProductRowsWithInventoryValuations(db, rows);
+  const priced = await enrichProductRowsWithPricing(db, valued);
   const ledgered = await enrichProductRowsWithQuantityLedger(db, priced);
   const projectedItems = await withDisplayImages(
     db,
@@ -218,21 +221,18 @@ export async function listProductComponents(
       productCode: product.shortcode,
       productName: product.name,
       manufacturer: product.manufacturer,
-      quantity: productComponent.quantity,
-      attachedAt: productComponent.createdAt,
+      quantity: entityLink.quantity,
+      attachedAt: entityLink.createdAt,
     })
-    .from(productComponent)
+    .from(entityLink)
     .innerJoin(
       product,
-      and(
-        eq(product.id, productComponent.componentProductId),
-        notDeleted(product),
-      ),
+      and(eq(product.id, entityLink.toEntityId), notDeleted(product)),
     )
     .where(
       and(
-        eq(productComponent.parentProductId, parentProductId),
-        notDeleted(productComponent),
+        eq(entityLink.fromEntityId, parentProductId),
+        liveLinks("productComponent"),
       ),
     )
     .orderBy(asc(product.name));
@@ -255,7 +255,7 @@ export async function listProductComponents(
       productId: parseShortcodeFor("product", row.productCode),
       productName: row.productName,
       manufacturer: row.manufacturer,
-      quantity: row.quantity,
+      quantity: linkQuantity(row.quantity),
       price: prices.get(row.productId) ?? null,
       coverImageUrl: coverImageUrls.get(row.productId) ?? null,
       onHandUnits:
@@ -309,22 +309,22 @@ async function loadMostRecentPurchaseByProductId(
   const liveVendor = and(eq(vendor.id, purchase.vendorId), notDeleted(vendor));
 
   // Both legs, for the same reason `listProductPurchases` needs both: a kit
-  // whose order is itemized per product has no `PurchaseProduct` row at all,
+  // whose order is itemized per product has no `purchaseProduct` link at all,
   // so the link-only query returned null for exactly the kits this carve-out
   // exists to link to.
   const [linkRows, expenseRows] = await Promise.all([
     dbc
-      .select({ productId: purchaseProduct.productId, ...purchaseColumns })
-      .from(purchaseProduct)
+      .select({ productId: entityLink.toEntityId, ...purchaseColumns })
+      .from(entityLink)
       .innerJoin(
         purchase,
-        and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
+        and(eq(purchase.id, entityLink.fromEntityId), notDeleted(purchase)),
       )
       .leftJoin(vendor, liveVendor)
       .where(
         and(
-          inArray(purchaseProduct.productId, parentProductIds),
-          notDeleted(purchaseProduct),
+          inArray(entityLink.toEntityId, parentProductIds),
+          liveLinks("purchaseProduct"),
         ),
       ),
     dbc
@@ -340,9 +340,13 @@ async function loadMostRecentPurchaseByProductId(
       ),
   ]);
 
-  const rows = [...linkRows, ...expenseRows].sort((a, b) =>
-    b.date.localeCompare(a.date),
-  );
+  const rows = [
+    ...linkRows.map((row) => ({
+      ...row,
+      productId: parseEntityId("product", row.productId),
+    })),
+    ...expenseRows,
+  ].sort((a, b) => b.date.localeCompare(a.date));
 
   const byProduct = new Map<ProductId, KitMembershipPurchaseOut>();
   for (const row of rows) {
@@ -370,21 +374,21 @@ export async function listKitMembership(
       parentCode: parent.shortcode,
       parentName: parent.name,
       manufacturer: parent.manufacturer,
-      quantity: productComponent.quantity,
-      attachedAt: productComponent.createdAt,
+      quantity: entityLink.quantity,
+      attachedAt: entityLink.createdAt,
     })
-    .from(productComponent)
+    .from(entityLink)
     .innerJoin(
       parent,
-      and(eq(parent.id, productComponent.parentProductId), notDeleted(parent)),
+      and(eq(parent.id, entityLink.fromEntityId), notDeleted(parent)),
     )
     .where(
       and(
-        eq(productComponent.componentProductId, componentProductId),
-        notDeleted(productComponent),
+        eq(entityLink.toEntityId, componentProductId),
+        liveLinks("productComponent"),
       ),
     )
-    .orderBy(desc(productComponent.createdAt));
+    .orderBy(desc(entityLink.createdAt));
 
   const parentProductIds = uniq(rows.map((row) => row.parentId));
   const [prices, expenseCounts, purchases, coverImageUrls] = await Promise.all([
@@ -398,7 +402,7 @@ export async function listKitMembership(
     parentProductId: parseShortcodeFor("product", row.parentCode),
     parentProductName: row.parentName,
     manufacturer: row.manufacturer,
-    quantity: row.quantity,
+    quantity: linkQuantity(row.quantity),
     coverImageUrl: coverImageUrls.get(row.parentId) ?? null,
     attachedAt: row.attachedAt,
     price: prices.get(row.parentId) ?? null,
@@ -407,20 +411,24 @@ export async function listKitMembership(
   }));
 }
 
-/** Every LIVE `ProductComponent` edge, for the cycle guard — it needs the
+/** Every LIVE `productComponent` link, for the cycle guard — it needs the
  * whole graph, not just the rows touching the attach's own parent, because a
  * kit several hops above a proposed component can close a loop the touched
  * edges alone would never reveal. */
 async function allLiveComponentEdges(
   dbc: DrizzleClient | DrizzleTransaction,
 ): Promise<{ parentProductId: ProductId; componentProductId: ProductId }[]> {
-  return dbc
+  const rows = await dbc
     .select({
-      parentProductId: productComponent.parentProductId,
-      componentProductId: productComponent.componentProductId,
+      parentProductId: entityLink.fromEntityId,
+      componentProductId: entityLink.toEntityId,
     })
-    .from(productComponent)
-    .where(notDeleted(productComponent));
+    .from(entityLink)
+    .where(liveLinks("productComponent"));
+  return rows.map((row) => ({
+    parentProductId: parseEntityId("product", row.parentProductId),
+    componentProductId: parseEntityId("product", row.componentProductId),
+  }));
 }
 
 /** Render an id path as shortcodes for an error message — a uuid must never
@@ -444,12 +452,12 @@ async function liveComponentShortcodes(
 ): Promise<string[]> {
   const rows = await dbc
     .select({ shortcode: product.shortcode })
-    .from(productComponent)
-    .innerJoin(product, eq(product.id, productComponent.componentProductId))
+    .from(entityLink)
+    .innerJoin(product, eq(product.id, entityLink.toEntityId))
     .where(
       and(
-        eq(productComponent.parentProductId, parentProductId),
-        notDeleted(productComponent),
+        eq(entityLink.fromEntityId, parentProductId),
+        liveLinks("productComponent"),
         notDeleted(product),
       ),
     )
@@ -470,13 +478,13 @@ async function liveComponentIds(
 ): Promise<Set<string>> {
   if (componentProductIds.length === 0) return new Set();
   const rows = await dbc
-    .select({ componentProductId: productComponent.componentProductId })
-    .from(productComponent)
+    .select({ componentProductId: entityLink.toEntityId })
+    .from(entityLink)
     .where(
       and(
-        eq(productComponent.parentProductId, parentProductId),
-        inArray(productComponent.componentProductId, [...componentProductIds]),
-        notDeleted(productComponent),
+        eq(entityLink.fromEntityId, parentProductId),
+        inArray(entityLink.toEntityId, [...componentProductIds]),
+        liveLinks("productComponent"),
       ),
     );
   return new Set(rows.map((row) => row.componentProductId));
@@ -646,22 +654,20 @@ export async function attachProductComponents(
 
     const before = await liveComponentShortcodes(tx, parentProductId);
     const inserted = await tx
-      .insert(productComponent)
+      .insert(entityLink)
       .values(
-        uniqueComponents.map(({ productId, quantity }) => ({
-          parentProductId,
-          componentProductId: productId,
-          quantity,
-        })),
+        uniqueComponents.map(({ productId, quantity }) =>
+          linkValues("productComponent", parentProductId, productId, quantity),
+        ),
       )
       .onConflictDoNothing()
-      .returning({ id: productComponent.id });
+      .returning({ id: entityLink.id });
     const after = await liveComponentShortcodes(tx, parentProductId);
 
     if (inserted.length > 0) {
       await markProductConversionCoverageInputStale(tx, [parentProductId]);
       await logAuditEntry(tx, actor, {
-        entityType: "product",
+        entityKind: "product",
         entityId: parentProductId,
         action: "update",
         changes: { componentProductIds: { from: before, to: after } },
@@ -688,22 +694,22 @@ export async function detachProductComponents(
   return withTransaction(db, async (tx) => {
     const before = await liveComponentShortcodes(tx, parentProductId);
     const removed = await tx
-      .update(productComponent)
+      .update(entityLink)
       .set({ deletedAt: new Date() })
       .where(
         and(
-          eq(productComponent.parentProductId, parentProductId),
-          inArray(productComponent.componentProductId, uniqueComponentIds),
-          notDeleted(productComponent),
+          eq(entityLink.fromEntityId, parentProductId),
+          inArray(entityLink.toEntityId, uniqueComponentIds),
+          liveLinks("productComponent"),
         ),
       )
-      .returning({ id: productComponent.id });
+      .returning({ id: entityLink.id });
     const after = await liveComponentShortcodes(tx, parentProductId);
 
     if (removed.length > 0) {
       await markProductConversionCoverageInputStale(tx, [parentProductId]);
       await logAuditEntry(tx, actor, {
-        entityType: "product",
+        entityKind: "product",
         entityId: parentProductId,
         action: "update",
         changes: { componentProductIds: { from: before, to: after } },
@@ -722,71 +728,30 @@ export async function detachProductComponents(
   });
 }
 
-export const productComponentsRelationAdapter = {
-  async list(db, ownerShortcode) {
-    return listProductComponents(
-      db,
-      await resolveOrThrow(db, "product", ownerShortcode),
-    );
-  },
-  // Advisory impact, using the SAME predicate the mutation refuses on. Runs on
-  // the pooled client, outside any transaction.
-  async preview(db, action, ownerId, targetIds) {
-    const parentProductId = parseEntityId("product", ownerId);
-    const componentProductIds = targetIds.map((id) =>
-      parseEntityId("product", id),
-    );
-    const edge = {
-      edgeKey: "ProductComponent.componentProductId",
-      label: "kit components",
-    };
-    return action === "attach"
-      ? planRelationAttach(
-          await preflightAttachComponents(
-            getDb(db),
-            parentProductId,
-            componentProductIds,
-          ),
-          { ...edge, description: "Component links this attach would create." },
-        )
-      : planRelationDetach(
-          await preflightDetachComponents(
-            getDb(db),
-            parentProductId,
-            componentProductIds,
-          ),
-          { ...edge, description: "Component links this detach would remove." },
-        );
-  },
-  async execute(ctx, action, ownerShortcode, items) {
-    const parentProductId = await resolveOrThrow(
-      ctx.db,
-      "product",
-      ownerShortcode,
-    );
-    const componentProductIds = await resolveAllOrThrow(
-      ctx.db,
-      "product",
-      items.map(({ id }) => id),
-    );
-    return action === "attach"
-      ? attachProductComponents(
-          ctx.db,
-          parentProductId,
-          componentProductIds.map((productId, index) => ({
-            productId,
-            quantity: items[index]?.quantity ?? 1,
-          })),
-          ctx.actorContext,
-        )
-      : detachProductComponents(
-          ctx.db,
-          parentProductId,
-          componentProductIds,
-          ctx.actorContext,
-        );
-  },
-} satisfies EntityRelationMutationAdapter<
+export const productComponentsRelationAdapter = linkRelationAdapter<
+  "productComponent",
   { id: string; quantity?: number },
   ProductComponentOut
->;
+>("productComponent", {
+  label: "kit components",
+  describe: {
+    attach: "Component links this attach would create.",
+    detach: "Component links this detach would remove.",
+  },
+  list: listProductComponents,
+  preflight: {
+    attach: preflightAttachComponents,
+    detach: preflightDetachComponents,
+  },
+  attach: (db, parentProductId, targets, actor) =>
+    attachProductComponents(
+      db,
+      parentProductId,
+      targets.map(({ id, item }) => ({
+        productId: id,
+        quantity: item.quantity ?? 1,
+      })),
+      actor,
+    ),
+  detach: detachProductComponents,
+});

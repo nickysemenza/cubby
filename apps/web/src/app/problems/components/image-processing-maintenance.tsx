@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { maintenance } from "~/lib/maintenance.functions";
+import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 const STATES = [
   ["current", "Current"],

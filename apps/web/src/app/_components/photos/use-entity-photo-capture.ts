@@ -68,8 +68,8 @@ import {
   type EntityMutationVariables,
 } from "~/entities/entity-contracts";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { imageUpload } from "~/lib/image.functions";
 import {
   PresignedUploadError,
   putPresignedObject,
@@ -122,7 +122,7 @@ export function useEntityPhotoCapture<E extends GalleryEntity>(
   const updateEntity = useMutation(
     entityMutationOptionsFactory(entity, "update", transport)(),
   );
-  const entityType = entityImageOf(entity);
+  const entityKind = entityImageOf(entity);
 
   const invalidate = useCallback(() => {
     void invalidateOperationTags(queryClient, ripple[entity]);
@@ -165,7 +165,7 @@ export function useEntityPhotoCapture<E extends GalleryEntity>(
         filename: file.name,
         contentType,
         size: file.size,
-        entityType,
+        entityKind,
       });
 
       try {
@@ -218,7 +218,7 @@ export function useEntityPhotoCapture<E extends GalleryEntity>(
       invalidate();
       return newCode;
     },
-    [entityType, uploadImage, updateEntity, invalidate],
+    [entityKind, uploadImage, updateEntity, invalidate],
   );
 
   /**

@@ -7,8 +7,8 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import type { ScheduleRow } from "~/app/_components/schedule/schedule-grid";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 
 export function usePlantingScheduleLabel(
   rows: readonly ScheduleRow[],
@@ -19,7 +19,7 @@ export function usePlantingScheduleLabel(
       Object.fromEntries(
         plantings.map((planting) => [
           entityDisplayImageKey({
-            entityType: "planting",
+            entityKind: "planting",
             entityId: planting.id,
           }),
           planting.displayImages[0] ?? null,
@@ -31,7 +31,7 @@ export function usePlantingScheduleLabel(
     () =>
       rows.flatMap((row) =>
         row.id.startsWith("location:") && row.id !== "location:unplaced"
-          ? [{ entityType: "location", entityId: row.id.slice(9) }]
+          ? [{ entityKind: "location", entityId: row.id.slice(9) }]
           : [],
       ),
     [rows],
@@ -59,12 +59,12 @@ export function usePlantingScheduleLabel(
       if (row.id.startsWith("planting:")) {
         const id = row.id.slice("planting:".length);
         return (
-          <EntityInlineLink
+          <EntityRefLink
             entity="planting"
             data={{ id, name: row.name }}
             displayImage={
               images[
-                entityDisplayImageKey({ entityType: "planting", entityId: id })
+                entityDisplayImageKey({ entityKind: "planting", entityId: id })
               ] ?? null
             }
             truncate
@@ -74,12 +74,12 @@ export function usePlantingScheduleLabel(
       if (row.id.startsWith("location:") && row.id !== "location:unplaced") {
         const id = row.id.slice("location:".length);
         return (
-          <EntityInlineLink
+          <EntityRefLink
             entity="location"
             data={{ id, name: row.name }}
             displayImage={
               images[
-                entityDisplayImageKey({ entityType: "location", entityId: id })
+                entityDisplayImageKey({ entityKind: "location", entityId: id })
               ] ?? null
             }
             truncate

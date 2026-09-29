@@ -7,6 +7,10 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import {
+  recomputeAllDurableWorkflow,
+  recomputeStaleDurableWorkflow,
+} from "~/server/operations/recipe.server";
 import { updateProduct } from "~/server/repo/product";
 import { getRecipesByIDs } from "~/server/repo/recipe/crud";
 import { recipeList } from "~/server/repo/recipe/crud";
@@ -14,10 +18,6 @@ import {
   getRecipeTotalsState,
   selectAllStaleRecipeIds,
 } from "~/server/repo/recipe/totals";
-import {
-  recomputeAllDurableWorkflow,
-  recomputeStaleDurableWorkflow,
-} from "~/server/workflows/recipe.server";
 
 import { findOrCreateIngredient } from "../repo/ingredient";
 import {

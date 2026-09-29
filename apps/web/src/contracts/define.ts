@@ -1,35 +1,26 @@
 import type { z } from "zod";
 
+import type { QueryCachePolicy, RippleKey } from "~/contracts/cache-policy";
+
 /**
  * Transport-neutral operation contracts.
  *
  * A contract names a domain and its operations with their Zod input/output
- * (or event) schemas and nothing else: no cache policy, no invalidation, no
- * React, no server code. That is what lets ONE declaration feed the browser
- * catalog (`defineOperationDomain`), the server implementers
+ * (or event) schemas, plus browser cache policy expressed purely as DATA: a
+ * query's `cache` (tags, freshness profile) and a mutation's `invalidates`
+ * (named fan-out rows). No React, no query client, no server code, and no
+ * function of the input — a policy that must read the input at runtime lives in
+ * `integrations/tanstack-query/operation-overrides.ts`. The one server-facing
+ * hint is a query's `readPolicy: "strong"` (see `QueryContract`), a
+ * data-freshness requirement. That is what lets ONE declaration feed the browser
+ * catalog (the generated `catalog.gen.ts`, which resolves the cache data and
+ * defaults every query's tags to `[domain, member]`), the server implementers
  * (`implementOperationDomain` / `implementSubscriptionDomain`), the operation
  * registry generator (which imports these modules at build time), and the
  * ts-rest HTTP router. Modules under `~/contracts` may import only `zod`,
  * `@cubby/*`, other contracts, and generated entity artifacts; the registry
  * generator enforces that boundary.
  */
-
-/**
- * Publishes the operation as an MCP tool that calls its
- * `implementOperationDomain` handler directly and validates against this
- * member's own object-rooted `input`/`output` schemas. The name, description,
- * and schemas are an outward contract for MCP clients. Annotations follow
- * `kind`; `destructive` and `openWorld` mark the exceptions. `readPolicy:
- * "strong"` keeps an MCP read on the authoritative adapter where the shared
- * operation read policy would accept the request-selected one.
- */
-export interface McpToolSpec {
-  readonly name: string;
-  readonly description: string;
-  readonly destructive?: true;
-  readonly openWorld?: true;
-  readonly readPolicy?: "strong";
-}
 
 interface OperationObservability {
   readonly entities?: readonly string[];
@@ -47,6 +38,12 @@ interface OperationObservability {
  * flagged member is also the only way an RPC id reaches CubbyKit. Resource
  * verbs are flagged on the entity declaration (`native.create/update/delete`)
  * instead.
+ *
+ * `readPolicy: "strong"` on a query keeps it on the authoritative database
+ * adapter: it needs live data, or is a bounded read where the freshness RPC
+ * would cost more than it saves. Absent, the query reads through the
+ * request-selected adapter. The generator collects the strong set into
+ * `STRONG_QUERY_OPERATIONS`; mutations are always strong.
  */
 export interface QueryContract<
   Input extends z.ZodTypeAny = z.ZodTypeAny,
@@ -58,7 +55,9 @@ export interface QueryContract<
   readonly observability?: OperationObservability;
   readonly http?: false;
   readonly native?: string;
-  readonly mcp?: McpToolSpec;
+  readonly readPolicy?: "strong";
+  /** Browser cache tags and freshness profile; see `QueryCachePolicy`. */
+  readonly cache?: QueryCachePolicy;
 }
 
 export interface MutationContract<
@@ -71,7 +70,12 @@ export interface MutationContract<
   readonly observability?: OperationObservability;
   readonly http?: false;
   readonly native?: string;
-  readonly mcp?: McpToolSpec;
+  /**
+   * The browser fan-out rows a successful call invalidates. Absent or empty
+   * invalidates nothing (a mutation that writes no cache-backed state, or whose
+   * effect a readiness poll observes).
+   */
+  readonly invalidates?: readonly RippleKey[];
 }
 
 /**

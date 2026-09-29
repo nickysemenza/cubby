@@ -44,6 +44,10 @@ import { sha256Hex } from "~/server/semantic/hash";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
 
 import { refundTally } from "../findings";
+import {
+  productionOrderMailAttachmentStorage,
+  type OrderMailAttachmentStorage,
+} from "./attachment-storage";
 import { orderAmountsInHuntWindow, uniqueOrderSubsetIds } from "./match";
 import type { GmailOrderMailAttachment } from "./types";
 import {
@@ -53,17 +57,29 @@ import {
 
 const cents = (value: number) => Math.round(value * 100);
 
-export type AttachOrderMailFile = typeof attachFileToEntity;
+type AttachOrderMailFile = typeof attachFileToEntity;
 
 /** External seams of the mail pipeline: the classifier model and object storage. */
 export interface OrderMailPorts {
   classify: typeof classifyOrderMail;
   attachFile: AttachOrderMailFile;
+  attachmentStorage: OrderMailAttachmentStorage;
 }
+
+/** The seams attaching pending mail PDFs to a Purchase needs. */
+export type OrderMailEvidencePorts = Pick<
+  OrderMailPorts,
+  "attachFile" | "attachmentStorage"
+>;
+
+const productionOrderMailEvidencePorts: OrderMailEvidencePorts = {
+  attachFile: attachFileToEntity,
+  attachmentStorage: productionOrderMailAttachmentStorage,
+};
 
 const productionOrderMailPorts: OrderMailPorts = {
   classify: classifyOrderMail,
-  attachFile: attachFileToEntity,
+  ...productionOrderMailEvidencePorts,
 };
 
 export async function attachPendingOrderMailEvidence(
@@ -74,7 +90,7 @@ export async function attachPendingOrderMailEvidence(
     purchaseShortcode: string;
     ledgerPartyId?: string;
   },
-  attachFile: AttachOrderMailFile = attachFileToEntity,
+  ports: OrderMailEvidencePorts = productionOrderMailEvidencePorts,
 ) {
   const database = getDb(db);
   const targetPurchaseId = await resolveOrThrow(
@@ -91,7 +107,7 @@ export async function attachPendingOrderMailEvidence(
       subject: orderMail.subject,
       providerAttachmentId: orderMailAttachment.providerAttachmentId,
       filename: orderMailAttachment.filename,
-      data: orderMailAttachment.pendingDataBase64Url,
+      objectKey: orderMailAttachment.pendingObjectKey,
     })
     .from(orderMailAttachment)
     .innerJoin(orderMail, eq(orderMail.id, orderMailAttachment.orderMailId))
@@ -109,12 +125,12 @@ export async function attachPendingOrderMailEvidence(
         isNull(orderMailEvent.supersededAt),
         eq(orderMailAttachment.mimeType, "application/pdf"),
         isNull(orderMailAttachment.imageId),
-        isNotNull(orderMailAttachment.pendingDataBase64Url),
+        isNotNull(orderMailAttachment.pendingObjectKey),
       ),
     );
   let attachedCount = 0;
   for (const row of rows) {
-    if (!row.data) continue;
+    if (!row.objectKey) continue;
     const decisions = await database
       .select({
         purchaseId: orderMailCandidateDecision.purchaseId,
@@ -141,10 +157,11 @@ export async function attachPendingOrderMailEvidence(
         .size !== 1
     )
       continue;
-    const stored = await attachFile(db, {
-      entityType: "purchase",
+    const bytes = await ports.attachmentStorage.get(row.objectKey);
+    const stored = await ports.attachFile(db, {
+      entityKind: "purchase",
       entityId: input.purchaseShortcode,
-      data: row.data,
+      data: Buffer.from(bytes).toString("base64"),
       contentType: "application/pdf",
       filename: row.filename,
       documentKind: row.subject.toLowerCase().includes("receipt")
@@ -156,7 +173,9 @@ export async function attachPendingOrderMailEvidence(
       .update(orderMailAttachment)
       .set({
         imageId: await resolveOrThrow(db, "image", stored.imageId),
-        pendingDataBase64Url: null,
+        // The object stays: this may run inside a caller's transaction that can
+        // still roll back, and deleting it would strand the row's key.
+        pendingObjectKey: null,
         updatedAt: new Date(),
       })
       .where(
@@ -272,8 +291,8 @@ export async function processOrderMails(
         await database.insert(runFinding).values({
           runId: runId,
           ledgerPartyId: mail.ledgerPartyId,
-          targetKind: "run",
-          targetId: runId,
+          entityKind: "run",
+          entityId: runId,
           kind: "unclassified_vendor",
           summary: `Purchase mail from ${mail.sender} does not match a known vendor. Create or update the vendor's order-email sender list.`,
           evidenceFingerprint: fingerprint,
@@ -562,7 +581,7 @@ export async function processOrderMails(
             purchaseShortcode: target.shortcode,
             ledgerPartyId: mail.ledgerPartyId,
           },
-          ports.attachFile,
+          ports,
         );
       }
 
@@ -599,8 +618,8 @@ export async function processOrderMails(
           .insert(runFinding)
           .values({
             ledgerPartyId: mail.ledgerPartyId,
-            targetKind: "purchase",
-            targetId: target.id,
+            entityKind: "purchase",
+            entityId: target.id,
             kind,
             summary:
               event.event === "delivered"
@@ -640,8 +659,8 @@ export async function processOrderMails(
               .insert(runFinding)
               .values({
                 ledgerPartyId: mail.ledgerPartyId,
-                targetKind: "purchase",
-                targetId: target.id,
+                entityKind: "purchase",
+                entityId: target.id,
                 kind: "return_window",
                 summary: `${costlyLines.length} line${costlyLines.length === 1 ? "" : "s"} worth at least $50 can be returned until ${expiresAt.toLocaleDateString("en-US", { timeZone: "UTC" })}.`,
                 evidenceFingerprint: await sha256Hex(

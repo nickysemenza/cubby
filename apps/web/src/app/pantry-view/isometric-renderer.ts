@@ -486,6 +486,7 @@ function drawFloorShadow(
 function getDrawFunction(type: LocationType | null) {
   switch (type) {
     case null:
+    case "furniture":
       return drawBoxContainer;
     case "shelf":
       return drawShelfUnit;

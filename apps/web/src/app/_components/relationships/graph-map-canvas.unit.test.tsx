@@ -45,13 +45,13 @@ afterEach(() => {
 it("reorganizes retained positions only when clicked and anchors later expansion to the new layout", async () => {
   const nodes: EntityGraphNode[] = [
     {
-      entityType: "vendor",
+      entityKind: "vendor",
       entityId: "VEN-2345",
       label: "Example Hardware",
       metadata: {},
     },
     {
-      entityType: "purchase",
+      entityKind: "purchase",
       entityId: "PUR-2345",
       label: "Timber order",
       metadata: {},
@@ -96,7 +96,7 @@ it("reorganizes retained positions only when clicked and anchors later expansion
 
   const reorganized = camera.positions;
   const added: EntityGraphNode = {
-    entityType: "purchase",
+    entityKind: "purchase",
     entityId: "PUR-4567",
     label: "Paint order",
     metadata: {},

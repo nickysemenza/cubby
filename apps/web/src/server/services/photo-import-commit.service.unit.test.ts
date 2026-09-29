@@ -32,7 +32,6 @@ const imageRow = (status: "PENDING" | "UPLOADED") => ({
 
 const context = entityKernelContextSchema.parse({
   db: database,
-  readDb: database,
   actorContext: {},
   usdaClient: {},
   upcLookupClient: {},

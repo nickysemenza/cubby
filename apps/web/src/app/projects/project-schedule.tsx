@@ -15,20 +15,20 @@ import {
   type EntityDisplayImageMap,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { flattenUniquePageItems } from "~/app/_components/hooks/infinite-page-utils";
 import {
   ScheduleGrid,
   type ScheduleRow,
 } from "~/app/_components/schedule/schedule-grid";
-import { task } from "~/app/tasks/task.functions";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Button } from "~/components/ui/button";
 import { entityDetailParams, entities } from "~/entities/entities";
-import {
-  compileEntityListInput,
-  entityListFor,
-} from "~/entities/entity-list.functions";
+import { compileEntityListInput, entityListFor } from "~/entities/entity-list";
 import type { FilterPatch } from "~/entities/filters";
+import {
+  task,
+  project,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import {
@@ -41,7 +41,6 @@ import {
   type ProjectScheduleEntry,
   projectScheduleWindow,
 } from "./project-schedule-model";
-import { project } from "./project.functions";
 
 const EMPTY_TASKS: TaskOut[] = [];
 
@@ -50,7 +49,7 @@ function seedProjectImages(
 ): EntityDisplayImageMap {
   return Object.fromEntries(
     projects.map((project) => [
-      entityDisplayImageKey({ entityType: "project", entityId: project.id }),
+      entityDisplayImageKey({ entityKind: "project", entityId: project.id }),
       project.displayImages[0] ?? null,
     ]),
   );
@@ -170,7 +169,7 @@ function ProjectScheduleSurface({
   const selected = selectedId ? byId.get(selectedId) : undefined;
   const window = useMemo(() => projectScheduleWindow(allRows), [allRows]);
   const refs = useMemo<EntityRef[]>(
-    () => allRows.map((row) => ({ entityType: row.entity, entityId: row.id })),
+    () => allRows.map((row) => ({ entityKind: row.entity, entityId: row.id })),
     [allRows],
   );
   const images = useEntityDisplayImages(refs, seededImages);
@@ -181,13 +180,13 @@ function ProjectScheduleSurface({
       const count = entry.blockedByIds.length + entry.blockingIds.length;
       return (
         <span className="flex w-full min-w-0 items-center gap-1">
-          <EntityInlineLink
+          <EntityRefLink
             entity={entry.entity}
             data={{ id: entry.id, name: entry.name }}
             displayImage={
               images[
                 entityDisplayImageKey({
-                  entityType: entry.entity,
+                  entityKind: entry.entity,
                   entityId: entry.id,
                 })
               ] ?? null

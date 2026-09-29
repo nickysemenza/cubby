@@ -1,5 +1,5 @@
 /**
- * MCP App for `search_usda_foods`.
+ * MCP App for the `usda_food` tool's `search` action.
  *
  * The app keeps an ambiguous USDA choice visual and reversible: the user can
  * refine the originating query, compare evidence, select one record, and only
@@ -7,6 +7,7 @@
  */
 import type { App } from "@modelcontextprotocol/ext-apps";
 import { z } from "zod/mini";
+import { USDA_PICKER } from "./metadata";
 import { readCubbyOrigin } from "./origin";
 
 /**
@@ -36,6 +37,7 @@ const searchResultSchema = z.object({
 type SearchResult = z.infer<typeof searchResultSchema>;
 
 const searchInputSchema = z.object({
+  action: z.optional(z.string()),
   query: z.optional(z.string()),
   dataType: z.optional(z.string()),
   pageIndex: z.optional(z.number()),
@@ -336,6 +338,7 @@ function renderSearchControls(
     submit.textContent = "Searching…";
     status.textContent = "Searching USDA FoodData Central…";
     const nextInput: SearchInput = {
+      action: "search",
       query: nextQuery,
       pageIndex: 0,
       pageSize: input?.pageSize ?? result.meta?.pageSize ?? 25,
@@ -343,7 +346,7 @@ function renderSearchControls(
     if (select.value) nextInput.dataType = select.value;
 
     void app
-      .callServerTool({ name: "search_usda_foods", arguments: nextInput })
+      .callServerTool({ name: USDA_PICKER.toolName, arguments: nextInput })
       .then((toolResult) => {
         const next = toolPayload(toolResult);
         if (toolResult.isError || !next) {
@@ -519,6 +522,9 @@ function render(
 
 export async function connectUsdaPicker(app: UsdaPickerApp): Promise<void> {
   let input: SearchInput | null = null;
+  // The picker is published on the whole `usda_food` tool, but only a search
+  // result is a choice to make; a single get/find record renders nothing.
+  let searchCall = true;
   let payload: SearchResult | null = null;
   const state: PickerState = { selected: null };
   const mount = () => {
@@ -533,12 +539,17 @@ export async function connectUsdaPicker(app: UsdaPickerApp): Promise<void> {
   app.ontoolinput = (notification) => {
     const parsed = searchInputSchema.safeParse(notification.arguments);
     input = parsed.success ? parsed.data : null;
+    searchCall = input?.action === undefined || input.action === "search";
     mount();
   };
   app.ontoolresult = (result) => {
-    const next = toolPayload(result);
     const root = document.getElementById("root");
     if (!root) return;
+    if (!searchCall) {
+      root.replaceChildren();
+      return;
+    }
+    const next = toolPayload(result);
     if (!next) {
       root.replaceChildren(
         el("p", "empty", "Could not read USDA results from the tool result."),

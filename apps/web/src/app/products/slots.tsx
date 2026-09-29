@@ -7,16 +7,15 @@ import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { FullNutrientBreakdown } from "~/app/_components/nutrition/FullNutrientBreakdown";
 import { NutrientDensityStats } from "~/app/_components/nutrition/NutrientDensityStats";
 import { ProductNutritionLabel } from "~/app/_components/nutrition/ProductNutritionLabel";
 import { RecipeUsagesTable } from "~/app/_components/recipe/recipe-usages-table";
 import { RelatednessRail } from "~/app/_components/relatedness/relatedness-rail";
 import { UnitCoveragePanel } from "~/app/_components/units/UnitCoveragePanel";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
-import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { Image } from "~/components/ui/image";
 import { labelNutrientsPer100 } from "~/lib/label-nutrition";
 import { countLabel } from "~/lib/pluralize";
@@ -134,7 +133,7 @@ export const ProductCookbooks: DetailSlotComponent<"product"> = ({
   const refs = useMemo(
     () =>
       product.cookbooks.map((cookbook) => ({
-        entityType: "cookbook" as const,
+        entityKind: "cookbook" as const,
         entityId: cookbook.id,
       })),
     [product.cookbooks],
@@ -152,24 +151,25 @@ export const ProductCookbooks: DetailSlotComponent<"product"> = ({
 
 function CookbookLinkRow({ cookbook }: { cookbook: ProductCookbooksProps }) {
   const displayImage = useEntityDisplayImage({
-    entityType: "cookbook",
+    entityKind: "cookbook",
     entityId: cookbook.id,
   });
   return (
     <Row className="items-center justify-between gap-2">
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={displayImage}
         entity="cookbook"
         data={{ id: cookbook.id, name: cookbook.name }}
       />
-      <EntityFilterLink
-        variant="value"
+      <EntityRefLink
+        variant="filter"
+        display="value"
         to="/recipes"
         search={{ source: cookbook.id }}
         label={`Show all ${countLabel(cookbook.recipeCount, "recipe")} from ${cookbook.name}`}
       >
         {countLabel(cookbook.recipeCount, "recipe")}
-      </EntityFilterLink>
+      </EntityRefLink>
     </Row>
   );
 }

@@ -17,4 +17,15 @@ struct RequestTraceTests {
         #expect(last?.operationID == "op-24")
         #expect(last?.status == 200)
     }
+
+    /// The gate's 426 arrives on whichever request the app happens to make first, so the trace
+    /// (which every request reports to) latches it for the root view.
+    @Test func latchesAnUpdateRequiredResponse() async {
+        let trace = await RequestTrace()
+        await trace.record(operationID: "a", ms: 1, status: 200)
+        #expect(await trace.clientUpdateRequired == false)
+        await trace.record(operationID: "b", ms: 1, status: 426)
+        await trace.record(operationID: "c", ms: 1, status: 200)
+        #expect(await trace.clientUpdateRequired)
+    }
 }

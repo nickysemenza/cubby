@@ -38,14 +38,16 @@ import {
   AmountFieldGroup,
   DEFAULT_AMOUNT_UNIT,
 } from "~/app/_components/inventory/amount-field-group";
-import { inventory } from "~/app/inventory/inventory.functions";
-import { product as productOperations } from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { Spinner } from "~/components/ui/spinner";
+import {
+  inventory,
+  product as productOperations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 import { getLocationId, requiredLocationField } from "../form-fields";
@@ -95,7 +97,7 @@ interface KitAccounting {
   expectedQuantity: number;
   /** Units already on shelves under THIS product's own name. */
   ownOnHandUnits: number | null;
-  /** Live `ProductComponent` edges — zero means this is not a kit. */
+  /** Live `productComponent` links — zero means this is not a kit. */
   componentCount: number;
 }
 

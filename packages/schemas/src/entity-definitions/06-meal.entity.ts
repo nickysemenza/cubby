@@ -495,6 +495,21 @@ export default defineEntity({
       export: "mealMcpEntityOut",
     },
   },
+  storage: {
+    indexes: [
+      {
+        name: "Meal_date_active_idx",
+        on: ["date"],
+        where: "{deletedAt} IS NULL",
+      },
+    ],
+    relations: {
+      recipes: { many: "mealRecipe" },
+      recipePortions: { many: "mealRecipePortion" },
+      foodEntries: { many: "mealFoodEntry" },
+      images: { many: "entityAttachment" },
+    },
+  },
   filters: {
     audit: true,
     schema: { module: "@cubby/schemas/meal", export: "mealFilterFields" },
@@ -773,14 +788,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "EntityAttachment.subjectEntityId", direction: "incoming" },
+          { edge: "EntityAttachment.entityId", direction: "incoming" },
           { edge: "EntityAttachment.imageId", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
           { edge: "EntityAttachment.imageId", direction: "incoming" },
-          { edge: "EntityAttachment.subjectEntityId", direction: "outgoing" },
+          { edge: "EntityAttachment.entityId", direction: "outgoing" },
         ],
       },
     },
@@ -838,8 +853,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/meal/entity-adapter",
-        export: "mealEntityAdapter",
+        module: "~/server/repo/meal/repository",
+        export: "mealRepository",
       },
       search: "document",
     },

@@ -50,6 +50,22 @@ struct ErrorDecodingTests {
         #expect(!CubbyAPIError(status: 409, operationID: "x", detail: nil).isStaleInventory)
     }
 
+    /// The server's version gate answers an outdated build with 426 before any operation runs, so
+    /// the generated decoders never see a shape they cannot read.
+    @Test func outdatedClientDecodesToAnUpdateRequiredError() throws {
+        let error = CubbyAPIError.decode(
+            status: 426, operationID: "resources.product.list",
+            body: try Fixtures.data(named: "error-update-required.json")
+        )
+        #expect(error.isClientUpdateRequired)
+        #expect(error.reason == "CLIENT_UPDATE_REQUIRED")
+        #expect(error.errorDescription?.contains("TestFlight") == true)
+        #expect(error.recoverySuggestion?.contains("TestFlight") == true)
+        // A proxy's bodyless 426 is still the same instruction.
+        #expect(CubbyAPIError(status: 426, operationID: "x", detail: nil).isClientUpdateRequired)
+        #expect(!CubbyAPIError(status: 409, operationID: "x", detail: nil).isClientUpdateRequired)
+    }
+
     @Test func status400DecodesValidationIssues() throws {
         let error = CubbyAPIError.decode(
             status: 400, operationID: "resources.product.create",

@@ -45,15 +45,6 @@ public actor CubbyClient {
         }
     }
 
-    public func findOrCreateProduct(upc: String, defaultName: String? = nil) async throws
-        -> ProductFindOrCreateByUPCOut
-    {
-        try await perform {
-            try await api.product_findOrCreateByUPC(body: .json(.init(upc: upc, defaultName: defaultName)))
-                .ok.body.json
-        }
-    }
-
     /// Find-or-create by a raw scanned code, resolved server-side the way the web `/scan` page
     /// does: an ISBN becomes a book, a barcode a product, a product label the product itself; an
     /// unreadable code is the server's validation error.
@@ -128,7 +119,7 @@ public actor CubbyClient {
     public func fieldExplanation(
         subject: EntityRef, field: String
     ) async throws -> FieldExplanationOutput {
-        let entityType: Operations.FieldExplanation_explain.Input.Query.EntityTypePayload =
+        let entityKind: Operations.FieldExplanation_explain.Input.Query.EntityKindPayload =
             switch subject.entity {
             case .product: .product
             case .productCategory: .productCategory
@@ -155,13 +146,12 @@ public actor CubbyClient {
             case .vendorAccount: .vendorAccount
             case .run: .run
             case .device: .device
-            case .imageSighting: .imageSighting
             case .plant: .plant
             }
         return try await perform {
             try await api.fieldExplanation_explain(
                 query: .init(
-                    entityType: entityType, entityId: subject.id, field: field)
+                    entityKind: entityKind, entityId: subject.id, field: field)
             ).ok.body.json
         }
     }
@@ -323,7 +313,7 @@ public actor CubbyClient {
             // `recommendations.forEntity` declares its own copy of the entity enum; match by raw value.
             try await api.recommendations_forEntity(
                 query: .init(
-                    entityType: .init(rawValue: source.entityType.rawValue)!, entityId: source.entityId)
+                    entityKind: .init(rawValue: source.entityKind.rawValue)!, entityId: source.entityId)
             ).ok.body.json
         }
     }
@@ -354,11 +344,12 @@ public actor CubbyClient {
 
     // MARK: - Images
 
-    /// One bounded, transactional library sighting page; the server upserts by image/owner/asset.
-    public func bulkImageSightings(_ items: [ImageSightingCreateInput]) async throws {
+    /// One bounded, transactional library sighting page (`image.recordSightings`); the server
+    /// upserts by image/owner/asset key, so a resent page changes nothing.
+    public func recordImageSightings(_ items: [ImageSightingRecordItem]) async throws {
         guard !items.isEmpty else { return }
         _ = try await perform {
-            try await api.image_bulkSightings(.init(body: .json(.init(items: items)))).ok.body.json
+            try await api.image_recordSightings(.init(body: .json(.init(items: items)))).ok.body.json
         }
     }
 
@@ -401,7 +392,7 @@ public actor CubbyClient {
             }
             input.contentType = contentType
             if let entity = request.entity {
-                input.entityType = EntityImage(rawValue: entity.rawValue.uppercased())
+                input.entityKind = EntityImage(rawValue: entity.rawValue.uppercased())
             }
             input.algorithmRevision = .init(rawValue: request.algorithmRevision)
             input.perceptualHash = request.perceptualHash.hex
@@ -440,30 +431,6 @@ public actor CubbyClient {
         }
     }
 
-    public func photoRunReview(_ runID: RunShortcode) async throws -> PhotoRunReviewResponse {
-        try await perform {
-            try await api.photoImport_review(query: .init(runId: runID)).ok.body.json
-        }
-    }
-
-    public func vendorOrderMail(
-        vendorID: VendorShortcode, ledgerPartyID: LedgerPartyShortcode? = nil
-    ) async throws -> PurchaseOrderMailOut {
-        try await perform {
-            try await api.vendor_orderMail(
-                query: .init(vendorId: vendorID, ledgerPartyId: ledgerPartyID)
-            ).ok.body.json
-        }
-    }
-
-    public func purchaseOrderMail(_ purchaseID: PurchaseShortcode) async throws
-        -> PurchaseOrderMailOut
-    {
-        try await perform {
-            try await api.purchase_orderMail(query: .init(purchaseId: purchaseID)).ok.body.json
-        }
-    }
-
     public func decideOrderMail(
         eventID: String, purchaseID: PurchaseShortcode, link: Bool,
         evidenceChecksum: String
@@ -476,32 +443,6 @@ public actor CubbyClient {
                         evidenceChecksum: evidenceChecksum
                     ))
             ).ok.body.json
-        }
-    }
-
-    public func startPhotoGrouping(_ runID: RunShortcode) async throws {
-        _ = try await perform {
-            try await api.photoImport_startGrouping(body: .json(.init(runId: runID))).ok.body.json
-        }
-    }
-
-    public func photoProductCandidates(
-        runID: RunShortcode, groupKey: String
-    ) async throws -> PhotoProductCandidatesResponse {
-        try await perform {
-            try await api.photoImport_candidates(query: .init(runId: runID, groupKey: groupKey))
-                .ok.body.json
-        }
-    }
-
-    public func choosePhotoGroupProduct(
-        runID: RunShortcode, groupKey: String, productID: ProductCode
-    ) async throws -> ReviewPhotoGroupsOutput {
-        try await perform {
-            try await api.photoImport_chooseExisting(
-                body: .json(.init(runId: runID, groupKey: groupKey, productId: productID))
-            )
-            .ok.body.json
         }
     }
 
@@ -529,39 +470,6 @@ public actor CubbyClient {
         }
     }
 
-    public func discardPhotoGroup(
-        runID: RunShortcode, groupKey: String
-    ) async throws -> ReviewPhotoGroupsOutput {
-        try await perform {
-            try await api.photoImport_discardGroup(body: .json(.init(runId: runID, groupKey: groupKey)))
-                .ok.body.json
-        }
-    }
-
-    public func runWorkSnapshot(_ runID: RunShortcode) async throws -> RunWorkSnapshotOutput {
-        try await perform {
-            try await api.run_workSnapshot(query: .init(runId: runID)).ok.body.json
-        }
-    }
-
-    public func runAiUsage(_ runID: RunShortcode) async throws -> AiRunUsageOut {
-        try await perform {
-            try await api.run_aiUsage(query: .init(runId: runID, limit: 1)).ok.body.json
-        }
-    }
-
-    /// Waits for any in-flight commit touching these rows, then returns one
-    /// transactionally consistent status and direct-association snapshot.
-    public func reconcilePhotoImport(_ imageIDs: [ImageCode]) async throws
-        -> PhotoImportReconcileOutput
-    {
-        try await perform {
-            try await api.photoImport_reconcile(
-                body: .json(PhotoImportReconcileInput(imageIds: imageIDs))
-            ).ok.body.json
-        }
-    }
-
     public func setPerceptualHashes(_ items: [ImageHashUpdate]) async throws -> SetPerceptualHashesOutput {
         try await perform {
             try await api.image_setPerceptualHashes(
@@ -571,28 +479,6 @@ public actor CubbyClient {
                         items: items.map { .init(id: $0.id, perceptualHash: $0.perceptualHash.hex) })
                 )
             ).ok.body.json
-        }
-    }
-
-    public func imageDetail(_ id: ImageCode) async throws -> ImageWithEntity {
-        try await perform {
-            try await api.image_detail(query: .init(id: id.rawValue)).ok.body.json
-        }
-    }
-
-    public func imageAnalyses(
-        _ id: ImageCode, cursor: String? = nil, limit: Int = 10
-    ) async throws -> ImageAnalysisHistoryOutput {
-        try await perform {
-            try await api.imageProcessing_analyses(
-                query: .init(id: id.rawValue, cursor: cursor, limit: limit)
-            ).ok.body.json
-        }
-    }
-
-    public func imageProcessingStatus(_ id: ImageCode) async throws -> ImageProcessingStatusOutput {
-        try await perform {
-            try await api.imageProcessing_status(query: .init(id: id.rawValue)).ok.body.json
         }
     }
 
@@ -670,28 +556,9 @@ public actor CubbyClient {
         case .describeImage: .describeImage
         case .subjectLift: .subjectLift
         case .aiSuggest: .aiSuggest
-        case .aiAction: .aiAction
         case .background: .background
         case .fileImport: .fileImport
-        case .legacy: .legacy
-        }
-    }
-
-    public func activityDetail(
-        _ id: String, cursor: String? = nil, limit: Int = 20
-    ) async throws -> ActivityDetailOutput {
-        try await perform {
-            try await api.activity_detail(query: .init(id: id, cursor: cursor, limit: limit))
-                .ok.body.json
-        }
-    }
-
-    public func activityEvents(
-        _ id: String, cursor: String? = nil, limit: Int = 50
-    ) async throws -> ActivityEventsOutput {
-        try await perform {
-            try await api.activity_events(query: .init(id: id, cursor: cursor, limit: limit))
-                .ok.body.json
+        case .mailSearch: .mailSearch
         }
     }
 
@@ -993,7 +860,7 @@ public actor CubbyClient {
         // `search.find`'s query declares its own searchable-entity enum, so catalog keys are
         // matched into it by raw value; a key it has not heard of is dropped rather than sent. Hits
         // name their entity by raw string (`SearchHit.key` is nil for an undeclared kind).
-        query.entityTypes = (kinds ?? EntityCatalog.intentExposed.map(\.key)).compactMap {
+        query.entityKinds = (kinds ?? EntityCatalog.intentExposed.map(\.key)).compactMap {
             .init(rawValue: $0.rawValue)
         }
         return try await perform {

@@ -8,13 +8,13 @@ import { ImageAssociationLinks } from "./image-associations";
 
 const associations: ImageAssociation[] = [
   {
-    entityType: "vendor",
+    entityKind: "vendor",
     entityId: "VEN-ABCD",
     entityName: "Home Depot",
     role: "logo",
   },
   {
-    entityType: "cookbook",
+    entityKind: "cookbook",
     entityId: "CKB-EFGH",
     entityName: "The Food Lab",
     role: "cover",

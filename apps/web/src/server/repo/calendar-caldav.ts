@@ -131,7 +131,6 @@ const caldavContext = (
 ) => {
   const context: EntityKernelContext = {
     ...buildCrudServices(db),
-    readDb: db,
     actorContext: buildActorContext(actorId, "caldav"),
   };
   if (hooks) context.caldavHooks = hooks;

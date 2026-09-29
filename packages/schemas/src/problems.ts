@@ -129,7 +129,7 @@ export const weightSoldProductSchema = z.object({
   ingredientId: ingredientShortcode.nullable(),
 });
 
-// A recorded ProjectToolUsage edge for a tool we did not own while the project
+// A recorded `projectTool` link for a tool we did not own while the project
 // ran. The `trade_match` suggestion lane shipped without consulting ownership
 // dates, so it drew candidates from the whole present-day tool shelf — for a
 // 2020 project, 293 of the 295 inventoried tools were acquired after it ended.
@@ -280,7 +280,7 @@ export const entityMissingEmbeddingSchema = z.object({
   ...searchableEntityRefFields,
   // Deliberately NOT hoisted onto `searchableEntityRefFields` itself: this row
   // always points at a LIVE entity, so it can always be resolved and is safe
-  // to link. Plain string, not a branded schema: `entityType` is one of ten
+  // to link. Plain string, not a branded schema: `entityKind` is one of ten
   // different entities, so no single branded type could be right for all of
   // them — mirrors why `entityId` above is also a plain string.
   entityId: publicEntityIdSchema,
@@ -444,8 +444,8 @@ export const duplicateFinancialTransactionSourceRefSchema = z.object({
  *
  * This is deliberately the ONLY statement-ledger detector. "Every unmatched row"
  * is not a defect list: it is the drift worklist, 15k rows at its widest, and
- * putting it here would make `list_problems` unusable. Unmatched rows are read
- * through `list_statement_rows({matchState:"unmatched"})` instead.
+ * putting it here would make `activity.problems` unusable. Unmatched rows are read
+ * through `finance_read.statement_rows({matchState:"unmatched"})` instead.
  */
 export const incompleteStatementImportSchema = z.object({
   source: z.string(),
@@ -1189,7 +1189,7 @@ export const countProblems = (all: AllProblems): ProblemsCount => {
 
 // Assemble the cost-grouped detector results into the combined AllProblems
 // shape (with derived total). Shared so the merge + total live in one place —
-// the MCP list_problems tool calls this directly over its own per-group
+// the MCP activity.problems tool calls this directly over its own per-group
 // scans. (The Problems page merges client-side in useProblemsData, which is
 // loading-aware and defaults not-yet-loaded groups to empty.)
 export const assembleAllProblems = (groups: {

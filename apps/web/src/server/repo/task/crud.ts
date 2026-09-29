@@ -24,7 +24,7 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { product, task, taskDependency } from "~/server/db/schema";
+import { product, task } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
@@ -47,7 +47,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { bulkPatchEntities, patchEntityRows } from "~/server/repo/entity-patch";
 import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
 /**
@@ -59,6 +58,7 @@ import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validatio
  * rows) inside the same transaction as the column update.
  */
 import { policyDelete } from "~/server/repo/removal";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   type EntityRef,
   lookupShortcodes,
@@ -86,19 +86,19 @@ export const TASK_DELETE_EDGE_POLICY = {
     description:
       "A deleted task's live subtasks are soft-deleted alongside it — they're checklist items with no independent existence.",
   },
-  "TaskDependency.taskId": {
-    code: "hard-delete-dependency",
-    effect: "hard-delete",
+  "EntityLink[taskDependency].from": {
+    code: "soft-delete-dependency",
+    effect: "soft-delete",
     description:
-      "Blocks/blocked-by dependency rows naming the task (or a cascaded subtask) are removed outright.",
+      "Blocks/blocked-by dependency links naming the task (or a cascaded subtask) are soft-deleted with it.",
   },
-  "TaskDependency.blockedByTaskId": {
-    code: "hard-delete-dependency",
-    effect: "hard-delete",
+  "EntityLink[taskDependency].to": {
+    code: "soft-delete-dependency",
+    effect: "soft-delete",
     description:
-      "Blocks/blocked-by dependency rows naming the task (or a cascaded subtask) are removed outright.",
+      "Blocks/blocked-by dependency links naming the task (or a cascaded subtask) are soft-deleted with it.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -108,6 +108,12 @@ export const TASK_DELETE_EDGE_POLICY = {
     code: "clear-live-fk-with-audit",
     effect: "detach",
     description: "A planting outlives the task that produced it.",
+  },
+  "EntityExternalId.entityId": {
+    code: "soft-delete-metadata",
+    effect: "soft-delete",
+    description:
+      "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
   },
 } as const satisfies IncomingEdgePolicy<"task", OperationDisposition>;
 
@@ -143,15 +149,7 @@ export async function taskDependencyIds(
   blockedBy: Map<TaskId, TaskShortcode[]>;
   blocking: Map<TaskId, TaskShortcode[]>;
 }> {
-  const raw = await dependencyIdsFor(
-    db,
-    {
-      ownColumn: taskDependency.taskId,
-      blockedByColumn: taskDependency.blockedByTaskId,
-      entity: "task",
-    },
-    taskIds,
-  );
+  const raw = await dependencyIdsFor(db, "task", taskIds);
 
   // The edge VALUES (other tasks' ids) are resolved to shortcodes here, once,
   // batched — `dbTaskToAPI` (every consumer's eventual destination) takes
@@ -438,7 +436,7 @@ export const createTask = async (
       );
     }
     await logAuditEntry(tx, actor, {
-      entityType: "task",
+      entityKind: "task",
       entityId: created.id,
       action: "create",
     });
@@ -597,17 +595,7 @@ export const updateTask = async (
     if (resolvedBlockedByIds !== undefined) {
       await replaceDependencyEdges(
         tx,
-        taskDependency,
-        {
-          ownColumn: taskDependency.taskId,
-          blockedByColumn: taskDependency.blockedByTaskId,
-          buildRow: (taskIdVal, blockedByTaskId) => ({
-            taskId: taskIdVal,
-            blockedByTaskId,
-          }),
-          entityTable: task,
-          entity: "task",
-        },
+        { entityTable: task, entity: "task" },
         id,
         resolvedBlockedByIds,
       );
@@ -627,7 +615,7 @@ export const updateTask = async (
     }
     if (Object.keys(changes).length > 0) {
       await logAuditEntry(tx, actor, {
-        entityType: "task",
+        entityKind: "task",
         entityId: id,
         action: "update",
         changes,
@@ -801,7 +789,7 @@ export const reorderTasks = async (
           : undefined;
         if (changes) {
           await logAuditEntry(tx, actor, {
-            entityType: "task",
+            entityKind: "task",
             entityId: moveId,
             action: "update",
             changes,

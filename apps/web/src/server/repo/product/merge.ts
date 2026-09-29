@@ -6,6 +6,7 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
+import type { EntityLinkKind } from "@cubby/schemas/entity-links";
 import {
   type ExternalIdKind,
   externalIdKind,
@@ -38,9 +39,9 @@ import {
   cookbook,
   device,
   entityAttachment,
+  entityExternalId,
+  entityLink,
   expense,
-  runEvidence,
-  runTarget,
   ingredient,
   inventoryEntry,
   location,
@@ -49,26 +50,24 @@ import {
   planting,
   product,
   productCategory,
-  productComponent,
   productConversionCoverage,
-  productExternalId,
   productUnitMappings,
-  projectToolUsage,
-  purchaseProduct,
+  runEvidence,
+  runTarget,
   task,
-  wishCandidate,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { type AuditEntryInput, logAuditEntries } from "~/server/repo/audit-log";
 import {
+  amountToColumns,
   buildPartialUpdateValues,
   getDb,
   lockAndValidateForDelete,
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { linkQuantity, liveLinks } from "~/server/repo/entity-links";
 import { impact, present, sideEffect } from "~/server/repo/impact";
-import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import {
   assertDistinctMergeTargets,
   finalizeMerge,
@@ -82,6 +81,7 @@ import {
   resolveProductCategory,
 } from "~/server/repo/product-category";
 import { repointProductMatchCandidatesTx } from "~/server/repo/product-match-candidate";
+import { unitMappingSides } from "~/server/repo/product/unit-mappings";
 import { cascadeRemoval } from "~/server/repo/removal";
 
 import { validateLiveEffectiveTrades } from "../inheritance-validation";
@@ -89,18 +89,18 @@ import { markProductConversionCoverageInputStale } from "./conversion-coverage";
 import { ensureSlotPrimaries } from "./update-helpers";
 
 export const PRODUCT_MERGE_EDGE_POLICY = {
-  "RunTarget.productId": {
+  "RunTarget.entityId": {
     code: "repoint-targeted-import-history",
     effect: "repoint",
     description: "Targeted enrichment history follows the surviving Product.",
   },
-  "ProductExternalId.productId": {
+  "EntityExternalId.entityId": {
     code: "repoint-or-discard-conflicting-slot",
     effect: "move-dedupe",
     description:
       "A merged product's external ids move onto the survivor; one that would collide on a (source, kind) slot the survivor already fills is discarded and named in the audit trail.",
   },
-  "ProductUnitMappings.productId": {
+  "ProductUnitMapping.productId": {
     code: "repoint-or-discard-conflicting-conversion",
     effect: "move-dedupe",
     description:
@@ -112,7 +112,7 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     description:
       "A merged product's stock moves onto the survivor; entries in a location the survivor already stocks are summed into the survivor's entry and the absorbed one is soft-deleted.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "move-dedupe-shared-image",
     effect: "move-dedupe",
     description:
@@ -130,13 +130,13 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     description:
       "Work history whose subject was a merged product re-points onto the survivor.",
   },
-  "ProjectToolUsage.productId": {
+  "EntityLink[projectTool].to": {
     code: "repoint-or-drop-same-project",
     effect: "move-dedupe",
     description:
       "A merged product's project-use history moves onto the survivor, skipping projects the survivor is already recorded on.",
   },
-  "PurchaseProduct.productId": {
+  "EntityLink[purchaseProduct].to": {
     code: "repoint-or-drop-same-purchase",
     effect: "move-dedupe",
     description:
@@ -148,7 +148,7 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     description:
       "Recorded meal food entries move onto the surviving product while their gram amounts remain fixed.",
   },
-  "WishCandidate.productId": {
+  "EntityLink[wishCandidate].to": {
     code: "repoint-or-drop-same-wish",
     effect: "move-dedupe",
     description:
@@ -160,13 +160,13 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     description:
       "Locations that ARE a merged product re-point onto the survivor. A plain repoint, not a fold: many locations legitimately share one SKU (twelve bins can all be the same tote), so there is no slot to collide on.",
   },
-  "ProductComponent.parentProductId": {
+  "EntityLink[productComponent].from": {
     code: "repoint-or-dedupe-identical-component",
     effect: "move-dedupe",
     description:
       "A merged kit's own component list moves onto the survivor; a part both kits list at the SAME quantity is deduped, and one they list at different quantities refuses the merge rather than inventing or destroying units.",
   },
-  "ProductComponent.componentProductId": {
+  "EntityLink[productComponent].to": {
     code: "repoint-or-sum-same-kit",
     effect: "move-dedupe",
     description:
@@ -470,7 +470,7 @@ const sameRatio = (left: number | null, right: number | null): boolean =>
  * `previewMergeProducts` run one implementation — the same reason
  * `planInventoryFold` exists.
  *
- * Note there is NO unique index on `ProductUnitMappings`, so unlike every other
+ * Note there is NO unique index on `ProductUnitMapping`, so unlike every other
  * slotted edge here nothing in the database would have refused the duplicate:
  * before this fold a merge simply accumulated both edges, and the survivor
  * quietly held two contradictory answers for one conversion.
@@ -571,7 +571,7 @@ interface ComponentMergePlan {
 }
 
 /**
- * The whole `ProductComponent` consequence of a merge, computed without
+ * The whole `productComponent` consequence of a merge, computed without
  * writing, so `mergeProducts` and `previewMergeProducts` share one
  * implementation of the rules rather than two readings of them. Throws
  * nothing: both refusals come back as data (`cycle`, `kit.conflicts`) so the
@@ -631,15 +631,22 @@ export const planProductComponentMerge = (args: {
 const loadComponentRows = async (
   db: DrizzleClient | DrizzleTransaction,
 ): Promise<ComponentRow[]> =>
-  await db.query.productComponent.findMany({
-    where: notDeleted(productComponent),
-    columns: {
-      id: true,
-      parentProductId: true,
-      componentProductId: true,
-      quantity: true,
-    },
-  });
+  (
+    await db
+      .select({
+        id: entityLink.id,
+        parentProductId: entityLink.fromEntityId,
+        componentProductId: entityLink.toEntityId,
+        quantity: entityLink.quantity,
+      })
+      .from(entityLink)
+      .where(liveLinks("productComponent"))
+  ).map((row) => ({
+    id: row.id,
+    parentProductId: parseEntityId("product", row.parentProductId),
+    componentProductId: parseEntityId("product", row.componentProductId),
+    quantity: linkQuantity(row.quantity),
+  }));
 
 /** Render an id path as shortcodes — a uuid must never reach a client message. */
 const describeProductPath = async (
@@ -817,13 +824,15 @@ async function buildProductMergePlan(
         placement: true,
         ownershipMode: true,
         ownerLedgerPartyId: true,
-        amount: true,
+        amountValue: true,
+        amountUnit: true,
       },
     })
-  ).map((row): InventoryRow => ({
+  ).map(({ amountValue, amountUnit, ...row }): InventoryRow => ({
     ...row,
     id: parseEntityId("inventory", row.id),
     productId: parseEntityId("product", row.productId),
+    amount: { value: amountValue, unit: amountUnit },
   }));
   const componentRows = await loadComponentRows(db);
   const unitMappingRows = (
@@ -832,25 +841,35 @@ async function buildProductMergePlan(
         inArray(productUnitMappings.productId, ids),
         notDeleted(productUnitMappings),
       ),
-      columns: { id: true, productId: true, a: true, b: true, source: true },
+      columns: {
+        id: true,
+        productId: true,
+        aValue: true,
+        aUnit: true,
+        bValue: true,
+        bUnit: true,
+        source: true,
+      },
       orderBy: [
         asc(productUnitMappings.createdAt),
         asc(productUnitMappings.id),
       ],
     })
   ).map((row): UnitMappingRow => ({
-    ...row,
+    id: row.id,
     productId: parseEntityId("product", row.productId),
+    ...unitMappingSides(row),
+    source: row.source,
   }));
   const externalIdRows = (
-    await db.query.productExternalId.findMany({
+    await db.query.entityExternalId.findMany({
       where: and(
-        inArray(productExternalId.productId, ids),
-        notDeleted(productExternalId),
+        inArray(entityExternalId.entityId, ids),
+        notDeleted(entityExternalId),
       ),
       columns: {
         id: true,
-        productId: true,
+        entityId: true,
         source: true,
         kind: true,
         externalId: true,
@@ -858,25 +877,27 @@ async function buildProductMergePlan(
         isPrimary: true,
       },
       orderBy: [
-        desc(productExternalId.isPrimary),
-        asc(productExternalId.createdAt),
-        asc(productExternalId.id),
+        desc(entityExternalId.isPrimary),
+        asc(entityExternalId.createdAt),
+        asc(entityExternalId.id),
       ],
     })
-  ).map((row): ExternalIdRow => ({
+  ).map(({ entityId, ...row }): ExternalIdRow => ({
     ...row,
-    productId: parseEntityId("product", row.productId),
+    productId: parseEntityId("product", entityId),
     kind: externalIdKind.parse(row.kind),
+    // Product identifier kinds always have a primary slot (CHECKed).
+    isPrimary: row.isPrimary === true,
   }));
   const imageRows = (
     await db.query.entityAttachment.findMany({
       where: and(
-        inArray(entityAttachment.subjectEntityId, ids),
+        inArray(entityAttachment.entityId, ids),
         notDeleted(entityAttachment),
       ),
       columns: {
         id: true,
-        subjectEntityId: true,
+        entityId: true,
         imageId: true,
         purpose: true,
         sortOrder: true,
@@ -888,47 +909,41 @@ async function buildProductMergePlan(
         asc(entityAttachment.createdAt),
       ],
     })
-  ).map(({ subjectEntityId, ...row }): ProductImageAssociationRow => ({
+  ).map(({ entityId, ...row }): ProductImageAssociationRow => ({
     ...row,
-    productId: parseEntityId("product", subjectEntityId),
+    productId: parseEntityId("product", entityId),
     sha256: row.image.sha256,
   }));
-  const projectUseRows = (
-    await db.query.projectToolUsage.findMany({
-      where: and(
-        inArray(projectToolUsage.productId, ids),
-        notDeleted(projectToolUsage),
-      ),
-      columns: { id: true, productId: true, projectId: true },
-    })
-  ).map((row): ProjectUseAssociationRow => ({
-    ...row,
-    productId: parseEntityId("product", row.productId),
-  }));
-  const purchaseRows = (
-    await db.query.purchaseProduct.findMany({
-      where: and(
-        inArray(purchaseProduct.productId, ids),
-        notDeleted(purchaseProduct),
-      ),
-      columns: { id: true, productId: true, purchaseId: true },
-    })
-  ).map((row): PurchaseAssociationRow => ({
-    ...row,
-    productId: parseEntityId("product", row.productId),
-  }));
-  const wishRows = (
-    await db.query.wishCandidate.findMany({
-      where: and(
-        inArray(wishCandidate.productId, ids),
-        notDeleted(wishCandidate),
-      ),
-      columns: { id: true, productId: true, wishId: true },
-    })
-  ).map((row): WishAssociationRow => ({
-    ...row,
-    productId: parseEntityId("product", row.productId),
-  }));
+  const linkRowsOf = async (kind: EntityLinkKind) =>
+    await db
+      .select({
+        id: entityLink.id,
+        productId: entityLink.toEntityId,
+        ownerId: entityLink.fromEntityId,
+      })
+      .from(entityLink)
+      .where(and(inArray(entityLink.toEntityId, ids), liveLinks(kind)));
+  const projectUseRows = (await linkRowsOf("projectTool")).map(
+    (row): ProjectUseAssociationRow => ({
+      id: row.id,
+      productId: parseEntityId("product", row.productId),
+      projectId: parseEntityId("project", row.ownerId),
+    }),
+  );
+  const purchaseRows = (await linkRowsOf("purchaseProduct")).map(
+    (row): PurchaseAssociationRow => ({
+      id: row.id,
+      productId: parseEntityId("product", row.productId),
+      purchaseId: parseEntityId("purchase", row.ownerId),
+    }),
+  );
+  const wishRows = (await linkRowsOf("wishCandidate")).map(
+    (row): WishAssociationRow => ({
+      id: row.id,
+      productId: parseEntityId("product", row.productId),
+      wishId: parseEntityId("wish", row.ownerId),
+    }),
+  );
   const expenses = (
     await db
       .select({ id: expense.id, productId: expense.productId })
@@ -1235,11 +1250,11 @@ const foldProductExternalIds = async (
   const externalIdPlan = plan.externalIds.collision;
   if (externalIdPlan.repoint.length > 0) {
     await tx
-      .update(productExternalId)
-      .set({ productId: keepId })
+      .update(entityExternalId)
+      .set({ entityId: keepId })
       .where(
         inArray(
-          productExternalId.id,
+          entityExternalId.id,
           externalIdPlan.repoint.map((row) => row.id),
         ),
       );
@@ -1253,18 +1268,18 @@ const foldProductExternalIds = async (
       into.url ?? rows.find((row) => row.url != null)?.url ?? null;
     if (into.url == null && filledUrl != null) {
       await tx
-        .update(productExternalId)
+        .update(entityExternalId)
         .set({ url: filledUrl })
-        .where(eq(productExternalId.id, into.id));
+        .where(eq(entityExternalId.id, into.id));
     }
     // A slot holds one primary. Conflicting loser identities survive as
     // secondaries and are named in both the response and audit trail.
     await tx
-      .update(productExternalId)
-      .set({ productId: keepId, isPrimary: false })
+      .update(entityExternalId)
+      .set({ entityId: keepId, isPrimary: false })
       .where(
         inArray(
-          productExternalId.id,
+          entityExternalId.id,
           rows.map((row) => row.id),
         ),
       );
@@ -1396,7 +1411,7 @@ export const mergeProducts = async (
       const to = { ...into.amount, value: into.amount.value + absorbed };
       await tx
         .update(inventoryEntry)
-        .set({ amount: to })
+        .set(amountToColumns(to))
         .where(eq(inventoryEntry.id, into.id));
       const absorbedIds = rows.map((row) => row.id);
       await tx
@@ -1405,7 +1420,7 @@ export const mergeProducts = async (
         .where(inArray(inventoryEntry.id, absorbedIds));
       const entries: AuditEntryInput[] = [
         {
-          entityType: "inventory",
+          entityKind: "inventory",
           entityId: into.id,
           action: "update",
           changes: { amount: { from: into.amount, to } },
@@ -1451,8 +1466,8 @@ export const mergeProducts = async (
       table: entityAttachment,
       // A retry key was scoped to the loser; it must not become reusable
       // against the survivor (ADR 0006).
-      repointValues: (subjectEntityId) => ({
-        subjectEntityId,
+      repointValues: (entityId) => ({
+        entityId,
         idempotencyKey: null,
       }),
       softDeleteValues: (deletedAt) => ({ deletedAt }),
@@ -1466,7 +1481,7 @@ export const mergeProducts = async (
       const survivorFirst = new Set(survivorImagesBefore.map((row) => row.id));
       const afterFold = await tx.query.entityAttachment.findMany({
         where: and(
-          eq(entityAttachment.subjectEntityId, keepId),
+          eq(entityAttachment.entityId, keepId),
           notDeleted(entityAttachment),
         ),
         columns: { id: true },
@@ -1490,8 +1505,8 @@ export const mergeProducts = async (
     }
     summary.projectUsesMoved = await foldAssociation(tx, {
       column: "productId",
-      table: projectToolUsage,
-      repointValues: (productId) => ({ productId }),
+      table: entityLink,
+      repointValues: (productId) => ({ toEntityId: productId }),
       softDeleteValues: (deletedAt) => ({ deletedAt }),
       rows: plan.projectUses.rows,
       keepId,
@@ -1501,8 +1516,8 @@ export const mergeProducts = async (
     });
     summary.purchaseLinksMoved = await foldAssociation(tx, {
       column: "productId",
-      table: purchaseProduct,
-      repointValues: (productId) => ({ productId }),
+      table: entityLink,
+      repointValues: (productId) => ({ toEntityId: productId }),
       softDeleteValues: (deletedAt) => ({ deletedAt }),
       rows: plan.purchases.rows,
       keepId,
@@ -1512,8 +1527,8 @@ export const mergeProducts = async (
     });
     summary.wishCandidatesMoved = await foldAssociation(tx, {
       column: "productId",
-      table: wishCandidate,
-      repointValues: (productId) => ({ productId }),
+      table: entityLink,
+      repointValues: (productId) => ({ toEntityId: productId }),
       softDeleteValues: (deletedAt) => ({ deletedAt }),
       rows: plan.wishes.rows,
       keepId,
@@ -1527,11 +1542,11 @@ export const mergeProducts = async (
     // the total, so unlike a discarded external id there is no value to name.
     if (componentPlan.kit.repoint.length > 0) {
       await tx
-        .update(productComponent)
-        .set({ parentProductId: keepId })
+        .update(entityLink)
+        .set({ fromEntityId: keepId })
         .where(
           inArray(
-            productComponent.id,
+            entityLink.id,
             componentPlan.kit.repoint.map((row) => row.id),
           ),
         );
@@ -1539,11 +1554,11 @@ export const mergeProducts = async (
     }
     if (componentPlan.kit.dedupe.length > 0) {
       await tx
-        .update(productComponent)
+        .update(entityLink)
         .set({ deletedAt: now })
         .where(
           inArray(
-            productComponent.id,
+            entityLink.id,
             componentPlan.kit.dedupe.map((row) => row.id),
           ),
         );
@@ -1551,11 +1566,11 @@ export const mergeProducts = async (
     }
     if (componentPlan.part.repoint.length > 0) {
       await tx
-        .update(productComponent)
-        .set({ componentProductId: keepId })
+        .update(entityLink)
+        .set({ toEntityId: keepId })
         .where(
           inArray(
-            productComponent.id,
+            entityLink.id,
             componentPlan.part.repoint.map((row) => row.id),
           ),
         );
@@ -1567,15 +1582,15 @@ export const mergeProducts = async (
       // merge into the survivor, and per-row updates would each read the
       // unmutated `into.quantity` and overwrite rather than accumulate.
       await tx
-        .update(productComponent)
+        .update(entityLink)
         .set({ quantity: into.quantity + sumBy(rows, (row) => row.quantity) })
-        .where(eq(productComponent.id, into.id));
+        .where(eq(entityLink.id, into.id));
       await tx
-        .update(productComponent)
+        .update(entityLink)
         .set({ deletedAt: now })
         .where(
           inArray(
-            productComponent.id,
+            entityLink.id,
             rows.map((row) => row.id),
           ),
         );
@@ -1679,12 +1694,12 @@ export const mergeProducts = async (
       .returning({ id: expense.id });
     summary.expensesMoved = movedExpenses.length;
     // Preserve the keeper's target when both Products were inspected in the
-    // same run; re-pointing all rows at once would violate the partial unique
-    // `(runId, productId)` index.
+    // same run; re-pointing all rows at once would violate the unique
+    // `(runId, entityId)` index.
     const targetedRuns = await tx
       .select({ id: runTarget.id, runId: runTarget.runId })
       .from(runTarget)
-      .where(inArray(runTarget.productId, plan.loserIds));
+      .where(inArray(runTarget.entityId, plan.loserIds));
     for (const target of targetedRuns) {
       const [existing] = await tx
         .select({ id: runTarget.id })
@@ -1692,7 +1707,7 @@ export const mergeProducts = async (
         .where(
           and(
             eq(runTarget.runId, target.runId),
-            eq(runTarget.productId, keepId),
+            eq(runTarget.entityId, keepId),
           ),
         )
         .limit(1);
@@ -1705,7 +1720,7 @@ export const mergeProducts = async (
       } else {
         await tx
           .update(runTarget)
-          .set({ productId: keepId, updatedAt: new Date() })
+          .set({ entityId: keepId, updatedAt: new Date() })
           .where(eq(runTarget.id, target.id));
       }
     }
@@ -1713,7 +1728,7 @@ export const mergeProducts = async (
       tx,
       actor,
       movedExpenses.map(({ id }) => ({
-        entityType: "expense" as const,
+        entityKind: "expense" as const,
         entityId: id,
         action: "update" as const,
         changes: { productId: { from: null, to: keepId } },
@@ -1769,10 +1784,6 @@ export const mergeProducts = async (
     summary.merged = removed;
     await validateLiveEffectiveTrades(tx);
 
-    // Every moved entry now values at the KEEPER's effective price; without
-    // this a re-pointed row keeps a valuation derived from a product that no
-    // longer exists, and the location rollup silently reports the old number.
-    await syncInventoryValuationsForProduct(tx, keepId);
     // Moved mappings, adopted food identity and kit composition all change the
     // survivor's effective conversion graph. Absorbed rows are no longer live;
     // the survivor must wait for the shared rebuild before it can match a
@@ -1902,7 +1913,7 @@ const previewMergeProductsFromPlan = async (
         description:
           "Different ISBNs identify different physical editions or formats. Correct or remove an ISBN before merging these Products.",
       },
-      edgeKey: "ProductExternalId.productId",
+      edgeKey: "EntityExternalId.entityId",
       label:
         isbns.length > 1
           ? `distinct ISBN editions (${isbns.join(", ")})`
@@ -1925,7 +1936,7 @@ const previewMergeProductsFromPlan = async (
         description:
           "A product cannot be its own component, at any depth. Merging these would close a loop in the kit graph; detach the kit link first.",
       },
-      edgeKey: "ProductComponent.parentProductId",
+      edgeKey: "EntityLink[productComponent].from",
       label: cycleLabel ?? "kit graph cycles",
       byTargetId: cycleLabel
         ? Object.fromEntries(losers.map((id) => [id, 1]))
@@ -1938,7 +1949,7 @@ const previewMergeProductsFromPlan = async (
         description:
           "Both kits list the same component but disagree on how many, and only one row can survive the (parentProductId, componentProductId) index. Correct one list first.",
       },
-      edgeKey: "ProductComponent.parentProductId",
+      edgeKey: "EntityLink[productComponent].from",
       label: "components listed at conflicting quantities",
       byTargetId: byProduct(
         componentPlan.kit.conflicts.flatMap(({ rows }) =>
@@ -1964,7 +1975,7 @@ const previewMergeProductsFromPlan = async (
         description:
           "Project resource usage requires a category that allows project resources (Tools, Tool accessories, Software). The merged survivor would no longer be eligible.",
       },
-      edgeKey: "ProjectToolUsage.productId",
+      edgeKey: "EntityLink[projectTool].to",
       label: "project uses that require an eligible category",
       byTargetId:
         categoryAdmission.hasProjectUses &&
@@ -2060,8 +2071,8 @@ const previewMergeProductsFromPlan = async (
       byTargetId: byProduct(inventoryPlan.absorb.flatMap(({ rows }) => rows)),
     }),
     impact({
-      disposition: PRODUCT_MERGE_EDGE_POLICY["ProductExternalId.productId"],
-      edgeKey: "ProductExternalId.productId",
+      disposition: PRODUCT_MERGE_EDGE_POLICY["EntityExternalId.entityId"],
+      edgeKey: "EntityExternalId.entityId",
       label: "external ids moved",
       byTargetId: byProduct(plan.externalIds.collision.repoint),
     }),
@@ -2072,7 +2083,7 @@ const previewMergeProductsFromPlan = async (
         description:
           "The survivor already fills this source and kind slot. The merged identifier is retained as a secondary while the survivor's identifier stays primary.",
       },
-      edgeKey: "ProductExternalId.productId",
+      edgeKey: "EntityExternalId.entityId",
       label: "conflicting external ids kept as secondary",
       byTargetId: byProduct(
         plan.externalIds.collision.absorb.flatMap(({ rows }) => rows),
@@ -2085,8 +2096,8 @@ const previewMergeProductsFromPlan = async (
       byTargetId: byProduct(plan.expenses),
     }),
     impact({
-      disposition: PRODUCT_MERGE_EDGE_POLICY["ProductUnitMappings.productId"],
-      edgeKey: "ProductUnitMappings.productId",
+      disposition: PRODUCT_MERGE_EDGE_POLICY["ProductUnitMapping.productId"],
+      edgeKey: "ProductUnitMapping.productId",
       label: "unit mappings re-pointed",
       byTargetId: byProduct(unitMappingPlan.repoint),
     }),
@@ -2097,7 +2108,7 @@ const previewMergeProductsFromPlan = async (
         description:
           "A conversion the survivor already states at the same ratio is dropped as a true duplicate.",
       },
-      edgeKey: "ProductUnitMappings.productId",
+      edgeKey: "ProductUnitMapping.productId",
       label: "duplicate unit mappings dropped",
       byTargetId: byProduct(
         unitMappingPlan.absorbed
@@ -2116,7 +2127,7 @@ const previewMergeProductsFromPlan = async (
         description:
           "The survivor already answers this unit pair with a DIFFERENT ratio. Its edge stands; the merged product's is dropped and named in the audit trail.",
       },
-      edgeKey: "ProductUnitMappings.productId",
+      edgeKey: "ProductUnitMapping.productId",
       label: "conflicting unit mappings discarded (survivor's ratio wins)",
       byTargetId: byProduct(
         unitMappingPlan.absorbed
@@ -2125,9 +2136,8 @@ const previewMergeProductsFromPlan = async (
       ),
     }),
     impact({
-      disposition:
-        PRODUCT_MERGE_EDGE_POLICY["EntityAttachment.subjectEntityId"],
-      edgeKey: "EntityAttachment.subjectEntityId",
+      disposition: PRODUCT_MERGE_EDGE_POLICY["EntityAttachment.entityId"],
+      edgeKey: "EntityAttachment.entityId",
       label: "image associations moved",
       byTargetId: byProduct(plan.images.collision.repoint),
     }),
@@ -2138,7 +2148,7 @@ const previewMergeProductsFromPlan = async (
         description:
           "The survivor already has this image, so the duplicate association is soft-deleted and the survivor's existing image order wins.",
       },
-      edgeKey: "EntityAttachment.subjectEntityId",
+      edgeKey: "EntityAttachment.entityId",
       label: "duplicate image associations dropped",
       byTargetId: byProduct(
         plan.images.collision.absorb.flatMap(({ rows }) => rows),
@@ -2151,8 +2161,8 @@ const previewMergeProductsFromPlan = async (
       byTargetId: byProduct(plan.tasks),
     }),
     impact({
-      disposition: PRODUCT_MERGE_EDGE_POLICY["ProjectToolUsage.productId"],
-      edgeKey: "ProjectToolUsage.productId",
+      disposition: PRODUCT_MERGE_EDGE_POLICY["EntityLink[projectTool].to"],
+      edgeKey: "EntityLink[projectTool].to",
       label: "project uses moved",
       byTargetId: byProduct(plan.projectUses.collision.repoint),
     }),
@@ -2163,15 +2173,15 @@ const previewMergeProductsFromPlan = async (
         description:
           "The project already lists the survivor, so the duplicate Product use is soft-deleted.",
       },
-      edgeKey: "ProjectToolUsage.productId",
+      edgeKey: "EntityLink[projectTool].to",
       label: "duplicate project uses dropped",
       byTargetId: byProduct(
         plan.projectUses.collision.absorb.flatMap(({ rows }) => rows),
       ),
     }),
     impact({
-      disposition: PRODUCT_MERGE_EDGE_POLICY["PurchaseProduct.productId"],
-      edgeKey: "PurchaseProduct.productId",
+      disposition: PRODUCT_MERGE_EDGE_POLICY["EntityLink[purchaseProduct].to"],
+      edgeKey: "EntityLink[purchaseProduct].to",
       label: "purchase links moved",
       byTargetId: byProduct(plan.purchases.collision.repoint),
     }),
@@ -2182,15 +2192,15 @@ const previewMergeProductsFromPlan = async (
         description:
           "The Purchase already links the survivor, so the duplicate Product link is soft-deleted.",
       },
-      edgeKey: "PurchaseProduct.productId",
+      edgeKey: "EntityLink[purchaseProduct].to",
       label: "duplicate purchase links dropped",
       byTargetId: byProduct(
         plan.purchases.collision.absorb.flatMap(({ rows }) => rows),
       ),
     }),
     impact({
-      disposition: PRODUCT_MERGE_EDGE_POLICY["WishCandidate.productId"],
-      edgeKey: "WishCandidate.productId",
+      disposition: PRODUCT_MERGE_EDGE_POLICY["EntityLink[wishCandidate].to"],
+      edgeKey: "EntityLink[wishCandidate].to",
       label: "wishlist candidacies moved",
       byTargetId: byProduct(plan.wishes.collision.repoint),
     }),
@@ -2201,7 +2211,7 @@ const previewMergeProductsFromPlan = async (
         description:
           "The Wish already names the survivor as a candidate, so the duplicate candidacy is soft-deleted.",
       },
-      edgeKey: "WishCandidate.productId",
+      edgeKey: "EntityLink[wishCandidate].to",
       label: "duplicate wishlist candidacies dropped",
       byTargetId: byProduct(
         plan.wishes.collision.absorb.flatMap(({ rows }) => rows),
@@ -2209,8 +2219,8 @@ const previewMergeProductsFromPlan = async (
     }),
     impact({
       disposition:
-        PRODUCT_MERGE_EDGE_POLICY["ProductComponent.parentProductId"],
-      edgeKey: "ProductComponent.parentProductId",
+        PRODUCT_MERGE_EDGE_POLICY["EntityLink[productComponent].from"],
+      edgeKey: "EntityLink[productComponent].from",
       label: "kit component rows moved",
       byTargetId: byProduct(
         componentPlan.kit.repoint.map((row) => ({
@@ -2225,7 +2235,7 @@ const previewMergeProductsFromPlan = async (
         description:
           "The survivor already lists this component at the same quantity, so the duplicate row is soft-deleted rather than moved.",
       },
-      edgeKey: "ProductComponent.parentProductId",
+      edgeKey: "EntityLink[productComponent].from",
       label: "duplicate component rows deduped",
       byTargetId: byProduct(
         componentPlan.kit.dedupe.map((row) => ({
@@ -2234,9 +2244,8 @@ const previewMergeProductsFromPlan = async (
       ),
     }),
     impact({
-      disposition:
-        PRODUCT_MERGE_EDGE_POLICY["ProductComponent.componentProductId"],
-      edgeKey: "ProductComponent.componentProductId",
+      disposition: PRODUCT_MERGE_EDGE_POLICY["EntityLink[productComponent].to"],
+      edgeKey: "EntityLink[productComponent].to",
       label: "kit memberships moved",
       byTargetId: byProduct(
         componentPlan.part.repoint.map((row) => ({
@@ -2251,7 +2260,7 @@ const previewMergeProductsFromPlan = async (
         description:
           "One kit listed two of the merged products, so their quantities are summed into the survivor's row and the absorbed row is soft-deleted.",
       },
-      edgeKey: "ProductComponent.componentProductId",
+      edgeKey: "EntityLink[productComponent].to",
       label: "kit quantities summed into the survivor",
       byTargetId: byProduct(
         componentPlan.part.absorb.flatMap(({ rows }) =>

@@ -12,6 +12,11 @@ import {
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
 import { sha256Hex } from "~/server/semantic/hash";
 
+import {
+  orderMailAttachmentKey,
+  productionOrderMailAttachmentStorage,
+  type OrderMailAttachmentStorage,
+} from "./attachment-storage";
 import type {
   GmailAccountTokenPatch,
   GmailAccountTokenRecord,
@@ -144,8 +149,10 @@ export const persistGmailSyncResult = async (
     polledAt?: Date;
     advanceCursor?: boolean;
     result: GmailSyncResult;
+    storage?: OrderMailAttachmentStorage;
   },
 ): Promise<GmailSyncPersistenceResult> => {
+  const storage = input.storage ?? productionOrderMailAttachmentStorage;
   const ledgerPartyId = parseEntityId("ledgerParty", input.ledgerPartyId);
   const provider = input.provider ?? "gmail";
   const polledAt = input.polledAt ?? new Date();
@@ -210,15 +217,15 @@ export const persistGmailSyncResult = async (
           `Gmail attachment references unknown message ${attachment.messageId}`,
         );
       }
-      await tx
+      const checksum = await attachmentChecksum(attachment);
+      const [row] = await tx
         .insert(orderMailAttachment)
         .values({
           orderMailId,
           providerAttachmentId: attachmentProviderId(attachment),
           filename: attachment.filename,
           mimeType: attachment.mimeType,
-          checksum: await attachmentChecksum(attachment),
-          pendingDataBase64Url: attachment.dataBase64Url ?? null,
+          checksum,
         })
         .onConflictDoUpdate({
           target: [
@@ -228,11 +235,33 @@ export const persistGmailSyncResult = async (
           set: {
             filename: attachment.filename,
             mimeType: attachment.mimeType,
-            checksum: await attachmentChecksum(attachment),
-            pendingDataBase64Url: attachment.dataBase64Url ?? null,
+            checksum,
             updatedAt: new Date(),
           },
+        })
+        .returning({
+          id: orderMailAttachment.id,
+          imageId: orderMailAttachment.imageId,
         });
+      if (!row) throw new GmailPersistenceError("Attachment upsert had no id");
+      // Bytes are only pending until a Purchase attaches them (`imageId`), and
+      // a sync without data must not erase bytes an earlier sync stored.
+      if (!attachment.dataBase64Url || row.imageId) continue;
+      // The key embeds the row id, known only after the upsert, so the upload
+      // follows it. It stays inside this transaction: a failed upload rolls
+      // back the message, the attachment and the cursor, and the sync replays
+      // while Gmail still has the bytes. An object left behind by a rollback
+      // is an unreferenced orphan under a row id that never committed.
+      const key = orderMailAttachmentKey(row.id);
+      await storage.put(
+        key,
+        Buffer.from(attachment.dataBase64Url, "base64"),
+        attachment.mimeType,
+      );
+      await tx
+        .update(orderMailAttachment)
+        .set({ pendingObjectKey: key })
+        .where(eq(orderMailAttachment.id, row.id));
     }
 
     if (input.advanceCursor !== false) {

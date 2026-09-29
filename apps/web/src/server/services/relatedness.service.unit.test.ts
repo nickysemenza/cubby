@@ -24,7 +24,7 @@ const dependencyOnlyDatabase = new Database(() => {
 const searchHit = (id: string, title: string) =>
   searchHitSchema.parse({
     id,
-    entityType: "product",
+    entityKind: "product",
     title,
     subtitle: null,
     typeHint: null,
@@ -41,7 +41,7 @@ function dependenciesFor(
   const dependencies: RelatednessDependencies = {
     resolveSourceId: async () => testEntityId("product", "source"),
     findSimilarEntities: async () => ({
-      source: { entityType: "product", entityId: sourceId },
+      source: { entityKind: "product", entityId: sourceId },
       status: "ready",
       results: [],
     }),
@@ -57,7 +57,7 @@ describe("getProductRelatedness", () => {
   it("suppresses dismissed candidates while retaining flat merged evidence", async () => {
     const dependencies = dependenciesFor({
       findSimilarEntities: async (): Promise<SimilarEntitiesOut> => ({
-        source: { entityType: "product", entityId: sourceId },
+        source: { entityKind: "product", entityId: sourceId },
         status: "ready",
         results: [
           {
@@ -92,7 +92,7 @@ describe("getProductTagPropagation", () => {
   it("proposes only non-collection tags with three semantic-neighbour votes", async () => {
     const dependencies = dependenciesFor({
       findSimilarEntities: async (): Promise<SimilarEntitiesOut> => ({
-        source: { entityType: "product", entityId: sourceId },
+        source: { entityKind: "product", entityId: sourceId },
         status: "ready",
         results: [
           { entity: searchHit(oneId, "One"), similarity: 0.9 },

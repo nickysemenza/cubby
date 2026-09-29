@@ -341,7 +341,7 @@ export const viewManifest = defineViewManifest({
       // decomposed kit is not "stocked nowhere", it is stocked as its
       // components. The parts are also the ACTIONABLE rows: an unstocked
       // component carries its own projected `expectedQuantity` (the kit's units
-      // reach it through `ProductComponent`) and matches this view by itself, so
+      // reach it through `productComponent`) and matches this view by itself, so
       // admitting the parent too reports one gap twice and less precisely.
       // Verified on production: all 25 kit parents leave, and every genuinely
       // unaccounted component stays.
@@ -797,7 +797,7 @@ export const viewManifest = defineViewManifest({
       label: "No instructions",
       description: "Recipes with no written instructions",
       // The source exclusion is spelled as a POSITIVE list plus the `(none)`
-      // sentinel, not as a negation: `SourceType` is nullable, a NULL is a
+      // sentinel, not as a negation: `sourceType` is nullable, a NULL is a
       // legacy hand-entered recipe that must stay visible, and `!= 'Book'`
       // would evaluate UNKNOWN against it and drop it. Book and Notion recipes
       // live elsewhere by design — the text isn't supposed to be here.
@@ -860,7 +860,8 @@ export const viewManifest = defineViewManifest({
     {
       id: "imports",
       label: "Imports",
-      description: "Account syncs, validations, enrichments and photo batches",
+      description:
+        "Account syncs, validations, enrichments, photo batches and Gmail searches",
       filters: [
         {
           id: "purpose",
@@ -869,6 +870,7 @@ export const viewManifest = defineViewManifest({
             "purchase_validation",
             "product_enrichment",
             "photo_inventory",
+            "mail_search",
           ],
         },
       ],
@@ -876,10 +878,9 @@ export const viewManifest = defineViewManifest({
     {
       id: "ai-work",
       label: "AI work",
-      description: "Jev suggestion passes, AI actions and background AI work",
-      filters: [
-        { id: "purpose", value: ["ai_suggest", "ai_action", "background"] },
-      ],
+      description:
+        "Jev suggestion passes, hourly AI groups and background AI work",
+      filters: [{ id: "purpose", value: ["ai_suggest", "background"] }],
     },
   ],
   wish: [

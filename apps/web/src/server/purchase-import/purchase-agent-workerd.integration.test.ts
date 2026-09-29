@@ -17,7 +17,6 @@ import {
   image,
   runFinding,
   run as runTable,
-  runMutation,
   runOperation,
   runProgress,
   runTarget,
@@ -135,20 +134,16 @@ async function protectedBusinessSnapshot(
     database
       .select()
       .from(entityAttachment)
-      .where(eq(entityAttachment.subjectEntityId, input.purchaseId)),
+      .where(eq(entityAttachment.entityId, input.purchaseId)),
     database
       .select()
       .from(entityAttachment)
-      .where(eq(entityAttachment.subjectEntityId, input.productId)),
+      .where(eq(entityAttachment.entityId, input.productId)),
     database.select().from(importSourceClaim),
     database.select().from(purchasePaymentEvidence),
     database.select().from(financialTransaction),
     database.select().from(financialTransactionAllocation),
     database.select().from(auditLog),
-    database
-      .select()
-      .from(runMutation)
-      .where(eq(runMutation.runId, input.runId)),
   ]);
   return JSON.stringify(values);
 }
@@ -178,7 +173,8 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
       .insert(runTarget)
       .values({
         runId: runEntityId.parse(run.id),
-        imageId: parseEntityId("image", imageFixture.id),
+        entityKind: "image",
+        entityId: parseEntityId("image", imageFixture.id),
         position: 0,
         state: "pending",
         targetFingerprint: `synthetic-${crypto.randomUUID()}`,

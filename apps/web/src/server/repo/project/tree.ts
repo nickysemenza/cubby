@@ -44,6 +44,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 
 import { projectDependencyIds } from "./analytics";
+import { withProjectExternalUrls } from "./external-links";
 import { hydrateProjectRow } from "./helpers";
 import { buildProjectListQuery, projectListSums } from "./lookup";
 import { collectDescendantIds, loadProjectSubtreeRollups } from "./subtree";
@@ -147,9 +148,18 @@ export const projectTreePage = async (
   ]);
 
   return {
-    data: await withDisplayImages(db, "project", rows, (row) =>
-      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-      hydrateProjectRow(row, projectContext, deps, dataQualities.get(row.id)!),
+    data: await withDisplayImages(
+      db,
+      "project",
+      await withProjectExternalUrls(db, rows),
+      (row) =>
+        // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+        hydrateProjectRow(
+          row,
+          projectContext,
+          deps,
+          dataQualities.get(row.id)!,
+        ),
     ),
     count: roots.length,
     sums,

@@ -27,7 +27,7 @@ import {
 import { EntityWorkbenchInspector } from "../entity-workbench-inspector";
 
 export interface PreviewState {
-  entityType: Entity;
+  entityKind: Entity;
   id: string;
   rowKey: string;
 }
@@ -95,7 +95,7 @@ export interface EntityPreviewRowData {
   id?: string | number | null;
   previewId?: string | number | null;
   fdc_id?: string | number | null;
-  entityType?: Entity | null;
+  entityKind?: Entity | null;
 }
 
 export interface UseEntityPreviewOptions {
@@ -105,8 +105,8 @@ export interface UseEntityPreviewOptions {
    * Opt into the workbench presentation: dock at desktop, Sheet at tablet,
    * and canonical navigation-only cards at mobile widths.
    *
-   * Legacy callers that only render PreviewSheet stay Sheet-only at every
-   * viewport so selecting a row never becomes invisible.
+   * Callers that only render PreviewSheet (the search page) stay Sheet-only at
+   * every viewport so selecting a row never becomes invisible.
    */
   responsiveInspector?: boolean;
   /**
@@ -150,7 +150,7 @@ function PreviewSheetView({
         {preview && (
           <>
             <SheetTitle className="sr-only">
-              {entityLabel(preview.entityType)} {preview.id} preview
+              {entityLabel(preview.entityKind)} {preview.id} preview
             </SheetTitle>
             {inspector}
           </>
@@ -166,7 +166,7 @@ function renderDefaultInspector({
 }: EntityPreviewRendererProps) {
   return (
     <EntityWorkbenchInspector
-      entity={preview.entityType}
+      entity={preview.entityKind}
       id={preview.id}
       onClose={onClose}
     />
@@ -240,17 +240,17 @@ export function useEntityPreview(
     [stopIntent],
   );
 
-  // Resolve { entityType, id } from a row the same way for click + hover.
-  // Note: entityType is handled separately to avoid conflicts with data that
-  // has its own entityType field (search results carry a per-row entityType).
+  // Resolve { entityKind, id } from a row the same way for click + hover.
+  // Note: entityKind is handled separately to avoid conflicts with data that
+  // has its own entityKind field (search results carry a per-row entityKind).
   const resolveRow = useCallback(
     <T extends EntityPreviewRowData>(row: {
       id?: string;
       original: T;
     }): PreviewState | null => {
       const rowData = row.original;
-      const entityType = fixedEntity ?? rowData.entityType;
-      if (!entityType) return null;
+      const entityKind = fixedEntity ?? rowData.entityKind;
+      if (!entityKind) return null;
       const targetId =
         idField === "previewId"
           ? rowData.previewId
@@ -260,7 +260,7 @@ export function useEntityPreview(
       if (targetId === undefined || targetId === null) return null;
       const id = String(targetId);
       const rowKey = String(row.id ?? rowData.id ?? id);
-      return { entityType, id, rowKey };
+      return { entityKind, id, rowKey };
     },
     [fixedEntity, idField],
   );
@@ -275,10 +275,10 @@ export function useEntityPreview(
         console.warn("useEntityPreview: could not resolve entity/id from row");
         return;
       }
-      if (!isBrowserRoutedEntity(resolved.entityType)) return;
+      if (!isBrowserRoutedEntity(resolved.entityKind)) return;
       const intent = intentRef.current;
       if (
-        intent?.preview.entityType === resolved.entityType &&
+        intent?.preview.entityKind === resolved.entityKind &&
         intent.preview.id === resolved.id
       ) {
         stopIntent(intent, false);
@@ -299,7 +299,7 @@ export function useEntityPreview(
   const inspectRow = useCallback(
     <T extends EntityPreviewRowData>(row: { id?: string; original: T }) => {
       const resolved = resolveRow(row);
-      if (!resolved || !isBrowserRoutedEntity(resolved.entityType)) return;
+      if (!resolved || !isBrowserRoutedEntity(resolved.entityKind)) return;
 
       if (
         responsiveInspector &&
@@ -307,7 +307,7 @@ export function useEntityPreview(
         mobileBehavior === "navigate"
       ) {
         void browserOperations.navigateToDetail(
-          resolved.entityType,
+          resolved.entityKind,
           resolved.id,
         );
         return;
@@ -328,13 +328,13 @@ export function useEntityPreview(
   const onRowHover = useCallback(
     <T extends EntityPreviewRowData>(row: { id?: string; original: T }) => {
       const resolved = resolveRow(row);
-      if (!resolved || !isBrowserRoutedEntity(resolved.entityType)) {
+      if (!resolved || !isBrowserRoutedEntity(resolved.entityKind)) {
         return;
       }
 
       const previous = intentRef.current;
       if (
-        previous?.preview.entityType === resolved.entityType &&
+        previous?.preview.entityKind === resolved.entityKind &&
         previous.preview.id === resolved.id
       ) {
         return;
@@ -342,7 +342,7 @@ export function useEntityPreview(
       if (previous) stopIntent(previous, true);
 
       const queryOptions = entityPreviewQueryOptions(
-        resolved.entityType,
+        resolved.entityKind,
         resolved.id,
       );
       const intent: PreviewIntent = {
@@ -354,7 +354,7 @@ export function useEntityPreview(
       intent.timer = setTimeout(() => {
         intent.timer = null;
         intent.started = true;
-        void browserOperations.prefetchDetail(resolved.entityType, resolved.id);
+        void browserOperations.prefetchDetail(resolved.entityKind, resolved.id);
       }, PREVIEW_INTENT_DELAY_MS);
       intentRef.current = intent;
     },
@@ -368,7 +368,7 @@ export function useEntityPreview(
       if (
         !resolved ||
         !intent ||
-        intent.preview.entityType !== resolved.entityType ||
+        intent.preview.entityKind !== resolved.entityKind ||
         intent.preview.id !== resolved.id
       ) {
         return;

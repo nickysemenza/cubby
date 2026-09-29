@@ -16,7 +16,7 @@ one record. Identical copies of the same exact variant are one Product with
 an inventory quantity, never duplicate Products.
 
 Match before create. Search existing Products (name, aliases, external ids,
-`resolve_products`, `find_similar_entities`) before writing a new one — a
+`entity_read.resolve`, `search.similar`) before writing a new one — a
 duplicate costs a merge later, a missed match costs nothing now.
 
 ## Either side first
@@ -36,7 +36,7 @@ identifier is the proof.
 
 Purchase prep only reports `exactIdentifierMatch` for identifiers stored as
 external ids, never for text in `notes`. When a photo shows a legible barcode,
-record it with `patch_products_external_ids` (`source: "gtin"`,
+record it with `product_enrichment.patch_external_ids` (`source: "gtin"`,
 `kind: "gtin_14"`); prep matches a numeric order-line SKU against it. A style
 number printed on a brand's own tag may also be stored as `retailer_sku`
 under that brand's vendor source slug when the brand sells direct. Otherwise
@@ -45,7 +45,7 @@ it stays in `notes`, and the purchase agent compares it by hand.
 **Descriptive-only match** — the photo Product has no identifier (a cut tag,
 an unreadable label): purchase-import does not claim it directly. Create the
 purchase's own vendor Product (vendor name plus catalog image), then record
-the candidate pair with `propose_product_match`
+the candidate pair with `product_enrichment.propose_match`
 (`{productIds: [photoProductId, vendorProductId], evidence, sourceUrls?}`)
 for a human to review side by side in the web recommendations workbench.
 The purchase import does not claim a descriptive-only match directly, and a
@@ -54,8 +54,8 @@ later merge requires human confirmation.
 **Purchase first, photos later** — when photo-inventory-import runs after a
 purchase already exists, check for the existing purchase Product before
 creating: exact identifiers first, then the vendor's purchased Products
-(`list_entity_relation` on the purchase's `products`, `resolve_products`,
-`find_similar_entities`) for a descriptive candidate. Purchase-created
+(`entity_read.relations` on the purchase's `products`, `entity_read.resolve`,
+`search.similar`) for a descriptive candidate. Purchase-created
 Products usually have no category and an empty manufacturer until enriched, so
 never filter candidates by either.
 Prioritize the exact variant with no own-item photo and no earlier photo-import
@@ -66,16 +66,16 @@ When brand, garment features, and variant evidence strongly favor one Product,
 propose `existingId` in the photo group with the evidence and uncertainty.
 The human approves that attachment. If two color or size variants remain
 plausible, leave the choice for review. Create a separate photo Product only
-when no existing variant fits; then use `propose_product_match` if later
+when no existing variant fits; then use `product_enrichment.propose_match` if later
 evidence connects two already-created Products.
 
 A server detector also surfaces candidate pairs automatically from both
-sides. Agents call `propose_product_match` themselves when they hold evidence
+sides. Agents call `product_enrichment.propose_match` themselves when they hold evidence
 the detector lacks — a vendor product page confirmed to match the photo, a
 label transcription, an exact identifier the detector hasn't indexed.
 
 **Merge.** When a human confirms a proposed pair, or an agent finds a
-same-item pair a matching pass missed, resolve with `entity merge product`:
+same-item pair a matching pass missed, resolve with `entity.merge product`:
 the vendor/purchase Product is always `keepId` — it carries the stronger
 identity evidence (a paid, itemized order) plus whatever the photo
 contributed. The photo Product's descriptive name folds into `aliases`, and
@@ -96,7 +96,7 @@ than one source of imagery exists on the same Product; set it only when a
 second source (typically the catalog image, or a merge) is added after the
 first, not on every write — a Product with only its own photo needs no
 reordering. The match card's merge applies this order automatically; a
-direct `entity merge product` keeps the survivor's order, so set `imageOrder`
+direct `entity.merge product` keeps the survivor's order, so set `imageOrder`
 afterwards. Any Product may carry a manual override instead; a later explicit
 reorder is authoritative and a subsequent automatic write must not fight it.
 
@@ -108,7 +108,7 @@ photos are always `source: own`.
 `dataGap: product_unpurchased` (the `product` entity's data-quality check)
 lists stocked Products with no Purchase or acquiring Expense — inventoried
 through a photo import but never matched to a purchase line. Use it as the
-purchase-import candidate pool (`entity list product { filters: { dataGap:
+purchase-import candidate pool (`entity_read.list product { filters: { dataGap:
 "product_unpurchased" } }`, ranked by category/owner) before creating a new
 Product for an order line, and as the photo-inventory-import worklist for
 Products still missing their purchase-side identity.

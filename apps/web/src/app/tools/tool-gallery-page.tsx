@@ -49,9 +49,8 @@ import { NativeSelect } from "~/components/ui/native-select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/spinner";
 import { useHydrated } from "~/hooks/useHydrated";
+import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn, formatCurrency } from "~/lib/utils";
-
-import { project } from "../projects/project.functions";
 
 const PAGE_SIZE = 60;
 const DIRECT_GROUP_JUMP_LIMIT = 10;

@@ -82,7 +82,7 @@ export const EMPTY_PROJECT_OWN_ROLLUP: ProjectOwnRollup = {
   spent: 0,
   actualSpent: 0,
   committedSpent: 0,
-  contributions: 0,
+  credits: 0,
   expenseCount: 0,
   taskCount: 0,
   doneTaskCount: 0,
@@ -136,7 +136,7 @@ export const EMPTY_PROJECT_SUBTREE_ROLLUP: ProjectSubtreeRollup = {
   spent: 0,
   actualSpent: 0,
   committedSpent: 0,
-  contributions: 0,
+  credits: 0,
   expenseCount: 0,
   taskCount: 0,
   doneTaskCount: 0,
@@ -182,7 +182,7 @@ const dbProjectToAPI = ({
   const reference = (shortcode: string | null) =>
     shortcode
       ? {
-          entityType: "project" as const,
+          entityKind: "project" as const,
           entityId: shortcode,
           name:
             allRows.find((item) => item.shortcode === shortcode)?.name ?? null,

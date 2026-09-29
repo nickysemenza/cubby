@@ -2,6 +2,7 @@ import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import {
   Table,
@@ -11,9 +12,9 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
-import { usdaFood as usdaFoodOperations } from "~/entities/usda.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import { useHydrated } from "~/hooks/useHydrated";
+import { usdaFood as usdaFoodOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import {
   BASE_KINDS,
   type BaseKind,
@@ -21,7 +22,6 @@ import {
 } from "~/lib/conversion-coverage";
 import { wasm } from "~/lib/wasm";
 
-import { EntityInlineLink } from "../EntityInlineLink";
 import { KindIcon } from "./kind-icon";
 
 // The base measurement kind a unit belongs to, or null for nutrient:* / other:*
@@ -72,7 +72,7 @@ const LazyFoodPillLink: React.FC<{ fdcId: number }> = ({ fdcId }) => {
   };
 
   return (
-    <EntityInlineLink
+    <EntityRefLink
       displayImage={null}
       entity="usda-food"
       data={displayFood}
@@ -110,7 +110,7 @@ const LazyProductPillLink: React.FC<{ productId: string }> = ({
   }
 
   return (
-    <EntityInlineLink
+    <EntityRefLink
       displayImage={product.displayImages[0] ?? null}
       entity="product"
       data={product}

@@ -28,7 +28,6 @@ import {
   type CubbyColumnCollection,
 } from "~/app/_components/data-table/table-features";
 import type { GroupConfig } from "~/app/_components/data-table/useGroupedList";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useTagOptions } from "~/app/_components/hooks/useEntityOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
@@ -47,7 +46,7 @@ import {
   productTreeRowKey,
   productTreeSubRows,
 } from "~/app/products/product-kit-rows";
-import { product as productOperations } from "~/app/products/product.functions";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ProductGtin } from "~/components/entity/product-gtin";
 import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
@@ -65,7 +64,10 @@ import {
   labeledFieldProvenance,
   relationshipFieldProvenance,
 } from "~/entities/field-provenance";
-import { relatedData } from "~/lib/related-data.functions";
+import {
+  product as productOperations,
+  relatedData,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
@@ -157,12 +159,7 @@ function ExpectedQuantityCell({
 function ProductFoodCell({ product }: { product: ProductListItem }) {
   const food = product.food;
   return food ? (
-    <EntityInlineLink
-      displayImage={null}
-      entity="usda-food"
-      data={food}
-      compact
-    />
+    <EntityRefLink displayImage={null} entity="usda-food" data={food} compact />
   ) : (
     <NoneValue />
   );

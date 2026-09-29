@@ -16,7 +16,6 @@ import { and, eq, inArray, max } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import { match } from "ts-pattern";
 
-import { computeInventoryValuation } from "~/lib/price-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -27,6 +26,7 @@ import {
 } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
+  amountToColumns,
   getDb,
   notDeleted,
   parseInventoryAmount,
@@ -38,7 +38,7 @@ import { loadProductPricing } from "~/server/repo/product/pricing";
 import { cascadeRemoval } from "~/server/repo/removal";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { assertLiveTargets } from "./helpers";
+import { assertLiveTargets, inventoryAuditRow } from "./helpers";
 import { dbInventoryEntryToAPI, requireLoadedProductPricing } from "./mappers";
 import {
   assertIndividualOwner,
@@ -51,7 +51,7 @@ import {
   type InventoryRawOwnership,
 } from "./slot";
 import type { InventoryEntryDeepDB } from "./types";
-import { loadValuationGraphs } from "./valuation";
+import { loadInventoryValuations } from "./valuation";
 
 export type ResolvedBulkMovePayload = {
   sourceLocationId: LocationId;
@@ -101,7 +101,8 @@ export const getInventoryLocationSnapshotToken = async (
       placement: true,
       ownershipMode: true,
       ownerLedgerPartyId: true,
-      amount: true,
+      amountValue: true,
+      amountUnit: true,
     },
   });
   return await inventorySnapshotToken(rows);
@@ -270,10 +271,9 @@ const applyAddedInventoryItem = async (
   locationId: LocationId,
   item: ResolvedInventoryBulkAddItem,
   existing: InventoryEntryDeepDB | undefined,
-  valuationGraphs: Awaited<ReturnType<typeof loadValuationGraphs>>,
 ): Promise<AddedInventoryResult> => {
   if (existing) {
-    const before = parseInventoryAmount(existing.amount, existing.id);
+    const before = parseInventoryAmount(existing);
     if (before.unit !== item.amount.unit) {
       throw createAppError(
         "CONSTRAINT_VIOLATION",
@@ -287,18 +287,16 @@ const applyAddedInventoryItem = async (
     const updated = await updateAndReturn(
       tx,
       inventoryEntry,
-      {
-        amount: nextAmount,
-        valuation: computeInventoryValuation(
-          nextAmount,
-          valuationGraphs.get(item.productId) ?? [],
-        ),
-      },
+      amountToColumns(nextAmount),
       eq(inventoryEntry.id, existing.id),
     );
-    const changes = computeChanges(existing, updated, ["amount"]);
+    const changes = computeChanges(
+      inventoryAuditRow(existing),
+      inventoryAuditRow(updated),
+      ["amount"],
+    );
     const audit: AuditEntryInput = {
-      entityType: "inventory",
+      entityKind: "inventory",
       entityId: existing.id,
       action: "update",
     };
@@ -313,11 +311,7 @@ const applyAddedInventoryItem = async (
   const values: Parameters<typeof insertWithShortcode<"inventory">>[2] = {
     productId: item.productId,
     locationId,
-    amount: item.amount,
-    valuation: computeInventoryValuation(
-      item.amount,
-      valuationGraphs.get(item.productId) ?? [],
-    ),
+    ...amountToColumns(item.amount),
   };
   if (item.placement) values.placement = item.placement;
   if (item.ownership) {
@@ -329,7 +323,7 @@ const applyAddedInventoryItem = async (
     id: created.id,
     action: "create",
     audit: {
-      entityType: "inventory",
+      entityKind: "inventory",
       entityId: created.id,
       action: "create",
     },
@@ -377,11 +371,6 @@ export const addInventoryEntries = async (
         existingItems.map((entry) => [inventorySlotKey(entry), entry]),
       );
 
-      const valuationGraphs = await loadValuationGraphs(
-        tx,
-        submittedProductIds,
-      );
-
       const resultIds: string[] = [];
       const auditEntries: AuditEntryInput[] = [];
       let createdCount = 0;
@@ -402,7 +391,6 @@ export const addInventoryEntries = async (
           locationId,
           item,
           existing,
-          valuationGraphs,
         );
         resultIds.push(applied.id);
         auditEntries.push(applied.audit);
@@ -424,7 +412,7 @@ export const addInventoryEntries = async (
     },
   );
 
-  const [pricing, ownership, dataQualities, locationQualities] =
+  const [pricing, ownership, dataQualities, locationQualities, valuations] =
     await Promise.all([
       loadInventoryEntryPricing(db, processed.results),
       loadEffectiveInventoryOwnership(db, processed.results),
@@ -438,11 +426,13 @@ export const addInventoryEntries = async (
         "location",
         processed.results.map((entry) => entry.location.id),
       ),
+      loadInventoryValuations(db, processed.results),
     ]);
   return {
     items: processed.results.map((entry) =>
       dbInventoryEntryToAPI(
         entry,
+        valuations.get(entry.id) ?? null,
         requireLoadedProductPricing(pricing, entry.product.id),
         // SAFETY: `entry` came from `processed.results`, which `dataQualities`/
         // `locationQualities` were loaded for.
@@ -495,7 +485,7 @@ const buildInventoryMovePlan = (
   for (const entry of [...sourceEntries, ...destinationEntries]) {
     const key = inventorySlotKey(entry);
     if (plannedBySlot.has(key)) continue;
-    const parsed = parseInventoryAmount(entry.amount, entry.id);
+    const parsed = parseInventoryAmount(entry);
     plannedBySlot.set(key, {
       id: entry.id,
       productId: entry.productId,
@@ -603,7 +593,6 @@ const persistInventoryMovePlan = async (
   destinationEntries: InventoryEntryDeepDB[],
   plan: InventoryMovePlan,
   resultSlots: string[],
-  valuationGraphs: Awaited<ReturnType<typeof loadValuationGraphs>>,
   actor: ActorContext,
 ) => {
   const auditEntries: AuditEntryInput[] = [];
@@ -637,10 +626,6 @@ const persistInventoryMovePlan = async (
       );
     }
     for (const [key, row] of ready) {
-      const valuation = computeInventoryValuation(
-        { value: row.value, unit: row.unit },
-        valuationGraphs.get(row.productId) ?? [],
-      );
       if (row.id === null) {
         const created = await insertWithShortcode(tx, "inventory", {
           productId: row.productId,
@@ -648,13 +633,12 @@ const persistInventoryMovePlan = async (
           placement: row.placement,
           ownershipMode: row.ownershipMode,
           ownerLedgerPartyId: row.ownerLedgerPartyId,
-          amount: { value: row.value, unit: row.unit },
-          valuation,
+          ...amountToColumns({ value: row.value, unit: row.unit }),
         });
         idBySlot.set(key, created.id);
         occupantBySlot.set(key, created.id);
         auditEntries.push({
-          entityType: "inventory",
+          entityKind: "inventory",
           entityId: created.id,
           action: "create",
         });
@@ -668,21 +652,21 @@ const persistInventoryMovePlan = async (
         tx,
         inventoryEntry,
         {
-          amount: { value: row.value, unit: row.unit },
+          ...amountToColumns({ value: row.value, unit: row.unit }),
           locationId: row.locationId,
-          valuation,
         },
         eq(inventoryEntry.id, row.id),
       );
       occupantBySlot.delete(inventorySlotKey(row.original));
       occupantBySlot.set(key, row.id);
-      const changes = computeChanges(row.original, updated, [
-        "amount",
-        "locationId",
-      ]);
+      const changes = computeChanges(
+        inventoryAuditRow(row.original),
+        inventoryAuditRow(updated),
+        ["amount", "locationId"],
+      );
       if (changes) {
         auditEntries.push({
-          entityType: "inventory",
+          entityKind: "inventory",
           entityId: row.id,
           action: "update",
           changes,
@@ -779,8 +763,6 @@ export const moveInventoryEntries = async (
             })
           : [];
 
-      const valuationGraphs = await loadValuationGraphs(tx, productIds);
-
       const plan = buildInventoryMovePlan(sourceEntries, destinationEntries);
       // Destination slots in request order — the response echoes the rows the
       // caller asked to fill, deduped, not every row the plan touched.
@@ -800,14 +782,13 @@ export const moveInventoryEntries = async (
         destinationEntries,
         plan,
         resultSlots,
-        valuationGraphs,
         actor,
       );
       return await batchFetchResults(tx, resultIds);
     },
   );
 
-  const [pricing, ownership, dataQualities, locationQualities] =
+  const [pricing, ownership, dataQualities, locationQualities, valuations] =
     await Promise.all([
       loadInventoryEntryPricing(db, processedItems),
       loadEffectiveInventoryOwnership(db, processedItems),
@@ -821,10 +802,12 @@ export const moveInventoryEntries = async (
         "location",
         processedItems.map((entry) => entry.location.id),
       ),
+      loadInventoryValuations(db, processedItems),
     ]);
   return processedItems.map((entry) =>
     dbInventoryEntryToAPI(
       entry,
+      valuations.get(entry.id) ?? null,
       requireLoadedProductPricing(pricing, entry.product.id),
       // SAFETY: `entry` came from `processedItems`, which `dataQualities`/
       // `locationQualities` were loaded for.
@@ -973,19 +956,6 @@ export const reconcileLocationSession = async (
 
       const existingById = new Map(existing.map((e) => [e.id, e]));
 
-      // Prices for adjusted/relocated entries' products (valuation can change
-      // when a relocation merges with an existing destination row).
-      const changedProductIds = uniq(
-        resolutions
-          .filter(
-            (resolution) =>
-              resolution.kind === "adjust" || resolution.kind === "relocate",
-          )
-          .map((r) => existingById.get(r.inventoryEntryId)?.productId)
-          .filter((id): id is ProductId => id != null),
-      );
-      const valuationGraphs = await loadValuationGraphs(tx, changedProductIds);
-
       const relocationProductIds = uniq(
         resolutions
           .filter((resolution) => resolution.kind === "relocate")
@@ -1005,7 +975,8 @@ export const reconcileLocationSession = async (
                 placement: inventoryEntry.placement,
                 ownershipMode: inventoryEntry.ownershipMode,
                 ownerLedgerPartyId: inventoryEntry.ownerLedgerPartyId,
-                amount: inventoryEntry.amount,
+                amountValue: inventoryEntry.amountValue,
+                amountUnit: inventoryEntry.amountUnit,
               })
               .from(inventoryEntry)
               .where(
@@ -1042,27 +1013,27 @@ export const reconcileLocationSession = async (
               .where(eq(inventoryEntry.id, before.id));
             resultIds.push(before.id);
             auditEntries.push({
-              entityType: "inventory",
+              entityKind: "inventory",
               entityId: before.id,
               action: "update",
             });
           })
           .with({ kind: "adjust" }, async ({ amount: adjusted }) => {
-            const valuation = computeInventoryValuation(
-              adjusted,
-              valuationGraphs.get(before.productId) ?? [],
-            );
             const updated = await updateAndReturn(
               tx,
               inventoryEntry,
-              { amount: adjusted, valuation, verifiedAt: now },
+              { ...amountToColumns(adjusted), verifiedAt: now },
               eq(inventoryEntry.id, before.id),
             );
             recomputeNeeded = true;
             resultIds.push(updated.id);
-            const changes = computeChanges(before, updated, ["amount"]);
+            const changes = computeChanges(
+              inventoryAuditRow(before),
+              inventoryAuditRow(updated),
+              ["amount"],
+            );
             const auditEntry: AuditEntryInput = {
-              entityType: "inventory",
+              entityKind: "inventory",
               entityId: before.id,
               action: "update",
             };
@@ -1078,19 +1049,15 @@ export const reconcileLocationSession = async (
             removedIds.push(before.id);
           })
           .with({ kind: "relocate" }, async ({ targetLocationId }) => {
-            const sourceAmount = parseInventoryAmount(before.amount, before.id);
+            const sourceAmount = parseInventoryAmount(before);
             const targetKey = inventorySlotKey({
               ...before,
               locationId: targetLocationId,
             });
             const target = targetRowsByLocationProduct.get(targetKey);
-            const valuationGraph = valuationGraphs.get(before.productId) ?? [];
 
             if (target) {
-              const targetAmount = parseInventoryAmount(
-                target.amount,
-                target.id,
-              );
+              const targetAmount = parseInventoryAmount(target);
               if (targetAmount.unit !== sourceAmount.unit) {
                 throw createAppError(
                   "CONSTRAINT_VIOLATION",
@@ -1104,21 +1071,16 @@ export const reconcileLocationSession = async (
               const updatedTarget = await updateAndReturn(
                 tx,
                 inventoryEntry,
-                {
-                  amount: nextAmount,
-                  valuation: computeInventoryValuation(
-                    nextAmount,
-                    valuationGraph,
-                  ),
-                  verifiedAt: now,
-                },
+                { ...amountToColumns(nextAmount), verifiedAt: now },
                 eq(inventoryEntry.id, target.id),
               );
-              const targetChanges = computeChanges(target, updatedTarget, [
-                "amount",
-              ]);
+              const targetChanges = computeChanges(
+                inventoryAuditRow(target),
+                inventoryAuditRow(updatedTarget),
+                ["amount"],
+              );
               const auditEntry: AuditEntryInput = {
-                entityType: "inventory",
+                entityKind: "inventory",
                 entityId: target.id,
                 action: "update",
               };
@@ -1136,7 +1098,8 @@ export const reconcileLocationSession = async (
                 placement: updatedTarget.placement,
                 ownershipMode: updatedTarget.ownershipMode,
                 ownerLedgerPartyId: updatedTarget.ownerLedgerPartyId,
-                amount: updatedTarget.amount,
+                amountValue: updatedTarget.amountValue,
+                amountUnit: updatedTarget.amountUnit,
               });
             } else {
               const updated = await updateAndReturn(
@@ -1147,7 +1110,7 @@ export const reconcileLocationSession = async (
               );
               const changes = computeChanges(before, updated, ["locationId"]);
               const auditEntry: AuditEntryInput = {
-                entityType: "inventory",
+                entityKind: "inventory",
                 entityId: before.id,
                 action: "update",
               };
@@ -1161,7 +1124,8 @@ export const reconcileLocationSession = async (
                 placement: updated.placement,
                 ownershipMode: updated.ownershipMode,
                 ownerLedgerPartyId: updated.ownerLedgerPartyId,
-                amount: updated.amount,
+                amountValue: updated.amountValue,
+                amountUnit: updated.amountUnit,
               });
             }
             recomputeNeeded = true;
@@ -1191,7 +1155,7 @@ export const reconcileLocationSession = async (
     },
   );
 
-  const [pricing, ownership, dataQualities, locationQualities] =
+  const [pricing, ownership, dataQualities, locationQualities, valuations] =
     await Promise.all([
       loadInventoryEntryPricing(db, processed),
       loadEffectiveInventoryOwnership(db, processed),
@@ -1205,11 +1169,13 @@ export const reconcileLocationSession = async (
         "location",
         processed.map((entry) => entry.location.id),
       ),
+      loadInventoryValuations(db, processed),
     ]);
   return {
     items: processed.map((entry) =>
       dbInventoryEntryToAPI(
         entry,
+        valuations.get(entry.id) ?? null,
         requireLoadedProductPricing(pricing, entry.product.id),
         // SAFETY: `entry` came from `processed`, which `dataQualities`/
         // `locationQualities` were loaded for.

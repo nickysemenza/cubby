@@ -408,14 +408,7 @@ export const connectedViews = {
     },
   ],
   "usda-food": [],
-  image: [
-    {
-      key: "reporting-devices",
-      title: "Reporting devices",
-      target: "device",
-      routes: [["sightings", "reporter"]],
-    },
-  ],
+  image: [],
   planting: [
     {
       key: "products",
@@ -558,34 +551,7 @@ export const connectedViews = {
       routes: [["purchases", "projects"]],
     },
   ],
-  device: [
-    {
-      key: "images",
-      title: "Sighting images",
-      target: "image",
-      routes: [["image-sightings", "image"]],
-    },
-    {
-      key: "owners",
-      title: "Sighting owners",
-      target: "ledgerParty",
-      routes: [["image-sightings", "owner"]],
-    },
-  ],
-  imageSighting: [
-    {
-      key: "captured-by",
-      title: "Image captured by",
-      target: "ledgerParty",
-      routes: [["image", "captured-by"]],
-    },
-    {
-      key: "reporter-owner",
-      title: "Reporter owner",
-      target: "ledgerParty",
-      routes: [["reporter", "owner"]],
-    },
-  ],
+  device: [],
   plant: [
     {
       key: "purchases",

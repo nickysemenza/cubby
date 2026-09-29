@@ -3,7 +3,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { entityAttachment, inventoryEntry, location } from "~/server/db/schema";
+import { inventoryEntry, location } from "~/server/db/schema";
 
 import { getDb } from "./database-helpers";
 import { getEntityGraphPaths } from "./entity-graph-paths";
@@ -15,6 +15,7 @@ import {
   createProductFixture as createProduct,
   makeExpenseInput,
   makeProductInput,
+  insertEntityAttachments,
 } from "./repo.fixtures";
 import { createVendor } from "./vendor";
 
@@ -28,9 +29,10 @@ describe("entity graph path repository", () => {
       ctx.actor,
     );
     const cover = await createImageFixture(ctx.db, "path-cover");
-    await getDb(ctx.db)
-      .insert(entityAttachment)
-      .values({ subjectEntityId: product.entityId, imageId: cover.id });
+    await insertEntityAttachments(ctx.db, {
+      entityId: product.entityId,
+      imageId: cover.id,
+    });
     const vendor = await createVendor(
       ctx.db,
       {
@@ -83,9 +85,9 @@ describe("entity graph path repository", () => {
 
     const measured = await countTestDbQueries(() =>
       getEntityGraphPaths(ctx.db, {
-        start: { entityType: "product", entityId: product.id },
+        start: { entityKind: "product", entityId: product.id },
         destination: {
-          entityType: "purchase",
+          entityKind: "purchase",
           entityId: purchase.output.id,
         },
       }),
@@ -100,7 +102,7 @@ describe("entity graph path repository", () => {
     });
     expect(measured.result.nodes).toHaveLength(2);
     expect(
-      measured.result.nodes.find((node) => node.entityType === "product")?.image
+      measured.result.nodes.find((node) => node.entityKind === "product")?.image
         ?.url,
     ).toBe(cover.url);
     expect(measured.result.paths).toHaveLength(1);
@@ -128,6 +130,7 @@ describe("entity graph path repository", () => {
         Array.from({ length: 60 }, (_, index) => ({
           shortcode: testShortcode("location", `LOC-PATH-${index}`),
           name: `Wide path location ${index}`,
+          type: "area" as const,
         })),
       )
       .returning({ id: location.id });
@@ -138,7 +141,8 @@ describe("entity graph path repository", () => {
           shortcode: testShortcode("inventory", `INV-PATH-${index}`),
           productId: product.entityId,
           locationId: locationRow.id,
-          amount: { value: 1, unit: "each" },
+          amountValue: 1,
+          amountUnit: "each",
         })),
       )
       .returning({ shortcode: inventoryEntry.shortcode });
@@ -147,9 +151,9 @@ describe("entity graph path repository", () => {
 
     const measured = await countTestDbQueries(() =>
       getEntityGraphPaths(ctx.db, {
-        start: { entityType: "product", entityId: product.id },
+        start: { entityKind: "product", entityId: product.id },
         destination: {
-          entityType: "inventory",
+          entityKind: "inventory",
           entityId: destination.shortcode,
         },
       }),

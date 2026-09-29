@@ -38,11 +38,10 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
-import { listScaffold } from "~/server/repo/list-scaffold";
-import { relatedWhereConditions } from "~/server/repo/related-view";
+import { listScaffold } from "~/server/repo/list";
 import { deleteByPolicy } from "~/server/repo/removal";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -89,7 +88,7 @@ export const MEAL_DELETE_EDGE_POLICY = {
     description:
       "Deleting a meal soft-deletes portions served at it; their source preparations are untouched.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -234,7 +233,6 @@ export const buildMealWhere = (
     // `mealFilterFields` spreads `mealRelatedFilterFields` (the recipe trio) and
     // the manifest renders its control — omitting this is the #588 drift, where
     // the UI sends a filter the server silently ignores.
-    ...relatedWhereConditions("meal", filters, meal.id),
     filters.from ? gte(meal.date, filters.from) : undefined,
     filters.to ? lte(meal.date, filters.to) : undefined,
     filters.recipeCostCoverage === "understated"
@@ -342,7 +340,7 @@ export const createMealWithEntityId = async (
       );
     }
     await logAuditEntry(tx, actor, {
-      entityType: "meal",
+      entityKind: "meal",
       entityId: created.id,
       action: "create",
     });
@@ -383,7 +381,7 @@ export const updateMeal = async (
       data,
     ));
     await logAuditEntry(tx, actor, {
-      entityType: "meal",
+      entityKind: "meal",
       entityId: id,
       action: "update",
     });
@@ -451,7 +449,7 @@ export const addRecipeToMeal = async (
       sortOrder: input.sortOrder ?? null,
     });
     await logAuditEntry(tx, actor, {
-      entityType: "meal",
+      entityKind: "meal",
       entityId: mealId,
       action: "update",
     });
@@ -491,7 +489,7 @@ const updateMealRecipe = async (
     if (data.sortOrder !== undefined) recipePatch.sortOrder = data.sortOrder;
     await updateAndReturn(tx, mealRecipe, recipePatch, eq(mealRecipe.id, id));
     await logAuditEntry(tx, actor, {
-      entityType: "meal",
+      entityKind: "meal",
       entityId: mealId,
       action: "update",
     });
@@ -551,7 +549,7 @@ const removeMealRecipe = async (
       .set({ deletedAt: now })
       .where(and(eq(mealRecipe.id, id), notDeleted(mealRecipe)));
     await logAuditEntry(tx, actor, {
-      entityType: "meal",
+      entityKind: "meal",
       entityId: mealId,
       action: "update",
     });

@@ -3,6 +3,8 @@ import {
   imageDisplayBindings,
 } from "@cubby/schemas/entity-manifest";
 
+import type { RippleKey } from "~/contracts/cache-policy";
+
 import type { OperationCacheTag } from "./operation-meta";
 
 /**
@@ -207,9 +209,8 @@ export const ripple = {
   /**
    * Product MERGE moves far more than a product write does. A rename touches
    * the product row and the surfaces that embed its name; a merge re-parents
-   * rows across five other entities: inventory entries move and re-value at
-   * the keeper's price (`planInventoryFold` →
-   * `syncInventoryValuationsForProduct`), expenses and projectUses are
+   * rows across five other entities: inventory entries move and value at
+   * the keeper's price on their next read (`planInventoryFold`), expenses and projectUses are
    * re-pointed, and dependent recipe costs are recomputed (#603). Left on the
    * narrow set, every one of those views kept rendering the pre-merge state —
    * including rows pointing at a now soft-deleted loser.
@@ -228,7 +229,7 @@ export const ripple = {
     ["search"],
     ["dashboard"],
   ]),
-  /** A ProductComponent edge is a Product→Product link, visible from both
+  /** A `productComponent` link is a Product→Product link, visible from both
    * ends (a kit's own component list, and the transpose kit-membership
    * list). It carries no money of its own — the kit keeps its own Expense —
    * so there's no spend, inventory, or calendar state to invalidate. */
@@ -286,7 +287,7 @@ export const ripple = {
    * Ingredient↔Product link where the product also names an explicit USDA
    * food (`fdc_id`) — the usda-food detail query embeds its own
    * `linkedProducts` roster, so it goes stale alongside the ingredient and
-   * product ends. Used by `entity-mutation.functions.ts`'s dynamic product
+   * product ends. Used by `operation-overrides.ts`'s dynamic product
    * widening, not by a static per-entity write.
    */
   ingredientProductUsdaFood: rippleTags(ingredientAll, productBase, [
@@ -460,10 +461,13 @@ export const ripple = {
 
   wish: rippleTags([["wish"], ["search"], ["dashboard"]]),
 
+  /** Recording statement rows: the rows and the dashboard counts. */
+  statementRow: rippleTags([["statementRow"], ["dashboard"]]),
+
   /** Not an entity — the Problems page's own detector cards, resolved by a fix
    * that touched nothing else. */
   problems: rippleTags([["problems"]]),
-} as const satisfies Record<string, InvalidationTagSet>;
+} as const satisfies Record<RippleKey | "none", InvalidationTagSet>;
 
 const problemsRippleCache = new WeakMap<
   InvalidationTagSet,
@@ -479,6 +483,19 @@ export const rippleWithProblems = (
   const combined = rippleTags(ripple.problems, tags);
   problemsRippleCache.set(tags, combined);
   return combined;
+};
+
+/**
+ * Resolve a contract's `invalidates` list to one set. The fan-out row itself
+ * for a single key, so a set with no filter-option roster (`exactRippleTags`)
+ * stays without one; the plain union for several.
+ */
+export const rippleFor = (keys: readonly RippleKey[]): InvalidationTagSet => {
+  const [first, ...rest] = keys;
+  if (first === undefined) return EMPTY_INVALIDATION_TAG_SET;
+  return rest.length === 0
+    ? ripple[first]
+    : exactRippleTags(...keys.map((key) => ripple[key]));
 };
 
 /** Union named ripple sets without allowing a call site to construct tags. */

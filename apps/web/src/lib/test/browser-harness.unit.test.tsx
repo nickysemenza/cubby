@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { entityTimeline } from "~/entities/entity-timeline.functions";
+import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
 
 import { createBrowserTestHarness } from "./browser-harness";

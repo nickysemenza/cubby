@@ -372,18 +372,10 @@ export async function seedReferenceUniverse(
   if (ledgerPartyB) ledgerTransferOverrides.toPartyId = ledgerPartyB.id;
   await seed("ledgerTransfer", ledgerTransferOverrides);
 
-  // `image` has no kernel create (see SKIPPED_ENTITIES), but a sighting
-  // needs one; insert it directly so imageSighting's filters are guarded.
+  // `image` has no kernel create (see SKIPPED_ENTITIES); insert it directly.
   const image = await createImageFixture(db, "list-smoke");
   record(image.shortcode);
-  const device = await seed("device");
-  // oxlint-disable-next-line anti-slop/no-known-value-widening, anti-slop/no-unsafe-dictionary-type -- see the walker block comment above
-  const sightingOverrides: Record<string, unknown> = {
-    imageId: image.shortcode,
-  };
-  if (device) sightingOverrides.deviceId = device.id;
-  if (ledgerPartyA) sightingOverrides.ledgerPartyId = ledgerPartyA.id;
-  await seed("imageSighting", sightingOverrides);
+  await seed("device");
 
   await seedPostPipelineCoverage(db, {
     seed,

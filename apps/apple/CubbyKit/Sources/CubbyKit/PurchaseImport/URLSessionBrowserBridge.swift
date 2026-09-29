@@ -200,7 +200,7 @@ public actor URLSessionBrowserBridge {
             url: configuration.url,
             bearerToken: bearerToken,
             userAgent:
-                "cubby-apple/\(BrowserBridgeProtocol.currentProtocolVersion) (\(configuration.deviceID.uuidString.lowercased()))"
+                "cubby-apple-browser-bridge/\(BrowserBridgeProtocol.currentProtocolVersion) (\(configuration.deviceID.uuidString.lowercased()))"
         )
         let socket = session.webSocketTask(with: request)
         self.socket = socket

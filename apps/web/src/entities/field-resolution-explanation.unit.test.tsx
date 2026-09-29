@@ -72,7 +72,7 @@ describe("ResolutionExplanation", () => {
             fallbackValue: "building",
             source: "purchase default",
             sourceEntity: {
-              entityType: "purchase",
+              entityKind: "purchase",
               entityId: purchaseId,
               name: null,
             },

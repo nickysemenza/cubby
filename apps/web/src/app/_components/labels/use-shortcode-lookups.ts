@@ -2,8 +2,10 @@ import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { location } from "~/app/locations/location.functions";
-import { product } from "~/app/products/product.functions";
+import {
+  location,
+  product,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import type { LabelItem } from "./sheet-layouts";
 
@@ -52,14 +54,14 @@ export function useShortcodeLookups(shortcodes: string[]) {
     const locs = locationData.map((d) => ({
       shortcode: d.id,
       name: d.name,
-      entityType: "location" as const,
+      entityKind: "location" as const,
       locationType: d.type ?? undefined,
       parentName: d.parentName,
     }));
     const prods = productData.map((d) => ({
       shortcode: d.id,
       name: d.name,
-      entityType: "product" as const,
+      entityKind: "product" as const,
       productCategory: d.category,
     }));
     return [...locs, ...prods];

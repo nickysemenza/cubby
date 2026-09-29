@@ -5,8 +5,8 @@ Cubby records a household's products, inventory, spending, and project history.
 ## Language
 
 **Run**:
-A durable record of coordinated work, identified by `RUN-`, with a purpose, trigger, status, and optional targets or operations. It may group image jobs, but its recorded cost can already include their costs. The Runs history presents every purpose together.
-_Avoid_: image processing job, individual attempt
+A durable record of coordinated work, identified by `RUN-`, with a purpose, trigger, status, and optional targets or operations. It may group image jobs, but its recorded cost can already include their costs. The Runs history presents every purpose together. A vendor mail search is a Run: what was asked and where its page-by-page walk stands belong to the Run itself.
+_Avoid_: image processing job, individual attempt, search job
 
 **Image processing job**:
 One image operation, identified by `IPR-`, with its own kind, state, attempts, and diagnostics. It may belong to a Run or stand alone. Its cost is a component of a parent Run total when both are shown, not an additional household expense.
@@ -52,8 +52,16 @@ _Avoid_: payer, account owner, beneficiary
 One registered native app instance on a phone or Mac, identified independently of a session or push token; a reinstall can retain the same identity. Optionally owned by a Ledger Party member and linked to the physical phone or Mac as a Product. An automatic-work switch, set on the device itself, and a remote-pause override, set from the web, together decide whether the job dispatcher sends it companion work; either one is enough to make it a plain viewer.
 _Avoid_: session, connection, install id
 
+**Entity Link**:
+A named pairing of two entities with no meaning beyond the pairing: a wish's candidate Product, the Products a purchase bought, a kit's component with a count, a task blocked by another. Removing a link removes neither entity, and a link is never a place to keep money.
+_Avoid_: join row, edge table
+
+**External Identifier**:
+A name an outside system gave an entity — a retailer's product number, a barcode, a Notion page, a card statement's order reference — recorded with the source it came from. One identifier from one source names at most one live entity.
+_Avoid_: source ref, foreign id
+
 **Image Sighting**:
-One party's report that a stored Image exists in their photo library or cloud asset store, made by one reporting Device. A repeat report for the same image, owner, and asset key replaces the sighting's observation columns rather than duplicating it. Several sightings on one Image are ordinary: Photo Library sync can put the same asset on a member's phone and Mac, and a photo shared between members can be reported by more than one Ledger Party.
+One party's report that a stored Image exists in their photo library or cloud asset store, made by one reporting Device. A sighting has no identity outside its Image. A repeat report for the same image, owner, and asset key replaces the sighting's observation columns rather than duplicating it. Several sightings on one Image are ordinary: Photo Library sync can put the same asset on a member's phone and Mac, and a photo shared between members can be reported by more than one Ledger Party.
 _Avoid_: upload record, device attachment, image copy
 
 **Capture Attribution**:

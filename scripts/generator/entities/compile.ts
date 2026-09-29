@@ -19,6 +19,7 @@ import {
   compileDataQuality,
   validateDataQualityDeclarations,
 } from "./data-quality.ts";
+import { compileEntityTable, validateEntityTables } from "./table-storage.ts";
 import {
   deriveImageDisplaySources,
   deriveInverseRelations,
@@ -491,6 +492,7 @@ const compileFieldModel = (
         list: field.display.list,
         detail: field.display.detail,
         listHidden: field.display.listHidden ?? false,
+        valueOptions: field.display.valueOptions ?? null,
         preview: field.display.preview ?? false,
       },
       validation: field.validation,
@@ -825,6 +827,32 @@ const filterWire = (
     : { kind: "range", from: `${name}Min`, to: `${name}Max` };
 };
 
+/**
+ * A range descriptor's presets either all carry the fields they set
+ * (`expand`, which the generator turns into the expander) or are resolved by a
+ * hand-written `expandRef` — never a mix, or an option would silently resolve
+ * to nothing.
+ */
+const validateFilterPresets = (
+  value: RawFilterDescriptor,
+  kind: FilterDescriptor["kind"],
+  options: FilterDescriptor["options"],
+  context: string,
+): void => {
+  const expanding = (options ?? []).filter(
+    (option) => option.expand !== undefined,
+  );
+  if (expanding.length === 0) return;
+  if (kind !== "range" || value.expandRef != null)
+    throw new EntityDeclarationError(
+      `${context} option expand needs a range descriptor without an expandRef.`,
+    );
+  if (expanding.length !== options?.length)
+    throw new EntityDeclarationError(
+      `${context} every option must declare expand once one does.`,
+    );
+};
+
 const validateFilterReference = (
   value: RawFilterDescriptor,
   kind: FilterDescriptor["kind"],
@@ -913,6 +941,7 @@ const filterDescriptor = (
   }
   const modelField = fields.find((field) => field.key === value.columnId);
   const options = enumFilterOptions(value, parsedKind, modelField, context);
+  validateFilterPresets(value, parsedKind, options, context);
   validateFilterReference(value, parsedKind, context);
   validateDerivedFilter(value, parsedKind, modelField, context);
   const stored = validateStoredFilter(value, parsedKind, storage, context);
@@ -1244,6 +1273,56 @@ const validateTitleField = (
 const HAND_WRITTEN_DETAIL_ROUTES = new Set(["recipe", "usda-food"]);
 
 /**
+ * `lifecycle: "readOnly"` declares no write capability, and a declared
+ * `resolve` matches names over the entity's own stored text columns; it may
+ * create only where a create contract exists.
+ */
+const validateLifecycleAndResolve = (
+  declaration: EntityDeclarationMetadata,
+  fieldModel: EntityFieldModel,
+  hasShortcode: boolean,
+  context: string,
+) => {
+  const { capabilities, fields } = declaration;
+  const readOnly = capabilities.lifecycle === "readOnly";
+  if (
+    readOnly &&
+    (fields?.create != null ||
+      fields?.update != null ||
+      capabilities.bulkUpdate !== null ||
+      capabilities.merge)
+  )
+    throw new EntityDeclarationError(
+      `${context}.capabilities.lifecycle is readOnly but the entity declares a create, update, bulkUpdate or merge capability.`,
+    );
+  const { resolve } = capabilities;
+  if (resolve === null) return;
+  if (!hasShortcode)
+    throw new EntityDeclarationError(
+      `${context}.capabilities.resolve needs a shortcode entity.`,
+    );
+  if (resolve.createMissing && (fields?.create == null || readOnly))
+    throw new EntityDeclarationError(
+      `${context}.capabilities.resolve.createMissing needs a create contract.`,
+    );
+  const stored = new Map(
+    fieldModel.storage.map((entry) => [entry.key, entry.kind] as const),
+  );
+  for (const column of [...resolve.match, ...resolve.scope])
+    if (!stored.has(column))
+      throw new EntityDeclarationError(
+        `${context}.capabilities.resolve names ${column}, which is not a stored field.`,
+      );
+  for (const column of resolve.match) {
+    const kind = stored.get(column);
+    if (kind !== "text" && kind !== "text-array")
+      throw new EntityDeclarationError(
+        `${context}.capabilities.resolve.match ${column} is ${String(kind)}; only text and text-array columns match names.`,
+      );
+  }
+};
+
+/**
  * A route defaults to generated list and detail pages over the
  * generic renderers, which read the kernel's list/detail projections: the
  * detail roster is every entity with create and update contracts, the list
@@ -1377,6 +1456,7 @@ export const compileEntity = (
     key,
     declaration.presentation.titleField,
   );
+  const table = compileEntityTable(declaration, declaredFieldModel, context);
   const operationOwners = {
     delete: declaration.capabilities.operationOwners.delete,
     merge: declaration.capabilities.operationOwners.merge,
@@ -1589,6 +1669,12 @@ export const compileEntity = (
           ],
   );
   const bulkUpdateFields = declaration.capabilities.bulkUpdate?.fields ?? null;
+  validateLifecycleAndResolve(
+    declaration,
+    fieldModel,
+    shortcode !== null,
+    context,
+  );
   return {
     key,
     overrides: collectEntityOverrides(raw),
@@ -1611,10 +1697,13 @@ export const compileEntity = (
       softDelete: declaration.capabilities.softDelete,
       delete: declaration.capabilities.delete,
       merge: declaration.capabilities.merge,
+      readOnly: declaration.capabilities.lifecycle === "readOnly",
     },
+    resolve: declaration.capabilities.resolve,
     mcpActions: declaration.capabilities.mcp,
     operationOwners,
     fieldModel,
+    table,
     dataQuality,
   };
 };
@@ -2240,6 +2329,7 @@ export const compileEntityDeclarations = (
     ),
   );
   validateEntityIdentities(entities);
+  validateEntityTables(entities);
   validateReferenceScopes(entities);
   validatePhotoCategoryLabels(photoCategories);
   validateImagePolicies(entities);

@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { EntityLinkKind } from "@cubby/schemas/entity-links";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   displayGtin,
@@ -60,9 +61,10 @@ import {
   cookbook,
   device,
   entityAttachment,
+  entityExternalId,
+  entityLink,
   expense,
   image,
-  runTarget,
   inventoryEntry,
   location,
   mealFoodEntry,
@@ -70,14 +72,10 @@ import {
   plant,
   planting,
   product,
-  productComponent,
   productConversionCoverage,
-  productExternalId,
   productUnitMappings,
-  projectToolUsage,
-  purchaseProduct,
+  runTarget,
   task,
-  wishCandidate,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { observeOperationPhase } from "~/server/observed-request";
@@ -104,9 +102,10 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
+import { ensureExternalSources } from "~/server/repo/entity-external-ids";
+import { liveLinks } from "~/server/repo/entity-links";
 import { patchEntityRows } from "~/server/repo/entity-patch";
 import {
   productAcquisitionDateFilterSql,
@@ -118,9 +117,12 @@ import {
 } from "~/server/repo/expense-aggregate-sql";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
-import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
+import {
+  enrichProductRowsWithInventoryValuations,
+  loadInventoryValuations,
+} from "~/server/repo/inventory/valuation";
 import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
 import {
   resolveProductCategory,
@@ -131,11 +133,9 @@ import {
   categoryFeatureSql,
 } from "~/server/repo/product-category-sql";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
-import {
-  relatedSortExpression,
-  relatedWhereConditions,
-} from "~/server/repo/related-view";
+import { relatedSortExpression } from "~/server/repo/related-view";
 import { deleteByPolicy } from "~/server/repo/removal";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -192,6 +192,7 @@ import {
   quantityVarianceSql,
 } from "./quantity-ledger";
 import type { ProductDeepDB, ProductListDB } from "./types";
+import { unitMappingColumns } from "./unit-mappings";
 import {
   assertNoCanonicalPriceMapping,
   ensureSlotPrimaries,
@@ -281,8 +282,8 @@ const resolveProductSort = (sort: SortParams) => {
   if (sort.orderBy === "primaryGtin") {
     return [
       sql.raw(
-        `(SELECT pei."externalId" FROM "ProductExternalId" pei ` +
-          `WHERE pei."productId" = "product"."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL ` +
+        `(SELECT pei."externalId" FROM "EntityExternalId" pei ` +
+          `WHERE pei."entityId" = "product"."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL ` +
           `ORDER BY pei."isPrimary" DESC, pei."createdAt", pei."id" LIMIT 1) ${dirSql}`,
       ),
     ];
@@ -412,7 +413,11 @@ const fetchProductById = async (
   const priced = await observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
     "pricing",
-    () => enrichProductRowsWithPricing(db, [row]),
+    async () =>
+      enrichProductRowsWithPricing(
+        db,
+        await enrichProductRowsWithInventoryValuations(db, [row]),
+      ),
   );
   const ledgered = await observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
@@ -445,7 +450,7 @@ const hydrateProductLocationBreadcrumbs = async (
       ...[...ancestorsById.values()].flatMap((chain) =>
         chain.map((rung) => rung.locationId),
       ),
-    ]).map((entityId) => ({ entityType: "location" as const, entityId })),
+    ]).map((entityId) => ({ entityKind: "location" as const, entityId })),
   );
   const displayImageOf = (id: LocationId) =>
     displayImages.get(entityRefKey("location", id)) ?? null;
@@ -529,14 +534,14 @@ export const getProductImagesByProductIds = async (
 
   const rows = await getDb(db)
     .select({
-      productId: entityAttachment.subjectEntityId,
+      productId: entityAttachment.entityId,
       image,
     })
     .from(entityAttachment)
     .innerJoin(image, eq(entityAttachment.imageId, image.id))
     .where(
       and(
-        inArray(entityAttachment.subjectEntityId, uniqueIds),
+        inArray(entityAttachment.entityId, uniqueIds),
         notDeleted(entityAttachment),
         sql`${entityAttachment.purpose} IS DISTINCT FROM 'label'`,
         notDeleted(image),
@@ -584,7 +589,10 @@ export const getProductsByShortcodes = async (
       results.flatMap((row) => productImageShortcodesOf(row.images)),
     ),
   ]);
-  const priced = await enrichProductRowsWithPricing(db, results);
+  const priced = await enrichProductRowsWithPricing(
+    db,
+    await enrichProductRowsWithInventoryValuations(db, results),
+  );
   const ledgered = await hydrateProductLocationBreadcrumbs(
     db,
     await enrichProductRowsWithQuantityLedger(db, priced),
@@ -730,7 +738,7 @@ export const buildProductWhere = async (
   // Joins Image so this matches what the thumbnail cell actually renders — it
   // drops PDF manuals, and Image is separately soft-deletable from ProductImage.
   const productIdsWithImages = dbClient
-    .select({ productId: entityAttachment.subjectEntityId })
+    .select({ productId: entityAttachment.entityId })
     .from(entityAttachment)
     .innerJoin(
       image,
@@ -752,16 +760,16 @@ export const buildProductWhere = async (
   // Kit membership requires live parent and component rows; do not approximate liveness with stale joins.
   const partsAccountedKitsSql = (productId: PgColumn) =>
     sql`(SELECT min(floor(COALESCE(${sql.raw(onHandUnitsSql("kac_p"))}, 0) / kac."quantity"))
-           FROM "ProductComponent" kac
+           FROM "EntityLink" kac
            JOIN "Product" kac_p
-             ON kac_p."id" = kac."componentProductId" AND kac_p."deletedAt" IS NULL
-          WHERE kac."parentProductId" = ${productId}
-            AND kac."deletedAt" IS NULL)`;
+             ON kac_p."id" = kac."toEntityId" AND kac_p."deletedAt" IS NULL
+          WHERE kac."fromEntityId" = ${productId}
+            AND kac."deletedAt" IS NULL AND kac."kind" = 'productComponent')`;
 
   const productIdsWithComponents = dbClient
-    .select({ productId: productComponent.parentProductId })
-    .from(productComponent)
-    .where(notDeleted(productComponent));
+    .select({ productId: entityLink.fromEntityId })
+    .from(entityLink)
+    .where(liveLinks("productComponent"));
 
   // This is the entity-list form of the sold-but-still-stocked diagnostic.
   // The quantity ledger remains the authority for expected quantity and unknown
@@ -784,24 +792,24 @@ export const buildProductWhere = async (
     ? [filters.externalIdSource].flat()
     : undefined;
   const productIdsWithExternalIds = dbClient
-    .select({ productId: productExternalId.productId })
-    .from(productExternalId)
+    .select({ productId: entityExternalId.entityId })
+    .from(entityExternalId)
     .where(
       and(
-        notDeleted(productExternalId),
+        notDeleted(entityExternalId),
         externalSources && externalSources.length > 0
-          ? inArray(productExternalId.source, externalSources)
+          ? inArray(entityExternalId.source, externalSources)
           : undefined,
       ),
     );
 
   const gtinRows = dbClient
-    .select({ productId: productExternalId.productId })
-    .from(productExternalId)
+    .select({ productId: entityExternalId.entityId })
+    .from(entityExternalId)
     .where(
       and(
-        notDeleted(productExternalId),
-        eq(productExternalId.source, GTIN_SOURCE),
+        notDeleted(entityExternalId),
+        eq(entityExternalId.source, GTIN_SOURCE),
       ),
     );
   const productIdsWithGtin = gtinRows;
@@ -820,13 +828,12 @@ export const buildProductWhere = async (
   // binds as `(NOT a IS NULL) AND (NOT EXISTS ...)` — i.e. "has fdc_id AND has
   // no barcode", which silently drops every barcode-only product from "has".
   const NO_USDA_KEY = sql`(${product.fdc_id} IS NULL AND ${product.labelNutrition} IS NULL AND NOT EXISTS (
-    SELECT 1 FROM "ProductExternalId" pei
-    WHERE pei."productId" = ${product.id}
+    SELECT 1 FROM "EntityExternalId" pei
+    WHERE pei."entityId" = ${product.id}
       AND pei."source" = ${GTIN_SOURCE}
       AND pei."deletedAt" IS NULL))`;
 
   const classificationConditions = () => [
-    ...relatedWhereConditions("product", filters, product.id),
     requestedIngredientCodes.length > 0 && selectedIngredientIds.length === 0
       ? sql`false`
       : or(
@@ -983,19 +990,19 @@ export const buildProductWhere = async (
       ? undefined
       : sql`EXISTS (
           SELECT 1
-          FROM "ProductComponent" kit_pc
-          JOIN "Product" kit ON kit."id" = kit_pc."parentProductId" AND kit."deletedAt" IS NULL
-          WHERE kit_pc."componentProductId" = ${product.id}
-            AND kit_pc."deletedAt" IS NULL
+          FROM "EntityLink" kit_pc
+          JOIN "Product" kit ON kit."id" = kit_pc."fromEntityId" AND kit."deletedAt" IS NULL
+          WHERE kit_pc."toEntityId" = ${product.id}
+            AND kit_pc."deletedAt" IS NULL AND kit_pc."kind" = 'productComponent'
             AND ${shortcodeSetCondition(sql`kit."shortcode"`, filters.kitId)})`,
     filters.componentId === undefined
       ? undefined
       : sql`EXISTS (
           SELECT 1
-          FROM "ProductComponent" component_pc
-          JOIN "Product" component ON component."id" = component_pc."componentProductId" AND component."deletedAt" IS NULL
-          WHERE component_pc."parentProductId" = ${product.id}
-            AND component_pc."deletedAt" IS NULL
+          FROM "EntityLink" component_pc
+          JOIN "Product" component ON component."id" = component_pc."toEntityId" AND component."deletedAt" IS NULL
+          WHERE component_pc."fromEntityId" = ${product.id}
+            AND component_pc."deletedAt" IS NULL AND component_pc."kind" = 'productComponent'
             AND ${shortcodeSetCondition(sql`component."shortcode"`, filters.componentId)})`,
     idSetPresence(
       product.id,
@@ -1219,7 +1226,7 @@ const loadProductListRelations = async (
     await Promise.all([
       getDb(db).query.entityAttachment.findMany({
         where: and(
-          inArray(entityAttachment.subjectEntityId, uniqueIds),
+          inArray(entityAttachment.entityId, uniqueIds),
           notDeleted(entityAttachment),
         ),
         orderBy: [
@@ -1228,10 +1235,10 @@ const loadProductListRelations = async (
         ],
         with: { image: true },
       }),
-      getDb(db).query.productExternalId.findMany({
+      getDb(db).query.entityExternalId.findMany({
         where: and(
-          inArray(productExternalId.productId, uniqueIds),
-          notDeleted(productExternalId),
+          inArray(entityExternalId.entityId, uniqueIds),
+          notDeleted(entityExternalId),
         ),
       }),
       getDb(db).query.productUnitMappings.findMany({
@@ -1251,16 +1258,20 @@ const loadProductListRelations = async (
     ]);
 
   for (const row of images) {
-    result.get(parseEntityId("product", row.subjectEntityId))?.images.push(row);
+    result.get(parseEntityId("product", row.entityId))?.images.push(row);
   }
   for (const row of externalIds) {
-    result.get(row.productId)?.externalIds.push(row);
+    result.get(parseEntityId("product", row.entityId))?.externalIds.push(row);
   }
   for (const row of unitMappings) {
     result.get(row.productId)?.unitMappings.push(row);
   }
+  const valuations = await loadInventoryValuations(db, inventoryEntries);
   for (const row of inventoryEntries) {
-    result.get(row.productId)?.inventoryEntry.push(row);
+    result.get(row.productId)?.inventoryEntry.push({
+      ...row,
+      valuation: valuations.get(row.id) ?? null,
+    });
   }
 
   return result;
@@ -1278,7 +1289,7 @@ export const getProductCoverImageUrlsByProductIds = async (
 ): Promise<Map<ProductId, string>> => {
   const covers = await resolveEntityDisplayImages(
     db,
-    ids.map((entityId) => ({ entityType: "product", entityId })),
+    ids.map((entityId) => ({ entityKind: "product", entityId })),
   );
   return new Map(
     ids.flatMap((id) => {
@@ -1535,27 +1546,27 @@ const assertExternalIdsAvailable = async (
       productId: product.id,
       productShortcode: product.shortcode,
       productName: product.name,
-      source: productExternalId.source,
-      kind: productExternalId.kind,
-      externalId: productExternalId.externalId,
+      source: entityExternalId.source,
+      kind: entityExternalId.kind,
+      externalId: entityExternalId.externalId,
     })
-    .from(productExternalId)
+    .from(entityExternalId)
     .innerJoin(
       product,
-      and(eq(product.id, productExternalId.productId), notDeleted(product)),
+      and(eq(product.id, entityExternalId.entityId), notDeleted(product)),
     )
     .where(
       and(
-        notDeleted(productExternalId),
+        notDeleted(entityExternalId),
         exceptProductId
-          ? sql`${productExternalId.productId} <> ${exceptProductId}`
+          ? sql`${entityExternalId.entityId} <> ${exceptProductId}`
           : undefined,
         or(
           ...entries.map((entry) =>
             and(
-              eq(productExternalId.source, entry.source),
-              eq(productExternalId.kind, entry.kind),
-              eq(productExternalId.externalId, entry.externalId),
+              eq(entityExternalId.source, entry.source),
+              eq(entityExternalId.kind, entry.kind),
+              eq(entityExternalId.externalId, entry.externalId),
             ),
           ),
         ),
@@ -1644,17 +1655,21 @@ export const createProduct = async (
         await tx.insert(productUnitMappings).values(
           unitMappings.map((mapping) => ({
             productId: newProduct.id,
-            a: mapping.a,
-            b: mapping.b,
+            ...unitMappingColumns(mapping),
             source: mapping.source,
           })),
         );
       }
 
       if (desiredExternalIds.length > 0) {
-        await tx.insert(productExternalId).values(
+        await ensureExternalSources(
+          tx,
+          desiredExternalIds.map((eid) => eid.source.trim().toLowerCase()),
+        );
+        await tx.insert(entityExternalId).values(
           desiredExternalIds.map((eid) => ({
-            productId: newProduct.id,
+            entityId: newProduct.id,
+            entityKind: "product" as const,
             source: eid.source.trim().toLowerCase(),
             kind: eid.kind,
             externalId: eid.externalId,
@@ -1697,7 +1712,7 @@ export const createProduct = async (
               .set({ purpose })
               .where(
                 and(
-                  eq(entityAttachment.subjectEntityId, newProduct.id),
+                  eq(entityAttachment.entityId, newProduct.id),
                   eq(entityAttachment.imageId, imageId),
                   notDeleted(entityAttachment),
                 ),
@@ -1712,15 +1727,15 @@ export const createProduct = async (
       }
 
       await logAuditEntry(tx, actor, {
-        entityType: "product",
+        entityKind: "product",
         entityId: newProduct.id,
         action: "create",
       });
 
       const createdExternalIds =
         desiredExternalIds.length > 0
-          ? await tx.query.productExternalId.findMany({
-              where: eq(productExternalId.productId, newProduct.id),
+          ? await tx.query.entityExternalId.findMany({
+              where: eq(entityExternalId.entityId, newProduct.id),
             })
           : [];
 
@@ -1796,7 +1811,7 @@ export const updateProduct = async (
   const prepareUpdate = async (
     tx: DrizzleTransaction,
     beforeProduct: typeof product.$inferSelect,
-    beforeExternalIds: Array<typeof productExternalId.$inferSelect>,
+    beforeExternalIds: Array<typeof entityExternalId.$inferSelect>,
   ) => {
     if (unitMappings !== undefined) assertNoCanonicalPriceMapping(unitMappings);
     const { upc, isbn, ...columnData } = productData;
@@ -1877,9 +1892,6 @@ export const updateProduct = async (
     ) {
       await markProductConversionCoverageInputStale(tx, [id]);
     }
-    if (data.price !== undefined || unitMappings !== undefined) {
-      await syncInventoryValuationsForProduct(tx, id);
-    }
     if (externalIds !== undefined) {
       const desired = desiredExternalIds ?? [];
       await assertExternalIdsAvailable(tx, desired, id);
@@ -1899,10 +1911,10 @@ export const updateProduct = async (
         throw createAppError("PRODUCT_NOT_FOUND", `Product ${id} not found`);
       }
 
-      const beforeExternalIds = await tx.query.productExternalId.findMany({
+      const beforeExternalIds = await tx.query.entityExternalId.findMany({
         where: and(
-          eq(productExternalId.productId, id),
-          notDeleted(productExternalId),
+          eq(entityExternalId.entityId, id),
+          notDeleted(entityExternalId),
         ),
       });
 
@@ -1956,7 +1968,7 @@ export const updateProduct = async (
       // reappear in the response) in display order.
       const productImages = await tx.query.entityAttachment.findMany({
         where: and(
-          eq(entityAttachment.subjectEntityId, updated.id),
+          eq(entityAttachment.entityId, updated.id),
           notDeleted(entityAttachment),
         ),
         with: {
@@ -1968,10 +1980,10 @@ export const updateProduct = async (
         ],
       });
 
-      const currentExternalIdRows = await tx.query.productExternalId.findMany({
+      const currentExternalIdRows = await tx.query.entityExternalId.findMany({
         where: and(
-          eq(productExternalId.productId, updated.id),
-          notDeleted(productExternalId),
+          eq(entityExternalId.entityId, updated.id),
+          notDeleted(entityExternalId),
         ),
       });
 
@@ -1983,7 +1995,7 @@ export const updateProduct = async (
 
       if (changes) {
         await logAuditEntry(tx, actor, {
-          entityType: "product",
+          entityKind: "product",
           entityId: updated.id,
           action: "update",
           changes,
@@ -2090,10 +2102,10 @@ export const patchProductExternalIds = async (
     });
     if (!before)
       throw createAppError("PRODUCT_NOT_FOUND", `Product ${id} not found`);
-    const beforeIds = await tx.query.productExternalId.findMany({
+    const beforeIds = await tx.query.entityExternalId.findMany({
       where: and(
-        eq(productExternalId.productId, id),
-        notDeleted(productExternalId),
+        eq(entityExternalId.entityId, id),
+        notDeleted(entityExternalId),
       ),
     });
 
@@ -2116,6 +2128,10 @@ export const patchProductExternalIds = async (
     }
 
     await assertExternalIdsAvailable(tx, input.upsert, id);
+    await ensureExternalSources(
+      tx,
+      input.upsert.map((entry) => entry.source.trim().toLowerCase()),
+    );
 
     // Slots this call is explicitly removing must never be short-circuited by
     // the unchanged-value check below, even if their pre-removal value
@@ -2127,27 +2143,27 @@ export const patchProductExternalIds = async (
     for (const entry of input.remove) {
       const source = entry.source.trim().toLowerCase();
       await tx
-        .update(productExternalId)
+        .update(entityExternalId)
         .set({ deletedAt: new Date() })
         .where(
           and(
-            eq(productExternalId.productId, id),
-            eq(productExternalId.source, source),
-            eq(productExternalId.kind, entry.kind),
-            eq(productExternalId.externalId, entry.expectedExternalId),
-            notDeleted(productExternalId),
+            eq(entityExternalId.entityId, id),
+            eq(entityExternalId.source, source),
+            eq(entityExternalId.kind, entry.kind),
+            eq(entityExternalId.externalId, entry.expectedExternalId),
+            notDeleted(entityExternalId),
           ),
         );
     }
     for (const entry of input.upsert) {
       const source = entry.source.trim().toLowerCase();
       const isPrimary = entry.isPrimary ?? true;
-      const slotRows = await tx.query.productExternalId.findMany({
+      const slotRows = await tx.query.entityExternalId.findMany({
         where: and(
-          eq(productExternalId.productId, id),
-          eq(productExternalId.source, source),
-          eq(productExternalId.kind, entry.kind),
-          notDeleted(productExternalId),
+          eq(entityExternalId.entityId, id),
+          eq(entityExternalId.source, source),
+          eq(entityExternalId.kind, entry.kind),
+          notDeleted(entityExternalId),
         ),
       });
       const liveSlot = isPrimary
@@ -2166,16 +2182,17 @@ export const patchProductExternalIds = async (
         // already enforced by `assertExternalIdsAvailable` above.
         if (liveSlot) {
           await tx
-            .update(productExternalId)
+            .update(entityExternalId)
             .set({
               url: storedExternalIdUrl({ ...entry, source }),
               isPrimary: false,
               updatedAt: new Date(),
             })
-            .where(eq(productExternalId.id, liveSlot.id));
+            .where(eq(entityExternalId.id, liveSlot.id));
         } else {
-          await tx.insert(productExternalId).values({
-            productId: id,
+          await tx.insert(entityExternalId).values({
+            entityId: id,
+            entityKind: "product" as const,
             source,
             kind: entry.kind,
             externalId: entry.externalId,
@@ -2186,9 +2203,10 @@ export const patchProductExternalIds = async (
         continue;
       }
       await tx
-        .insert(productExternalId)
+        .insert(entityExternalId)
         .values({
-          productId: id,
+          entityId: id,
+          entityKind: "product" as const,
           source,
           kind: entry.kind,
           externalId: entry.externalId,
@@ -2200,11 +2218,11 @@ export const patchProductExternalIds = async (
           // index from this, and `deletedAt IS NULL` alone no longer describes
           // any unique index on these columns.
           target: [
-            productExternalId.productId,
-            productExternalId.source,
-            productExternalId.kind,
+            entityExternalId.entityId,
+            entityExternalId.source,
+            entityExternalId.kind,
           ],
-          targetWhere: sql`${productExternalId.isPrimary} AND ${productExternalId.deletedAt} IS NULL`,
+          targetWhere: sql`${entityExternalId.isPrimary} AND ${entityExternalId.deletedAt} IS NULL`,
           set: {
             externalId: entry.externalId,
             url: storedExternalIdUrl({ ...entry, source }),
@@ -2217,10 +2235,10 @@ export const patchProductExternalIds = async (
     // than promotion logic inside the loops.
     await ensureSlotPrimaries(tx, id, [...input.upsert, ...input.remove]);
 
-    const externalIds = await tx.query.productExternalId.findMany({
+    const externalIds = await tx.query.entityExternalId.findMany({
       where: and(
-        eq(productExternalId.productId, id),
-        notDeleted(productExternalId),
+        eq(entityExternalId.entityId, id),
+        notDeleted(entityExternalId),
       ),
     });
     const changes = computeChanges(
@@ -2239,7 +2257,7 @@ export const patchProductExternalIds = async (
         .set({ updatedAt })
         .where(and(eq(product.id, id), notDeleted(product)));
       await logAuditEntry(tx, actor, {
-        entityType: "product",
+        entityKind: "product",
         entityId: id,
         action: "update",
         changes,
@@ -2338,7 +2356,7 @@ export const quickCreateProduct = async (
     }
 
     await logAuditEntry(tx, actor, {
-      entityType: "product",
+      entityKind: "product",
       entityId: inserted.id,
       action: "create",
     });
@@ -2346,8 +2364,8 @@ export const quickCreateProduct = async (
     const rows =
       incomingGtin == null
         ? []
-        : await tx.query.productExternalId.findMany({
-            where: eq(productExternalId.productId, inserted.id),
+        : await tx.query.entityExternalId.findMany({
+            where: eq(entityExternalId.entityId, inserted.id),
           });
     return { newProduct: inserted, externalIds: rows };
   });
@@ -2383,12 +2401,27 @@ type ProductDependentFetcher = (
   ids: ProductId[],
 ) => Promise<Array<{ productId: ProductId | null }>>;
 
+/** Live links of `kind` whose `to` end is one of the products. */
+const liveLinksToProducts =
+  (kind: EntityLinkKind): ProductDependentFetcher =>
+  async (tx, ids) =>
+    (
+      await tx
+        .select({ productId: entityLink.toEntityId })
+        .from(entityLink)
+        .where(and(inArray(entityLink.toEntityId, ids), liveLinks(kind)))
+    ).map((row) => ({ productId: parseEntityId("product", row.productId) }));
+
 const PRODUCT_RETAINING_DEPENDENTS = {
-  "RunTarget.productId": (tx, ids) =>
-    tx.query.runTarget.findMany({
-      where: inArray(runTarget.productId, ids),
-      columns: { productId: true },
-    }),
+  "RunTarget.entityId": async (tx, ids) => {
+    const rows = await tx.query.runTarget.findMany({
+      where: inArray(runTarget.entityId, ids),
+      columns: { entityId: true },
+    });
+    return rows.map(({ entityId }) => ({
+      productId: parseEntityId("product", entityId),
+    }));
+  },
   "Planting.sourceProductId": async (tx, ids) => {
     const rows = await tx.query.planting.findMany({
       where: and(inArray(planting.sourceProductId, ids), notDeleted(planting)),
@@ -2418,22 +2451,8 @@ const PRODUCT_RETAINING_DEPENDENTS = {
       productId: subjectProductId,
     }));
   },
-  "ProjectToolUsage.productId": (tx, ids) =>
-    tx.query.projectToolUsage.findMany({
-      where: and(
-        inArray(projectToolUsage.productId, ids),
-        notDeleted(projectToolUsage),
-      ),
-      columns: { productId: true },
-    }),
-  "PurchaseProduct.productId": (tx, ids) =>
-    tx.query.purchaseProduct.findMany({
-      where: and(
-        inArray(purchaseProduct.productId, ids),
-        notDeleted(purchaseProduct),
-      ),
-      columns: { productId: true },
-    }),
+  "EntityLink[projectTool].to": liveLinksToProducts("projectTool"),
+  "EntityLink[purchaseProduct].to": liveLinksToProducts("purchaseProduct"),
   "MealFoodEntry.productId": (tx, ids) =>
     tx.query.mealFoodEntry.findMany({
       where: and(
@@ -2442,14 +2461,7 @@ const PRODUCT_RETAINING_DEPENDENTS = {
       ),
       columns: { productId: true },
     }),
-  "WishCandidate.productId": (tx, ids) =>
-    tx.query.wishCandidate.findMany({
-      where: and(
-        inArray(wishCandidate.productId, ids),
-        notDeleted(wishCandidate),
-      ),
-      columns: { productId: true },
-    }),
+  "EntityLink[wishCandidate].to": liveLinksToProducts("wishCandidate"),
   "Location.productId": (tx, ids) =>
     tx.query.location.findMany({
       where: and(inArray(location.productId, ids), notDeleted(location)),
@@ -2460,18 +2472,7 @@ const PRODUCT_RETAINING_DEPENDENTS = {
       where: and(inArray(cookbook.productId, ids), notDeleted(cookbook)),
       columns: { productId: true },
     }),
-  "ProductComponent.componentProductId": async (tx, ids) => {
-    const rows = await tx.query.productComponent.findMany({
-      where: and(
-        inArray(productComponent.componentProductId, ids),
-        notDeleted(productComponent),
-      ),
-      columns: { componentProductId: true },
-    });
-    return rows.map(({ componentProductId }) => ({
-      productId: componentProductId,
-    }));
-  },
+  "EntityLink[productComponent].to": liveLinksToProducts("productComponent"),
   // Never read: `Device.productId`'s disposition is "detach", not "block",
   // so the loop below skips it before calling this. Present only to satisfy
   // this map's exhaustiveness over every retaining edge.

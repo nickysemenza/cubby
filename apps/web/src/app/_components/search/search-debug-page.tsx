@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { search } from "~/lib/search.functions";
+import { search } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { getSearchResultRoute } from "./search-utils";
 
@@ -43,9 +43,9 @@ function ResultTable({ title, items }: { title: string; items: SearchHit[] }) {
         </TableHeader>
         <TableBody>
           {items.map((item, index) => (
-            <TableRow key={`${item.entityType}:${item.id}`}>
+            <TableRow key={`${item.entityKind}:${item.id}`}>
               <TableCell>{index + 1}</TableCell>
-              <TableCell>{item.entityType}</TableCell>
+              <TableCell>{item.entityKind}</TableCell>
               <TableCell>
                 <SearchResultEntityLink item={item} />
               </TableCell>

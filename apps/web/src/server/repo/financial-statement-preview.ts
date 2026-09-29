@@ -8,15 +8,15 @@ import {
 import {
   type FinancialStatementImportPreviewInput,
   type FinancialStatementImportPreviewOut,
-  financialTransactionSourceRefs,
 } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, inArray, or, sql } from "drizzle-orm";
-import { uniq } from "es-toolkit";
+import { uniq, uniqBy } from "es-toolkit";
 
 import type { Database } from "~/server/db";
 import { financialAccount, financialTransaction } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import { settlementRefsFor } from "~/server/repo/entity-external-ids";
 import {
   merchantVendorInferences,
   normalizeMerchant,
@@ -89,22 +89,32 @@ export async function previewFinancialStatementImport(
     input.rows.map((row) => statementRowExternalId(row)),
   );
   const dates = uniq(input.rows.map((row) => row.date));
-  // Containment rather than a `jsonb_array_elements` subquery, so the GIN index
-  // on sourceRefs serves the probe instead of a per-ref sequential scan. One
-  // clause per pair: a multi-element containment operand means "contains all of
-  // these", not "any of these". The source comes from the row rather than a
-  // literal, so a non-monarch export looks itself up rather than nothing.
-  const sourceRefLookup = or(
-    ...uniq(
-      input.rows.map((row, index) =>
-        JSON.stringify([
-          { source: row.source, externalId: sourceRefIds[index]! },
-        ]),
-      ),
-    ).map(
-      (operand) => sql`${financialTransaction.sourceRefs} @> ${operand}::jsonb`,
-    ),
+  // Transactions already holding one of these rows' settlement references,
+  // probed on the live `(source, kind, externalId)` unique. The source comes
+  // from the row rather than a literal, so a non-monarch export looks itself
+  // up rather than nothing.
+  const pairs = uniqBy(
+    input.rows.map((row, index) => ({
+      source: row.source,
+      externalId: sourceRefIds[index]!,
+    })),
+    (pair) => `${pair.source}\0${pair.externalId}`,
   );
+  const sourceRefLookup =
+    pairs.length === 0
+      ? undefined
+      : sql`EXISTS (
+          SELECT 1 FROM "EntityExternalId" px
+          WHERE px."entityId" = "FinancialTransaction"."id"
+            AND px."kind" = 'settlement_ref' AND px."deletedAt" IS NULL
+            AND (${sql.join(
+              pairs.map(
+                (pair) =>
+                  sql`(px."source" = ${pair.source} AND px."externalId" = ${pair.externalId})`,
+              ),
+              sql` OR `,
+            )})
+        )`;
   const [accounts, transactions] = await Promise.all([
     unwrapDb(db)
       .select({
@@ -125,7 +135,6 @@ export async function previewFinancialStatementImport(
         amount: financialTransaction.amount,
         postedDate: financialTransaction.postedDate,
         rawDescription: financialTransaction.rawDescription,
-        sourceRefs: financialTransaction.sourceRefs,
       })
       .from(financialTransaction)
       .where(
@@ -148,11 +157,13 @@ export async function previewFinancialStatementImport(
     sourceAliases: financialAccountSourceAliases.parse(account.sourceAliases),
     cardNumbers: financialAccountCardNumbers.parse(account.cardNumbers),
   }));
+  const refsByTransaction = await settlementRefsFor(
+    db,
+    transactions.map((transaction) => transaction.id),
+  );
   const parsedTransactions = transactions.map((transaction) => ({
     ...transaction,
-    sourceRefs:
-      financialTransactionSourceRefs.safeParse(transaction.sourceRefs).data ??
-      [],
+    sourceRefs: refsByTransaction.get(transaction.id) ?? [],
   }));
 
   const rows = input.rows.map((row, index) => {

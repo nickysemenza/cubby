@@ -3,9 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useMemo } from "react";
 
-import { recipe } from "~/app/recipes/recipe.functions";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Stack } from "~/components/layout";
+import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import type { GraphData, GraphFilters } from "./dependency-graph-model";
 import { DependencyGraphViewer } from "./dependency-graph-viewer";

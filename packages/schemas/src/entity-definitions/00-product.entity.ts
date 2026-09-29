@@ -1341,6 +1341,55 @@ export default defineEntity({
       export: "productWithFoodMcpEntityOut",
     },
   },
+  storage: {
+    indexes: [
+      {
+        on: ["name", "manufacturer"],
+        unique: true,
+        where: "{deletedAt} IS NULL",
+      },
+      { on: ["createdAt"] },
+      // No GIN on `aliases` (here, Ingredient, or Location): every alias filter
+      // is `unnest(aliases) ILIKE`, which an array GIN cannot serve — those
+      // index @>/&&/= ANY. EXPLAIN confirms a seq scan with a per-row SubPlan
+      // either way, so the index was pure write cost.
+      { trigram: "name" },
+      { trigram: "manufacturer" },
+      { on: ["name", "manufacturer"] },
+      {
+        name: "Product_name_active_idx",
+        on: ["name"],
+        where: "{deletedAt} IS NULL",
+      },
+      {
+        name: "Product_manufacturer_active_idx",
+        on: ["manufacturer"],
+        where: "{deletedAt} IS NULL",
+      },
+    ],
+    relations: {
+      category: "categoryId",
+      ingredient: { field: "ingredientId", relationName: "ProductIngredient" },
+      growsPlant: "growsPlantId",
+      unitMappings: { many: "productUnitMappings" },
+      mealFoodEntries: { many: "mealFoodEntry" },
+      conversionCoverage: { one: "productConversionCoverage" },
+      externalIds: {
+        many: "entityExternalId",
+        relationName: "productExternalIds",
+      },
+      inventoryEntry: { many: "inventoryEntry" },
+      images: { many: "entityAttachment" },
+      expenses: { many: "expense" },
+      // Locations that ARE an instance of this product (a bin, tote, rack).
+      // Distinct from `inventoryEntry`, which is stock held AT a location.
+      locations: { many: "location" },
+      // Cookbooks whose physical copy this product is. `many` only because
+      // Drizzle models the reverse of a nullable FK that way — in practice
+      // it's 0 or 1.
+      cookbooks: { many: "cookbook" },
+    },
+  },
   filters: {
     audit: true,
     schema: { module: "@cubby/schemas/product", export: "productFilterFields" },
@@ -1495,16 +1544,32 @@ export default defineEntity({
         kind: "range",
         placeholder: "Filter net basis...",
         options: [
-          { value: "positive", label: "Positive basis" },
-          { value: "zero", label: "Zero basis" },
-          { value: "negative", label: "Credit / negative" },
-          { value: "gte100", label: "$100 and up" },
-          { value: "gte500", label: "$500 and up" },
+          {
+            value: "positive",
+            label: "Positive basis",
+            expand: { expenseTotalMin: 0.01 },
+          },
+          {
+            value: "zero",
+            label: "Zero basis",
+            expand: { expenseTotalMin: 0, expenseTotalMax: 0 },
+          },
+          {
+            value: "negative",
+            label: "Credit / negative",
+            expand: { expenseTotalMax: -0.01 },
+          },
+          {
+            value: "gte100",
+            label: "$100 and up",
+            expand: { expenseTotalMin: 100 },
+          },
+          {
+            value: "gte500",
+            label: "$500 and up",
+            expand: { expenseTotalMin: 500 },
+          },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveNetBasis",
-        },
       },
       {
         columnId: "ledgerExpectedQuantity",
@@ -1519,16 +1584,32 @@ export default defineEntity({
         placeholder: "Filter expected quantity...",
         deriveSchema: true,
         options: [
-          { value: "negative", label: "Negative (sold more than bought)" },
-          { value: "zero", label: "Zero (none expected)" },
-          { value: "positive", label: "One or more expected" },
-          { value: "gte5", label: "5 or more expected" },
-          { value: "unknown", label: "Has lines with no quantity" },
+          {
+            value: "negative",
+            label: "Negative (sold more than bought)",
+            expand: { expectedQuantityMax: -1 },
+          },
+          {
+            value: "zero",
+            label: "Zero (none expected)",
+            expand: { expectedQuantityMin: 0, expectedQuantityMax: 0 },
+          },
+          {
+            value: "positive",
+            label: "One or more expected",
+            expand: { expectedQuantityMin: 1 },
+          },
+          {
+            value: "gte5",
+            label: "5 or more expected",
+            expand: { expectedQuantityMin: 5 },
+          },
+          {
+            value: "unknown",
+            label: "Has lines with no quantity",
+            expand: { unknownQuantityLinesFilter: "has" },
+          },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveExpectedQuantity",
-        },
       },
       {
         columnId: "quantityVariance",
@@ -1536,13 +1617,17 @@ export default defineEntity({
         wire: { kind: "param", name: "quantityVarianceFilter" },
         placeholder: "Filter shelf vs. ledger...",
         options: [
-          { value: "mismatched", label: "Shelf disagrees with ledger" },
-          { value: "matched", label: "Shelf matches ledger" },
+          {
+            value: "mismatched",
+            label: "Shelf disagrees with ledger",
+            expand: { quantityVarianceFilter: "mismatched" },
+          },
+          {
+            value: "matched",
+            label: "Shelf matches ledger",
+            expand: { quantityVarianceFilter: "matched" },
+          },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveQuantityVariance",
-        },
       },
       {
         columnId: "notes",
@@ -1595,15 +1680,29 @@ export default defineEntity({
         wire: { kind: "param", name: "pricePresenceFilter" },
         placeholder: "Filter price...",
         options: [
-          { value: "has", label: "Has price", meta: true },
-          { value: "none", label: "(none)", meta: true },
-          { value: "none-real", label: "No price (excluding buckets)" },
-          { value: "none-bucket", label: "No price (buckets only)" },
+          {
+            value: "has",
+            label: "Has price",
+            meta: true,
+            expand: { pricePresenceFilter: "has" },
+          },
+          {
+            value: "none",
+            label: "(none)",
+            meta: true,
+            expand: { pricePresenceFilter: "none" },
+          },
+          {
+            value: "none-real",
+            label: "No price (excluding buckets)",
+            expand: { pricePresenceFilter: "none", miscBucketFilter: "none" },
+          },
+          {
+            value: "none-bucket",
+            label: "No price (buckets only)",
+            expand: { pricePresenceFilter: "none", miscBucketFilter: "has" },
+          },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolvePrice",
-        },
       },
       {
         columnId: "food",
@@ -1743,7 +1842,7 @@ export default defineEntity({
         placeholder: "Search related used on projects...",
       },
       {
-        // Components of a kit: products on the kit's `ProductComponent` rows.
+        // Components of a kit: products on the kit's `productComponent` links.
         columnId: "kitId",
         kind: "idMulti",
         placeholder: "Filter by kit...",
@@ -1751,7 +1850,7 @@ export default defineEntity({
         urlOnly: true,
       },
       {
-        // Kits containing a component: parents on its `ProductComponent` rows.
+        // Kits containing a component: parents on its `productComponent` links.
         columnId: "componentId",
         kind: "idMulti",
         placeholder: "Filter by component...",
@@ -1991,14 +2090,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "ProjectToolUsage.productId", direction: "incoming" },
-          { edge: "ProjectToolUsage.projectId", direction: "outgoing" },
+          { edge: "EntityLink[projectTool].to", direction: "incoming" },
+          { edge: "EntityLink[projectTool].from", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "ProjectToolUsage.projectId", direction: "incoming" },
-          { edge: "ProjectToolUsage.productId", direction: "outgoing" },
+          { edge: "EntityLink[projectTool].from", direction: "incoming" },
+          { edge: "EntityLink[projectTool].to", direction: "outgoing" },
         ],
       },
     },
@@ -2068,17 +2167,20 @@ export default defineEntity({
           provenance: {
             kind: "local-path",
             steps: [
-              { edge: "PurchaseProduct.productId", direction: "incoming" },
+              { edge: "EntityLink[purchaseProduct].to", direction: "incoming" },
               {
-                edge: "PurchaseProduct.purchaseId",
+                edge: "EntityLink[purchaseProduct].from",
                 direction: "outgoing",
               },
             ],
           },
           inverse: {
             steps: [
-              { edge: "PurchaseProduct.purchaseId", direction: "incoming" },
-              { edge: "PurchaseProduct.productId", direction: "outgoing" },
+              {
+                edge: "EntityLink[purchaseProduct].from",
+                direction: "incoming",
+              },
+              { edge: "EntityLink[purchaseProduct].to", direction: "outgoing" },
             ],
           },
         },
@@ -2169,14 +2271,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "WishCandidate.productId", direction: "incoming" },
-          { edge: "WishCandidate.wishId", direction: "outgoing" },
+          { edge: "EntityLink[wishCandidate].to", direction: "incoming" },
+          { edge: "EntityLink[wishCandidate].from", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "WishCandidate.wishId", direction: "incoming" },
-          { edge: "WishCandidate.productId", direction: "outgoing" },
+          { edge: "EntityLink[wishCandidate].from", direction: "incoming" },
+          { edge: "EntityLink[wishCandidate].to", direction: "outgoing" },
         ],
       },
     },
@@ -2201,14 +2303,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "EntityAttachment.subjectEntityId", direction: "incoming" },
+          { edge: "EntityAttachment.entityId", direction: "incoming" },
           { edge: "EntityAttachment.imageId", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
           { edge: "EntityAttachment.imageId", direction: "incoming" },
-          { edge: "EntityAttachment.subjectEntityId", direction: "outgoing" },
+          { edge: "EntityAttachment.entityId", direction: "outgoing" },
         ],
       },
     },
@@ -2221,9 +2323,9 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "ProductComponent.parentProductId", direction: "incoming" },
+          { edge: "EntityLink[productComponent].from", direction: "incoming" },
           {
-            edge: "ProductComponent.componentProductId",
+            edge: "EntityLink[productComponent].to",
             direction: "outgoing",
           },
         ],
@@ -2231,10 +2333,10 @@ export default defineEntity({
       inverse: {
         steps: [
           {
-            edge: "ProductComponent.componentProductId",
+            edge: "EntityLink[productComponent].to",
             direction: "incoming",
           },
-          { edge: "ProductComponent.parentProductId", direction: "outgoing" },
+          { edge: "EntityLink[productComponent].from", direction: "outgoing" },
         ],
       },
       mutation: {
@@ -2264,17 +2366,17 @@ export default defineEntity({
         kind: "local-path",
         steps: [
           {
-            edge: "ProductComponent.componentProductId",
+            edge: "EntityLink[productComponent].to",
             direction: "incoming",
           },
-          { edge: "ProductComponent.parentProductId", direction: "outgoing" },
+          { edge: "EntityLink[productComponent].from", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "ProductComponent.parentProductId", direction: "incoming" },
+          { edge: "EntityLink[productComponent].from", direction: "incoming" },
           {
-            edge: "ProductComponent.componentProductId",
+            edge: "EntityLink[productComponent].to",
             direction: "outgoing",
           },
         ],
@@ -2288,7 +2390,7 @@ export default defineEntity({
       provenance: {
         kind: "external",
         system: "usda-api",
-        sourceColumns: ["ProductExternalId.externalId", "Product.fdc_id"],
+        sourceColumns: ["EntityExternalId.externalId", "Product.fdc_id"],
       },
     },
   ],
@@ -2345,6 +2447,7 @@ export default defineEntity({
           facet: "provenance",
           label: "No image (stocked)",
           message: "No product image is attached.",
+          coverage: "productsWithNoImages",
         },
         {
           id: "amazon_asin",
@@ -2392,6 +2495,13 @@ export default defineEntity({
     bulkUpdate: { fields: ["stockTracked"] },
     merge: true,
     operationOwners: { delete: "kernel", merge: "kernel" },
+    // Receipt lines name products loosely; a miss is the caller's decision
+    // (create, merge, or pick a candidate), never an automatic row.
+    resolve: {
+      match: ["name", "aliases"],
+      createMissing: false,
+      candidates: 3,
+    },
     mcp: [
       "get",
       "list",
@@ -2424,8 +2534,8 @@ export default defineEntity({
     mcpNames: { overrides: { list: "search_products" } },
     ports: {
       repository: {
-        module: "~/server/repo/product/entity-adapter",
-        export: "productEntityAdapter",
+        module: "~/server/repo/product/repository",
+        export: "productRepository",
       },
       timeline: {
         module: "~/server/repo/product/movement-timeline",

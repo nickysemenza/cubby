@@ -56,7 +56,7 @@ const chunks = <T>(items: readonly T[], size: number): T[][] => {
 
 const pathRecordKey = (path: EntityGraphPath): string =>
   path.nodeRefs
-    .map((ref) => entityRefKey(ref.entityType, ref.entityId))
+    .map((ref) => entityRefKey(ref.entityKind, ref.entityId))
     .join(">");
 
 const pathKey = (path: EntityGraphPath): string =>
@@ -86,7 +86,7 @@ const addPath = (
 };
 
 const branchKey = (branch: EntityGraphBranch): string =>
-  `${entityRefKey(branch.root.entityType, branch.root.entityId)}|${branch.relationshipKey}`;
+  `${entityRefKey(branch.root.entityKind, branch.root.entityId)}|${branch.relationshipKey}`;
 
 const uniqueBranches = (
   branches: readonly EntityGraphBranch[],
@@ -96,7 +96,7 @@ const uniqueBranches = (
   ...new Map<string, EntityGraphBranch>(
     branches.map((branch): [string, EntityGraphBranch] => {
       const firstOmitted = branch.items.findIndex((item) => {
-        const itemKey = entityRefKey(item.entityType, item.entityId);
+        const itemKey = entityRefKey(item.entityKind, item.entityId);
         return (
           !nodeKeys.has(itemKey) ||
           !branch.edgeIds.some((id) => {
@@ -105,7 +105,7 @@ const uniqueBranches = (
               edge !== undefined &&
               [edge.source, edge.target].some(
                 (endpoint) =>
-                  entityRefKey(endpoint.entityType, endpoint.entityId) ===
+                  entityRefKey(endpoint.entityKind, endpoint.entityId) ===
                   itemKey,
               )
             );
@@ -115,7 +115,7 @@ const uniqueBranches = (
       const items =
         firstOmitted < 0 ? branch.items : branch.items.slice(0, firstOmitted);
       const itemKeys = new Set(
-        items.map((item) => entityRefKey(item.entityType, item.entityId)),
+        items.map((item) => entityRefKey(item.entityKind, item.entityId)),
       );
       return [
         branchKey(branch),
@@ -128,7 +128,7 @@ const uniqueBranches = (
               edge !== undefined &&
               [edge.source, edge.target].some((endpoint) =>
                 itemKeys.has(
-                  entityRefKey(endpoint.entityType, endpoint.entityId),
+                  entityRefKey(endpoint.entityKind, endpoint.entityId),
                 ),
               )
             );
@@ -161,7 +161,7 @@ export async function exploreEntityGraph(
   const limits = { ...DEFAULT_LIMITS, ...options.limits };
   const now = options.now ?? Date.now;
   const deadline = now() + limits.deadlineMs;
-  const rootKey = entityRefKey(root.entityType, root.entityId);
+  const rootKey = entityRefKey(root.entityKind, root.entityId);
   const acceptedRefs = new Map<string, EntityRef>([[rootKey, root]]);
   const nodes = new Map<string, EntityGraphNode>();
   const edges = new Map<string, EntityGraphEdge>();
@@ -191,7 +191,7 @@ export async function exploreEntityGraph(
         if (branch.nextOffset !== null) paginationReached = true;
       }
       for (const node of graph.nodes) {
-        const key = entityRefKey(node.entityType, node.entityId);
+        const key = entityRefKey(node.entityKind, node.entityId);
         if (!acceptedRefs.has(key)) {
           if (acceptedRefs.size >= limits.maxNodes) {
             budgetReached = true;
@@ -203,17 +203,17 @@ export async function exploreEntityGraph(
       }
 
       const batchKeys = new Set(
-        batch.map((item) => entityRefKey(item.entityType, item.entityId)),
+        batch.map((item) => entityRefKey(item.entityKind, item.entityId)),
       );
       for (const edge of [...graph.edges].sort((left, right) =>
         left.id.localeCompare(right.id),
       )) {
         const sourceKey = entityRefKey(
-          edge.source.entityType,
+          edge.source.entityKind,
           edge.source.entityId,
         );
         const targetKey = entityRefKey(
-          edge.target.entityType,
+          edge.target.entityKind,
           edge.target.entityId,
         );
         if (!acceptedRefs.has(sourceKey) || !acceptedRefs.has(targetKey)) {
@@ -234,7 +234,7 @@ export async function exploreEntityGraph(
           const from = visits.get(fromKey);
           if (!from || from.distance !== frontierDepth) continue;
           const neighborKey = entityRefKey(
-            neighbor.entityType,
+            neighbor.entityKind,
             neighbor.entityId,
           );
           const distance = frontierDepth + 1;
@@ -250,7 +250,7 @@ export async function exploreEntityGraph(
             if (
               path.nodeRefs.some(
                 (ref) =>
-                  entityRefKey(ref.entityType, ref.entityId) === neighborKey,
+                  entityRefKey(ref.entityKind, ref.entityId) === neighborKey,
               )
             ) {
               continue;
@@ -269,8 +269,8 @@ export async function exploreEntityGraph(
       if (budgetReached) break;
     }
     frontier = [...next.values()].sort((left, right) =>
-      entityRefKey(left.entityType, left.entityId).localeCompare(
-        entityRefKey(right.entityType, right.entityId),
+      entityRefKey(left.entityKind, left.entityId).localeCompare(
+        entityRefKey(right.entityKind, right.entityId),
       ),
     );
     frontierDepth += 1;
@@ -281,10 +281,10 @@ export async function exploreEntityGraph(
   const candidateEdges = [...edges.values()].filter(
     (edge) =>
       candidateNodeKeys.has(
-        entityRefKey(edge.source.entityType, edge.source.entityId),
+        entityRefKey(edge.source.entityKind, edge.source.entityId),
       ) &&
       candidateNodeKeys.has(
-        entityRefKey(edge.target.entityType, edge.target.entityId),
+        entityRefKey(edge.target.entityKind, edge.target.entityId),
       ),
   );
   const candidateEdgeIds = new Set(candidateEdges.map((edge) => edge.id));
@@ -300,16 +300,16 @@ export async function exploreEntityGraph(
   const retainedNodeKeys = new Set(
     paths
       .flatMap((path) => path.nodeRefs)
-      .map((ref) => entityRefKey(ref.entityType, ref.entityId)),
+      .map((ref) => entityRefKey(ref.entityKind, ref.entityId)),
   );
   if (nodes.has(rootKey)) retainedNodeKeys.add(rootKey);
   const retainedEdges = candidateEdges.filter(
     (edge) =>
       retainedNodeKeys.has(
-        entityRefKey(edge.source.entityType, edge.source.entityId),
+        entityRefKey(edge.source.entityKind, edge.source.entityId),
       ) &&
       retainedNodeKeys.has(
-        entityRefKey(edge.target.entityType, edge.target.entityId),
+        entityRefKey(edge.target.entityKind, edge.target.entityId),
       ),
   );
   const retainedEdgesById = new Map(

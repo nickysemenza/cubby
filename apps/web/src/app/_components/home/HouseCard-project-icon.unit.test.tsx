@@ -3,7 +3,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { task } from "~/app/tasks/task.functions";
+import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 

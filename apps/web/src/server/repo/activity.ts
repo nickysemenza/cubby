@@ -195,6 +195,13 @@ function listPredicate(input: ActivityListInput): SQL {
     clauses.push(sql`"parentRunId" = ${input.parentRunId}`);
   if (input.kind) clauses.push(sql`kind = ${input.kind}`);
   if (input.trigger) clauses.push(sql`trigger = ${input.trigger}`);
+  if (input.excludeTriggers?.length)
+    clauses.push(
+      sql`(trigger IS NULL OR trigger NOT IN (${sql.join(
+        input.excludeTriggers.map((value) => sql`${value}`),
+        sql`, `,
+      )}))`,
+    );
   if (input.vendorAccountId)
     clauses.push(sql`"vendorAccountId" = ${input.vendorAccountId}`);
   if (input.vendorId) clauses.push(sql`"vendorId" = ${input.vendorId}`);
@@ -215,8 +222,8 @@ function listPredicate(input: ActivityListInput): SQL {
       OR internal_id IN (
         SELECT t."runId"
         FROM "RunTarget" t
-        LEFT JOIN "Product" product ON product.id = t."productId" AND product."deletedAt" IS NULL
-        LEFT JOIN "Purchase" purchase ON purchase.id = t."purchaseId" AND purchase."deletedAt" IS NULL
+        LEFT JOIN "Product" product ON product.id = t."entityId" AND product."deletedAt" IS NULL
+        LEFT JOIN "Purchase" purchase ON purchase.id = t."entityId" AND purchase."deletedAt" IS NULL
         WHERE product.shortcode = ${input.subjectId} OR purchase.shortcode = ${input.subjectId}
       )
     )`);

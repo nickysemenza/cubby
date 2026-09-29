@@ -190,7 +190,7 @@ export function BoardCell({
     () =>
       cards.flatMap((task) =>
         task.projectId
-          ? [{ entityType: "project" as const, entityId: task.projectId }]
+          ? [{ entityKind: "project" as const, entityId: task.projectId }]
           : [],
       ),
     [cards],

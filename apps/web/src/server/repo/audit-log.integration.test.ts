@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { AuditEntityType } from "@cubby/schemas/audit";
+import type { AuditEntityKind } from "@cubby/schemas/audit";
 import type { AuditChannel } from "@cubby/schemas/context";
 import { testShortcode } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
@@ -8,8 +8,8 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { auditLog, product } from "~/server/db/schema";
+import { listAuditLog } from "~/server/operations/audit-log";
 import { getAuditLog } from "~/server/repo/audit-log";
-import { listAuditLog } from "~/server/workflows/audit-log";
 
 import { insertAndReturn, withTransaction } from "./database-helpers";
 import {
@@ -23,7 +23,7 @@ import { insertWithShortcode } from "./shortcode-utils";
 
 /**
  * `getAuditLog` filters by `channel` and a `createdAtFrom`/
- * `createdAtTo` window on top of the existing entityType/entityId/cursor
+ * `createdAtTo` window on top of the existing entityKind/entityId/cursor
  * filters. Rows are inserted directly against the `auditLog` table (rather
  * than through `logAuditEntry`) so each test can pin an exact `createdAt` —
  * `logAuditEntry` always stamps `defaultNow()`.
@@ -37,24 +37,23 @@ describe("getAuditLog — channel + time window", () => {
       makeProductInput({ name: "Audit subject fixture" }),
       ctx.actor,
     );
-    const listed = await listAuditLog({
-      db: ctx.db,
-      data: { entityType: "product", entityId: record.id, limit: 50 },
+    const listed = await listAuditLog(ctx.db, {
+      entityKind: "product",
+      entityId: record.id,
+      limit: 50,
     });
     expect(listed.entries.length).toBeGreaterThan(0);
     expect(
-      await listAuditLog({
-        db: ctx.db,
-        data: { entityType: "ingredient", entityId: record.id, limit: 50 },
+      await listAuditLog(ctx.db, {
+        entityKind: "ingredient",
+        entityId: record.id,
+        limit: 50,
       }),
     ).toEqual({ entries: [] });
     expect(
-      await listAuditLog({
-        db: ctx.db,
-        data: {
-          entityId: testShortcode("product", "missing-audit-subject"),
-          limit: 50,
-        },
+      await listAuditLog(ctx.db, {
+        entityId: testShortcode("product", "missing-audit-subject"),
+        limit: 50,
       }),
     ).toEqual({ entries: [] });
   });
@@ -69,7 +68,7 @@ describe("getAuditLog — channel + time window", () => {
       manufacturer: "Test Mfr",
     });
     return insertAndReturn(ctx.db, auditLog, {
-      entityType: "product",
+      entityKind: "product",
       entityId: subject.id,
       action: "update",
       userId: ctx.actor.userId,
@@ -134,9 +133,9 @@ describe("getAuditLog — channel + time window", () => {
 describe("getAuditLog — entityName", () => {
   const ctx = withTestDb();
 
-  const auditRowFor = (entityType: AuditEntityType, entityId: string) =>
+  const auditRowFor = (entityKind: AuditEntityKind, entityId: string) =>
     insertAndReturn(ctx.db, auditLog, {
-      entityType,
+      entityKind,
       entityId,
       action: "update",
       userId: ctx.actor.userId,
@@ -157,7 +156,7 @@ describe("getAuditLog — entityName", () => {
 
     const { entries } = await getAuditLog(ctx.db, {
       limit: 50,
-      entityType: "product",
+      entityKind: "product",
     });
     expect(entries[0]?.entityName).toBe("Retired Blade");
   });
@@ -186,7 +185,7 @@ describe("getAuditLog — entityName", () => {
 
     const { entries } = await getAuditLog(ctx.db, {
       limit: 50,
-      entityType: "inventory",
+      entityKind: "inventory",
     });
     expect(entries[0]?.entityName).toBe("Cast Iron Skillet · Garage");
   });

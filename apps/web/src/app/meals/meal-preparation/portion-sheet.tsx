@@ -5,7 +5,6 @@ import type {
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
-import { format, parseISO } from "date-fns";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
@@ -16,6 +15,7 @@ import { DialogFooter } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
+import { formatCalendarDay } from "~/lib/date-format";
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
 
 import { FoodAmountEditor, formatFoodAmount } from "../food-amount-editor";
@@ -161,10 +161,7 @@ export function PortionSheet({
     !isSaving;
 
   const sourceDate = useMemo(() => {
-    const date = parseISO(source.sourceMeal.date);
-    return Number.isNaN(date.valueOf())
-      ? source.sourceMeal.date
-      : format(date, "MMM d");
+    return formatCalendarDay(source.sourceMeal.date, "monthDay");
   }, [source.sourceMeal.date]);
 
   const updateRow = (index: number, patch: Partial<PortionDraft>) => {

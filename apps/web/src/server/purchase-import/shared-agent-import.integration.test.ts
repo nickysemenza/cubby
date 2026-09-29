@@ -2,21 +2,23 @@ import {
   commitPurchaseImportInput,
   validatePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  entityExternalId,
+  auditLog,
   expense,
   financialTransactionAllocation,
+  product,
+  purchase,
   runFinding,
   runOperation,
   runTarget,
-  product,
-  productExternalId,
-  purchase,
 } from "~/server/db/schema";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
+import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import {
   createProductFixture,
   makeProductInput,
@@ -62,8 +64,10 @@ describe("shared purchase-import prepare and commit", () => {
       .where(eq(product.id, existingProduct.entityId));
     if (!existingProductRow) throw new Error("Product fixture was not created");
     await withTransaction(ctx.db, async (tx) => {
-      await tx.insert(productExternalId).values({
-        productId: existingProduct.entityId,
+      await ensureExternalSources(tx, ["amazon", "gtin"]);
+      await tx.insert(entityExternalId).values({
+        entityId: existingProduct.entityId,
+        entityKind: "product" as const,
         source: "amazon",
         kind: "asin",
         externalId: "B012345678",
@@ -218,6 +222,36 @@ describe("shared purchase-import prepare and commit", () => {
         eq(financialTransactionAllocation.purchaseId, writtenPurchases[0]!.id),
       );
     expect(allocations).toEqual([{ transactionId: postedCharge.id }]);
+
+    // The import's writes are recorded once, under the Run, in the shared
+    // audit trail; a replay of the same commit adds nothing.
+    const runAudit = await getDb(ctx.db)
+      .select({
+        entityKind: auditLog.entityKind,
+        entityId: auditLog.entityId,
+        action: auditLog.action,
+        userId: auditLog.userId,
+      })
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.runId, run.id),
+          inArray(auditLog.entityKind, ["purchase", "expense"]),
+        ),
+      );
+    expect(runAudit).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          entityKind: "purchase",
+          entityId: writtenPurchases[0]!.id,
+          userId: ctx.actor.userId,
+        }),
+        expect.objectContaining({ entityKind: "expense", action: "create" }),
+      ]),
+    );
+    expect(
+      runAudit.filter((row) => row.entityKind === "purchase"),
+    ).toHaveLength(1);
   });
 
   it("matches a photo-recorded barcode exactly when the order line SKU is that UPC", async () => {
@@ -249,8 +283,10 @@ describe("shared purchase-import prepare and commit", () => {
       .where(eq(product.id, photoProduct.entityId));
     if (!photoProductRow) throw new Error("Product fixture was not created");
     await withTransaction(ctx.db, async (tx) => {
-      await tx.insert(productExternalId).values({
-        productId: photoProduct.entityId,
+      await ensureExternalSources(tx, ["amazon", "gtin"]);
+      await tx.insert(entityExternalId).values({
+        entityId: photoProduct.entityId,
+        entityKind: "product" as const,
         source: "gtin",
         kind: "gtin_14",
         externalId: "00012345678905",
@@ -986,7 +1022,7 @@ describe("shared purchase-import prepare and commit", () => {
     const findings = await getDb(ctx.db)
       .select({ kind: runFinding.kind })
       .from(runFinding)
-      .where(eq(runFinding.targetId, manualPurchase.id));
+      .where(eq(runFinding.entityId, manualPurchase.id));
     expect(findings.some((row) => row.kind === "duplicate_lines")).toBe(true);
   });
 });

@@ -31,7 +31,7 @@ const guideRows = async (
   plantingIds: readonly string[],
 ): Promise<EntityTimelineRow[]> => {
   if (plantingIds.length === 0) return [];
-  const rows = await getDb(context.readDb)
+  const rows = await getDb(context.db)
     .select({
       shortcode: planting.shortcode,
       plantName: plant.name,

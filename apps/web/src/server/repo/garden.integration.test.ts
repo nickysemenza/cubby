@@ -4,10 +4,11 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
-import { gardenEntry, gardenEntryPlanting, planting } from "~/server/db/schema";
+import { entityLink, gardenEntry, planting } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { getAuditLog } from "~/server/repo/audit-log";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { getDb } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import {
   createGardenEntry,
   createPlanting,
@@ -16,7 +17,7 @@ import {
   updateGardenEntry,
   updatePlanting,
 } from "~/server/repo/garden";
-import { plantingEntityAdapter } from "~/server/repo/garden/entity-adapters";
+import { plantingRepository } from "~/server/repo/garden/repository";
 import { createLocation } from "~/server/repo/location";
 import {
   createPlantFixture,
@@ -27,7 +28,7 @@ import {
 import { getSearchDocumentEmbeddingText } from "~/server/repo/search-document";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { createTask } from "~/server/repo/task/crud";
-import { taskEntityAdapter } from "~/server/repo/task/entity-adapter";
+import { taskRepository } from "~/server/repo/task/repository";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 describe("garden workflows", () => {
@@ -127,7 +128,7 @@ describe("garden workflows", () => {
         plantingIds: [sowed.id],
         kind: "note",
         observedOn,
-        note: "First same-day entry",
+        notes: "First same-day entry",
         pendingImageIds: [],
       },
       TEST_ACTOR,
@@ -139,7 +140,7 @@ describe("garden workflows", () => {
         plantingIds: [sowed.id],
         kind: "note",
         observedOn,
-        note: "Second same-day entry",
+        notes: "Second same-day entry",
         pendingImageIds: [],
       },
       TEST_ACTOR,
@@ -197,7 +198,7 @@ describe("garden workflows", () => {
         plantingIds: [second.id, first.id],
         kind: "note",
         observedOn: "2026-06-15",
-        note: "Two plantings",
+        notes: "Two plantings",
         pendingImageIds: [],
       },
       TEST_ACTOR,
@@ -242,7 +243,7 @@ describe("garden workflows", () => {
         plantingIds: [target.id],
         kind: "note",
         observedOn: "2026-05-01",
-        note: "Direct note",
+        notes: "Direct note",
         pendingImageIds: [],
       },
       TEST_ACTOR,
@@ -254,7 +255,7 @@ describe("garden workflows", () => {
         plantingIds: [],
         kind: "note",
         observedOn: "2026-05-15",
-        note: "Whole-bed note in window",
+        notes: "Whole-bed note in window",
         pendingImageIds: [],
       },
       TEST_ACTOR,
@@ -266,7 +267,7 @@ describe("garden workflows", () => {
         plantingIds: [],
         kind: "note",
         observedOn: "2026-03-01",
-        note: "Whole-bed note before sowing",
+        notes: "Whole-bed note before sowing",
         pendingImageIds: [],
       },
       TEST_ACTOR,
@@ -278,7 +279,7 @@ describe("garden workflows", () => {
         plantingIds: [],
         kind: "note",
         observedOn: "2026-07-01",
-        note: "Whole-bed note after finishing",
+        notes: "Whole-bed note after finishing",
         pendingImageIds: [],
       },
       TEST_ACTOR,
@@ -290,7 +291,7 @@ describe("garden workflows", () => {
         plantingIds: [],
         kind: "note",
         observedOn: "2026-05-15",
-        note: "Other bed note",
+        notes: "Other bed note",
         pendingImageIds: [],
       },
       TEST_ACTOR,
@@ -348,7 +349,7 @@ describe("garden workflows", () => {
       TEST_ACTOR,
     );
     const unchangedAudit = await getAuditLog(ctx.db, {
-      entityType: "gardenEntry",
+      entityKind: "gardenEntry",
       entityIds: [entryId!],
       limit: 10,
     });
@@ -365,7 +366,7 @@ describe("garden workflows", () => {
       TEST_ACTOR,
     );
     const changedAudit = await getAuditLog(ctx.db, {
-      entityType: "gardenEntry",
+      entityKind: "gardenEntry",
       entityIds: [entryId!],
       limit: 10,
     });
@@ -414,19 +415,19 @@ describe("garden workflows", () => {
         plantingIds: [target.id, retained.id],
         kind: "note",
         observedOn: "2026-05-01",
-        note: "Kept on delete",
+        notes: "Kept on delete",
         pendingImageIds: [],
       },
       TEST_ACTOR,
     );
 
-    const result = await plantingEntityAdapter.repository.delete(
+    const result = await plantingRepository.repository.delete!(
       kernelContext(ctx.db),
       [target.id],
     );
     expect(result.affectedEdges).toContainEqual(
       expect.objectContaining({
-        edge: "GardenEntryPlanting.plantingId",
+        edge: "EntityLink[gardenEntryPlanting].to",
         effect: "soft-delete",
         changed: 1,
       }),
@@ -441,7 +442,7 @@ describe("garden workflows", () => {
     expect(row).toMatchObject({ deletedAt: null });
 
     const audit = await getAuditLog(ctx.db, {
-      entityType: "gardenEntry",
+      entityKind: "gardenEntry",
       entityIds: [entryId!],
       limit: 10,
     });
@@ -449,16 +450,16 @@ describe("garden workflows", () => {
       action: "update",
       changes: { plantingIds: { to: [retained.id] } },
     });
-    const liveLinks = await getDb(ctx.db)
-      .select({ plantingId: gardenEntryPlanting.plantingId })
-      .from(gardenEntryPlanting)
+    const liveRows = await getDb(ctx.db)
+      .select({ plantingId: entityLink.toEntityId })
+      .from(entityLink)
       .where(
         and(
-          eq(gardenEntryPlanting.gardenEntryId, entryId!),
-          notDeleted(gardenEntryPlanting),
+          eq(entityLink.fromEntityId, entryId!),
+          liveLinks("gardenEntryPlanting"),
         ),
       );
-    expect(liveLinks).toHaveLength(1);
+    expect(liveRows).toHaveLength(1);
     const refreshedSearchText = await getSearchDocumentEmbeddingText(
       ctx.db,
       "gardenEntry",
@@ -488,7 +489,7 @@ describe("garden workflows", () => {
       TEST_ACTOR,
     );
 
-    const result = await taskEntityAdapter.repository.delete(
+    const result = await taskRepository.repository.delete!(
       kernelContext(ctx.db),
       [task.output.id],
     );
@@ -513,7 +514,7 @@ describe("garden workflows", () => {
     expect(row).toMatchObject({ taskId: null, deletedAt: null });
 
     const audit = await getAuditLog(ctx.db, {
-      entityType: "planting",
+      entityKind: "planting",
       entityIds: [plantedId!],
       limit: 10,
     });
@@ -551,7 +552,7 @@ describe("garden workflows", () => {
     );
 
     const audit = await getAuditLog(ctx.db, {
-      entityType: "planting",
+      entityKind: "planting",
       entityIds: [plantedId!],
       limit: 10,
     });
@@ -674,7 +675,7 @@ describe("garden workflows", () => {
     expect(ids.has(inactive.id)).toBe(false);
   });
 
-  it("plantingEntityAdapter.repository.bulkUpdate patches status and finishedOn together and clears locationId with an explicit null", async () => {
+  it("plantingRepository.repository.bulkUpdate patches status and finishedOn together and clears locationId with an explicit null", async () => {
     const crop = await createPlantFixture(
       ctx.db,
       { name: "Bulk update crop" },
@@ -692,7 +693,7 @@ describe("garden workflows", () => {
       TEST_ACTOR,
     );
 
-    await plantingEntityAdapter.repository.bulkUpdate(
+    await plantingRepository.repository.bulkUpdate!(
       kernelContext(ctx.db),
       [first.id, second.id],
       { status: "finished", finishedOn: "2026-08-01", locationId: null },

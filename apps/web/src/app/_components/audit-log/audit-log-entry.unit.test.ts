@@ -18,7 +18,7 @@ describe("summarizeChanges", () => {
     const summary = summarizeChanges({
       name: { from: "Old", to: "New" },
       totals: { from: { cost: 1 }, to: { cost: 2 } },
-      valuation: { from: { total: 3 }, to: { total: 4 } },
+      progress: { from: { pagesScanned: 3 }, to: { pagesScanned: 4 } },
     });
 
     expect(summary?.shown.map((f) => f.field)).toEqual(["name"]);

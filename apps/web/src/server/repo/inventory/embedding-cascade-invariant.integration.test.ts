@@ -44,11 +44,12 @@ import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
 import {
   entityEmbedding,
+  entityLink,
   inventoryEntry,
   task,
-  taskDependency,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import {
   createInventoryEntry,
   deleteInventoryEntries,
@@ -82,13 +83,13 @@ const embeddingProbes = (ctx: TestDbContext) => {
   return {
     resolveId,
 
-    seedEmbedding: (entityType: SearchableEntity, entityId: string) =>
+    seedEmbedding: (entityKind: SearchableEntity, entityId: string) =>
       getDb(ctx.db)
         .insert(entityEmbedding)
         .values({
-          entityType,
+          entityKind,
           entityId,
-          embeddingText: `${entityType} ${entityId}`,
+          embeddingText: `${entityKind} ${entityId}`,
           embeddingHash: `hash-${entityId}`,
           provider: "test",
           model: "test",
@@ -96,13 +97,13 @@ const embeddingProbes = (ctx: TestDbContext) => {
         }),
 
     embeddingDeletedAt: async (
-      entityType: SearchableEntity,
+      entityKind: SearchableEntity,
       entityId: string,
     ) =>
       (
         await getDb(ctx.db).query.entityEmbedding.findFirst({
           where: and(
-            eq(entityEmbedding.entityType, entityType),
+            eq(entityEmbedding.entityKind, entityKind),
             eq(entityEmbedding.entityId, entityId),
           ),
           columns: { deletedAt: true },
@@ -259,8 +260,12 @@ describe("removal entrypoints reach the shared cascade (no orphans)", () => {
     expect(parentRow?.deletedAt).not.toBeNull();
     expect(subtaskRow?.deletedAt).not.toBeNull();
 
-    const remainingEdges = await getDb(ctx.db).query.taskDependency.findMany({
-      where: eq(taskDependency.taskId, subtaskId),
+    // Dependency links soft-delete with their task (EntityLink, ADR 0007).
+    const remainingEdges = await getDb(ctx.db).query.entityLink.findMany({
+      where: and(
+        eq(entityLink.fromEntityId, subtaskId),
+        liveLinks("taskDependency"),
+      ),
     });
     expect(remainingEdges).toHaveLength(0);
 

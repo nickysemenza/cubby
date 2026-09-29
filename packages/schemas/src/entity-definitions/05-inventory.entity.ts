@@ -204,14 +204,14 @@ export default defineEntity({
         provenance: {
           kind: "derived",
           sources: [
-            { label: "Stored inventory valuation" },
+            { label: "Inventory amount" },
             { label: "Current product price and unit mappings" },
           ],
         },
         explanation: {
           ruleId: "inventory.valuation",
           description:
-            "This is the stored valuation produced when Cubby last evaluated the inventory amount against the product's pricing and unit mappings. Current inputs are shown as reference evidence and do not recompute the stored value.",
+            "Computed on every read: the inventory amount routed to money through the product's current price and unit mappings, so a price or mapping change is reflected immediately.",
           resolver: "productValuation",
           readPath: "valuation",
           sourceDependencies: [
@@ -222,7 +222,7 @@ export default defineEntity({
         },
         validation: {
           read: inventoryValuation.describe(
-            "Precomputed value: amount × product price",
+            "Computed on read: amount routed through the product's unit mappings to its current price",
           ),
           create: null,
           update: null,
@@ -289,12 +289,12 @@ export default defineEntity({
       },
       { key: "shortcode", specialized: "shortcode" },
       { key: "productId", reference: "product" },
-      { key: "amount", specialized: "json:amount" },
+      // Stored as `amountValue` + `amountUnit`; the wire shape stays `{ value, unit }`.
+      { key: "amount", specialized: "amount-columns" },
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
       { key: "locationId", reference: "location" },
-      { key: "valuation", kindOverride: "number", specialized: "real" },
       "verifiedAt",
       {
         key: "placement",
@@ -344,7 +344,7 @@ export default defineEntity({
         "valuation",
         "verifiedAt",
       ],
-      computed: ["name", "product", "location"],
+      computed: ["name", "product", "location", "valuation"],
     },
     intents: {
       fields: {
@@ -414,6 +414,41 @@ export default defineEntity({
     mcpDetail: {
       module: "@cubby/schemas/inventory",
       export: "inventoryWithLocationAndProductMcpEntityOut",
+    },
+  },
+  storage: {
+    indexes: [
+      // Placement is part of the key so a spare on the shelf and one wired
+      // into the wall can coexist in the same room — the normal state, not a
+      // duplicate.
+      {
+        name: "InventoryEntry_productId_locationId_key",
+        on: [
+          "productId",
+          "locationId",
+          "placement",
+          "ownershipMode",
+          {
+            sql: "coalesce({ownerLedgerPartyId}, '00000000-0000-0000-0000-000000000000'::uuid)",
+          },
+        ],
+        unique: true,
+        where: "{deletedAt} IS NULL",
+      },
+      { name: "InventoryEntry_owner_idx", on: ["ownerLedgerPartyId"] },
+      { on: ["createdAt"] },
+    ],
+    checks: [
+      { column: "placement" },
+      {
+        name: "InventoryEntry_ownership_valid",
+        sql: "({ownershipMode} = 'person' AND {ownerLedgerPartyId} IS NOT NULL) OR ({ownershipMode} IN ('inherit', 'unassigned') AND {ownerLedgerPartyId} IS NULL)",
+      },
+    ],
+    relations: {
+      owner: "ownerLedgerPartyId",
+      product: "productId",
+      location: "locationId",
     },
   },
   filters: {
@@ -662,6 +697,7 @@ export default defineEntity({
           weight: 1,
           label: "Verified",
           message: "This stock entry has never been verified.",
+          coverage: "neverVerifiedInventory",
         },
       ],
     },
@@ -674,8 +710,8 @@ export default defineEntity({
     },
     ports: {
       repository: {
-        module: "~/server/repo/inventory/entity-adapter",
-        export: "inventoryEntityAdapter",
+        module: "~/server/repo/inventory/repository",
+        export: "inventoryRepository",
       },
       search: "document",
     },

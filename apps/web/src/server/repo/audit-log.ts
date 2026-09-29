@@ -1,7 +1,9 @@
 import type {
-  AuditEntityType,
+  AuditEntityKind,
+  AuditFieldChange,
   AuditJsonValue,
   AuditLogListOut,
+  AuditStoredChanges,
 } from "@cubby/schemas/audit";
 import {
   auditChannelSchema,
@@ -67,6 +69,30 @@ const auditChangesSchema: z.ZodType<AuditChanges> = z.record(
   z.string(),
   auditChangeSchema,
 );
+const auditSightingChangesSchema = z.object({
+  sightings: z.record(z.string(), z.record(z.string(), auditChangeSchema)),
+});
+
+/**
+ * Stored `AuditLog.changes` as flat field diffs. An `ImageSighting` event is
+ * stored on its Image as `{ sightings: { <sighting id>: <field diffs> } }`
+ * (sightings are not entities, so the Image is the audit subject); it reads
+ * as `sightings.<field>` entries, or a lone `sighting` entry when the report
+ * changed no tracked field, so the row still says what happened.
+ */
+function readStoredChanges(stored: unknown) {
+  const nested = auditSightingChangesSchema.safeParse(stored);
+  if (!nested.success) return auditChangesSchema.parse(stored);
+  const fields = Object.values(nested.data.sightings).flatMap((diff) =>
+    Object.entries(diff).map(
+      ([field, change]) => [`sightings.${field}`, change] as const,
+    ),
+  );
+  return Object.fromEntries(
+    fields.length > 0 ? fields : [["sighting", { to: "reported" }] as const],
+  );
+}
+
 const auditCursorPayloadSchema = z.object({
   createdAt: z.string(),
   id: z.string().min(1),
@@ -77,9 +103,9 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 type AuditEntryFields = {
-  entityType: AuditEntityType;
+  entityKind: AuditEntityKind;
   entityId: string;
-  changes?: AuditChangeMap;
+  changes?: AuditStoredChanges;
 };
 
 type AuditChange = { from: unknown; to: unknown };
@@ -223,6 +249,17 @@ export function diffUnorderedIdSet<T extends string>(
   return { from: [...before], to: [...after] };
 }
 
+/**
+ * The column is typed as flat diffs so every reader must go through
+ * {@link readStoredChanges}; the one nested shape (a sighting event on its
+ * Image) is written here.
+ */
+const storedChanges = (
+  changes: AuditStoredChanges | undefined,
+): Record<string, AuditFieldChange> | undefined =>
+  // SAFETY: jsonb stores either shape as-is; `readStoredChanges` reads both.
+  changes as Record<string, AuditFieldChange> | undefined;
+
 const auditActorColumns = (actor: ActorContext) => ({
   userId: actor.userId,
   channel: actor.channel,
@@ -242,10 +279,10 @@ export async function logAuditEntry(
   await unwrapDb(db)
     .insert(auditLog)
     .values({
-      entityType: entry.entityType,
+      entityKind: entry.entityKind,
       entityId: entry.entityId,
       action: entry.action,
-      changes: entry.changes,
+      changes: storedChanges(entry.changes),
       ...auditActorColumns(actor),
     });
 }
@@ -262,10 +299,10 @@ export async function logAuditEntries(
   if (entries.length === 0) return;
 
   const auditRecords = entries.map((entry) => ({
-    entityType: entry.entityType,
+    entityKind: entry.entityKind,
     entityId: entry.entityId,
     action: entry.action,
-    changes: entry.changes,
+    changes: storedChanges(entry.changes),
     ...auditActorColumns(actor),
   }));
 
@@ -281,11 +318,11 @@ export async function logAuditEntries(
  * payload any more than the top-level `entityId` does.
  */
 function collectChangeRefs(
-  entityType: AuditEntityType,
+  entityKind: AuditEntityKind,
   changes: AuditChanges | null,
 ): EntityRef[] {
   if (!changes) return [];
-  const dbTable = entityManifest[entityType].dbTable;
+  const dbTable = entityManifest[entityKind].dbTable;
   if (!dbTable) return [];
 
   const refs: EntityRef[] = [];
@@ -308,12 +345,12 @@ function collectChangeRefs(
  * already contain every ref `collectChangeRefs` found for this entry.
  */
 function remapChangeShortcodes(
-  entityType: AuditEntityType,
+  entityKind: AuditEntityKind,
   changes: AuditChanges | null,
   shortcodeByRef: Map<string, string>,
 ): Record<string, { from?: AuditJsonValue; to?: AuditJsonValue }> | null {
   if (!changes) return null;
-  const dbTable = entityManifest[entityType].dbTable;
+  const dbTable = entityManifest[entityKind].dbTable;
 
   const resolveValue = (
     targetEntity: ShortcodeEntity,
@@ -360,7 +397,7 @@ async function lookupOauthClientNames(
 export async function getAuditLog(
   db: Database,
   params: {
-    entityType?: AuditEntityType;
+    entityKind?: AuditEntityKind;
     entityId?: string;
     /**
      * Repo-only cohort narrowing (uuids, not shortcodes): the entity timeline
@@ -383,8 +420,8 @@ export async function getAuditLog(
 ): Promise<AuditLogListOut> {
   const conditions: SQL[] = [];
 
-  if (params.entityType) {
-    conditions.push(eq(auditLog.entityType, params.entityType));
+  if (params.entityKind) {
+    conditions.push(eq(auditLog.entityKind, params.entityKind));
   }
 
   if (params.entityId) {
@@ -461,18 +498,17 @@ export async function getAuditLog(
     ...entry,
     action: auditActionSchema.parse(entry.action),
     channel: auditChannelSchema.parse(entry.channel),
-    changes:
-      entry.changes == null ? null : auditChangesSchema.parse(entry.changes),
+    changes: entry.changes == null ? null : readStoredChanges(entry.changes),
   }));
   const lastEntry = returnEntries.at(-1);
   const nextCursor =
     hasMore && lastEntry ? encodeAuditCursor(lastEntry) : undefined;
 
   const entryRefs: EntityRef[] = returnEntries.map((entry) =>
-    parseEntityRef(entry.entityType, entry.entityId),
+    parseEntityRef(entry.entityKind, entry.entityId),
   );
   const changeRefs = returnEntries.flatMap((entry) =>
-    collectChangeRefs(entry.entityType, entry.changes),
+    collectChangeRefs(entry.entityKind, entry.changes),
   );
 
   // AuditLog's identity FK guarantees every subject has an Entity row. Read
@@ -484,7 +520,7 @@ export async function getAuditLog(
       resolveEntityDisplayImages(
         db,
         entryRefs.map(({ entity, id }) => ({
-          entityType: entity,
+          entityKind: entity,
           entityId: id,
         })),
       ),
@@ -543,12 +579,12 @@ export async function getAuditLog(
         entityId: identity?.shortcode ?? null,
         canonicalEntityId: identity?.canonical?.shortcode ?? null,
         entityName:
-          nameByRef.get(entityRefKey(entry.entityType, entityId)) ?? null,
+          nameByRef.get(entityRefKey(entry.entityKind, entityId)) ?? null,
         displayImage:
-          displayImageByRef.get(entityRefKey(entry.entityType, entityId)) ??
+          displayImageByRef.get(entityRefKey(entry.entityKind, entityId)) ??
           null,
         changes: remapChangeShortcodes(
-          entry.entityType,
+          entry.entityKind,
           changes,
           shortcodeByRef,
         ),

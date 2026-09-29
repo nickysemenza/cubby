@@ -1,7 +1,6 @@
-import { TableLink } from "~/app/_components/table/TableLink";
 import { PossibleVendor } from "~/app/finance/possible-vendor";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
-import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { formatCurrency } from "~/lib/utils";
@@ -29,14 +28,16 @@ export const financialTransactionDetailFields = {
           {transaction.allocations.map((allocation) => (
             <Row key={allocation.purchaseId} justify="between" gap="sm">
               <Row align="center" gap="tight">
-                <TableLink
+                <EntityRefLink
+                  variant="table"
                   to={entities.purchase.routes.detail}
                   params={entityDetailParams(allocation.purchaseId)}
-                  variant="mono"
+                  tone="mono"
                 >
                   {allocation.purchaseId}
-                </TableLink>
-                <EntityFilterLink
+                </EntityRefLink>
+                <EntityRefLink
+                  variant="filter"
                   to="/financial-transactions"
                   search={{ purchaseId: allocation.purchaseId }}
                   label={`Show all transactions allocated to ${allocation.purchaseId}`}

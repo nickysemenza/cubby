@@ -19,10 +19,13 @@ import { z } from "zod";
 
 import {
   compileFilterCodec,
+  FILTERS_CLEARED,
+  FILTERS_KEY,
   type FilterCodec,
   type FilterSpecCore,
   type FilterValue,
   paramToSort,
+  resolveOpeningFilters,
   sortToParam,
 } from "~/entities/filters";
 
@@ -87,14 +90,25 @@ function serializeUrlState(
   initialSort: string,
   initialSortDesc: boolean,
   syncPaginationToUrl: boolean,
+  initialFilter: ColumnFiltersState,
 ): string {
   const sort = sortToParam(sorting);
+  // Like the default sort, the declared default filter stays implicit in the
+  // URL: only a departure from it is written. Clearing it (no filters at all)
+  // is a departure `resolveOpeningFilters` cannot infer from absence, so it
+  // is written as `filters=none`.
+  const isDefaultFilter =
+    JSON.stringify(columnFilters) === JSON.stringify(initialFilter);
+  const clearedDefault = initialFilter.length > 0 && columnFilters.length === 0;
   return JSON.stringify({
     ...codec.encode((columnId) =>
-      parseFilterValue(
-        columnFilters.find((filter) => filter.id === columnId)?.value,
-      ),
+      isDefaultFilter
+        ? undefined
+        : parseFilterValue(
+            columnFilters.find((filter) => filter.id === columnId)?.value,
+          ),
     ),
+    [FILTERS_KEY]: clearedDefault ? FILTERS_CLEARED : undefined,
     // The default sort stays implicit in the URL - only a departure from it is
     // written, so a freshly opened list keeps a clean query string.
     [SORT_KEY]:
@@ -200,10 +214,12 @@ export function useTableState(
   // Lazy initializer: URL filters win over the caller's seed, so a shared link
   // restores the same rows before first paint.
   const [columnFilters, setColumnFiltersRaw] = useState<ColumnFiltersState>(
-    () => {
-      const fromUrl = codec.decodeColumns(urlStateSource);
-      return fromUrl.length ? fromUrl : initialFilter;
-    },
+    () =>
+      resolveOpeningFilters(
+        codec.decodeColumns(urlStateSource),
+        urlStateSource,
+        initialFilter,
+      ),
   );
   const hasPrimarySearch = columnFilters.some(
     (filter) => filter.id === primarySearch?.key && Boolean(filter.value),
@@ -254,7 +270,7 @@ export function useTableState(
   // Every key this hook owns. URL-only keys are deliberately absent: no
   // column state can produce them, so this table must never delete them.
   const managedKeys = useMemo(
-    () => [...codec.columnKeys, SORT_KEY, PAGE_KEY, SIZE_KEY],
+    () => [...codec.columnKeys, FILTERS_KEY, SORT_KEY, PAGE_KEY, SIZE_KEY],
     [codec],
   );
   const managedSearchKey = JSON.stringify(
@@ -276,7 +292,11 @@ export function useTableState(
       sorting:
         paramToSort(urlStateSource[SORT_KEY]) ??
         defaultSortState(initialSort, initialSortDesc),
-      columnFilters: urlFilters.length ? urlFilters : initialFilter,
+      columnFilters: resolveOpeningFilters(
+        urlFilters,
+        urlStateSource,
+        initialFilter,
+      ),
       pagination: {
         pageIndex:
           Number.isFinite(page) && page > 0
@@ -307,6 +327,7 @@ export function useTableState(
         initialSort,
         initialSortDesc,
         syncPaginationToUrl,
+        initialFilter,
       ),
     [
       sorting,
@@ -316,6 +337,7 @@ export function useTableState(
       initialSort,
       initialSortDesc,
       syncPaginationToUrl,
+      initialFilter,
     ],
   );
   const serializedSearchState = useMemo(
@@ -328,8 +350,16 @@ export function useTableState(
         initialSort,
         initialSortDesc,
         syncPaginationToUrl,
+        initialFilter,
       ),
-    [urlState, codec, initialSort, initialSortDesc, syncPaginationToUrl],
+    [
+      urlState,
+      codec,
+      initialSort,
+      initialSortDesc,
+      syncPaginationToUrl,
+      initialFilter,
+    ],
   );
   // Unlike `serializedSearchState`, retain explicit default and disabled-page
   // params so write-through can clean up keys this table owns.

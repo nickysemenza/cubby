@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { EntityPreviewLink } from "~/app/_components/EntityPreviewLink";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { transformedImageUrl } from "~/lib/image-url";
 import { cn } from "~/lib/utils";
@@ -110,7 +110,7 @@ export function VendorMark({
  *
  * Supplying `vendorId` also makes the whole branded cell the canonical vendor
  * detail link, with the same at-rest dotted underline and hover preview as
- * `EntityInlineLink`. Without an id it intentionally stays plain: during an
+ * `EntityRefLink`. Without an id it intentionally stays plain: during an
  * optimistic vendor edit, the displayed name can change before the refetched
  * ExpenseOut carries the new vendor's shortcode.
  */
@@ -162,7 +162,8 @@ export function VendorCell({
   if (!vendorId) return body;
 
   return (
-    <EntityPreviewLink
+    <EntityRefLink
+      variant="preview"
       entity="vendor"
       id={vendorId}
       displayImage={logo?.url ? { url: logo.url } : null}
@@ -170,6 +171,6 @@ export function VendorCell({
       className="group/vendor-link inline-flex max-w-full min-w-0 text-foreground transition-colors hover:text-primary"
     >
       {body}
-    </EntityPreviewLink>
+    </EntityRefLink>
   );
 }

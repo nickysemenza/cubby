@@ -1,6 +1,6 @@
 /** Complete, non-paginated work graph for the graph explorer. */
 import type { ProjectId, TaskId } from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   ProjectDependencyGraph,
   ProjectGraphEdge,
@@ -8,13 +8,9 @@ import type {
 } from "@cubby/schemas/project-dependency-graph";
 
 import type { Database } from "~/server/db";
-import {
-  project,
-  projectDependency,
-  task,
-  taskDependency,
-} from "~/server/db/schema";
+import { entityLink, project, task } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import { effectiveTaskProjectSql } from "~/server/repo/task-project-inheritance";
 
 type ProjectRow = {
@@ -87,18 +83,31 @@ const fetchGraphRows = async (db: Database): Promise<GraphRows> => {
         .where(notDeleted(task)),
       dbClient
         .select({
-          projectId: projectDependency.projectId,
-          blockedByProjectId: projectDependency.blockedByProjectId,
+          projectId: entityLink.fromEntityId,
+          blockedByProjectId: entityLink.toEntityId,
         })
-        .from(projectDependency),
+        .from(entityLink)
+        .where(liveLinks("projectDependency")),
       dbClient
         .select({
-          taskId: taskDependency.taskId,
-          blockedByTaskId: taskDependency.blockedByTaskId,
+          taskId: entityLink.fromEntityId,
+          blockedByTaskId: entityLink.toEntityId,
         })
-        .from(taskDependency),
+        .from(entityLink)
+        .where(liveLinks("taskDependency")),
     ]);
-  return { projects, tasks, projectDependencies, taskDependencies };
+  return {
+    projects,
+    tasks,
+    projectDependencies: projectDependencies.map((row) => ({
+      projectId: parseEntityId("project", row.projectId),
+      blockedByProjectId: parseEntityId("project", row.blockedByProjectId),
+    })),
+    taskDependencies: taskDependencies.map((row) => ({
+      taskId: parseEntityId("task", row.taskId),
+      blockedByTaskId: parseEntityId("task", row.blockedByTaskId),
+    })),
+  };
 };
 
 const byId = <Id extends string, Row extends { id: Id }>(rows: Row[]) =>

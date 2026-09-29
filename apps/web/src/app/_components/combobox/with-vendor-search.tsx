@@ -8,7 +8,7 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
-import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import {
   buildSearchHitComboboxItem,

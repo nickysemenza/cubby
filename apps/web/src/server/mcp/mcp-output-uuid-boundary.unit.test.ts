@@ -28,29 +28,24 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // resent without it is deleted and reinserted). Declared on product get/list
   // and on the products embedded in ingredient get/list — same row, same
   // write handle. See `productUnitMappingMcpEntityOut` in @cubby/schemas.
-  "entity.item.product[].unitMappings[].id",
-  "entity.item.unitMappings[].id",
-  "entity.items[].product[].unitMappings[].id",
-  "entity.items[].unitMappings[].id",
-  "find_recipes_using_ingredient.recipes[].usages[].lineId",
-  "get_entities.item.product[].unitMappings[].id",
-  "get_entities.item.unitMappings[].id",
-  "get_entities.items[].product[].unitMappings[].id",
-  "get_entities.items[].unitMappings[].id",
-  // MealRecipe has no shortcode. The add result exposes the newly inserted
-  // occurrence handle needed by the dedicated update/remove workflow tools.
-  "add_recipe_to_meal.mealRecipeId",
-  "get_meal_preparations.preparations[].mealRecipeId",
+  "entity_read.item.product[].unitMappings[].id",
+  "entity_read.item.unitMappings[].id",
+  "entity_read.items[].product[].unitMappings[].id",
+  "entity_read.items[].unitMappings[].id",
+  // A recipe line has no shortcode; recipe_import.patch_line takes this id.
+  "recipe_insights.recipes[].usages[].lineId",
+  // MealRecipe has no shortcode. meal_recipe.add exposes the newly inserted
+  // occurrence handle that meal_recipe update/remove/save_preparation take.
+  "meal_recipe.mealRecipeId",
+  "meal_recipe.recipes[].id",
+  "nutrition.preparations[].mealRecipeId",
   // Import findings are internal review proposals. Their own id is the write
   // handle for apply/dismiss, while proposed fixes retain the exact internal
   // rows the audited transaction would mutate; neither is an entity link.
-  "list_problems.runFindings[].id",
-  "list_problems.runFindings[].proposedFix.expenseId",
-  "list_problems.runFindings[].proposedFix.productId",
-  "list_problems.runFindings[].proposedFix.purchaseId",
-  "remove_meal_recipe.recipes[].id",
-  "save_meal_recipe_preparation.mealRecipeId",
-  "update_meal_recipe.recipes[].id",
+  "activity.runFindings[].id",
+  "activity.runFindings[].proposedFix.expenseId",
+  "activity.runFindings[].proposedFix.productId",
+  "activity.runFindings[].proposedFix.purchaseId",
 ]);
 
 const NOT_YET_CUT_OVER: string[] = [];
@@ -140,7 +135,7 @@ function isJsonSchemaMap(
 describe("MCP output schemas expose shortcodes, not uuids, outside declared exceptions", () => {
   it("walks every registered tool's OUTPUT schema off the live catalog", async () => {
     const { tools } = await listMcpToolCatalog();
-    expect(tools.length).toBeGreaterThan(50);
+    expect(tools.length).toBe(21);
 
     const violations: UuidFinding[] = [];
     const matchedDeclarations = new Set<string>();

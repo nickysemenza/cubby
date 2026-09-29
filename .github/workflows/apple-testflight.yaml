@@ -43,6 +43,19 @@ jobs:
             exit 1
           }
 
+          # The server refuses Apple builds older than this minimum with HTTP 426,
+          # so a release tagged below it would lock itself out.
+          minimum="$(sed -nE 's/^export const MINIMUM_APPLE_CLIENT_VERSION = "([0-9.]+)";$/\1/p' apps/web/src/server/apple-client-gate.ts)"
+          [[ -n "$minimum" ]] || {
+            echo "::error::Could not read MINIMUM_APPLE_CLIENT_VERSION from apps/web/src/server/apple-client-gate.ts."
+            exit 1
+          }
+          lowest="$(printf '%s\n%s\n' "$minimum" "$version" | sort -V | head -1)"
+          [[ "$lowest" == "$minimum" ]] || {
+            echo "::error::Release $version is below the server's minimum client version $minimum; tag v${minimum}.0 or higher."
+            exit 1
+          }
+
           # Refresh origin/main explicitly so the ancestor check never trusts
           # whatever the checkout happened to fetch.
           git fetch --no-tags origin main

@@ -4,13 +4,13 @@ import { cn, formatCurrency } from "~/lib/utils";
 
 /**
  * Reconciles the four money quantities a single "Spent" figure hides — estimate,
- * actual, committed (future), and contributions (negative expenses) — over a
+ * actual, committed (future), and credits (negative expenses) — over a
  * burn bar. Actual + committed stack against the estimate envelope; a marker sits
- * at 100% of estimate; the Remaining figure nets out contributions and turns
+ * at 100% of estimate; the Remaining figure nets out credits and turns
  * `destructive` when net spend exceeds the estimate.
  *
  * Zero-value figures are omitted, so a plain project (no future, no
- * contributions) collapses to Estimate · Actual · Remaining with a clean bar.
+ * credits) collapses to Estimate · Actual · Remaining with a clean bar.
  */
 export function BudgetStrip({
   estimate,
@@ -19,7 +19,7 @@ export function BudgetStrip({
   estimate: number | null;
   split: SpendSplit;
 }) {
-  const { actual, committed, contributions } = split;
+  const { actual, committed, credits } = split;
   const remaining = budgetRemaining(estimate, split);
   const gross = actual + committed;
 
@@ -41,8 +41,8 @@ export function BudgetStrip({
         {committed > 0 && (
           <Figure label="Committed" value={committed} tone="warning" />
         )}
-        {contributions > 0 && (
-          <Figure label="Credits" value={-contributions} tone="muted" />
+        {credits > 0 && (
+          <Figure label="Credits" value={-credits} tone="muted" />
         )}
         <Figure
           label="Remaining"

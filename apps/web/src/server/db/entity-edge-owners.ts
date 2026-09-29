@@ -20,30 +20,25 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import {
   entityAttachment,
+  entityLink,
   expenseAttribution,
   financialTransactionAllocation,
-  gardenEntryPlanting,
   imageDerivative,
   imageDescriptionCorrection,
   imageProcessingJob,
+  imageSighting,
   runTarget,
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
   photoGroupProposal,
-  productComponent,
   productConversionCoverage,
-  productExternalId,
+  entityExternalId,
   productUnitMappings,
-  projectDependency,
-  projectToolUsage,
   purchasePaymentEvidence,
-  purchaseProduct,
   recipeSection,
   recipeSectionIngredient,
   statementRow,
-  taskDependency,
-  wishCandidate,
 } from "./schema";
 
 export type EntityEdgeOwner =
@@ -61,29 +56,31 @@ export type EntityEdgeOwner =
    * entity, so its kind is read from `Entity`.
    */
   | { ownerIdentity: AnyPgColumn }
+  /**
+   * `EntityLink`: the owner is `fromEntityId`, whose kind the row's link kind
+   * declares (`ENTITY_LINK_KINDS[kind].from`). The `.from` end of each kind is
+   * the owner column; the `.to` end is the edge.
+   */
+  | { linkFrom: AnyPgColumn }
   | { excluded: string };
 
 const WORKFLOW =
   "Workflow evidence about entities, not a relationship between them.";
 
 export const ENTITY_EDGE_OWNERS = {
-  EntityAttachment: { ownerIdentity: entityAttachment.subjectEntityId },
+  EntityAttachment: { ownerIdentity: entityAttachment.entityId },
+  EntityLink: { linkFrom: entityLink.fromEntityId },
   ExpenseAttribution: { owner: expenseAttribution.expenseId },
   FinancialTransactionAllocation: {
     owner: financialTransactionAllocation.transactionId,
   },
-  GardenEntryPlanting: { owner: gardenEntryPlanting.gardenEntryId },
   MealFoodEntry: { owner: mealFoodEntry.mealId },
   MealRecipe: { owner: mealRecipe.mealId },
   MealRecipePortion: { owner: mealRecipePortion.mealId },
-  ProductComponent: { owner: productComponent.parentProductId },
   ProductConversionCoverage: { owner: productConversionCoverage.productId },
-  ProductExternalId: { owner: productExternalId.productId },
-  ProductUnitMappings: { owner: productUnitMappings.productId },
-  ProjectDependency: { owner: projectDependency.projectId },
-  ProjectToolUsage: { owner: projectToolUsage.projectId },
+  EntityExternalId: { ownerIdentity: entityExternalId.entityId },
+  ProductUnitMapping: { owner: productUnitMappings.productId },
   PurchasePaymentEvidence: { owner: purchasePaymentEvidence.purchaseId },
-  PurchaseProduct: { owner: purchaseProduct.purchaseId },
   RecipeSection: { owner: recipeSection.recipeId },
   RecipeSectionIngredient: {
     via: {
@@ -93,15 +90,17 @@ export const ENTITY_EDGE_OWNERS = {
     },
   },
   StatementRow: { owner: statementRow.accountId },
-  TaskDependency: { owner: taskDependency.taskId },
-  WishCandidate: { owner: wishCandidate.wishId },
   // A run's target list is how a run relates to what it imported.
   RunTarget: { owner: runTarget.runId },
   PhotoGroupProposal: { owner: photoGroupProposal.runId },
   ImageDerivative: { owner: imageDerivative.imageId },
   ImageDescriptionCorrection: { owner: imageDescriptionCorrection.imageId },
   ImageProcessingJob: { owner: imageProcessingJob.imageId },
+  ImageSighting: { owner: imageSighting.imageId },
   AiUsage: { excluded: "Telemetry attribution." },
+  ExternalSource: {
+    excluded: "Registry metadata naming the vendor a source slug is.",
+  },
   AuditLog: { excluded: "History attribution." },
   RunFinding: { excluded: WORKFLOW },
   ImportHunt: { excluded: WORKFLOW },
@@ -109,7 +108,6 @@ export const ENTITY_EDGE_OWNERS = {
   RunApproval: { excluded: WORKFLOW },
   RunControlEvent: { excluded: WORKFLOW },
   RunEvidence: { excluded: WORKFLOW },
-  RunMutation: { excluded: WORKFLOW },
   RunOperation: { excluded: WORKFLOW },
   RunOrderCandidate: { excluded: WORKFLOW },
   RunProgress: { excluded: WORKFLOW },
@@ -120,7 +118,6 @@ export const ENTITY_EDGE_OWNERS = {
   OrderMail: { excluded: WORKFLOW },
   OrderMailCandidateDecision: { excluded: WORKFLOW },
   OrderMailAttachment: { excluded: WORKFLOW },
-  VendorMailSearchJob: { excluded: WORKFLOW },
   ProductMatchCandidate: {
     excluded: "A review queue of possible duplicates, not a relationship.",
   },

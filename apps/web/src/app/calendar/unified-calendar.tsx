@@ -8,7 +8,7 @@ import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { addDays, format } from "date-fns";
+import { addDays } from "date-fns";
 import {
   type CSSProperties,
   lazy,
@@ -41,6 +41,8 @@ import { createPopoverHandle, PopoverTrigger } from "~/components/ui/popover";
 import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
 import { ChoiceSwitcher } from "~/components/ui/view-switcher";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
+import { calendar } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatCalendarDay } from "~/lib/date-format";
 import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
@@ -64,7 +66,6 @@ import {
 } from "./calendar-period";
 import { CalendarSchedule } from "./calendar-schedule";
 import { EMPTY_DAY_SUMMARY, WeekSummaryGrid } from "./calendar-week-summary";
-import { calendar } from "./calendar.functions";
 
 const CALENDAR_ACTIVATION = {
   touchDelayMs: 350,
@@ -638,7 +639,7 @@ function CalendarDaySheet({
       onOpenChange={onOpenChange}
       title={
         day
-          ? format(householdCalendarDate(day), "EEEE, MMMM d")
+          ? formatCalendarDay(householdCalendarDate(day), "weekdayLongMonthDay")
           : "Calendar day"
       }
       description={

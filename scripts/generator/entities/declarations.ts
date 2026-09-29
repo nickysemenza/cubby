@@ -75,6 +75,7 @@ export type FilterDescriptor = Readonly<{
         label: string;
         meta?: boolean;
         color?: string;
+        expand?: Readonly<Record<string, string | number | boolean>>;
       }>[]
     | null;
   optionsRef: SourceRef | null;
@@ -225,6 +226,13 @@ export type EntityField = Readonly<{
       interactive?: boolean;
     }> | null;
     listHidden: boolean;
+    valueOptions:
+      | readonly Readonly<{
+          value: string;
+          label: string;
+          color?: string;
+        }>[]
+      | null;
     preview: boolean;
   }>;
   validation: Readonly<{
@@ -273,6 +281,60 @@ export type EntityFieldModel = Readonly<{
   sort: EntityFieldModelSort | null;
   intents: EntityEditIntents | null;
 }>;
+/** An operational column the table stores with no model field. */
+export type EntityTableColumn = Readonly<{
+  key: string;
+  kind: "text" | "identifier" | "timestamp" | "json";
+  notNull: boolean;
+  defaultValue: string | null;
+  /** An entity key, or `user`. */
+  reference: string | null;
+  type: SourceRef | null;
+}>;
+/** SQL with `{columnKey}` placeholders the renderer binds to table columns. */
+type EntityTableSql = string;
+export type EntityTableIndex = Readonly<{
+  name: string;
+  unique: boolean;
+  using: "btree" | "gin";
+  on: readonly Readonly<
+    { column: string; desc: boolean } | { sql: EntityTableSql }
+  >[];
+  where: EntityTableSql | null;
+}>;
+export type EntityTableCheck = Readonly<{
+  name: string;
+  sql: EntityTableSql;
+  /** Verbatim SQL with bare `"column"` identifiers (`sql.raw`), no placeholders. */
+  bare: boolean;
+}>;
+export type EntityTableRelation = Readonly<
+  | {
+      kind: "one";
+      name: string;
+      /** A Drizzle table export, or the entity a reference column names. */
+      target: Readonly<{ table: string } | { entity: string }>;
+      fields: readonly string[];
+      references: readonly string[];
+      relationName: string | null;
+    }
+  | {
+      kind: "many";
+      name: string;
+      target: Readonly<{ table: string }>;
+      relationName: string | null;
+    }
+>;
+export type CompiledEntityTable = Readonly<{
+  /** The SQL table name. */
+  name: string;
+  /** The Drizzle export (`lowerFirst(name)`): `inventoryEntry`, `product`. */
+  exportName: string;
+  columns: readonly EntityTableColumn[];
+  indexes: readonly EntityTableIndex[];
+  checks: readonly EntityTableCheck[];
+  relations: readonly EntityTableRelation[];
+}>;
 export type CompiledPresentation = CompiledEntityPresentation;
 export type CompiledEntity = Readonly<{
   key: string;
@@ -311,13 +373,19 @@ export type CompiledEntity = Readonly<{
     softDelete: boolean;
     delete: DeclarationValue | null;
     merge: boolean;
+    /** `capabilities.lifecycle: "readOnly"` — the kernel serves reads only. */
+    readOnly: boolean;
   }>;
+  /** `capabilities.resolve`, or null when the entity has no resolve action. */
+  resolve: EntityDeclarationMetadata["capabilities"]["resolve"];
   mcpActions: readonly string[];
   operationOwners: Readonly<{
     delete: OperationOwner;
     merge: OperationOwner;
   }>;
   fieldModel: EntityFieldModel;
+  /** The entity's own table, or null for a table-less entity (usda-food). */
+  table: CompiledEntityTable | null;
   /** `capabilities.dataQuality`, or null for an unscored entity. */
   dataQuality: Readonly<{
     checks: readonly Readonly<{
@@ -327,6 +395,7 @@ export type CompiledEntity = Readonly<{
       weight: number;
       label: string;
       message: string;
+      coverage?: string;
     }>[];
     exceptions: boolean;
     related: readonly string[];

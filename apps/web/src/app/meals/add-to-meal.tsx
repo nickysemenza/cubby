@@ -11,7 +11,7 @@ import { CalendarPlusIcon } from "@phosphor-icons/react/dist/csr/CalendarPlus";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { format, parseISO } from "date-fns";
+import { format } from "date-fns";
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -27,13 +27,16 @@ import { DialogFormActions } from "~/components/ui/dialog-form-actions";
 import { Label } from "~/components/ui/label";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { entityMutation } from "~/entities/entity-mutation.functions";
 import { fieldEnumOptions } from "~/entities/enum-field-display";
-import { ai } from "~/lib/ai.functions";
+import {
+  entityMutation,
+  ai,
+  meal,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatCalendarDay } from "~/lib/date-format";
 import type { EntityBrowserMutationResult } from "~/server/entity-kernel/contracts";
 
 import { mealListLabel } from "./meal-format";
-import { meal } from "./meal.functions";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
 const NEW_MEAL = "new";
@@ -169,7 +172,7 @@ export function AddToMeal({
     invalidate();
     setOpen(false);
     toast.success(
-      `Added to a meal on ${format(parseISO(meal.date), "EEE, MMM d")}`,
+      `Added to a meal on ${formatCalendarDay(meal.date, "weekdayMonthDay")}`,
       {
         action: {
           label: "View",

@@ -63,6 +63,27 @@ export default defineEntity({
           list: true,
           detail: true,
           renderer: { detail: "financial-account-identity" },
+          // Labels for `identity.kind`; a bare `replaceAll("_", " ")` would
+          // read `stored_value` as "stored value".
+          valueOptions: [
+            {
+              value: "credit_card",
+              label: "Credit card",
+              color: "var(--slate)",
+            },
+            {
+              value: "bank_account",
+              label: "Bank account",
+              color: "var(--slate)",
+            },
+            {
+              value: "stored_value",
+              label: "Gift card or store credit",
+              color: "var(--slate)",
+            },
+            { value: "cash", label: "Cash", color: "var(--slate)" },
+            { value: "other", label: "Other", color: "var(--slate)" },
+          ],
         },
         validation: {
           read: financialAccountIdentity,
@@ -391,6 +412,36 @@ export default defineEntity({
     output: {
       module: "@cubby/schemas/financial-account",
       export: "financialAccountOut",
+    },
+  },
+  storage: {
+    indexes: [
+      { on: ["name"] },
+      { on: ["provisional"] },
+      // One live balance per provider and owner, so settlement can resolve a
+      // gift-card leg from (purchase vendor, vendor-account member) alone.
+      // NULL owners stay distinct: a household card coexists with members'
+      // balances.
+      {
+        name: "FinancialAccount_provider_owner_key",
+        on: ["providerVendorId", "ledgerPartyId"],
+        unique: true,
+        where: "{providerVendorId} IS NOT NULL AND {deletedAt} IS NULL",
+      },
+    ],
+    checks: [
+      {
+        name: "FinancialAccount_providerVendor_stored_value_check",
+        sql: "{providerVendorId} IS NULL OR {identity}->>'kind' = 'stored_value'",
+      },
+    ],
+    unindexedReferences: {
+      providerVendorId:
+        "provider lookups read live rows through the partial FinancialAccount_provider_owner_key",
+    },
+    relations: {
+      ledgerParty: "ledgerPartyId",
+      transactions: { many: "financialTransaction" },
     },
   },
   filters: {

@@ -22,11 +22,11 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   entityEmbedding,
+  entityLink,
   expense,
   financialTransaction,
   financialTransactionAllocation,
   gardenEntry,
-  gardenEntryPlanting,
   inventoryEntry,
   meal,
   mealRecipe,
@@ -40,7 +40,6 @@ import {
   task,
   vendor,
   wish,
-  wishCandidate,
 } from "~/server/db/schema";
 import {
   notDeleted,
@@ -48,6 +47,7 @@ import {
   uuidArrayParam,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
 import {
   getOrphanedSearchDocumentRefs,
@@ -62,7 +62,7 @@ import {
 
 async function softDeleteEntityEmbeddingsTx(
   tx: DrizzleTransaction,
-  entityType: SearchableEntity,
+  entityKind: SearchableEntity,
   entityIds: string[],
 ): Promise<void> {
   if (entityIds.length === 0) return;
@@ -71,7 +71,7 @@ async function softDeleteEntityEmbeddingsTx(
     .set({ deletedAt: new Date() })
     .where(
       and(
-        eq(entityEmbedding.entityType, entityType),
+        eq(entityEmbedding.entityKind, entityKind),
         inArray(entityEmbedding.entityId, entityIds),
         notDeleted(entityEmbedding),
       ),
@@ -81,20 +81,20 @@ async function softDeleteEntityEmbeddingsTx(
 /** Revalidate persisted candidates and retire both artifacts atomically. */
 export async function retireStillOrphanedSearchArtifacts(
   db: Database,
-  refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
+  refs: ReadonlyArray<{ entityKind: SearchableEntity; entityId: string }>,
 ): Promise<number> {
   if (refs.length === 0) return 0;
   return withTransaction(db, async (tx) => {
     const stillOrphaned = await getOrphanedSearchDocumentRefs(tx, refs);
     const byType = new Map<SearchableEntity, string[]>();
     for (const ref of stillOrphaned) {
-      byType.set(ref.entityType, [
-        ...(byType.get(ref.entityType) ?? []),
+      byType.set(ref.entityKind, [
+        ...(byType.get(ref.entityKind) ?? []),
         ref.entityId,
       ]);
     }
-    for (const [entityType, ids] of byType) {
-      await softDeleteEntitySearchArtifactsTx(tx, entityType, ids);
+    for (const [entityKind, ids] of byType) {
+      await softDeleteEntitySearchArtifactsTx(tx, entityKind, ids);
     }
     return stillOrphaned.length;
   });
@@ -110,17 +110,17 @@ export async function retireStillOrphanedSearchArtifacts(
  */
 export async function softDeleteEntitySearchArtifactsTx(
   tx: DrizzleTransaction,
-  entityType: SearchableEntity,
+  entityKind: SearchableEntity,
   entityIds: string[],
 ): Promise<void> {
   if (entityIds.length === 0) return;
-  await softDeleteEntityEmbeddingsTx(tx, entityType, entityIds);
+  await softDeleteEntityEmbeddingsTx(tx, entityKind, entityIds);
   await tx
     .update(searchDocument)
     .set({ deletedAt: new Date() })
     .where(
       and(
-        eq(searchDocument.entityType, entityType),
+        eq(searchDocument.entityKind, entityKind),
         inArray(searchDocument.entityId, entityIds),
         notDeleted(searchDocument),
       ),
@@ -133,7 +133,7 @@ export async function getEntityEmbeddingDeletedAtForRef(
 ): Promise<Date | null | undefined> {
   const row = await unwrapDb(db).query.entityEmbedding.findFirst({
     where: and(
-      eq(entityEmbedding.entityType, ref.entityType),
+      eq(entityEmbedding.entityKind, ref.entityKind),
       eq(entityEmbedding.entityId, ref.entityId),
     ),
     columns: { deletedAt: true },
@@ -153,7 +153,7 @@ export async function findInventoryEmbeddingRefsForProducts(
     ),
     columns: { id: true },
   });
-  return rows.map((row) => ({ entityType: "inventory", entityId: row.id }));
+  return rows.map((row) => ({ entityKind: "inventory", entityId: row.id }));
 }
 
 /** Product embeddings include their category name, including inherited roots. */
@@ -169,7 +169,7 @@ export async function findProductEmbeddingRefsForCategories(
     ),
     columns: { id: true },
   });
-  return rows.map((row) => ({ entityType: "product", entityId: row.id }));
+  return rows.map((row) => ({ entityKind: "product", entityId: row.id }));
 }
 
 /** Tasks embed their subject product's name, so a product rename must refresh
@@ -180,7 +180,7 @@ export async function findTaskEmbeddingRefsForProducts(
 ): Promise<SearchableEntityRef[]> {
   if (productIds.length === 0) return [];
   const result = await unwrapDb(db).execute<SearchableEntityRef>(sql`
-    SELECT 'task' AS "entityType", t."id"::text AS "entityId" FROM "Task" t
+    SELECT 'task' AS "entityKind", t."id"::text AS "entityId" FROM "Task" t
     WHERE t."deletedAt" IS NULL AND ${effectiveTaskSubjectProductSql("t")} = ANY(${uuidArrayParam(productIds)})
     UNION ALL
     SELECT 'expense', e."id"::text FROM "Expense" e WHERE e."deletedAt" IS NULL AND e."productId" = ANY(${uuidArrayParam(productIds)})
@@ -195,17 +195,17 @@ export async function findWishEmbeddingRefsForProducts(
 ): Promise<SearchableEntityRef[]> {
   if (productIds.length === 0) return [];
   const rows = await unwrapDb(db)
-    .selectDistinct({ wishId: wishCandidate.wishId })
-    .from(wishCandidate)
-    .innerJoin(wish, eq(wish.id, wishCandidate.wishId))
+    .selectDistinct({ wishId: entityLink.fromEntityId })
+    .from(entityLink)
+    .innerJoin(wish, eq(wish.id, entityLink.fromEntityId))
     .where(
       and(
-        inArray(wishCandidate.productId, productIds),
-        notDeleted(wishCandidate),
+        inArray(entityLink.toEntityId, productIds),
+        liveLinks("wishCandidate"),
         notDeleted(wish),
       ),
     );
-  return rows.map((row) => ({ entityType: "wish", entityId: row.wishId }));
+  return rows.map((row) => ({ entityKind: "wish", entityId: row.wishId }));
 }
 
 export async function findInventoryEmbeddingRefsForLocations(
@@ -220,7 +220,7 @@ export async function findInventoryEmbeddingRefsForLocations(
     ),
     columns: { id: true },
   });
-  return rows.map((row) => ({ entityType: "inventory", entityId: row.id }));
+  return rows.map((row) => ({ entityKind: "inventory", entityId: row.id }));
 }
 
 export async function findRecipeEmbeddingRefsForIngredients(
@@ -244,7 +244,7 @@ export async function findRecipeEmbeddingRefsForIngredients(
         notDeleted(recipe),
       ),
     );
-  return rows.map((row) => ({ entityType: "recipe", entityId: row.recipeId }));
+  return rows.map((row) => ({ entityKind: "recipe", entityId: row.recipeId }));
 }
 
 /** Plantings whose embedded title names one of these plants. */
@@ -257,7 +257,7 @@ export async function findPlantingEmbeddingRefsForPlants(
     where: and(inArray(planting.plantId, plantIds), notDeleted(planting)),
     columns: { id: true },
   });
-  return rows.map((row) => ({ entityType: "planting", entityId: row.id }));
+  return rows.map((row) => ({ entityKind: "planting", entityId: row.id }));
 }
 
 /** Plantings embed their CURRENT location's name (title's subtitle), so a
@@ -271,7 +271,7 @@ export async function findPlantingEmbeddingRefsForLocations(
     where: and(inArray(planting.locationId, locationIds), notDeleted(planting)),
     columns: { id: true },
   });
-  return rows.map((row) => ({ entityType: "planting", entityId: row.id }));
+  return rows.map((row) => ({ entityKind: "planting", entityId: row.id }));
 }
 
 /** Garden entries embed their location's NAME in the title, so a location
@@ -288,7 +288,7 @@ export async function findGardenEntryEmbeddingRefsForLocations(
     ),
     columns: { id: true },
   });
-  return rows.map((row) => ({ entityType: "gardenEntry", entityId: row.id }));
+  return rows.map((row) => ({ entityKind: "gardenEntry", entityId: row.id }));
 }
 
 /** Garden entries embed the names of their linked plantings. */
@@ -299,19 +299,16 @@ export async function findGardenEntryEmbeddingRefsForPlantings(
   if (plantingIds.length === 0) return [];
   const rows = await unwrapDb(db)
     .select({ id: gardenEntry.id })
-    .from(gardenEntryPlanting)
-    .innerJoin(
-      gardenEntry,
-      eq(gardenEntry.id, gardenEntryPlanting.gardenEntryId),
-    )
+    .from(entityLink)
+    .innerJoin(gardenEntry, eq(gardenEntry.id, entityLink.fromEntityId))
     .where(
       and(
-        inArray(gardenEntryPlanting.plantingId, plantingIds),
-        notDeleted(gardenEntryPlanting),
+        inArray(entityLink.toEntityId, plantingIds),
+        liveLinks("gardenEntryPlanting"),
         notDeleted(gardenEntry),
       ),
     );
-  return rows.map((row) => ({ entityType: "gardenEntry", entityId: row.id }));
+  return rows.map((row) => ({ entityKind: "gardenEntry", entityId: row.id }));
 }
 
 /**
@@ -334,7 +331,7 @@ export async function findMealEmbeddingRefsForRecipes(
         notDeleted(meal),
       ),
     );
-  return rows.map((row) => ({ entityType: "meal", entityId: row.mealId }));
+  return rows.map((row) => ({ entityKind: "meal", entityId: row.mealId }));
 }
 
 /**
@@ -352,7 +349,7 @@ export async function findTrackerEmbeddingRefsForProjects(
       UNION
       SELECT p."id" FROM "Project" p JOIN affected a ON p."parentProjectId" = a."id" WHERE p."deletedAt" IS NULL
     )
-    SELECT 'project' AS "entityType", p."id"::text AS "entityId" FROM "Project" p JOIN affected a ON a."id" = p."id" WHERE p."deletedAt" IS NULL
+    SELECT 'project' AS "entityKind", p."id"::text AS "entityId" FROM "Project" p JOIN affected a ON a."id" = p."id" WHERE p."deletedAt" IS NULL
     UNION ALL
     SELECT 'task', t."id"::text FROM "Task" t WHERE t."deletedAt" IS NULL AND ${effectiveTaskProjectSql("t")} IN (SELECT "id" FROM affected)
     UNION ALL
@@ -418,16 +415,16 @@ export async function findEmbeddingRefsForPurchases(
   return [
     ...(includePurchases
       ? purchaseIds.map((entityId): SearchableEntityRef => ({
-          entityType: "purchase",
+          entityKind: "purchase",
           entityId,
         }))
       : []),
     ...expenses.map((row): SearchableEntityRef => ({
-      entityType: "expense",
+      entityKind: "expense",
       entityId: row.id,
     })),
     ...transactions.map((row): SearchableEntityRef => ({
-      entityType: "financialTransaction",
+      entityKind: "financialTransaction",
       entityId: row.id,
     })),
   ];
@@ -447,7 +444,7 @@ export async function findTransactionEmbeddingRefsForAccounts(
     columns: { id: true },
   });
   return rows.map((row) => ({
-    entityType: "financialTransaction",
+    entityKind: "financialTransaction",
     entityId: row.id,
   }));
 }
@@ -477,8 +474,8 @@ export async function findCommercialEmbeddingRefsForExpenses(
   return [
     ...siblings,
     ...rows.flatMap((row): SearchableEntityRef[] => [
-      { entityType: "purchase", entityId: row.purchaseId },
-      { entityType: "vendor", entityId: row.vendorId },
+      { entityKind: "purchase", entityId: row.purchaseId },
+      { entityKind: "vendor", entityId: row.vendorId },
     ]),
   ];
 }
@@ -496,7 +493,7 @@ const RECONCILE_PAGE_SIZE = 500;
  * before its first refresh, or a truncated table) has no soft-delete marker
  * there to find, only in `SearchDocument`.
  *
- * DISTINCT on (entityType, entityId) and the NOT EXISTS guard both exist for
+ * DISTINCT on (entityKind, entityId) and the NOT EXISTS guard both exist for
  * the same reason: `SearchDocument_live_entity_key` is a partial unique index
  * (`WHERE "deletedAt" IS NULL`), so `markSearchDocumentMissing` followed by a
  * later successful refresh inserts a second, live row for the same entity
@@ -510,7 +507,7 @@ export async function selectRecentlySoftDeletedSearchRefs(
   db: Database | DrizzleTransaction,
   options: { since: Date; cursor?: SearchDocumentCursor; limit?: number },
 ): Promise<{
-  refs: Array<{ entityType: SearchableEntity; entityId: string }>;
+  refs: Array<{ entityKind: SearchableEntity; entityId: string }>;
   nextCursor: SearchDocumentCursor | null;
 }> {
   const limit = Math.min(
@@ -518,23 +515,23 @@ export async function selectRecentlySoftDeletedSearchRefs(
     RECONCILE_PAGE_SIZE,
   );
   const cursor = options.cursor
-    ? sql`AND (sd."entityType", sd."entityId") > (${options.cursor.entityType}, ${options.cursor.entityId}::uuid)`
+    ? sql`AND (sd."entityKind", sd."entityId") > (${options.cursor.entityKind}, ${options.cursor.entityId}::uuid)`
     : sql``;
   const result = await unwrapDb(db).execute<{
-    entityType: SearchableEntity;
+    entityKind: SearchableEntity;
     entityId: string;
   }>(sql`
-    SELECT DISTINCT sd."entityType", sd."entityId"::text AS "entityId"
+    SELECT DISTINCT sd."entityKind", sd."entityId"::text AS "entityId"
     FROM "SearchDocument" sd
     WHERE sd."deletedAt" > ${options.since}
       AND NOT EXISTS (
         SELECT 1 FROM "SearchDocument" live
-        WHERE live."entityType" = sd."entityType"
+        WHERE live."entityKind" = sd."entityKind"
           AND live."entityId" = sd."entityId"
           AND live."deletedAt" IS NULL
       )
       ${cursor}
-    ORDER BY sd."entityType", sd."entityId"::text
+    ORDER BY sd."entityKind", sd."entityId"::text
     LIMIT ${limit}
   `);
   const last = result.rows.at(-1);
@@ -542,7 +539,7 @@ export async function selectRecentlySoftDeletedSearchRefs(
     refs: result.rows,
     nextCursor:
       last && result.rows.length === limit
-        ? { entityType: last.entityType, entityId: last.entityId }
+        ? { entityKind: last.entityKind, entityId: last.entityId }
         : null,
   };
 }
@@ -556,5 +553,5 @@ export async function findChildTaskEmbeddingRefs(
     where: and(inArray(task.parentTaskId, parentIds), notDeleted(task)),
     columns: { id: true },
   });
-  return rows.map((row) => ({ entityType: "task", entityId: row.id }));
+  return rows.map((row) => ({ entityKind: "task", entityId: row.id }));
 }

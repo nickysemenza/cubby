@@ -199,6 +199,8 @@ const checkList = (
   }
   for (const key of list.shelf?.subtitle ?? [])
     lookup.read(key, "list.shelf.subtitle");
+  for (const filter of list.initialFilter)
+    lookup.read(filter.id, "list.initialFilter");
   if (list.tree !== null) {
     const parent = lookup.read(list.tree.parentField, "list.tree.parentField");
     if (
@@ -458,6 +460,7 @@ export const compilePresentation = (
       ],
       viewAliases: list.viewAliases,
       shelf: { subtitle: shelfSubtitle },
+      initialFilter: list.initialFilter,
       primarySearch: list.primarySearch,
       tree: list.tree,
       actions: list.actions ?? (capabilities.delete !== null ? ["delete"] : []),

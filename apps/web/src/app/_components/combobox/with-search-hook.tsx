@@ -12,13 +12,12 @@ import { lazy, Suspense } from "react";
 import type { z } from "zod";
 
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
-import { location } from "~/app/locations/location.functions";
-import { product } from "~/app/products/product.functions";
 import { captureRequest } from "~/entities/editing/editor-requests";
+import { entityListFor, type EntityListParams } from "~/entities/entity-list";
 import {
-  entityListFor,
-  type EntityListParams,
-} from "~/entities/entity-list.functions";
+  location,
+  product,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import {
   buildLocationComboboxItem,

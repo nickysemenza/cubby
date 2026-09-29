@@ -12,7 +12,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { expense, project, projectDependency, task } from "~/server/db/schema";
+import { expense, project, task } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditChangeMap,
@@ -30,7 +30,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
 /**
  * Project CRUD operations.
@@ -42,6 +41,7 @@ import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validatio
  * orphaning live tasks/expenses before hard-deleting the dependency edges.
  */
 import { policyDelete } from "~/server/repo/removal";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
@@ -55,6 +55,10 @@ import {
   effectiveProjectTradeSql,
 } from "../task-project-inheritance";
 import { projectDependencyIds } from "./analytics";
+import {
+  setProjectExternalUrls,
+  withProjectExternalUrls,
+} from "./external-links";
 import { hydrateProjectRow } from "./helpers";
 import { loadProjectSubtreeRollups } from "./subtree";
 
@@ -71,17 +75,17 @@ export const PROJECT_DELETE_EDGE_POLICY = {
     description:
       "A project with live sub-projects can't be deleted — delete or reparent them first.",
   },
-  "ProjectDependency.projectId": {
-    code: "hard-delete-dependency",
-    effect: "hard-delete",
+  "EntityLink[projectDependency].from": {
+    code: "soft-delete-dependency",
+    effect: "soft-delete",
     description:
-      "Blocks/blocked-by dependency rows naming the project are removed outright.",
+      "Blocks/blocked-by dependency links naming the project are soft-deleted with it.",
   },
-  "ProjectDependency.blockedByProjectId": {
-    code: "hard-delete-dependency",
-    effect: "hard-delete",
+  "EntityLink[projectDependency].to": {
+    code: "soft-delete-dependency",
+    effect: "soft-delete",
     description:
-      "Blocks/blocked-by dependency rows naming the project are removed outright.",
+      "Blocks/blocked-by dependency links naming the project are soft-deleted with it.",
   },
   "Task.projectId": {
     code: "block-live-task",
@@ -95,17 +99,23 @@ export const PROJECT_DELETE_EDGE_POLICY = {
     description:
       "A project with live expenses can't be deleted — delete or reassign them first.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
       "Image associations are soft-deleted with the project, and each file is\n      deleted too unless something else still references it.",
   },
-  "ProjectToolUsage.projectId": {
+  "EntityLink[projectTool].from": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
       "Tool-use associations are soft-deleted with the project; the tool Products and their other project history remain.",
+  },
+  "EntityExternalId.entityId": {
+    code: "soft-delete-metadata",
+    effect: "soft-delete",
+    description:
+      "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
   },
 } as const satisfies IncomingEdgePolicy<"project", OperationDisposition>;
 
@@ -124,15 +134,18 @@ const projectReader = createEntityReader({
     // Whole-tree parent/child map + this project's subtree rollup — see
     // subtree.ts's doc comment for why the tree is loaded in full rather than
     // walked with per-row queries.
-    const [projectContext, deps, dataQualities] = await Promise.all([
-      loadProjectSubtreeRollups(db, [row.id]),
-      projectDependencyIds(db, [row.id]),
-      loadDataQualities(db, "project", [row.id]),
-    ]);
+    const [projectContext, deps, dataQualities, [withUrls]] = await Promise.all(
+      [
+        loadProjectSubtreeRollups(db, [row.id]),
+        projectDependencyIds(db, [row.id]),
+        loadDataQualities(db, "project", [row.id]),
+        withProjectExternalUrls(db, [row]),
+      ],
+    );
 
     // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
     return hydrateProjectRow(
-      row,
+      withUrls!,
       projectContext,
       deps,
       dataQualities.get(row.id)!,
@@ -207,12 +220,14 @@ export const createProject = async (
       endDate: data.endDate,
       icon: data.icon,
       notes: data.notes,
+    });
+    await setProjectExternalUrls(tx, created.id, {
       googleDriveFolderUrl: data.googleDriveFolderUrl,
       notionPageUrl: data.notionPageUrl,
     });
     await validateLiveEffectiveTrades(tx);
     await logAuditEntry(tx, actor, {
-      entityType: "project",
+      entityKind: "project",
       entityId: created.id,
       action: "create",
     });
@@ -336,10 +351,14 @@ export const updateProject = async (
       endDate: data.endDate,
       icon: data.icon,
       notes: data.notes,
+    });
+    const [beforeWithUrls] = await withProjectExternalUrls(tx, [before]);
+    const updatedRow = await updateLiveAndReturn(tx, project, updateValues, id);
+    await setProjectExternalUrls(tx, id, {
       googleDriveFolderUrl: data.googleDriveFolderUrl,
       notionPageUrl: data.notionPageUrl,
     });
-    const updated = await updateLiveAndReturn(tx, project, updateValues, id);
+    const [updated] = await withProjectExternalUrls(tx, [updatedRow]);
     await validateLiveEffectiveTrades(tx);
 
     // Full-replacement set: clear this project's blocked-by edges and insert
@@ -347,24 +366,16 @@ export const updateProject = async (
     if (resolvedBlockedByIds !== undefined) {
       await replaceDependencyEdges(
         tx,
-        projectDependency,
-        {
-          ownColumn: projectDependency.projectId,
-          blockedByColumn: projectDependency.blockedByProjectId,
-          buildRow: (projectId, blockedByProjectId) => ({
-            projectId,
-            blockedByProjectId,
-          }),
-          entityTable: project,
-          entity: "project",
-        },
+        { entityTable: project, entity: "project" },
         id,
         resolvedBlockedByIds,
       );
     }
 
     const changes: AuditChangeMap = {
-      ...computeChanges(before, updated, [...entityFieldModels.project.audit]),
+      ...computeChanges(beforeWithUrls!, updated!, [
+        ...entityFieldModels.project.audit,
+      ]),
     };
     if (resolvedBlockedByIds !== undefined) {
       const blockedByChange = diffUnorderedIdSet(
@@ -377,7 +388,7 @@ export const updateProject = async (
     }
     if (Object.keys(changes).length > 0) {
       await logAuditEntry(tx, actor, {
-        entityType: "project",
+        entityKind: "project",
         entityId: id,
         action: "update",
         changes,

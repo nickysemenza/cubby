@@ -33,7 +33,7 @@ export type HandlerDefinition = {
 };
 
 /** The runtime shape of a `defineContract(...)` value, as the generator reads it. */
-type ContractMember = {
+export type ContractMember = {
   kind: Kind;
   observability?: {
     entities?: readonly string[];
@@ -43,15 +43,25 @@ type ContractMember = {
   http?: false;
   /** Why the Apple app calls this operation (see contracts/define.ts). */
   native?: string;
+  /** Keeps a query on the authoritative adapter (see contracts/define.ts). */
+  readPolicy?: "strong";
+  /** Browser cache tags / profile of a query (see contracts/cache-policy.ts). */
+  cache?: {
+    tags?: readonly (readonly string[])[];
+    profile?: string;
+  };
+  /** Ripple keys a mutation invalidates (see contracts/cache-policy.ts). */
+  invalidates?: readonly string[];
   input?: z.ZodType;
 };
 type Contract = { domain: string; ops: Record<string, ContractMember> };
-type LoadedContract = { exportName: string; contract: Contract };
+export type LoadedContract = { exportName: string; contract: Contract };
 export type DeclaredOperation = {
   kind: Kind;
   observability: OperationObservability;
   http: boolean;
   native: boolean;
+  strongRead: boolean;
   input: z.ZodType | undefined;
   exportName: string;
   member: string;
@@ -158,7 +168,7 @@ const CONTRACT_IMPORT_ALLOWLIST = [
   /^\.\/[^/]+$/u,
 ];
 
-const assertContractPurity = (path: string): void => {
+export const assertContractPurity = (path: string): void => {
   for (const source of runtimeImportSources(parseFile(path).body)) {
     if (CONTRACT_IMPORT_ALLOWLIST.some((pattern) => pattern.test(source)))
       continue;
@@ -169,7 +179,17 @@ const assertContractPurity = (path: string): void => {
 };
 
 /**
- * `defineOperationDomain` modules are loaded by the browser bundle, so a
+ * The hand-written browser policy that cannot be contract data because it is a
+ * function of the call's input (see `operation-overrides.ts`).
+ */
+export const OPERATION_OVERRIDES_MODULE = join(
+  SOURCE_ROOT,
+  "integrations/tanstack-query/operation-overrides.ts",
+);
+
+/**
+ * `defineOperationDomain` modules (the generated client catalog) and the
+ * operation overrides they import are loaded by the browser bundle, so a
  * runtime dependency on server-only code (or node builtins) would either crash
  * the client build or silently pull server modules into it. Type-only imports
  * are erased and stay legal. `import { type X } from "~/server/…"` is still
@@ -178,16 +198,18 @@ const assertContractPurity = (path: string): void => {
  */
 const assertClientSafeImports = (path: string): void => {
   const program = parseFile(path);
-  const declaresDomain = topLevelVariableDeclarators(program).some(
-    ({ init }) =>
-      init.type === "CallExpression" &&
-      calledName(init.callee) === "defineOperationDomain",
-  );
+  const declaresDomain =
+    path === OPERATION_OVERRIDES_MODULE ||
+    topLevelVariableDeclarators(program).some(
+      ({ init }) =>
+        init.type === "CallExpression" &&
+        calledName(init.callee) === "defineOperationDomain",
+    );
   if (!declaresDomain) return;
   for (const source of runtimeImportSources(program.body)) {
     if (/^~\/server(?:\/|$)/u.test(source) || source.startsWith("node:")) {
       throw new Error(
-        `${relative(ROOT, path)} declares a Start operation domain but has a runtime import of ${JSON.stringify(source)}. Domain modules load in the browser; use \`import type\`, or move the runtime dependency into the domain's implementOperationDomain module.`,
+        `${relative(ROOT, path)} is loaded by the browser bundle but has a runtime import of ${JSON.stringify(source)}. The client operation catalog and its overrides must stay free of server code; use \`import type\`, or move the runtime dependency into the domain's implementOperationDomain module.`,
       );
     }
   }
@@ -219,7 +241,7 @@ let cachedContracts: Promise<LoadedContract[]> | undefined;
  * Every `*.contract.ts` file must be re-exported from the index barrel, and
  * every export of the barrel must be a contract.
  */
-const loadContracts = (): Promise<LoadedContract[]> => {
+export const loadContracts = (): Promise<LoadedContract[]> => {
   cachedContracts ??= (async () => {
     const indexPath = join(CONTRACTS_ROOT, "index.ts");
     const files = readdirSync(CONTRACTS_ROOT)
@@ -281,6 +303,7 @@ export const collectDeclaredOperations = (): Promise<
           },
           http: definition.http !== false,
           native: definition.native !== undefined,
+          strongRead: definition.readPolicy === "strong",
           input: definition.input,
           exportName,
           member,
@@ -486,6 +509,25 @@ export const collectStartOperations = async (): Promise<
       { kind: declared.kind, observability: declared.observability },
     ]),
   );
+};
+
+/**
+ * Query ids whose contract member declares `readPolicy: "strong"`, sorted. A
+ * flag on a mutation or subscription is an error here: mutations are always
+ * strong and subscriptions run through the workflow stream's own policy, so a
+ * flag there would be silently meaningless.
+ */
+export const collectStrongQueryOperationIds = async (): Promise<string[]> => {
+  const ids: string[] = [];
+  for (const [operation, declared] of await collectDeclaredOperations()) {
+    if (!declared.strongRead) continue;
+    if (declared.kind !== "query")
+      throw new Error(
+        `${operation} declares readPolicy: "strong" but is a ${declared.kind}; only queries choose a read policy.`,
+      );
+    ids.push(operation);
+  }
+  return ids.sort((a, b) => a.localeCompare(b));
 };
 
 /**

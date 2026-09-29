@@ -20,6 +20,7 @@ import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { ingredient, product } from "~/server/db/schema";
+import { resolveNames } from "~/server/entity-kernel/resolve";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   notDeleted,
@@ -28,9 +29,9 @@ import {
   updateAndReturn,
   withTransactionOn,
 } from "~/server/repo/database-helpers";
-import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { patchEntityRows } from "~/server/repo/entity-patch";
 import { markProductConversionCoverageInputStale } from "~/server/repo/product/conversion-coverage";
+import { createEntityCrud } from "~/server/repo/repository";
 import {
   findOrCreateWithShortcode,
   insertWithShortcode,
@@ -86,7 +87,7 @@ export const createIngredient = async (
 
   // Log audit entry
   await logAuditEntry(db, actor, {
-    entityType: "ingredient",
+    entityKind: "ingredient",
     entityId: newIngredient.id,
     action: "create",
   });
@@ -211,94 +212,34 @@ type ResolvedIngredient = {
   created: boolean;
 };
 
-// Batch resolve-or-create: for each requested name, find the existing standalone
-// ingredient (case-insensitive on name/aliases) or atomically create it, reusing
-// the same matcher + race-safe `findOrCreate` primitive as findOrCreateIngredient.
-// Returns one entry per non-blank input name in order, so an agent/MCP caller can
-// collapse dozens of search+create round-trips into one call. Duplicate or
-// casing-variant names dedupe to a single DB op; a name matching another's alias
-// resolves to that existing ingredient (no duplicate row).
+/**
+ * Shim over the kernel `resolve` capability (`resolveNames`) kept for the MCP
+ * tools; remove once they call `resolveEntity`. One entry per non-blank input
+ * name in order; casing variants share one row, and a name matching another
+ * ingredient's alias resolves to it.
+ */
 export const resolveOrCreateIngredients = async (
   db: Database | DrizzleTransaction,
   names: string[],
 ): Promise<ResolvedIngredient[]> => {
-  const resolved = new Map<
-    string,
-    {
-      id: IngredientId;
-      shortcode: IngredientShortcode;
-      canonicalName: string;
-      aliases: string[];
-      created: boolean;
-    }
-  >();
-  const requested = new Set<string>();
-
-  const uniqueNames: string[] = [];
-  for (const rawName of names) {
-    const name = rawName.trim();
-    const key = name.toLowerCase();
-    if (key.length === 0 || requested.has(key)) continue;
-    // Reserve the key before the lookup so casing variants coalesce.
-    requested.add(key);
-    uniqueNames.push(name);
-  }
-
-  if (uniqueNames.length > 0) {
-    // Fetch all already-existing name/alias matches at once, avoiding a
-    // find-or-create SELECT per input — a cookbook-sized request is
-    // overwhelmingly existing ingredients.
-    const existing = await unwrapDb(db).query.ingredient.findMany({
-      where: buildIngredientWhere(true, uniqueNames[0]!, uniqueNames.slice(1)),
-      columns: { id: true, shortcode: true, name: true, aliases: true },
-    });
-    for (const row of existing) {
-      const entry = {
-        id: row.id,
-        shortcode: parseShortcodeFor("ingredient", row.shortcode),
-        canonicalName: row.name,
-        aliases: row.aliases,
-        created: false,
-      };
-      for (const matchName of [row.name, ...row.aliases]) {
-        const key = matchName.toLowerCase();
-        if (requested.has(key)) resolved.set(key, entry);
-      }
-    }
-  }
-
-  for (const name of uniqueNames) {
-    const key = name.toLowerCase();
-    if (resolved.get(key)) continue;
-    const { row, created } = await findOrCreateWithShortcode(db, "ingredient", {
-      where: buildIngredientWhere(true, name),
-      values: () => ({
-        name,
-        aliases: [],
-      }),
-    });
-    resolved.set(key, {
-      id: row.id,
-      shortcode: parseShortcodeFor("ingredient", row.shortcode),
-      canonicalName: row.name,
-      aliases: row.aliases,
-      created,
-    });
-  }
-
-  const out: ResolvedIngredient[] = [];
-  for (const rawName of names) {
-    const entry = resolved.get(rawName.trim().toLowerCase());
-    if (!entry) continue; // blank/whitespace-only name
-    out.push({
-      name: rawName,
-      id: entry.shortcode,
-      entityId: entry.id,
-      canonicalName: entry.canonicalName,
-      aliases: entry.aliases,
-      matched: !entry.created,
-      created: entry.created,
-    });
-  }
-  return out;
+  const requested = names.filter((name) => name.trim().length > 0);
+  const resolved = await resolveNames(
+    db,
+    "ingredient",
+    requested.map((name) => ({ name })),
+    { create: true },
+  );
+  return resolved.map(({ row }, index) => {
+    if (!row) throw new Error("A creating resolve returned no ingredient");
+    const [canonicalName = row.name, ...aliases] = row.matchValues;
+    return {
+      name: requested[index] ?? row.name,
+      id: parseShortcodeFor("ingredient", row.shortcode),
+      entityId: row.id,
+      canonicalName,
+      aliases,
+      matched: !row.created,
+      created: row.created,
+    };
+  });
 };

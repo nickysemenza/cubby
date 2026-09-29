@@ -102,7 +102,15 @@ export default defineEntity({
         key: "acquiredAt",
         kind: "timestamp",
         nullable: true,
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          // The Status column reads `acquiredAt` as a state, not a date.
+          valueOptions: [
+            { value: "acquired", label: "Acquired", color: "var(--positive)" },
+            { value: "wanted", label: "Wanted", color: "var(--slate)" },
+          ],
+        },
         validation: {
           read: z.date().nullable(),
           create: null,
@@ -112,7 +120,15 @@ export default defineEntity({
       {
         key: "candidates",
         kind: "json",
-        display: { detail: true, renderer: { detail: "wish-candidates" } },
+        display: {
+          detail: true,
+          renderer: { detail: "wish-candidates" },
+          // Roster for a candidate row's `inventoried` flag in the list.
+          valueOptions: [
+            { value: "yes", label: "In inventory", color: "var(--positive)" },
+            { value: "no", label: "Not stocked", color: "var(--slate)" },
+          ],
+        },
         provenance: {
           kind: "relation",
           sources: [{ entity: "product", relation: "candidates" }],
@@ -256,6 +272,9 @@ export default defineEntity({
     output: { module: "@cubby/schemas/wish", export: "wishOut" },
     list: { module: "@cubby/schemas/wish", export: "wishListItemOut" },
   },
+  storage: {
+    indexes: [{ on: ["createdAt"] }, { on: ["acquiredAt"] }],
+  },
   filters: {
     audit: true,
     schema: { module: "@cubby/schemas/wish", export: "wishFilterFields" },
@@ -317,14 +336,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "WishCandidate.wishId", direction: "incoming" },
-          { edge: "WishCandidate.productId", direction: "outgoing" },
+          { edge: "EntityLink[wishCandidate].from", direction: "incoming" },
+          { edge: "EntityLink[wishCandidate].to", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "WishCandidate.productId", direction: "incoming" },
-          { edge: "WishCandidate.wishId", direction: "outgoing" },
+          { edge: "EntityLink[wishCandidate].to", direction: "incoming" },
+          { edge: "EntityLink[wishCandidate].from", direction: "outgoing" },
         ],
       },
     },

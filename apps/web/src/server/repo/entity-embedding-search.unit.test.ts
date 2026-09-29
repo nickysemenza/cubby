@@ -21,7 +21,7 @@ describe("findSimilarEntities", () => {
     setCfEnv(fromPartial<Env>({ VECTORIZE: index }));
 
     const seed = {
-      entityType: "recipe" as const,
+      entityKind: "recipe" as const,
       entityId: testEntityId("recipe", "seed"),
     };
     const neighbors = [
@@ -32,9 +32,9 @@ describe("findSimilarEntities", () => {
 
     await index.upsert([
       {
-        id: `${seed.entityType}:${seed.entityId}`,
+        id: `${seed.entityKind}:${seed.entityId}`,
         values: vector(1),
-        metadata: { entityType: seed.entityType },
+        metadata: { entityType: seed.entityKind },
       },
       ...neighbors.map((entityId, position) => ({
         id: `recipe:${entityId}`,
@@ -63,7 +63,7 @@ describe("findSimilarEntities", () => {
 
     const results = await findSimilarEntities(
       productionVectorStore,
-      { entityType: "recipe", entityId: testEntityId("recipe", "unembedded") },
+      { entityKind: "recipe", entityId: testEntityId("recipe", "unembedded") },
       { targetType: "recipe", limit: 5 },
     );
 

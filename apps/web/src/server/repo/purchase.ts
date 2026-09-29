@@ -54,14 +54,13 @@ import {
   expenseAttribution,
   financialTransactionAllocation,
   image,
-  runEvidence,
-  runTarget,
   importSourceClaim,
   ledgerSourceClaim,
   orderMailCandidateDecision,
   purchase,
   purchasePaymentEvidence,
-  purchaseProduct,
+  runEvidence,
+  runTarget,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -92,6 +91,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
+import { repointLinkEnd } from "~/server/repo/entity-links";
 import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
@@ -108,7 +108,7 @@ import {
   transactionIdsAllocatedTo,
 } from "~/server/repo/financial-transaction-allocations";
 import { displayableImageSql } from "~/server/repo/image-displayability";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import {
   finalizeMerge,
   repointEdge,
@@ -121,7 +121,6 @@ import {
   loadPurchaseFinancialAggregates,
   type PurchaseFinancialAggregate,
 } from "~/server/repo/purchase-financial-aggregates";
-import { relatedWhereConditions } from "~/server/repo/related-view";
 /** Purchase repository: one vendor event per row; Expense is the authoritative spend ledger. */
 import { deleteByPolicy } from "~/server/repo/removal";
 import { cascadeRemoval } from "~/server/repo/removal";
@@ -153,7 +152,7 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     description:
       "A reviewed email decision retains the deleted Purchase tombstone.",
   },
-  "RunTarget.purchaseId": {
+  "RunTarget.entityId": {
     code: "preserve-targeted-import-history",
     effect: "preserve",
     description:
@@ -177,13 +176,13 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     description:
       "Deleting a purchase nulls its expenses' purchaseId rather than deleting them — an expense is the money, and deleting a purchase must never delete spend. Each detach is logged to the audit trail.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
       "Image associations are soft-deleted with the purchase, and each file is\n      deleted too unless something else still references it.",
   },
-  "PurchaseProduct.purchaseId": {
+  "EntityLink[purchaseProduct].from": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -204,7 +203,7 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
     description:
       "Reviewed mail decisions follow the survivor; an existing survivor decision wins a conflict.",
   },
-  "RunTarget.purchaseId": {
+  "RunTarget.entityId": {
     code: "repoint-targeted-import-history",
     effect: "repoint",
     description: "Targeted validation history follows the surviving purchase.",
@@ -225,13 +224,13 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
     description:
       "Merging a purchase re-points its expenses onto the surviving purchase, logged to the audit trail.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "move-dedupe-and-soft-delete-source",
     effect: "move-dedupe",
     description:
       "The absorbed purchase's images move onto the survivor, skipping any already filed there, and the source associations are soft-deleted.",
   },
-  "PurchaseProduct.purchaseId": {
+  "EntityLink[purchaseProduct].from": {
     code: "move-dedupe-and-soft-delete-source",
     effect: "move-dedupe",
     description:
@@ -281,7 +280,7 @@ const purchasePostedRefundTotal = correlated<number>(
 const purchaseDocumentCount = correlated<number>(
   `(SELECT count(*)::int FROM "EntityAttachment" pi
      JOIN "Image" i ON i."id" = pi."imageId" AND i."deletedAt" IS NULL
-     WHERE pi."subjectEntityId" = "Purchase"."id" AND pi."deletedAt" IS NULL)`,
+     WHERE pi."entityId" = "Purchase"."id" AND pi."deletedAt" IS NULL)`,
 );
 
 const purchaseVendorName = correlated<string | null>(
@@ -309,7 +308,7 @@ const purchaseVendorOrderUrlTemplate = correlated<string | null>(
 
 const purchaseVendorLogoKey = sql<string | null>`(
   SELECT logo."key" FROM "Vendor" v
-  JOIN "EntityAttachment" logo_att ON logo_att."subjectEntityId" = v."id"
+  JOIN "EntityAttachment" logo_att ON logo_att."entityId" = v."id"
     AND logo_att."role" = 'logo' AND logo_att."deletedAt" IS NULL
   JOIN "Image" logo ON logo."id" = logo_att."imageId"
   WHERE v."id" = ${sql.raw('"Purchase"."vendorId"')}
@@ -440,7 +439,7 @@ const loadPurchaseImages = async (
     .innerJoin(image, eq(entityAttachment.imageId, image.id))
     .where(
       and(
-        eq(entityAttachment.subjectEntityId, id),
+        eq(entityAttachment.entityId, id),
         notDeleted(entityAttachment),
         notDeleted(image),
       ),
@@ -575,7 +574,6 @@ export const buildPurchaseWhereClause = async (
   // filters — applied by `purchaseScaffold.where` before the conditions below.
   return purchaseScaffold.where(filters, [
     vendorCondition,
-    ...relatedWhereConditions("purchase", filters, purchase.id),
     eqAny(purchase.orderId, filters.orderId),
     presenceCondition(purchase.orderId, filters.orderIdPresenceFilter),
     expenseStatusCondition(filters.expenseStatus),
@@ -725,7 +723,7 @@ export const reclassifyPurchaseDocument = async (
   await withTransaction(db, async (tx) => {
     const before = await tx.query.entityAttachment.findFirst({
       where: and(
-        eq(entityAttachment.subjectEntityId, id),
+        eq(entityAttachment.entityId, id),
         eq(entityAttachment.imageId, imageId),
         notDeleted(entityAttachment),
       ),
@@ -746,7 +744,7 @@ export const reclassifyPurchaseDocument = async (
       .set({ updatedAt: new Date() })
       .where(and(eq(purchase.id, id), notDeleted(purchase)));
     await logAuditEntry(tx, actor, {
-      entityType: "purchase",
+      entityKind: "purchase",
       entityId: id,
       action: "update",
       changes: {
@@ -849,7 +847,7 @@ export const createPurchase = async (
       undefined,
     );
     await logAuditEntry(tx, actor, {
-      entityType: "purchase",
+      entityKind: "purchase",
       entityId: created.id,
       action: "create",
     });
@@ -973,7 +971,7 @@ export const updatePurchase = async (
     ]);
     if (changes) {
       await logAuditEntry(tx, actor, {
-        entityType: "purchase",
+        entityKind: "purchase",
         entityId: id,
         action: "update",
         changes,
@@ -1070,7 +1068,7 @@ export const linkExpensesToPurchase = async (
         return changes
           ? [
               {
-                entityType: "expense" as const,
+                entityKind: "expense" as const,
                 entityId: row.id,
                 action: "update" as const,
                 changes,
@@ -1348,7 +1346,7 @@ export const splitExpense = async (
         .where(eq(expense.id, expenseId));
 
       const auditEntries: AuditEntryInput[] = inserted.map((id) => ({
-        entityType: "expense" as const,
+        entityKind: "expense" as const,
         entityId: id,
         action: "create" as const,
       }));
@@ -1439,7 +1437,7 @@ export const renameChargeOrderId = async (
   // purchase-import reconciliation action) left no trace anywhere.
   if (self.orderId !== orderId) {
     await logAuditEntry(tx, actor, {
-      entityType: "purchase",
+      entityKind: "purchase",
       entityId: id,
       action: "update",
       changes: { orderId: { from: self.orderId, to: orderId } },
@@ -1668,7 +1666,7 @@ const moveChargeImages = async (
 ) => {
   const rows = await tx.query.entityAttachment.findMany({
     where: and(
-      eq(entityAttachment.subjectEntityId, deadId),
+      eq(entityAttachment.entityId, deadId),
       notDeleted(entityAttachment),
     ),
     columns: { imageId: true, sortOrder: true, documentKind: true },
@@ -1678,7 +1676,8 @@ const moveChargeImages = async (
     .insert(entityAttachment)
     .values(
       rows.map((row) => ({
-        subjectEntityId: survivorId,
+        entityId: survivorId,
+        entityKind: "purchase" as const,
         role: "attachment" as const,
         imageId: row.imageId,
         sortOrder: row.sortOrder,
@@ -1690,10 +1689,7 @@ const moveChargeImages = async (
     .update(entityAttachment)
     .set({ deletedAt: new Date() })
     .where(
-      and(
-        eq(entityAttachment.subjectEntityId, deadId),
-        notDeleted(entityAttachment),
-      ),
+      and(eq(entityAttachment.entityId, deadId), notDeleted(entityAttachment)),
     );
 };
 
@@ -1702,26 +1698,12 @@ const moveChargeProducts = async (
   deadId: PurchaseId,
   survivorId: PurchaseId,
 ) => {
-  const rows = await tx.query.purchaseProduct.findMany({
-    where: and(
-      eq(purchaseProduct.purchaseId, deadId),
-      notDeleted(purchaseProduct),
-    ),
-    columns: { productId: true },
+  await repointLinkEnd(tx, {
+    kind: "purchaseProduct",
+    end: "from",
+    keepId: survivorId,
+    loserIds: [deadId],
   });
-  if (rows.length === 0) return;
-  await tx
-    .insert(purchaseProduct)
-    .values(
-      rows.map(({ productId }) => ({ purchaseId: survivorId, productId })),
-    )
-    .onConflictDoNothing();
-  await tx
-    .update(purchaseProduct)
-    .set({ deletedAt: new Date() })
-    .where(
-      and(eq(purchaseProduct.purchaseId, deadId), notDeleted(purchaseProduct)),
-    );
 };
 
 /** Fold charge contents with audited expense re-pointing; callers own index ordering. */
@@ -1757,7 +1739,7 @@ export const foldChargeInto = async (
     tx,
     actor,
     moved.map((id) => ({
-      entityType: "expense" as const,
+      entityKind: "expense" as const,
       entityId: id,
       action: "update" as const,
       changes: { purchaseId: { from: deadId, to: survivorId } },
@@ -1970,11 +1952,11 @@ export const mergePurchases = async (
     }
     // A run can already target the keeper. Preserve that canonical target and
     // drop the colliding loser row before re-pointing the remaining history;
-    // the partial unique index makes a bulk update unsafe here.
+    // the unique (run, entity) index makes a bulk update unsafe here.
     const targetedRuns = await tx
       .select({ id: runTarget.id, runId: runTarget.runId })
       .from(runTarget)
-      .where(inArray(runTarget.purchaseId, losers));
+      .where(inArray(runTarget.entityId, losers));
     for (const target of targetedRuns) {
       const [existing] = await tx
         .select({ id: runTarget.id })
@@ -1982,7 +1964,7 @@ export const mergePurchases = async (
         .where(
           and(
             eq(runTarget.runId, target.runId),
-            eq(runTarget.purchaseId, keepId),
+            eq(runTarget.entityId, keepId),
           ),
         )
         .limit(1);
@@ -1995,14 +1977,14 @@ export const mergePurchases = async (
       } else {
         await tx
           .update(runTarget)
-          .set({ purchaseId: keepId, updatedAt: new Date() })
+          .set({ entityId: keepId, updatedAt: new Date() })
           .where(eq(runTarget.id, target.id));
       }
     }
 
     await logAuditEntries(tx, actor, [
       {
-        entityType: "purchase" as const,
+        entityKind: "purchase" as const,
         entityId: keepId,
         action: "update" as const,
         changes: { mergedFrom: { from: null, to: losers } },

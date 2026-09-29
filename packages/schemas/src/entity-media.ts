@@ -15,7 +15,7 @@ export const entityDisplayImagesInput = z.object({
 });
 export type EntityDisplayImagesInput = z.infer<typeof entityDisplayImagesInput>;
 
-/** Canonical public `entityType:shortcode` key → cover or explicit no-image. */
+/** Canonical public `entityKind:shortcode` key → cover or explicit no-image. */
 export const entityDisplayImagesOutput = z.record(
   z.string(),
   imageUrlSummary.nullable(),

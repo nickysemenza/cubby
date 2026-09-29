@@ -2,7 +2,7 @@
  * Which Products a Purchase acquired, and the transpose — answered from TWO
  * sources, because one of them alone cannot answer it.
  *
- * `PurchaseProduct` is a deliberately SPARSE provenance edge. It exists because
+ * `purchaseProduct` is a deliberately SPARSE provenance edge. It exists because
  * an installment/lump-sum Purchase's Expenses are `lineBasis: "allocation"`
  * (see `packages/schemas/src/expense-line-kind.ts`) and can never carry a
  * `productId`. An allocation is a slice of a total that was never itemized —
@@ -46,11 +46,10 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
+  entityLink,
   expense,
   product,
-  productComponent,
   purchase,
-  purchaseProduct,
   vendor,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -60,23 +59,18 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { linkValues, liveLinks } from "~/server/repo/entity-links";
 import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
-import type { EntityRelationMutationAdapter } from "~/server/repo/relation-mutation-adapter";
+import { linkRelationAdapter } from "~/server/repo/relation-mutation-adapter";
 import {
   emptyPreflight,
   loadRelationProducts,
-  planRelationAttach,
-  planRelationDetach,
   type RelationPreflight,
   relationImpact,
   throwRelationRefusal,
 } from "~/server/repo/relation-preflight";
-import {
-  resolveAllOrThrow,
-  resolveOrThrow,
-} from "~/server/repo/shortcode-resolver";
 
 /**
  * Does this Expense say the order ACQUIRED the product?
@@ -171,25 +165,26 @@ const loadComponentCountsByProductId = async (
   if (productIds.length === 0) return counts;
   const rows = await dbc
     .select({
-      parentProductId: productComponent.parentProductId,
+      parentProductId: entityLink.fromEntityId,
       count: count(),
     })
-    .from(productComponent)
+    .from(entityLink)
     .innerJoin(
       product,
-      and(
-        eq(product.id, productComponent.componentProductId),
-        notDeleted(product),
-      ),
+      and(eq(product.id, entityLink.toEntityId), notDeleted(product)),
     )
     .where(
       and(
-        inArray(productComponent.parentProductId, productIds),
-        notDeleted(productComponent),
+        inArray(entityLink.fromEntityId, productIds),
+        liveLinks("productComponent"),
       ),
     )
-    .groupBy(productComponent.parentProductId);
-  for (const row of rows) counts.set(row.parentProductId, Number(row.count));
+    .groupBy(entityLink.fromEntityId);
+  for (const row of rows)
+    counts.set(
+      parseEntityId("product", row.parentProductId),
+      Number(row.count),
+    );
   return counts;
 };
 
@@ -207,16 +202,16 @@ export async function listPurchaseProducts(
 
   const [linkRows, expenseRows] = await Promise.all([
     dbc
-      .select({ ...productColumns, linkAttachedAt: purchaseProduct.createdAt })
-      .from(purchaseProduct)
+      .select({ ...productColumns, linkAttachedAt: entityLink.createdAt })
+      .from(entityLink)
       .innerJoin(
         product,
-        and(eq(product.id, purchaseProduct.productId), notDeleted(product)),
+        and(eq(product.id, entityLink.toEntityId), notDeleted(product)),
       )
       .where(
         and(
-          eq(purchaseProduct.purchaseId, purchaseId),
-          notDeleted(purchaseProduct),
+          eq(entityLink.fromEntityId, purchaseId),
+          liveLinks("purchaseProduct"),
         ),
       ),
     dbc
@@ -273,18 +268,15 @@ export async function listProductPurchases(
 
   const [linkRows, expenseRows] = await Promise.all([
     dbc
-      .select({ ...purchaseColumns, linkAttachedAt: purchaseProduct.createdAt })
-      .from(purchaseProduct)
+      .select({ ...purchaseColumns, linkAttachedAt: entityLink.createdAt })
+      .from(entityLink)
       .innerJoin(
         purchase,
-        and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
+        and(eq(purchase.id, entityLink.fromEntityId), notDeleted(purchase)),
       )
       .leftJoin(vendor, liveVendor)
       .where(
-        and(
-          eq(purchaseProduct.productId, productId),
-          notDeleted(purchaseProduct),
-        ),
+        and(eq(entityLink.toEntityId, productId), liveLinks("purchaseProduct")),
       ),
     dbc
       .selectDistinct(purchaseColumns)
@@ -319,12 +311,12 @@ async function liveProductShortcodes(
 ): Promise<string[]> {
   const rows = await dbc
     .select({ shortcode: product.shortcode })
-    .from(purchaseProduct)
-    .innerJoin(product, eq(product.id, purchaseProduct.productId))
+    .from(entityLink)
+    .innerJoin(product, eq(product.id, entityLink.toEntityId))
     .where(
       and(
-        eq(purchaseProduct.purchaseId, purchaseId),
-        notDeleted(purchaseProduct),
+        eq(entityLink.fromEntityId, purchaseId),
+        liveLinks("purchaseProduct"),
         notDeleted(product),
       ),
     )
@@ -339,13 +331,13 @@ async function livePurchaseProductIds(
 ): Promise<Set<string>> {
   if (productIds.length === 0) return new Set();
   const rows = await dbc
-    .select({ productId: purchaseProduct.productId })
-    .from(purchaseProduct)
+    .select({ productId: entityLink.toEntityId })
+    .from(entityLink)
     .where(
       and(
-        eq(purchaseProduct.purchaseId, purchaseId),
-        inArray(purchaseProduct.productId, [...productIds]),
-        notDeleted(purchaseProduct),
+        eq(entityLink.fromEntityId, purchaseId),
+        inArray(entityLink.toEntityId, [...productIds]),
+        liveLinks("purchaseProduct"),
       ),
     );
   return new Set(rows.map((row) => row.productId));
@@ -359,7 +351,7 @@ async function livePurchaseProductIds(
  * SEQUENTIALLY so both call sites are safe — see `repo/relation-preflight.ts`.
  *
  * There is no category gate here on purpose: an order can buy anything. The
- * only counterpart to `ProjectToolUsage`'s `ineligible` bucket is the empty
+ * only counterpart to `projectTool`'s `ineligible` bucket is the empty
  * one this returns.
  */
 async function preflightAttachPurchaseProducts(
@@ -403,11 +395,6 @@ async function preflightDetachPurchaseProducts(
   };
 }
 
-const PURCHASE_PRODUCT_EDGE = {
-  edgeKey: "PurchaseProduct.productId",
-  label: "purchase product links",
-} as const;
-
 export async function attachPurchaseProducts(
   db: Database,
   purchaseId: PurchaseId,
@@ -450,15 +437,19 @@ export async function attachPurchaseProducts(
 
     const before = await liveProductShortcodes(tx, purchaseId);
     const inserted = await tx
-      .insert(purchaseProduct)
-      .values(uniqueProductIds.map((productId) => ({ purchaseId, productId })))
+      .insert(entityLink)
+      .values(
+        uniqueProductIds.map((productId) =>
+          linkValues("purchaseProduct", purchaseId, productId),
+        ),
+      )
       .onConflictDoNothing()
-      .returning({ id: purchaseProduct.id });
+      .returning({ id: entityLink.id });
     const after = await liveProductShortcodes(tx, purchaseId);
 
     if (inserted.length > 0) {
       await logAuditEntry(tx, actor, {
-        entityType: "purchase",
+        entityKind: "purchase",
         entityId: purchaseId,
         action: "update",
         changes: { linkedProductIds: { from: before, to: after } },
@@ -485,21 +476,21 @@ export async function detachPurchaseProducts(
   return withTransaction(db, async (tx) => {
     const before = await liveProductShortcodes(tx, purchaseId);
     const removed = await tx
-      .update(purchaseProduct)
+      .update(entityLink)
       .set({ deletedAt: new Date() })
       .where(
         and(
-          eq(purchaseProduct.purchaseId, purchaseId),
-          inArray(purchaseProduct.productId, uniqueProductIds),
-          notDeleted(purchaseProduct),
+          eq(entityLink.fromEntityId, purchaseId),
+          inArray(entityLink.toEntityId, uniqueProductIds),
+          liveLinks("purchaseProduct"),
         ),
       )
-      .returning({ id: purchaseProduct.id });
+      .returning({ id: entityLink.id });
     const after = await liveProductShortcodes(tx, purchaseId);
 
     if (removed.length > 0) {
       await logAuditEntry(tx, actor, {
-        entityType: "purchase",
+        entityKind: "purchase",
         entityId: purchaseId,
         action: "update",
         changes: { linkedProductIds: { from: before, to: after } },
@@ -517,54 +508,27 @@ export async function detachPurchaseProducts(
   });
 }
 
-export const purchaseProductsRelationAdapter = {
-  async list(db, ownerShortcode) {
-    return listPurchaseProducts(
+export const purchaseProductsRelationAdapter = linkRelationAdapter<
+  "purchaseProduct",
+  { id: string },
+  PurchaseProductOut
+>("purchaseProduct", {
+  label: "purchase product links",
+  describe: {
+    attach: "Provenance links this attach would create.",
+    detach: "Provenance links this detach would remove.",
+  },
+  list: listPurchaseProducts,
+  preflight: {
+    attach: preflightAttachPurchaseProducts,
+    detach: preflightDetachPurchaseProducts,
+  },
+  attach: (db, purchaseId, targets, actor) =>
+    attachPurchaseProducts(
       db,
-      await resolveOrThrow(db, "purchase", ownerShortcode),
-    );
-  },
-  async preview(db, action, ownerId, targetIds) {
-    const purchaseId = parseEntityId("purchase", ownerId);
-    const productIds = targetIds.map((id) => parseEntityId("product", id));
-    return action === "attach"
-      ? planRelationAttach(
-          await preflightAttachPurchaseProducts(
-            getDb(db),
-            purchaseId,
-            productIds,
-          ),
-          {
-            ...PURCHASE_PRODUCT_EDGE,
-            description: "Provenance links this attach would create.",
-          },
-        )
-      : planRelationDetach(
-          await preflightDetachPurchaseProducts(
-            getDb(db),
-            purchaseId,
-            productIds,
-          ),
-          {
-            ...PURCHASE_PRODUCT_EDGE,
-            description: "Provenance links this detach would remove.",
-          },
-        );
-  },
-  async execute(ctx, action, ownerShortcode, items) {
-    const purchaseId = await resolveOrThrow(ctx.db, "purchase", ownerShortcode);
-    const productIds = await resolveAllOrThrow(
-      ctx.db,
-      "product",
-      items.map(({ id }) => id),
-    );
-    return action === "attach"
-      ? attachPurchaseProducts(ctx.db, purchaseId, productIds, ctx.actorContext)
-      : detachPurchaseProducts(
-          ctx.db,
-          purchaseId,
-          productIds,
-          ctx.actorContext,
-        );
-  },
-} satisfies EntityRelationMutationAdapter<{ id: string }, PurchaseProductOut>;
+      purchaseId,
+      targets.map(({ id }) => id),
+      actor,
+    ),
+  detach: detachPurchaseProducts,
+});

@@ -15,13 +15,13 @@ export async function getEntityDisplayImages(
 ): Promise<EntityDisplayImagesOutput> {
   const uniqueRefs = [
     ...new Map(
-      refs.map((ref) => [entityRefKey(ref.entityType, ref.entityId), ref]),
+      refs.map((ref) => [entityRefKey(ref.entityKind, ref.entityId), ref]),
     ).values(),
   ];
   const images = await resolvePublicEntityDisplayImages(db, uniqueRefs);
   return Object.fromEntries(
     uniqueRefs.map((ref) => {
-      const key = entityRefKey(ref.entityType, ref.entityId);
+      const key = entityRefKey(ref.entityKind, ref.entityId);
       return [key, images.get(key) ?? null];
     }),
   );

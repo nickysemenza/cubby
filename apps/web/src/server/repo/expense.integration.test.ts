@@ -19,6 +19,12 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
+import {
+  expenseAnalyzeWorkflow,
+  expenseChargeContextWorkflow,
+  expenseChartDataWorkflow,
+  expenseFacetCountsWorkflow,
+} from "~/server/operations/expense.server";
 import { getAuditLog } from "~/server/repo/audit-log";
 import {
   createExpense,
@@ -26,6 +32,7 @@ import {
   expenseAnalytics,
   expenseList,
   expenseMonthlySummary,
+  expenseTradeAffinity,
   getExpenseByShortcode,
   setExpensesCostType,
   setExpensesTrade,
@@ -42,14 +49,6 @@ import { resolveShortcode } from "~/server/repo/shortcode-resolver";
 import { vendorOptions } from "~/server/repo/vendor";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import {
-  expenseAnalyticsWorkflow,
-  expenseAnalyzeWorkflow,
-  expenseChargeContextWorkflow,
-  expenseChartDataWorkflow,
-  expenseFacetCountsWorkflow,
-  expenseTradeAffinityWorkflow,
-} from "~/server/workflows/expense.server";
 
 const unwrap = async <T>(p: Promise<{ output: T }>): Promise<T> =>
   (await p).output;
@@ -81,11 +80,11 @@ type ExpenseCreateSeed = z.input<typeof expenseCreateInput>;
 const createExpenseWorkflowCaller = (db: Database) => ({
   chartData: (input: Parameters<typeof expenseChartDataWorkflow>[1]) =>
     expenseChartDataWorkflow(db, input),
-  analytics: (input: Parameters<typeof expenseAnalyticsWorkflow>[1]) =>
-    expenseAnalyticsWorkflow(db, input),
+  analytics: (input: Parameters<typeof expenseAnalytics>[1]) =>
+    expenseAnalytics(db, input),
   chargeContext: (input: Parameters<typeof expenseChargeContextWorkflow>[1]) =>
     expenseChargeContextWorkflow(db, input),
-  tradeAffinity: () => expenseTradeAffinityWorkflow(db),
+  tradeAffinity: () => expenseTradeAffinity(db),
 });
 
 const purchaseIdOf = (expense: ExpenseOut): PurchaseShortcode => {
@@ -352,7 +351,7 @@ describe("expense repository — CRUD", () => {
     );
     expect(changedKind.lineKind).toBe("fee");
     const audit = await getAuditLog(ctx.db, {
-      entityType: "expense",
+      entityKind: "expense",
       entityId: inferredTaxId,
       limit: 20,
     });
@@ -591,7 +590,7 @@ describe("expense repository — bulk trade / cost-type writes", () => {
   const updateEntries = async (id: ExpenseId) =>
     (
       await getAuditLog(ctx.db, {
-        entityType: "expense",
+        entityKind: "expense",
         entityId: id,
         limit: 50,
       })
@@ -1147,7 +1146,7 @@ describe("expense repository — charge resolution on update", () => {
     // And no audit entry for a write that never landed. `getAuditLog`'s
     // `entityId` matches the internal uuid, not the shortcode.
     const audit = await getAuditLog(ctx.db, {
-      entityType: "expense",
+      entityKind: "expense",
       entityId: doomedId,
       limit: 20,
     });

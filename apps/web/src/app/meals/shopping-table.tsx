@@ -2,7 +2,6 @@ import type { ShoppingListItem } from "@cubby/schemas/meal";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
-import { format, parseISO } from "date-fns";
 import { useState } from "react";
 
 import { Row } from "~/components/layout";
@@ -16,6 +15,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { entityDetailLink } from "~/entities/entities";
+import { formatCalendarDay } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
 
 import {
@@ -183,7 +183,8 @@ function RowGroup({
                 {...entityDetailLink("meal", c.mealId)}
                 className="hover:underline"
               >
-                {c.mealName || "Meal"} · {format(parseISO(c.date), "EEE M/d")}
+                {c.mealName || "Meal"} ·{" "}
+                {formatCalendarDay(c.date, "weekdayNumeric")}
               </Link>
               <span className="ml-1">
                 — {c.scale !== 1 ? `${c.scale}× ` : ""}

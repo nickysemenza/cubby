@@ -69,13 +69,13 @@ describe("entity field provenance", () => {
       model: {
         ...vendorAccountDeclaration.model,
         storage: vendorAccountDeclaration.model.storage.filter(
-          (field) => field !== "lastRunAt",
+          (field) => field !== "label",
         ),
       },
     };
 
     expect(() => compileEntity(declaration, 0)).toThrow(
-      /model\.lastRunAt is exposed without storage, a reference, or declared provenance/u,
+      /model\.label is exposed without storage, a reference, or declared provenance/u,
     );
   });
 

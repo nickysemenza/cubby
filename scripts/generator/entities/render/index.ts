@@ -15,15 +15,17 @@ import type {
   FilterDescriptor,
   SourceRef,
 } from "../declarations.ts";
-import { renderEntityColumnsArtifact } from "./columns.ts";
 import { renderFieldExplanationReference } from "./field-explanations-reference.ts";
 import { renderRecord } from "./record.ts";
+import { renderEntityTablesArtifact } from "./tables.ts";
 import { browserRoutes, lowerCamelCase } from "./routes.ts";
 import { kernelEntitiesFor } from "./shared.ts";
 import { hasGenericListOperation } from "../list-capabilities.ts";
 import { renderSwiftEntityCatalog } from "./swift-catalog.ts";
 import { renderDataQualityArtifacts } from "./data-quality.ts";
 import { renderImagePolicyArtifacts } from "./image-policy.ts";
+import { renderCoverageTotalsArtifacts } from "./coverage-totals.ts";
+import { renderSchemaWrapperArtifacts } from "./schema-wrappers.ts";
 
 type ContractEntity = CompiledEntity & {
   contract: NonNullable<CompiledEntity["contract"]>;
@@ -696,15 +698,23 @@ export const renderEntityArtifacts = (
   const lifecycleFor = (entity: CompiledEntity) => entity.lifecycle;
   const kernelActionsFor = (entity: CompiledEntity) => {
     const lifecycle = lifecycleFor(entity);
-    return [
+    const reads = [
       "get",
       "list",
       ...(entity.descriptor.searchable === true ? ["search"] : []),
+    ];
+    const resolve = entity.resolve === null ? [] : ["resolve"];
+    // A read-only entity keeps its other writes in its own workflows; the
+    // kernel serves its reads and nothing else.
+    if (lifecycle.readOnly) return [...reads, ...resolve];
+    return [
+      ...reads,
       ...(entity.contract?.create ? ["create"] : []),
       ...(entity.contract?.update ? ["update"] : []),
       ...(entity.bulkUpdateFields === null ? [] : ["bulkUpdate"]),
       ...(lifecycle.delete === null ? [] : ["delete"]),
       ...(lifecycle.merge === true ? ["merge"] : []),
+      ...resolve,
     ];
   };
   const kernelContractCases = Object.fromEntries(
@@ -816,7 +826,15 @@ export const renderEntityArtifacts = (
           countable: entity.descriptor.countable === true,
           kernelActions,
           filterUrlKeys: entity.filterUrlKeys,
-          filterDescriptors: entity.filterDescriptors,
+          // Presets are runtime behavior (`entity-filter-bindings.gen.ts`), not
+          // inspector metadata.
+          filterDescriptors: entity.filterDescriptors.map((descriptor) => ({
+            ...descriptor,
+            options:
+              descriptor.options?.map(
+                ({ expand: _expand, ...option }) => option,
+              ) ?? null,
+          })),
           mcpOperations,
           mcpOwner,
           lifecycle: {
@@ -1005,6 +1023,8 @@ export const renderEntityArtifacts = (
     .join("\n");
   return [
     ...renderDataQualityArtifacts(entities),
+    ...renderSchemaWrapperArtifacts(entities),
+    ...renderCoverageTotalsArtifacts(entities),
     ...renderImagePolicyArtifacts(entities),
     ...renderFieldExplanationReference(entities),
     {
@@ -1088,7 +1108,7 @@ export const renderEntityArtifacts = (
         "type GeneratedEntityFieldResolutionValue = string | number | boolean | null | readonly GeneratedEntityFieldResolutionValue[] | GeneratedEntityFieldResolutionObject;\ninterface GeneratedEntityFieldResolutionObject { readonly [key: string]: GeneratedEntityFieldResolutionValue }\n\n" +
         'export type GeneratedEntityFieldProvenance = { kind: "reference" | "relation" | "derived"; sources: readonly { entity: Entity | null; label: string | null; relation: string | null }[] };\n\n' +
         "export type GeneratedEntityFieldModel = {\n" +
-        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; requiredOnCreate: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean; scope: readonly { sourceField: string; targetField: string }[]; filters: readonly { field: string; values: readonly string[] }[] } | null; explanation: { ruleId: string; version: number; description: string; readPath?: string; resolver: "field" | "inventoryOwnership" | "productValuation" | "imageRepresentation" | "imageCapture" | "productQuantity" | "recipeTotals" | "locationValuation" | "merchantVendorInference" | "expenseAttribution"; projections?: Readonly<{ list?: string; detail?: string; summary?: string }>; sourceDependencies?: readonly Readonly<{ path: string; label: string }>[]; actions?: readonly ("confirmOwner" | "inheritOwner" | "editSource")[] } | null; resolution: { reset: Readonly<Record<string, GeneratedEntityFieldResolutionValue>>; none: Readonly<Record<string, GeneratedEntityFieldResolutionValue>> | null; redundancy: "eligible" | "intentional" } | null; provenance: GeneratedEntityFieldProvenance | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string; description?: string; color?: string }[] | null; section: string; width: "half" | null; placeholder: string | null; initial: "today" | null; suggest: { readonly basis: readonly string[]; readonly mode: "fill" | "prune" } | null } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; listOrder: number | null; width: "xs" | "sm" | "md" | "lg" | null; format: "currency" | "signedCurrency" | "plainDate" | "timestamp" | "external-link" | "amount" | null; renderer: { list: string | null; detail: string | null } | null; mobile: { slot: string; priority: number; interactive?: boolean } | null; listHidden: boolean; preview: boolean } }[];\n' +
+        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; requiredOnCreate: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean; scope: readonly { sourceField: string; targetField: string }[]; filters: readonly { field: string; values: readonly string[] }[] } | null; explanation: { ruleId: string; version: number; description: string; readPath?: string; resolver: "field" | "inventoryOwnership" | "productValuation" | "imageRepresentation" | "imageCapture" | "productQuantity" | "recipeTotals" | "locationValuation" | "merchantVendorInference" | "expenseAttribution"; projections?: Readonly<{ list?: string; detail?: string; summary?: string }>; sourceDependencies?: readonly Readonly<{ path: string; label: string }>[]; actions?: readonly ("confirmOwner" | "inheritOwner" | "editSource")[] } | null; resolution: { reset: Readonly<Record<string, GeneratedEntityFieldResolutionValue>>; none: Readonly<Record<string, GeneratedEntityFieldResolutionValue>> | null; redundancy: "eligible" | "intentional" } | null; provenance: GeneratedEntityFieldProvenance | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string; description?: string; color?: string }[] | null; section: string; width: "half" | null; placeholder: string | null; initial: "today" | null; suggest: { readonly basis: readonly string[]; readonly mode: "fill" | "prune" } | null } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; listOrder: number | null; width: "xs" | "sm" | "md" | "lg" | null; format: "currency" | "signedCurrency" | "plainDate" | "timestamp" | "external-link" | "amount" | null; renderer: { list: string | null; detail: string | null } | null; mobile: { slot: string; priority: number; interactive?: boolean } | null; listHidden: boolean; valueOptions: { value: string; label: string; color?: string }[] | null; preview: boolean } }[];\n' +
         '  storage: readonly { key: string; column: string; kind: GeneratedEntityFieldKind; nullable: boolean; default: "none" | "generated" | "now" | "literal"; defaultValue: unknown; reference: string | null; specialized: string | null }[];\n' +
         "  create: readonly string[];\n" +
         "  update: readonly string[];\n" +
@@ -1198,8 +1218,8 @@ export const renderEntityArtifacts = (
         '  (typeof generatedEntitySort)[E]["fields"][number];\n',
     },
     {
-      relativePath: "apps/web/src/server/db/generated/entity-columns.gen.ts",
-      source: renderEntityColumnsArtifact(entities),
+      relativePath: "apps/web/src/server/db/generated/entity-tables.gen.ts",
+      source: renderEntityTablesArtifact(entities),
     },
     ...fieldSchemaArtifacts,
     {
@@ -1220,7 +1240,7 @@ export const renderEntityArtifacts = (
         '  imageStorage: false | "gallery" | "cover" | "logo";\n' +
         "  displayImages: boolean;\n" +
         "  countable: boolean;\n" +
-        '  kernelActions: readonly ("get" | "list" | "search" | "create" | "update" | "bulkUpdate" | "delete" | "merge")[];\n' +
+        '  kernelActions: readonly ("get" | "list" | "search" | "create" | "update" | "bulkUpdate" | "delete" | "merge" | "resolve")[];\n' +
         "  filterUrlKeys: readonly string[];\n" +
         "  filterDescriptors: readonly EntityFilterDescriptorMetadata[];\n" +
         '  mcpOperations: readonly ("get" | "list" | "search" | "create" | "update" | "delete" | "bulkUpdate" | "merge")[];\n' +
@@ -1406,7 +1426,7 @@ export const renderEntityArtifacts = (
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",
       source:
         generatedHeader +
-        'import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";\n' +
+        'import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";\n' +
         'import { withEntityDetailMedia, withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
         'import { paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
@@ -1560,6 +1580,17 @@ export const renderEntityArtifacts = (
           name: "generatedSearchEntityKernelEntities",
           entries: entitiesForAction("search"),
           comment: "// Generated action rosters stay one line each.",
+        }) +
+        `export const generatedResolveEntityKernelEntities = ${compactLiteral(entitiesForAction("resolve"))} as const;\n` +
+        "\n" +
+        renderRecord({
+          name: "generatedEntityResolveCapabilities",
+          entries: Object.fromEntries(
+            kernelEntities.flatMap((entity) =>
+              entity.resolve === null ? [] : [[entity.key, entity.resolve]],
+            ),
+          ),
+          comment: "// Declared `capabilities.resolve`, one entity per line.",
         }) +
         `export const generatedMergeEntityKernelEntities = ${compactLiteral(entitiesForAction("merge"))} as const;\n`,
     },

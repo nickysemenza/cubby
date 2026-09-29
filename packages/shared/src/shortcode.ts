@@ -62,8 +62,8 @@ const shortcodeRegex = (type: ShortcodeType) =>
 
 /**
  * A schema for a code whose entity isn't known until runtime — an MCP tool
- * whose target type is chosen by another field (`find_similar_entities`'s
- * `pair`) or read off the prefix itself (`attach_files`).
+ * whose target type is chosen by another field (`search.similar`'s
+ * `pair`) or read off the prefix itself (`image.attach_files`).
  *
  * Still a `ZodString` with a real `pattern`, just one alternating over the
  * allowed prefixes, so the published JSON Schema keeps telling an agent which
@@ -199,7 +199,6 @@ export const runShortcode = SHORTCODE_SCHEMA.run;
 export const wishShortcode = SHORTCODE_SCHEMA.wish;
 export const deviceShortcode = SHORTCODE_SCHEMA.device;
 export const plantShortcode = SHORTCODE_SCHEMA.plant;
-export const imageSightingShortcode = SHORTCODE_SCHEMA.imageSighting;
 
 export type CookbookShortcode = ShortcodeFor<"cookbook">;
 export type ExpenseShortcode = ShortcodeFor<"expense">;
@@ -227,7 +226,6 @@ export type RunShortcode = ShortcodeFor<"run">;
 export type WishShortcode = ShortcodeFor<"wish">;
 export type DeviceShortcode = ShortcodeFor<"device">;
 export type PlantShortcode = ShortcodeFor<"plant">;
-export type ImageSightingShortcode = ShortcodeFor<"imageSighting">;
 
 /** Any entity's shortcode, for surfaces that hold a code before resolving it. */
 export type AnyShortcode = z.infer<(typeof SHORTCODE_SCHEMA)[ShortcodeType]>;
@@ -315,7 +313,6 @@ const PARSE_CANONICAL_SHORTCODE = {
   wish: shortcodeParser("wish"),
   device: shortcodeParser("device"),
   plant: shortcodeParser("plant"),
-  imageSighting: shortcodeParser("imageSighting"),
 } as const satisfies {
   [T in ShortcodeType]: (code: string) => ParsedShortcodeFor<T> | null;
 };

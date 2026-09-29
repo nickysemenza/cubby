@@ -15,7 +15,7 @@ describe("collectTableEntityMediaRefs", () => {
           meta: attachCubbyColumnMeta<(typeof rows)[number]["original"]>({
             entityRefs: (row) =>
               row.productIds.map((entityId) => ({
-                entityType: "product",
+                entityKind: "product",
                 entityId,
               })),
           }),
@@ -25,10 +25,10 @@ describe("collectTableEntityMediaRefs", () => {
     ];
 
     expect(collectTableEntityMediaRefs(visibleColumns, rows)).toEqual([
-      { entityType: "product", entityId: "PRD-ONE" },
-      { entityType: "product", entityId: "PRD-TWO" },
-      { entityType: "product", entityId: "PRD-TWO" },
-      { entityType: "product", entityId: "PRD-THREE" },
+      { entityKind: "product", entityId: "PRD-ONE" },
+      { entityKind: "product", entityId: "PRD-TWO" },
+      { entityKind: "product", entityId: "PRD-TWO" },
+      { entityKind: "product", entityId: "PRD-THREE" },
     ]);
   });
 });

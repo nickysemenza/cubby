@@ -11,13 +11,15 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 
-import { entityMutation } from "~/entities/entity-mutation.functions";
-import { ai } from "~/lib/ai.functions";
+import {
+  entityMutation,
+  ai,
+  meal,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 
 import { type AddToMealOperations, AddToMeal } from "./add-to-meal";
-import { meal } from "./meal.functions";
 
 const recipeId = testShortcode("recipe", "RCP-4K7M");
 const createdMeals: MealCreateInput[] = [];
@@ -94,7 +96,7 @@ const testOperations: AddToMealOperations = {
         action: "create" as const,
         entity: "meal" as const,
         item: tuesdayDinner,
-        sideEffects: { backgroundBatches: [] },
+        sideEffects: {},
       };
     }
     if (command.action === "update" && command.entity === "meal") {
@@ -104,7 +106,7 @@ const testOperations: AddToMealOperations = {
         action: "update" as const,
         entity: "meal" as const,
         item: { ...cornerDeli, mealKind: "cooked" as const },
-        sideEffects: { backgroundBatches: [] },
+        sideEffects: {},
       };
     }
     throw new Error("Add to meal only issues meal create and update commands.");

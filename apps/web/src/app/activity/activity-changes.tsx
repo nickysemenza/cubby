@@ -1,4 +1,4 @@
-import { type AuditEntityType, auditEntitySchema } from "@cubby/schemas/audit";
+import { type AuditEntityKind, auditEntitySchema } from "@cubby/schemas/audit";
 import {
   AUDIT_CHANNELS,
   type AuditChannel,
@@ -13,15 +13,15 @@ import { NativeSelect } from "~/components/ui/native-select";
 import { entityPluralLabel } from "~/entities/entities";
 
 export function ActivityChanges({
-  entityType,
+  entityKind,
   channel,
-  onEntityTypeChange,
+  onEntityKindChange,
   onChannelChange,
   onClear,
 }: {
-  entityType: AuditEntityType | undefined;
+  entityKind: AuditEntityKind | undefined;
   channel: AuditChannel | undefined;
-  onEntityTypeChange: (entityType: AuditEntityType | undefined) => void;
+  onEntityKindChange: (entityKind: AuditEntityKind | undefined) => void;
   onChannelChange: (channel: AuditChannel | undefined) => void;
   onClear: () => void;
 }) {
@@ -32,26 +32,26 @@ export function ActivityChanges({
           Recent changes across all entities.
         </p>
         <Row gap="sm" wrap>
-          <EntityTypeFilter value={entityType} onChange={onEntityTypeChange} />
+          <EntityKindFilter value={entityKind} onChange={onEntityKindChange} />
           <ChannelFilter value={channel} onChange={onChannelChange} />
-          {entityType || channel ? (
+          {entityKind || channel ? (
             <Button variant="ghost" size="sm" onClick={onClear}>
               Clear
             </Button>
           ) : null}
         </Row>
       </Row>
-      <AuditLogList showEntityLink entityType={entityType} channel={channel} />
+      <AuditLogList showEntityLink entityKind={entityKind} channel={channel} />
     </Stack>
   );
 }
 
-function EntityTypeFilter({
+function EntityKindFilter({
   value,
   onChange,
 }: {
-  value: AuditEntityType | undefined;
-  onChange: (entityType: AuditEntityType | undefined) => void;
+  value: AuditEntityKind | undefined;
+  onChange: (entityKind: AuditEntityKind | undefined) => void;
 }) {
   return (
     <Row as="label" align="center" gap="sm" className="w-fit text-sm">

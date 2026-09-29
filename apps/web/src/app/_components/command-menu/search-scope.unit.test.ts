@@ -25,23 +25,23 @@ describe("parseCommandSearchScope", () => {
     ["projects:furnace", "project"],
     ["expense:invoice", "expense"],
     ["expenses:invoice", "expense"],
-  ] as const)("recognizes %s", (value, entityType) => {
+  ] as const)("recognizes %s", (value, entityKind) => {
     expect(parseCommandSearchScope(value)).toEqual({
-      entityType,
+      entityKind,
       query: value.slice(value.indexOf(":") + 1).trimStart(),
     });
   });
 
   it("preserves additional colons in the query", () => {
     expect(parseCommandSearchScope("recipe:sauce: tomato")).toEqual({
-      entityType: "recipe",
+      entityKind: "recipe",
       query: "sauce: tomato",
     });
   });
 
   it("accepts an empty query after a recognized scope", () => {
     expect(parseCommandSearchScope("locations:")).toEqual({
-      entityType: "location",
+      entityKind: "location",
       query: "",
     });
   });
@@ -50,7 +50,7 @@ describe("parseCommandSearchScope", () => {
     "leaves %s as an unscoped query",
     (value) => {
       expect(parseCommandSearchScope(value)).toEqual({
-        entityType: null,
+        entityKind: null,
         query: value,
       });
     },

@@ -21,6 +21,7 @@ import type { AuditEntryInput } from "~/server/repo/audit-log";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted } from "~/server/repo/database-helpers";
 import { recordMergeRedirects } from "~/server/repo/entity-identity";
+import { parseLinkEdgeKey } from "~/server/repo/entity-links";
 import type { RemovableEntity } from "~/server/repo/removal";
 import { cascadeRemoval } from "~/server/repo/removal";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
@@ -105,6 +106,10 @@ export const repointEdge = async <E extends Entity>(
   args: { from: readonly string[]; to: string; liveOnly: boolean },
 ): Promise<string[]> => {
   if (args.from.length === 0) return [];
+  // A link end shares its column with every other link kind and resolves
+  // collisions by its declaration, which a plain column repoint cannot do.
+  if (parseLinkEdgeKey(String(edgeKey)))
+    throw new Error(`${String(edgeKey)} repoints through repointLinkEnd`);
   const column = edgeColumn(entity, edgeKey);
   // SAFETY: Every incoming-edge column is declared on a PostgreSQL table with
   // the `id` and `deletedAt` columns required by merge operations.
@@ -165,8 +170,8 @@ export const finalizeMerge = async <E extends RemovableEntity>(
       .from(runFinding)
       .where(
         and(
-          eq(runFinding.targetKind, entity),
-          inArray(runFinding.targetId, ids),
+          eq(runFinding.entityKind, entity),
+          inArray(runFinding.entityId, ids),
         ),
       );
     for (const finding of findings) {
@@ -178,8 +183,8 @@ export const finalizeMerge = async <E extends RemovableEntity>(
               .where(
                 and(
                   eq(runFinding.ledgerPartyId, finding.ledgerPartyId),
-                  eq(runFinding.targetKind, entity),
-                  eq(runFinding.targetId, keepId),
+                  eq(runFinding.entityKind, entity),
+                  eq(runFinding.entityId, keepId),
                   eq(runFinding.kind, finding.kind),
                   eq(
                     runFinding.evidenceFingerprint,
@@ -195,7 +200,7 @@ export const finalizeMerge = async <E extends RemovableEntity>(
       } else {
         await tx
           .update(runFinding)
-          .set({ targetId: keepId, updatedAt: new Date() })
+          .set({ entityId: keepId, updatedAt: new Date() })
           .where(eq(runFinding.id, finding.id));
       }
     }
@@ -234,7 +239,7 @@ export const finalizeMerge = async <E extends RemovableEntity>(
   const survivorChanges = args.survivorChanges ?? {};
   if (actor && Object.keys(survivorChanges).length > 0) {
     entries.push({
-      entityType: entity,
+      entityKind: entity,
       entityId: keepId,
       action: "update",
       changes: survivorChanges,

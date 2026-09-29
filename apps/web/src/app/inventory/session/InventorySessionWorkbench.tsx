@@ -11,7 +11,6 @@ import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { skipToken, useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { formatDistanceToNow } from "date-fns";
 import pluralize from "pluralize";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -23,9 +22,6 @@ import {
 } from "~/app/_components/hooks/useActionMutation";
 import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
 import { QueuePassResumePrompt } from "~/app/_components/queue-pass/QueuePassProgress";
-import { inventory } from "~/app/inventory/inventory.functions";
-import { location } from "~/app/locations/location.functions";
-import { product } from "~/app/products/product.functions";
 import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import { Button, buttonVariants } from "~/components/ui/button";
@@ -39,6 +35,12 @@ import {
 } from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import {
+  inventory,
+  location,
+  product,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatRelative } from "~/lib/date-format";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import { LocationReviewPane } from "./_components/LocationReviewPane";
@@ -952,11 +954,7 @@ function SessionComplete({
               <CardTitle>{parent.name} recount complete</CardTitle>
             </h2>
             <Description>
-              Finished a pass started{" "}
-              {formatDistanceToNow(startedAt, {
-                addSuffix: true,
-              })}
-              .
+              Finished a pass started {formatRelative(startedAt)}.
             </Description>
           </div>
         </Row>

@@ -31,6 +31,7 @@ import {
 } from "~/app/_components/ai/field-suggestion";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { renderScalarValue } from "~/components/common/scalar-value";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -73,10 +74,7 @@ import {
   type SearchProviderProps,
 } from "../combobox/with-search-hook";
 import { useEntityDisplayImage } from "../entity-media/entity-display-images";
-import { EntityInlineLink } from "../EntityInlineLink";
-import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { ImageThumbnail } from "../table/ImageThumbnail";
-import { TableLink } from "../table/TableLink";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import type { CellClipboardSpec, CellJsonValue } from "./cell-clipboard";
 import {
@@ -279,9 +277,14 @@ export function createNameColumn<T extends BaseRow>(
       // unlinked branch keeps the truncation and the full-name tooltip.
       const linkName = (label: ReactNode) =>
         link ? (
-          <TableLink to={link.to} params={link.params} variant="identity">
+          <EntityRefLink
+            variant="table"
+            to={link.to}
+            params={link.params}
+            tone="identity"
+          >
             {label}
-          </TableLink>
+          </EntityRefLink>
         ) : (
           label
         );
@@ -625,7 +628,7 @@ function entityInlineItemRefs(
         return z.array(locationInlineSchema).parse(value);
     }
   })();
-  return items.map((item) => ({ entityType: entity, entityId: item.id }));
+  return items.map((item) => ({ entityKind: entity, entityId: item.id }));
 }
 
 export function createEntityInlineLinkColumn<
@@ -783,7 +786,7 @@ export function createInventoryEntriesColumn<
       entityRefs: (row) =>
         row[accessor].flatMap((entry) => {
           const related = getRelatedEntity(entry);
-          return related ? [{ entityType: entity, entityId: related.id }] : [];
+          return related ? [{ entityKind: entity, entityId: related.id }] : [];
         }),
     }),
     cell: (info) => (
@@ -1219,12 +1222,12 @@ function CanonicalSingleEntityLink({
   data,
 }: CanonicalSingleEntityLinkProps) {
   const displayImage = useEntityDisplayImage({
-    entityType: entity,
+    entityKind: entity,
     entityId: "id" in data ? data.id : "",
   });
   if (entity === "usda-food") {
     return (
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={null}
         entity="usda-food"
         data={data}
@@ -1233,7 +1236,7 @@ function CanonicalSingleEntityLink({
     );
   }
   return (
-    <EntityInlineLink
+    <EntityRefLink
       displayImage={displayImage}
       entity={entity}
       data={data}
@@ -1327,7 +1330,8 @@ const singleEntityAdapters = {
       <CanonicalSingleEntityLink entity="ingredient" data={data} />
     ),
     renderCollection: (items) => (
-      <EntityInlineLinkList
+      <EntityRefLink
+        variant="list"
         entity="ingredient"
         items={items}
         maxItems={1}
@@ -1348,7 +1352,8 @@ const singleEntityAdapters = {
       <CanonicalSingleEntityLink entity="product" data={data} />
     ),
     renderCollection: (items) => (
-      <EntityInlineLinkList
+      <EntityRefLink
+        variant="list"
         entity="product"
         items={items}
         maxItems={1}
@@ -1365,7 +1370,8 @@ const singleEntityAdapters = {
       <CanonicalSingleEntityLink entity="recipe" data={data} />
     ),
     renderCollection: (items) => (
-      <EntityInlineLinkList
+      <EntityRefLink
+        variant="list"
         entity="recipe"
         items={items}
         maxItems={1}
@@ -1386,7 +1392,8 @@ const singleEntityAdapters = {
       <CanonicalSingleEntityLink entity="location" data={data} />
     ),
     renderCollection: (items) => (
-      <EntityInlineLinkList
+      <EntityRefLink
+        variant="list"
         entity="location"
         items={items}
         maxItems={1}
@@ -1505,7 +1512,7 @@ export function createSingleEntityInlineLinkColumn<
         const item = valueFor(row);
         return entity === "usda-food" || !item || !("id" in item)
           ? []
-          : [{ entityType: entity, entityId: item.id }];
+          : [{ entityKind: entity, entityId: item.id }];
       },
     }),
     cell: (info) => {
@@ -1873,9 +1880,14 @@ export function createExternalLinkColumn<
               }
               const shown = display(String(v));
               return (
-                <TableLink to={linkTo} params={{ id: shown }} variant={variant}>
+                <EntityRefLink
+                  variant="table"
+                  to={linkTo}
+                  params={{ id: shown }}
+                  tone={variant}
+                >
                   {shown}
-                </TableLink>
+                </EntityRefLink>
               );
             }}
           />
@@ -1885,9 +1897,14 @@ export function createExternalLinkColumn<
       if (value === null || value === undefined) return <NoneValue />;
       const shown = display(String(value));
       return (
-        <TableLink to={linkTo} params={{ id: shown }} variant={variant}>
+        <EntityRefLink
+          variant="table"
+          to={linkTo}
+          params={{ id: shown }}
+          tone={variant}
+        >
           {shown}
-        </TableLink>
+        </EntityRefLink>
       );
     },
   });

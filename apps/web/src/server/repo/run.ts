@@ -3,15 +3,15 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { RunFilters, RunOut } from "@cubby/schemas/run";
 import { runOut } from "@cubby/schemas/run";
 import { runPurpose, type RunPurpose } from "@cubby/schemas/run-fields";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { formatDuration } from "~/lib/format-duration";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { run as runTable, vendorMailSearchJob } from "~/server/db/schema";
-import { entityRepository } from "~/server/entity-kernel/adapter";
+import { run as runTable } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
+import { defineRepository, listOn, onDb } from "~/server/repo/repository";
+import { createEntityReader } from "~/server/repo/repository";
 import { lookupEntityReferences } from "~/server/repo/shortcode-resolver";
 
 /**
@@ -26,39 +26,10 @@ const PURPOSE_LABEL = {
   product_enrichment: "Product enrichment",
   photo_inventory: "Photo inventory",
   ai_suggest: "AI suggestions",
-  ai_action: "AI action",
   background: "Background",
   file_import: "File import",
-  legacy: "Legacy",
+  mail_search: "Mail search",
 } satisfies Record<RunPurpose, string>;
-
-const mailSearchErrors = async (
-  db: Database | DrizzleTransaction,
-  rows: RunRow[],
-) => {
-  const runIds = rows
-    .filter(
-      (row) =>
-        row.status === "failed" &&
-        row.failureCode === "vendor_mail_search_failed" &&
-        row.dispatchError === null,
-    )
-    .map((row) => row.id);
-  if (runIds.length === 0) return new Map<string, string | null>();
-  const records = await unwrapDb(db)
-    .select({
-      runId: vendorMailSearchJob.runId,
-      error: vendorMailSearchJob.error,
-    })
-    .from(vendorMailSearchJob)
-    .where(inArray(vendorMailSearchJob.runId, runIds));
-  return new Map(records.map((job) => [job.runId, job.error]));
-};
-
-const failureDetails = (
-  row: RunRow,
-  mailErrorByRun: Map<string, string | null>,
-) => row.dispatchError ?? mailErrorByRun.get(row.id) ?? null;
 
 // includes-deleted: a run is immutable history, so it keeps naming the
 // account, vendor and party it ran for after they are tombstoned.
@@ -70,26 +41,24 @@ const hydrate = async (
     entity: E,
     ids: (string | null)[],
   ) => lookupEntityReferences(db, entity, ids, { includeDeleted: true });
-  const [accounts, vendors, parties, predecessors, mailErrorByRun] =
-    await Promise.all([
-      refs(
-        "vendorAccount",
-        rows.map((row) => row.vendorAccountId),
-      ),
-      refs(
-        "vendor",
-        rows.map((row) => row.vendorId),
-      ),
-      refs(
-        "ledgerParty",
-        rows.map((row) => row.ledgerPartyId),
-      ),
-      refs(
-        "run",
-        rows.map((row) => row.predecessorRunId),
-      ),
-      mailSearchErrors(db, rows),
-    ]);
+  const [accounts, vendors, parties, predecessors] = await Promise.all([
+    refs(
+      "vendorAccount",
+      rows.map((row) => row.vendorAccountId),
+    ),
+    refs(
+      "vendor",
+      rows.map((row) => row.vendorId),
+    ),
+    refs(
+      "ledgerParty",
+      rows.map((row) => row.ledgerPartyId),
+    ),
+    refs(
+      "run",
+      rows.map((row) => row.predecessorRunId),
+    ),
+  ]);
   const at = <V>(map: Map<string, V>, id: string | null) =>
     id === null ? undefined : map.get(id);
   return rows.map((row) => {
@@ -98,7 +67,6 @@ const hydrate = async (
     const party = at(parties, row.ledgerPartyId);
     return runOut.parse({
       ...row,
-      dispatchError: failureDetails(row, mailErrorByRun),
       id: parseShortcodeFor("run", row.shortcode),
       displayName: `${vendor?.name ?? party?.name ?? row.actorName} · ${PURPOSE_LABEL[runPurpose.parse(row.purpose)]}`,
       wallTime: row.endedAt
@@ -151,12 +119,8 @@ const reader = createEntityReader<
 
 export const getRunByShortcode = reader.getByShortcode;
 
-/**
- * Read-only: the run service and the import writer own every write, and the
- * manifest declares `delete: null`, so the generated adapter refuses one.
- */
-export const runRepository = entityRepository("run", {
-  lifecycle: { delete: {} },
-  get: getRunByShortcode,
-  list: listRuns,
+/** Declared `lifecycle: "readOnly"`: the run service and importers own writes. */
+export const runRepository = defineRepository("run", {
+  get: onDb(getRunByShortcode),
+  list: listOn(listRuns),
 });

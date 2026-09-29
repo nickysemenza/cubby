@@ -11,6 +11,7 @@ import { z } from "zod";
 
 import { referenceEntitySearch } from "~/app/_components/combobox/reference-entity-search";
 import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import type { EditMode } from "~/entities/editing/entity-field-presentation";
@@ -20,9 +21,7 @@ import {
   requiredFieldModel,
 } from "~/entities/editing/entity-primitive-fields";
 import { entities, entityDetailParams } from "~/entities/entities";
-
-import { TableLink } from "../_components/table/TableLink";
-import { financialTransaction } from "./finance.functions";
+import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 const AccountSearch = referenceEntitySearch("financialAccount");
 const PurchaseSearch = referenceEntitySearch("purchase");
@@ -153,12 +152,13 @@ export function FinancialTransactionFormFields({
           <Row align="center" justify="between" gap="sm" wrap>
             <span className="text-xs text-muted-foreground">
               Suggested purchases · Showing purchases from{" "}
-              <TableLink
+              <EntityRefLink
+                variant="table"
                 to={entities.vendor.routes.detail}
                 params={entityDetailParams(scopedVendorId)}
               >
                 {suggested.vendorName}
-              </TableLink>
+              </EntityRefLink>
             </span>
             <Button
               type="button"

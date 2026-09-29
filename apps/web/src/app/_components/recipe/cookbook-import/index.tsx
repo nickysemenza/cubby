@@ -19,7 +19,6 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
-import { recipe, recipeStreams } from "~/app/recipes/recipe.functions";
 import { showErrorToast } from "~/components/feedback/error-details";
 import { Row } from "~/components/layout/row";
 import { Stack } from "~/components/layout/stack";
@@ -35,12 +34,16 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Description } from "~/components/ui/description";
 import {
+  recipe,
+  recipeStreams,
+  imageUpload,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
+import {
   addWithDependencies,
   flattenRecipes,
   topoOrder,
 } from "~/lib/cookbook-graph";
 import { getErrorMessage } from "~/lib/error-utils";
-import { imageUpload } from "~/lib/image.functions";
 import {
   PresignedUploadError,
   putPresignedObject,
@@ -217,7 +220,7 @@ export function CookbookImport({
         filename,
         contentType: mime,
         size: bytes.byteLength,
-        entityType: "COOKBOOK",
+        entityKind: "COOKBOOK",
       });
       // Copy into a fresh ArrayBuffer-backed buffer (a valid BodyInit, and sidesteps
       // the Uint8Array<ArrayBufferLike> vs ArrayBuffer lib-type mismatch).

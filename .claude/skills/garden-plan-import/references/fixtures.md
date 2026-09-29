@@ -16,7 +16,7 @@ plus a planted Task's Planting.
 
 1. Resolve `Location` "bed 3" → existing `LOC-B3XX` (`type: "bed"`), or
    create it if this is the first plan to mention it.
-2. Resolve the cultivar via `resolve_plants` with
+2. Resolve the cultivar via `entity.resolve` with
    `{ "name": "DiCicco", "gardenGuideKey": "broccoli" }` → `PLANT-BRCL`
    (created if unresolved); note "or Belstar" in that Plant's `notes`.
 3. Create the `Task`:
@@ -56,7 +56,7 @@ A calendar row with a future window and no bed assigned yet in the plan.
 Produces a Task plus a planned Planting with `locationId: null`.
 
 1. Resolve `{ "name": "Windsor", "gardenGuideKey": "bean-fava" }` via
-   `resolve_plants` → `PLANT-FAVA` (displays as "Windsor · Fava bean").
+   `entity.resolve` → `PLANT-FAVA` (displays as "Windsor · Fava bean").
 2. Create the `Task`:
    ```json
    {
@@ -104,16 +104,16 @@ A shopping-list line with no crop and no bed — Task only, no Planting.
 }
 ```
 
-→ `TSK-BAG2`. Check `resolve_products` first in case a matching Product
+→ `TSK-BAG2`. Check `entity_read.resolve` first in case a matching Product
 already exists to set as `subjectProductId`; if not, leave it unset — this
 skill never creates a Product for an unbought line.
 
 ## Verification for this batch
 
-- `entity list planting {filters:{taskId:"TSK-BRC3"}}` and `{filters:
+- `entity_read.list planting {filters:{taskId:"TSK-BRC3"}}` and `{filters:
 {taskId:"TSK-FAVA"}}` each return exactly the one planned Planting created
   above.
-- `entity list task {filters:{projectId:"PRJ-TEST"}}` includes all three
+- `entity_read.list task {filters:{projectId:"PRJ-TEST"}}` includes all three
   Tasks, with `dueDate` matching the plan's headings.
 - The planning calendar shows `TSK-BRC3`/`TSK-FAVA`/`TSK-BAG2` on their due
   dates once the batch completes.

@@ -7,6 +7,7 @@ import { ScalesIcon } from "@phosphor-icons/react/dist/csr/Scales";
 import { ScrollIcon } from "@phosphor-icons/react/dist/csr/Scroll";
 import { useMemo } from "react";
 
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import {
@@ -27,7 +28,6 @@ import {
 
 import { EntityActionButtons } from "../actions/entity-actions";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
-import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { FullNutrientBreakdown } from "../nutrition/FullNutrientBreakdown";
 import { NutrientDensityStats } from "../nutrition/NutrientDensityStats";
 import { NutritionLabel } from "../nutrition/NutritionLabel";
@@ -236,7 +236,7 @@ export const USDAFoodDetail: React.FC<{
           No associated products found
         </div>
       ) : (
-        <EntityInlineLinkList entity="product" items={linkedProducts} />
+        <EntityRefLink variant="list" entity="product" items={linkedProducts} />
       )}
     </div>
   );

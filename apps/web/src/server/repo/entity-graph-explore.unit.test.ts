@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { exploreEntityGraph } from "./entity-graph-explore";
 
 const ref = (id: string): EntityRef => ({
-  entityType: "task",
+  entityKind: "task",
   entityId: `TSK-${id}`,
 });
 

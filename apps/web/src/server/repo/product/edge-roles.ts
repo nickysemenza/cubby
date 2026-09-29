@@ -18,12 +18,12 @@
  *    `Expense.productId` (it was bought — the ledger's net cost and
  *    owned/sold window derive from this row, so an orphaned product would
  *    silently corrupt that derivation with no restore path), and
- *    `PurchaseProduct.productId` (the vendor order it was bought on —
+ *    `EntityLink[purchaseProduct].to` (the vendor order it was bought on —
  *    provenance an allocation-basis Expense can never carry).
  *  - history: `Task.subjectProductId` (work performed on the product; deleting
  *    the subject would leave that durable task history nameless) and
- *    `ProjectToolUsage.productId` (a reusable tool's project-use history).
- *  - association: `WishCandidate.productId` (a candidate alternative remains
+ *    `EntityLink[projectTool].to` (a reusable tool's project-use history).
+ *  - association: `EntityLink[wishCandidate].to` (a candidate alternative remains
  *    meaningful until removed from its Wishlist entries).
  *  - reference: `Location.productId` (a Location that IS this product — the
  *    bin itself) and `Cookbook.productId` (a Cookbook whose physical copy
@@ -33,16 +33,16 @@
  *    Cookbook's shelf link both live only on this side of the edge, so
  *    orphaning the Product would leave the other row with no identity at
  *    all, not merely a broken link.
- *  - usage: `ProductComponent.componentProductId` — this product is cited as
+ *  - usage: `EntityLink[productComponent].to` — this product is cited as
  *    a part inside another (kit) product's component list. Retaining for the
  *    same reason as a purchase link: deleting it would silently shrink the
  *    kit's contents with no record of what used to be there.
- *  - composition: `ProductComponent.parentProductId` — this product's OWN
+ *  - composition: `EntityLink[productComponent].from` — this product's OWN
  *    component list, when it's a kit. NOT retaining, deliberately asymmetric
  *    with the edge above: deleting a kit is supposed to take its component
  *    list with it, the same way deleting a recipe takes its sections.
- *  - metadata / media: `ProductExternalId.productId`,
- *    `ProductUnitMappings.productId`, `ProductConversionCoverage.productId`,
+ *  - metadata / media: `EntityExternalId.entityId`,
+ *    `ProductUnitMapping.productId`, `ProductConversionCoverage.productId`,
  *    `ProductImage.productId` — none of which say anything about ownership on
  *    their own.
  *
@@ -139,7 +139,7 @@ export type ProductDeleteDisposition =
   | (OperationDisposition & { effect: "detach" });
 
 export const PRODUCT_DELETE_EDGE_POLICY = {
-  "RunTarget.productId": {
+  "RunTarget.entityId": {
     code: "block-targeted-import-history",
     effect: "block",
     description:
@@ -171,7 +171,7 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     reason: "PRODUCT_HAS_TASKS",
     label: "tasks referencing them",
   },
-  "ProjectToolUsage.productId": {
+  "EntityLink[projectTool].to": {
     code: "block-live-project-use",
     effect: "block",
     description:
@@ -179,7 +179,7 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     reason: "PRODUCT_HAS_PROJECT_USES",
     label: "project uses",
   },
-  "PurchaseProduct.productId": {
+  "EntityLink[purchaseProduct].to": {
     code: "block-live-purchase-link",
     effect: "block",
     description:
@@ -195,7 +195,7 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     reason: "CONSTRAINT_VIOLATION",
     label: "meal food entries",
   },
-  "WishCandidate.productId": {
+  "EntityLink[wishCandidate].to": {
     code: "block-live-wishlist-candidate",
     effect: "block",
     description:
@@ -203,12 +203,12 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     reason: "PRODUCT_HAS_WISH_CANDIDATES",
     label: "wishlist candidates",
   },
-  "ProductExternalId.productId": {
+  "EntityExternalId.entityId": {
     code: "soft-delete-metadata",
     effect: "soft-delete",
     description: "External ids (e.g. ASINs) are soft-deleted with the product.",
   },
-  "ProductUnitMappings.productId": {
+  "ProductUnitMapping.productId": {
     code: "soft-delete-metadata",
     effect: "soft-delete",
     description:
@@ -230,19 +230,19 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     reason: "PRODUCT_HAS_COOKBOOKS",
     label: "cookbooks",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
       "Image associations are soft-deleted with the product, and each file is\n      deleted too unless something else still references it.",
   },
-  "ProductComponent.parentProductId": {
+  "EntityLink[productComponent].from": {
     code: "soft-delete-kit-components",
     effect: "soft-delete",
     description:
       "Deleting a kit takes its own component list with it — the individual component Products are untouched.",
   },
-  "ProductComponent.componentProductId": {
+  "EntityLink[productComponent].to": {
     code: "block-live-kit-membership",
     effect: "block",
     description:

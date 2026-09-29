@@ -5,9 +5,9 @@ import {
   HierarchyDrilldown,
   type HierarchyDrilldownNode,
 } from "~/app/_components/visualizations/hierarchy-drilldown";
-import { location } from "~/app/locations/location.functions";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
+import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 const formatItems = (count: number) =>
   `${count} ${count === 1 ? "item" : "items"}`;

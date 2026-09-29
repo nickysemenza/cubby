@@ -4,7 +4,7 @@ import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EntityMutationTransport } from "~/entities/entity-contracts";
-import { entityMutation } from "~/entities/entity-mutation.functions";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
@@ -33,7 +33,7 @@ function editorPort(beforeWrite: () => Promise<void> = async () => undefined) {
       action: "update",
       entity: "vendor",
       item: record,
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     });
   });
   const mutation = entityMutation.mutate.withTransport(transport);

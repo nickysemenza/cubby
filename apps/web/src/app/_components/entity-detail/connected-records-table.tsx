@@ -9,11 +9,19 @@ import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
+import {
   entityDetailParams,
   entities,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
-import { entityGraph } from "~/entities/entity-graph.functions";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import {
   useSectionCount,
@@ -23,11 +31,16 @@ import {
 
 const PAGE_SIZE = 20;
 
+// Roomier than the primitive defaults, and wrapping: a path evidence cell is a
+// multi-line list, not a single truncated value.
+const HEAD_CLASS = "h-auto p-3 text-sm";
+const CELL_CLASS = "p-3 align-top whitespace-normal";
+
 function RecordPathLink({ node }: { node: ConnectedPathNode }) {
-  if (!isBrowserRoutedEntity(node.entityType)) return <span>{node.label}</span>;
+  if (!isBrowserRoutedEntity(node.entityKind)) return <span>{node.label}</span>;
   return (
     <Link
-      to={entities[node.entityType].routes.detail}
+      to={entities[node.entityKind].routes.detail}
       params={entityDetailParams(node.entityId)}
       className="text-link hover:underline"
     >
@@ -65,15 +78,15 @@ export function RecordPaths({
             <li
               key={path
                 .slice(0, index + 2)
-                .map((part) => `${part.entityType}:${part.entityId}`)
+                .map((part) => `${part.entityKind}:${part.entityId}`)
                 .join("|")}
               className="flex max-w-full min-w-0 items-baseline gap-1 overflow-hidden whitespace-nowrap"
-              title={`${node.entityType}: ${node.label}`}
+              title={`${node.entityKind}: ${node.label}`}
             >
               <span className="shrink-0 text-xs text-muted-foreground">
-                {isBrowserRoutedEntity(node.entityType)
-                  ? entities[node.entityType].label
-                  : node.entityType}
+                {isBrowserRoutedEntity(node.entityKind)
+                  ? entities[node.entityKind].label
+                  : node.entityKind}
               </span>
               <span className="min-w-0 truncate">
                 <RecordPathLink node={node} />
@@ -88,7 +101,7 @@ export function RecordPaths({
           <li
             key={path
               .slice(0, index + 2)
-              .map((part) => `${part.entityType}:${part.entityId}`)
+              .map((part) => `${part.entityKind}:${part.entityId}`)
               .join("|")}
             className="inline-flex max-w-full min-w-0 items-center gap-1.5"
           >
@@ -99,9 +112,9 @@ export function RecordPaths({
             ) : null}
             <span className="max-w-full min-w-0 rounded border border-border bg-muted/30 px-1.5 py-0.5">
               <span className="me-1 text-xs text-muted-foreground">
-                {isBrowserRoutedEntity(node.entityType)
-                  ? entities[node.entityType].label
-                  : node.entityType}
+                {isBrowserRoutedEntity(node.entityKind)
+                  ? entities[node.entityKind].label
+                  : node.entityKind}
               </span>
               <RecordPathLink node={node} />
             </span>
@@ -129,7 +142,7 @@ export function RecordPaths({
             {other.map((path) => (
               <li
                 key={path
-                  .map((node) => `${node.entityType}:${node.entityId}`)
+                  .map((node) => `${node.entityKind}:${node.entityId}`)
                   .join("|")}
               >
                 {renderPath(path)}
@@ -201,7 +214,7 @@ export function ConnectedRecordsTable({
   const [page, setPage] = useState(0);
   const query = useQuery(
     entityGraph.connectedRecords.queryOptions({
-      source: { entityType: source, entityId: sourceId },
+      source: { entityKind: source, entityId: sourceId },
       viewKey,
       offset: openAll ? page * PAGE_SIZE : 0,
       limit: PAGE_SIZE,
@@ -234,35 +247,33 @@ export function ConnectedRecordsTable({
   return (
     <div className="space-y-3">
       <HopRange range={routeHopRange} />
-      <div className="overflow-x-auto rounded-md border border-border">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-border text-muted-foreground">
-            <tr>
-              <th className="p-3 font-medium">
-                {isBrowserRoutedEntity(target)
-                  ? entities[target].label
-                  : "Record"}
-              </th>
-              <th className="p-3 font-medium">Connected through</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr
-                key={item.target.entityId}
-                className="border-b border-border last:border-0"
-              >
-                <td className="p-3 align-top font-medium">
-                  <RecordPathLink node={item.target} />
-                </td>
-                <td className="p-3 align-top">
-                  <RecordPaths paths={item.paths} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Table
+        containerClassName="rounded-md border border-border"
+        className="table-auto text-sm"
+      >
+        <TableHeader>
+          <TableRow>
+            <TableHead className={HEAD_CLASS}>
+              {isBrowserRoutedEntity(target)
+                ? entities[target].label
+                : "Record"}
+            </TableHead>
+            <TableHead className={HEAD_CLASS}>Connected through</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {items.map((item) => (
+            <TableRow key={item.target.entityId}>
+              <TableCell className={`${CELL_CLASS} font-medium`}>
+                <RecordPathLink node={item.target} />
+              </TableCell>
+              <TableCell className={CELL_CLASS}>
+                <RecordPaths paths={item.paths} />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
       <ConnectionPager
         openAll={openAll}
         page={page}

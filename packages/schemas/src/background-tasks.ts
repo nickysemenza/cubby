@@ -64,12 +64,12 @@ export const entityEmbeddingRefreshTaskSchema = z
   .object({
     kind: z.literal("entity-embedding.refresh"),
     ...taskEnvelopeFields,
-    entityType: searchableEntitySchema,
+    entityKind: searchableEntitySchema,
     entityId: z.uuid(),
   })
   .transform((task) => {
-    const ref = parseEntityRef(task.entityType, task.entityId);
-    return { ...task, entityType: ref.entity, entityId: ref.id, ref };
+    const ref = parseEntityRef(task.entityKind, task.entityId);
+    return { ...task, entityKind: ref.entity, entityId: ref.id, ref };
   });
 
 export const locationAiDescriptionRefreshTaskSchema = z.object({

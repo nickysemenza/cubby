@@ -55,7 +55,7 @@ const embedTask = (seed: string): BackgroundTaskMessageInput => ({
   task: {
     kind: "entity-embedding.refresh",
     requestedAt,
-    entityType: "recipe",
+    entityKind: "recipe",
     entityId: testEntityId("recipe", seed),
   },
 });
@@ -215,7 +215,7 @@ describe("handleBackgroundQueueBatch", () => {
         async (_db, refs) =>
           new Map(
             refs.map((ref) => [
-              entityRefKey(ref.entityType, ref.entityId),
+              entityRefKey(ref.entityKind, ref.entityId),
               ref.entityId === testEntityId("recipe", "boom")
                 ? { error: boomError, throttled: false }
                 : { outcome: "written" as const },
@@ -299,7 +299,7 @@ describe("handleBackgroundQueueBatch", () => {
         async (_db, refs) =>
           new Map(
             refs.map((ref) => [
-              entityRefKey(ref.entityType, ref.entityId),
+              entityRefKey(ref.entityKind, ref.entityId),
               { error: throttledError, throttled: true },
             ]),
           ),

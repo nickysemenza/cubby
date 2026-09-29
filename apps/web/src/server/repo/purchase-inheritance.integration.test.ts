@@ -5,10 +5,10 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { explainField } from "~/server/field-explanation-browser.server";
+import { expenseChargeContextWorkflow } from "~/server/operations/expense.server";
+import { explainField } from "~/server/operations/field-explanation.server";
 import { getEntityRecommendations } from "~/server/services/entity-recommendations.service";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { expenseChargeContextWorkflow } from "~/server/workflows/expense.server";
 
 import { getDb } from "./database-helpers";
 import { getExpenseByShortcode, updateExpense } from "./expense";
@@ -116,7 +116,7 @@ describe("purchase inheritance lifecycle", () => {
     expect(result?.siblings).toHaveLength(2);
     await expect(
       getEntityRecommendations(ctx.db, {
-        entityType: "expense",
+        entityKind: "expense",
         entityId: code,
       }),
     ).resolves.toMatchObject({ source: { entityId: code } });
@@ -125,7 +125,7 @@ describe("purchase inheritance lifecycle", () => {
     );
     for (const surface of ["detail", "list"] as const) {
       const explanation = await explainField(context, {
-        entityType: "expense",
+        entityKind: "expense",
         entityId: charge.shortcode,
         field: "projectId",
         surface,
@@ -133,11 +133,11 @@ describe("purchase inheritance lifecycle", () => {
       expect(explanation.sources).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            entity: { entityType: "project", entityId: first.shortcode },
+            entity: { entityKind: "project", entityId: first.shortcode },
             value: expect.objectContaining({ amount: 0.2 }),
           }),
           expect.objectContaining({
-            entity: { entityType: "project", entityId: second.shortcode },
+            entity: { entityKind: "project", entityId: second.shortcode },
             value: expect.objectContaining({ amount: 0.8 }),
           }),
         ]),
@@ -148,7 +148,7 @@ describe("purchase inheritance lifecycle", () => {
     }
     await expect(
       getEntityRecommendations(ctx.db, {
-        entityType: "expense",
+        entityKind: "expense",
         entityId: charge.shortcode,
       }),
     ).resolves.toMatchObject({ groups: [] });

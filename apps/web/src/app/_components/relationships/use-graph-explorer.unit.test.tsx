@@ -4,15 +4,15 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { entityGraph } from "~/entities/entity-graph.functions";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { graphBranchKey, graphRefKey } from "./entity-graph-state";
 import { useGraphExplorer } from "./use-graph-explorer";
 
-const root: EntityRef = { entityType: "vendor", entityId: "VEN-2345" };
+const root: EntityRef = { entityKind: "vendor", entityId: "VEN-2345" };
 const member = (index: number): EntityRef => ({
-  entityType: "purchase",
+  entityKind: "purchase",
   entityId: testShortcode("purchase", `graph-member-${index}`),
 });
 function fixture(
@@ -68,7 +68,7 @@ describe("graph exploration session", () => {
       explore: entityGraph.explore.withTransport(async ({ input }) => {
         reads.push(graphRefKey(input.root));
         return fixture(input.root, [
-          input.root.entityType === "vendor" ? member(1) : member(2),
+          input.root.entityKind === "vendor" ? member(1) : member(2),
         ]);
       }),
     };
@@ -146,7 +146,7 @@ describe("graph exploration session", () => {
     const operations = {
       ...entityGraph,
       explore: entityGraph.explore.withTransport(async ({ input }) =>
-        input.root.entityType === "vendor"
+        input.root.entityKind === "vendor"
           ? fixture(root, [member(1)])
           : delayed,
       ),

@@ -36,8 +36,8 @@ describe("syncProductUnitMappings row identity", () => {
       .then((rows) =>
         rows.map((row) => ({
           id: row.id,
-          a: row.a,
-          b: row.b,
+          a: { value: row.aValue, unit: row.aUnit },
+          b: { value: row.bValue, unit: row.bUnit },
           source: row.source,
           createdAt: row.createdAt,
         })),

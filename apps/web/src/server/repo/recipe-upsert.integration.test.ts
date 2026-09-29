@@ -96,8 +96,9 @@ describe("upsertRecipe", () => {
             .values({
               name,
               shortcode: "RCP-7K9M",
-              SourceType: "Website",
-              SourceData: "https://example.com/winner",
+              sourceType: "Website",
+              sourceUrl: "https://example.com/winner",
+              sourceLabel: null,
             })
             .returning();
           markWinnerReady();

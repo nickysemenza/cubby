@@ -1,11 +1,18 @@
 import type { FieldSuggestionsOut } from "@cubby/schemas/ai";
+import { buildActorContext } from "@cubby/schemas/context";
 import { runEntityId } from "@cubby/schemas/identifiers";
+import { testUserId } from "@cubby/schemas/testing";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EntityKernelContext } from "./adapter";
 import { previewEntity, type PreviewEntityPorts } from "./preview";
 
+// `ensureRun` is ported, but the run's grouping key still reads the actor.
+const kernelContext = fromPartial<EntityKernelContext>({
+  db: {},
+  actorContext: buildActorContext(testUserId("test-user-id"), "mcp"),
+});
 const fixtureRunId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
 const mocks = {
@@ -31,7 +38,7 @@ describe("previewEntity field suggestions", () => {
     mocks.resolveExpense.mockResolvedValue({});
     mocks.suggestFields.mockResolvedValue({ suggestions: {} });
     await previewEntity(
-      fromPartial<EntityKernelContext>({ db: {} }),
+      kernelContext,
       {
         entity: "expense",
         data: { name: "Sales tax", lineKind: "auto" },
@@ -128,7 +135,7 @@ describe("previewEntity field suggestions", () => {
     });
 
     const result = await previewEntity(
-      fromPartial<EntityKernelContext>({}),
+      kernelContext,
       {
         entity: "task",
         data: {
@@ -177,7 +184,7 @@ describe("previewEntity field suggestions", () => {
     mocks.suggestFields.mockResolvedValue({ suggestions: { trade: null } });
 
     const result = await previewEntity(
-      fromPartial<EntityKernelContext>({}),
+      kernelContext,
       {
         entity: "task",
         data: { name: "Inspect unknown work" },
@@ -220,7 +227,7 @@ describe("previewEntity field suggestions", () => {
     });
 
     const result = await previewEntity(
-      fromPartial<EntityKernelContext>({}),
+      kernelContext,
       {
         entity: "product",
         data: { name: "Widget" },

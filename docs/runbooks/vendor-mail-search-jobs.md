@@ -1,65 +1,38 @@
-# Vendor Gmail search jobs: schema expansion
+# Vendor Gmail search runs
 
-Apply this additive SQL to production before merging the PR that reads
-`OrderMail.classifiedChecksum` and `VendorMailSearchJob`. One migration owner
-must confirm no other schema change is in flight. The currently deployed code
-continues to work with these additions.
+A vendor Gmail search is one `Run` with `purpose = 'mail_search'`. It has no
+table of its own: the request lives in `Run.input` and the page-by-page walk in
+`Run.progress`, both jsonb validated by `mailSearchRunInput` and
+`mailSearchRunProgress` in `packages/schemas/src/run-fields.ts`. The code is
+`server/purchase-import/gmail/search-job.ts`.
 
-## Preflight
+The former `VendorMailSearchJob` table was folded into these columns in the
+2026-09 consolidation, so no expand step applies to Gmail search state any
+more; a schema change ships as a committed migration like every other ([domain rules](../agents/domain-rules.md#production-changes)).
 
-Confirm that `OrderMail` and `Run` exist and that neither new object has a
-conflicting definition. Do not use `db:push --force`.
+## Shape
 
-```sql
-SELECT table_name, column_name, data_type, is_nullable, column_default
-FROM information_schema.columns
-WHERE table_schema = 'public'
-  AND table_name IN ('OrderMail', 'Run', 'VendorMailSearchJob')
-ORDER BY table_name, ordinal_position;
+- `Run.input`: `after` (the search window) and `searchTerms` (the exact
+  sender and domain terms saved at launch). A run created before the terms were
+  recorded has an empty list, so its original query cannot be reconstructed.
+- `Run.progress`: `phase` (`queued` between pages, `running` while one is
+  scanned, then `completed` or `failed`), `pageToken` (the cursor the walk
+  started from, null at the newest page), `nextPageToken`, `pagesScanned`,
+  `searched`, `reviewable`, and a transient `error` kept while a rate-limited
+  page waits to be retried. `skipped` is the Run's own counter.
+- `Run.status` stays `running` until the last page or a terminal failure;
+  `progress.phase` is the claim state a page's worker compare-and-sets on.
 
-SELECT indexname, indexdef
-FROM pg_indexes
-WHERE schemaname = 'public'
-  AND tablename = 'VendorMailSearchJob';
-```
-
-## Expand
-
-```sql
-BEGIN;
-
-ALTER TABLE "OrderMail"
-  ADD COLUMN IF NOT EXISTS "classifiedChecksum" text;
-
-CREATE TABLE IF NOT EXISTS "VendorMailSearchJob" (
-  "runId" uuid PRIMARY KEY REFERENCES "Run"("id"),
-  "after" text NOT NULL,
-  "pageToken" text,
-  "status" text NOT NULL DEFAULT 'queued',
-  "searched" integer NOT NULL DEFAULT 0,
-  "skipped" integer NOT NULL DEFAULT 0,
-  "reviewable" integer NOT NULL DEFAULT 0,
-  "nextPageToken" text,
-  "error" text,
-  "startedAt" timestamp,
-  "finishedAt" timestamp,
-  "createdAt" timestamp NOT NULL DEFAULT now(),
-  "updatedAt" timestamp NOT NULL DEFAULT now()
-);
-
-COMMIT;
-```
-
-## Readback and deploy gate
-
-Repeat the preflight queries. Confirm `classifiedChecksum` is nullable and the
-job table's Run foreign key exists. The new table starts empty. Keep auto-merge
-off until this readback and exact PR-head GitHub Actions pass.
+## Inspect a search
 
 ```sql
-SELECT count(*) AS search_jobs FROM "VendorMailSearchJob";
-
-SELECT conname, pg_get_constraintdef(oid)
-FROM pg_constraint
-WHERE conrelid = '"VendorMailSearchJob"'::regclass;
+SELECT r."shortcode", r."status", r."input", r."progress", r."startedAt"
+FROM "Run" r
+WHERE r."purpose" = 'mail_search'
+ORDER BY r."startedAt" DESC
+LIMIT 20;
 ```
+
+A `mail_search` Run whose `progress` is NULL never wrote its opening state (its
+transaction failed after the Run committed); it is not a search and the code
+ignores it.

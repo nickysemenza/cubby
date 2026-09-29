@@ -1,6 +1,9 @@
 import { type AnyColumn, and, asc, eq, sql } from "drizzle-orm";
 
 import {
+  cookbook,
+  entityAttachment,
+  entityExternalId,
   expenseAttribution,
   image,
   inventoryEntry,
@@ -8,10 +11,7 @@ import {
   location,
   mealRecipe,
   product,
-  productExternalId,
   productUnitMappings,
-  cookbook,
-  entityAttachment,
   recipe,
   recipeSection,
   recipeSectionIngredient,
@@ -42,6 +42,7 @@ import {
   productExpenseTotalSql,
 } from "~/server/repo/expense-aggregate-sql";
 import { stockOnly } from "~/server/repo/inventory/placement";
+import { locationAiDescriptionExtras } from "~/server/repo/location/ai-description";
 import { categorySummarySql } from "~/server/repo/product-category-sql";
 import { productClassificationEvidenceSql } from "~/server/repo/product/classification-evidence";
 
@@ -56,7 +57,7 @@ import { notDeleted } from "./query";
  * on the same live-edge predicate — the filter, the cell, and the hero
  * disagreeing is the #428 failure mode.
  */
-const productComponentCount = sql<number>`(SELECT count(*) FROM "ProductComponent" pc WHERE pc."parentProductId" = "product"."id" AND pc."deletedAt" IS NULL)`;
+const productComponentCount = sql<number>`(SELECT count(*) FROM "EntityLink" pc WHERE pc."fromEntityId" = "product"."id" AND pc."deletedAt" IS NULL AND pc."kind" = 'productComponent')`;
 
 /**
  * An expense's parent `project` plus its optionally-linked `product`, same
@@ -243,6 +244,18 @@ const locationIdentityProduct = {
   },
 } as const;
 
+/**
+ * What `dbRecipeToTopLevel` reads to decode a recipe's `source`: its
+ * Cookbook's code and title, and its live Notion page identifier.
+ */
+export const recipeSourceRelations = {
+  cookbook: { columns: { shortcode: true, name: true } },
+  externalIds: {
+    where: and(eq(entityExternalId.kind, "page"), notDeleted(entityExternalId)),
+    columns: { externalId: true },
+  },
+} as const;
+
 export const relations = {
   ingredient: {
     full: {
@@ -252,7 +265,7 @@ export const relations = {
           where: notDeleted(product),
           with: {
             unitMappings: { where: notDeleted(productUnitMappings) },
-            externalIds: { where: notDeleted(productExternalId) },
+            externalIds: { where: notDeleted(entityExternalId) },
             images: {
               where: notDeleted(entityAttachment),
               orderBy: imageOrder,
@@ -262,13 +275,13 @@ export const relations = {
             },
           },
         },
-        recipe: true,
+        recipe: { with: recipeSourceRelations },
         recipeSectionIngredient: {
           where: notDeleted(recipeSectionIngredient),
           with: {
             recipeSection: {
               with: {
-                recipe: true,
+                recipe: { with: recipeSourceRelations },
               },
             },
           },
@@ -290,7 +303,7 @@ export const relations = {
               where: notDeleted(productUnitMappings),
             },
             externalIds: {
-              where: notDeleted(productExternalId),
+              where: notDeleted(entityExternalId),
             },
             images: {
               where: notDeleted(entityAttachment),
@@ -310,7 +323,7 @@ export const relations = {
         ingredient: true,
         growsPlant: { columns: { shortcode: true } },
         unitMappings: { where: notDeleted(productUnitMappings) },
-        externalIds: { where: notDeleted(productExternalId) },
+        externalIds: { where: notDeleted(entityExternalId) },
         // Locations that ARE this product — a bin in service, as opposed to
         // `inventoryEntry`, which is stock held somewhere. Scalar columns only;
         // the detail table renders a name, a type and a link.
@@ -378,7 +391,7 @@ export const relations = {
           where: notDeleted(productUnitMappings),
         },
         externalIds: {
-          where: notDeleted(productExternalId),
+          where: notDeleted(entityExternalId),
         },
         inventoryEntry: {
           where: notDeleted(inventoryEntry),
@@ -427,7 +440,7 @@ export const relations = {
         // Shortcode only — the source badge links the book, and Cookbook is a
         // handful of rows, so this join is far cheaper than resolving the code
         // per recipe on the client.
-        cookbook: { columns: { shortcode: true } },
+        ...recipeSourceRelations,
         // Shortcode + name — the lineage pointer's link needs a real label to
         // show, not just a code (same reasoning as `cookbook` above, plus a name).
         forkedFrom: { columns: { shortcode: true, name: true } },
@@ -441,7 +454,7 @@ export const relations = {
               with: {
                 ingredient: {
                   with: {
-                    recipe: true,
+                    recipe: { with: recipeSourceRelations },
                   },
                 },
               },
@@ -464,7 +477,7 @@ export const relations = {
     // payload and one per-recipe lateral join off the hot list query.
     list: {
       with: {
-        cookbook: { columns: { shortcode: true } },
+        ...recipeSourceRelations,
         // Shortcode + name — the lineage pointer's link needs a real label to
         // show, not just a code (same reasoning as `cookbook` above, plus a name).
         forkedFrom: { columns: { shortcode: true, name: true } },
@@ -478,7 +491,7 @@ export const relations = {
               with: {
                 ingredient: {
                   with: {
-                    recipe: true,
+                    recipe: { with: recipeSourceRelations },
                   },
                 },
               },
@@ -490,6 +503,8 @@ export const relations = {
   },
   location: {
     list: {
+      // `aiDescription` is computed from AiAnalysis, not stored on the row.
+      extras: locationAiDescriptionExtras,
       with: {
         parent: true,
         product: locationIdentityProduct,
@@ -513,7 +528,7 @@ export const relations = {
             // barcode is derived from its primary `gtin` identifier row.
             product: {
               extras: productCategoryProjection,
-              with: { externalIds: { where: notDeleted(productExternalId) } },
+              with: { externalIds: { where: notDeleted(entityExternalId) } },
             },
           },
         },
@@ -530,11 +545,13 @@ export const relations = {
       },
     },
     full: {
+      extras: locationAiDescriptionExtras,
       with: {
         parent: true,
         product: locationIdentityProduct,
         children: {
           where: notDeleted(location),
+          extras: locationAiDescriptionExtras,
           with: {
             // Children carry their identity SKU too — the Contents table shows
             // one row per child bin, and without this every product-linked
@@ -563,6 +580,7 @@ export const relations = {
       },
     },
     withImages: {
+      extras: locationAiDescriptionExtras,
       with: {
         product: locationIdentityProduct,
         images: {
@@ -583,7 +601,7 @@ export const relations = {
         // without it every inventory row would report itself barcode-less.
         product: {
           extras: productCategoryProjection,
-          with: { externalIds: { where: notDeleted(productExternalId) } },
+          with: { externalIds: { where: notDeleted(entityExternalId) } },
         },
         location: true,
       },
@@ -594,7 +612,7 @@ export const relations = {
           extras: productCategoryProjection,
           with: {
             unitMappings: { where: notDeleted(productUnitMappings) },
-            externalIds: { where: notDeleted(productExternalId) },
+            externalIds: { where: notDeleted(entityExternalId) },
             images: {
               where: notDeleted(entityAttachment),
               orderBy: imageOrder,

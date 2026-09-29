@@ -12,8 +12,6 @@ import { z } from "zod";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { PurchaseImportAgentConnection } from "~/app/activity/purchase-import-agent-connection";
 import { CalendarConnectDialog } from "~/app/calendar/calendar-connect-dialog";
-import { calendar } from "~/app/calendar/calendar.functions";
-import { ledgerParty } from "~/app/finance/finance.functions";
 import { AwaitingWorkCard } from "~/app/problems/components/awaiting-work-card";
 import { MaintenanceCard } from "~/app/problems/components/maintenance-card";
 import { Row, Stack } from "~/components/layout";
@@ -36,9 +34,14 @@ import { Eyebrow } from "~/components/ui/eyebrow";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { StatusText } from "~/components/ui/status-text";
-import { run as runOperations } from "~/entities/run.functions";
+import {
+  calendar,
+  ledgerParty,
+  run as runOperations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
 import { copyText } from "~/lib/clipboard";
+import { formatInstant } from "~/lib/date-format";
 import { getErrorMessage } from "~/lib/error-utils";
 import { hasGmailReadonlyScope } from "~/lib/google-auth";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
@@ -576,9 +579,7 @@ function DiagnosticsCard() {
               gap="md"
               className="py-2 text-xs text-muted-foreground"
             >
-              <span>
-                Last run {new Date(dataUpdatedAt).toLocaleTimeString()}
-              </span>
+              <span>Last run {formatInstant(dataUpdatedAt, "time")}</span>
               <span className="font-mono tabular-nums">
                 total {data.totalMs} ms
               </span>

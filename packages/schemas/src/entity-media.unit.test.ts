@@ -9,14 +9,14 @@ import {
 describe("entity media contract", () => {
   it("bounds public ref batches and permits explicit no-image results", () => {
     const refs = Array.from({ length: ID_CHUNK_SIZE }, (_, index) => ({
-      entityType: "product" as const,
+      entityKind: "product" as const,
       entityId: `PRD-${index}`,
     }));
 
     expect(entityDisplayImagesInput.safeParse({ refs }).success).toBe(true);
     expect(
       entityDisplayImagesInput.safeParse({
-        refs: [...refs, { entityType: "product", entityId: "PRD-OVER" }],
+        refs: [...refs, { entityKind: "product", entityId: "PRD-OVER" }],
       }).success,
     ).toBe(false);
     expect(

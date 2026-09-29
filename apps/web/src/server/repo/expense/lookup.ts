@@ -35,14 +35,13 @@ import {
   shortcodeSetCondition,
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
-import { type ListPage, listScaffold } from "~/server/repo/list-scaffold";
+import { type ListPage, listScaffold } from "~/server/repo/list";
 import { disposalPurchaseIds } from "~/server/repo/product/ownership";
 import { matchingEmbeddedProjectIds } from "~/server/repo/project/dashboard-shared";
 import {
   collectDescendantIds,
   loadProjectTree,
 } from "~/server/repo/project/subtree";
-import { relatedWhereConditions } from "~/server/repo/related-view";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 
 import {
@@ -322,7 +321,6 @@ export const buildExpenseWhereClause = async (
   // sub-select — see its doc above.
   const storedFilters = { ...filters, trade: undefined };
   return expenseScaffold.where(storedFilters, [
-    ...relatedWhereConditions("expense", filters, expense.id),
     filters.ledgerPartyId === undefined
       ? undefined
       : sql`EXISTS (

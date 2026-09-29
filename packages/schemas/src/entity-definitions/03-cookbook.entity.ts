@@ -10,7 +10,7 @@ export default defineEntity({
     // No kernel `get`: the detail reads the cookbook summary query.
     detailOverride: {
       query: {
-        module: "~/entities/cookbook.functions",
+        module: "~/entities/cookbook-queries",
         export: "cookbookDetailQuery",
       },
     },
@@ -227,9 +227,6 @@ export default defineEntity({
       "sourceLabel",
       { key: "rawJson", specialized: "json:rawJson" },
       { key: "report", specialized: "json:report" },
-      // Stored at upsert (recipe items in the tree), so browse and problem
-      // detection never walk the JSON.
-      { key: "sourceRecipeCount", defaultValue: 0 },
       { key: "productId", reference: "product" },
       { key: "importedAt", defaultOverride: "now" },
       { key: "createdAt" },
@@ -263,6 +260,24 @@ export default defineEntity({
     list: { module: "@cubby/schemas/recipe", export: "cookbookSummary" },
     detail: { module: "@cubby/schemas/recipe", export: "cookbookSummary" },
   },
+  // The book a set of EPUB-extracted recipes came from. Holds the full
+  // assembled `ImportRecipe[]` JSON so recipes can be re-derived without
+  // re-running the LLM; a cookbook is always born from a full import, so
+  // every content column is NOT NULL. `productId` links it to the physical
+  // book on the shelf. Matching is always human-confirmed — never auto-link on
+  // a title prefix: two books can share a leading title word and differ.
+  storage: {
+    indexes: [
+      { on: ["name"], unique: true, where: "{deletedAt} IS NULL" },
+      { on: ["createdAt"] },
+      { trigram: "name" },
+    ],
+    relations: {
+      recipes: { many: "recipe" },
+      attachments: { many: "entityAttachment" },
+      product: "productId",
+    },
+  },
   filters: { descriptors: [] },
   relations: [
     {
@@ -288,14 +303,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "EntityAttachment.subjectEntityId", direction: "incoming" },
+          { edge: "EntityAttachment.entityId", direction: "incoming" },
           { edge: "EntityAttachment.imageId", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
           { edge: "EntityAttachment.imageId", direction: "incoming" },
-          { edge: "EntityAttachment.subjectEntityId", direction: "outgoing" },
+          { edge: "EntityAttachment.entityId", direction: "outgoing" },
         ],
       },
     },
@@ -353,7 +368,10 @@ export default defineEntity({
     bulkUpdate: null,
     merge: false,
     operationOwners: { delete: "workflow", merge: null },
-    mcp: ["list"],
+    // Born only from an EPUB import and deleted with its recipes by that
+    // import workflow; the kernel serves its reads.
+    lifecycle: "readOnly",
+    mcp: ["get", "list"],
     dataQuality: {
       checks: [
         {
@@ -377,7 +395,10 @@ export default defineEntity({
   },
   extensions: {
     ports: {
-      repository: null,
+      repository: {
+        module: "~/server/repo/cookbook.repository",
+        export: "cookbookRepository",
+      },
       search: "document",
     },
   },

@@ -20,10 +20,7 @@ import {
   createFinancialAccount,
   updateFinancialAccount,
 } from "~/server/repo/financial-account";
-import {
-  financialTransactionRepository,
-  updateFinancialTransaction,
-} from "~/server/repo/financial-transaction";
+import { updateFinancialTransaction } from "~/server/repo/financial-transaction";
 import {
   createLedgerParty,
   deleteLedgerParties,
@@ -32,13 +29,13 @@ import {
 } from "~/server/repo/ledger-party";
 import {
   createLedgerTransfer,
-  ledgerTransferRepository,
   getLedgerTransferByShortcode,
   updateLedgerTransfer,
 } from "~/server/repo/ledger-transfer";
 import { makeExpenseInput } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { findOrCreateVendor } from "~/server/repo/vendor";
+import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 
 describe("consolidated household ledger", () => {
   const ctx = withTestDb("mcp");
@@ -299,7 +296,7 @@ describe("consolidated household ledger", () => {
       .from(auditLog)
       .where(
         and(
-          eq(auditLog.entityType, "ledgerTransfer"),
+          eq(auditLog.entityKind, "ledgerTransfer"),
           eq(auditLog.entityId, transfer.entityId),
           eq(auditLog.action, "update"),
         ),
@@ -316,17 +313,13 @@ describe("consolidated household ledger", () => {
       deleteLedgerParties(ctx.db, [member.output.id], ctx.actor),
     ).rejects.toThrow("Cannot delete ledger party:");
     await expect(
-      financialTransactionRepository.delete(
-        ctx.db,
-        [parseShortcodeFor("financialTransaction", inflow.shortcode)],
-        ctx.actor,
-      ),
+      deleteThroughKernel(ctx.db, ctx.actor, "financialTransaction", [
+        parseShortcodeFor("financialTransaction", inflow.shortcode),
+      ]),
     ).rejects.toThrow("cannot be deleted until the transfer releases it");
-    await ledgerTransferRepository.delete(
-      ctx.db,
-      [transfer.output!.id],
-      ctx.actor,
-    );
+    await deleteThroughKernel(ctx.db, ctx.actor, "ledgerTransfer", [
+      transfer.output!.id,
+    ]);
     const [cleared] = await unwrapDb(ctx.db)
       .select({ id: financialTransaction.id })
       .from(financialTransaction)
@@ -567,7 +560,7 @@ describe("consolidated household ledger", () => {
       .from(auditLog)
       .where(
         and(
-          eq(auditLog.entityType, "expense"),
+          eq(auditLog.entityKind, "expense"),
           eq(auditLog.entityId, created.entityId),
           eq(auditLog.action, "update"),
         ),

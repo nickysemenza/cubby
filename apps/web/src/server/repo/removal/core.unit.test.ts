@@ -24,7 +24,7 @@ describe("cascadeRemoval — the type-level lock", () => {
     // being a convention a runtime detector catches after the fact.
     // @ts-expect-error a delete entry can only be minted by `cascadeRemoval`
     const forged: AuditEntryInput = {
-      entityType: "product",
+      entityKind: "product",
       entityId: "p1",
       action: "delete",
     };

@@ -1,9 +1,8 @@
 import type { MerchantVendorInference } from "@cubby/schemas/financial-transaction";
 
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 import { entities, entityDetailParams } from "~/entities/entities";
-
-import { TableLink } from "../_components/table/TableLink";
 
 const supportCopy = (count: number) =>
   `${count} previously settled ${count === 1 ? "transaction" : "transactions"}`;
@@ -26,13 +25,14 @@ export function PossibleVendor({
     const candidate = inference.candidates[0];
     return (
       <Stack gap="tight" className="min-w-0">
-        <TableLink
+        <EntityRefLink
+          variant="table"
           to={entities.vendor.routes.detail}
           params={entityDetailParams(candidate.vendorId)}
           className="block truncate"
         >
           {candidate.vendorName}
-        </TableLink>
+        </EntityRefLink>
         <span className="text-2xs text-muted-foreground">
           {compact
             ? supportCopy(candidate.supportingTransactionCount)
@@ -50,13 +50,14 @@ export function PossibleVendor({
       <Stack as="ul" gap="tight" className="mt-2">
         {inference.candidates.map((candidate) => (
           <Row as="li" key={candidate.vendorId} justify="between" gap="sm">
-            <TableLink
+            <EntityRefLink
+              variant="table"
               to={entities.vendor.routes.detail}
               params={entityDetailParams(candidate.vendorId)}
               className="min-w-0 truncate"
             >
               {candidate.vendorName}
-            </TableLink>
+            </EntityRefLink>
             <span className="shrink-0 text-2xs text-muted-foreground">
               {supportCopy(candidate.supportingTransactionCount)}
             </span>

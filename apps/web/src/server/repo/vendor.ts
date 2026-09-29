@@ -58,7 +58,7 @@ import {
   displayableImageSql,
   displayableImageWhere,
 } from "~/server/repo/image-displayability";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import {
   finalizeMerge,
   planSlotCollisions,
@@ -66,7 +66,6 @@ import {
   resolveMergeTargets,
 } from "~/server/repo/merge";
 import { foldChargeInto } from "~/server/repo/purchase";
-import { relatedWhereConditions } from "~/server/repo/related-view";
 import { applyMergePolicy, policyDelete } from "~/server/repo/removal";
 import {
   resolveLiveShortcode,
@@ -120,11 +119,17 @@ export const VENDOR_DELETE_EDGE_POLICY = {
     description:
       "A vendor with purchases still pointing at it can't be deleted — those purchases are load-bearing history.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "cascade-delete-attachment",
     effect: "soft-delete",
     description:
       "The logo association is soft-deleted with the vendor; the image is reaped when nothing else uses it.",
+  },
+  "ExternalSource.vendorId": {
+    code: "clear-source-vendor",
+    effect: "detach",
+    description:
+      "Identifier sources that named this vendor stay registered and simply stop naming it.",
   },
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
@@ -168,11 +173,17 @@ export const VENDOR_MERGE_EDGE_POLICY = {
     description:
       "A merged vendor's purchases re-point onto the surviving vendor; purchases that collide on the same order id are folded into one instead.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "carry-logo",
     effect: "repoint",
     description:
       "A loser's logo becomes the survivor's when the survivor has none; any other loser logo is detached and reaped unless shared.",
+  },
+  "ExternalSource.vendorId": {
+    code: "repoint-source-vendor",
+    effect: "repoint",
+    description:
+      "Identifier sources that named a merged vendor name the survivor.",
   },
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
@@ -250,7 +261,7 @@ export async function getVendorCoverage(
 const vendorHasDisplayableLogo = sql<boolean>`EXISTS (
   SELECT 1 FROM "EntityAttachment" logo_att
   JOIN "Image" logo ON logo."id" = logo_att."imageId"
-  WHERE logo_att."subjectEntityId" = ${sql.raw('"Vendor"."id"')}
+  WHERE logo_att."entityId" = ${sql.raw('"Vendor"."id"')}
     AND logo_att."role" = 'logo'
     AND logo_att."deletedAt" IS NULL
     AND logo."deletedAt" IS NULL
@@ -259,7 +270,7 @@ const vendorHasDisplayableLogo = sql<boolean>`EXISTS (
 
 /** The vendor's live logo attachment, for a left join ahead of `image`. */
 const vendorLogoAttachment = and(
-  eq(entityAttachment.subjectEntityId, vendor.id),
+  eq(entityAttachment.entityId, vendor.id),
   eq(entityAttachment.role, "logo"),
   notDeleted(entityAttachment),
 );
@@ -438,7 +449,6 @@ export const buildVendorWhereClause = (filters: VendorFilters) =>
       : filters.logoPresenceFilter === "none"
         ? sql`NOT ${vendorHasDisplayableLogo}`
         : undefined,
-    ...relatedWhereConditions("vendor", filters, vendor.id),
   ]);
 
 const resolveVendorSort = (sort: SortParams) => {
@@ -621,7 +631,7 @@ export const createVendor = async (
       notes: data.notes,
     });
     await logAuditEntry(tx, actor, {
-      entityType: "vendor",
+      entityKind: "vendor",
       entityId: created.id,
       action: "create",
     });
@@ -700,7 +710,7 @@ export const replaceVendorLogo = async (
         created.id,
       );
       await logAuditEntry(tx, actor, {
-        entityType: "vendor",
+        entityKind: "vendor",
         entityId,
         action: "update",
         changes: {
@@ -880,7 +890,7 @@ export const mergeVendors = async (
         // Detach every loser logo before tombstoning, then give the survivor
         // the carried one, so a logo that was not carried is eligible for the
         // same shared-reference reap as an ordinary vendor delete.
-        "EntityAttachment.subjectEntityId": async () => {
+        "EntityAttachment.entityId": async () => {
           for (const loserId of losers) {
             const { previousImageId } = await replaceSingularAttachment(
               tx,

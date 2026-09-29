@@ -30,7 +30,7 @@ describe("location search paths", () => {
 
     const hits = await findSearchHits(ctx.db, {
       query: "Synthetic brass shelf",
-      entityTypes: ["location"],
+      entityKinds: ["location"],
       limit: 10,
     });
     const hit = hits.find((item) => item.id === child.id);

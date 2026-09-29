@@ -37,7 +37,11 @@ import {
 import { updateImageProcessingSettings } from "./image-processing-maintenance";
 import { persistImageProcessingSubmission } from "./image-processing-submission";
 import { hydrateImageReadProjection } from "./image-read-projection";
-import { createProductFixture, makeProductInput } from "./repo.fixtures";
+import {
+  createProductFixture,
+  makeProductInput,
+  insertEntityAttachments,
+} from "./repo.fixtures";
 
 describe("durable image representations", () => {
   const ctx = withTestDb();
@@ -213,14 +217,12 @@ describe("durable image representations", () => {
       makeProductInput({ name: "Label-only image owner" }),
       ctx.actor,
     );
-    await getDb(ctx.db)
-      .insert(entityAttachment)
-      .values({
-        subjectEntityId: labelOwner.entityId,
-        imageId: parseEntityId("image", labelOnly.id),
-        sortOrder: 0,
-        purpose: "label",
-      });
+    await insertEntityAttachments(ctx.db, {
+      entityId: labelOwner.entityId,
+      imageId: parseEntityId("image", labelOnly.id),
+      sortOrder: 0,
+      purpose: "label",
+    });
 
     expect(
       await claimImageProcessingJob(ctx.db, {
@@ -245,7 +247,7 @@ describe("durable image representations", () => {
       .set({ purpose: "item" })
       .where(
         and(
-          eq(entityAttachment.subjectEntityId, labelOwner.entityId),
+          eq(entityAttachment.entityId, labelOwner.entityId),
           eq(entityAttachment.imageId, parseEntityId("image", labelOnly.id)),
         ),
       );
@@ -271,22 +273,20 @@ describe("durable image representations", () => {
       makeProductInput({ name: "Item image owner" }),
       ctx.actor,
     );
-    await getDb(ctx.db)
-      .insert(entityAttachment)
-      .values([
-        {
-          subjectEntityId: labelOwner.entityId,
-          imageId: parseEntityId("image", shared.id),
-          sortOrder: 1,
-          purpose: "label",
-        },
-        {
-          subjectEntityId: itemOwner.entityId,
-          imageId: parseEntityId("image", shared.id),
-          sortOrder: 0,
-          purpose: "item",
-        },
-      ]);
+    await insertEntityAttachments(ctx.db, [
+      {
+        entityId: labelOwner.entityId,
+        imageId: parseEntityId("image", shared.id),
+        sortOrder: 1,
+        purpose: "label",
+      },
+      {
+        entityId: itemOwner.entityId,
+        imageId: parseEntityId("image", shared.id),
+        sortOrder: 0,
+        purpose: "item",
+      },
+    ]);
     expect(
       await claimImageProcessingJob(ctx.db, {
         jobId: shared.jobId,
@@ -390,8 +390,8 @@ describe("durable image representations", () => {
       makeProductInput({ name: "Search owner" }),
       ctx.actor,
     );
-    await getDb(ctx.db).insert(entityAttachment).values({
-      subjectEntityId: owner.entityId,
+    await insertEntityAttachments(ctx.db, {
+      entityId: owner.entityId,
       imageId,
       sortOrder: 0,
     });

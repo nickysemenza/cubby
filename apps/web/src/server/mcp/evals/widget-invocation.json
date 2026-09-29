@@ -4,13 +4,13 @@
     {
       "category": "direct",
       "prompt": "Find the right USDA food record for plain Greek yogurt so I can map its nutrition.",
-      "expectedTool": "search_usda_foods",
+      "expectedTool": "usda_food.search",
       "expectedWidget": "ui://cubby/usda-picker.html"
     },
     {
       "category": "indirect",
       "prompt": "This grocery Product still needs a nutrition source, and there may be several plausible USDA matches.",
-      "expectedTool": "search_usda_foods",
+      "expectedTool": "usda_food.search",
       "expectedWidget": "ui://cubby/usda-picker.html"
     },
     {
@@ -22,13 +22,13 @@
     {
       "category": "direct",
       "prompt": "What do I need to buy for the meals planned this week?",
-      "expectedTool": "get_shopping_list",
+      "expectedTool": "nutrition.shopping_list",
       "expectedWidget": null
     },
     {
       "category": "indirect",
       "prompt": "I'm heading to the store. What are we short on for the dinners on our calendar?",
-      "expectedTool": "get_shopping_list",
+      "expectedTool": "nutrition.shopping_list",
       "expectedWidget": null
     },
     {

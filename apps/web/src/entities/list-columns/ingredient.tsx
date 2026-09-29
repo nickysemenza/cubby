@@ -16,8 +16,6 @@ import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { EntityInlineLinkList } from "~/app/_components/EntityInlineLinkList";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import {
   ProductFoodSummariesProvider,
@@ -25,6 +23,7 @@ import {
   useProductFoodSummaries,
 } from "~/app/_components/products/product-food-summaries";
 import { TruncatedList } from "~/app/_components/TruncatedList";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { NoneValue } from "~/components/ui/none-value";
 import {
@@ -64,12 +63,12 @@ function ProductPillsCell({ products }: { products: IngredientProduct[] }) {
 function ProductPillWithFood({ product }: { product: IngredientProduct }) {
   const food = useHydratedProductFood(product);
   const displayImage = useEntityDisplayImage({
-    entityType: "product",
+    entityKind: "product",
     entityId: product.id,
   });
   return (
     <span className="inline-flex min-w-0 items-center gap-1">
-      <EntityInlineLink
+      <EntityRefLink
         displayImage={displayImage}
         entity="product"
         data={product}
@@ -116,7 +115,8 @@ function RecipeUsageCell({ ingredient }: { ingredient: IngredientListItem }) {
           <TooltipContent>Appears in {recipes.length} recipes</TooltipContent>
         </Tooltip>
       )}
-      <EntityInlineLinkList
+      <EntityRefLink
+        variant="list"
         entity="recipe"
         items={recipes.slice(0, 1)}
         maxItems={1}
@@ -175,7 +175,7 @@ export const ingredientListOverride = defineListOverride<
                 mobile: { slot: "meta", priority: 30 },
                 entityRefs: (row) =>
                   row.appearsInRecipes.map((recipe) => ({
-                    entityType: "recipe",
+                    entityKind: "recipe",
                     entityId: recipe.id,
                   })),
               }),
@@ -247,7 +247,7 @@ function IngredientFoodHydration({
     <ProductFoodSummariesProvider productIds={productIds} summaries={summaries}>
       <EntityDisplayImagesProvider
         refs={productIds.map((entityId) => ({
-          entityType: "product" as const,
+          entityKind: "product" as const,
           entityId,
         }))}
       >

@@ -4,49 +4,33 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { z } from "zod";
 
-import { auditLogHandlers } from "~/server/audit-log-browser.server";
-import { entityGraphHandlers } from "~/server/entity-runtime.server";
-import { financialTransactionHandlers } from "~/server/finance-browser.server";
-import { householdContributionHandlers } from "~/server/household-contribution-browser.server";
-import { imageProcessingHandlers } from "~/server/image-processing-browser.server";
-import { mealHandlers } from "~/server/meal-browser.server";
-import { productHandlers } from "~/server/product-browser.server";
-import { projectHandlers } from "~/server/project-browser.server";
-import { purchaseHandlers } from "~/server/purchase-browser.server";
-import { recommendationsHandlers } from "~/server/recommendations-browser.server";
-import { statementRowHandlers } from "~/server/statement-row-browser.server";
+import { MCP_TOOLS } from "~/contracts/mcp-tools";
+import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
+import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
+import { purchaseAgentRunActions } from "~/server/purchase-import/capabilities";
 
 import { registerMcpApps } from "./apps";
-import { installMockStrippedListToolsHandler } from "./tools/_shared";
-import { registerContractTools } from "./tools/contract-tools";
-import { registerDataQualityTools } from "./tools/data-quality.tools";
-import { registerEntityIntegrityTools } from "./tools/entity-integrity.tools";
-import { registerEntityTools } from "./tools/entity.tools";
-import { registerFinancialTools } from "./tools/financial.tools";
-import { IMAGE_TOOL_NAMES, registerImageTools } from "./tools/image.tools";
-import { registerIngredientTools } from "./tools/ingredient.tools";
-import { registerInventoryTools } from "./tools/inventory.tools";
-import { registerLedgerTools } from "./tools/ledger.tools";
-import { MEAL_RECIPE_TOOL_NAMES, registerMealTools } from "./tools/meal.tools";
-import { registerPhotoImportTools } from "./tools/photo-import.tools";
-import { registerPlantTools } from "./tools/plant.tools";
-import { registerProblemsTools } from "./tools/problems.tools";
-import { registerProductTools } from "./tools/product.tools";
-import { registerProjectTools } from "./tools/project.tools";
-import { registerPurchaseTools } from "./tools/purchase.tools";
-import { registerRecipeTools } from "./tools/recipe.tools";
-import { registerSearchTools } from "./tools/search.tools";
+import { trustedPurchaseAgent } from "./purchase-agent-protocol";
 import { installToolCallTelemetryHandler } from "./tools/tool-call-telemetry";
-import { registerUsdaTools } from "./tools/usda.tools";
+import { installMockStrippedListToolsHandler } from "./tools/tool-catalog";
+import type { ToolCatalogView } from "./tools/tool-catalog";
+import {
+  compiledMcpTools,
+  narrowedToolSchema,
+  operationContextFromExtra,
+  registerMcpTools,
+  type ToolExtra,
+} from "./tools/tool-registration";
 import { createMcpClientValidator } from "./validation";
 
 /**
  * MCP Server for Cubby inventory and product management.
  *
- * The McpServer + tools are created once (module scope). Only the transport
- * is per-request — the SDK requires a fresh transport in stateless mode,
- * but the server itself is stateless and safe to reuse.
+ * The tools are compiled once per isolate (`registerMcpTools`); the McpServer
+ * and transport are per request — the SDK's `connect()` runs once per
+ * instance, and a stateless transport cannot be reused.
  */
 
 const shortcodePrefixInstructions = Object.entries(SHORTCODE_PREFIX)
@@ -55,32 +39,32 @@ const shortcodePrefixInstructions = Object.entries(SHORTCODE_PREFIX)
 
 export const MCP_SERVER_INSTRUCTIONS = `Cubby MCP — personal pantry, recipe, and meal-planning API.
 
+Every tool takes {action, ...fields}; its description lists what each action does, and this text names an action as tool.action (call entity_read with {action:"get", ...} for entity_read.get). Read-only tools hold only reads, so they are safe to auto-approve.
+
 Entity ids are public shortcodes, not uuids. Every top-level entity id you receive back from a tool and every entity relationship id you fill in is a short prefixed code (e.g. PRD-4K7M) — the uuid primary key behind it never crosses this API. The prefix names the entity, so a code is self-describing:
 ${shortcodePrefixInstructions}
 A code with the wrong prefix for the field it's passed to (a LOC- code where a tool wants a product) is rejected by input validation before the tool runs, so a mismatched or unresolvable code never reaches a write.
 
-Public outputs omit storage-only child-row and diagnostic ids when no shortcode exists. Three narrow exceptions retain a raw sub-entity id because it is the follow-up write handle: dedicated meal-recipe mutations return their mealRecipe \`id\`, find_recipes_using_ingredient returns a section \`lineId\`, and a product's \`unitMappings[]\` rows (from find/get/list on product) keep their row \`id\` so resending it updates that mapping in place instead of deleting and recreating it. Entity write inputs may accept those raw sub-entity ids when editing an existing section, line, mapping, or meal-recipe row. USDA \`fdc_id\` is an external USDA identifier rather than a Cubby id.
+Public outputs omit storage-only child-row and diagnostic ids when no shortcode exists. Three narrow exceptions retain a raw sub-entity id because it is the follow-up write handle: meal_recipe writes return their mealRecipe \`id\`, recipe_insights.using_ingredient returns a section \`lineId\`, and a product's \`unitMappings[]\` rows (from entity_read on product) keep their row \`id\` so resending it updates that mapping in place instead of deleting and recreating it. Entity write inputs may accept those raw sub-entity ids when editing an existing section, line, mapping, or meal-recipe row. USDA \`fdc_id\` is an external USDA identifier rather than a Cubby id.
 
 Workflow tips:
-- Start with each tool's published input schema. Call entity with a command object such as {action:"list", entity:"product"} or {action:"get", entity:"product", id:"PRD-…"}; consult entities://catalog only when the schema leaves a supported entity/action unclear. Workflow tools remain for multi-entity work; global_search searches every indexed entity at once.
-- Ingredients: batch-resolve names with resolve_ingredients instead of one search+create per name.
-- Garden: resolve cultivars with resolve_plants ({ name, gardenGuideKey? }) before creating Plantings; a Planting names its Plant, never free-text variety.
-- Meals: ${MEAL_RECIPE_TOOL_NAMES.add} returns \`mealRecipeId\`; use that occurrence id (not recipeId) with ${MEAL_RECIPE_TOOL_NAMES.update} or ${MEAL_RECIPE_TOOL_NAMES.remove}. Generic entity meal reads omit the storage-only mealRecipe id.
-- Products: usdaFdcId reflects either an explicit fdc_id or a barcode-resolved USDA link. A product carries a SET of barcodes as \`gtin\` external ids, canonical GTIN-14; \`primaryGtin\` is the one that stands for it, and the \`upc\` write field sets that slot in any encoding. Use entity action="list", entity="product" with sort="dataQuality" (ascending = weakest identity first; every scored entity accepts it, plus dataStatus/dataGap filters) for enrichment worklists, patch_products_external_ids for slot-safe typed identifier changes, and exact (source, kind, externalId) collision checks before adding identity. Entity action="get", entity="product" is the detailed media read; verify_products_images is the explicit R2 integrity check.
-- Recipes: prefer create_recipe_from_text for pasted prep sheets; use entity action="create", entity="recipe" when you already have ingredient ids.
-- Interactive tools: use search_usda_foods when nutrition mapping requires a choice among plausible USDA records. Let its picker show and refine the candidates, then wait for the user's "Use this" choice instead of reproducing every result in prose. Use get_shopping_list when the user asks what to buy for planned meals in a date range; its checks are temporary and are not saved as manual shopping items.
-- Problems: list_problems countsOnly=true for cheap triage; type="duplicateInventory" finds unique Products stored in more than one location.
-- Projects, tasks, and expenses use entity; a project's markdown notes come back from entity action=get, entity=project.
+- Reads go through entity_read ({action:"list", entity:"product"} or {action:"get", entity:"product", id:"PRD-…"}), writes through entity ({action:"create", entity:"product", data:{…}}); consult entities://catalog only when a schema leaves a supported entity/action unclear. search.global searches every indexed entity at once. Project, task, and expense records use the same two tools; a project's markdown notes come back from entity_read.get(project).
+- Ingredients and plants: batch-resolve names with entity.resolve ({entity:"ingredient", names} or {entity:"plant", plants}) instead of one search+create per name. A Planting names its Plant, never free-text variety.
+- Meals: meal_recipe.add returns \`mealRecipeId\`; use that occurrence id (not recipeId) with meal_recipe.update or meal_recipe.remove. Entity meal reads omit the storage-only mealRecipe id.
+- Products: usdaFdcId reflects either an explicit fdc_id or a barcode-resolved USDA link. A product carries a SET of barcodes as \`gtin\` external ids, canonical GTIN-14; \`primaryGtin\` is the one that stands for it, and the \`upc\` write field sets that slot in any encoding. Use entity_read.list with sort="dataQuality" (ascending = weakest identity first; every scored entity accepts it, plus dataStatus/dataGap filters) for enrichment worklists, product_enrichment.patch_external_ids for slot-safe typed identifier changes, and imports_read.external_id_collisions for exact (source, kind, externalId) checks before adding identity. entity_read.get(product) with resultDetail "full" is the detailed media read; product_enrichment.verify_images is the explicit R2 integrity check.
+- Recipes: prefer recipe_import.from_text for pasted prep sheets; use entity.create(recipe) when you already have ingredient ids.
+- Interactive: use usda_food.search when nutrition mapping requires a choice among plausible USDA records; its picker shows and refines the candidates, so wait for the user's "Use this" choice instead of reproducing every result in prose. Use nutrition.shopping_list when the user asks what to buy for planned meals in a date range; its checks are temporary and are not saved as manual shopping items.
+- Problems: activity.problems with countsOnly=true for cheap triage; type="duplicateInventory" finds unique Products stored in more than one location.
 - Ledger shape: \`Expense → Purchase ← FinancialTransaction → FinancialAccount\`, with \`Vendor ──< Purchase\`. ALL spend lives on \`Expense.cost\`; a \`Purchase\` is one vendor order, receipt, or deliberately separate purchase event (not a card charge), and its \`statedTotal\` is literal vendor paperwork that is never summed into spend. Financial Transactions are settlement evidence only: matching paperwork or Expense totals does not prove payment.
-- Reconciling a vendor export against the ledger: match_expenses (read-only, ranks candidates for the whole batch) → entity action=update, entity=expense to set vendor/orderId on what you confirm, or split_expense when one ledger row aggregates several export lines. Never write from a match without confirming it — and run match_expenses before entity action=create, entity=expense, since the row you are about to add usually already exists under a different name.
-- Reconciling a purchase against its paperwork: entity update(purchase) records \`statedTotal\`; linked posted refund transactions produce the neutral \`refund_adjusted\` reconciliation status when they exactly explain a lower Expense total. list_problems type="purchasesNotReconciling" contains only the remaining unexplained differences.
-- Purchase completeness: start with entity action=list, entity=purchase, filtering dataStatus="needs_data" and optionally dataGap. Purchase and Product outputs carry computed dataQuality; linked Product gaps and exceptions are returned separately on Purchases with targetType/targetId so mutations can address the owning entity without changing the Purchase's own status. Use set_data_exception only for source-backed negative knowledge, and require documentKind when ${IMAGE_TOOL_NAMES.attachFiles} targets a Purchase.
-- Gallery attachments: ${IMAGE_TOOL_NAMES.attachFiles} and ${IMAGE_TOOL_NAMES.attachExistingImage} accept every ordered-gallery entity listed in their input schema, including Garden Entries, meals, and tasks. For local files, call ${IMAGE_TOOL_NAMES.createFileUploads}, PUT each successful item with its declared Content-Type, then pass the returned uploadIds to ${IMAGE_TOOL_NAMES.attachFiles}. Covers and vendor logos have their own replacement fields, not gallery attachment targets. Provide a deterministic idempotencyKey for retries and the freshly read expectedImageCount for Product gallery writes. A mismatch is a precondition failure and associates nothing. MIME/signature conflicts are rejected; verify_products_images backfills and checks stored Product files without making ordinary entity action="get", entity="product" reads contact R2.
-- Financial settlement is separate evidence: FinancialTransaction amounts never enter spend. A Purchase is the vendor order/receipt; it may have several FTX- rows (installments, refunds, split tender). Use entity list(financialTransaction) with purchaseId to inspect those rows.
-- Household contribution accounting uses standard entities: Expense beneficiaries/funders describe who consumed and initially funded existing cost; LedgerTransfer records later movement between Ledger Parties and owns its complete normalized-claim and evidence-transaction sets. LPY-/LTR- records use entity rather than global search; they are not indexed for semantic search, though they now have browser pages.
-- Ledger imports are client-orchestrated through standard mutations. Independent creates/updates may use entity_batch; there is intentionally no custom cross-record transactional importer. Retry with the same normalized Source Claim and use a reviewed disambiguator for legitimate indistinguishable duplicates.
-- Monarch CSVs stay client-side: parse them in the MCP client, then use preview_financial_statement_import in batches before creating approved ready_to_create rows with entity action=create, entity=financialTransaction. The preview is read-only and its stable source references make unchanged rows from later full-history exports no-ops.
-- Entity action=list responses return { meta, items } paginated objects. The entity command accepts one deliberate action at a time; workflow tools document their own batch behavior.
+- Reconciling a vendor export against the ledger: finance_read.expense_match (read-only, ranks candidates for the whole batch) → entity.update(expense) to set vendor/orderId on what you confirm, or expenses.split when one ledger row aggregates several export lines. Never write from a match without confirming it — and run the match before entity.create(expense), since the row you are about to add usually already exists under a different name.
+- Reconciling a purchase against its paperwork: entity.update(purchase) records \`statedTotal\`; linked posted refund transactions produce the neutral \`refund_adjusted\` reconciliation status when they exactly explain a lower Expense total. activity.problems type="purchasesNotReconciling" contains only the remaining unexplained differences.
+- Purchase completeness: start with entity_read.list(purchase), filtering dataStatus="needs_data" and optionally dataGap. Purchase and Product outputs carry computed dataQuality; linked Product gaps and exceptions are returned separately on Purchases with targetType/targetId so mutations can address the owning entity without changing the Purchase's own status. Use data_exception.set only for source-backed negative knowledge, and give documentKind when image.attach_files targets a Purchase.
+- Gallery attachments: image.attach_files and image.attach_existing accept every ordered-gallery entity listed in their schema, including Garden Entries, meals, and tasks. For local files, call image.create_uploads, PUT each successful item with its declared Content-Type, then pass the returned uploadIds to image.attach_files. Covers and vendor logos have their own replacement fields, not gallery attachment targets. Provide a deterministic idempotencyKey for retries and the freshly read expectedImageCount for Product gallery writes; a mismatch is a precondition failure and attaches nothing. MIME/signature conflicts are rejected; product_enrichment.verify_images backfills and checks stored Product files without making ordinary entity_read.get(product) reads contact R2.
+- Financial settlement is separate evidence: FinancialTransaction amounts never enter spend. A Purchase is the vendor order/receipt; it may have several FTX- rows (installments, refunds, split tender). Use entity_read.list(financialTransaction) with purchaseId to inspect those rows.
+- Household contribution accounting uses standard entities: Expense beneficiaries/funders describe who consumed and initially funded existing cost; LedgerTransfer records later movement between Ledger Parties and owns its complete normalized-claim and evidence-transaction sets. LPY-/LTR- records use entity_read/entity rather than search.global; they are not indexed for semantic search.
+- Ledger imports are client-orchestrated through standard mutations. Independent creates/updates may use entity.commands; there is intentionally no custom cross-record transactional importer. Retry with the same normalized Source Claim and use a reviewed disambiguator for legitimate indistinguishable duplicates.
+- Monarch CSVs stay client-side: parse them in the MCP client, then use finance_read.preview_import in batches before creating approved ready_to_create rows with entity.create(financialTransaction). The preview is read-only and its stable source references make unchanged rows from later full-history exports no-ops.
+- entity_read.list returns { meta, items } paginated objects. Every other action documents its own batch behavior.
 - structuredContent is canonical; text content mirrors the same JSON.`;
 
 // Re-exported for the unit test, which exercises the slim projections directly.
@@ -89,52 +73,83 @@ export {
   slimProduct,
   slimProductDetail,
   slimUsdaFood,
-} from "./tools/_shared";
+} from "~/contracts/mcp-projections";
 
-/**
- * Implemented contracts whose members declare `mcp`. Each such member becomes
- * a tool calling that handler; the catalog contract test fails when a flagged
- * member's domain is missing here.
- */
-const MCP_CONTRACT_DOMAINS = [
-  auditLogHandlers,
-  entityGraphHandlers,
-  financialTransactionHandlers,
-  householdContributionHandlers,
-  imageProcessingHandlers,
-  mealHandlers,
-  productHandlers,
-  projectHandlers,
-  purchaseHandlers,
-  recommendationsHandlers,
-  statementRowHandlers,
-];
+function registerEntityCatalog(server: McpServer) {
+  server.registerResource(
+    "entities_catalog",
+    "entities://catalog",
+    {
+      description:
+        "The entity-kernel contract: supported entities, the entity_read / entity actions, and each action's precise JSON Schema.",
+      mimeType: "application/json",
+    },
+    async () => ({
+      contents: [
+        {
+          uri: "entities://catalog",
+          mimeType: "application/json",
+          text: JSON.stringify({
+            entities: ENTITY_KERNEL_ENTITIES,
+            actions: Object.fromEntries(
+              (["entity_read", "entity"] as const).flatMap((tool) =>
+                Object.entries(MCP_TOOL_BINDINGS[tool].actions).flatMap(
+                  ([action, binding]) =>
+                    "kernel" in binding
+                      ? [
+                          [
+                            `${tool}.${action}`,
+                            {
+                              writes: tool === "entity",
+                              inputSchema: z.toJSONSchema(
+                                binding.kernel.input,
+                                { unrepresentable: "any", io: "input" },
+                              ),
+                            },
+                          ],
+                        ]
+                      : [],
+                ),
+              ),
+            ),
+          }),
+        },
+      ],
+    }),
+  );
+}
 
-function registerTools(server: McpServer) {
-  for (const domain of MCP_CONTRACT_DOMAINS)
-    registerContractTools(server, domain);
-  registerEntityTools(server);
-  registerInventoryTools(server);
-  registerProductTools(server);
-  registerSearchTools(server);
-  registerIngredientTools(server);
-  registerPlantTools(server);
-  registerLedgerTools(server);
-  registerRecipeTools(server);
-  registerProblemsTools(server);
-  registerProjectTools(server);
-  registerPurchaseTools(server);
-  registerPhotoImportTools(server);
-  registerFinancialTools(server);
-  registerMealTools(server);
-  registerUsdaTools(server);
-  registerImageTools(server);
-  registerDataQualityTools(server);
-  registerEntityIntegrityTools(server);
-  // The `ui://` resources those tools' `_meta.ui.resourceUri` pointers resolve
-  // to. Adds the `resources` capability, which is otherwise unused — cubby's
-  // MCP surface is tools-only.
-  registerMcpApps(server);
+/** The calling purchase agent sees only the actions its run's purpose mounts. */
+async function purchaseAgentCatalogView(
+  extra: ToolExtra,
+): Promise<ToolCatalogView | undefined> {
+  const trusted = trustedPurchaseAgent(extra);
+  if (!trusted) return undefined;
+  const operationContext = operationContextFromExtra(extra);
+  if (!operationContext) return () => null;
+  const prepared = await operationContext.prepare("strong");
+  const { allowed } = await purchaseAgentRunActions(
+    prepared.entityKernel.db,
+    trusted.runId,
+  );
+  const allowedSet = new Set(allowed);
+  const tools = new Map(
+    compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOLS).map((tool) => [
+      tool.name,
+      tool,
+    ]),
+  );
+  return (name) => {
+    const tool = tools.get(name);
+    if (!tool) return null;
+    const narrowed = narrowedToolSchema(tool, allowedSet);
+    return narrowed
+      ? {
+          description: narrowed.description,
+          inputSchema: narrowed.inputJsonSchema,
+        }
+      : null;
+  };
 }
 
 export function createMcpServer() {
@@ -147,9 +162,13 @@ export function createMcpServer() {
       instructions: MCP_SERVER_INSTRUCTIONS,
     },
   );
-  registerTools(server);
+  registerMcpTools(server, MCP_TOOL_BINDINGS, MCP_TOOLS);
+  registerEntityCatalog(server);
+  // The `ui://` resources those tools' `_meta.ui.resourceUri` pointers resolve
+  // to. Adds the `resources` capability beside the entity catalog.
+  registerMcpApps(server);
   installToolCallTelemetryHandler(server);
-  installMockStrippedListToolsHandler(server);
+  installMockStrippedListToolsHandler(server, purchaseAgentCatalogView);
   return server;
 }
 

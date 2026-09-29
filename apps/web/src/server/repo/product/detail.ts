@@ -15,6 +15,7 @@ import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient";
+import { enrichProductRowsWithInventoryValuations } from "~/server/repo/inventory/valuation";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
@@ -56,7 +57,7 @@ const hydrateProductLocationBreadcrumbs = async (
       ...[...ancestorsById.values()].flatMap((chain) =>
         chain.map((rung) => rung.locationId),
       ),
-    ]).map((entityId) => ({ entityType: "location" as const, entityId })),
+    ]).map((entityId) => ({ entityKind: "location" as const, entityId })),
   );
   const displayImageOf = (id: LocationId) =>
     displayImages.get(entityRefKey("location", id)) ?? null;
@@ -156,9 +157,13 @@ export async function readProductDetail(
     PRODUCT_DETAIL_OPERATION,
     "breadcrumbs",
     () =>
-      hydrateProductLocationBreadcrumbs(context.db, [
-        { ...row, quantityLedger },
-      ]).then((rows) => rows[0]!),
+      enrichProductRowsWithInventoryValuations(context.db, [row])
+        .then((valued) =>
+          hydrateProductLocationBreadcrumbs(context.db, [
+            { ...valued[0]!, quantityLedger },
+          ]),
+        )
+        .then((rows) => rows[0]!),
   );
   const dataQuality = await observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
@@ -173,7 +178,7 @@ export async function readProductDetail(
     },
   );
   // Not wrapped in `observeOperationPhase`: the tracked phase vocabulary for
-  // "entity.detail" is a closed list (`entity-detail.functions.ts`) this repo
+  // "entity.detail" is a closed list (`entity-detail.ts`) this repo
   // module doesn't own, so this batched lookup rides alongside the "quality"
   // phase's timing instead of minting a new one.
   const coverImageUrl =

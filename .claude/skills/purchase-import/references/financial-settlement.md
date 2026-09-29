@@ -34,11 +34,11 @@ receipt, and what a statement produces when it combines same-day refunds.
 Record it as **one** transaction carrying an `allocations` array:
 
 ```
-entity({ command: { action: "update", entity: "financialTransaction",
+entity({ action: "update", entity: "financialTransaction",
   id: "FTX-TEST", data: { allocations: [
     { purchaseId: "PUR-TSTA", amount: -10.00 },
     { purchaseId: "PUR-TSTB", amount: -5.00 },
-  ] } } })
+  ] } })
 ```
 
 Allocations must sum to the transaction's amount to the cent and share its sign;
@@ -52,17 +52,17 @@ purchase", never "unsettled" — read `allocations` for the general case.
 
 ## Statement import
 
-Use `preview_financial_statement_import` for normalized client-side Monarch
+Use `finance_read.preview_import` for normalized client-side Monarch
 rows. It is read-only and returns `already_recorded`, `ready_to_create`,
 `possible_existing`, `unresolved_account`, or `indistinguishable_duplicate`.
 
 After approval, submit only `ready_to_create` proposed values to
-`entity create financialTransaction` (or `entity_batch`). Review every result. Source reference
+`entity.create financialTransaction` (or `entity.commands`). Review every result. Source reference
 uniqueness makes later full-history imports no-op for unchanged rows; it does
 not authorize writing through a conflict.
 
 Resolve an Account by source external ID, source aliases, then one unambiguous
-network/last-four candidate across every account's `cardNumbers` (`entity list
+network/last-four candidate across every account's `cardNumbers` (`entity_read.list
 financialAccount {filters:{last4}}` searches them all). Last four alone is not
 unique. A provisional Account is correct when evidence is incomplete; do not
 invent provider data.
@@ -92,7 +92,7 @@ distinct mechanisms, and the statement row tells you which:
 
 Either way: first look the digits up across `cardNumbers`. If they are absent
 and the statement row identifies the funding account (date, amount, vendor),
-`entity update financialAccount` that account with the digits appended —
+`entity.update financialAccount` that account with the digits appended —
 `wallet_token` when the statement or provider confirms a wallet, a dated
 `primary` when the mismatch is a reissue, `unknown` when the cause is open —
 with a `note` citing the receipt. Do not mint a provisional Account for the
@@ -107,17 +107,17 @@ than a coverage gap.
 
 An existing transaction can carry the right amount, Account and Purchase and
 still leave `settlement_reference` open because it was imported without a source
-ref. Re-derive the ref through `preview_financial_statement_import` — a match
+ref. Re-derive the ref through `finance_read.preview_import` — a match
 returns `possible_existing` with the transaction id — then backfill it with
-`entity update financialTransaction`. Never create a second transaction to fix this.
+`entity.update financialTransaction`. Never create a second transaction to fix this.
 
 The field is **`sourceRefs`**, an array, and on update it replaces the whole
 array (read–merge–write when appending). The singular `sourceRef` is accepted
 and silently discarded — the write reports success, `sourceRefs` comes back
 `[]`, and the gap stays open. Confirm by re-reading the row, or by checking that
-the Purchase drops out of `entity list purchase` with `filters:{dataStatus:"needs_data"}`.
+the Purchase drops out of `entity_read.list purchase` with `filters:{dataStatus:"needs_data"}`.
 
-**`entity create financialTransaction` does take `sourceRefs`,** so the backfill pass
+**`entity.create financialTransaction` does take `sourceRefs`,** so the backfill pass
 above is only for transactions created without one. Include refs in the initial
 create when available; a create-plus-backfill sequence adds an unnecessary write
 and briefly leaves the transaction indistinguishable from a reference-less import.
@@ -134,16 +134,16 @@ discarding the evidence that it existed.
 
 ## The statement ledger
 
-Provider rows are recorded verbatim with `record_statement_rows`, and drift is a
+Provider rows are recorded verbatim with `statement_rows.record`, and drift is a
 query rather than a pipeline rebuilt each session. It is not an importer: it
 resolves no account, links no Purchase, creates no transaction, and makes no
 match.
 
-`list_statement_rows({matchState:"unmatched"})` is the worklist — a provider row
+`finance_read.statement_rows({matchState:"unmatched"})` is the worklist — a provider row
 with no live transaction carrying its source ref. To close one, append that ref
-to the right transaction with `entity update financialTransaction` (read–merge–write
+to the right transaction with `entity.update financialTransaction` (read–merge–write
 on `sourceRefs`); the row flips to `matched` on the next read, with no write to
-the row itself. `update_statement_rows` takes a `{filter}` selector for the long
+the row itself. `statement_rows.update` takes a `{filter}` selector for the long
 tail that will never match; `disposition: "ignored"` requires BOTH a reason and
 a note, enforced by a CHECK.
 
@@ -164,7 +164,7 @@ Three reconciliation traps:
   is the write path for ordinary imports, where a few hundred rows is
   unremarkable; a backfill big enough that a model cannot carry it is a one-off
   migration script, not a reason to fork the write path permanently. Reconcile
-  afterwards either way with `find_statement_row_drift` — a row present in the
+  afterwards either way with `finance_read.drift` — a row present in the
   ledger but absent from every export is the signature.
 
 ## Purchases and refunds
@@ -286,7 +286,7 @@ transaction for it.
 ## Re-importing a newer provider export
 
 - It is a **delta-only** job. Dedup is on `(source, externalId)` globally, so
-  declare `rowCountDeclared` = the delta count (or `list_statement_imports`
+  declare `rowCountDeclared` = the delta count (or `finance_read.imports`
   reports an unfinished chunked ingest). Compute `statementRowExternalId` with
   `apps/web/src/server/repo/statement-row-identity.ts` — import it, never
   reimplement — and ask the DB which ids exist; a column-wise CSV diff does not

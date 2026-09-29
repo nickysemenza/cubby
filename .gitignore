@@ -118,6 +118,9 @@ artifacts/flue-model-eval/
 # generated apps/web/src/routes/_authenticated/.gitignore beside them.
 *.gen.ts
 *.gen.json
+# `pnpm db:generate` renders the derived DDL here; drizzle/derived.lock and
+# the migrations are the committed record.
+*.gen.sql
 /docs/how-values-are-determined.md
 /apps/apple/CubbyKit/Sources/CubbyKit/Generated/
 /apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated/

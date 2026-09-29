@@ -1,11 +1,19 @@
 import { z } from "zod";
+import { mealBaseFilterFields } from "./generated/meal.gen";
+
+export {
+  mealCreateInput,
+  mealUpdateData,
+  mealUpdateInput,
+  type MealCreateInput,
+  type MealUpdateInput,
+} from "./generated/meal.gen";
 export * from "./meal-nutrition";
 export * from "./meal-amount";
 import { mealFoodAmount } from "./meal-amount";
 import { recipeYieldSchema } from "./recipe-shared";
-import { auditDateFilterFields, uniqueBy } from "./base-entity";
+import { uniqueBy } from "./base-entity";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import { mealRelatedFilterFields } from "./related-view";
 import {
   aggregatedNeedOut,
   needViaOut,
@@ -30,10 +38,7 @@ import {
 } from "./nutrition";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import { mealRecipeOut, mealTotals } from "./meal-fields";
-import {
-  generatedMealFieldSchemas,
-  generatedMealFilterFields,
-} from "./generated/entity-field-schemas.meal.gen";
+import { generatedMealFieldSchemas } from "./generated/entity-field-schemas.meal.gen";
 export {
   mealRecipeInput,
   type MealRecipeInput,
@@ -74,16 +79,6 @@ export {
  */
 export type MealSortField = GeneratedEntitySortField<"meal">;
 
-export const mealCreateInput = z.object(generatedMealFieldSchemas.create);
-export type MealCreateInput = z.infer<typeof mealCreateInput>;
-
-export const mealUpdateData = z.object(generatedMealFieldSchemas.update);
-export const mealUpdateInput = z.object({
-  id: mealShortcode,
-  data: mealUpdateData,
-});
-export type MealUpdateInput = z.infer<typeof mealUpdateInput>;
-
 export const mealAddRecipeInput = z.object({
   mealId: mealShortcode,
   recipeId: recipeShortcode.describe("Recipe ID to plan into the meal"),
@@ -96,19 +91,24 @@ export const mealAddRecipeInput = z.object({
     .describe("Sort order within the meal"),
 });
 
+// mealRecipe.id is a declared exception to shortcode-only ids: the meal-recipe
+// join row has no shortcode, so agents address it by this raw id.
+const mealRecipeOccurrenceId = mealRecipeId.describe(
+  "Meal-recipe ID (the `id` inside a meal's recipes[], NOT the recipe id)",
+);
+
 export const mealUpdateRecipeInput = z.object({
-  id: mealRecipeId,
-  scale: mealScale.optional(),
-  sortOrder: z.number().int().nullable().optional(),
+  id: mealRecipeOccurrenceId,
+  scale: mealScale.optional().describe("New scale multiplier (e.g. 1.5)"),
+  sortOrder: z.number().int().nullable().optional().describe("New sort order"),
 });
 
 export const mealRecipeIdInput = z.object({
-  id: mealRecipeId,
+  id: mealRecipeOccurrenceId,
 });
 
 export const mealFilterFields = {
-  ...auditDateFilterFields,
-  ...generatedMealFilterFields,
+  ...mealBaseFilterFields,
   /**
    * `meal.mealType` is nullable, so `"none"` is the unslotted worklist. OR-ed
    * with `mealType` rather than narrowing it (see
@@ -123,7 +123,6 @@ export const mealFilterFields = {
     ),
   from: mealDate.optional().describe("Only meals on or after this day"),
   to: mealDate.optional().describe("Only meals on or before this day"),
-  ...mealRelatedFilterFields,
 };
 
 export const mealFiltersSchema = z.object(mealFilterFields);
@@ -286,7 +285,7 @@ export const getMealPreparationsMcpInput = getMealPreparationsInput.extend({
 });
 
 /**
- * `get_meal_preparations` over MCP: the same shape as {@link getMealPreparationsOut}
+ * `nutrition.preparations` over MCP: the same shape as {@link getMealPreparationsOut}
  * but every `totals.nutrition` may be a subset of the 22 nutrient keys. One
  * meal read carries (1 + preparations + portions + 2) totals objects; at 22
  * estimates each that was ~10KB to answer "is this portion confirmed?". The
@@ -350,7 +349,7 @@ export const mealMcpEntityOut = mealOut.extend({
  * Slim MCP projection of a meal row: built from the same field map as
  * `mealOut` minus its audit timestamps, so it cannot drift from the plain
  * shape. Each entry in `recipes` is a full `mealRecipeOut` — its `id` is the
- * mealRecipe row id (the one `update_meal_recipe`/`remove_meal_recipe` take)
+ * mealRecipe row id (the one `meal_recipe.update`/`meal_recipe.remove` take)
  * and the recipe's own name lives at `recipes[].recipe.name`.
  */
 export const mealMcpOut = z.object({

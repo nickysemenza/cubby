@@ -1,4 +1,8 @@
-import { parseShortcodeFor, type ProductId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  parseShortcodeFor,
+  type ProductId,
+} from "@cubby/schemas/identifiers";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import type {
   PhotoGroupProposal,
@@ -9,9 +13,9 @@ import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
+  entityExternalId,
   expense,
   product,
-  productExternalId,
   purchase,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -34,22 +38,22 @@ const SUGGESTION_LIMIT = 5;
 const HAS_OWN_PHOTO = sql.raw(`EXISTS (
   SELECT 1 FROM "EntityAttachment" pc_ea
   JOIN "Image" pc_i ON pc_i."id" = pc_ea."imageId" AND pc_i."deletedAt" IS NULL
-  WHERE pc_ea."subjectEntityId" = "Product"."id"
+  WHERE pc_ea."entityId" = "Product"."id"
     AND pc_ea."deletedAt" IS NULL AND pc_i."source" = 'own'
 )`);
 const HAS_PHOTO_IMPORT = sql.raw(`EXISTS (
   SELECT 1 FROM "EntityAttachment" pc_ea
   JOIN "Image" pc_i ON pc_i."id" = pc_ea."imageId" AND pc_i."deletedAt" IS NULL
-  JOIN "RunTarget" pc_t ON pc_t."imageId" = pc_i."id"
+  JOIN "RunTarget" pc_t ON pc_t."entityId" = pc_i."id"
   JOIN "Run" pc_r ON pc_r."id" = pc_t."runId"
-  WHERE pc_ea."subjectEntityId" = "Product"."id"
+  WHERE pc_ea."entityId" = "Product"."id"
     AND pc_ea."deletedAt" IS NULL AND pc_r."deletedAt" IS NULL
     AND pc_r."purpose" = 'photo_inventory'
 )`);
 const HAS_PURCHASE = sql.raw(`EXISTS (
-  SELECT 1 FROM "PurchaseProduct" pc_pp
-  JOIN "Purchase" pc_p ON pc_p."id" = pc_pp."purchaseId" AND pc_p."deletedAt" IS NULL
-  WHERE pc_pp."productId" = "Product"."id" AND pc_pp."deletedAt" IS NULL
+  SELECT 1 FROM "EntityLink" pc_pp
+  JOIN "Purchase" pc_p ON pc_p."id" = pc_pp."fromEntityId" AND pc_p."deletedAt" IS NULL
+  WHERE pc_pp."toEntityId" = "Product"."id" AND pc_pp."deletedAt" IS NULL AND pc_pp."kind" = 'purchaseProduct'
 ) OR EXISTS (
   SELECT 1 FROM "Expense" pc_e
   JOIN "Purchase" pc_p ON pc_p."id" = pc_e."purchaseId" AND pc_p."deletedAt" IS NULL
@@ -250,19 +254,21 @@ export async function findPhotoProductCandidates(
   const exactRows = identifiers.length
     ? await getDb(db)
         .select({
-          productId: productExternalId.productId,
-          externalId: productExternalId.externalId,
+          productId: entityExternalId.entityId,
+          externalId: entityExternalId.externalId,
         })
-        .from(productExternalId)
+        .from(entityExternalId)
         .where(
           and(
-            notDeleted(productExternalId),
-            inArray(productExternalId.externalId, identifiers),
+            notDeleted(entityExternalId),
+            inArray(entityExternalId.externalId, identifiers),
           ),
         )
         .limit(50)
     : [];
-  const exactIds = [...new Set(exactRows.map((row) => row.productId))];
+  const exactIds = [
+    ...new Set(exactRows.map((row) => parseEntityId("product", row.productId))),
+  ];
   if (!terms.length && !exactIds.length) return [];
   const textMatch = (term: string) => {
     const pattern = searchPattern(term);

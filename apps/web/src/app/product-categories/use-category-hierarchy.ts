@@ -3,7 +3,7 @@ import { useMemo } from "react";
 
 import { useProductCategories } from "~/app/_components/hooks/useProductCategories";
 import { getFeatureColor } from "~/app/_components/products/category-theme";
-import { product } from "~/app/products/product.functions";
+import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import {
   buildCategoryHierarchy,

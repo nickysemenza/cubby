@@ -3,6 +3,15 @@ import { type AnyColumn, sql, type SQL } from "drizzle-orm";
 
 import { normalizeSearchText } from "~/server/semantic/text";
 
+/**
+ * `SearchDocument` does not store the public code: an exact code hit is the
+ * document whose entity holds it, read from the unique upper-case
+ * `Entity.shortcode`. The scalar subquery is null for a non-code, so the arm
+ * is false rather than an error.
+ */
+export const exactCodeMatch = (normalized: string): SQL =>
+  sql`sd."entityId" = (SELECT e."id" FROM "Entity" e WHERE e."shortcode" = ${normalized.toUpperCase()})`;
+
 /** Terms and prefix query are shared by command search and scoped list search. */
 export const searchTerms = (query: string): string[] =>
   normalizeSearchText(query)
@@ -33,10 +42,10 @@ export const lexicalEligibility = (
     SELECT 1
     FROM "SearchDocument" sd
     WHERE sd."deletedAt" IS NULL
-      AND sd."entityType" = ${entity}
+      AND sd."entityKind" = ${entity}
       AND sd."entityId" = ${entityId}
       AND (
-        lower(sd."shortcode") = ${normalized}
+        ${exactCodeMatch(normalized)}
         OR lower(sd.title) = ${normalized}
         OR EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) = ${normalized})
         OR lower(sd.title) LIKE ${`${normalized}%`}
@@ -57,7 +66,7 @@ export const lexicalRelevance = (
   const tsQuery = buildPrefixTsQuery(query);
   return sql`(
     SELECT
-      CASE WHEN lower(sd."shortcode") = ${normalized} THEN 0
+      CASE WHEN ${exactCodeMatch(normalized)} THEN 0
            WHEN lower(sd.title) = ${normalized} THEN 1
            WHEN EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) = ${normalized}) THEN 2
            WHEN lower(sd.title) LIKE ${`${normalized}%`} OR EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) LIKE ${`${normalized}%`}) THEN 3
@@ -67,7 +76,7 @@ export const lexicalRelevance = (
       - similarity(sd."normalizedText", ${normalized})
     FROM "SearchDocument" sd
     WHERE sd."deletedAt" IS NULL
-      AND sd."entityType" = ${entity}
+      AND sd."entityKind" = ${entity}
       AND sd."entityId" = ${entityId}
     LIMIT 1
   )`;

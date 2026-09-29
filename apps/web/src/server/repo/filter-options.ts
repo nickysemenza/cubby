@@ -306,7 +306,7 @@ async function loadEntityRows(
       .leftJoin(
         entityAttachment,
         and(
-          eq(entityAttachment.subjectEntityId, table.id),
+          eq(entityAttachment.entityId, table.id),
           eq(entityAttachment.role, "logo"),
           notDeleted(entityAttachment),
         ),

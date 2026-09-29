@@ -504,11 +504,6 @@ export default defineEntity({
       },
       { key: "shortcode", kind: "text" },
       {
-        key: "notionPageId",
-        kind: "text",
-        nullable: true,
-      },
-      {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
@@ -543,7 +538,6 @@ export default defineEntity({
       "dueEndDate",
       { key: "trade", specialized: "enum:trade" },
       { key: "sortOrder", specialized: "double-precision" },
-      "notionPageId",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
@@ -681,6 +675,16 @@ export default defineEntity({
     update: { module: "@cubby/schemas/project", export: "taskUpdateData" },
     output: { module: "@cubby/schemas/project", export: "taskOut" },
     list: { module: "@cubby/schemas/project", export: "taskListItemOut" },
+  },
+  storage: {
+    indexes: [{ on: ["status"] }, { on: ["dueDate"] }],
+    relations: {
+      project: "projectId",
+      subjectProduct: "subjectProductId",
+      parentTask: { field: "parentTaskId", relationName: "TaskToTask" },
+      subtasks: { many: "task", relationName: "TaskToTask" },
+      images: { many: "entityAttachment" },
+    },
   },
   filters: {
     audit: true,
@@ -919,14 +923,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "TaskDependency.taskId", direction: "incoming" },
-          { edge: "TaskDependency.blockedByTaskId", direction: "outgoing" },
+          { edge: "EntityLink[taskDependency].from", direction: "incoming" },
+          { edge: "EntityLink[taskDependency].to", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "TaskDependency.blockedByTaskId", direction: "incoming" },
-          { edge: "TaskDependency.taskId", direction: "outgoing" },
+          { edge: "EntityLink[taskDependency].to", direction: "incoming" },
+          { edge: "EntityLink[taskDependency].from", direction: "outgoing" },
         ],
       },
     },
@@ -938,14 +942,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "EntityAttachment.subjectEntityId", direction: "incoming" },
+          { edge: "EntityAttachment.entityId", direction: "incoming" },
           { edge: "EntityAttachment.imageId", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
           { edge: "EntityAttachment.imageId", direction: "incoming" },
-          { edge: "EntityAttachment.subjectEntityId", direction: "outgoing" },
+          { edge: "EntityAttachment.entityId", direction: "outgoing" },
         ],
       },
     },
@@ -1029,8 +1033,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/task/entity-adapter",
-        export: "taskEntityAdapter",
+        module: "~/server/repo/task/repository",
+        export: "taskRepository",
       },
       search: "document",
     },

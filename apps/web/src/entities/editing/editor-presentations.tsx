@@ -2,7 +2,6 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import { financialAccountIdentity } from "@cubby/schemas/financial-account";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
 import {
   type ComponentProps,
   type ComponentType,
@@ -19,7 +18,6 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import type { PendingImage } from "~/app/_components/PendingImageUpload";
 import {
   SelectField as FinanceSelectField,
@@ -29,6 +27,7 @@ import {
   FinancialTransactionFormFields,
   type FinancialTransactionFormValues,
 } from "~/app/finance/financial-transaction-form";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { AliasesField } from "~/components/forms/aliases-field";
 import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -36,7 +35,8 @@ import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import type { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { entityListFor } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list";
+import { formatCalendarDay } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
 
 import {
@@ -158,7 +158,7 @@ function IngredientDuplicateNameHint({ form }: EntityEditorFieldsProps) {
   const matchRefs = useMemo(
     () =>
       matches.map((match) => ({
-        entityType: "ingredient" as const,
+        entityKind: "ingredient" as const,
         entityId: match.id,
       })),
     [matches],
@@ -182,11 +182,11 @@ function IngredientDuplicateNameHint({ form }: EntityEditorFieldsProps) {
       </Description>
       <Row gap="xs" wrap>
         {matches.map((m) => (
-          <EntityInlineLink
+          <EntityRefLink
             displayImage={
               displayImages[
                 entityDisplayImageKey({
-                  entityType: "ingredient",
+                  entityKind: "ingredient",
                   entityId: m.id,
                 })
               ] ?? null
@@ -564,7 +564,7 @@ const presentations = {
       if (result.name) {
         return `Added "${result.name}"`;
       }
-      return `Added meal for ${format(parseISO(result.date), "EEE, MMM d")}`;
+      return `Added meal for ${formatCalendarDay(result.date, "weekdayMonthDay")}`;
     },
   },
   "task:create:capture": {

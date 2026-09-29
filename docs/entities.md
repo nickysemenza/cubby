@@ -35,17 +35,19 @@ Run:
 
 ```bash
 pnpm generate
-pnpm generate:check
+pnpm check:clean
 ```
 
-One generator (`scripts/generator/main.ts`) runs three stages in order: the
-entity stage (`scripts/generator/entities/`), the Start operation registry
-(`scripts/generator/start-operations/`), and the HTTP OpenAPI document with
-its native derivations (`scripts/generator/http-api/`). `generate:check` fails
-on invalid metadata, duplicate entity keys or routes, invalid relation
-policies, unsupported capabilities, and stale, missing, or extraneous generated
-files from any stage. Typecheck verifies declaration types and referenced
-exports.
+One generator (`scripts/generator/main.ts`) writes the entity artifacts first
+(`scripts/generator/entities/`), then the artifacts derived from the operation
+contracts: the operation registry, handler loaders, the browser client catalog
+that resolves each contract's cache tags and invalidation data
+(`scripts/generator/start-operations/`), and the HTTP OpenAPI document with its
+native derivations (`scripts/generator/http-api/`). Generation fails on invalid
+metadata, duplicate entity keys or routes, invalid relation policies, and
+unsupported capabilities. Generated files are never committed:
+`pnpm check:clean` proves a generate run leaves the tree unchanged. Typecheck
+verifies declaration types and referenced exports.
 
 ## One declaration, several consumers
 
@@ -127,7 +129,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: false, // or "gallery" (an `<Entity>Image` join table) | "cover" (one `coverImageId`) | "logo" (one direct logo FK)
+    images: false, // or "gallery" | "cover" | "logo" — all `EntityAttachment` rows, differing in `role`
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },
@@ -140,8 +142,8 @@ export default defineEntity({
     mcpNames: null,
     ports: {
       repository: {
-        module: "~/server/repo/example/entity-adapter",
-        export: "exampleEntityAdapter",
+        module: "~/server/repo/example/repository",
+        export: "exampleRepository",
       },
       references: {
         label: { module: "~/entities/entities", export: "entityLabel" },
@@ -437,6 +439,20 @@ Storage objects also name `kindOverride`, `nullableOverride`, and
 Stored-field order and create/update/output/bulk/audit rosters remain explicit:
 presentation defaults never grant mutation capabilities or introduce columns.
 
+The declaration's top-level `storage` block owns the rest of the entity's table,
+and the generator emits the complete Drizzle `pgTable` plus its `relations()`
+into `apps/web/src/server/db/generated/entity-tables.gen.ts`, re-exported by
+`schema.ts` under the same names. `storage.columns` adds operational columns
+no model field declares; `indexes`, `checks` (a named SQL check, or a
+value-set check whose values default to the field's read enum), and
+`relations` (the `with: {}` names; a string is a reference column) name
+columns as `{columnKey}` in SQL. Derived without declaring: the shortcode
+unique index, the identity FK to `Entity(id, shortcode)`, and a
+`<Table>_<column>_idx` index on every reference column no full index leads
+with (`unindexedReferences` opts one out with a reason). Constraint names are
+part of the committed migration snapshot, so a declared name is never changed
+casually.
+
 The `model.fields` roster owns field kinds, read keys, labels, validation,
 controls, and display membership. `EntityBasicInfo` reads `display.detail`;
 `createEntityDisplayColumns` reads `display.list`. A field's
@@ -500,7 +516,13 @@ synthetic identity column. A `list: true` field with `readKeyOverride: null` nee
 override; column compilation fails otherwise. `display.listHidden` owns a
 declared column's hidden-by-default state; pages retain
 `initialColumnVisibility` only for computed or relation columns outside the
-field model. `display.preview` marks the facts of the hover preview card
+field model. `display.valueOptions` is the label/tone roster for an
+enum-like value a field renders without a select control (a derived status, or
+the `kind`/`status` member of a JSON field); read it through
+`fieldEnumOptions(entity, key)`. A range filter's presets are declared as
+`options[].expand` patches of filter fields (`{ costMin: 500 }`) and the
+generator emits the expander; only presets that cannot be static (today-relative
+dates, open-ended counts) keep an `expandRef`. `display.preview` marks the facts of the hover preview card
 (compiled to `detail.preview`, in model order); a computed figure the card
 needs is a read-only projection field on the server output, never a web-side
 map. An entity with no preview field falls back to its hero stats and first
@@ -522,10 +544,9 @@ Every `fields` entry not named in `computed` must be a `model.fields` key; a
 correlated subquery or rollup resolved in the repository, such as a vendor's
 live purchase count or a product's expected-quantity variance. The generator
 emits the roster as `generatedEntitySort` in
-`packages/schemas/src/generated/entity-sort.gen.ts`, and the kernel's
-`defineEntityAdapter` derives its `EntitySortContract` from that map when a
-binding omits `sort` explicitly, so an entity adapter no longer hand-lists its
-own `sort: { fields: xSortableFields, default: "..." }`. The compiler enforces
+`packages/schemas/src/generated/entity-sort.gen.ts`, and `defineRepository`
+derives the kernel's `EntitySortContract` from that map, so no repository
+hand-lists its own sort roster. The compiler enforces
 `default ∈ fields`, `groupable ⊆ fields`, and `computed ⊆ fields`. The same
 roster narrows the `/api/v1` list route (`sort` refined to `fields`, `groupBy`
 an enum of `groupable`, or of `fields` when `groupable` is empty), so a
@@ -619,18 +640,15 @@ Extensions delegate to those services instead of branching inside the kernel.
 
 Generic detail, list, deferred filter-option, and write operations use one
 authenticated operation dispatcher and generated entity-to-input/output maps.
-Image, USDA Food, and Cookbook retain explicit browser projections because
-their shapes are specialized, but those projections use the same operation
-module for authentication, validation, errors, cancellation checkpoints,
-tracing, and console observability.
+Specialized shapes such as Image and USDA Food are ordinary operations in
+`server/operations/`, so they share the operation module's authentication,
+validation, errors, cancellation checkpoints, tracing, and console
+observability.
 
 Ordinary browser calls POST a SuperJSON operation envelope to
 `/api/browser/dispatch`. The Worker routes this path directly to the shared
 dispatcher; operation and entity labels remain in request headers for DevTools
-and tracing. SSR invokes that dispatcher in-process. A browser that reaches an
-older Worker without this endpoint retries through the Start function. That
-function remains available to already-open clients, including its legacy alias
-rewrite at both server entries.
+and tracing. SSR invokes that dispatcher in-process.
 
 The server operation boundary chooses one database adapter before invoking a
 handler and exposes that adapter through both context handles. Ordinary queries
@@ -643,17 +661,24 @@ policy: a query transported through POST is still cache-eligible. Each MCP tool
 execution selects a new caller from the same freshness state. Availability reads use the selected database; recipe repairs and
 their immediate follow-up reads remain strong.
 
-Workflow operations are explicit Start functions with no entity business logic in
-the transport adapter. Removing an operation has no deployment shim: a tab loaded
-before that deployment must reload before calling the removed function.
+Operations that are not entity CRUD have one path: an operation contract in
+`src/contracts/`, implemented once in `src/server/operations/<domain>.server.ts`
+with `implementOperationDomain(contract, handlers)`, calling repositories. The
+browser client, HTTP API, and MCP are adapters over that implementation and
+hold no business logic; there is no per-transport `*-browser.server.ts` module.
+Removing an operation has no deployment shim: a tab loaded before that
+deployment must reload before calling the removed function.
 
-MCP invokes `executeEntity` directly through the `entity` tool and publishes its
-machine-readable contract at `entities://catalog`. The `get_entities` capability
-uses the same generated get/list/search contracts with mutation actions excluded
-by its input schema. Workflow-shaped MCP tools remain separate. MCP, jobs, repositories, entity modules, and kernel tests must
-not import browser transport modules. Explicit workflow adapters and typed JSONL
-stream routes are the only transport seams; business behavior remains in
-workflow modules.
+The MCP surface is declared once in `apps/web/src/contracts/mcp-tools.ts`: 21
+tools, each a group of actions called as `{ action, ...fields }`, where an
+action is a contract member or an entity-kernel verb. `pnpm generate` binds
+every action to its `implementOperationDomain` handler and refuses a tool that
+mixes queries and mutations, so read-only tools stay auto-approvable. MCP
+invokes `executeEntity` through the kernel verbs of the `entity` (writes) and
+`entity_read` (reads) tools and publishes their machine-readable contract at
+`entities://catalog`. MCP, jobs, repositories, entity modules, and kernel tests must
+not import browser transport modules. Operation adapters and typed JSONL stream routes are the only transport
+seams; business behavior remains in the operation modules.
 
 ## Filters and search
 
@@ -733,11 +758,11 @@ expected — the same arithmetic the hydrated `score` uses, so `ORDER BY`
 agrees with the read value. The score is unindexed — a correlated `EXISTS`
 per check per row — which is fine at household scale. `related` roll-ups add
 an `EXISTS` against an aliased related table using that entity's own
-bindings; `list-scaffold.ts` binds the resulting filters and sort for every
+bindings; `repo/list.ts` binds the resulting filters and sort for every
 scored entity's list in one place.
 
-Durable "not available" exceptions (`set_data_exception`/
-`clear_data_exception`) live in the `DataException` table, keyed by an
+Durable "not available" exceptions (`data_exception.set`/
+`data_exception.clear`) live in the `DataException` table, keyed by an
 `Entity(id, kind)` FK, for every entity whose declaration sets `exceptions`.
 Enabling it requires fingerprint inputs for every check and an allowed-reason
 list per check (`EXCEPTION_REASONS` in `repo/data-quality/exceptions.ts`). An
@@ -748,7 +773,7 @@ exception goes with its entity when the entity is removed or merged away.
 Every logical relation declares its target, cardinality, primary named source,
 provenance path, and inverse path. A relationship may add more named sources;
 for example, `Purchase.products` combines detachable `explicit` evidence from
-`PurchaseProduct` with non-detachable `expense` evidence from acquisition
+`purchaseProduct` links with non-detachable `expense` evidence from acquisition
 Expenses. Mutable sources additionally name a typed item schema, adapter, and
 transport exposure. The compiler rejects duplicate relation/source keys,
 unresolvable mutation sources, invalid inverses, and stale generated bindings.
@@ -794,8 +819,29 @@ The physical graph is composed at read time from `ENTITY_EDGES` and
 `ENTITY_EDGE_OWNERS` (`repo/entity-edge-source.ts`): `(edgeKey, sourceKind,
 sourceId, targetKind, targetId)` with both ends live. It backs the Relations
 tab's Connections, the impact preview, the graph explorer's physical edges,
-the Problems orphan finder, and MCP `get_entity_connections`. Writes never go
+the Problems orphan finder, and MCP `entity_read.connections`. Writes never go
 through it.
+
+Two generic tables carry the relationships and identifiers that used to have a
+table each (ADR 0007):
+
+- `EntityLink(kind, fromEntityId/fromKind, toEntityId/toKind, quantity)` holds
+  every pure pairing of two entities: `wishCandidate`, `purchaseProduct`,
+  `projectTool`, `gardenEntryPlanting`, `productComponent`, `taskDependency`,
+  `projectDependency`. Link kinds are declared in
+  `packages/schemas/src/entity-links.ts` (endpoint kinds, quantity, self-link and
+  cycle rules, per-end role, label, liveness, and merge collision rule). The
+  table's CHECKs and the edge-source branch per kind derive from that
+  declaration; the write helpers are in `repo/entity-links.ts`. Every query
+  names its `kind` and filters `deletedAt`.
+- `EntityExternalId(entityId/entityKind, source, kind, externalId, url,
+isPrimary)` holds every identifier an outside system gave an entity, and
+  `ExternalSource` registers the source slugs. Kinds and the entity kinds they
+  attach to are declared in `EXTERNAL_ID_KINDS`
+  (`packages/schemas/src/external-id.ts`): product identifiers (`asin`,
+  `retailer_sku`, `gtin_14`, …), `settlement_ref` on financial transactions,
+  `page` (Notion) and `folder` (Drive). A live `(source, kind, externalId)`
+  names one entity; rows soft-delete with their entity.
 
 ## Product classification and photos
 
@@ -829,17 +875,21 @@ original bytes remain the analysis source and fallback, and the original can
 be selected explicitly.
 
 An Image's _who took this and when_ is derived, never entered directly.
-`ImageSighting` records each report that a stored Image appears in one Ledger
+`ImageSighting` — a non-entity child table of Image, with no shortcode and no
+identity row — records each report that a stored Image appears in one Ledger
 Party member's photo library or cloud asset store, from one reporting
-`Device` — unique per `(imageId, ledgerPartyId, assetKey)`, so a member's
+`Device`. It is unique per `(imageId, ledgerPartyId, assetKey)`, so a member's
 second device reporting the same synced asset updates the existing sighting
-rather than creating another one. `deriveImageCapture` reduces an image's
+rather than creating another one. Sightings are written only through
+`image.recordSightings` (and a photo-import commit's `library` block), read on
+the Image detail as `sightings`, and their audit history lives on the parent
+Image. `deriveImageCapture` reduces an image's
 live sightings, and failing those its embedded EXIF, to Image's own
 `capturedAt`, `captureLocation`, `capturePlaceName`, `captureDeviceLabel`, and
 `capturedByPartyId` fields, recording how confidently in
 `captureAttribution` (`none`, `derived`, `ambiguous` when several members'
 evidence ties, or `confirmed` once a member sets it by hand — confirmed is
-never recomputed). Every sighting create, update, or delete re-runs this
+never recomputed). Every sighting write or reporting-device delete re-runs this
 derivation for its image in the same transaction. See ADR 0005 for the full
 precedence rule.
 
@@ -851,11 +901,21 @@ precedence rule.
    if the entity's natural title can be empty, declare a storage-less
    read-only `displayName` field instead (see above) and point `titleField`
    at it rather than at a nullable name column.
-2. Add its branded id and compose its table and canonical input/output schemas
-   from the generated factories. Keep indexes, constraints, domain refinements,
-   and relationship projections explicit. A physical change still requires a
-   compatible migration; generation does not apply production DDL.
-3. Add a kernel repository adapter for the capabilities the spec declares.
+2. Add its branded id, declare its table's indexes, checks, and Drizzle
+   relations in `storage`, and compose canonical input/output schemas from
+   the generated factories. Keep domain refinements and relationship
+   projections explicit. A physical change still requires a compatible
+   migration; generation does not apply production DDL.
+3. Declare its repository with `defineRepository(entity, { get, list, … })`
+   (`apps/web/src/server/repo/repository.ts`) and point
+   `extensions.ports.repository` at the export; the generator binds it to
+   the kernel. Methods take the kernel context (`(ctx, …)`); the declared
+   actions gate which ones the kernel exposes (`capabilities.lifecycle:
+"readOnly"` exposes get/list/search), and `delete` defaults to the
+   declared `lifecycle.delete` policy plus `deleteHooks`. The kernel owns the
+   write transaction: a repository writes through `ctx.db` and never opens a
+   transaction on another handle. A declared `capabilities.resolve` needs no
+   code: `resolveEntity` serves it from `entity-kernel/resolve.ts`.
 4. Set `route.basePath` for the generic pages (`listOverride: null`
    hand-writes the list route module; detail is always generic, with
    specialized UI in detail slots); add workflow extensions where needed.
@@ -864,10 +924,12 @@ precedence rule.
 5. Run `pnpm generate`; review generated source like handwritten source.
 6. Declare physical edge semantics and operation-specific lifecycle policies,
    when the entity participates in deletion or merge. A new shortcode table
-   adds `entityIdentityFk(...)` beside its `shortcodeUnique(...)`; the identity
+   gets its identity FK and shortcode index generated; the identity
    triggers follow the roster automatically, and the production cutover for
    an existing database must backfill `Entity`. A new join or child table that
-   carries an edge column names its owner in `ENTITY_EDGE_OWNERS`.
+   carries an edge column names its owner in `ENTITY_EDGE_OWNERS`. A new
+   many-to-many pairing of two entities is a kind in `ENTITY_LINK_KINDS`, not a
+   new table.
 7. Run generated action contracts and the affected PostgreSQL contracts, plus
    UI and built-browser checks for changed presentation. Follow the repository
    validation guide for final gates.

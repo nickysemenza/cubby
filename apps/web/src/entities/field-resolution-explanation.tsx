@@ -88,7 +88,7 @@ function InEffectRow({
         <span className="break-words">Allocated across the purchase</span>
         {resolution.sourceEntity ? (
           <ExplanationEntityLink
-            entity={resolution.sourceEntity.entityType}
+            entity={resolution.sourceEntity.entityKind}
             id={resolution.sourceEntity.entityId}
           />
         ) : null}
@@ -103,7 +103,7 @@ function InEffectRow({
       </span>
       {resolution.sourceEntity ? (
         <ExplanationEntityLink
-          entity={resolution.sourceEntity.entityType}
+          entity={resolution.sourceEntity.entityKind}
           id={resolution.sourceEntity.entityId}
         />
       ) : null}
@@ -162,7 +162,7 @@ export function ResolutionExplanation({
     });
   } else if (resolution.mode === "inherit") {
     const linkedNoun = resolution.sourceEntity
-      ? nounFor(resolution.sourceEntity.entityType)
+      ? nounFor(resolution.sourceEntity.entityKind)
       : null;
     rows.push({
       label: `Stored on this ${noun}`,

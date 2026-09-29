@@ -33,20 +33,6 @@ export function stripMockFromJsonSchema(schema: JsonObject): JsonObject {
   return stripped;
 }
 
-export function requireObjectInputSchema<TInput extends z.ZodObject>(
-  toolName: string,
-  schema: TInput,
-): TInput {
-  if (!normalizeObjectSchema(schema)) {
-    throw new Error(
-      `registerMcpTool(${toolName}): inputSchema must be an object schema. ` +
-        "A union, pipe, or other non-object schema advertises the tool as taking no arguments " +
-        "and causes the MCP SDK to strip every argument before the handler runs.",
-    );
-  }
-  return schema;
-}
-
 export function sdkOutputSchema(schema: z.core.$ZodType): z.ZodType {
   // The SDK normalizer returns undefined for non-object outputs, then its
   // validator crashes while parsing structured content. This guard prevents
@@ -55,7 +41,7 @@ export function sdkOutputSchema(schema: z.core.$ZodType): z.ZodType {
   return schema instanceof z.ZodObject ? schema : z.looseObject({});
 }
 
-function safeToJsonSchema(
+export function safeToJsonSchema(
   schema: z.core.$ZodType,
   io: "input" | "output",
 ): JsonObject {

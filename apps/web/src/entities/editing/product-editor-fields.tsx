@@ -51,7 +51,7 @@ import { Description } from "~/components/ui/description";
 import { FieldError } from "~/components/ui/field";
 import { Image } from "~/components/ui/image";
 import { Spinner } from "~/components/ui/spinner";
-import { upc as upcLookup } from "~/lib/upc.functions";
+import { upc as upcLookup } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import type {
   EntityEditorMediaInput,
@@ -645,7 +645,7 @@ function ProductManualsField({
   };
   return (
     <PendingDocumentUpload
-      entityType="PRODUCT"
+      entityKind="PRODUCT"
       folder={documentFolder}
       existingDocuments={existingDocuments}
       onDocumentsChange={(documents) =>

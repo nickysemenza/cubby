@@ -5,7 +5,7 @@ import { z } from "zod";
  */
 type ParseContext = {
   /** Entity type name (e.g., "Product", "Location") */
-  entityType: string;
+  entityKind: string;
   /** Identifying information - can be a string or key-value pairs */
   identifier?: string | Record<string, string>;
 };
@@ -52,8 +52,8 @@ export function parseWithContext<TSchema extends z.ZodType>(
   if (!result.success) {
     const identifierStr = formatIdentifier(context.identifier);
     const prefix = identifierStr
-      ? `[${context.entityType} ${identifierStr}]`
-      : `[${context.entityType}]`;
+      ? `[${context.entityKind} ${identifierStr}]`
+      : `[${context.entityKind}]`;
     const issues = formatIssues(result.error.issues);
 
     throw new Error(`${prefix} Validation failed: ${issues}`);

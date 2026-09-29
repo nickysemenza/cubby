@@ -27,14 +27,17 @@ describe("presentEntitySelectOptions", () => {
   });
 
   it("keeps explicit colors and icons authoritative while appending rich options", () => {
-    const options = presentEntitySelectOptions("image", "status", [
-      { value: "FAILED", label: "Broken", color: "var(--custom)" },
+    const options = presentEntitySelectOptions("expense", "lineKind", [
+      { value: "item_line", label: "Broken", color: "var(--custom)" },
     ]);
 
     expect(options).toEqual([
-      { value: "FAILED", label: "Broken", color: "var(--custom)" },
-      { value: "PENDING", label: "Pending", color: "var(--slate)" },
-      { value: "UPLOADED", label: "Uploaded", color: "var(--positive)" },
+      { value: "item_line", label: "Broken", color: "var(--custom)" },
+      {
+        value: "auto",
+        label: "Auto-detect from name",
+        color: "var(--chart-1)",
+      },
     ]);
   });
 

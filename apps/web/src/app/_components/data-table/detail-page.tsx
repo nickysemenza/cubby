@@ -695,7 +695,7 @@ function resolveActivityDetail(
     placement: "supporting",
     content: (
       <AuditLogList
-        entityType={pageDetail.entity}
+        entityKind={pageDetail.entity}
         entityId={sourceId}
         showEntityLink={false}
       />

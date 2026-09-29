@@ -15,16 +15,18 @@ import {
   type EntityDisplayImagesQueryOptions,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { RelatedProductRow } from "~/app/_components/relatedness/related-product-row";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { entityMedia } from "~/entities/entity-media.functions";
 import { useHydratedLoading } from "~/hooks/useHydrated";
+import {
+  entityMedia,
+  recommendations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
-import { recommendations } from "~/lib/recommendations.functions";
 
 type ExpenseGroup = Extract<
   EntityRecommendationGroup,
@@ -79,18 +81,18 @@ export function EntityRecommendations({
 }: EntityRecommendationsProps) {
   const query = useQuery(
     operations.forEntity.queryOptions({
-      entityType: source.entityType,
+      entityKind: source.entityKind,
       entityId: source.entityId,
     }),
   );
   const [selected, setSelected] = useState<SelectedProposal | null>(null);
   const basisKey = query.data?.basisKey;
-  const sourceKey = `${source.entityType}:${source.entityId}`;
+  const sourceKey = `${source.entityKind}:${source.entityId}`;
   const loading = useHydratedLoading(query.isPending);
   const data = query.data;
   const dataIsCurrent =
     data !== undefined &&
-    `${data.source.entityType}:${data.source.entityId}` === sourceKey;
+    `${data.source.entityKind}:${data.source.entityId}` === sourceKey;
   const groups = useMemo(
     () =>
       dataIsCurrent
@@ -107,7 +109,7 @@ export function EntityRecommendations({
         case "product-related":
           refs.push(
             ...group.proposals.map((proposal) => ({
-              entityType: "product" as const,
+              entityKind: "product" as const,
               entityId: proposal.target.id,
             })),
           );
@@ -117,13 +119,13 @@ export function EntityRecommendations({
             ...(group.currentTarget
               ? [
                   {
-                    entityType: "project" as const,
+                    entityKind: "project" as const,
                     entityId: group.currentTarget.id,
                   },
                 ]
               : []),
             ...group.proposals.map((proposal) => ({
-              entityType: "project" as const,
+              entityKind: "project" as const,
               entityId: proposal.target.id,
             })),
           );
@@ -133,13 +135,13 @@ export function EntityRecommendations({
             ...(group.currentTarget
               ? [
                   {
-                    entityType: "location" as const,
+                    entityKind: "location" as const,
                     entityId: group.currentTarget.id,
                   },
                 ]
               : []),
             ...group.proposals.map((proposal) => ({
-              entityType: "location" as const,
+              entityKind: "location" as const,
               entityId: proposal.target.id,
             })),
           );
@@ -275,7 +277,7 @@ function RecommendationGroup({
             displayImage={
               displayImages[
                 entityDisplayImageKey({
-                  entityType: "product",
+                  entityKind: "product",
                   entityId: proposal.target.id,
                 })
               ] ?? null
@@ -476,16 +478,12 @@ function ProposalTargetLink({
 }) {
   const displayImage =
     displayImages[
-      entityDisplayImageKey({ entityType: entity, entityId: target.id })
+      entityDisplayImageKey({ entityKind: entity, entityId: target.id })
     ] ?? null;
   return entity === "project" ? (
-    <EntityInlineLink
-      entity="project"
-      data={target}
-      displayImage={displayImage}
-    />
+    <EntityRefLink entity="project" data={target} displayImage={displayImage} />
   ) : (
-    <EntityInlineLink
+    <EntityRefLink
       entity="location"
       data={target}
       displayImage={displayImage}

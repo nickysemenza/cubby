@@ -7,6 +7,7 @@ import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle"
 import { uniq } from "es-toolkit";
 import { useMemo, useState } from "react";
 
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -33,7 +34,6 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "../../entity-media/entity-display-images";
-import { EntityInlineLink } from "../../EntityInlineLink";
 import { formatAmounts } from "../../inventory/format-amount";
 import { DecompositionView } from "../decomposition-view";
 import {
@@ -134,7 +134,7 @@ export function IngredientPreviewTable({
     () =>
       ingredientsWithMatch.flatMap((item) =>
         item.match
-          ? [{ entityType: "ingredient" as const, entityId: item.match.id }]
+          ? [{ entityKind: "ingredient" as const, entityId: item.match.id }]
           : [],
       ),
     [ingredientsWithMatch],
@@ -208,7 +208,7 @@ export function IngredientPreviewTable({
                 item.match
                   ? (displayImages[
                       entityDisplayImageKey({
-                        entityType: "ingredient",
+                        entityKind: "ingredient",
                         entityId: item.match.id,
                       })
                     ] ?? null)
@@ -267,7 +267,7 @@ function IngredientRow({
               <span className="min-w-0 truncate">{item.parsed.name}</span>
             </>
           ) : isMatched && item.match ? (
-            <EntityInlineLink
+            <EntityRefLink
               displayImage={displayImage}
               entity="ingredient"
               data={{

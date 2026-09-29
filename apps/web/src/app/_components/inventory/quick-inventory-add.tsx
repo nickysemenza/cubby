@@ -1,4 +1,3 @@
-import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import { amount } from "@cubby/schemas/codec";
 import type {
   LocationShortcode,
@@ -248,21 +247,15 @@ export function QuickInventoryAdd({
       });
 
       try {
-        const inventory = await inventoryCreateMutation.mutateAsync({
+        await inventoryCreateMutation.mutateAsync({
           productId: newProduct.id,
           locationId,
           amount: values.amount,
         });
 
-        const sideEffects: MutationSideEffects = {
-          backgroundBatches: [
-            ...newProduct.sideEffects.backgroundBatches,
-            ...inventory.sideEffects.backgroundBatches,
-          ],
-        };
         toast.success(
           savedWithBackgroundWork(
-            sideEffects,
+            newProduct.sideEffects,
             `Created "${newProduct.name}" and added to inventory`,
           ),
         );
@@ -450,7 +443,7 @@ export function QuickInventoryAdd({
                   own roster, and `useImageState` already owns the create
                   form's pending-image lifecycle. */}
               <PendingImageUpload
-                entityType="PRODUCT"
+                entityKind="PRODUCT"
                 onImagesChange={imageState.handlePendingImagesChange}
               />
               <IdentifyProductButton

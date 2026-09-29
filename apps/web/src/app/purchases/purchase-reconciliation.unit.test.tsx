@@ -10,18 +10,9 @@ import {
   financialTransactionCaptureRequestForPurchase,
   rankSettlementCandidates,
 } from "./financial-settlement";
-import { purchaseReconciliationOptions } from "./purchase-options";
 import { ReconciliationStatus } from "./purchase-reconciliation";
 
 describe("purchase reconciliation statuses", () => {
-  it("offers refund-adjusted as a distinct filter cohort", () => {
-    expect(purchaseReconciliationOptions).toContainEqual({
-      value: "refund_adjusted",
-      label: "Refund-adjusted",
-      color: "var(--slate)",
-    });
-  });
-
   it("renders a posted-refund-explained difference neutrally", () => {
     render(
       <ReconciliationStatus

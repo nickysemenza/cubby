@@ -127,9 +127,9 @@ describe("entity graph cross-entity journey", () => {
     );
 
     const follow = async (
-      source: { entityType: Entity; entityId: string },
+      source: { entityKind: Entity; entityId: string },
       relationshipKey: string,
-      target: { entityType: Entity; entityId: string },
+      target: { entityKind: Entity; entityId: string },
       canonicalEdge = { source, target, relationshipKey },
     ) => {
       const graph = await getEntityGraph(ctx.db, {
@@ -141,7 +141,7 @@ describe("entity graph cross-entity journey", () => {
         expect.objectContaining({
           root: source,
           relationshipKey,
-          target: target.entityType,
+          target: target.entityKind,
           items: expect.arrayContaining([target]),
         }),
       );
@@ -152,87 +152,87 @@ describe("entity graph cross-entity journey", () => {
     };
 
     await follow(
-      { entityType: "cookbook", entityId: cookbook.output.id },
+      { entityKind: "cookbook", entityId: cookbook.output.id },
       // Declared on the cookbook for its TOC section, so the derived
       // `inverse:recipe.cookbook` branch is superseded by this key.
       "recipes",
-      { entityType: "recipe", entityId: recipe.shortcode },
+      { entityKind: "recipe", entityId: recipe.shortcode },
       {
-        source: { entityType: "recipe", entityId: recipe.shortcode },
-        target: { entityType: "cookbook", entityId: cookbook.output.id },
+        source: { entityKind: "recipe", entityId: recipe.shortcode },
+        target: { entityKind: "cookbook", entityId: cookbook.output.id },
         relationshipKey: "cookbook",
       },
     );
     await follow(
-      { entityType: "recipe", entityId: recipe.shortcode },
+      { entityKind: "recipe", entityId: recipe.shortcode },
       "ingredients",
-      { entityType: "ingredient", entityId: ingredient.id },
+      { entityKind: "ingredient", entityId: ingredient.id },
     );
     await follow(
-      { entityType: "ingredient", entityId: ingredient.id },
+      { entityKind: "ingredient", entityId: ingredient.id },
       "products",
-      { entityType: "product", entityId: product.id },
+      { entityKind: "product", entityId: product.id },
       {
-        source: { entityType: "product", entityId: product.id },
-        target: { entityType: "ingredient", entityId: ingredient.id },
+        source: { entityKind: "product", entityId: product.id },
+        target: { entityKind: "ingredient", entityId: ingredient.id },
         relationshipKey: "ingredient",
       },
     );
     // The side holding the foreign key owns the arrow: both reads share the
     // inventory → product edge, whichever entity declared its relation first.
     const fromProduct = await follow(
-      { entityType: "product", entityId: product.id },
+      { entityKind: "product", entityId: product.id },
       "inventory",
-      { entityType: "inventory", entityId: inventory.id },
+      { entityKind: "inventory", entityId: inventory.id },
       {
-        source: { entityType: "inventory", entityId: inventory.id },
-        target: { entityType: "product", entityId: product.id },
+        source: { entityKind: "inventory", entityId: inventory.id },
+        target: { entityKind: "product", entityId: product.id },
         relationshipKey: "product",
       },
     );
     const fromInventory = await follow(
-      { entityType: "inventory", entityId: inventory.id },
+      { entityKind: "inventory", entityId: inventory.id },
       "product",
-      { entityType: "product", entityId: product.id },
+      { entityKind: "product", entityId: product.id },
     );
     expect(fromProduct.edges).toHaveLength(1);
     expect(fromInventory.edges).toHaveLength(1);
     expect(fromInventory.edges[0]).toEqual(fromProduct.edges[0]);
     await follow(
-      { entityType: "inventory", entityId: inventory.id },
+      { entityKind: "inventory", entityId: inventory.id },
       "location",
-      { entityType: "location", entityId: location.id },
+      { entityKind: "location", entityId: location.id },
     );
-    await follow({ entityType: "product", entityId: product.id }, "purchases", {
-      entityType: "purchase",
+    await follow({ entityKind: "product", entityId: product.id }, "purchases", {
+      entityKind: "purchase",
       entityId: purchase.output.id,
     });
     await follow(
-      { entityType: "purchase", entityId: purchase.output.id },
+      { entityKind: "purchase", entityId: purchase.output.id },
       "expenses",
-      { entityType: "expense", entityId: expense.output.id },
+      { entityKind: "expense", entityId: expense.output.id },
       {
-        source: { entityType: "expense", entityId: expense.output.id },
-        target: { entityType: "purchase", entityId: purchase.output.id },
+        source: { entityKind: "expense", entityId: expense.output.id },
+        target: { entityKind: "purchase", entityId: purchase.output.id },
         relationshipKey: "purchase",
       },
     );
 
     const explored = await getEntityGraphExplore(ctx.db, {
-      root: { entityType: "product", entityId: product.id },
+      root: { entityKind: "product", entityId: product.id },
       depth: 2,
     });
     expect(explored.nodes).toContainEqual(
       expect.objectContaining({
-        entityType: "location",
+        entityKind: "location",
         entityId: location.id,
       }),
     );
     expect(explored.paths).toContainEqual({
       nodeRefs: [
-        { entityType: "product", entityId: product.id },
-        { entityType: "inventory", entityId: inventory.id },
-        { entityType: "location", entityId: location.id },
+        { entityKind: "product", entityId: product.id },
+        { entityKind: "inventory", entityId: inventory.id },
+        { entityKind: "location", entityId: location.id },
       ],
       edgeIds: expect.arrayContaining([expect.any(String), expect.any(String)]),
     });
@@ -263,15 +263,15 @@ describe("entity graph cross-entity journey", () => {
     );
 
     const firstParent = await getEntityGraph(ctx.db, {
-      roots: [{ entityType: "location", entityId: first.id }],
+      roots: [{ entityKind: "location", entityId: first.id }],
       relationshipKeys: ["parent"],
     });
     const secondParent = await getEntityGraph(ctx.db, {
-      roots: [{ entityType: "location", entityId: second.id }],
+      roots: [{ entityKind: "location", entityId: second.id }],
       relationshipKeys: ["parent"],
     });
     const inverseOfSecond = await getEntityGraph(ctx.db, {
-      roots: [{ entityType: "location", entityId: second.id }],
+      roots: [{ entityKind: "location", entityId: second.id }],
       relationshipKeys: ["children"],
     });
 
@@ -280,23 +280,23 @@ describe("entity graph cross-entity journey", () => {
     const inverseEdge = inverseOfSecond.edges[0];
 
     expect(firstEdge).toMatchObject({
-      source: { entityType: "location", entityId: first.id },
-      target: { entityType: "location", entityId: second.id },
+      source: { entityKind: "location", entityId: first.id },
+      target: { entityKind: "location", entityId: second.id },
       relationshipKey: "parent",
     });
     expect(secondEdge).toMatchObject({
-      source: { entityType: "location", entityId: second.id },
-      target: { entityType: "location", entityId: first.id },
+      source: { entityKind: "location", entityId: second.id },
+      target: { entityKind: "location", entityId: first.id },
       relationshipKey: "parent",
     });
     expect(firstEdge?.id).not.toBe(secondEdge?.id);
     expect(inverseOfSecond.branches).toContainEqual(
       expect.objectContaining({
-        root: { entityType: "location", entityId: second.id },
+        root: { entityKind: "location", entityId: second.id },
         relationshipKey: "children",
         items: [
           expect.objectContaining({
-            entityType: "location",
+            entityKind: "location",
             entityId: first.id,
           }),
         ],

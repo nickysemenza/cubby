@@ -47,6 +47,7 @@ import type { MappableProductExternalId } from "./external-id-types";
 import { type ProductPricing, resolveProductPricing } from "./pricing";
 import type { QuantityLedger } from "./quantity-ledger";
 import type { ProductDeepDB, ProductListDB } from "./types";
+import { unitMappingSides } from "./unit-mappings";
 
 type ProductImageRow =
   | MappableImageRecord
@@ -187,8 +188,7 @@ export const mapProductUnitMappings = (
     .filter((unitMapping) => unitMapping.deletedAt === null)
     .map((unitMapping) => ({
       id: unitMapping.id,
-      a: unitMapping.a,
-      b: unitMapping.b,
+      ...unitMappingSides(unitMapping),
       source: unitMapping.source,
       sourceMetadata: {
         type: "product" as const,
@@ -245,7 +245,7 @@ export const dbProductToTopLevelAPI = (
   const result = mapDbProductToTopLevel(productData);
 
   return parseWithContext(productTopLevelOut, result, {
-    entityType: "Product",
+    entityKind: "Product",
     identifier: { id: productData.id, name: productData.name },
   });
 };
@@ -287,7 +287,7 @@ export const dbProductToPickerItemAPI = (
   const result = mapDbProductToPickerItem(productData);
 
   return parseWithContext(productPickerItemOut, result, {
-    entityType: "Product",
+    entityKind: "Product",
     identifier: { id: productData.id, name: productData.name },
   });
 };
@@ -351,10 +351,7 @@ const mapDbLocationToProductListInventory = (
 ) => ({
   id: parseShortcodeFor("location", locationData.shortcode),
   name: locationData.name,
-  type: parseLocationType(locationData.type, {
-    id: locationData.id,
-    name: locationData.name,
-  }),
+  type: parseLocationType(locationData.type),
 });
 
 /**
@@ -375,7 +372,7 @@ export const mapProductListInventoryEntries = (
     entries.filter((entry) => isNotDeleted(entry.location)),
     (entry) => ({
       id: parseShortcodeFor("inventory", entry.shortcode),
-      amount: parseInventoryAmount(entry.amount, entry.id),
+      amount: parseInventoryAmount(entry),
       valuation: entry.valuation,
       verifiedAt: entry.verifiedAt,
       placement: entry.placement,
@@ -474,7 +471,7 @@ export const dbProductToListAPI = (
   };
 
   return parseWithContext(productListItemOut, result, {
-    entityType: "Product",
+    entityKind: "Product",
     identifier: { id: productData.id, name: productData.name },
   });
 };
@@ -506,7 +503,7 @@ export const dbProductToAPI = (
     inventoryEntry.filter((entry) => isNotDeleted(entry.location)),
     (entry) => ({
       id: parseShortcodeFor("inventory", entry.shortcode),
-      amount: parseInventoryAmount(entry.amount, entry.id),
+      amount: parseInventoryAmount(entry),
       valuation: entry.valuation,
       verifiedAt: entry.verifiedAt,
       placement: entry.placement,
@@ -517,15 +514,12 @@ export const dbProductToAPI = (
         name: entry.location.name,
         aliases: entry.location.aliases,
         notes: entry.location.notes ?? null,
-        // Null whenever the location IS a product; only a present value is
-        // validated against the enum.
-        type: parseLocationType(entry.location.type, {
-          id: entry.location.id,
-          name: entry.location.name,
-        }),
+        type: parseLocationType(entry.location.type),
         product: mapLocationIdentityProduct(entry.location),
         lastBulkInventory: entry.location.lastBulkInventory,
-        aiDescription: entry.location.aiDescription,
+        // Like `valuation` below: a lightweight identity reference, not the
+        // place callers read a location's AI description from.
+        aiDescription: null,
         images: mapImages(entry.location.images),
         displayImage: entry.location.displayImage ?? null,
         // Valuation is a whole-tree rollup; this movement-timeline embed is a
@@ -586,7 +580,7 @@ export const dbProductToAPI = (
     servingAsLocations: mapRelation(productData.locations ?? [], (loc) => ({
       id: parseShortcodeFor("location", loc.shortcode),
       name: loc.name,
-      type: parseLocationType(loc.type, { id: loc.id, name: loc.name }),
+      type: parseLocationType(loc.type),
       // This row carries no image columns — the select is scalar-only on
       // purpose — so the hydrated thumbnail is the only visual it has.
       displayImage: loc.displayImage ?? null,
@@ -614,7 +608,7 @@ export const dbProductToAPI = (
     productWithIngredientAndInventoryAndMappingsOut,
     result,
     {
-      entityType: "Product",
+      entityKind: "Product",
       identifier: { id: productData.id, name: productData.name },
     },
   );

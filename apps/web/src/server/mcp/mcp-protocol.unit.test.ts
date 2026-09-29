@@ -17,16 +17,41 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { projectEntityResult } from "~/contracts/mcp-projections";
+import { MCP_TOOLS } from "~/contracts/mcp-tools";
 import { mock } from "~/lib/test/mock-schema";
 import {
   ENTITY_KERNEL_ENTITIES,
   entityMcpReadCommandSchema,
 } from "~/server/entity-kernel/contracts";
 
-import { callMcpTool } from "./mcp-test-utils";
+import type { McpEntityExecutor } from "./kernel-actions";
+import { bindingsWithKernelExecutor, callMcpTool } from "./mcp-test-utils";
 import { listMcpResourceCatalog, listMcpToolCatalog } from "./server";
-import { type ExecuteEntity, registerEntityTools } from "./tools/entity.tools";
-import { projectEntityResult } from "./tools/response-projection";
+import {
+  type McpToolRegistrationRuntime,
+  registerMcpTools,
+} from "./tools/tool-registration";
+
+type ExecuteEntity = McpEntityExecutor;
+
+/**
+ * The production tools over a synthetic kernel executor: these tests exercise
+ * the tool boundary (dispatch, projection, batches), not the repositories.
+ */
+function kernelServer(
+  execute: ExecuteEntity,
+  runtime?: McpToolRegistrationRuntime,
+) {
+  const server = new McpServer({ name: "test", version: "1.0.0" });
+  registerMcpTools(
+    server,
+    bindingsWithKernelExecutor(execute),
+    MCP_TOOLS,
+    runtime ?? { markCalendarDirty: vi.fn() },
+  );
+  return server;
+}
 
 describe("MCP protocol smoke", () => {
   it("publishes command and read-only entity capabilities with a discoverable catalog", async () => {
@@ -37,33 +62,35 @@ describe("MCP protocol smoke", () => {
     const names = new Set(tools.map((tool) => tool.name));
     const entityInput = z
       .object({
-        properties: z.object({ command: z.json().optional() }).optional(),
+        properties: z.object({ action: z.json().optional() }).optional(),
       })
       .parse(tools.find((tool) => tool.name === "entity")?.inputSchema);
 
     expect(names).toContain("entity");
-    expect(names).toContain("get_entities");
+    expect(names).toContain("entity_read");
     expect(
-      tools.find((tool) => tool.name === "get_entities")?.annotations
+      tools.find((tool) => tool.name === "entity_read")?.annotations
         ?.readOnlyHint,
     ).toBe(true);
     expect(resources.map((resource) => resource.uri)).toContain(
       "entities://catalog",
     );
-    expect(entityInput.properties?.command).toBeDefined();
+    expect(entityInput.properties?.action).toBeDefined();
     for (const entity of ENTITY_KERNEL_ENTITIES) {
       for (const operation of ["list", "get", "create", "update"] as const) {
         expect(names).not.toContain(mcpToolName(entity, operation));
       }
     }
-    expect(names).toContain("move_inventory_entries");
-    expect(names).not.toContain("start_planting");
-    expect(names).not.toContain("move_planting");
-    expect(names).not.toContain("finish_planting");
-    expect(names).not.toContain("delete_entity");
-    expect(names).not.toContain("attach_entity");
-    expect(names).not.toContain("detach_entity");
-    expect(names).not.toContain("merge_entity");
+    for (const retired of [
+      "get_entities",
+      "entity_batch",
+      "move_inventory_entries",
+      "delete_entity",
+      "attach_entity",
+      "detach_entity",
+      "merge_entity",
+    ])
+      expect(names).not.toContain(retired);
   });
 
   it.each([
@@ -87,8 +114,7 @@ describe("MCP protocol smoke", () => {
   });
 
   it("dispatches entity commands through the explicit kernel capability", async () => {
-    const server = new McpServer({ name: "test", version: "1.0.0" });
-    const runEntity: ExecuteEntity = vi.fn(async (_context, command) => {
+    const runEntity = vi.fn<ExecuteEntity>(async (_context, command) => {
       expect(command).toMatchObject({ action: "list", entity: "expense" });
       return {
         action: "list" as const,
@@ -98,7 +124,7 @@ describe("MCP protocol smoke", () => {
       };
     });
     const recordDatabaseWrite = vi.fn(async () => {});
-    registerEntityTools(server, runEntity, {
+    const server = kernelServer(runEntity, {
       markCalendarDirty: vi.fn(),
       recordDatabaseWrite,
     });
@@ -108,7 +134,6 @@ describe("MCP protocol smoke", () => {
     // is exercised, not a database-backed operation.
     const entityKernel = {
       db: null,
-      readDb: null,
       actorContext: null,
       usdaClient: null,
       upcLookupClient: null,
@@ -117,8 +142,8 @@ describe("MCP protocol smoke", () => {
 
     const result = await callMcpTool(
       server,
-      "entity",
-      { command: { action: "list", entity: "expense" } },
+      "entity_read",
+      { action: "list", entity: "expense" },
       {},
       { entityKernel },
     );
@@ -207,6 +232,16 @@ describe("MCP protocol smoke", () => {
     });
   });
 
+  const nullKernel = {
+    entityKernel: {
+      db: null,
+      actorContext: null,
+      usdaClient: null,
+      upcLookupClient: null,
+      services: null,
+    },
+  };
+
   it("defaults entity reads to identity summaries and keeps compact product ids", async () => {
     const product = mock(productWithFoodOut, {
       overrides: {
@@ -235,24 +270,13 @@ describe("MCP protocol smoke", () => {
         previousShortcodes: [],
       },
     });
-    const server = new McpServer({ name: "test", version: "1.0.0" });
-    registerEntityTools(server, runEntity);
 
     const result = await callMcpTool(
-      server,
-      "get_entities",
-      { command: { action: "get", entity: "product", id: product.id } },
+      kernelServer(runEntity),
+      "entity_read",
+      { action: "get", entity: "product", id: product.id },
       {},
-      {
-        entityKernel: {
-          db: null,
-          readDb: null,
-          actorContext: null,
-          usdaClient: null,
-          upcLookupClient: null,
-          services: null,
-        },
-      },
+      nullKernel,
     );
 
     expect(result.isError).not.toBe(true);
@@ -289,41 +313,25 @@ describe("MCP protocol smoke", () => {
         previousShortcodes: [],
       },
     });
-    const summaryServer = new McpServer({ name: "test", version: "1.0.0" });
-    const fullServer = new McpServer({ name: "test", version: "1.0.0" });
-    registerEntityTools(summaryServer, runEntity);
-    registerEntityTools(fullServer, runEntity);
-    const extra = {
-      entityKernel: {
-        db: null,
-        readDb: null,
-        actorContext: null,
-        usdaClient: null,
-        upcLookupClient: null,
-        services: null,
-      },
-    };
     const [summary, full] = await Promise.all([
       callMcpTool(
-        summaryServer,
-        "get_entities",
-        { command: { action: "get", entity: "product", id: product.id } },
+        kernelServer(runEntity),
+        "entity_read",
+        { action: "get", entity: "product", id: product.id },
         {},
-        extra,
+        nullKernel,
       ),
       callMcpTool(
-        fullServer,
-        "get_entities",
+        kernelServer(runEntity),
+        "entity_read",
         {
-          command: {
-            action: "get",
-            entity: "product",
-            id: product.id,
-            resultDetail: "full",
-          },
+          action: "get",
+          entity: "product",
+          id: product.id,
+          resultDetail: "full",
         },
         {},
-        extra,
+        nullKernel,
       ),
     ]);
     const summaryJson = JSON.stringify(summary.structuredContent);
@@ -360,24 +368,13 @@ describe("MCP protocol smoke", () => {
       items: [{ ...meal, displayImages: [] }],
       meta: { pageIndex: 0, pageSize: 10, totalCount: 1 },
     });
-    const server = new McpServer({ name: "test", version: "1.0.0" });
-    registerEntityTools(server, runEntity);
 
     const result = await callMcpTool(
-      server,
-      "entity",
-      { command: { action: "list", entity: "meal", resultDetail: "full" } },
+      kernelServer(runEntity),
+      "entity_read",
+      { action: "list", entity: "meal", resultDetail: "full" },
       {},
-      {
-        entityKernel: {
-          db: null,
-          readDb: null,
-          actorContext: null,
-          usdaClient: null,
-          upcLookupClient: null,
-          services: null,
-        },
-      },
+      nullKernel,
     );
     const serialized = JSON.stringify(result.structuredContent);
 
@@ -397,17 +394,6 @@ describe("MCP protocol smoke", () => {
       ],
     });
   });
-
-  const nullKernel = {
-    entityKernel: {
-      db: null,
-      readDb: null,
-      actorContext: null,
-      usdaClient: null,
-      upcLookupClient: null,
-      services: null,
-    },
-  };
 
   it("drops the full USDA nutrient table from product and ingredient reads", async () => {
     const food = mock(foodSummary);
@@ -461,33 +447,28 @@ describe("MCP protocol smoke", () => {
               previousShortcodes: [],
             },
           };
-    const server = new McpServer({ name: "test", version: "1.0.0" });
-    registerEntityTools(server, runEntity);
+    const server = kernelServer(runEntity);
 
     const productRead = await callMcpTool(
       server,
-      "get_entities",
+      "entity_read",
       {
-        command: {
-          action: "get",
-          entity: "product",
-          id: product.id,
-          resultDetail: "full",
-        },
+        action: "get",
+        entity: "product",
+        id: product.id,
+        resultDetail: "full",
       },
       {},
       nullKernel,
     );
     const ingredientRead = await callMcpTool(
-      server,
-      "get_entities",
+      kernelServer(runEntity),
+      "entity_read",
       {
-        command: {
-          action: "get",
-          entity: "ingredient",
-          id: ingredient.id,
-          resultDetail: "full",
-        },
+        action: "get",
+        entity: "ingredient",
+        id: ingredient.id,
+        resultDetail: "full",
       },
       {},
       nullKernel,
@@ -504,7 +485,7 @@ describe("MCP protocol smoke", () => {
     expect(ingredientJson).toContain(recipe.id);
   });
 
-  it("runs entity_batch items independently and reports each outcome", async () => {
+  it("runs entity.commands independently and reports each outcome", async () => {
     const created = mock(productTopLevelOut, {
       overrides: { externalIds: [] },
     });
@@ -516,21 +497,21 @@ describe("MCP protocol smoke", () => {
         action: "create",
         entity: "product",
         item: { ...created, name: command.data.name },
-        sideEffects: { backgroundBatches: [] },
+        sideEffects: {},
       };
     });
-    const server = new McpServer({ name: "test", version: "1.0.0" });
     const recordDatabaseWrite = vi.fn(async () => {});
-    registerEntityTools(server, runEntity, {
+    const server = kernelServer(runEntity, {
       markCalendarDirty: vi.fn(),
       recordDatabaseWrite,
     });
 
     const result = await callMcpTool(
       server,
-      "entity_batch",
+      "entity",
       {
-        items: [
+        action: "commands",
+        commands: [
           { action: "create", entity: "product", data: { name: "first" } },
           { action: "create", entity: "product", data: { name: "boom" } },
           { action: "create", entity: "product", data: { name: "third" } },
@@ -551,6 +532,6 @@ describe("MCP protocol smoke", () => {
       ],
     });
     expect(recordDatabaseWrite).toHaveBeenCalledOnce();
-    expect(recordDatabaseWrite).toHaveBeenCalledWith("mcp.entity_batch");
+    expect(recordDatabaseWrite).toHaveBeenCalledWith("mcp.entity.commands");
   });
 });

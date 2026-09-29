@@ -18,6 +18,7 @@ import { generatedMcpEntityKernelContractCases } from "~/server/generated/entity
 import {
   ENTITY_KERNEL_ENTITIES,
   entityCommandSchema,
+  entityResolveCommandSchema,
   entityDeleteResultSchema,
   entityMcpCommandSchema,
   entityMcpReadCommandSchema,
@@ -94,9 +95,9 @@ describe("entity kernel bindings", () => {
       [...ENTITY_KERNEL_ENTITIES].sort(),
     );
     expect(Object.keys(ENTITY_SCHEMA_BINDINGS).sort()).toEqual(
-      [...ENTITY_KERNEL_ENTITIES, "cookbook"].sort(),
+      [...ENTITY_KERNEL_ENTITIES].sort(),
     );
-    // Cookbook's existing read contract has no generic mutation repository.
+    // Cookbook is a read-only kernel entity: no mutation command exists.
     const cookbook = ENTITY_SCHEMA_BINDINGS.cookbook;
     expect(cookbook.createInput).toBeNull();
     expect(cookbook.updateInput).toBeNull();
@@ -131,7 +132,7 @@ describe("entity kernel bindings", () => {
 
   it("keeps merge capability and incoming-edge policy inseparable", () => {
     const mergeable = Object.values(ENTITY_KERNEL_BINDINGS).filter(
-      (binding) => binding.merge,
+      (binding) => binding.mergeOperation,
     );
     expect(mergeable.map((binding) => binding.entity).sort()).toEqual([
       "ingredient",
@@ -153,7 +154,7 @@ describe("entity kernel bindings", () => {
               binding.entity === "product" ? { externalIds: [] } : undefined,
           }),
           mergeSummary: { merged: 1 },
-          sideEffects: { backgroundBatches: [] },
+          sideEffects: {},
         }).success,
       ).toBe(true);
     }
@@ -174,12 +175,12 @@ describe("entity kernel bindings", () => {
       deletedReferences: [{ entity: "project" as const, id: "PRJ-4K7M" }],
       affectedEdges: [
         {
-          edge: "EntityAttachment.subjectEntityId",
+          edge: "EntityAttachment.entityId",
           effect: "soft-delete" as const,
           changed: 2,
         },
       ],
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     };
     expect(entityDeleteResultSchema.safeParse(result).success).toBe(true);
     expect(
@@ -200,7 +201,9 @@ describe("entity kernel bindings", () => {
       expect(Boolean(binding.repository.update)).toBe(
         includesAction(actions, "update"),
       );
-      expect(Boolean(binding.merge)).toBe(includesAction(actions, "merge"));
+      expect(Boolean(binding.mergeOperation)).toBe(
+        includesAction(actions, "merge"),
+      );
       const id = `${SHORTCODE_PREFIX[entity]}ABCD`;
       for (const action of actions) {
         let actionInput = {};
@@ -232,8 +235,15 @@ describe("entity kernel bindings", () => {
           actionInput = { query: "needle" };
         } else if (action === "merge") {
           actionInput = { data: {} };
+        } else if (action === "resolve") {
+          actionInput = { names: ["needle"] };
         }
-        const parsed = entityCommandSchema.safeParse({
+        // `resolve` is its own kernel entry point (`resolveEntity`).
+        const parsed = (
+          action === "resolve"
+            ? entityResolveCommandSchema
+            : entityCommandSchema
+        ).safeParse({
           entity,
           action,
           ...actionInput,

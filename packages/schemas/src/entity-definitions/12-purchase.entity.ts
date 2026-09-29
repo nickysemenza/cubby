@@ -376,7 +376,27 @@ export default defineEntity({
       {
         key: "reconciliation",
         kind: "json",
-        display: { list: true },
+        display: {
+          list: true,
+          valueOptions: [
+            { value: "match", label: "Reconciles", color: "var(--positive)" },
+            {
+              value: "refund_adjusted",
+              label: "Refund-adjusted",
+              color: "var(--slate)",
+            },
+            {
+              value: "mismatch",
+              label: "Needs review",
+              color: "var(--warning)",
+            },
+            {
+              value: "unknown",
+              label: "No stated total",
+              color: "var(--slate)",
+            },
+          ],
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
@@ -402,7 +422,20 @@ export default defineEntity({
         // Settlement evidence only; never participates in spend rollups.
         key: "financialReconciliation",
         kind: "json",
-        display: { list: true },
+        display: {
+          list: true,
+          // Roster for `financialReconciliation.status`.
+          valueOptions: [
+            { value: "unknown", label: "No evidence", color: "var(--slate)" },
+            { value: "pending", label: "Pending", color: "var(--warning)" },
+            { value: "match", label: "Settled", color: "var(--positive)" },
+            {
+              value: "mismatch",
+              label: "Mismatch",
+              color: "var(--destructive)",
+            },
+          ],
+        },
         provenance: {
           kind: "derived",
           sources: [
@@ -680,6 +713,39 @@ export default defineEntity({
     output: { module: "@cubby/schemas/purchase", export: "purchaseOut" },
     list: { module: "@cubby/schemas/purchase", export: "purchaseListItemOut" },
   },
+  // One vendor order, receipt, or deliberately separate purchase event — the
+  // home for vendor-side truth (literal stated total, documents, identity).
+  // No money is summed from this table: spend is `SUM(Expense.cost)`.
+  storage: {
+    columns: [{ key: "runId", kind: "identifier", reference: "run" }],
+    indexes: [
+      // One order = one purchase. PARTIAL on `orderId IS NOT NULL`, which is
+      // what lets the many `(vendorId, null)` purchase events coexist. This
+      // index is also what makes `findOrCreatePurchase` unambiguous (no
+      // "which purchase?" branch on the import hot path) and why no
+      // `splitPurchase` operation is needed at all.
+      {
+        on: ["vendorId", "orderId"],
+        unique: true,
+        where: "{orderId} IS NOT NULL AND {deletedAt} IS NULL",
+      },
+      { on: ["date"] },
+      { trigram: "orderId" },
+      { trigram: "displayLabel" },
+    ],
+    checks: [
+      {
+        name: "Purchase_statedTotal_whole_cent_check",
+        sql: "{statedTotal} IS NULL OR abs({statedTotal} * 100 - round({statedTotal} * 100)) < 0.0000001",
+      },
+    ],
+    relations: {
+      vendor: "vendorId",
+      expenses: { many: "expense" },
+      images: { many: "entityAttachment" },
+      settlementAllocations: { many: "financialTransactionAllocation" },
+    },
+  },
   filters: {
     audit: true,
     schema: {
@@ -751,7 +817,7 @@ export default defineEntity({
           { value: "1y", label: "Last 12 months" },
         ],
         expandRef: {
-          module: "~/app/expenses/expense-options",
+          module: "~/entities/filter-behavior",
           export: "resolveDateRange",
         },
       },
@@ -786,15 +852,27 @@ export default defineEntity({
         placeholder: "Filter by expense total...",
         deriveSchema: true,
         options: [
-          { value: "gte500", label: "$500 and up" },
-          { value: "gte200", label: "$200 and up" },
-          { value: "gte100", label: "$100 and up" },
-          { value: "nonpositive", label: "Non-positive (≤ $0)" },
+          {
+            value: "gte500",
+            label: "$500 and up",
+            expand: { expenseTotalMin: 500 },
+          },
+          {
+            value: "gte200",
+            label: "$200 and up",
+            expand: { expenseTotalMin: 200 },
+          },
+          {
+            value: "gte100",
+            label: "$100 and up",
+            expand: { expenseTotalMin: 100 },
+          },
+          {
+            value: "nonpositive",
+            label: "Non-positive (≤ $0)",
+            expand: { expenseTotalMax: 0 },
+          },
         ],
-        expandRef: {
-          module: "~/app/purchases/purchase-options",
-          export: "resolvePurchaseExpenseTotalFilter",
-        },
       },
       {
         columnId: "reconciliation",
@@ -963,14 +1041,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "EntityAttachment.subjectEntityId", direction: "incoming" },
+          { edge: "EntityAttachment.entityId", direction: "incoming" },
           { edge: "EntityAttachment.imageId", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
           { edge: "EntityAttachment.imageId", direction: "incoming" },
-          { edge: "EntityAttachment.subjectEntityId", direction: "outgoing" },
+          { edge: "EntityAttachment.entityId", direction: "outgoing" },
         ],
       },
     },
@@ -1044,14 +1122,20 @@ export default defineEntity({
           provenance: {
             kind: "local-path",
             steps: [
-              { edge: "PurchaseProduct.purchaseId", direction: "incoming" },
-              { edge: "PurchaseProduct.productId", direction: "outgoing" },
+              {
+                edge: "EntityLink[purchaseProduct].from",
+                direction: "incoming",
+              },
+              { edge: "EntityLink[purchaseProduct].to", direction: "outgoing" },
             ],
           },
           inverse: {
             steps: [
-              { edge: "PurchaseProduct.productId", direction: "incoming" },
-              { edge: "PurchaseProduct.purchaseId", direction: "outgoing" },
+              { edge: "EntityLink[purchaseProduct].to", direction: "incoming" },
+              {
+                edge: "EntityLink[purchaseProduct].from",
+                direction: "outgoing",
+              },
             ],
           },
         },
@@ -1227,8 +1311,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/purchase.entity-adapter",
-        export: "purchaseEntityAdapter",
+        module: "~/server/repo/purchase.repository",
+        export: "purchaseRepository",
       },
       search: "document",
     },

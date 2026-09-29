@@ -109,7 +109,7 @@ const attentionKey = (
 const attentionItem = <T extends ProjectAttentionType>(
   row: ProjectAttentionDescribable & { type: T } & {
     severity: ProjectAttentionItem["severity"];
-    entityType: ProjectAttentionItem["entityType"];
+    entityKind: ProjectAttentionItem["entityKind"];
     entityId: string;
     date: string | null;
     amount: number | null;
@@ -123,7 +123,7 @@ const attentionItem = <T extends ProjectAttentionType>(
     severity: row.severity,
     name: row.name,
     description: describeAttentionItem(row),
-    entityType: row.entityType,
+    entityKind: row.entityKind,
     entityId: row.entityId,
     date: row.date,
     amount: row.amount,
@@ -273,7 +273,7 @@ export async function computeAttentionItems(
           type: "overdue_task",
           severity: "critical",
           name: row.name,
-          entityType: "task",
+          entityKind: "task",
           entityId: row.shortcode,
           date: effectiveDue,
           amount: null,
@@ -362,7 +362,7 @@ export async function computeAttentionItems(
           type: "stalled_project",
           severity: "warning",
           name: row.name,
-          entityType: "project",
+          entityKind: "project",
           entityId: row.shortcode,
           date: lastActivityDate,
           amount: null,
@@ -399,7 +399,7 @@ export async function computeAttentionItems(
           type: "missing_budget",
           severity: "info",
           name: row.name,
-          entityType: "project",
+          entityKind: "project",
           entityId: row.shortcode,
           date: null,
           amount: spend,
@@ -427,7 +427,7 @@ export async function computeAttentionItems(
           type: "past_due_planned_expense",
           severity: "warning",
           name: row.name,
-          entityType: "expense",
+          entityKind: "expense",
           entityId: row.shortcode,
           date: plannedFor,
           amount: row.cost,
@@ -452,7 +452,7 @@ export async function computeAttentionItems(
         type: "unclassified_expense",
         severity: "info",
         name: row.name,
-        entityType: "expense",
+        entityKind: "expense",
         entityId: row.shortcode,
         date: row.date,
         amount: null,
@@ -509,7 +509,7 @@ export async function computeAttentionItems(
           type: "blocked_work",
           severity: "warning",
           name: row.name,
-          entityType: "project",
+          entityKind: "project",
           entityId: row.shortcode,
           date: null,
           amount: null,
@@ -545,7 +545,7 @@ export async function computeAttentionItems(
             type: "date_window_drift",
             severity: "info",
             name: row.name,
-            entityType: "project",
+            entityKind: "project",
             entityId: row.shortcode,
             date: window.derivedStart,
             amount: null,
@@ -573,7 +573,7 @@ export async function computeAttentionItems(
             type: "date_window_drift",
             severity: "info",
             name: row.name,
-            entityType: "project",
+            entityKind: "project",
             entityId: row.shortcode,
             date: window.derivedEnd,
             amount: null,

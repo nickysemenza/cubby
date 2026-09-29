@@ -1,8 +1,8 @@
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
-import { formatDistanceToNow } from "date-fns";
 import type { ReactNode } from "react";
 
 import { Row } from "~/components/layout";
+import { formatRelative } from "~/lib/date-format";
 
 /** `by {manufacturer}` — the standard product-card subtitle. */
 export function byManufacturer(manufacturer: string): string {
@@ -19,7 +19,7 @@ export function createdAgoDetail(createdAt: Date | string | number): ReactNode {
       className="text-sm text-muted-foreground"
     >
       <CalendarIcon className="size-3" />
-      Created {formatDistanceToNow(createdAt)} ago
+      Created {formatRelative(createdAt)}
     </Row>
   );
 }

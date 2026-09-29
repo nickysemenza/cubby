@@ -14,8 +14,8 @@
  * The branching itself is pure and lives in `scan-plan.ts`.
  */
 
-import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
+import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
 import type {
   ResolveScanStraysInput,
   ResolveScanStraysOut,

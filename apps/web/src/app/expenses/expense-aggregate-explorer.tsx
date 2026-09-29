@@ -29,6 +29,7 @@ import { CrossTabTable } from "~/components/matrix/cross-tab-table";
 import { Button } from "~/components/ui/button";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Switch } from "~/components/ui/switch";
+import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyText } from "~/lib/clipboard";
 import { cn, formatCount, formatCurrency, formatPercent } from "~/lib/utils";
 
@@ -45,7 +46,6 @@ import {
   expenseAnalyzeCsv,
   expenseAnalyzeCsvFilename,
 } from "./expense-analyze-csv";
-import { expense } from "./expense.functions";
 
 const METRICS: readonly { value: ExpenseAnalyzeMetric; label: string }[] = [
   { value: "net", label: "Net" },

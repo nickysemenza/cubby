@@ -32,41 +32,51 @@ export const inventoryContract = defineContract("inventory", {
   bulkAdd: mutation({
     input: inventoryBulkAddPayload,
     output: inventoryBulkAddOut,
+    invalidates: ["inventory"],
   }),
   bulkDiscard: mutation({
     input: inventoryBulkDiscardPayload,
     output: inventoryBulkDiscardOut,
+    invalidates: ["expense"],
   }),
   bulkMove: mutation({
     input: bulkMovePayload,
     output: inventoryWithLocationAndProductListAndSideEffectsOut,
+    invalidates: ["inventory"],
   }),
   moveEntries: mutation({
     native: "Accept inventory placement recommendation",
     input: moveInventoryEntriesPayload,
     output: inventoryWithLocationAndProductListAndSideEffectsOut,
+    invalidates: ["inventory"],
   }),
   reconcileSession: mutation({
     native: "Audit reconcile",
     input: reconcileSessionPayload,
     output: inventoryWithLocationAndProductListAndSideEffectsOut,
+    invalidates: ["inventory"],
   }),
   scanAtLocation: mutation({
     native: "Capture",
     input: scanAtLocationInput,
     output: scanAtLocationOut,
+    invalidates: ["inventory"],
   }),
   resolveScanStrays: mutation({
     native: "Strays sheet",
     input: resolveScanStraysInput,
     output: resolveScanStraysOut,
+    invalidates: ["inventory"],
   }),
+  // Interactive inventory work and integrity/repair diagnostics.
   findDuplicates: query({
+    readPolicy: "strong",
     native: "Audit duplicate badge",
     input: inventoryFindDuplicatesInput,
     output: inventoryDuplicateUniqueProductsOut,
   }),
   getByLocationIds: query({
+    readPolicy: "strong",
     native: "Audit bin rows",
     input: inventoryLocationIdsInput,
     output: inventoryWithLocationAndProductListOut,
@@ -80,10 +90,12 @@ export const inventoryContract = defineContract("inventory", {
     native: "Set inventory owner",
     input: setInventoryOwnershipInput,
     output: inventoryOwnershipMutationOut,
+    invalidates: ["inventory"],
   }),
   confirmOwnership: mutation({
     native: "Confirm inherited inventory owner",
     input: confirmInventoryOwnershipInput,
     output: inventoryOwnershipMutationOut,
+    invalidates: ["inventory"],
   }),
 });

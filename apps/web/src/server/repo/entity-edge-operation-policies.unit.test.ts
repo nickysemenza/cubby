@@ -78,16 +78,16 @@ describe("product retaining edges", () => {
     // along with every recipe it imported.
     "Cookbook.productId",
     "Expense.productId",
-    "RunTarget.productId",
+    "RunTarget.entityId",
     "InventoryEntry.productId",
     "Location.productId",
     "MealFoodEntry.productId",
     "Planting.sourceProductId",
-    "ProductComponent.componentProductId",
-    "ProjectToolUsage.productId",
-    "PurchaseProduct.productId",
+    "EntityLink[productComponent].to",
+    "EntityLink[projectTool].to",
+    "EntityLink[purchaseProduct].to",
     "Task.subjectProductId",
-    "WishCandidate.productId",
+    "EntityLink[wishCandidate].to",
     // A device's linked hardware. Retaining by role (a device is real
     // evidence the product still matters), but — unlike every other entry
     // here — NOT blocking: it's the first retaining edge the policy
@@ -147,8 +147,8 @@ describe("product retaining edges", () => {
  * `ENTITY_LIFECYCLE_REGISTRY` is mostly derived, not hand-assembled:
  * `entity-lifecycle-registry.ts` builds one entry per
  * `generatedEntityKernelEntities` member straight off the compiled
- * `ENTITY_KERNEL_BINDINGS`, and hand-adds exactly one more (`cookbook`
- * delete, the sole workflow-owned lifecycle operation outside the kernel).
+ * `ENTITY_KERNEL_BINDINGS` (a read-only entity's binding still carries the
+ * policy its workflow deletes under: cookbook).
  * Nothing forces a new `entityManifest` lifecycle claim to get a matching
  * kernel binding, though, so this is the runtime guard for that: every entity
  * whose `lifecycle.delete` is non-null must have a `"delete"` entry here (and

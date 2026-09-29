@@ -9,8 +9,8 @@ import {
 import { placeGraphMap } from "./graph-map-layout";
 import { graphBranchCount, projectGraphMap } from "./graph-map-state";
 
-const root = { entityType: "vendor", entityId: "VEN-2345" } as const;
-const child = { entityType: "purchase", entityId: "PUR-2345" } as const;
+const root = { entityKind: "vendor", entityId: "VEN-2345" } as const;
+const child = { entityKind: "purchase", entityId: "PUR-2345" } as const;
 const edge = {
   id: "purchase-vendor",
   source: child,

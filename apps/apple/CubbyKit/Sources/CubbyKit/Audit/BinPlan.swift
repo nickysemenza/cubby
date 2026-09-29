@@ -56,7 +56,7 @@ public enum BinPlan {
         }
         return .adopt(
             AdoptableBin(
-                id: target.id, name: target.name, type: target._type?.rawValue, currentParentName: parent.name
+                id: target.id, name: target.name, type: target._type.rawValue, currentParentName: parent.name
             ))
     }
 }

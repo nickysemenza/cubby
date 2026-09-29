@@ -21,8 +21,11 @@ import {
   ledgerParty,
   user,
 } from "~/server/db/schema";
-import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
-import { markImageUploadedWorkflow } from "~/server/workflows/image.server";
+import { markImageUploadedWorkflow } from "~/server/operations/image.server";
+import {
+  makeCookbookExtraction,
+  insertEntityAttachments,
+} from "~/server/repo/repo.fixtures";
 
 import { deleteCookbook, upsertCookbook } from "./cookbook";
 import {
@@ -106,7 +109,8 @@ const mkRunTargetRow = (
 ) =>
   insertAndReturn(db, runTarget, {
     runId: values.runId,
-    imageId: parseEntityId("image", values.imageId),
+    entityKind: "image",
+    entityId: parseEntityId("image", values.imageId),
     position: values.position,
     state: values.state ?? "pending",
     targetFingerprint: uniqRunLabel("target-fingerprint"),
@@ -292,7 +296,7 @@ describe("image repository", () => {
         await dbc
           .select()
           .from(entityAttachment)
-          .where(eq(entityAttachment.subjectEntityId, projectId))
+          .where(eq(entityAttachment.entityId, projectId))
           .orderBy(asc(entityAttachment.sortOrder))
       ).map(({ imageId: id, sortOrder }) => ({ id, sortOrder })),
     ).toEqual([
@@ -496,14 +500,14 @@ describe("image repository", () => {
       },
       ctx.actor,
     );
-    await getDb(ctx.db).insert(entityAttachment).values({
-      subjectEntityId: cookbookId,
+    await insertEntityAttachments(ctx.db, {
+      entityId: cookbookId,
       role: "cover",
       imageId: cover.id,
     });
     const vendorId = await findOrCreateVendor(ctx.db, "FK Clear Vendor");
-    await getDb(ctx.db).insert(entityAttachment).values({
-      subjectEntityId: vendorId,
+    await insertEntityAttachments(ctx.db, {
+      entityId: vendorId,
       role: "logo",
       imageId: logo.id,
     });
@@ -520,9 +524,7 @@ describe("image repository", () => {
       await getDb(ctx.db)
         .select({ id: entityAttachment.id })
         .from(entityAttachment)
-        .where(
-          inArray(entityAttachment.subjectEntityId, [cookbookId, vendorId]),
-        ),
+        .where(inArray(entityAttachment.entityId, [cookbookId, vendorId])),
     ).toEqual([]);
     expect(
       await getDb(ctx.db).query.cookbook.findFirst({
@@ -751,8 +753,8 @@ describe("image repository — purchase (charge) documents", () => {
       const projectA = await makeProject("Detach Shared A");
       const projectB = await makeProject("Detach Shared B");
       const attached = await attachToProject(projectA, "shared.jpg");
-      await insertAndReturn(ctx.db, entityAttachment, {
-        subjectEntityId: projectB,
+      await insertEntityAttachments(ctx.db, {
+        entityId: projectB,
         imageId: attached.id,
       });
 
@@ -783,14 +785,11 @@ describe("image repository — purchase (charge) documents", () => {
       const projectA = await makeProject("Detach Tombstone A");
       const projectB = await makeProject("Detach Tombstone B");
       const attached = await attachToProject(projectA, "tombstone.jpg");
-      const [tombstoned] = await getDb(ctx.db)
-        .insert(entityAttachment)
-        .values({
-          subjectEntityId: projectB,
-          imageId: attached.id,
-          deletedAt: new Date(),
-        })
-        .returning();
+      const [tombstoned] = await insertEntityAttachments(ctx.db, {
+        entityId: projectB,
+        imageId: attached.id,
+        deletedAt: new Date(),
+      });
 
       const result = await withTransaction(ctx.db, (tx) =>
         detachImagesFromEntity(tx, { entity: "project", id: projectA }, [
@@ -869,8 +868,8 @@ describe("image repository — purchase (charge) documents", () => {
         },
         ctx.actor,
       );
-      await getDb(ctx.db).insert(entityAttachment).values({
-        subjectEntityId: cookbookId,
+      await insertEntityAttachments(ctx.db, {
+        entityId: cookbookId,
         role: "cover",
         imageId: coverOnly.id,
       });

@@ -5,14 +5,14 @@ import { moneyNullable } from "./money";
 import { productListItemOut } from "./product";
 
 /**
- * What's inside a kit (`ProductComponent` in schema.ts). A combo tool kit or a
+ * What's inside a kit (a `productComponent` `EntityLink`). A combo tool kit or a
  * multi-pack is a Product like any other — it keeps its own UPC, model, ASIN,
  * image, and purchase history — but it is ALSO made of other Products, and
  * this is the only place that's recorded. One row per distinct component; a
  * 4-pack of one part is one row with `quantity: 4`, a 9-piece kit is nine
  * rows.
  *
- * Non-entity, same as `PurchaseProduct` (`./purchase`): no shortcode, no
+ * Non-entity, same as `purchaseProduct` (`./purchase`): no shortcode, no
  * entity-manifest entry. Mirrors that module's shapes as closely as the extra
  * `quantity` field allows.
  */

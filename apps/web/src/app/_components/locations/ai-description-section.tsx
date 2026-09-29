@@ -13,7 +13,7 @@ import { useAiProposal } from "~/app/_components/ai/use-ai-proposal";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
-import { ai } from "~/lib/ai.functions";
+import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 interface AiDescriptionSectionProps {
   locationId: LocationShortcode;

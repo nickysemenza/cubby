@@ -1,4 +1,4 @@
-import type { AiAnalysisEntityType } from "@cubby/schemas/ai";
+import type { AiAnalysisEntityKind } from "@cubby/schemas/ai";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { z } from "zod";
 
@@ -13,7 +13,7 @@ import {
 } from "~/server/repo/database-helpers";
 
 interface AiAnalysisKey<T> {
-  entityKind: AiAnalysisEntityType;
+  entityKind: AiAnalysisEntityKind;
   entityId: string | null;
   feature: AiAnalysisFeature<T>;
   inputFingerprint: string;
@@ -30,7 +30,7 @@ export interface StoredAiAnalysis<T> {
 export async function listAiAnalysesForEntityFeature<T>(
   db: Database,
   input: {
-    entityKind: AiAnalysisEntityType;
+    entityKind: AiAnalysisEntityKind;
     entityId: string | null;
     feature: string;
     promptVersion: string;

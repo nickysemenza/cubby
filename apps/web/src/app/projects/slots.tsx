@@ -4,8 +4,8 @@ import { useMemo } from "react";
 
 import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
 import { ProjectExpenseAnalytics } from "~/app/expenses/expense-analytics-view";
-import { expense } from "~/app/expenses/expense.functions";
 import { Description } from "~/components/ui/description";
+import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { splitExpenseSpend } from "~/lib/spend";
 
 import { BudgetStrip } from "./BudgetStrip";

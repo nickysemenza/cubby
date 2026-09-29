@@ -30,8 +30,9 @@ import {
   parseShortcodeFor,
   type RecipeId,
 } from "@cubby/schemas/identifiers";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -45,6 +46,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import { logAuditEntry } from "~/server/repo/audit-log";
+import { cookbookSourceRecipeCountSql } from "~/server/repo/cookbook-source-count";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   getDb,
@@ -57,6 +59,7 @@ import {
   type CookbookImportContext,
   upsertCookbookRecipeFromCookbook,
 } from "~/server/repo/import-recipe-convert";
+import { type ListPage, listScaffold } from "~/server/repo/list";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import {
   deleteRecipesByCookbookTx,
@@ -72,7 +75,7 @@ import {
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 export const COOKBOOK_DELETE_EDGE_POLICY = {
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "cascade-delete-attachment",
     effect: "soft-delete",
     description:
@@ -116,7 +119,6 @@ export const upsertCookbook = async (
     name: input.name,
     rawJson: input.rawJson,
     report: input.report ?? null,
-    sourceRecipeCount: flattenCookbookRecipes(input.rawJson).length,
     author: input.author ?? [],
     subjects: input.subjects ?? [],
     sourceLabel: input.sourceLabel,
@@ -162,7 +164,7 @@ export const upsertCookbook = async (
       }
 
       await logAuditEntry(tx, actor, {
-        entityType: "cookbook",
+        entityKind: "cookbook",
         entityId: id,
         action: existingId ? "update" : "create",
       });
@@ -215,35 +217,28 @@ const getCookbookById = async (db: Database, id: CookbookId) => {
 };
 
 /**
- * The `readCookbookSummaries` predicate, with no filters of its own beyond
- * soft-delete and an optional single-shortcode narrowing. Exported so
- * `getEntityCounts` can call `cookbookListWhere()` and get the browse index's
- * REAL population rather than a hand-restated copy that can drift from it.
+ * The unfiltered browse-index predicate, so `getEntityCounts` counts the
+ * list's REAL population rather than a hand-restated copy that can drift.
  */
-export const cookbookListWhere = (shortcode?: CookbookShortcode) =>
-  and(
-    notDeleted(cookbook),
-    shortcode ? eq(cookbook.shortcode, shortcode) : undefined,
-  );
+export const cookbookListWhere = () => cookbookScaffold.where({});
+
+const recipeCountSql = sql<number>`count(${recipe.id})::int`;
 
 /**
- * Cookbooks with their non-deleted recipe counts, for the browse index. A left
- * join keeps cookbooks with zero current recipes visible.
+ * Cookbooks with their non-deleted recipe counts, one page of the browse
+ * index. A left join keeps cookbooks with zero current recipes visible.
  */
-const readCookbookSummaries = async (
-  db: Database,
-  shortcode?: CookbookShortcode,
-): Promise<CookbookSummary[]> => {
-  const rows = await getDb(db)
+const selectCookbookSummaryRows = (db: Database, page: ListPage) =>
+  getDb(db)
     .select({
       id: cookbook.id,
       shortcode: cookbook.shortcode,
       book: cookbook.name,
       author: cookbook.author,
       subjects: cookbook.subjects,
-      recipeCount: sql<number>`count(${recipe.id})::int`,
+      recipeCount: recipeCountSql,
       coverKey: image.key,
-      sourceRecipeCount: cookbook.sourceRecipeCount,
+      sourceRecipeCount: cookbookSourceRecipeCountSql(cookbook.rawJson),
       // Rows from before the book-tree format hold a flat array.
       needsReextract: sql<boolean>`jsonb_typeof(${cookbook.rawJson}) = 'array'`,
       productId: cookbook.productId,
@@ -258,7 +253,7 @@ const readCookbookSummaries = async (
     .leftJoin(
       entityAttachment,
       and(
-        eq(entityAttachment.subjectEntityId, cookbook.id),
+        eq(entityAttachment.entityId, cookbook.id),
         eq(entityAttachment.role, "cover"),
         notDeleted(entityAttachment),
       ),
@@ -268,10 +263,20 @@ const readCookbookSummaries = async (
       product,
       and(eq(product.id, cookbook.productId), notDeleted(product)),
     )
-    .where(cookbookListWhere(shortcode))
+    .where(page.where)
     .groupBy(cookbook.id, image.key, product.id)
-    .orderBy(cookbook.name);
+    .orderBy(...page.orderBy)
+    .limit(page.limit)
+    .offset(page.offset);
 
+type CookbookSummaryRow = Awaited<
+  ReturnType<typeof selectCookbookSummaryRows>
+>[number];
+
+const hydrateCookbookSummaries = async (
+  db: Database,
+  rows: CookbookSummaryRow[],
+): Promise<CookbookSummary[]> => {
   // The linked product's own cover, via the shared batched reader rather than a
   // third join — ProductImage carries the cover flag, so inlining it here would
   // mean duplicating that resolution.
@@ -309,14 +314,59 @@ const readCookbookSummaries = async (
   );
 };
 
-export const listCookbooks = async (db: Database): Promise<CookbookSummary[]> =>
-  await readCookbookSummaries(db);
+/** Cookbook declares no list filters beyond the scaffold's own. */
+type CookbookFilters = Readonly<Record<string, never>>;
+
+const cookbookScaffold = listScaffold("cookbook", cookbook);
+
+/** The kernel list: declared filters, the generated sort roster, paging. */
+export const cookbookList = (
+  db: Database,
+  filters: CookbookFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+) =>
+  cookbookScaffold.list(
+    db,
+    { filters, sorts, pagination },
+    {
+      select: (page) => selectCookbookSummaryRows(db, page),
+      hydrate: (rows) => hydrateCookbookSummaries(db, rows),
+      // `recipeCount` is the grouped count, not a column.
+      resolveSort: (sort) =>
+        sort.orderBy === "recipeCount"
+          ? sort.direction === "asc"
+            ? [asc(recipeCountSql)]
+            : [desc(recipeCountSql)]
+          : null,
+    },
+  );
 
 export const getCookbookSummary = async (
   db: Database,
-  shortcode: CookbookShortcode,
-): Promise<CookbookSummary | null> =>
-  (await readCookbookSummaries(db, shortcode))[0] ?? null;
+  shortcode: string,
+): Promise<CookbookSummary | null> => {
+  const where = cookbookScaffold.where({}, [eq(cookbook.shortcode, shortcode)]);
+  const rows = await selectCookbookSummaryRows(db, {
+    where,
+    orderBy: [asc(cookbook.shortcode)],
+    limit: 1,
+    offset: 0,
+  });
+  return (await hydrateCookbookSummaries(db, rows))[0] ?? null;
+};
+
+/**
+ * Every cookbook, by title. Backs the `cookbook.list` contract until
+ * read-only entities join the generic browser list roster.
+ */
+export const listCookbooks = async (db: Database): Promise<CookbookSummary[]> =>
+  (
+    await cookbookList(db, {}, [{ orderBy: "name", direction: "asc" }], {
+      pageIndex: 0,
+      pageSize: 10_000,
+    })
+  ).data;
 
 /**
  * Point a cookbook at the physical copy on the shelf, or clear the link
@@ -326,8 +376,7 @@ export const getCookbookSummary = async (
  * so nothing in the codebase writes this without a human choosing the product.
  *
  * No uniqueness guard on the product side. Two cookbooks claiming one copy is
- * odd but harmless — nothing derives money or stock from this edge — and a
- * partial unique index would not survive `db:push` anyway.
+ * odd but harmless — nothing derives money or stock from this edge.
  */
 export const setCookbookProduct = async (
   db: Database,
@@ -350,7 +399,7 @@ export const setCookbookProduct = async (
       and(eq(cookbook.id, id), notDeleted(cookbook)),
     );
     await logAuditEntry(tx, actor, {
-      entityType: "cookbook",
+      entityKind: "cookbook",
       entityId: id,
       action: "update",
       changes: { productId: { from: before.productId, to: productId } },

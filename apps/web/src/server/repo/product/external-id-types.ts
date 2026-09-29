@@ -1,9 +1,9 @@
-import type { productExternalId } from "~/server/db/schema";
+import type { entityExternalId } from "~/server/db/schema";
 
 export type MappableProductExternalId = Omit<
-  typeof productExternalId.$inferSelect,
+  typeof entityExternalId.$inferSelect,
   "kind" | "isPrimary"
 > & {
-  kind?: typeof productExternalId.$inferSelect.kind;
-  isPrimary?: typeof productExternalId.$inferSelect.isPrimary;
+  kind?: typeof entityExternalId.$inferSelect.kind;
+  isPrimary?: typeof entityExternalId.$inferSelect.isPrimary;
 };

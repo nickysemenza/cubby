@@ -76,7 +76,7 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
-          suggest: { basis: ["harvestAmount", "note"] },
+          suggest: { basis: ["harvestAmount", "notes"] },
           options: [
             { value: "note", label: "Note" },
             { value: "harvest", label: "Harvest" },
@@ -105,7 +105,9 @@ export default defineEntity({
         },
       },
       {
-        key: "note",
+        key: "notes",
+        // Stored and sent as `notes`; a garden entry still reads as one "Note".
+        labelOverride: "Note",
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
@@ -198,7 +200,7 @@ export default defineEntity({
       },
       {
         // `"<Kind> · <YYYY-MM-DD> · <location name>"` — gardenEntry has no
-        // name column and `note` is nullable, so this is the canonical
+        // name column and `notes` is nullable, so this is the canonical
         // non-null title.
         key: "displayName",
         kind: "text",
@@ -239,7 +241,7 @@ export default defineEntity({
         defaultValue: "note",
       },
       "observedOn",
-      "note",
+      "notes",
       "harvestAmount",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
@@ -250,7 +252,7 @@ export default defineEntity({
       "plantingIds",
       "kind",
       "observedOn",
-      "note",
+      "notes",
       "harvestAmount",
       "pendingImageIds",
     ],
@@ -259,7 +261,7 @@ export default defineEntity({
       "plantingIds",
       "kind",
       "observedOn",
-      "note",
+      "notes",
       "harvestAmount",
       "pendingImageIds",
       "removeImageIds",
@@ -271,7 +273,7 @@ export default defineEntity({
       "plantingIds",
       "kind",
       "observedOn",
-      "note",
+      "notes",
       "harvestAmount",
     ],
     sort: {
@@ -279,13 +281,13 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["locationId", "observedOn", "note", "pendingImageIds"],
+        capture: ["locationId", "observedOn", "notes", "pendingImageIds"],
         full: [
           "locationId",
           "plantingIds",
           "kind",
           "observedOn",
-          "note",
+          "notes",
           "harvestAmount",
           "pendingImageIds",
           "removeImageIds",
@@ -301,7 +303,7 @@ export default defineEntity({
       "plantingIds",
       "kind",
       "observedOn",
-      "note",
+      "notes",
       "harvestAmount",
       "images",
       "displayName",
@@ -324,6 +326,13 @@ export default defineEntity({
     list: {
       module: "@cubby/schemas/garden-entry",
       export: "gardenEntryListItemOut",
+    },
+  },
+  storage: {
+    indexes: [{ on: ["observedOn"] }],
+    relations: {
+      location: "locationId",
+      images: { many: "entityAttachment" },
     },
   },
   filters: {
@@ -403,14 +412,20 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "GardenEntryPlanting.gardenEntryId", direction: "incoming" },
-          { edge: "GardenEntryPlanting.plantingId", direction: "outgoing" },
+          {
+            edge: "EntityLink[gardenEntryPlanting].from",
+            direction: "incoming",
+          },
+          { edge: "EntityLink[gardenEntryPlanting].to", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "GardenEntryPlanting.plantingId", direction: "incoming" },
-          { edge: "GardenEntryPlanting.gardenEntryId", direction: "outgoing" },
+          { edge: "EntityLink[gardenEntryPlanting].to", direction: "incoming" },
+          {
+            edge: "EntityLink[gardenEntryPlanting].from",
+            direction: "outgoing",
+          },
         ],
       },
     },
@@ -422,14 +437,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "EntityAttachment.subjectEntityId", direction: "incoming" },
+          { edge: "EntityAttachment.entityId", direction: "incoming" },
           { edge: "EntityAttachment.imageId", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
           { edge: "EntityAttachment.imageId", direction: "incoming" },
-          { edge: "EntityAttachment.subjectEntityId", direction: "outgoing" },
+          { edge: "EntityAttachment.entityId", direction: "outgoing" },
         ],
       },
     },
@@ -456,10 +471,10 @@ export default defineEntity({
       ],
       routing: {
         category: "plants",
-        candidateFields: ["note"],
+        candidateFields: ["notes"],
         temporalFields: ["observedOn"],
         lifecycleFilters: [],
-        signals: { ocrFields: ["note"], classifierLabels: ["garden"] },
+        signals: { ocrFields: ["notes"], classifierLabels: ["garden"] },
         abstention: { minimumScore: 0.72, minimumMargin: 0.12 },
       },
     },
@@ -492,8 +507,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/garden/entity-adapters",
-        export: "gardenEntryEntityAdapter",
+        module: "~/server/repo/garden/repository",
+        export: "gardenEntryRepository",
       },
       filters: null,
     },

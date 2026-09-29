@@ -1,20 +1,20 @@
 import { taskCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { testShortcode } from "@cubby/schemas/testing";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
-  entityAttachment,
+  entityLink,
   expense,
   image,
   inventoryEntry,
   location,
   product,
   purchase,
-  purchaseProduct,
 } from "~/server/db/schema";
+import { linkValues, ofLinkKind } from "~/server/repo/entity-links";
 
 import { getDb } from "./database-helpers";
 import { getEntityGraph, readEntityGraph } from "./entity-graph";
@@ -32,6 +32,7 @@ import {
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
+  insertEntityAttachments,
 } from "./repo.fixtures";
 import { createTask } from "./task/crud";
 import { createVendor, findOrCreateVendor } from "./vendor";
@@ -79,13 +80,14 @@ describe("entity graph repository", () => {
     ]);
 
     const cover = await createImageFixture(ctx.db, "graph-cover");
-    await getDb(ctx.db)
-      .insert(entityAttachment)
-      .values({ subjectEntityId: product.entityId, imageId: cover.id });
+    await insertEntityAttachments(ctx.db, {
+      entityId: product.entityId,
+      imageId: cover.id,
+    });
 
     const read = () =>
       getEntityGraph(ctx.db, {
-        roots: [{ entityType: "product", entityId: product.id }],
+        roots: [{ entityKind: "product", entityId: product.id }],
         relationshipKeys: ["inventory"],
         limit: 1,
       });
@@ -94,12 +96,12 @@ describe("entity graph repository", () => {
       measured.result.nodes.every((node) => node.image?.url === cover.url),
     ).toBe(true);
     const imageGraph = await getEntityGraph(ctx.db, {
-      roots: [{ entityType: "image", entityId: cover.shortcode }],
+      roots: [{ entityKind: "image", entityId: cover.shortcode }],
       relationshipKeys: [],
     });
     expect(imageGraph.nodes[0]?.image?.url).toBe(cover.url);
     const explored = await getEntityGraphExplore(ctx.db, {
-      root: { entityType: "product", entityId: product.id },
+      root: { entityKind: "product", entityId: product.id },
       depth: 1,
     });
     expect(explored.nodes.every((node) => node.image?.url === cover.url)).toBe(
@@ -111,7 +113,7 @@ describe("entity graph repository", () => {
     const relationshipOnly = await readEntityGraph(
       ctx.db,
       {
-        roots: [{ entityType: "product", entityId: product.id }],
+        roots: [{ entityKind: "product", entityId: product.id }],
         relationshipKeys: ["inventory"],
         limit: 1,
       },
@@ -135,7 +137,7 @@ describe("entity graph repository", () => {
       readEntityGraph(
         ctx.db,
         {
-          roots: [{ entityType: "product", entityId: product.id }],
+          roots: [{ entityKind: "product", entityId: product.id }],
           relationshipKeys: ["inventory"],
           limit: 1,
         },
@@ -206,13 +208,13 @@ describe("entity graph repository", () => {
     );
 
     const graph = await getEntityGraph(ctx.db, {
-      roots: [{ entityType: "inventory", entityId: inventory.id }],
+      roots: [{ entityKind: "inventory", entityId: inventory.id }],
       relationshipKeys: ["location"],
     });
     expect(graph.edges).toContainEqual(
       expect.objectContaining({
         relationshipKey: "location",
-        target: { entityType: "location", entityId: location.id },
+        target: { entityKind: "location", entityId: location.id },
       }),
     );
   });
@@ -273,7 +275,7 @@ describe("entity graph repository", () => {
 
     const read = () =>
       getEntityGraph(ctx.db, {
-        roots: [{ entityType: "product", entityId: productFixture.id }],
+        roots: [{ entityKind: "product", entityId: productFixture.id }],
         relationshipKeys: ["purchases"],
       });
     const graph = await read();
@@ -288,9 +290,14 @@ describe("entity graph repository", () => {
     );
 
     await getDb(ctx.db)
-      .update(purchaseProduct)
+      .update(entityLink)
       .set({ deletedAt: new Date() })
-      .where(eq(purchaseProduct.purchaseId, purchase.entityId));
+      .where(
+        and(
+          eq(entityLink.fromEntityId, purchase.entityId),
+          ofLinkKind("purchaseProduct"),
+        ),
+      );
     const withoutExplicitEvidence = await read();
     expect(withoutExplicitEvidence.branches[0]?.edgeIds).toHaveLength(1);
     expect(withoutExplicitEvidence.edges).toEqual([
@@ -334,7 +341,7 @@ describe("entity graph repository", () => {
       ),
     );
     const input = {
-      roots: [{ entityType: "product" as const, entityId: productFixture.id }],
+      roots: [{ entityKind: "product" as const, entityId: productFixture.id }],
       relationshipKeys: ["inventory"],
       limit: 1,
     };
@@ -395,7 +402,7 @@ describe("entity graph repository", () => {
       ),
     );
     const taskInput = {
-      roots: [{ entityType: "task" as const, entityId: task.output.id }],
+      roots: [{ entityKind: "task" as const, entityId: task.output.id }],
       relationshipKeys: ["plantings"],
       limit: 1,
     };
@@ -427,7 +434,7 @@ describe("entity graph repository", () => {
     );
 
     const plantingGraph = await getEntityGraph(ctx.db, {
-      roots: [{ entityType: "planting", entityId: plantings[0]!.id }],
+      roots: [{ entityKind: "planting", entityId: plantings[0]!.id }],
       relationshipKeys: ["task"],
     });
     expect(plantingGraph.branches[0]).toMatchObject({
@@ -435,7 +442,7 @@ describe("entity graph repository", () => {
       target: "task",
       totalCount: 1,
       nextOffset: null,
-      items: [{ entityType: "task", entityId: task.output.id }],
+      items: [{ entityKind: "task", entityId: task.output.id }],
     });
   });
 
@@ -458,6 +465,7 @@ describe("entity graph repository", () => {
         Array.from({ length: 20 }, (_, index) => ({
           shortcode: testShortcode("location", `graph-${index}`),
           name: `Batched graph location ${index}`,
+          type: "area" as const,
         })),
       )
       .returning({ entityId: location.id });
@@ -492,17 +500,17 @@ describe("entity graph repository", () => {
               ),
               productId: productFixture.entityId,
               locationId: location.entityId,
-              amount: { value: 1, unit: "each" },
+              amountValue: 1,
+              amountUnit: "each",
             })),
           ),
         ),
       getDb(ctx.db)
-        .insert(purchaseProduct)
+        .insert(entityLink)
         .values(
-          fixturePairs.map(({ productId, purchaseId }) => ({
-            productId,
-            purchaseId,
-          })),
+          fixturePairs.map(({ productId, purchaseId }) =>
+            linkValues("purchaseProduct", purchaseId, productId),
+          ),
         ),
       getDb(ctx.db)
         .insert(expense)
@@ -527,7 +535,7 @@ describe("entity graph repository", () => {
     const measured = await countTestDbQueries(() =>
       getEntityGraph(ctx.db, {
         roots: products.map((productFixture) => ({
-          entityType: "product" as const,
+          entityKind: "product" as const,
           entityId: productFixture.id,
         })),
         relationshipKeys: ["purchases", "inventory"],
@@ -562,13 +570,13 @@ describe("entity graph repository", () => {
       ]),
     );
     const firstPage = await getEntityGraph(ctx.db, {
-      roots: [{ entityType: "product", entityId: products[0]!.id }],
+      roots: [{ entityKind: "product", entityId: products[0]!.id }],
       relationshipKeys: ["inventory"],
       limit: 10,
     });
     const nextOffset = firstPage.branches[0]?.nextOffset;
     const secondPage = await getEntityGraph(ctx.db, {
-      roots: [{ entityType: "product", entityId: products[0]!.id }],
+      roots: [{ entityKind: "product", entityId: products[0]!.id }],
       relationshipKeys: ["inventory"],
       limit: 10,
       offset: nextOffset ?? 0,
@@ -630,8 +638,8 @@ describe("entity graph repository", () => {
     );
     const graph = await getEntityGraph(ctx.db, {
       roots: [
-        { entityType: "planting", entityId: withVariety.id },
-        { entityType: "planting", entityId: withoutVariety.id },
+        { entityKind: "planting", entityId: withVariety.id },
+        { entityKind: "planting", entityId: withoutVariety.id },
       ],
       relationshipKeys: [],
     });
@@ -655,7 +663,7 @@ describe("entity graph repository", () => {
         locationId: bed.id,
         kind: "note",
         observedOn: "2026-10-06",
-        note: "Whole-bed overview",
+        notes: "Whole-bed overview",
         pendingImageIds: [],
       },
       ctx.actor,
@@ -666,7 +674,7 @@ describe("entity graph repository", () => {
         locationId: bed.id,
         kind: "harvest",
         observedOn: "2026-10-07",
-        note: "First pick",
+        notes: "First pick",
         harvestAmount: "A handful",
         pendingImageIds: [],
       },
@@ -674,8 +682,8 @@ describe("entity graph repository", () => {
     );
     const graph = await getEntityGraph(ctx.db, {
       roots: [
-        { entityType: "gardenEntry", entityId: observation.id },
-        { entityType: "gardenEntry", entityId: harvest.id },
+        { entityKind: "gardenEntry", entityId: observation.id },
+        { entityKind: "gardenEntry", entityId: harvest.id },
       ],
       relationshipKeys: [],
     });

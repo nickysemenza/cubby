@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { Row } from "~/components/layout";
 import { NativeSelect } from "~/components/ui/native-select";
-import { cookbook } from "~/entities/cookbook.functions";
+import { cookbook } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 interface CookbookSelectProps {
   value: CookbookShortcode | undefined;

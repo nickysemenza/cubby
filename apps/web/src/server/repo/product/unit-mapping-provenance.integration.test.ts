@@ -4,11 +4,11 @@ import { parseShortcode } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getProductSummariesWorkflow } from "~/server/operations/product.server";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { requireActor } from "~/server/request-context";
 import { getProductWithFood } from "~/server/services/product.service";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { getProductSummariesWorkflow } from "~/server/workflows/product.server";
 
 import { createProductFixture, makeProductInput } from "../repo.fixtures";
 

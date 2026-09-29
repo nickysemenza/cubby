@@ -1,9 +1,9 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ExpenseOut } from "@cubby/schemas/project";
 
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { ProjectSuggestionChips } from "~/app/expenses/project-suggestion-chips";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Stack } from "~/components/layout";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { renderDetailFieldValue } from "~/entities/entity-display";
@@ -35,7 +35,7 @@ function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
               className="flex min-w-0 items-baseline justify-between gap-3"
             >
               {share.projectId ? (
-                <EntityInlineLink
+                <EntityRefLink
                   entity="project"
                   data={{
                     id: share.projectId,

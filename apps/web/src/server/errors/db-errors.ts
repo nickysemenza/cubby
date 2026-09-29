@@ -51,7 +51,7 @@ function findPgError(error: UnparsedDatabaseError, depth = 0): PgError | null {
   }
 }
 
-/** "ProductExternalId" -> "product external id" for prose. */
+/** "EntityExternalId" -> "entity external id" for prose. */
 function prettyTable(table?: string): string {
   if (!table) return "record";
   return table.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
@@ -145,6 +145,27 @@ export function translateDatabaseError(
   switch (pg.code) {
     case "23505": {
       // unique_violation
+      // Backstop for the repository pre-checks: an identifier already held by
+      // another live record. The key detail names the kind, which picks the
+      // structured refusal (a settlement reference keeps its own reason).
+      if (pg.constraint === "EntityExternalId_source_kind_externalId_key") {
+        const key = /\)=\(([^,]+), ([^,]+), (.+)\) already exists/u.exec(
+          pg.detail ?? "",
+        );
+        return key?.[2] === "settlement_ref"
+          ? createAppError(
+              "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT",
+              `Source transaction ${key[1]}/${key[3]} is already recorded.`,
+              error,
+            )
+          : createAppError(
+              "EXTERNAL_ID_CONFLICT",
+              key
+                ? `${key[1]} ${key[2]} ${key[3]} already belongs to another record.`
+                : "That identifier already belongs to another record.",
+              error,
+            );
+      }
       const cols = columnsFromDetail(pg.detail);
       const a = article(entity);
       return createAppError(
@@ -178,13 +199,10 @@ export function translateDatabaseError(
     }
     case "23514": {
       // check_violation
-      if (
-        pg.constraint === "ProjectDependency_no_self_check" ||
-        pg.constraint === "TaskDependency_no_self_check"
-      ) {
+      if (pg.constraint === "EntityLink_no_self_check") {
         return createAppError(
           "SELF_DEPENDENCY",
-          "A dependency cannot point to itself.",
+          "A dependency or component link cannot point to itself.",
           error,
         );
       }

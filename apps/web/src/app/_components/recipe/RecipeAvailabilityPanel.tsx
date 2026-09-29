@@ -9,9 +9,9 @@ import {
   statusClass,
   statusLabel,
 } from "~/app/meals/meal-format";
-import { suggestions } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
+import { suggestions } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn } from "~/lib/utils";
 
 const SHELL = "border border-[var(--border)] px-4 py-2 print:hidden";

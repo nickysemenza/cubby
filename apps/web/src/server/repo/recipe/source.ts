@@ -4,23 +4,31 @@ import { match, P } from "ts-pattern";
 
 /**
  * Codec between a recipe's provenance discriminated union (`RecipeSource`, the
- * API shape) and the two DB columns (`SourceType` + `SourceData`). Kept in one
- * place so the stringly-typed pairing isn't reconstructed ad hoc across repos.
- * No migration: the columns are unchanged — this just gives the boundary a real
- * type and finally surfaces a Book recipe's book name in the API.
+ * API shape) and where each kind of provenance is stored:
+ *
+ * - Website: `sourceUrl`.
+ * - Book: the Cookbook row (`cookbookId`) names the book; a book with no
+ *   Cookbook row keeps its title in `sourceLabel`.
+ * - Notion: the page id is a `(notion, page)` EntityExternalId — the
+ *   identity a re-import matches on.
+ * - Other: nothing.
+ *
+ * Kept in one place so the pairing isn't reconstructed ad hoc across repos.
  */
 
 type SourceColumns = {
-  SourceType: string | null;
-  SourceData: string | null;
-  cookbookId?: string | null;
+  sourceType: string | null;
+  sourceUrl: string | null;
+  sourceLabel: string | null;
+  cookbookName?: string | null;
   cookbookShortcode?: string | null;
+  notionPageId?: string | null;
 };
 
 // Provenance override for recipes whose source isn't a website URL (e.g. EPUB
-// cookbooks → SourceType "Book"). When omitted, source derives from meta.url.
-// `cookbookId` is set only for Book recipes (the FK to their Cookbook); SourceData
-// is kept synced to the cookbook name so the source codec stays a pure row read.
+// cookbooks → sourceType "Book"). When omitted, source derives from meta.url.
+// `sourceData` is the URL (Website), the book title (Book without a Cookbook
+// row), or the page id (Notion); `cookbookId` is set only for Book recipes.
 export type RecipeProvenance = {
   sourceType: "Book" | "Website" | "Other" | "Notion";
   sourceData: string | null;
@@ -28,12 +36,18 @@ export type RecipeProvenance = {
   cookbookShortcode?: string | null;
 };
 
-/** Tagged provenance → the DB column triple. The encode mirror of {@link recipeSourceFromDb}. */
+/**
+ * Tagged provenance → the Recipe columns. A Notion page id is not a column:
+ * the caller records it with `recordNotionRecipePage`.
+ */
 export function recipeSourceToColumns(p: RecipeProvenance) {
+  const cookbookId = p.cookbookId ?? null;
   return {
-    SourceType: p.sourceType,
-    SourceData: p.sourceData,
-    cookbookId: p.cookbookId ?? null,
+    sourceType: p.sourceType,
+    sourceUrl: p.sourceType === "Website" ? p.sourceData : null,
+    sourceLabel:
+      p.sourceType === "Book" && cookbookId === null ? p.sourceData : null,
+    cookbookId,
   };
 }
 
@@ -52,39 +66,38 @@ function notionUrlFromId(pageId: string): string {
   return `https://www.notion.so/${pageId.replace(/-/g, "")}`;
 }
 
-/** DB columns → tagged union. Legacy/ambiguous rows decode to `{ type: "other" }`. */
+/** Stored provenance → tagged union. Legacy/ambiguous rows decode to `{ type: "other" }`. */
 export function recipeSourceFromDb({
-  SourceType,
-  SourceData,
+  sourceType,
+  sourceUrl,
+  sourceLabel,
+  cookbookName,
   cookbookShortcode,
+  notionPageId,
 }: SourceColumns): RecipeSource {
-  // `P.string.minLength(1)` preserves the original `&& SourceData` truthiness
-  // guard: null and "" both fall through to `{ type: "other" }`.
-  return (
-    match({ SourceType, SourceData })
-      .with(
-        { SourceType: "Book", SourceData: P.string.minLength(1) },
-        ({ SourceData }) => ({
-          type: "book" as const,
-          book: SourceData,
-          cookbookId: cookbookShortcode
-            ? parseShortcodeFor("cookbook", cookbookShortcode)
-            : null,
-        }),
-      )
-      .with(
-        { SourceType: "Website", SourceData: P.string.minLength(1) },
-        ({ SourceData }) => ({ type: "website" as const, url: SourceData }),
-      )
-      // Notion: SourceData holds the stable page id; derive the page URL for display.
-      .with(
-        { SourceType: "Notion", SourceData: P.string.minLength(1) },
-        ({ SourceData }) => ({
-          type: "notion" as const,
-          pageId: SourceData,
-          url: notionUrlFromId(SourceData),
-        }),
-      )
-      .otherwise(() => ({ type: "other" as const }))
-  );
+  const book = cookbookName ?? sourceLabel;
+  return match({ sourceType, book, sourceUrl, notionPageId })
+    .with(
+      { sourceType: "Book", book: P.string.minLength(1) },
+      ({ book: title }) => ({
+        type: "book" as const,
+        book: title,
+        cookbookId: cookbookShortcode
+          ? parseShortcodeFor("cookbook", cookbookShortcode)
+          : null,
+      }),
+    )
+    .with(
+      { sourceType: "Website", sourceUrl: P.string.minLength(1) },
+      ({ sourceUrl: url }) => ({ type: "website" as const, url }),
+    )
+    .with(
+      { sourceType: "Notion", notionPageId: P.string.minLength(1) },
+      ({ notionPageId: pageId }) => ({
+        type: "notion" as const,
+        pageId,
+        url: notionUrlFromId(pageId),
+      }),
+    )
+    .otherwise(() => ({ type: "other" as const }));
 }

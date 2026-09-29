@@ -13,9 +13,9 @@ import {
   visitGraphRecord,
 } from "./entity-graph-state";
 
-const product = { entityType: "product", entityId: "PRD-4K7M" } as const;
-const purchase = { entityType: "purchase", entityId: "PUR-4K7M" } as const;
-const expense = { entityType: "expense", entityId: "EXP-4K7M" } as const;
+const product = { entityKind: "product", entityId: "PRD-4K7M" } as const;
+const purchase = { entityKind: "purchase", entityId: "PUR-4K7M" } as const;
+const expense = { entityKind: "expense", entityId: "EXP-4K7M" } as const;
 const node = (ref: typeof product | typeof purchase | typeof expense) => ({
   ...ref,
   label: ref.entityId,
@@ -200,7 +200,7 @@ describe("entity graph exploration", () => {
       ...page.branches[0]!,
       relationshipKey: `branch-${branchIndex}`,
       items: Array.from({ length: 25 }, (_, itemIndex) => ({
-        entityType: "product" as const,
+        entityKind: "product" as const,
         entityId: `PRD-${branchIndex}-${itemIndex}`,
       })),
     }));

@@ -34,12 +34,15 @@ import {
   entities,
 } from "~/entities/entities";
 import { createEntityDisplayColumns } from "~/entities/entity-display";
-import { entityGraph } from "~/entities/entity-graph.functions";
-import { entityList, entityListFor } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list";
 import {
   listEntities,
   type ListEntity,
 } from "~/entities/generated/entity-lists.gen";
+import {
+  entityGraph,
+  entityList,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import {
   useSectionCollapsed,
@@ -528,7 +531,7 @@ export function EntityRelationTable({
     .slice(0, 50);
   const evidenceQuery = useQuery(
     entityGraph.connectedRecords.queryOptions({
-      source: { entityType: plan.source, entityId: recordId },
+      source: { entityKind: plan.source, entityId: recordId },
       viewKey: `relation:${plan.relation}`,
       targetIds: visibleIds,
       limit: 50,

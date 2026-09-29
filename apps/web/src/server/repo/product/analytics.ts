@@ -18,10 +18,10 @@ import {
 import type { Database } from "~/server/db";
 import {
   entityAttachment,
+  entityExternalId,
   image,
   inventoryEntry,
   product,
-  productExternalId,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
@@ -94,7 +94,7 @@ export const findProductsWithNoImages = async (
     .leftJoin(
       entityAttachment,
       and(
-        eq(entityAttachment.subjectEntityId, product.id),
+        eq(entityAttachment.entityId, product.id),
         notDeleted(entityAttachment),
         sql`${entityAttachment.purpose} IS DISTINCT FROM 'label'`,
       ),
@@ -144,7 +144,7 @@ export const countProductsWithNoImagesWithGtin = async (
             .innerJoin(image, eq(image.id, entityAttachment.imageId))
             .where(
               and(
-                eq(entityAttachment.subjectEntityId, product.id),
+                eq(entityAttachment.entityId, product.id),
                 notDeleted(entityAttachment),
                 sql`${entityAttachment.purpose} IS DISTINCT FROM 'label'`,
                 displayableImageWhere,
@@ -185,16 +185,16 @@ export const getProductExternalIdSourceOptions = async (
 ): Promise<Array<{ source: string; count: number }>> =>
   getDb(db)
     .select({
-      source: productExternalId.source,
-      count: sql<number>`count(distinct ${productExternalId.productId})::int`,
+      source: entityExternalId.source,
+      count: sql<number>`count(distinct ${entityExternalId.entityId})::int`,
     })
-    .from(productExternalId)
-    .innerJoin(product, eq(product.id, productExternalId.productId))
-    .where(and(notDeleted(productExternalId), notDeleted(product)))
-    .groupBy(productExternalId.source)
+    .from(entityExternalId)
+    .innerJoin(product, eq(product.id, entityExternalId.entityId))
+    .where(and(notDeleted(entityExternalId), notDeleted(product)))
+    .groupBy(entityExternalId.source)
     .orderBy(
-      sql`count(distinct ${productExternalId.productId}) DESC`,
-      productExternalId.source,
+      sql`count(distinct ${entityExternalId.entityId}) DESC`,
+      entityExternalId.source,
     );
 
 export const getProductManufacturerOptions = async (

@@ -18,7 +18,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import * as schema from "~/server/db/schema";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
+import { ENTITY_BINDINGS } from "~/server/generated/entity-bindings.gen";
 
 // SAFETY: Drizzle's runtime `is` predicate has identified every retained
 // value as a PgTable; its generic predicate does not preserve that type here.
@@ -65,15 +65,19 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
     purchaseId:
       "settlement link lives on FinancialTransactionAllocation, not the row",
     allocations: "writes FinancialTransactionAllocation rows",
+    sourceRefs: "writes settlement_ref EntityExternalId rows",
   },
   ledgerTransfer: {
     sourceClaims: "writes LedgerSourceClaim provenance rows",
     evidenceTransactionIds:
       "records the FinancialTransactions that evidence the transfer",
   },
+  inventory: {
+    amount: "stored as the amountValue + amountUnit column pair",
+  },
   location: { pendingImageIds: "writes LocationImage rows" },
   gardenEntry: {
-    plantingIds: "writes GardenEntryPlanting rows",
+    plantingIds: "writes gardenEntryPlanting EntityLink rows",
     pendingImageIds: "writes GardenEntryImage rows",
   },
   meal: {
@@ -81,13 +85,17 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
     pendingImageIds: "writes MealImage rows",
   },
   product: {
-    upc: "barcode write slot; lands in ProductExternalId, not on Product",
-    isbn: "book identifier; lands in ProductExternalId, not on Product",
-    externalIds: "writes ProductExternalId rows",
-    unitMappings: "writes ProductUnitMappings rows",
+    upc: "barcode write slot; lands in EntityExternalId, not on Product",
+    isbn: "book identifier; lands in EntityExternalId, not on Product",
+    externalIds: "writes product EntityExternalId rows",
+    unitMappings: "writes ProductUnitMapping rows",
     pendingImageIds: "writes ProductImage rows",
     pendingImagePurposes:
       "sets the item or label purpose for each pending ProductImage row",
+  },
+  project: {
+    googleDriveFolderUrl: "writes the (google-drive, folder) EntityExternalId",
+    notionPageUrl: "the url of the (notion, page) EntityExternalId",
   },
   purchase: { pendingImageIds: "writes PurchaseImage rows" },
   recipe: {
@@ -95,7 +103,7 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
     pendingImageIds: "writes RecipeImage rows",
   },
   task: { pendingImageIds: "writes TaskImage rows" },
-  wish: { candidateProductIds: "writes WishCandidate rows" },
+  wish: { candidateProductIds: "writes wishCandidate EntityLink rows" },
 };
 
 /**
@@ -105,9 +113,12 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
  * justified here.
  */
 const UNSUPPLIED_REQUIRED_COLUMNS: EntityFieldNotes = {
-  imageSighting: {
-    ledgerPartyId:
-      "resolved server-side from the acting login's linked member party (repo/member-login.ts) when omitted — see repo/image-sighting.ts's resolveSightingOwnerParty",
+  inventory: {
+    amountValue: "supplied by the create input's `amount`",
+    amountUnit: "supplied by the create input's `amount`",
+  },
+  location: {
+    type: "optional in the create shape: a Product link alone stores `furniture`; the repo refuses a create with neither (createLocationTx)",
   },
 };
 

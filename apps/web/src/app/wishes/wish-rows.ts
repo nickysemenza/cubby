@@ -18,7 +18,7 @@ export type WishRow =
   | {
       kind: "wish";
       id: string;
-      entityType: "wish";
+      entityKind: "wish";
       previewId: WishListItemOut["id"];
       name: string;
       wish: WishListItemOut;
@@ -27,7 +27,7 @@ export type WishRow =
   | {
       kind: "candidate";
       id: string;
-      entityType: "product";
+      entityKind: "product";
       previewId: WishCandidateOut["id"];
       name: string;
       productId: WishCandidateOut["id"];
@@ -45,14 +45,14 @@ export const buildWishRows = (wishes: readonly WishListItemOut[]): WishRow[] =>
   wishes.map((wish) => ({
     kind: "wish",
     id: wish.id,
-    entityType: "wish",
+    entityKind: "wish",
     previewId: wish.id,
     name: wish.name,
     wish,
     subRows: wish.candidates.map((candidate) => ({
       kind: "candidate",
       id: `${wish.id}:${candidate.id}`,
-      entityType: "product",
+      entityKind: "product",
       previewId: candidate.id,
       name: candidate.name,
       productId: candidate.id,

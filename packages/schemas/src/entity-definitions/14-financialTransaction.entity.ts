@@ -257,6 +257,11 @@ export default defineEntity({
       {
         key: "sourceRefs",
         kind: "json",
+        // Stored as `settlement_ref` EntityExternalId rows.
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Settlement references" }],
+        },
         // "Source" reproduces the list column's existing header text (its
         // `display.columnId` alias below). One label serves both surfaces,
         // so the detail page's overview heading for this field (which has
@@ -433,11 +438,6 @@ export default defineEntity({
       "merchant",
       "rawDescription",
       "sourceCategory",
-      {
-        key: "sourceRefs",
-        defaultValue: "'[]'::jsonb",
-        specialized: "json:sourceRefs",
-      },
       "notes",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
@@ -579,6 +579,45 @@ export default defineEntity({
       export: "financialTransactionOut",
     },
   },
+  // A settlement-side event. Amounts are evidence only: they never participate
+  // in spend/project/calendar rollups, which remain derived from Expense.cost.
+  storage: {
+    indexes: [
+      {
+        name: "FinancialTransaction_ledgerTransferId_positive_evidence_key",
+        on: ["ledgerTransferId"],
+        unique: true,
+        where:
+          "{deletedAt} IS NULL AND {ledgerTransferId} IS NOT NULL AND {amount} > 0",
+      },
+      {
+        name: "FinancialTransaction_ledgerTransferId_negative_evidence_key",
+        on: ["ledgerTransferId"],
+        unique: true,
+        where:
+          "{deletedAt} IS NULL AND {ledgerTransferId} IS NOT NULL AND {amount} < 0",
+      },
+      { on: ["kind"] },
+      { on: ["status"] },
+      { on: ["transactionDate"] },
+      { on: ["postedDate"] },
+    ],
+    checks: [
+      {
+        name: "FinancialTransaction_amount_whole_cent_check",
+        sql: "{amount} <> 0 AND abs({amount} * 100 - round({amount} * 100)) < 0.0000001",
+      },
+      {
+        name: "FinancialTransaction_posted_date_check",
+        sql: "{status} <> 'posted' OR {postedDate} IS NOT NULL",
+      },
+    ],
+    relations: {
+      account: "accountId",
+      allocations: { many: "financialTransactionAllocation" },
+      ledgerTransfer: "ledgerTransferId",
+    },
+  },
   filters: {
     audit: true,
     schema: {
@@ -713,15 +752,19 @@ export default defineEntity({
         stored: true,
         range: { finite: true },
         options: [
-          { value: "gte1000", label: "$1,000 and up" },
-          { value: "gte250", label: "$250 and up" },
-          { value: "gte50", label: "$50 and up" },
-          { value: "credits", label: "Credits (≤ $0)" },
+          {
+            value: "gte1000",
+            label: "$1,000 and up",
+            expand: { amountMin: 1000 },
+          },
+          { value: "gte250", label: "$250 and up", expand: { amountMin: 250 } },
+          { value: "gte50", label: "$50 and up", expand: { amountMin: 50 } },
+          {
+            value: "credits",
+            label: "Credits (≤ $0)",
+            expand: { amountMax: 0 },
+          },
         ],
-        expandRef: {
-          module: "~/app/finance/financial-transaction-options",
-          export: "resolveAmountFilter",
-        },
       },
       {
         columnId: "amountMin",

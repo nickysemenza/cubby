@@ -196,8 +196,8 @@ describe("createEntityInlineLinkColumn", () => {
     };
 
     expect(productCollectionColumn().meta?.entityRefs?.(row)).toEqual([
-      { entityType: "product", entityId: "PRD-2ABC" },
-      { entityType: "product", entityId: "PRD-3ABC" },
+      { entityKind: "product", entityId: "PRD-2ABC" },
+      { entityKind: "product", entityId: "PRD-3ABC" },
     ]);
   });
 

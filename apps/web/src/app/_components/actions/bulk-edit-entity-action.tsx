@@ -1,10 +1,10 @@
-import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   entityInspectorMetadata,
   type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
+import type { MutationSideEffects } from "@cubby/schemas/mutation-side-effects";
 import type { UseMutationOptions } from "@tanstack/react-query";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {

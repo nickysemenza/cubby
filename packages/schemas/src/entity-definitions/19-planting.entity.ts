@@ -47,7 +47,7 @@ export default defineEntity({
             "kind",
             "observedOn",
             "locationId",
-            "note",
+            "notes",
             "harvestAmount",
           ],
           sort: { field: "observedOn", direction: "desc" },
@@ -539,6 +539,15 @@ export default defineEntity({
     output: { module: "@cubby/schemas/planting", export: "plantingOut" },
     list: { module: "@cubby/schemas/planting", export: "plantingListItemOut" },
   },
+  storage: {
+    indexes: [{ on: ["status"] }],
+    relations: {
+      plant: "plantId",
+      sourceProduct: "sourceProductId",
+      location: "locationId",
+      task: "taskId",
+    },
+  },
   filters: {
     audit: true,
     schema: {
@@ -591,7 +600,7 @@ export default defineEntity({
         brandRef: { entity: "product" },
       },
       {
-        // Plantings a garden entry is logged against (`GardenEntryPlanting`).
+        // Plantings a garden entry is logged against (`gardenEntryPlanting`).
         columnId: "gardenEntryId",
         kind: "idMulti",
         placeholder: "Filter by garden entry...",
@@ -661,14 +670,20 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "GardenEntryPlanting.plantingId", direction: "incoming" },
-          { edge: "GardenEntryPlanting.gardenEntryId", direction: "outgoing" },
+          { edge: "EntityLink[gardenEntryPlanting].to", direction: "incoming" },
+          {
+            edge: "EntityLink[gardenEntryPlanting].from",
+            direction: "outgoing",
+          },
         ],
       },
       inverse: {
         steps: [
-          { edge: "GardenEntryPlanting.gardenEntryId", direction: "incoming" },
-          { edge: "GardenEntryPlanting.plantingId", direction: "outgoing" },
+          {
+            edge: "EntityLink[gardenEntryPlanting].from",
+            direction: "incoming",
+          },
+          { edge: "EntityLink[gardenEntryPlanting].to", direction: "outgoing" },
         ],
       },
     },
@@ -767,8 +782,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/garden/entity-adapters",
-        export: "plantingEntityAdapter",
+        module: "~/server/repo/garden/repository",
+        export: "plantingRepository",
       },
       filters: null,
       timeline: {

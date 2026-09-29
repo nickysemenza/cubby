@@ -7,7 +7,6 @@ import { startOperationDefinition } from "~/lib/start-operation-observability";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import { withErrorReporting } from "~/server/errors/report-error";
 import { observeOperation } from "~/server/observed-request";
-import { applyReadPolicy } from "~/server/read-policy";
 import type { PublicStartOperationError } from "~/server/start-operation.contract";
 import {
   type AuthenticatedStartOperationContext,
@@ -109,9 +108,11 @@ export async function workflowStreamResponse<
             async (span) => {
               span.setAttribute("cubby.authenticated", false);
               throwIfStartOperationAborted(signal);
-              const context = applyReadPolicy(
-                await runtime.authenticate(options.request.headers, span),
-                "strong",
+              // A fresh request context has one database handle, the
+              // authoritative one, so a stream needs no read-policy selection.
+              const context = await runtime.authenticate(
+                options.request.headers,
+                span,
               );
 
               actorVerified = true;

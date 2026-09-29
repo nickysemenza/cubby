@@ -2,7 +2,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 
 import type { BulkAddProduct } from "../products/product-bulk-add-to-inventory-dialog";
 import { ProductBulkAddToInventoryDialog } from "../products/product-bulk-add-to-inventory-dialog";

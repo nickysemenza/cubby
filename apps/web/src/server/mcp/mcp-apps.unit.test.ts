@@ -121,17 +121,14 @@ describe("MCP App resources", () => {
     expect([...pointedAt].every((uri) => served.has(uri))).toBe(true);
     expect(
       tools.find((tool) => tool.name === USDA_PICKER.toolName)?._meta,
-    ).toMatchObject({
-      ui: { resourceUri: USDA_PICKER.uri },
-      "ui/resourceUri": USDA_PICKER.uri,
-    });
-    for (const name of ["get_shopping_list", "search_usda_foods"]) {
+    ).toEqual({ ui: { resourceUri: USDA_PICKER.uri } });
+    for (const name of ["nutrition", "usda_food"]) {
       expect(
         tools.find((tool) => tool.name === name)?.outputSchema,
       ).toBeDefined();
     }
     expect(
-      tools.find((tool) => tool.name === "get_shopping_list")?._meta,
+      tools.find((tool) => tool.name === "nutrition")?._meta,
     ).toBeUndefined();
 
     const fixture = invocationFixtureSchema.parse(
@@ -147,9 +144,9 @@ describe("MCP App resources", () => {
     );
     for (const item of fixture.cases) {
       if (!item.expectedTool) continue;
-      const tool = tools.find(
-        (candidate) => candidate.name === item.expectedTool,
-      );
+      // Fixtures name an action as `tool.action`; the widget is per tool.
+      const [toolName] = item.expectedTool.split(".");
+      const tool = tools.find((candidate) => candidate.name === toolName);
       expect(tool?.description).toContain("Do not invoke");
       const metadata = appToolMetadataSchema.safeParse(tool?._meta).data;
       expect(metadata?.ui?.resourceUri ?? null).toBe(item.expectedWidget);

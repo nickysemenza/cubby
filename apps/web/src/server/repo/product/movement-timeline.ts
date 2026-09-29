@@ -41,16 +41,16 @@ import {
 import { formatCurrency } from "~/lib/utils";
 import type { Database } from "~/server/db";
 import {
+  entityLink,
   expense,
   product,
   project,
-  projectToolUsage,
   purchase,
-  purchaseProduct,
   vendor,
 } from "~/server/db/schema";
 import type { EntityTimelineImplementation } from "~/server/entity-timeline/contracts";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import { effectiveExpenseProjectSql } from "~/server/repo/expense-inheritance";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 
@@ -185,17 +185,17 @@ const movementDates = (db: Database) =>
       ),
     getDb(db)
       .select({
-        productId: sql<string>`${purchaseProduct.productId}`.as("productId"),
+        productId: sql<string>`${entityLink.toEntityId}`.as("productId"),
         date: sql<string | null>`${purchase.date}`.as("date"),
       })
-      .from(purchaseProduct)
+      .from(entityLink)
       .innerJoin(
         purchase,
-        and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
+        and(eq(purchase.id, entityLink.fromEntityId), notDeleted(purchase)),
       )
       .where(
         and(
-          notDeleted(purchaseProduct),
+          liveLinks("purchaseProduct"),
           notExists(
             getDb(db)
               .select({ one: sql`1` })
@@ -203,7 +203,7 @@ const movementDates = (db: Database) =>
               .where(
                 and(
                   eq(expense.purchaseId, purchase.id),
-                  eq(expense.productId, purchaseProduct.productId),
+                  eq(expense.productId, entityLink.toEntityId),
                   eq(expense.future, false),
                   notDeleted(expense),
                 ),
@@ -357,7 +357,7 @@ export async function getProductMovementTimeline(
   );
   const provenanceRows = await getDb(db)
     .select({
-      productId: purchaseProduct.productId,
+      productId: entityLink.toEntityId,
       purchaseId: purchase.id,
       purchaseCode: purchase.shortcode,
       purchaseDate: purchase.date,
@@ -366,17 +366,23 @@ export async function getProductMovementTimeline(
       vendorCode: vendor.shortcode,
       vendorName: vendor.name,
     })
-    .from(purchaseProduct)
+    .from(entityLink)
     .innerJoin(
       purchase,
-      and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
+      and(eq(purchase.id, entityLink.fromEntityId), notDeleted(purchase)),
     )
     .leftJoin(vendor, and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)))
     .where(
       and(
-        notDeleted(purchaseProduct),
-        inArray(purchaseProduct.productId, productIds),
+        liveLinks("purchaseProduct"),
+        inArray(entityLink.toEntityId, productIds),
       ),
+    )
+    .then((rows) =>
+      rows.map((row) => ({
+        ...row,
+        productId: parseEntityId("product", row.productId),
+      })),
     );
   const unitemizedRows = provenanceRows.filter(
     (row) => !itemizedPairs.has(`${row.purchaseId}:${row.productId}`),
@@ -518,22 +524,19 @@ export async function getProductMovementTimeline(
       ? []
       : await getDb(db)
           .select({
-            productId: projectToolUsage.productId,
+            productId: entityLink.toEntityId,
             projectCode: project.shortcode,
             projectName: project.name,
           })
-          .from(projectToolUsage)
+          .from(entityLink)
           .innerJoin(
             project,
-            and(
-              eq(project.id, projectToolUsage.projectId),
-              notDeleted(project),
-            ),
+            and(eq(project.id, entityLink.fromEntityId), notDeleted(project)),
           )
           .where(
             and(
-              notDeleted(projectToolUsage),
-              inArray(projectToolUsage.productId, productIdsWithMovements),
+              liveLinks("projectTool"),
+              inArray(entityLink.toEntityId, productIdsWithMovements),
             ),
           );
   const usagesByProduct = groupBy(usageRows, (row) => row.productId);
@@ -768,7 +771,7 @@ export const productTimeline: EntityTimelineImplementation<"product"> = async (
   input,
 ) =>
   toEntityTimeline(
-    await getProductMovementTimeline(context.readDb, {
+    await getProductMovementTimeline(context.db, {
       filters: input.filters,
       ids: input.window.ids,
       from: input.window.from,

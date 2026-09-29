@@ -7,8 +7,8 @@ import { defineEntityChecks } from "../registry";
 type Wish = typeof wish;
 
 const hasLiveCandidate = (t: Wish) => sql`EXISTS (
-  SELECT 1 FROM "WishCandidate" dq_wsh_c
-  WHERE dq_wsh_c."wishId" = ${t.id} AND dq_wsh_c."deletedAt" IS NULL
+  SELECT 1 FROM "EntityLink" dq_wsh_c
+  WHERE dq_wsh_c."fromEntityId" = ${t.id} AND dq_wsh_c."deletedAt" IS NULL AND dq_wsh_c."kind" = 'wishCandidate'
 )`;
 
 export const wishChecks = defineEntityChecks({

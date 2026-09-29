@@ -96,7 +96,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - Household projects, tasks, and expenses (the spend ledger) — migrated from Notion into first-class entities
 - Vendor roster and per-transaction `Purchase` records: order id, purchase date, stated total, and invoice PDF, with split/link/merge operations over the Expenses
 - Typed Expense receipt roles (`principal`, tax, shipping, discount, fee, tip, other adjustment) that keep all money in `SUM(Expense.cost)` while excluding ancillary rows from merchandise/category analytics
-- `ProjectToolUsage` — a durable, deliberately coarse edge recording that a reusable tool or software Product was used on a project, for tool lifetime cost / cost-per-project-use rollups
+- `projectTool` link — a durable, deliberately coarse edge recording that a reusable tool or software Product was used on a project, for tool lifetime cost / cost-per-project-use rollups
 - Blocked-by dependency edges between projects and between tasks
 - Dashboard with overview/charts/data/gallery views (spending, timelines, task heatmaps, dependency graph); Data view offers a flat list or an expandable Work-Breakdown-Structure tree, both paginated by project root on the server
 - Detail pages with full inline editing, markdown notes, and image galleries
@@ -185,8 +185,8 @@ MCP / jobs      ───────────────↗
 JSONL routes    →  cancellable workflow streams
 ```
 
-- Typed declarations with real Zod schemas in `packages/schemas/src/entity-definitions/*.entity.ts` compile the exhaustive manifest, schema bindings, browser roster, filter URL catalog, kernel action capabilities, and contract cases. `pnpm generate:check` rejects stale or invalid artifacts; typecheck verifies referenced exports.
-- `executeEntity` is the baseline CRUD/filter/search/relation interface. TanStack Start is the browser entity adapter; MCP and jobs invoke the kernel directly. Explicit Start functions adapt workflows, while typed JSONL routes carry cancellable progress streams.
+- Typed declarations with real Zod schemas in `packages/schemas/src/entity-definitions/*.entity.ts` compile the exhaustive manifest, schema bindings, browser roster, filter URL catalog, kernel action capabilities, and contract cases. `pnpm generate` rejects invalid declarations and `pnpm check:clean` proves generation leaves the tree unchanged; typecheck verifies referenced exports.
+- `executeEntity` is the baseline CRUD/filter/search/relation interface. TanStack Start is the browser entity adapter; MCP and jobs invoke the kernel directly. Every other operation is a contract in `src/contracts/` implemented once in `src/server/operations/<domain>.server.ts`; the browser, HTTP API and MCP are adapters over it, and typed JSONL routes carry cancellable progress streams.
 - Services own workflows and external enrichment such as USDA data. Repositories retain transaction ownership, invariants, and entity-specific SQL.
 - `Database` is a request-scoped handle: routers and services pass it through, while repository helpers are the sanctioned place to resolve its Drizzle client. This keeps the layered architecture by convention and API locality.
 - Adding a baseline entity starts with one compiler spec, followed by the repository adapter and any thin workflow or route extensions; see [docs/entities.md](docs/entities.md).
@@ -203,7 +203,7 @@ See [AGENTS.md](AGENTS.md) for the prescriptive rules (branded IDs, soft delete,
 
 Products can be inventoried — an **Inventory Entry** specifies the amount of a given **Product** at a given **Location**.
 
-The household **Project Tracker** (migrated from Notion) is its own self-contained module: a **Project** groups **Tasks** and **Expenses** (the spend ledger), with blocked-by/blocking dependency edges between projects and between tasks. A soft-deletable **ProjectToolUsage** edge records that a reusable tool or software Product was used on one exact project. Tool lifetime cost and cost-per-project-use, plus software's non-additive shared spend during a project's effective date window, remain derived from Expenses and live usage edges rather than denormalized. Spend/progress rollups are SQL aggregates — never denormalized. Project `locations` is deliberately free-form `text[]` (house names live in data, not committed enums).
+The household **Project Tracker** (migrated from Notion) is its own self-contained module: a **Project** groups **Tasks** and **Expenses** (the spend ledger), with blocked-by/blocking dependency edges between projects and between tasks. A soft-deletable **`projectTool` link** records that a reusable tool or software Product was used on one exact project. Tool lifetime cost and cost-per-project-use, plus software's non-additive shared spend during a project's effective date window, remain derived from Expenses and live usage edges rather than denormalized. Spend/progress rollups are SQL aggregates — never denormalized. Project `locations` is deliberately free-form `text[]` (house names live in data, not committed enums).
 
 Spend itself is three entities, `Vendor ──< Purchase ──< Expense`: a **Vendor** is the roster of places money goes (identity only), a **Purchase** is one vendor order, receipt, or deliberately separate purchase event — its `orderId`, vendor date, literal `statedTotal`, and invoice documents — and an **Expense** is a spend line within that Purchase. `Expense.lineKind` distinguishes `principal` merchandise/services from productless tax, shipping, discounts, fees, tips, and combined adjustments. **All money still lives on `Expense`**: every total reads `SUM(cost)` across every kind, while cost-type/trade/tool analytics classify principal lines only and report adjustments as a signed reconciliation amount. `purchase.statedTotal` is never summed into spend. A partial-unique `(vendorId, orderId)` index makes one order exactly one Purchase. ⚠️ `Purchase` **changed meaning** in this split — the old flat ledger row is now `Expense`; see [docs/terminology.md](docs/terminology.md#vendor-vs-purchase-vs-expense).
 
@@ -300,14 +300,14 @@ the shared prod Neon instance (see "⚠ Shared prod DB" below). For iteration
 that shouldn't touch prod, use the persistent local PostgreSQL lane:
 
 ```sh
-pnpm dev:local      # start PostgreSQL, push schema, seed if empty, then Vite
+pnpm dev:local      # start PostgreSQL, apply migrations, seed if empty, then Vite
 pnpm db:dev:reset  # delete the guarded local volume, then rebuild its corpus
 pnpm db:dev:down    # stop the container (the named volume, and its data, persist)
 ```
 
 `db:dev:up` is macOS/Apple-`container`-only, matches a fixed name
 (`cubby-dev-pg`) and port (`localhost:55432`), and is idempotent — rerunning
-it reuses the existing container rather than recreating it. `db:dev:push` and
+it reuses the existing container rather than recreating it. `db:dev:migrate` and
 `db:dev:seed` refuse to run against anything but that local database (checked
 by protocol, host, port, user, password, and database). The reset also checks
 the running container's image, published port, environment, and named volume
@@ -315,9 +315,12 @@ before removing it; after `db:dev:down`, run `db:dev:up` before resetting.
 `dev:local` skips corpus seeding when products already exist;
 `db:dev:reset` restores a clean corpus. The persistent database is shared by
 local worktrees.
-If a later schema change needs a Drizzle rename decision, `dev:local` stops
-before changing data; run `pnpm db:dev:push` interactively or use the explicit
-reset to replace the synthetic corpus.
+`db:dev:migrate` applies the committed migrations (`apps/web/drizzle/`); a
+database built by the retired `db:push` is refused, so rebuild it once with
+`pnpm db:dev:reset`. A branch whose migrations are ahead of main
+sets `CUBBY_DEV_DB_NAME=cubby_dev_<name>` for `dev:local`, `db:dev:migrate`,
+`db:dev:seed`, and `db:dev:reset` to use its own database in the same
+container; reset then drops only that database.
 
 The corpus is created through a local, synthetic-only account
 (`dev@cubby.localhost` / `cubby-dev-local-only`, seeded by the real
@@ -468,8 +471,9 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   `CUBBY_E2E_WORKERS=1|2|3|4` overrides its local macOS default of 2. CI and Linux
   default to one browser worker. Multiple pairs share the host's finite CPU and memory.
 - **⚠ Shared prod DB:** every worktree's `DATABASE_URL` is the **same prod Neon**
-  instance (dev DB _is_ prod). `db:push` and data changes from one worktree are
-  visible everywhere and hit prod — coordinate schema changes across parallel work.
+  instance (dev DB _is_ prod). Data changes from one worktree are visible
+  everywhere and hit prod; schema changes reach prod only through
+  `db:migrate --target=production` — coordinate them across parallel work.
 - Editing `recipebridge/` Rust source — or the patched sibling ingredient-parser
   checkout — is picked up automatically on the next `pnpm dev` (see "WASM never
   silently drifts" above); `pnpm run wasm` forces it. Needs the rust toolchain + the
@@ -477,40 +481,42 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 
 ## ⚡ Common Commands
 
-| Command                                            | What it does                                                                     |
-| -------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `pnpm run dev`                                     | Start the web, UPC, and USDA local services                                      |
-| `pnpm run build`                                   | Build all three production Worker bundles                                        |
-| `pnpm run check`                                   | Fast full-tree quality, TypeScript, entity freshness, Knip, and high-risk guards |
-| `pnpm run check:all`                               | `check` plus Worker/OpenAPI, script-test, and security validation                |
-| `pnpm run dedupe:check`                            | Dependency deduplication; CI runs it for code validation                         |
-| `pnpm run typecheck`                               | Recursive package typecheck with `tsc` (TypeScript 7, native)                    |
-| `pnpm run lint`                                    | Full-tree Oxlint                                                                 |
-| `pnpm run lint:fix`                                | Full-tree Oxlint auto-fix                                                        |
-| `pnpm run format:check`                            | Full-tree Oxfmt check                                                            |
-| `pnpm run format`                                  | Full-tree Oxfmt write                                                            |
-| `pnpm run test`                                    | All fast unit, UI, contract, and auxiliary-package tests                         |
-| `pnpm run test:postgres`                           | Authoritative PostgreSQL contracts (disposable Apple containers on macOS)        |
-| `pnpm run test:e2e`                                | PostgreSQL-backed Playwright tests (disposable Apple containers on macOS)        |
-| `pnpm run test:all`                                | Fast tests, then PostgreSQL and Playwright concurrently                          |
-| `pnpm run test:local`                              | Alias of `test:all`                                                              |
-| `pnpm run test:services:down`                      | Remove warm `CUBBY_TEST_SERVICES=warm` containers                                |
-| `pnpm --filter @cubby/web run test:e2e:watch`      | Warm services + `vite build --watch` + Playwright `--ui`, local-only             |
-| `pnpm run db:dev:up` / `:push` / `:seed` / `:down` | Persistent local dev PostgreSQL + synthetic corpus (see above)                   |
-| `pnpm run dev:local`                               | `vite dev` against the local dev database instead of prod                        |
-| `pnpm --filter @cubby/web run db:push`             | Push the web Drizzle schema to the configured Postgres DB                        |
-| `pnpm --filter @cubby/web run build:cf`            | Build only the main web Worker                                                   |
-| `pnpm --filter @cubby/web run preview:cf`          | Run the Workers build locally                                                    |
-| `pnpm --filter @cubby/web run deploy:cf`           | Deploy to Cloudflare Workers                                                     |
-| `pnpm run deploy:all`                              | Deploy all four production Workers in dependency order                           |
-| `pnpm run wasm`                                    | Rebuild `@cubby/recipebridge` from Rust source                                   |
+| Command                                                          | What it does                                                                     |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `pnpm run dev`                                                   | Start the web, UPC, and USDA local services                                      |
+| `pnpm run build`                                                 | Build all three production Worker bundles                                        |
+| `pnpm run check`                                                 | Fast full-tree quality, TypeScript, entity freshness, Knip, and high-risk guards |
+| `pnpm run check:all`                                             | `check` plus Worker/OpenAPI, script-test, and security validation                |
+| `pnpm run dedupe:check`                                          | Dependency deduplication; CI runs it for code validation                         |
+| `pnpm run typecheck`                                             | Recursive package typecheck with `tsc` (TypeScript 7, native)                    |
+| `pnpm run lint`                                                  | Full-tree Oxlint                                                                 |
+| `pnpm run lint:fix`                                              | Full-tree Oxlint auto-fix                                                        |
+| `pnpm run format:check`                                          | Full-tree Oxfmt check                                                            |
+| `pnpm run format`                                                | Full-tree Oxfmt write                                                            |
+| `pnpm run test`                                                  | All fast unit, UI, contract, and auxiliary-package tests                         |
+| `pnpm run test:postgres`                                         | Authoritative PostgreSQL contracts (disposable Apple containers on macOS)        |
+| `pnpm run test:e2e`                                              | PostgreSQL-backed Playwright tests (disposable Apple containers on macOS)        |
+| `pnpm run test:all`                                              | Fast tests, then PostgreSQL and Playwright concurrently                          |
+| `pnpm run test:local`                                            | Alias of `test:all`                                                              |
+| `pnpm run test:services:down`                                    | Remove warm `CUBBY_TEST_SERVICES=warm` containers                                |
+| `pnpm --filter @cubby/web run test:e2e:watch`                    | Warm services + `vite build --watch` + Playwright `--ui`, local-only             |
+| `pnpm run db:dev:up` / `:migrate` / `:seed` / `:down`            | Persistent local dev PostgreSQL + synthetic corpus (see above)                   |
+| `pnpm run dev:local`                                             | `vite dev` against the local dev database instead of prod                        |
+| `pnpm run db:generate`                                           | Generate a migration for `schema.ts` + derived-DDL changes (`apps/web/drizzle/`) |
+| `pnpm run db:check`                                              | Prove the migrations carry `schema.ts` and build its exact catalog               |
+| `pnpm --filter @cubby/web run db:migrate -- --target=production` | Apply pending migrations; needs `PRODUCTION_DIRECT_DATABASE_URL`                 |
+| `pnpm --filter @cubby/web run build:cf`                          | Build only the main web Worker                                                   |
+| `pnpm --filter @cubby/web run preview:cf`                        | Run the Workers build locally                                                    |
+| `pnpm --filter @cubby/web run deploy:cf`                         | Deploy to Cloudflare Workers                                                     |
+| `pnpm run deploy:all`                                            | Deploy all four production Workers in dependency order                           |
+| `pnpm run wasm`                                                  | Rebuild `@cubby/recipebridge` from Rust source                                   |
 
 See [docs/ci.md](docs/ci.md) for CI scoping, artifact provenance, scheduled
 coverage, deployment behavior, and the measured optimizations that should not
 be reintroduced.
 
 The auxiliary Workers (`@cubby/upc-lookup` and `@cubby/usda-api`) are included in
-recursive checks/tests. Their D1 databases do not use the web `db:push` workflow:
+recursive checks/tests. Their D1 databases do not use the web migration workflow:
 generate/apply their D1 migrations locally first, run the package checks, then apply
 remote D1 migrations before deploying code that depends on the new schema. Use staged
 expand/migrate/deploy/cleanup changes for incompatible D1 schema changes.
@@ -613,8 +619,10 @@ NULL`, the embedding text hash, the AI fingerprint cache), so duplicate,
   streaming **Repair index** maintenance action. The daily cron refreshes the
   calendar feed and _asserts_ the awaiting counts are zero (Sentry when not);
   it never repairs, so a lost wakeup stays visible instead of being absorbed.
-  Search projections are written inside the entity write transaction; location
-  valuation is a SQL rollup computed on read; the problem-count badge is a KV
+  Search projections are written inside the entity write transaction; inventory
+  and location valuation are computed on every read (each entry priced through
+  the product's unit-mapping graph, then rolled up the location tree in
+  TypeScript; nothing stores them); the problem-count badge is a KV
   snapshot refreshed behind a read once a mutation marks it dirty; abandoned
   uploads are culled on the next presign.
 - **OTel disabled in production** — only runs in dev via `instrument.server.mjs`.
@@ -733,9 +741,9 @@ native Apple app (`apps/apple`) generates its client from the committed
 document and is the API's consumer of record.
 
 After changing contracts, declarations or schemas, run `pnpm generate` (one
-generator, `scripts/generator/`, running its entity, start-operation and HTTP
-OpenAPI stages in order) and `pnpm generate:check` before a PR; `pnpm check`
-includes it. Operation contracts, entity capabilities, and
+generator, `scripts/generator/`, writing the entity artifacts, then the
+operation-contract and HTTP OpenAPI artifacts) and `pnpm check:clean` before a
+PR; `pnpm check` includes generation. Operation contracts, entity capabilities, and
 runtime schemas remain authoritative; new ordinary operations require no
 HTTP-specific edits. Wire schemas are derived from the domain schemas by
 `toWire` (`apps/web/src/lib/http-api/wire.ts`): Dates become ISO strings, output
@@ -775,9 +783,9 @@ One tool renders an interactive UI in hosts that support the
 [MCP Apps extension](https://modelcontextprotocol.io/docs/extensions/apps)
 (SEP-1865) — Claude web and desktop among them:
 
-| Tool                | App                                                                                       |
-| ------------------- | ----------------------------------------------------------------------------------------- |
-| `search_usda_foods` | Pickable cards with data-type richness cues and macros; selection flows back to the agent |
+| Tool               | App                                                                                       |
+| ------------------ | ----------------------------------------------------------------------------------------- |
+| `usda_food.search` | Pickable cards with data-type richness cues and macros; selection flows back to the agent |
 
 The USDA UI is **strictly additive** — a host without the extension ignores
 `_meta.ui.resourceUri` and gets the same `structuredContent` as before. Scope is
@@ -785,7 +793,7 @@ deliberately narrow: an app earns its place only where the chat is the right
 home for the interaction _and_ text is a bad medium for it. Tables, boards, and
 charts stay in the web app, one `openLink` away.
 
-`get_shopping_list` remains a plain tool with structured content and readable
+`nutrition.shopping_list` remains a plain tool with structured content and readable
 text. The removed widget's temporary checkbox state was never durable; durable
 manual items and checks belong to the ranked shopping-list project.
 
@@ -825,7 +833,7 @@ between the web app and the iframes.
 - **Contract:** `@cubby/usda-contract` defines endpoints with Zod schemas (ts-rest).
 - **Schemas:** `@cubby/usda-schemas` for shared entity types.
 - **Client:** [apps/web/src/server/clients/usda.ts](apps/web/src/server/clients/usda.ts) wraps the ts-rest client.
-- **Browser adapter:** [apps/web/src/entities/usda.functions.ts](apps/web/src/entities/usda.functions.ts).
+- **Browser adapter:** [apps/web/src/contracts/usda.contract.ts](apps/web/src/contracts/usda.contract.ts) (cache tags and freshness live on its members; the generated `catalog.gen.ts` resolves them).
 - Service layer processes USDA portion data through WASM for conversions.
 
 ```ts
@@ -844,14 +852,14 @@ sections there.
 
 ### Recently shipped
 
-- **Either-side-first product import** — belongings can be imported from photos or from vendor orders in any order and converge on one Product. A photo-inventory run's agent proposes item groups (`propose_photo_groups`) that a human edits and approves on the run page, alongside each photo's original, cutout, and processing state. A product match queue in the recommendations workbench pairs never-bought stocked Products with purchased ones (text similarity, name overlap, plus agent pairs recorded with evidence via `propose_product_match`) for side-by-side review and merge into the purchase Product with own photos leading the cover. Purchase prep also treats a numeric order-line SKU as a GTIN, so a barcode read off a photographed tag is an exact match.
-- **Product merge** — fold duplicate Product rows into one survivor: stock, ledger lines, external identifiers, images, unit mappings, tasks, project uses, and wishlist candidacies move onto the keeper, same-location stock is summed rather than dropped, and every recipe that costs through a merged-away or deleted product recomputes. Exposed as `merge_products` over MCP; `findDuplicateProductIdentities` (Problems) surfaces candidates by shared identifier-slot evidence (a barcode or a retailer SKU). Built on a shared merge core (`finalizeMerge`) that now underlies all four entity merges (ingredient, vendor, purchase, product) and makes the embedding-cleanup cascade structural rather than a per-merge obligation.
+- **Either-side-first product import** — belongings can be imported from photos or from vendor orders in any order and converge on one Product. A photo-inventory run's agent proposes item groups (`photo_run.propose_groups`) that a human edits and approves on the run page, alongside each photo's original, cutout, and processing state. A product match queue in the recommendations workbench pairs never-bought stocked Products with purchased ones (text similarity, name overlap, plus agent pairs recorded with evidence via `product_enrichment.propose_match`) for side-by-side review and merge into the purchase Product with own photos leading the cover. Purchase prep also treats a numeric order-line SKU as a GTIN, so a barcode read off a photographed tag is an exact match.
+- **Product merge** — fold duplicate Product rows into one survivor: stock, ledger lines, external identifiers, images, unit mappings, tasks, project uses, and wishlist candidacies move onto the keeper, same-location stock is summed rather than dropped, and every recipe that costs through a merged-away or deleted product recomputes. Exposed as `entity.merge` (`entity: "product"`) over MCP; `findDuplicateProductIdentities` (Problems) surfaces candidates by shared identifier-slot evidence (a barcode or a retailer SKU). Built on a shared merge core (`finalizeMerge`) that now underlies all four entity merges (ingredient, vendor, purchase, product) and makes the embedding-cleanup cascade structural rather than a per-merge obligation.
 - **Tool wishlist** — a `Wish` entity (`WSH-`) for tracking wanted-but-not-yet-owned items, independent of inventory or projects. Rebuilt on the shared entity/CRUD-factory machinery; the list surfaces each wish's candidate-product cover images and price range, and expands into per-candidate rows the way the Projects Data tab nests sub-projects.
-- **Manufacturer spelling snapped on create** — `entity create product` resolves `manufacturer` to the established spelling already used among live Products, closing the drift that let variant spellings accumulate; `entity update product` deliberately does not auto-snap.
+- **Manufacturer spelling snapped on create** — `entity.create product` resolves `manufacturer` to the established spelling already used among live Products, closing the drift that let variant spellings accumulate; `entity.update product` deliberately does not auto-snap.
 - **Financial accounts & transactions** — a settlement evidence layer, `FinancialAccount ──< FinancialTransaction`, separate from spend: statement activity (pending charges, split tender, installments, refunds), allocated across the Purchases it settles so one card line can cover several orders. `Expense.cost` remains the sole spend source; reconciliation compares linked transactions against Expense lines as `unknown`/`pending`/`match`/`mismatch`. Client-parsed Monarch statement preview drives selective, user-approved creation.
 - **Typed Expense line roles** — `Expense.lineKind` (`principal`, tax, shipping, discount, fee, tip, other adjustment) distinguishes merchandise/services from productless receipt adjustments, all still summed into `SUM(Expense.cost)`, while excluding adjustment rows from merchandise/category analytics.
-- **`ProjectToolUsage`** — a durable, deliberately coarse edge recording that a reusable tool or software Product was used on a project, feeding tool-lifetime-cost and cost-per-project-use rollups without double-counting the original Expense. `/projects/tools` adds a tools × projects matrix (three-state toggle cells, grouped by derived trade or manufacturer) for bulk-backfilling usage history, since attaching one project at a time through a dialog had left the ledger largely empty.
-- **Vendor / Purchase / Expense split** — the flat spend ledger became `Vendor ──< Purchase ──< Expense`. The old ledger row is now **`Expense`** (routes `/expenses`, MCP `*_expense(s)` tools); **`Purchase`** is a vendor order/receipt event holding its order id, vendor date, literal never-summed `statedTotal`, and invoice PDF; **`Vendor`** is a real roster. Create/update inputs still take `vendor` (a name) and `orderId` and resolve both on first sight. New operations: `linkExpensesToPurchase`, `splitExpense`, `mergePurchases`.
+- **`projectTool` link** — a durable, deliberately coarse edge recording that a reusable tool or software Product was used on a project, feeding tool-lifetime-cost and cost-per-project-use rollups without double-counting the original Expense. The `/tools` Usage view adds a tools × projects matrix (three-state toggle cells, grouped by derived trade or manufacturer) for bulk-backfilling usage history, since attaching one project at a time through a dialog had left the ledger largely empty.
+- **Vendor / Purchase / Expense split** — the flat spend ledger became `Vendor ──< Purchase ──< Expense`. The old ledger row is now **`Expense`** (routes `/expenses`, the MCP `entity` tool's `expense` actions); **`Purchase`** is a vendor order/receipt event holding its order id, vendor date, literal never-summed `statedTotal`, and invoice PDF; **`Vendor`** is a real roster. Create/update inputs still take `vendor` (a name) and `orderId` and resolve both on first sight. New operations: `linkExpensesToPurchase`, `splitExpense`, `mergePurchases`.
 - **Project tracker migration + maturation** — the household projects/tasks/expenses databases moved from Notion into first-class cubby entities (DB tables, full CRUD UI at `/projects` `/tasks` `/expenses`, MCP tools, dashboard + charts). Follow-ups consolidated the entities onto shared helpers and the entity manifest, added detail pages with full editing UI, wired all three into global search + semantic embeddings, and made them first-class in inline links/hovercards (with mobile dialogs). The one-time import script was removed post-cutover (recoverable from git history).
 - **Unified planning calendar** — meals, task ranges, planned/actual expenses, and project spans share filterable month-overview and week-ledger views with a day drawer, quick-add flows, operational summaries, and selective drag-to-reschedule. The Meals calendar tab reuses the same implementation.
 

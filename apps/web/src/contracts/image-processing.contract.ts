@@ -29,11 +29,13 @@ export const imageProcessingContract = defineContract("imageProcessing", {
     native: "Image analysis history",
     input: imageAnalysisHistoryInput,
     output: imageAnalysisHistoryOutput,
+    cache: { tags: [["image"]] },
   }),
   retry: mutation({
     native: "Retry failed image processing",
     input: retryImageProcessingInput,
     output: retryImageProcessingOutput,
+    invalidates: ["image"],
   }),
   // WebSockets do not have an OpenAPI operation of their own. This native-only
   // validation operation makes the exact shared wire unions generator-visible
@@ -45,37 +47,27 @@ export const imageProcessingContract = defineContract("imageProcessing", {
     output: validateImageProcessingCompanionMessageOutput,
   }),
   status: query({
-    mcp: {
-      name: "get_image_processing",
-      description:
-        "Read an image's durable description and transparent-cutout processing status.",
-    },
     native: "Image processing status",
     input: imageProcessingStatusInput,
     output: imageProcessingStatusOutput,
+    cache: { tags: [["image"]] },
   }),
   schedule: mutation({
-    mcp: {
-      name: "schedule_image_processing",
-      description:
-        "Schedule description and/or transparent-cutout processing for an uploaded image.",
-    },
     native: "Schedule image processing",
     input: scheduleImageProcessingInput,
     output: scheduleImageProcessingOutput,
+    invalidates: ["image"],
   }),
   evaluateAppleDescription: mutation({
     native: "Evaluate image description on Apple device",
     input: evaluateAppleImageDescriptionInput,
     output: evaluateAppleImageDescriptionOutput,
+    invalidates: ["image"],
   }),
   correctDescription: mutation({
-    mcp: {
-      name: "correct_image_description",
-      description: "Save a confirmed correction for an image description.",
-    },
     native: "Confirm image description correction",
     input: imageDescriptionCorrectionInput,
     output: imageDescriptionCorrectionOutput,
+    invalidates: ["image"],
   }),
 });

@@ -36,7 +36,7 @@ export interface PickerPresentation {
 }
 
 // Generic ComboboxItem type that preserves ID branding
-// TId defaults to string for backward compatibility
+// TId defaults to string for pickers whose ids are not branded
 export type ComboboxItem<TId extends string = string> = {
   /** Canonical value written by the assignment adapter. */
   name: string;

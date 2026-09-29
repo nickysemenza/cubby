@@ -11,7 +11,7 @@ import { locationChildGroupLabel } from "~/app/_components/locations/location-vi
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { Eyebrow } from "~/components/ui/eyebrow";
-import { entityListFor } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list";
 import { formatCurrency } from "~/lib/utils";
 
 /**

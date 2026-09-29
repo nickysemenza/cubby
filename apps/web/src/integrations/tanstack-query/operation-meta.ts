@@ -1,6 +1,7 @@
 import type { QueryKey } from "@tanstack/react-query";
 import { z } from "zod";
 
+import type { CacheTag } from "~/contracts/cache-policy";
 import type { OperationTransport } from "~/lib/perf/perf-store";
 
 import type { InvalidationTagSet } from "./cache-tags";
@@ -36,7 +37,7 @@ export interface CubbyOperationMeta extends Record<string, unknown> {
   silentErrors?: boolean;
 }
 
-export type OperationCacheTag = readonly [string, ...string[]];
+export type OperationCacheTag = CacheTag;
 
 declare module "@tanstack/react-query" {
   interface Register {

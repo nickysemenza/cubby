@@ -4,8 +4,10 @@ import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { inventory } from "~/app/inventory/inventory.functions";
-import { recommendations } from "~/lib/recommendations.functions";
+import {
+  inventory,
+  recommendations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { categorySummaryFixture } from "../../../../tooling/product-category-fixtures";
@@ -73,7 +75,7 @@ const inventoryitem = inventoryWithLocationAndProductOut.parse({
   dataQuality: testCompleteDataQuality(),
 });
 const recommendation = entityRecommendationsOut.parse({
-  source: { entityType: "inventory", entityId: INVENTORY_ID },
+  source: { entityKind: "inventory", entityId: INVENTORY_ID },
   basisKey: "parked-at-unknown",
   groups: [
     {
@@ -115,7 +117,7 @@ describe("InventoryPlacementSuggestion", () => {
           displayName: "Canned tomatoes · Pantry",
         },
       ],
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {},
     }));
     render(
       <InventoryPlacementSuggestion

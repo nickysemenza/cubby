@@ -5,8 +5,8 @@ import { and, desc, eq, exists, or, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   aiUsage,
+  auditLog,
   run as runTable,
-  runMutation,
   runTarget,
   vendor,
   vendorAccount,
@@ -21,7 +21,7 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 
-/** Resolve the public Purchase id used by the RunMutation target edge. */
+/** Resolve the public Purchase id a Run's AuditLog rows name. */
 export async function resolvePurchaseImportTarget(
   db: Database | DrizzleTransaction,
   purchaseShortcode: string,
@@ -81,13 +81,13 @@ export function listRuns(
           ? or(
               exists(
                 getDb(db)
-                  .select({ id: runMutation.id })
-                  .from(runMutation)
+                  .select({ id: auditLog.id })
+                  .from(auditLog)
                   .where(
                     and(
-                      eq(runMutation.runId, runTable.id),
-                      eq(runMutation.targetKind, "purchase"),
-                      eq(runMutation.targetId, purchaseId),
+                      eq(auditLog.runId, runTable.id),
+                      eq(auditLog.entityKind, "purchase"),
+                      eq(auditLog.entityId, purchaseId),
                     ),
                   ),
               ),
@@ -98,7 +98,7 @@ export function listRuns(
                   .where(
                     and(
                       eq(runTarget.runId, runTable.id),
-                      eq(runTarget.purchaseId, purchaseId),
+                      eq(runTarget.entityId, purchaseId),
                     ),
                   ),
               ),
@@ -160,7 +160,7 @@ export function listProductRuns(
                 .where(
                   and(
                     eq(runTarget.runId, runTable.id),
-                    eq(runTarget.productId, productId),
+                    eq(runTarget.entityId, productId),
                   ),
                 ),
             )
@@ -198,7 +198,7 @@ export async function reportRunTargetDeviceWork(
         deviceWorkAttempts: runTarget.deviceWorkAttempts,
       })
       .from(runTarget)
-      .where(and(eq(runTarget.runId, runId), eq(runTarget.imageId, imageId)))
+      .where(and(eq(runTarget.runId, runId), eq(runTarget.entityId, imageId)))
       .for("update");
     if (!target)
       throw new Error("This run has no photo target for that image.");

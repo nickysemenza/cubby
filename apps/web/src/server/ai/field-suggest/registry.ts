@@ -295,7 +295,7 @@ async function lexicalProductCandidates(
   if (trimmed.length < MIN_SEARCH_TEXT_LENGTH) return [];
   return findLexicalSearchCandidates(
     db,
-    { query: trimmed, entityTypes: ["product"], limit: REFERENCE_ROSTER_CAP },
+    { query: trimmed, entityKinds: ["product"], limit: REFERENCE_ROSTER_CAP },
     REFERENCE_ROSTER_CAP,
   );
 }
@@ -450,7 +450,8 @@ export const FIELD_SUGGEST_REGISTRY = {
   } satisfies ArrayPruneSuggestSpec,
   "location.type": {
     kind: "enum",
-    values: locationType.options,
+    // `furniture` is a Product instance; only a productId link can make one.
+    values: locationType.options.filter((value) => value !== "furniture"),
     describe: (v) => LOCATION_TYPE_DESCRIPTIONS[v],
     rules: LOCATION_TYPE_RULES,
     subject: (basis) => renderSubject("location", basis),

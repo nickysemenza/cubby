@@ -14,16 +14,16 @@ import {
   product,
 } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { precomputeEnrichmentProposalsWorkflow } from "~/server/operations/ai.server";
+import {
+  mergeWorkflow,
+  resolveOrCreateWorkflow,
+} from "~/server/operations/ingredient.server";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { deleteRecipes } from "~/server/repo/recipe";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { executeWorkflow, workflow } from "~/server/workflow-runtime";
-import { precomputeEnrichmentProposalsWorkflow } from "~/server/workflows/ai.server";
-import {
-  mergeWorkflow,
-  resolveOrCreateWorkflow,
-} from "~/server/workflows/ingredient.server";
 
 import { getDb, withTransaction } from "./database-helpers";
 import { patchEntityRows } from "./entity-patch";
@@ -522,7 +522,7 @@ describe("ingredient", () => {
     await getDb(ctx.db)
       .insert(entityEmbedding)
       .values({
-        entityType: "ingredient",
+        entityKind: "ingredient",
         entityId: alias.id,
         embeddingText: `ingredient ${alias.id}`,
         embeddingHash: `hash-${alias.id}`,
@@ -694,7 +694,7 @@ describe("ingredient repository — transactional update", () => {
     expect((await getIngredientByID(ctx.db, createdId)).name).toBe(original);
 
     const audit = await getAuditLog(ctx.db, {
-      entityType: "ingredient",
+      entityKind: "ingredient",
       entityId: createdId,
       limit: 20,
     });

@@ -7,16 +7,19 @@ export const productReuseFixture = {
   result: {
     toolCalls: [
       {
-        name: "mcp__cubby__prepare_purchase_import",
+        name: "mcp__cubby__purchase_import",
+        action: "prepare",
         runOperationId: "prepare:order:vendor-1001",
       },
-      { name: "mcp__cubby__search_entities" },
+      { name: "mcp__cubby__entity_read", action: "search" },
       {
-        name: "mcp__cubby__commit_purchase_import",
+        name: "mcp__cubby__purchase_import",
+        action: "commit",
         runOperationId: "commit:order:vendor-1001",
       },
       {
-        name: "mcp__cubby__commit_purchase_import",
+        name: "mcp__cubby__purchase_import",
+        action: "commit",
         runOperationId: "commit:order:vendor-1001",
       },
     ],

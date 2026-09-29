@@ -6,7 +6,7 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { useQuery } from "@tanstack/react-query";
 
-import { dashboard } from "~/lib/dashboard.functions";
+import { dashboard } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 const additionalCountEntities = [
   "ledgerParty",

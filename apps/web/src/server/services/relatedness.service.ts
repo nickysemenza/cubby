@@ -6,6 +6,7 @@ import type { SimilarEntitiesOut } from "@cubby/schemas/search";
 import { isCollectionTag } from "@cubby/shared/collection-tag";
 
 import type { Database } from "~/server/db";
+import { findSimilarEntitiesWorkflow } from "~/server/operations/semantic-similarity.server";
 import {
   getProductsByShortcodes,
   getProductsSharingTags,
@@ -16,7 +17,6 @@ import {
   suggestionCandidateKey,
 } from "~/server/repo/suggestion-dismissal";
 import { bindWorkflow, workflow } from "~/server/workflow-runtime";
-import { findSimilarEntitiesWorkflow } from "~/server/workflows/semantic-similarity.server";
 
 import { buildProductRelatednessLedger } from "./relatedness-ledger";
 
@@ -45,7 +45,7 @@ export interface RelatednessDependencies {
   makeCandidateKey: typeof suggestionCandidateKey;
 }
 
-export const productionRelatednessDependencies: RelatednessDependencies = {
+const productionRelatednessDependencies: RelatednessDependencies = {
   resolveSourceId: resolveOrThrow,
   findSimilarEntities: findSimilarEntitiesWorkflow,
   getProductsSharingTags,
@@ -63,7 +63,7 @@ type RelatednessContext = {
   dependencies: RelatednessDependencies;
 };
 
-export const productRelatednessWorkflowDefinition = workflow<
+const productRelatednessWorkflowDefinition = workflow<
   RelatednessContext,
   ProductShortcode
 >("relatedness.product")
@@ -94,8 +94,8 @@ export const productRelatednessWorkflowDefinition = workflow<
       context.dependencies.getProductsSharingTags(context.db, source),
     dismissals: ({ context }, { source }) =>
       context.dependencies.getActiveDismissalKeys(context.db, {
-        sourceEntityType: "product",
-        sourceEntityId: source,
+        entityKind: "product",
+        entityId: source,
         suggestionKind: "product.related",
       }),
   })
@@ -136,23 +136,18 @@ export const productRelatednessWorkflowDefinition = workflow<
     };
   });
 
-export const getProductRelatedness = bindWorkflow(
-  productRelatednessWorkflowDefinition,
-  (
-    db: Database,
-    sourceId: ProductShortcode,
-    dependencies: RelatednessDependencies = productionRelatednessDependencies,
-  ) => ({
-    context: { db, dependencies },
-    input: sourceId,
-  }),
-);
+const productRelatedness = bindWorkflow(productRelatednessWorkflowDefinition);
+export const getProductRelatedness = (
+  db: Database,
+  sourceId: ProductShortcode,
+  dependencies: RelatednessDependencies = productionRelatednessDependencies,
+) => productRelatedness({ db, dependencies }, sourceId);
 
 /**
  * Tags are proposed only from current semantic neighbours. They remain out of
  * relatedness scoring, so the ground-truth label cannot vote for itself.
  */
-export const productTagPropagationWorkflowDefinition = workflow<
+const productTagPropagationWorkflowDefinition = workflow<
   RelatednessContext,
   ProductShortcode
 >("recommendations.tagPropagation")
@@ -182,8 +177,8 @@ export const productTagPropagationWorkflowDefinition = workflow<
       ]),
     dismissals: ({ context }, { source }) =>
       context.dependencies.getActiveDismissalKeys(context.db, {
-        sourceEntityType: "product",
-        sourceEntityId: source.id,
+        entityKind: "product",
+        entityId: source.id,
         suggestionKind: "product.tag-propagation",
       }),
   })
@@ -250,14 +245,11 @@ export const productTagPropagationWorkflowDefinition = workflow<
     }),
   );
 
-export const getProductTagPropagation = bindWorkflow(
+const productTagPropagation = bindWorkflow(
   productTagPropagationWorkflowDefinition,
-  (
-    db: Database,
-    sourceId: ProductShortcode,
-    dependencies: RelatednessDependencies = productionRelatednessDependencies,
-  ) => ({
-    context: { db, dependencies },
-    input: sourceId,
-  }),
 );
+export const getProductTagPropagation = (
+  db: Database,
+  sourceId: ProductShortcode,
+  dependencies: RelatednessDependencies = productionRelatednessDependencies,
+) => productTagPropagation({ db, dependencies }, sourceId);

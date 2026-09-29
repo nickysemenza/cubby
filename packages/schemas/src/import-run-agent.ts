@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+import type {
+  CubbyMcpToolAction,
+  CubbyMcpToolName,
+} from "./generated/mcp-tool-names.gen";
 import { runEntityId } from "./identifier-fields";
 import { runPurpose } from "./run-fields";
 
@@ -57,57 +61,76 @@ const IMPORT_RUN_AGENT_TOOLS = [
 ] as const;
 export type ImportRunAgentToolName = (typeof IMPORT_RUN_AGENT_TOOLS)[number];
 
-const PHOTO_MCP_TOOLS = [
-  "get_photo_run_context",
-  "get_image_processing",
-  "suggest_photo_product_candidates",
-  "resolve_products",
-  "find_similar_entities",
-  "propose_photo_groups",
-  "list_photo_group_proposals",
-  "patch_products_external_ids",
-] as const;
+const PHOTO_MCP_ACTIONS = [
+  "imports_read.photo_context",
+  "imports_read.image_processing",
+  "imports_read.photo_candidates",
+  "imports_read.photo_proposals",
+  "entity_read.resolve",
+  "search.similar",
+  "photo_run.propose_groups",
+  "product_enrichment.patch_external_ids",
+] as const satisfies readonly CubbyMcpToolAction[];
 
-// Tools purchase runs called in production plus those the purchase-import and
-// product-enrichment skills (mounted on every purchase run) name.
-const PURCHASE_MCP_TOOLS = [
-  "commit_purchase_import",
-  "confirm_purchase_merchant_vendor",
-  "entity",
-  "entity_batch",
-  "find_product_external_id_collisions",
-  "find_similar_entities",
-  "find_statement_row_drift",
-  "get_entities",
-  "get_vendor_coverage",
-  "global_search",
-  "import_operation_status",
-  "list_entity_relation",
-  "list_statement_imports",
-  "list_statement_rows",
-  "lookup_upc",
-  "patch_products_external_ids",
-  "prepare_purchase_import",
-  "preview_financial_statement_import",
-  "propose_product_match",
-  "record_statement_rows",
-  "resolve_products",
-  "schedule_image_processing",
-  "update_statement_rows",
-  "validate_purchase_import",
-  "verify_products_images",
-] as const;
+// Actions purchase runs called in production plus those the purchase-import
+// and product-enrichment skills (mounted on every purchase run) name.
+const PURCHASE_MCP_ACTIONS = [
+  "entity_read.get",
+  "entity_read.list",
+  "entity_read.search",
+  "entity_read.relations",
+  "entity_read.resolve",
+  "entity.create",
+  "entity.update",
+  "entity.delete",
+  "entity.merge",
+  "entity.bulkUpdate",
+  "entity.link",
+  "entity.unlink",
+  "entity.commands",
+  "search.global",
+  "search.similar",
+  "finance_read.statement_rows",
+  "finance_read.imports",
+  "finance_read.drift",
+  "finance_read.preview_import",
+  "statement_rows.record",
+  "statement_rows.update",
+  "imports_read.purchase_status",
+  "imports_read.vendor_coverage",
+  "imports_read.external_id_collisions",
+  "imports_read.upc_lookup",
+  "purchase_import.prepare",
+  "purchase_import.validate",
+  "purchase_import.commit",
+  "purchase_import.confirm_vendor",
+  "product_enrichment.propose_match",
+  "product_enrichment.patch_external_ids",
+  "product_enrichment.verify_images",
+  "image.schedule_processing",
+] as const satisfies readonly CubbyMcpToolAction[];
 
-export type CubbyMcpToolName =
-  | (typeof PHOTO_MCP_TOOLS)[number]
-  | (typeof PURCHASE_MCP_TOOLS)[number];
+/** The tools Flue mounts for a set of actions: it mounts by tool name. */
+const toolsOf = <const Actions extends readonly CubbyMcpToolAction[]>(
+  actions: Actions,
+) =>
+  // SAFETY: every generated action is `${tool}.${action}` with a dot-free
+  // tool name, so the segment before the first dot is exactly that tool.
+  [...new Set(actions.map((action) => action.split(".")[0]))] as Array<
+    Actions[number] extends `${infer Tool}.${string}` ? Tool : never
+  >;
 
 export type ImportRunAgentConfig = {
   /** OpenAI model id the Flue coordinator runs on. */
   model: "gpt-6-luna" | "gpt-6-sol";
   effort: "low" | "medium" | "high";
   agentTools: readonly ImportRunAgentToolName[];
-  /** Flue sends every mounted tool's schema on every call, so list only what the workflow uses. */
+  /**
+   * Flue mounts MCP tools by name and sends every mounted schema on every
+   * call; Cubby narrows each mounted tool's advertised schema to these
+   * actions and refuses any other action from the run.
+   */
+  mcpActions: readonly CubbyMcpToolAction[];
   mcpTools: readonly CubbyMcpToolName[];
 };
 
@@ -115,7 +138,22 @@ const purchaseAgent = {
   model: "gpt-6-sol",
   effort: "high",
   agentTools: IMPORT_RUN_AGENT_TOOLS,
-  mcpTools: PURCHASE_MCP_TOOLS,
+  mcpActions: PURCHASE_MCP_ACTIONS,
+  mcpTools: toolsOf(PURCHASE_MCP_ACTIONS),
+} satisfies ImportRunAgentConfig;
+
+// Enrichment runs also commit what they verified; `enrichment_commit` is
+// granted to the product_enrichment purpose only (server capability gate).
+const ENRICHMENT_MCP_ACTIONS = [
+  ...PURCHASE_MCP_ACTIONS,
+  "product_enrichment.commit",
+  "product_enrichment.overwrite",
+] as const satisfies readonly CubbyMcpToolAction[];
+
+const enrichmentAgent = {
+  ...purchaseAgent,
+  mcpActions: ENRICHMENT_MCP_ACTIONS,
+  mcpTools: toolsOf(ENRICHMENT_MCP_ACTIONS),
 } satisfies ImportRunAgentConfig;
 
 /**
@@ -133,9 +171,10 @@ export const importRunAgentManifest = {
       "report_agent_progress",
       "stop_import_run_for_review",
     ],
-    mcpTools: PHOTO_MCP_TOOLS,
+    mcpActions: PHOTO_MCP_ACTIONS,
+    mcpTools: toolsOf(PHOTO_MCP_ACTIONS),
   },
   account_sync: purchaseAgent,
   purchase_validation: purchaseAgent,
-  product_enrichment: purchaseAgent,
+  product_enrichment: enrichmentAgent,
 } as const satisfies Record<FlueImportRunPurpose, ImportRunAgentConfig>;

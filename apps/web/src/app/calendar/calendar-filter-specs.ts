@@ -5,11 +5,10 @@ import {
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { createElement } from "react";
 
-import { futureFilterOptions } from "~/app/expenses/expense-options";
 import { tradeOptions } from "~/app/projects/trade-options";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { fieldEnumOptions } from "~/entities/enum-field-display";
-import type { FilterSpec } from "~/entities/filter-manifest";
+import { getEntityFilters, type FilterSpec } from "~/entities/filter-manifest";
 
 import { KIND_ICONS } from "./calendar-icons";
 
@@ -102,7 +101,10 @@ export const calendarFilterSpecs: readonly FilterSpec[] = [
     kind: "boolean",
     label: "Expense status",
     placeholder: "Filter by expense status...",
-    options: futureFilterOptions,
+    // The expense list's own roster for this column.
+    options: getEntityFilters("expense").find(
+      (spec) => spec.columnId === "future",
+    )?.options,
   },
   {
     columnId: "projectStatus",

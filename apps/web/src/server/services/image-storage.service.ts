@@ -83,7 +83,7 @@ type StagedImageRecord = Pick<
   "key" | "filename" | "contentType"
 > & {
   status: string;
-  entityType: string | null;
+  associations: readonly { entityKind: string }[];
 };
 
 /** Explicit external seams for image storage; production binds real adapters. */
@@ -521,8 +521,8 @@ const createFileUploadWithPorts = async <TDatabase>(
  * discards the staging row on success, and `deleteImages` is a HARD delete that
  * takes the row's entity associations with it — so an `uploadId` naming an
  * already-attached image would duplicate the attachment and then destroy the
- * original. That mixup is easy to make rather than exotic: `attach_files`
- * RETURNS an `imageId` and `create_file_uploads` returns an `uploadId`, both
+ * original. That mixup is easy to make rather than exotic: `image.attach_files`
+ * RETURNS an `imageId` and `image.create_uploads` returns an `uploadId`, both
  * `IMG-` codes over the same table, so a retry that reaches for the wrong one
  * looks identical. Requiring the staged state turns it into a clean error.
  *
@@ -543,7 +543,7 @@ const readStagedUpload = async <TDatabase>(
   const notFound = (cause?: unknown) =>
     createAppError(
       "IMAGE_ATTACH_FAILED",
-      `Upload ${uploadId} not found. Call create_file_uploads first.`,
+      `Upload ${uploadId} not found. Call image.create_uploads first.`,
       cause,
     );
   // `uploadId` is the staged row's public `IMG-` code; `getImageById` is a raw
@@ -566,11 +566,11 @@ const readStagedUpload = async <TDatabase>(
       }
       throw notFound(error);
     });
-  if (staged.status !== "PENDING" || staged.entityType !== null) {
+  if (staged.status !== "PENDING" || staged.associations.length > 0) {
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
-      `${uploadId} is not a staged upload — it is an existing ${staged.entityType ?? "stored"} file. ` +
-        "Pass the uploadId returned by create_file_uploads, not an imageId from a previous attach_files.",
+      `${uploadId} is not a staged upload — it is an existing ${staged.associations[0]?.entityKind ?? "stored"} file. ` +
+        "Pass the uploadId returned by image.create_uploads, not an imageId from a previous image.attach_files.",
     );
   }
   const response = await ports.objectStorage.getObject(staged.key);
@@ -715,7 +715,7 @@ const attachmentResponse = <TDatabase>(
     filename: row.filename,
     contentType: row.contentType,
     kind: row.contentType === PDF_CONTENT_TYPE ? "document" : "image",
-    entityType: input.entityType,
+    entityKind: input.entityKind,
     entityId: input.entityId,
     // The key lives on the attachment (ADR 0006); a reuse matched this one.
     idempotencyKey: input.idempotencyKey ?? null,
@@ -745,15 +745,15 @@ const attachFileToEntityWithPorts = async <TDatabase>(
   const entityId = await ports.shortcode.resolveLive(
     db,
     input.entityId,
-    input.entityType,
+    input.entityKind,
   );
   if (!entityId) {
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
-      `${input.entityType} ${input.entityId} not found`,
+      `${input.entityKind} ${input.entityId} not found`,
     );
   }
-  const entity = parseEntityRef(input.entityType, entityId);
+  const entity = parseEntityRef(input.entityKind, entityId);
   await ports.repository.assertAttachableEntityExists(db, entity);
 
   // A cheap retry can return before fetching/uploading bytes. The same lookup

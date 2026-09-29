@@ -10,13 +10,20 @@ import type { RunId } from "@cubby/schemas/identifiers";
  * TTL, the non-streaming wire shape the cache key needs, a new middleware —
  * is one edit here instead of ten.
  */
-import { chat, type ModelMessage } from "@tanstack/ai";
+import { chat, embed, type ModelMessage } from "@tanstack/ai";
 
+import type { UnparsedError } from "~/lib/error-utils";
 import { recordAiUsage } from "~/server/ai-usage";
-import type { AiChatFeature, AiStructuredFeature } from "~/server/ai/features";
+import type {
+  AiChatFeature,
+  AiFeature,
+  AiStructuredFeature,
+} from "~/server/ai/features";
 import {
   getChatModelConfig,
+  providerFor,
   type SupportedChatModel,
+  type SupportedEmbeddingModel,
   adaptiveThinkingFor,
 } from "~/server/ai/models";
 import {
@@ -90,6 +97,78 @@ export interface AiRunContext<T = unknown> {
    * settles must not be free to keep re-prompting a paid model forever).
    */
   validate?: (output: T) => { ok: true } | { ok: false; issues: string[] };
+}
+
+/** The call-site fields a usage row takes from an {@link AiRunContext}. */
+type UsageCallContext = Pick<
+  AiRunContext,
+  "db" | "runId" | "operation" | "job" | "entity" | "cacheStatus"
+>;
+
+/** What one call did; the rest of the row comes from the feature and context. */
+export interface FeatureUsageOutcome {
+  durationMs: number;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  estimatedCost?: number | null;
+  attempt?: number;
+  status?: "succeeded" | "failed";
+  gatewayLogId?: string | null;
+  /** Overrides the context's caller-cache status for this row. */
+  cacheStatus?: "hit" | "miss" | "none";
+  applicationCacheStatus?: ApplicationCacheStatus;
+}
+
+/**
+ * The one writer of `AiUsage` rows for work that does not flow through the
+ * chat middleware: Jev's raw gateway fetch, embeddings, and answers replayed
+ * from the caller's own cache (`AiAnalysis`), which place no model call at
+ * all. Chat-tier calls are recorded by `aiGatewayUsageMiddleware`. Every
+ * model call records exactly one row — a second writer double-counts spend —
+ * so a new call path goes through this function or the middleware, never
+ * `recordAiUsage` directly. Provider comes from the model registry.
+ */
+export async function recordFeatureUsage(
+  spec: Pick<AiFeature, "feature" | "model">,
+  ctx: UsageCallContext,
+  outcome: FeatureUsageOutcome,
+): Promise<void> {
+  if (!ctx.db) return;
+  await recordAiUsage(ctx.db, {
+    provider: providerFor(spec.model),
+    model: spec.model,
+    feature: spec.feature,
+    operation: ctx.operation,
+    runId: ctx.runId,
+    jobKind: ctx.job?.kind ?? null,
+    jobId: ctx.job?.id ?? null,
+    entity: ctx.entity ?? null,
+    inputTokens: outcome.inputTokens ?? null,
+    outputTokens: outcome.outputTokens ?? null,
+    estimatedCost: outcome.estimatedCost ?? null,
+    attempt: outcome.attempt,
+    status: outcome.status,
+    gatewayLogId: outcome.gatewayLogId ?? null,
+    durationMs: outcome.durationMs,
+    cacheStatus: outcome.cacheStatus ?? ctx.cacheStatus ?? "none",
+    applicationCacheStatus: outcome.applicationCacheStatus,
+  });
+}
+
+/** A gateway-response-cache answer: no tokens, no cost, zero attempts. */
+export function recordApplicationCacheHit(
+  spec: Pick<AiFeature, "feature" | "model">,
+  ctx: UsageCallContext,
+  durationMs: number,
+): Promise<void> {
+  return recordFeatureUsage(spec, ctx, {
+    durationMs,
+    inputTokens: 0,
+    outputTokens: 0,
+    estimatedCost: 0,
+    attempt: 0,
+    applicationCacheStatus: "hit",
+  });
 }
 
 /**
@@ -336,26 +415,7 @@ export async function runStructuredFeature<T>(
     force: ctx.force,
     keyInput,
     validate,
-    onHit: async (durationMs) => {
-      if (!ctx.db) return;
-      await recordAiUsage(ctx.db, {
-        provider: getChatModelConfig(spec.model).provider,
-        model: spec.model,
-        feature: spec.feature,
-        operation: ctx.operation,
-        runId: ctx.runId,
-        jobKind: ctx.job?.kind ?? null,
-        jobId: ctx.job?.id ?? null,
-        entity: ctx.entity ?? null,
-        cacheStatus: ctx.cacheStatus ?? "none",
-        applicationCacheStatus: "hit",
-        inputTokens: 0,
-        outputTokens: 0,
-        estimatedCost: 0,
-        attempt: 0,
-        durationMs,
-      });
-    },
+    onHit: (durationMs) => recordApplicationCacheHit(spec, ctx, durationMs),
     compute: async (applicationCacheStatus) => {
       const callContext = { ...ctx, applicationCacheStatus };
       const firstResult = await placeCall(
@@ -383,4 +443,50 @@ export async function runStructuredFeature<T>(
       );
     },
   });
+}
+
+/**
+ * Place one embedding call and record its usage row. The feature is a plain
+ * `{feature, model}` because embedding callers name their own label (search
+ * queries and entity refresh share the runner, not the label). The adapter
+ * comes from the caller: the gateway's request metadata is fixed when the
+ * transport is built, so it cannot be hoisted to a shared client. Without a
+ * `runId` (no database) no row is written.
+ */
+export async function runEmbeddingFeature(
+  spec: { feature: string; model: SupportedEmbeddingModel },
+  args: {
+    adapter: Parameters<typeof embed>[0]["adapter"];
+    texts: string[];
+    dimensions: number;
+  },
+  ctx: Omit<AiRunContext, "runId"> & { runId?: RunId },
+) {
+  const startedAt = performance.now();
+  const result = await embed({
+    adapter: args.adapter,
+    input: args.texts,
+    dimensions: args.dimensions,
+  }).catch((error: UnparsedError) => {
+    throw wrapAiGatewayError(error, {
+      model: spec.model,
+      provider: providerFor(spec.model),
+      route: "openai",
+      feature: spec.feature,
+      operation: ctx.operation,
+    });
+  });
+  if (ctx.runId) {
+    await recordFeatureUsage(
+      spec,
+      { ...ctx, runId: ctx.runId },
+      {
+        inputTokens:
+          result.usage?.promptTokens ?? result.usage?.totalTokens ?? null,
+        durationMs: Math.round(performance.now() - startedAt),
+        cacheStatus: "none",
+      },
+    );
+  }
+  return result;
 }

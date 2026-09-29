@@ -27,9 +27,9 @@ import { toast } from "sonner";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
 import { referenceEntitySearch } from "~/app/_components/combobox/reference-entity-search";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { PhotoGrid } from "~/app/_components/photos/photo-grid";
 import { ProductVariantEvidence } from "~/app/_components/product-variant-evidence";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Section, Stack } from "~/components/layout";
 import { ShortcodeProse } from "~/components/shortcode-prose";
@@ -61,8 +61,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { photoImport } from "~/entities/run.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { photoImport } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import {
   RUN_TARGET_STATE_LABEL,
@@ -555,7 +555,7 @@ function ProductPanel({
               <span className="text-2xs text-muted-foreground">
                 Attach to existing product
               </span>
-              <EntityInlineLink
+              <EntityRefLink
                 entity="product"
                 data={{ id: product.existing.id, name: product.existing.name }}
                 displayImage={null}
@@ -662,7 +662,7 @@ function ProductPanel({
                 displayWidth={40}
                 className="size-10 shrink-0 rounded-sm border border-border object-cover"
               />
-              <EntityInlineLink
+              <EntityRefLink
                 entity="product"
                 data={{ id: match.id, name: match.name }}
                 displayImage={null}
@@ -774,7 +774,7 @@ function PhotoProductSuggestions({
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <p className="text-sm font-semibold break-words">
                         {index + 1}.{" "}
-                        <EntityInlineLink
+                        <EntityRefLink
                           entity="product"
                           data={{ id: candidate.id, name: candidate.name }}
                           displayImage={null}
@@ -952,7 +952,7 @@ function PhotoProductSuggestions({
                   {candidate.purchaseLines?.length ? (
                     candidate.purchaseLines.map((line) => (
                       <p key={line.expenseId} className="py-0.5 text-2xs">
-                        <EntityInlineLink
+                        <EntityRefLink
                           entity="expense"
                           data={{ id: line.expenseId, name: line.name }}
                           displayImage={null}
@@ -1655,7 +1655,7 @@ function ExpenseLinkReview({
             >
               <div className="min-w-0 flex-1">
                 <p className="font-medium">
-                  <EntityInlineLink
+                  <EntityRefLink
                     entity="expense"
                     data={{ id: line.expenseId, name: line.name }}
                     displayImage={null}
@@ -2014,7 +2014,7 @@ export function PhotoGroupReview({
                 </p>
                 {selected.committedProduct && (
                   <p className="mt-2 text-sm">
-                    <EntityInlineLink
+                    <EntityRefLink
                       entity="product"
                       data={{
                         id: selected.committedProduct.id,
@@ -2027,7 +2027,7 @@ export function PhotoGroupReview({
                 {selected.committedInventoryId ? (
                   <p className="mt-1 text-xs">
                     Inventory entry{" "}
-                    <EntityInlineLink
+                    <EntityRefLink
                       entity="inventory"
                       data={{
                         id: selected.committedInventoryId,

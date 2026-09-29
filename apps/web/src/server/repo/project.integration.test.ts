@@ -7,8 +7,9 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { projectDependency } from "~/server/db/schema";
-import { projectCreateFromTasksWorkflow } from "~/server/workflows/project.server";
+import { entityLink } from "~/server/db/schema";
+import { projectCreateFromTasksWorkflow } from "~/server/operations/project.server";
+import { linkValues } from "~/server/repo/entity-links";
 
 import { insertAndReturn } from "./database-helpers";
 import { createExpense } from "./expense";
@@ -114,7 +115,7 @@ describe("project repository", () => {
       spent: 150,
       actualSpent: 100,
       committedSpent: 50,
-      contributions: 0,
+      credits: 0,
       expenseCount: 2,
       taskCount: 3,
       doneTaskCount: 1,
@@ -122,7 +123,7 @@ describe("project repository", () => {
         spent: 150,
         actualSpent: 100,
         committedSpent: 50,
-        contributions: 0,
+        credits: 0,
         expenseCount: 2,
         taskCount: 3,
         doneTaskCount: 1,
@@ -272,10 +273,11 @@ describe("project repository", () => {
     );
 
     await expect(
-      insertAndReturn(ctx.db, projectDependency, {
-        projectId: entityId,
-        blockedByProjectId: entityId,
-      }),
+      insertAndReturn(
+        ctx.db,
+        entityLink,
+        linkValues("projectDependency", entityId, entityId),
+      ),
     ).rejects.toMatchObject({ cause: { code: "23514" } });
   });
 
@@ -517,7 +519,7 @@ describe("project repository — date windows (derivation)", () => {
 
 /**
  * `projectPortfolioAnalytics` backs both the Analytics tab's charts and the
- * MCP `get_project_budget` tool, and the only coverage it had was a mocked
+ * MCP `project_overview.budget` tool, and the only coverage it had was a mocked
  * unit test (`mcp/server.unit.test.ts`). These pin the two aggregates whose
  * numbers come out of the subtree rollup — `costVsEstimate` and
  * `spendingByProject` — against a parent/child pair with spend on BOTH, plus

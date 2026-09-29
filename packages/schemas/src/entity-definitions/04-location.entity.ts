@@ -158,10 +158,10 @@ export default defineEntity({
       {
         key: "type",
         kind: "enum",
-        nullable: true,
         // Auto-suggest is manifest-driven (`control.suggest`) now, not the
-        // hand-rendered AI-suggest widget; `type` still disappears once a
-        // product link supplies the form factor — see `intents.fields` below.
+        // hand-rendered AI-suggest widget. A Product-linked location has no
+        // form factor of its own; the server stores `furniture` for it when
+        // the request omits `type`. `furniture` requires a `productId`.
         control: {
           kind: "select",
           options: selectControlOptions.locationType,
@@ -174,9 +174,9 @@ export default defineEntity({
           mobile: { slot: "subtitle", priority: 15 },
         },
         validation: {
-          read: locationType.nullable(),
-          create: locationType.nullable().optional(),
-          update: locationType.nullable().optional(),
+          read: locationType,
+          create: locationType.optional(),
+          update: locationType.optional(),
         },
       },
       {
@@ -319,6 +319,12 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         // Rendered (and regenerated) by the `ai-description` detail slot.
+        // Read from the latest live `location-description` AiAnalysis; the
+        // location row stores nothing.
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Latest location-description AI analysis" }],
+        },
         display: {
           list: true,
           listHidden: true,
@@ -449,7 +455,6 @@ export default defineEntity({
       { key: "productId", reference: "product" },
       { key: "type", specialized: "enum:type" },
       "notes",
-      "aiDescription",
     ],
     create: [
       "name",
@@ -549,6 +554,51 @@ export default defineEntity({
     list: { module: "@cubby/schemas/location", export: "locationListItemOut" },
     detail: { module: "@cubby/schemas/location", export: "infLocation" },
   },
+  storage: {
+    indexes: [
+      {
+        name: "Location_name_key",
+        on: [{ sql: "lower({name})" }],
+        unique: true,
+        where: "{deletedAt} IS NULL",
+      },
+      { on: ["name"] },
+      { on: ["tags"], using: "gin" },
+      { on: ["createdAt"] },
+      { on: ["lastBulkInventory"] },
+      { trigram: "name" },
+      { on: ["type", "name"] },
+      {
+        name: "Location_name_active_idx",
+        on: ["name"],
+        where: "{deletedAt} IS NULL",
+      },
+      {
+        name: "Location_type_active_idx",
+        on: ["type"],
+        where: "{deletedAt} IS NULL",
+      },
+    ],
+    checks: [
+      // `furniture` marks a Product-instance location (the bin or rack
+      // itself). One direction only: a garden bed or planter may link a
+      // Product and keep its own type, so `productId IS NOT NULL` does not
+      // imply `furniture`.
+      {
+        name: "Location_furniture_product_check",
+        sql: "{type} <> 'furniture' OR {productId} IS NOT NULL",
+      },
+    ],
+    relations: {
+      parent: { field: "parentId", relationName: "LocationToLocation" },
+      children: { many: "location", relationName: "LocationToLocation" },
+      inventoryEntries: { many: "inventoryEntry" },
+      images: { many: "entityAttachment" },
+      product: "productId",
+      plantings: { many: "planting" },
+      gardenEntries: { many: "gardenEntry" },
+    },
+  },
   filters: {
     audit: true,
     schema: {
@@ -596,10 +646,6 @@ export default defineEntity({
         field: "aiDescriptionPresenceFilter",
         kind: "presence",
         placeholder: "Filter descriptions...",
-        deriveSchema: true,
-        schemaDescription:
-          "Filter to locations that do / don't have an AI-generated description.",
-        stored: true,
         options: [
           { value: "has", label: "Has description", meta: true },
           { value: "none", label: "(none)", meta: true },
@@ -612,7 +658,7 @@ export default defineEntity({
         placeholder: "Filter by location name...",
         deriveSchema: true,
         schemaDescription: "Filter by location name (substring)",
-        stored: { columns: ["name", "aiDescription", "aliases"] },
+        stored: { columns: ["name", "aliases"] },
       },
       {
         columnId: "type",
@@ -674,16 +720,32 @@ export default defineEntity({
         wire: { kind: "range", from: "valuationMin", to: "valuationMax" },
         placeholder: "Filter valuation...",
         options: [
-          { value: "positive", label: "Positive basis" },
-          { value: "zero", label: "Zero basis" },
-          { value: "negative", label: "Credit / negative" },
-          { value: "gte100", label: "$100 and up" },
-          { value: "gte500", label: "$500 and up" },
+          {
+            value: "positive",
+            label: "Positive basis",
+            expand: { valuationMin: 0.01 },
+          },
+          {
+            value: "zero",
+            label: "Zero basis",
+            expand: { valuationMin: 0, valuationMax: 0 },
+          },
+          {
+            value: "negative",
+            label: "Credit / negative",
+            expand: { valuationMax: -0.01 },
+          },
+          {
+            value: "gte100",
+            label: "$100 and up",
+            expand: { valuationMin: 100 },
+          },
+          {
+            value: "gte500",
+            label: "$500 and up",
+            expand: { valuationMin: 500 },
+          },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveLocationValuation",
-        },
       },
       {
         columnId: "related:location.ingredients",
@@ -789,14 +851,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "EntityAttachment.subjectEntityId", direction: "incoming" },
+          { edge: "EntityAttachment.entityId", direction: "incoming" },
           { edge: "EntityAttachment.imageId", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
           { edge: "EntityAttachment.imageId", direction: "incoming" },
-          { edge: "EntityAttachment.subjectEntityId", direction: "outgoing" },
+          { edge: "EntityAttachment.entityId", direction: "outgoing" },
         ],
       },
     },
@@ -887,11 +949,16 @@ export default defineEntity({
           message: "No AI-generated description is recorded.",
         },
         {
-          id: "location_type",
-          facet: "identity",
-          weight: 1,
-          label: "Type",
-          message: "Location type is not recorded.",
+          // A furniture location IS a Product instance; stock of that same
+          // Product elsewhere counts the item twice (once as the place, once
+          // as an inventory row).
+          id: "location_furniture_counted",
+          facet: "integrity",
+          kind: "defect",
+          weight: 2,
+          label: "Counted twice",
+          message:
+            "This furniture location's Product also has live inventory entries, so the item is counted twice.",
         },
       ],
     },
@@ -899,8 +966,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/location/entity-adapter",
-        export: "locationEntityAdapter",
+        module: "~/server/repo/location/repository",
+        export: "locationRepository",
       },
       search: "document",
     },

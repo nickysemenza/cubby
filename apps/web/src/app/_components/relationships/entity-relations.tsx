@@ -24,7 +24,6 @@ import {
 } from "~/app/_components/relatedness/entity-recommendations";
 import { EntityGraphPicker } from "~/app/_components/relationships/entity-graph-picker";
 import { PhysicalConnectionsPanel } from "~/app/_components/relationships/physical-connections";
-import { inventory } from "~/app/inventory/inventory.functions";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -42,8 +41,11 @@ import {
   entityMutationOptionsFactory,
   type EntityMutationOptionsFactory,
 } from "~/entities/entity-contracts";
-import { entityGraph } from "~/entities/entity-graph.functions";
 import { useHydratedLoading } from "~/hooks/useHydrated";
+import {
+  inventory,
+  entityGraph,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 
 import {
@@ -75,7 +77,7 @@ export interface EntityRelationsState {
   view?: "list" | "graph";
   layout?: "neighborhood" | "flow";
   query?: string;
-  entityType?: Entity;
+  entityKind?: Entity;
   relationship?: string;
   selected?: string;
   trail?: string[];
@@ -87,11 +89,11 @@ export interface EntityRelationsState {
 
 const refFromKey = (key?: string): EntityRef | undefined => {
   const split = key?.indexOf(":") ?? -1;
-  const entityType = allEntities.find(
+  const entityKind = allEntities.find(
     (entity) => entity === key?.slice(0, split),
   );
   return entityGraphRootSchema.safeParse({
-    entityType,
+    entityKind,
     entityId: key?.slice(split + 1),
   }).data;
 };
@@ -137,7 +139,7 @@ export function EntityRelations({
   const [localView, setLocalView] = useState<"list" | "graph">("list");
   const router = useRouter();
   const root = useMemo(
-    () => ({ entityType: entity, entityId: sourceId }),
+    () => ({ entityKind: entity, entityId: sourceId }),
     [entity, sourceId],
   );
   if (!supportsEntityGraph(entity)) return null;
@@ -152,7 +154,7 @@ export function EntityRelations({
         onRootChange={(value) =>
           void router.navigate({
             to: "/graph",
-            search: { entity: value.entityType, root: value.entityId },
+            search: { entity: value.entityKind, root: value.entityId },
           })
         }
         onNavigationChange={(navigation) =>
@@ -167,7 +169,7 @@ export function EntityRelations({
   return (
     <EntityRelationsSession
       key={`${entity}:${sourceId}`}
-      root={{ entityType: entity, entityId: sourceId }}
+      root={{ entityKind: entity, entityId: sourceId }}
       state={state}
       onStateChange={(next) => {
         setLocalView(next.view ?? "list");
@@ -566,7 +568,7 @@ function EntityRelationsContent(
           to="/entities"
           search={{
             tab: "explore",
-            entity: root.entityType,
+            entity: root.entityKind,
             root: root.entityId,
             view: "graph",
             layout: current.layout,
@@ -594,10 +596,10 @@ function EntityRelationsContent(
         />
         <NativeSelect
           aria-label="Filter entity type"
-          value={current.entityType ?? ""}
+          value={current.entityKind ?? ""}
           onChange={(event) =>
             change({
-              entityType: allEntities.find(
+              entityKind: allEntities.find(
                 (entity) => entity === event.target.value,
               ),
             })
@@ -714,7 +716,7 @@ function RelationshipBranches({
   const shown = branches.filter(
     (b) =>
       (showEmpty || b.totalCount > 0) &&
-      (!current.entityType || b.target === current.entityType) &&
+      (!current.entityKind || b.target === current.entityKind) &&
       (!current.relationship || b.relationshipKey === current.relationship),
   );
   return (
@@ -811,7 +813,7 @@ function RelationshipBranches({
                   <li key={graphRefKey(node)} className="py-2">
                     <Row gap="sm" align="center">
                       <EntityIcon
-                        entity={node.entityType}
+                        entity={node.entityKind}
                         colored
                         className="size-3.5"
                       />
@@ -847,7 +849,7 @@ function RelationshipBranches({
           </section>
         );
       })}
-      {shown.length === 0 && (current.entityType || current.relationship) && (
+      {shown.length === 0 && (current.entityKind || current.relationship) && (
         <p className="text-sm text-muted-foreground">
           No relationships match the current filters.
         </p>
@@ -862,12 +864,12 @@ function RelationshipBranches({
 }
 
 function hrefFor(node: EntityRef, router: ReturnType<typeof useRouter>) {
-  if (!isBrowserRoutedEntity(node.entityType)) return undefined;
-  return node.entityType === "usda-food"
+  if (!isBrowserRoutedEntity(node.entityKind)) return undefined;
+  return node.entityKind === "usda-food"
     ? router.buildLocation({ to: "/usda/$id", params: { id: node.entityId } })
         .href
     : router.buildLocation({
-        to: entities[node.entityType].routes.detail,
+        to: entities[node.entityKind].routes.detail,
         params: entityDetailParams(node.entityId),
       }).href;
 }
@@ -894,7 +896,7 @@ function graphFacts(node: EntityGraphNode): string[] {
   const { quantity, unit, ...facts } = node.metadata;
   const values = Object.entries(facts).map(([key, value]) =>
     key === "amount" &&
-    node.entityType === "expense" &&
+    node.entityKind === "expense" &&
     Number.isFinite(Number(value))
       ? formatCurrency(Number(value))
       : key === "statedTotal" && Number.isFinite(Number(value))
@@ -907,7 +909,7 @@ function graphFacts(node: EntityGraphNode): string[] {
 }
 function graphSourceLabel(edge: EntityGraphEdge) {
   const relationship = entityManifest[
-    edge.source.entityType
+    edge.source.entityKind
   ].relationships.find((candidate) => candidate.key === edge.relationshipKey);
   return (
     relationship?.sources.find((source) => source.key === edge.sourceKey)
@@ -1001,7 +1003,7 @@ function GraphPathPanel({
             setPathIndex(0);
             change({
               destination: graphRefKey({
-                entityType: value.entity,
+                entityKind: value.entity,
                 entityId: value.id,
               }),
               view: "graph",
@@ -1077,7 +1079,7 @@ function exploredProjection(
   const text = current.query?.trim().toLocaleLowerCase() ?? "";
   const filteredBranches = branches.filter(
     (branch) =>
-      (!current.entityType || branch.target === current.entityType) &&
+      (!current.entityKind || branch.target === current.entityKind) &&
       (!current.relationship ||
         branch.relationshipKey === current.relationship),
   );
@@ -1159,13 +1161,13 @@ function VisitedRecords({
               <ArrowRightIcon className="size-3.5" />
             </Button>
             <EntityIcon
-              entity={selected.entityType}
+              entity={selected.entityKind}
               colored
               className="size-4"
             />
             <GraphRecordLink node={selected} href={hrefFor(selected, router)} />
             <span className="text-xs text-muted-foreground">
-              {entityLabel(selected.entityType)} · visit {cursor + 1} of{" "}
+              {entityLabel(selected.entityKind)} · visit {cursor + 1} of{" "}
               {trail.length}
             </span>
             {selectedKey !== rootKey && (

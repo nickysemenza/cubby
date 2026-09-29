@@ -34,7 +34,7 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail";
 import { enumFieldLabel } from "~/entities/enum-field-display";
 import { useDebug } from "~/hooks/useDebug";
 import { cn } from "~/lib/utils";
@@ -54,7 +54,7 @@ import { useGlobalSearch } from "./command-menu/use-global-search";
 import { completeNavLeaves } from "./navigation/nav-items";
 import type { NavItem } from "./navigation/nav-items";
 import {
-  entityTypeMap,
+  entityKindMap,
   getSearchMatchText,
   getSearchResultRoute,
   SearchResultMedia,
@@ -191,8 +191,8 @@ export function GlobalCommandMenu({
     }
   }, [open]);
 
-  const goToEntity = (entityType: SearchableEntity, shortcode: string) => {
-    const entity = entities[entityTypeMap[entityType]];
+  const goToEntity = (entityKind: SearchableEntity, shortcode: string) => {
+    const entity = entities[entityKindMap[entityKind]];
     if (entity) {
       navigate({
         to: entity.routes.detail,
@@ -225,14 +225,14 @@ export function GlobalCommandMenu({
   const hasSearch = search.length > 0;
   const hasResults = (results?.length ?? 0) > 0;
   const scopeLabel = searchScope
-    ? entities[entityTypeMap[searchScope]].pluralLabel
+    ? entities[entityKindMap[searchScope]].pluralLabel
     : null;
 
   const handleSearchChange = (value: string) => {
     if (!searchScope) {
       const parsed = parseCommandSearchScope(value);
-      if (parsed.entityType) {
-        setSearchScope(parsed.entityType);
+      if (parsed.entityKind) {
+        setSearchScope(parsed.entityKind);
         setSearch(parsed.query);
         return;
       }
@@ -604,7 +604,7 @@ const placementDestination = (
   placement: SearchInventoryPlacement,
 ): SearchDestination => ({
   id: placement.id,
-  entityType: "inventory",
+  entityKind: "inventory",
   title: group.primary.title,
   subtitle: placement.locationPath,
   typeHint: group.primary.typeHint,
@@ -616,7 +616,7 @@ const componentPlacementDestination = (
 ): SearchDestination => ({
   ...componentPlacement.component,
   id: componentPlacement.placement.id,
-  entityType: "inventory",
+  entityKind: "inventory",
   subtitle: componentPlacement.placement.locationPath,
 });
 
@@ -827,8 +827,8 @@ export function SearchGroupItem({
           })}
           {activity.map((item) => (
             <CommandItem
-              key={`${item.entityType}-${item.id}`}
-              value={`activity-${item.entityType}-${item.id}`}
+              key={`${item.entityKind}-${item.id}`}
+              value={`activity-${item.entityKind}-${item.id}`}
               onSelect={() => onSelect(item)}
               className="min-h-11 gap-2 pl-8 sm:min-h-9"
             >
@@ -836,7 +836,7 @@ export function SearchGroupItem({
               <div className="min-w-0 flex-1">
                 <div className="truncate text-xs font-medium">{item.title}</div>
                 <div className="truncate text-2xs text-muted-foreground">
-                  {entities[entityTypeMap[item.entityType]].label} · {item.id} ·
+                  {entities[entityKindMap[item.entityKind]].label} · {item.id} ·
                   Linked to {group.primary.title}
                 </div>
               </div>
@@ -872,7 +872,7 @@ function SearchEntityResultItem({
 
   return (
     <CommandItem
-      value={`${item.entityType}-${item.id}`}
+      value={`${item.entityKind}-${item.id}`}
       onSelect={() => onSelect(item)}
       className="flex items-center gap-2"
     >
@@ -900,7 +900,7 @@ function SearchEntityResultItem({
       </div>
       <div className="max-w-28 shrink-0 self-start pt-1 text-right">
         <span className="block truncate font-mono text-2xs tracking-wider text-slate uppercase">
-          {entities[entityTypeMap[item.entityType]].label}
+          {entities[entityKindMap[item.entityKind]].label}
         </span>
         <span className="block truncate font-mono text-2xs text-muted-foreground tabular-nums">
           {item.id}

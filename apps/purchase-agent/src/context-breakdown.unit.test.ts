@@ -37,7 +37,7 @@ describe("measureRequestContext", () => {
           {
             type: "function_call",
             call_id: "call_a",
-            name: "mcp__cubby__get_photo_run_context",
+            name: "mcp__cubby__imports_read",
             arguments: "{}",
           },
           {
@@ -65,7 +65,7 @@ describe("measureRequestContext", () => {
           { type: "function_call_output", call_id: "orphan", output: "q" },
         ],
         tools: [
-          tool("mcp__cubby__get_photo_run_context", "d".repeat(900)),
+          tool("mcp__cubby__imports_read", "d".repeat(900)),
           tool("mcp__cubby__entity", "d".repeat(900)),
           tool("report_agent_progress", "d".repeat(100)),
         ],
@@ -81,7 +81,7 @@ describe("measureRequestContext", () => {
     expect(sections.conversation).toBeGreaterThanOrEqual(40);
     expect(sections.conversation).toBeLessThan(500);
     expect(
-      sections.toolResults["mcp__cubby__get_photo_run_context"],
+      sections.toolResults["mcp__cubby__imports_read"],
     ).toBeGreaterThanOrEqual(3_000);
     // An image counts as a fixed weight, never its base64 length.
     expect(sections.toolResults["report_agent_progress"]).toBeGreaterThan(
@@ -111,7 +111,7 @@ describe("measureRequestContext", () => {
         system: [{ type: "text", text: "s".repeat(700) }],
         tools: [
           {
-            name: "mcp__cubby__entity",
+            name: "mcp__cubby__entity_read",
             description: "d".repeat(400),
             input_schema: {},
           },
@@ -126,7 +126,7 @@ describe("measureRequestContext", () => {
               {
                 type: "tool_use",
                 id: "toolu_1",
-                name: "mcp__cubby__entity",
+                name: "mcp__cubby__entity_read",
                 input: { action: "list" },
               },
             ],
@@ -158,10 +158,10 @@ describe("measureRequestContext", () => {
     expect(sections.mcpToolSchemas).toBeGreaterThan(400);
     expect(sections.agentToolSchemas).toBeGreaterThan(50);
     expect(sections.agentToolSchemas).toBeLessThan(sections.mcpToolSchemas);
-    expect(sections.toolResults["mcp__cubby__entity"]).toBeGreaterThanOrEqual(
-      1_200,
-    );
-    expect(sections.toolResults["mcp__cubby__entity"]).toBeLessThan(1_400);
+    expect(
+      sections.toolResults["mcp__cubby__entity_read"],
+    ).toBeGreaterThanOrEqual(1_200);
+    expect(sections.toolResults["mcp__cubby__entity_read"]).toBeLessThan(1_400);
     expect(sections.conversation).toBeGreaterThan(IMAGE_CHAR_WEIGHT);
     expect(sections.conversation).toBeLessThan(IMAGE_CHAR_WEIGHT + 300);
   });

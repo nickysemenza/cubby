@@ -1,15 +1,23 @@
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { imageUrlSummary } from "./image-summary";
-import { vendorRelatedFilterFields } from "./related-view";
-import { auditDateFilterFields, plainDate } from "./base-entity";
-import {
-  generatedVendorFieldSchemas,
-  generatedVendorFilterFields,
-} from "./generated/entity-field-schemas.vendor.gen";
+import { plainDate } from "./base-entity";
+import { generatedVendorFieldSchemas } from "./generated/entity-field-schemas.vendor.gen";
 import { vendorShortcode } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
 import { presenceFilter } from "./pagination";
+import { vendorBaseFilterFields, vendorOut } from "./generated/vendor.gen";
+
+export {
+  vendorCreateInput,
+  vendorUpdateData,
+  vendorUpdateInput,
+  vendorOut,
+  type VendorCreateInput,
+  type VendorUpdateData,
+  type VendorUpdateInput,
+  type VendorOut,
+} from "./generated/vendor.gen";
 
 /**
  * Vendor — the roster of places money goes. `Vendor ──< Purchase ──< Expense`:
@@ -23,26 +31,11 @@ import { presenceFilter } from "./pagination";
  * free-text column repeated on every ledger row.
  */
 
-const vendorCreateFields = generatedVendorFieldSchemas.create;
-
-export const vendorCreateInput = z.object(vendorCreateFields);
-export type VendorCreateInput = z.infer<typeof vendorCreateInput>;
-
-export const vendorUpdateData = z.object(generatedVendorFieldSchemas.update);
-export type VendorUpdateData = z.infer<typeof vendorUpdateData>;
-export const vendorUpdateInput = z.object({
-  id: vendorShortcode,
-  data: vendorUpdateData,
-});
-export type VendorUpdateInput = z.infer<typeof vendorUpdateInput>;
-
 export const fetchVendorLogoInput = z.object({ id: vendorShortcode });
 export type FetchVendorLogoInput = z.infer<typeof fetchVendorLogoInput>;
 
 export const vendorFilterFields = {
-  ...auditDateFilterFields,
-  ...vendorRelatedFilterFields,
-  ...generatedVendorFilterFields,
+  ...vendorBaseFilterFields,
   latestPurchaseDatePresenceFilter: presenceFilter,
   logoPresenceFilter: presenceFilter,
 };
@@ -53,11 +46,6 @@ export type VendorFilters = z.infer<typeof vendorFiltersSchema>;
 // vendor's live purchases and their expenses, resolved by correlated
 // subqueries in repo/vendor.ts — not columns on `Vendor`.
 export type VendorSortField = GeneratedEntitySortField<"vendor">;
-
-export const vendorOut = z.object({
-  ...generatedVendorFieldSchemas.read,
-});
-export type VendorOut = z.infer<typeof vendorOut>;
 
 export const vendorListResponse = createPaginatedResponseSchema(vendorOut);
 export type VendorListResponse = z.infer<typeof vendorListResponse>;

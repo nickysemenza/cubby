@@ -59,6 +59,10 @@ import {
   liveExpenseCents,
   purchasesForOrder,
 } from "../order-import.fixtures";
+import {
+  orderMailAttachmentKey,
+  type OrderMailAttachmentStorage,
+} from "./attachment-storage";
 import { type OrderMailPorts, processOrderMails } from "./process";
 import { decideOrderMailCandidate, listVendorOrderMail } from "./review";
 
@@ -75,6 +79,31 @@ const storage = createImageStorageService({
     getPublicUrl: (key) => `https://images.example.test/${key}`,
   },
 });
+// Pending attachment bytes live in object storage; only the seam is faked.
+const attachmentObjects = new Map<string, Uint8Array>();
+const attachmentStorage: OrderMailAttachmentStorage = {
+  put: async (key, bytes) => {
+    attachmentObjects.set(key, bytes);
+  },
+  get: async (key) => {
+    const bytes = attachmentObjects.get(key);
+    if (!bytes) throw new Error(`test setup: missing object ${key}`);
+    return bytes;
+  },
+  delete: async (key) => {
+    attachmentObjects.delete(key);
+  },
+};
+/** Bytes decoded from every `data` the pipeline handed to file attachment. */
+const attachedBytes: Buffer[] = [];
+const recordingAttachFile: OrderMailPorts["attachFile"] = async (db, input) => {
+  if (input.data) attachedBytes.push(Buffer.from(input.data, "base64"));
+  return storage.attachFileToEntity(db, input);
+};
+const evidencePorts = {
+  attachFile: recordingAttachFile,
+  attachmentStorage,
+};
 const ports: OrderMailPorts = {
   classify: async ({ messageId }) => {
     const classification = classifications.get(messageId);
@@ -82,13 +111,11 @@ const ports: OrderMailPorts = {
       throw new Error(`test setup: no classification for ${messageId}`);
     return classification;
   },
-  attachFile: storage.attachFileToEntity,
+  ...evidencePorts,
 };
 
 const SENDER = "ForgeWear <orders@forgewear.example>";
-const PDF_BASE64URL = Buffer.from("%PDF-1.4 synthetic invoice").toString(
-  "base64url",
-);
+const PDF_BYTES = Buffer.from("%PDF-1.4 synthetic invoice \u00ff\u0000");
 
 describe("Gmail order mail processing", () => {
   const ctx = withTestDb();
@@ -96,6 +123,8 @@ describe("Gmail order mail processing", () => {
   beforeEach(() => {
     classifications.clear();
     uploadedKeys.length = 0;
+    attachmentObjects.clear();
+    attachedBytes.length = 0;
   });
 
   async function seedForgeWear() {
@@ -178,6 +207,31 @@ describe("Gmail order mail processing", () => {
       postedDate: date,
     });
 
+  /** A legacy-free pending PDF: the bytes in object storage, the key on the row. */
+  async function insertPendingPdf(
+    orderMailId: string,
+    providerAttachmentId: string,
+    checksum: string,
+  ) {
+    const [row] = await getDb(ctx.db)
+      .insert(orderMailAttachment)
+      .values({
+        orderMailId,
+        providerAttachmentId,
+        filename: "invoice.pdf",
+        mimeType: "application/pdf",
+        checksum,
+      })
+      .returning({ id: orderMailAttachment.id });
+    if (!row) throw new Error("test setup: attachment not inserted");
+    const key = orderMailAttachmentKey(row.id);
+    attachmentObjects.set(key, PDF_BYTES);
+    await getDb(ctx.db)
+      .update(orderMailAttachment)
+      .set({ pendingObjectKey: key })
+      .where(eq(orderMailAttachment.id, row.id));
+  }
+
   async function receiveMail(
     seed: Seed,
     messageId: string,
@@ -198,16 +252,7 @@ describe("Gmail order mail processing", () => {
       .returning({ id: orderMail.id });
     if (!mail) throw new Error("test setup: order mail not inserted");
     if (options.pdf) {
-      await getDb(ctx.db)
-        .insert(orderMailAttachment)
-        .values({
-          orderMailId: mail.id,
-          providerAttachmentId: `att-${messageId}`,
-          filename: "invoice.pdf",
-          mimeType: "application/pdf",
-          checksum: `sum-${messageId}`,
-          pendingDataBase64Url: PDF_BASE64URL,
-        });
+      await insertPendingPdf(mail.id, `att-${messageId}`, `sum-${messageId}`);
     }
     classifications.set(
       messageId,
@@ -363,7 +408,7 @@ describe("Gmail order mail processing", () => {
     const attachments = await getDb(ctx.db)
       .select({ id: entityAttachment.id })
       .from(entityAttachment)
-      .where(eq(entityAttachment.subjectEntityId, target.id));
+      .where(eq(entityAttachment.entityId, target.id));
     expect(attachments).toEqual([]);
   });
 
@@ -471,14 +516,7 @@ describe("Gmail order mail processing", () => {
       .select({ id: orderMail.id })
       .from(orderMail);
     if (!mail) throw new Error("test setup: mail missing");
-    await getDb(ctx.db).insert(orderMailAttachment).values({
-      orderMailId: mail.id,
-      providerAttachmentId: "att-dismissed",
-      filename: "invoice.pdf",
-      mimeType: "application/pdf",
-      checksum: "pdf-dismissed",
-      pendingDataBase64Url: PDF_BASE64URL,
-    });
+    await insertPendingPdf(mail.id, "att-dismissed", "pdf-dismissed");
 
     await processOrderMails(ctx.db, ["msg-dismissed-pdf"], [], ports);
 
@@ -796,7 +834,7 @@ describe("Gmail order mail processing", () => {
         .from(runFinding)
         .where(
           and(
-            eq(runFinding.targetId, target.id),
+            eq(runFinding.entityId, target.id),
             eq(runFinding.kind, "refund_unbooked"),
           ),
         );
@@ -870,7 +908,7 @@ describe("Gmail order mail processing", () => {
         .from(runFinding)
         .where(
           and(
-            eq(runFinding.targetId, target.id),
+            eq(runFinding.entityId, target.id),
             eq(runFinding.kind, "refund_unbooked"),
           ),
         );
@@ -920,7 +958,7 @@ describe("Gmail order mail processing", () => {
         .from(entityAttachment)
         .where(
           and(
-            eq(entityAttachment.subjectEntityId, purchaseId),
+            eq(entityAttachment.entityId, purchaseId),
             notDeleted(entityAttachment),
           ),
         );
@@ -928,7 +966,7 @@ describe("Gmail order mail processing", () => {
       getDb(ctx.db)
         .select({
           imageId: orderMailAttachment.imageId,
-          pending: orderMailAttachment.pendingDataBase64Url,
+          pending: orderMailAttachment.pendingObjectKey,
         })
         .from(orderMailAttachment);
 
@@ -941,9 +979,11 @@ describe("Gmail order mail processing", () => {
       { pdf: true },
     );
     expect(await purchasesForOrder(ctx.db, "FW-SYN-3001")).toHaveLength(0);
-    expect(await pendingMailPdfs()).toEqual([
-      { imageId: null, pending: PDF_BASE64URL },
-    ]);
+    const [pendingPdf] = await pendingMailPdfs();
+    expect(pendingPdf).toEqual({
+      imageId: null,
+      pending: expect.stringMatching(/^order-mail-attachment\/[0-9a-f-]{36}$/),
+    });
     await importOrderHistory(
       ctx.db,
       ctx.actor,
@@ -955,7 +995,7 @@ describe("Gmail order mail processing", () => {
         lines: [{ title: "Wool beanie", amount: 25 }],
         revision: "b",
       },
-      storage.attachFileToEntity,
+      evidencePorts,
     );
     const mailFirst = await purchasesForOrder(ctx.db, "FW-SYN-3001");
     expect(mailFirst).toHaveLength(1);
@@ -996,6 +1036,9 @@ describe("Gmail order mail processing", () => {
       ),
     ).toBe(true);
     expect(uploadedKeys).toHaveLength(2);
+    // Attaching reads the stored object back byte for byte.
+    expect(attachedBytes).toHaveLength(2);
+    expect(attachedBytes.every((bytes) => bytes.equals(PDF_BYTES))).toBe(true);
     expect(await liveExpenseCents(ctx.db, mailFirst[0]!.id)).toEqual([2500]);
     expect(await liveExpenseCents(ctx.db, historyFirst[0]!.id)).toEqual([8800]);
   });

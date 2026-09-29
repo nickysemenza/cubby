@@ -23,10 +23,10 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import type { PreviewPresentation } from "~/app/_components/hooks/useEntityPreview";
 import { ProjectMark } from "~/app/projects/project-mark";
 import type { ProjectPortfolioAnalyticsViewProps } from "~/app/projects/project-portfolio-analytics-view";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { DashboardSectionLoading } from "~/components/feedback/loading-skeletons";
 import { Grid, Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -52,7 +52,12 @@ import { Skeleton } from "~/components/ui/skeleton";
 import type { SummaryItem } from "~/components/ui/stat-tile";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { image, type ProjectImageSummaries } from "~/entities/image.functions";
+import { type ProjectImageSummaries } from "~/entities/image-queries";
+import {
+  image,
+  project,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatCalendarDay } from "~/lib/date-format";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn, formatCurrency } from "~/lib/utils";
 
@@ -66,10 +71,8 @@ import {
 } from "./dashboard-filter-state";
 import { ActiveScopeSummary, DashboardFilters } from "./dashboard-filters";
 import { NeedsAttention } from "./needs-attention";
-import { project } from "./project.functions";
 import {
   capitalize,
-  formatDate,
   formatDateRange,
   PROJECT_STATUS_LABELS,
   StatusIcon,
@@ -417,7 +420,7 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
     () =>
       tasks.flatMap((task) =>
         task.projectId
-          ? [{ entityType: "project" as const, entityId: task.projectId }]
+          ? [{ entityKind: "project" as const, entityId: task.projectId }]
           : [],
       ),
     [tasks],
@@ -443,11 +446,11 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
             </Link>
             {task.projectName && task.projectId && (
               <span className="max-w-40 min-w-0 text-xs text-muted-foreground">
-                <EntityInlineLink
+                <EntityRefLink
                   displayImage={
                     projectImages[
                       entityDisplayImageKey({
-                        entityType: "project",
+                        entityKind: "project",
                         entityId: task.projectId,
                       })
                     ] ?? null
@@ -460,7 +463,7 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
             )}
             {task.dueDate && (
               <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                {formatDate(task.dueDate)}
+                {formatCalendarDay(task.dueDate, "monthDay")}
               </span>
             )}
           </Row>

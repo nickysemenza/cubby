@@ -2,15 +2,15 @@ import {
   imageId as parseImageId,
   runEntityId,
 } from "@cubby/schemas/identifiers";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { runMutation, runTarget } from "~/server/db/schema";
+import { auditLog, runTarget } from "~/server/db/schema";
+import { runHandlers } from "~/server/operations/run.server";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
-import { runHandlers } from "~/server/run-browser.server";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { startOrResumeRun, startPhotoInventoryRun } from "./run-service";
@@ -50,14 +50,15 @@ describe("purchase import run target resolution", () => {
       displayLabel: "Imported target purchase",
     });
     await getDb(ctx.db)
-      .insert(runMutation)
+      .insert(auditLog)
       .values({
         runId: run.id,
-        targetKind: "purchase",
-        targetId: purchase.id,
-        mutationKind: "create",
-        fields: ["displayLabel"],
-        postFingerprint: "test-fingerprint",
+        entityKind: "purchase",
+        entityId: purchase.id,
+        action: "create",
+        changes: { displayLabel: { from: null, to: null } },
+        userId: ctx.actor.userId,
+        channel: "mcp",
       });
     const untouchedVendor = await insertWithShortcode(ctx.db, "vendor", {
       name: `Untouched target vendor ${crypto.randomUUID()}`,
@@ -84,12 +85,12 @@ describe("purchase import run target resolution", () => {
       purchase.shortcode,
     );
     const [mutation] = await getDb(ctx.db)
-      .select({ runId: runMutation.runId })
-      .from(runMutation)
+      .select({ runId: auditLog.runId })
+      .from(auditLog)
       .where(
         and(
-          eq(runMutation.targetKind, "purchase"),
-          eq(runMutation.targetId, targetId!),
+          eq(auditLog.entityKind, "purchase"),
+          eq(auditLog.entityId, targetId!),
         ),
       );
 
@@ -98,6 +99,35 @@ describe("purchase import run target resolution", () => {
 
     const runs = await listRuns(ctx.db, party.id, targetId!);
     expect(runs.map((row) => row.id)).toEqual([run.id]);
+  });
+});
+
+describe("run target entity reference", () => {
+  const ctx = withTestDb();
+
+  // A target names one purchase, product or image; the kind CHECK is the only
+  // thing keeping a run worklist from pointing at any other entity.
+  it("refuses an entityKind outside purchase, product and image", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Run target kind test member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const run = await startPhotoInventoryRun(ctx.db, {
+      ledgerPartyId: party.id,
+      actorUserId: ctx.actor.userId,
+    });
+    const recipe = await insertWithShortcode(ctx.db, "recipe", {
+      name: "Run target kind recipe",
+    });
+    await expect(
+      getDb(ctx.db).execute(
+        sql`INSERT INTO "RunTarget" ("runId", "entityId", "entityKind", "targetFingerprint")
+            VALUES (${run.id}, ${recipe.id}, 'recipe', 'kind-test-fingerprint')`,
+      ),
+    ).rejects.toMatchObject({
+      cause: { constraint: "RunTarget_entityKind_check" },
+    });
   });
 });
 
@@ -129,7 +159,8 @@ describe("run.reportDeviceWork", () => {
       .insert(runTarget)
       .values({
         runId: runEntityId.parse(run.id),
-        imageId: parseImageId.parse(image.id),
+        entityKind: "image",
+        entityId: parseImageId.parse(image.id),
         targetFingerprint: "device-work-test-fingerprint",
       });
     return { runShortcode: runRow!.shortcode, imageShortcode: image.shortcode };

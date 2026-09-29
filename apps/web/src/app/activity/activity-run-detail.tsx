@@ -13,11 +13,10 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { StatusText } from "~/components/ui/status-text";
-import { activity } from "~/lib/activity.functions";
+import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyText } from "~/lib/clipboard";
+import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
-
-const moment = (value: string) => new Date(value).toLocaleString();
 
 // oxlint-disable-next-line complexity -- one selected record owns paired attempt and event pagination with their diagnostics.
 export function ActivityRunDetail({
@@ -92,7 +91,7 @@ export function ActivityRunDetail({
             <CardTitle>{run?.subjectName ?? "Work detail"}</CardTitle>
             <CardDescription>
               {run
-                ? `${run.id} · ${run.recordType === "run" ? "Run" : "Image job"} · ${run.kind.replaceAll("_", " ")} · ${run.state} · ${moment(run.createdAt)}`
+                ? `${run.id} · ${run.recordType === "run" ? "Run" : "Image job"} · ${run.kind.replaceAll("_", " ")} · ${run.state} · ${formatInstant(run.createdAt, "dateTime")}`
                 : id}
             </CardDescription>
           </div>
@@ -173,7 +172,7 @@ export function ActivityRunDetail({
                   <Row justify="between" gap="sm" wrap>
                     <span>
                       #{attempt.number} · {attempt.state} ·{" "}
-                      {moment(attempt.startedAt)}
+                      {formatInstant(attempt.startedAt, "dateTime")}
                     </span>
                     <Row gap="xs">
                       {attempt.diagnosticsJson ? (
@@ -255,7 +254,8 @@ export function ActivityRunDetail({
               >
                 <Row justify="between" gap="sm" wrap>
                   <span>
-                    {moment(event.occurredAt)} · {event.source} · {event.event}
+                    {formatInstant(event.occurredAt, "dateTime")} ·{" "}
+                    {event.source} · {event.event}
                   </span>
                   {event.detailsJson ? (
                     <Button

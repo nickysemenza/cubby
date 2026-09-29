@@ -26,7 +26,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
  * cannot make (a rename that changes the title but not the embedded body). */
 const searchDocumentTitle = async (
   db: Database,
-  entityType: SearchableEntity,
+  entityKind: SearchableEntity,
   entityId: string,
 ): Promise<string | null> => {
   const rows = await getDb(db)
@@ -34,7 +34,7 @@ const searchDocumentTitle = async (
     .from(searchDocument)
     .where(
       and(
-        eq(searchDocument.entityType, entityType),
+        eq(searchDocument.entityKind, entityKind),
         eq(searchDocument.entityId, entityId),
       ),
     );
@@ -198,7 +198,7 @@ describe("entity kernel search projections", () => {
         plantingIds: [],
         kind: "note",
         observedOn: "2026-05-01",
-        note: "Projected garden entry note",
+        notes: "Projected garden entry note",
         harvestAmount: null,
       },
     });

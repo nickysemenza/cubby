@@ -454,8 +454,8 @@ private final class ActivityDetailModel {
         loading = true
         defer { if generation == requestGeneration { loading = false } }
         do {
-            async let detail = client.activityDetail(id)
-            async let events = client.activityEvents(id)
+            async let detail = client.activityDetail(.init(id: id, limit: 20))
+            async let events = client.activityEvents(.init(id: id, limit: 50))
             let loaded = try await (detail, events)
             guard generation == requestGeneration else { return }
             self.detail = loaded.0
@@ -473,7 +473,7 @@ private final class ActivityDetailModel {
         loading = true
         defer { loading = false }
         do {
-            let page = try await client.activityEvents(id, cursor: eventCursor)
+            let page = try await client.activityEvents(.init(id: id, cursor: eventCursor, limit: 50))
             events += page.items
             self.eventCursor = page.nextCursor
         } catch {
@@ -487,7 +487,7 @@ private final class ActivityDetailModel {
         loading = true
         defer { loading = false }
         do {
-            let page = try await client.activityDetail(id, cursor: cursor)
+            let page = try await client.activityDetail(.init(id: id, cursor: cursor, limit: 20))
             guard var current = detail else { return }
             current.attempts += page.attempts
             current.nextAttemptCursor = page.nextAttemptCursor
@@ -545,7 +545,7 @@ private final class ActivityDetailModel {
         var seen: Set<Int> = []
         repeat {
             let page = try await client.activityDetail(
-                id, cursor: cursor, limit: min(100, count - attempts.count))
+                .init(id: id, cursor: cursor, limit: min(100, count - attempts.count)))
             if result == nil { result = page }
             for attempt in page.attempts where seen.insert(attempt.number).inserted {
                 attempts.append(attempt)
@@ -575,7 +575,7 @@ private final class ActivityDetailModel {
         var seen: Set<String> = []
         repeat {
             let page = try await client.activityEvents(
-                id, cursor: cursor, limit: min(100, count - events.count))
+                .init(id: id, cursor: cursor, limit: min(100, count - events.count)))
             for event in page.items where seen.insert(event.id).inserted {
                 events.append(event)
                 if events.count == count { break }
@@ -725,10 +725,9 @@ extension ActivityKind {
         case .describeImage: "Image description"
         case .subjectLift: "Image cutout"
         case .aiSuggest: "AI suggestion"
-        case .aiAction: "AI action"
         case .background: "Background work"
         case .fileImport: "File import"
-        case .legacy: "Legacy work"
+        case .mailSearch: "Mail search"
         }
     }
 
@@ -739,10 +738,10 @@ extension ActivityKind {
         case .photoInventory: "photo.on.rectangle"
         case .describeImage: "text.below.photo"
         case .subjectLift: "person.crop.rectangle"
-        case .aiSuggest, .aiAction: "sparkles"
+        case .aiSuggest: "sparkles"
         case .background: "arrow.triangle.2.circlepath"
         case .fileImport: "square.and.arrow.down"
-        case .legacy: "clock.arrow.circlepath"
+        case .mailSearch: "envelope.badge"
         }
     }
 }

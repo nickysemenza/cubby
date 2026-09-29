@@ -49,7 +49,7 @@ function resolveConnectedView(source: Entity, viewKey: string) {
 
 const nodeExpression = (entity: Entity, alias: string): SQL =>
   sql`jsonb_build_object(
-    'entityType', ${entity}::text,
+    'entityKind', ${entity}::text,
     'entityId', ${sql.raw(`${alias}."shortcode"`)},
     'label', ${labelSql(entity, alias)}
   )`;
@@ -116,10 +116,10 @@ export async function getConnectedRecords(
   input: ConnectedRecordsInput,
 ): Promise<ConnectedRecordsOutput> {
   const { source, viewKey } = input;
-  const view = resolveConnectedView(source.entityType, viewKey);
-  const routes = compiledConnectedRoutes(source.entityType, viewKey);
+  const view = resolveConnectedView(source.entityKind, viewKey);
+  const routes = compiledConnectedRoutes(source.entityKind, viewKey);
   if (routes.length === 0)
-    throw new Error(`No routes for ${source.entityType}.${viewKey}`);
+    throw new Error(`No routes for ${source.entityKind}.${viewKey}`);
   const hopCounts = routes.map((route) => route.hops);
   const routeHopRange = {
     min: Math.min(...hopCounts),
@@ -133,9 +133,9 @@ export async function getConnectedRecords(
       routeHopRange,
     };
   }
-  const rootTable = entityManifest[source.entityType].dbTable;
-  if (!rootTable) throw new Error(`No local table for ${source.entityType}`);
-  const rootLiveness = entityManifest[source.entityType].softDelete
+  const rootTable = entityManifest[source.entityKind].dbTable;
+  if (!rootTable) throw new Error(`No local table for ${source.entityKind}`);
+  const rootLiveness = entityManifest[source.entityKind].softDelete
     ? sql`AND s."deletedAt" IS NULL`
     : sql``;
   const targetFilter = input.targetIds
@@ -184,7 +184,7 @@ export async function getConnectedRecords(
   const row = pageRowSchema.parse(result.rows[0]);
   const items = row.items.map((item) => ({
     target: {
-      entityType: view.target,
+      entityKind: view.target,
       entityId: item.targetId,
       label: item.targetLabel,
     } satisfies PathNode,

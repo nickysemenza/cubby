@@ -30,7 +30,7 @@ import {
 } from "./task-project-inheritance";
 
 interface SearchDocumentSource {
-  entityType: SearchableEntity;
+  entityKind: SearchableEntity;
   entityId: string;
   shortcode: string;
   title: string;
@@ -42,7 +42,7 @@ interface SearchDocumentSource {
 
 export interface SearchDocumentRefreshResult {
   status: "upserted" | "softDeleted" | "missing";
-  entityType: SearchableEntity;
+  entityKind: SearchableEntity;
   entityId: string;
 }
 
@@ -53,11 +53,11 @@ export interface SearchDocumentRefreshResult {
  */
 async function loadDirectImageSearchText(
   db: Database | DrizzleTransaction,
-  refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
+  refs: ReadonlyArray<{ entityKind: SearchableEntity; entityId: string }>,
 ): Promise<Map<string, string>> {
   if (!refs.length) return new Map();
   const refValues = sql.join(
-    refs.map((ref) => sql`(${ref.entityType}::text, ${ref.entityId}::uuid)`),
+    refs.map((ref) => sql`(${ref.entityKind}::text, ${ref.entityId}::uuid)`),
     sql`, `,
   );
   const searchable = new Set<string>(searchableEntities);
@@ -66,25 +66,25 @@ async function loadDirectImageSearchText(
   const branches = [
     ...(searchable.has("image")
       ? [
-          sql`SELECT 'image'::text AS "entityType", i.id::text AS "entityId", i.id AS "imageId"
-          FROM "Image" i JOIN refs ON refs."entityType" = 'image' AND refs."entityId" = i.id
+          sql`SELECT 'image'::text AS "entityKind", i.id::text AS "entityId", i.id AS "imageId"
+          FROM "Image" i JOIN refs ON refs."entityKind" = 'image' AND refs."entityId" = i.id
           WHERE i."deletedAt" IS NULL`,
         ]
       : []),
-    sql`SELECT e."kind" AS "entityType", attachment."subjectEntityId"::text AS "entityId", attachment."imageId" AS "imageId"
+    sql`SELECT e."kind" AS "entityKind", attachment."entityId"::text AS "entityId", attachment."imageId" AS "imageId"
         FROM "EntityAttachment" attachment
-        JOIN "Entity" e ON e."id" = attachment."subjectEntityId"
-        JOIN refs ON refs."entityType" = e."kind" AND refs."entityId" = attachment."subjectEntityId"
+        JOIN "Entity" e ON e."id" = attachment."entityId"
+        JOIN refs ON refs."entityKind" = e."kind" AND refs."entityId" = attachment."entityId"
         WHERE attachment."deletedAt" IS NULL`,
   ];
   const result = await unwrapDb(db).execute<{
-    entityType: SearchableEntity;
+    entityKind: SearchableEntity;
     entityId: string;
     text: string | null;
   }>(sql`
-    WITH refs("entityType", "entityId") AS (VALUES ${refValues}),
+    WITH refs("entityKind", "entityId") AS (VALUES ${refValues}),
     attached AS (${sql.join(branches, sql` UNION ALL `)})
-    SELECT attached."entityType", attached."entityId",
+    SELECT attached."entityKind", attached."entityId",
       COALESCE(correction.description, analysis.result->>'description') AS text
     FROM attached
     JOIN "Image" image ON image.id = attached."imageId" AND image."deletedAt" IS NULL
@@ -118,7 +118,7 @@ async function loadDirectImageSearchText(
   for (const row of result.rows) {
     const text = row.text?.trim();
     if (!text) continue;
-    const key = entityRefKey(row.entityType, row.entityId);
+    const key = entityRefKey(row.entityKind, row.entityId);
     values.set(key, [values.get(key), text].filter(Boolean).join("\n"));
   }
   return values;
@@ -135,26 +135,26 @@ export async function findDirectImageSearchOwnerRefs(
 ): Promise<SearchableEntityRef[]> {
   const searchable = new Set<string>(searchableEntities);
   const result = await unwrapDb(db).execute<{
-    entityType: SearchableEntity;
+    entityKind: SearchableEntity;
     entityId: string;
   }>(sql`
     ${sql.join(
       [
         ...(searchable.has("image")
           ? [
-              sql`SELECT 'image'::text AS "entityType", id::text AS "entityId" FROM "Image"
+              sql`SELECT 'image'::text AS "entityKind", id::text AS "entityId" FROM "Image"
             WHERE id = ${imageId}::uuid AND "deletedAt" IS NULL`,
             ]
           : []),
-        sql`SELECT e."kind" AS "entityType", attachment."subjectEntityId"::text AS "entityId"
+        sql`SELECT e."kind" AS "entityKind", attachment."entityId"::text AS "entityId"
           FROM "EntityAttachment" attachment
-          JOIN "Entity" e ON e."id" = attachment."subjectEntityId" AND e."deletedAt" IS NULL
+          JOIN "Entity" e ON e."id" = attachment."entityId" AND e."deletedAt" IS NULL
           WHERE attachment."imageId" = ${imageId}::uuid AND attachment."deletedAt" IS NULL`,
       ],
       sql` UNION ALL `,
     )}
   `);
-  return result.rows.filter((row) => searchable.has(row.entityType));
+  return result.rows.filter((row) => searchable.has(row.entityKind));
 }
 
 /** Refresh docs and semantic work after an analysis/correction changes text. */
@@ -237,12 +237,12 @@ const textArray = (values: string[]): SQL =>
  */
 async function getSearchDocumentSources(
   db: Database | DrizzleTransaction,
-  entityTypes: SearchableEntity[],
+  entityKinds: SearchableEntity[],
   entityIds?: readonly string[],
   page?: { cursor?: SearchDocumentCursor; pageSize?: number },
 ): Promise<SearchDocumentSource[]> {
   const types = sql.join(
-    entityTypes.map((entityType) => sql`${entityType}`),
+    entityKinds.map((entityKind) => sql`${entityKind}`),
     sql`, `,
   );
   // ONE bind parameter for the whole id set, not one per id: a Postgres array
@@ -273,16 +273,16 @@ async function getSearchDocumentSources(
   // never appears in global search. Nothing else in the pipeline sees that hole.
   const branches = {
     image: sql`
-      SELECT 'image'::text AS "entityType", i."id"::text AS "entityId", i."shortcode",
+      SELECT 'image'::text AS "entityKind", i."id"::text AS "entityId", i."shortcode",
         i.filename AS title, NULL::text AS subtitle, 'image'::text AS "typeHint",
         ARRAY[]::text[] AS aliases, ARRAY[i."contentType"]::text[] AS keywords
       FROM "Image" i WHERE i."deletedAt" IS NULL AND 'image' IN (${types}) AND ${requested(sql`i."id"`)}`,
     product: sql`
-      SELECT 'product'::text AS "entityType", p."id"::text AS "entityId", p."shortcode",
+      SELECT 'product'::text AS "entityKind", p."id"::text AS "entityId", p."shortcode",
         p."name" AS title, p."manufacturer" AS subtitle, ${categorySummarySql(sql`p."categoryId"`)}->>'name' AS "typeHint",
         p."aliases" AS aliases,
-        COALESCE((SELECT array_agg(pei."externalId") FROM "ProductExternalId" pei
-                  WHERE pei."productId" = p."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL),
+        COALESCE((SELECT array_agg(pei."externalId") FROM "EntityExternalId" pei
+                  WHERE pei."entityId" = p."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL),
                  ARRAY[]::text[]) || ARRAY[p."model", p."manufacturer"]::text[] AS keywords
       FROM "Product" p WHERE p."deletedAt" IS NULL AND 'product' IN (${types}) AND ${requested(sql`p."id"`)}`,
     recipe: sql`
@@ -302,8 +302,8 @@ async function getSearchDocumentSources(
     inventory: sql`
       SELECT 'inventory', ie."id"::text, ie."shortcode", p."name", l."name", ${categorySummarySql(sql`p."categoryId"`)}->>'name', p."aliases",
         ARRAY[l."name", l."type", p."manufacturer"]::text[] ||
-        COALESCE((SELECT array_agg(pei."externalId") FROM "ProductExternalId" pei
-                  WHERE pei."productId" = p."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL),
+        COALESCE((SELECT array_agg(pei."externalId") FROM "EntityExternalId" pei
+                  WHERE pei."entityId" = p."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL),
                  ARRAY[]::text[])
       FROM "InventoryEntry" ie JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL
       WHERE ie."deletedAt" IS NULL AND 'inventory' IN (${types}) AND ${requested(sql`ie."id"`)}`,
@@ -374,10 +374,10 @@ async function getSearchDocumentSources(
         (CASE ge."kind" WHEN 'observation' THEN 'Note' WHEN 'harvest' THEN 'Harvest' ELSE 'Move' END)
           || ' · ' || to_char(ge."observedOn", 'YYYY-MM-DD') || ' · ' || l."name",
         (SELECT string_agg(COALESCE(p."name", 'Unknown plant'), ', ' ORDER BY pl."shortcode")
-         FROM "GardenEntryPlanting" gep
-         JOIN "Planting" pl ON pl."id" = gep."plantingId" AND pl."deletedAt" IS NULL
+         FROM "EntityLink" gep
+         JOIN "Planting" pl ON pl."id" = gep."toEntityId" AND pl."deletedAt" IS NULL
          LEFT JOIN "Plant" p ON p."id" = pl."plantId" AND p."deletedAt" IS NULL
-         WHERE gep."gardenEntryId" = ge."id" AND gep."deletedAt" IS NULL),
+         WHERE gep."fromEntityId" = ge."id" AND gep."deletedAt" IS NULL AND gep."kind" = 'gardenEntryPlanting'),
         ge."kind", ARRAY[]::text[], ARRAY[l."name", ge."harvestAmount"]::text[]
       FROM "GardenEntry" ge
       JOIN "Location" l ON l."id" = ge."locationId" AND l."deletedAt" IS NULL
@@ -395,11 +395,11 @@ async function getSearchDocumentSources(
   );
 
   const cursor = page?.cursor
-    ? sql`WHERE (source."entityType", source."entityId"::uuid) > (${page.cursor.entityType}, ${page.cursor.entityId}::uuid)`
+    ? sql`WHERE (source."entityKind", source."entityId"::uuid) > (${page.cursor.entityKind}, ${page.cursor.entityId}::uuid)`
     : sql``;
   const limit = page?.pageSize ? sql`LIMIT ${page.pageSize}` : sql``;
   const result = await unwrapDb(db).execute<{
-    entityType: SearchableEntity;
+    entityKind: SearchableEntity;
     entityId: string;
     shortcode: string;
     title: string;
@@ -422,7 +422,7 @@ async function getSearchDocumentSources(
     )
     SELECT * FROM (${union}) source
     ${cursor}
-    ORDER BY source."entityType", source."entityId"::uuid
+    ORDER BY source."entityKind", source."entityId"::uuid
     ${limit}
   `);
   return result.rows.map((row) => {
@@ -431,7 +431,7 @@ async function getSearchDocumentSources(
       ...row,
       aliases: textList(row.aliases ?? []),
       keywords:
-        row.entityType === "product" || row.entityType === "inventory"
+        row.entityKind === "product" || row.entityKind === "inventory"
           ? [
               ...new Set(
                 keywords.flatMap((keyword) =>
@@ -448,21 +448,21 @@ async function getSearchDocumentPage(
   db: Database | DrizzleTransaction,
   options: { cursor?: SearchDocumentCursor; pageSize?: number } = {},
 ): Promise<{
-  refs: Array<{ entityType: SearchableEntity; entityId: string }>;
+  refs: Array<{ entityKind: SearchableEntity; entityId: string }>;
   nextCursor: SearchDocumentCursor | null;
 }> {
   const pageSize = Math.min(Math.max(options.pageSize ?? 250, 1), 250);
   const cursor = options.cursor
-    ? sql`AND ("entityType", "entityId") > (${options.cursor.entityType}, ${options.cursor.entityId}::uuid)`
+    ? sql`AND ("entityKind", "entityId") > (${options.cursor.entityKind}, ${options.cursor.entityId}::uuid)`
     : sql``;
   const result = await unwrapDb(db).execute<{
-    entityType: SearchableEntity;
+    entityKind: SearchableEntity;
     entityId: string;
   }>(sql`
-    SELECT "entityType", "entityId"::text AS "entityId"
+    SELECT "entityKind", "entityId"::text AS "entityId"
     FROM "SearchDocument"
     WHERE "deletedAt" IS NULL ${cursor}
-    ORDER BY "entityType", "entityId"
+    ORDER BY "entityKind", "entityId"
     LIMIT ${pageSize}
   `);
   const last = result.rows.at(-1);
@@ -474,35 +474,35 @@ async function getSearchDocumentPage(
 
 export async function getSearchDocumentSourceRepairPage(
   db: Database | DrizzleTransaction,
-  entityTypes: SearchableEntity[],
+  entityKinds: SearchableEntity[],
   options: { cursor?: SearchDocumentCursor; pageSize?: number } = {},
 ): Promise<{
-  refs: Array<{ entityType: SearchableEntity; entityId: string }>;
+  refs: Array<{ entityKind: SearchableEntity; entityId: string }>;
   nextCursor: SearchDocumentCursor | null;
   scannedCount: number;
   missingCount: number;
   staleCount: number;
 }> {
   const pageSize = Math.min(Math.max(options.pageSize ?? 250, 1), 250);
-  const sources = await getSearchDocumentSources(db, entityTypes, undefined, {
+  const sources = await getSearchDocumentSources(db, entityKinds, undefined, {
     cursor: options.cursor,
     pageSize,
   });
   const idsByType = new Map<SearchableEntity, string[]>();
   for (const source of sources) {
-    idsByType.set(source.entityType, [
-      ...(idsByType.get(source.entityType) ?? []),
+    idsByType.set(source.entityKind, [
+      ...(idsByType.get(source.entityKind) ?? []),
       source.entityId,
     ]);
   }
   const [texts, documents] = await Promise.all([
     getEmbeddingTextsForRefs(db, idsByType),
     unwrapDb(db).execute<{
-      entityType: SearchableEntity;
+      entityKind: SearchableEntity;
       entityId: string;
       sourceHash: string;
     }>(sql`
-      SELECT "entityType", "entityId"::text AS "entityId", "sourceHash"
+      SELECT "entityKind", "entityId"::text AS "entityId", "sourceHash"
       FROM "SearchDocument"
       WHERE "deletedAt" IS NULL
         AND "entityId" = ANY(${uuidArrayParam(sources.map((source) => source.entityId))})
@@ -511,22 +511,22 @@ export async function getSearchDocumentSourceRepairPage(
   const imageTexts = await loadDirectImageSearchText(
     db,
     sources.map((source) => ({
-      entityType: source.entityType,
+      entityKind: source.entityKind,
       entityId: source.entityId,
     })),
   );
   const textByRef = new Map(
-    texts.map((text) => [entityRefKey(text.entityType, text.entityId), text]),
+    texts.map((text) => [entityRefKey(text.entityKind, text.entityId), text]),
   );
   const documentByRef = new Map(
     documents.rows.map((document) => [
-      entityRefKey(document.entityType, document.entityId),
+      entityRefKey(document.entityKind, document.entityId),
       document,
     ]),
   );
-  const refs: Array<{ entityType: SearchableEntity; entityId: string }> = [];
+  const refs: Array<{ entityKind: SearchableEntity; entityId: string }> = [];
   for (const source of sources) {
-    const key = entityRefKey(source.entityType, source.entityId);
+    const key = entityRefKey(source.entityKind, source.entityId);
     const text = textByRef.get(key);
     if (!text) continue;
     const document = documentByRef.get(key);
@@ -540,7 +540,7 @@ export async function getSearchDocumentSourceRepairPage(
             .join("\n"),
         ))
     ) {
-      refs.push({ entityType: source.entityType, entityId: source.entityId });
+      refs.push({ entityKind: source.entityKind, entityId: source.entityId });
     }
   }
   const last = sources.at(-1);
@@ -548,14 +548,14 @@ export async function getSearchDocumentSourceRepairPage(
     refs,
     nextCursor:
       last && sources.length === pageSize
-        ? { entityType: last.entityType, entityId: last.entityId }
+        ? { entityKind: last.entityKind, entityId: last.entityId }
         : null,
     scannedCount: sources.length,
     missingCount: refs.filter(
-      (ref) => !documentByRef.has(entityRefKey(ref.entityType, ref.entityId)),
+      (ref) => !documentByRef.has(entityRefKey(ref.entityKind, ref.entityId)),
     ).length,
     staleCount: refs.filter((ref) =>
-      documentByRef.has(entityRefKey(ref.entityType, ref.entityId)),
+      documentByRef.has(entityRefKey(ref.entityKind, ref.entityId)),
     ).length,
   };
 }
@@ -564,7 +564,7 @@ export async function getSearchDocumentOrphanPage(
   db: Database | DrizzleTransaction,
   options: { cursor?: SearchDocumentCursor; pageSize?: number } = {},
 ): Promise<{
-  refs: Array<{ entityType: SearchableEntity; entityId: string }>;
+  refs: Array<{ entityKind: SearchableEntity; entityId: string }>;
   nextCursor: SearchDocumentCursor | null;
   scannedCount: number;
   orphanedCount: number;
@@ -591,13 +591,13 @@ export async function getSearchDocumentOrphanPage(
  */
 export async function getOrphanedSearchDocumentRefs(
   db: Database | DrizzleTransaction,
-  refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
-): Promise<Array<{ entityType: SearchableEntity; entityId: string }>> {
+  refs: ReadonlyArray<{ entityKind: SearchableEntity; entityId: string }>,
+): Promise<Array<{ entityKind: SearchableEntity; entityId: string }>> {
   if (refs.length === 0) return [];
   const idsByType = new Map<SearchableEntity, string[]>();
   for (const ref of refs)
-    idsByType.set(ref.entityType, [
-      ...(idsByType.get(ref.entityType) ?? []),
+    idsByType.set(ref.entityKind, [
+      ...(idsByType.get(ref.entityKind) ?? []),
       ref.entityId,
     ]);
   const [sources, texts] = await Promise.all([
@@ -609,36 +609,36 @@ export async function getOrphanedSearchDocumentRefs(
     getEmbeddingTextsForRefs(db, idsByType),
   ]);
   const sourceRefs = new Set(
-    sources.map((source) => entityRefKey(source.entityType, source.entityId)),
+    sources.map((source) => entityRefKey(source.entityKind, source.entityId)),
   );
   const textRefs = new Set(
-    texts.map((text) => entityRefKey(text.entityType, text.entityId)),
+    texts.map((text) => entityRefKey(text.entityKind, text.entityId)),
   );
   return refs.filter((ref) => {
-    const key = entityRefKey(ref.entityType, ref.entityId);
+    const key = entityRefKey(ref.entityKind, ref.entityId);
     return !sourceRefs.has(key) || !textRefs.has(key);
   });
 }
 
 export async function refreshSearchDocument(
   db: Database | DrizzleTransaction,
-  entityType: SearchableEntity,
+  entityKind: SearchableEntity,
   entityId: string,
 ): Promise<SearchDocumentRefreshResult> {
-  const [result] = await refreshSearchDocuments(db, [{ entityType, entityId }]);
-  return result ?? (await markSearchDocumentMissing(db, entityType, entityId));
+  const [result] = await refreshSearchDocuments(db, [{ entityKind, entityId }]);
+  return result ?? (await markSearchDocumentMissing(db, entityKind, entityId));
 }
 
 async function markSearchDocumentMissing(
   db: Database | DrizzleTransaction,
-  entityType: SearchableEntity,
+  entityKind: SearchableEntity,
   entityId: string,
 ): Promise<SearchDocumentRefreshResult> {
   await unwrapDb(db).execute(sql`
     UPDATE "SearchDocument" SET "deletedAt" = now(), "updatedAt" = now()
-    WHERE "entityType" = ${entityType} AND "entityId" = ${entityId}::uuid AND "deletedAt" IS NULL
+    WHERE "entityKind" = ${entityKind} AND "entityId" = ${entityId}::uuid AND "deletedAt" IS NULL
   `);
-  return { status: "missing", entityType, entityId };
+  return { status: "missing", entityKind, entityId };
 }
 
 async function upsertSearchDocumentBatch(
@@ -651,8 +651,8 @@ async function upsertSearchDocumentBatch(
       const normalizedText = normalizeSearchText(source.title);
       const sourceHash = await searchDocumentSourceHash(source, body);
       return sql`(
-        ${source.entityType}::text, ${source.entityId}::uuid,
-        ${source.shortcode}::text, ${source.title}::text,
+        ${source.entityKind}::text, ${source.entityId}::uuid,
+        ${source.title}::text,
         ${source.subtitle}::text, ${source.typeHint}::text,
         ${textArray(source.aliases)}, ${textArray(source.keywords)},
         ${body}::text, ${normalizedText}::text, ${sourceHash}::text
@@ -661,22 +661,22 @@ async function upsertSearchDocumentBatch(
   );
   await unwrapDb(db).execute(sql`
     INSERT INTO "SearchDocument" (
-      "entityType", "entityId", "shortcode", title, subtitle, "typeHint",
+      "entityKind", "entityId", title, subtitle, "typeHint",
       aliases, keywords, body, "semanticText", "normalizedText",
       "searchVector", "sourceHash"
     )
-    SELECT input."entityType", input."entityId", input.shortcode, input.title,
+    SELECT input."entityKind", input."entityId", input.title,
       input.subtitle, input."typeHint", input.aliases, input.keywords,
       input.body, input.body, input."normalizedText",
       setweight(to_tsvector('simple', input.title), 'A') ||
       setweight(to_tsvector('simple', concat_ws(' ', input.subtitle, array_to_string(input.aliases, ' '), array_to_string(input.keywords, ' '))), 'B') ||
       setweight(to_tsvector('simple', input.body), 'D'), input."sourceHash"
     FROM (VALUES ${sql.join(rows, sql`, `)}) AS input(
-      "entityType", "entityId", shortcode, title, subtitle, "typeHint",
+      "entityKind", "entityId", title, subtitle, "typeHint",
       aliases, keywords, body, "normalizedText", "sourceHash"
     )
-    ON CONFLICT ("entityType", "entityId") WHERE "deletedAt" IS NULL DO UPDATE SET
-      "shortcode" = EXCLUDED."shortcode", title = EXCLUDED.title,
+    ON CONFLICT ("entityKind", "entityId") WHERE "deletedAt" IS NULL DO UPDATE SET
+      title = EXCLUDED.title,
       subtitle = EXCLUDED.subtitle, "typeHint" = EXCLUDED."typeHint",
       aliases = EXCLUDED.aliases, keywords = EXCLUDED.keywords,
       body = EXCLUDED.body, "semanticText" = EXCLUDED."semanticText",
@@ -687,22 +687,22 @@ async function upsertSearchDocumentBatch(
   `);
   return entries.map(({ source }) => ({
     status: "upserted",
-    entityType: source.entityType,
+    entityKind: source.entityKind,
     entityId: source.entityId,
   }));
 }
 
 export async function refreshSearchDocuments(
   db: Database | DrizzleTransaction,
-  refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
+  refs: ReadonlyArray<{ entityKind: SearchableEntity; entityId: string }>,
 ): Promise<SearchDocumentRefreshResult[]> {
   if (refs.length === 0) return [];
 
   const idsByType = new Map<SearchableEntity, string[]>();
   for (const ref of refs) {
-    const ids = idsByType.get(ref.entityType);
+    const ids = idsByType.get(ref.entityKind);
     if (ids) ids.push(ref.entityId);
-    else idsByType.set(ref.entityType, [ref.entityId]);
+    else idsByType.set(ref.entityKind, [ref.entityId]);
   }
 
   // Two queries for the whole wave, not two per ref. The id set is passed
@@ -721,19 +721,19 @@ export async function refreshSearchDocuments(
 
   const sourceByRef = new Map(
     sources.map((source) => [
-      entityRefKey(source.entityType, source.entityId),
+      entityRefKey(source.entityKind, source.entityId),
       source,
     ]),
   );
   const textByRef = new Map(
-    texts.map((text) => [entityRefKey(text.entityType, text.entityId), text]),
+    texts.map((text) => [entityRefKey(text.entityKind, text.entityId), text]),
   );
 
   const results: SearchDocumentRefreshResult[] = [];
   const entries: Array<{ source: SearchDocumentSource; body: string }> = [];
   const seen = new Set<string>();
   for (const ref of refs) {
-    const key = entityRefKey(ref.entityType, ref.entityId);
+    const key = entityRefKey(ref.entityKind, ref.entityId);
     if (seen.has(key)) continue;
     seen.add(key);
     const source = sourceByRef.get(key);
@@ -748,7 +748,7 @@ export async function refreshSearchDocuments(
       continue;
     }
     results.push(
-      await markSearchDocumentMissing(db, ref.entityType, ref.entityId),
+      await markSearchDocumentMissing(db, ref.entityKind, ref.entityId),
     );
   }
 
@@ -766,18 +766,18 @@ export async function refreshSearchDocuments(
 
 export async function getSearchDocumentEmbeddingText(
   db: Database | DrizzleTransaction,
-  entityType: SearchableEntity,
+  entityKind: SearchableEntity,
   entityId: string,
 ): Promise<SearchableEntityText | null> {
   const result = await unwrapDb(db).execute<{
-    entityType: SearchableEntity;
+    entityKind: SearchableEntity;
     entityId: string;
     embeddingText: string;
   }>(sql`
-    SELECT "entityType", "entityId"::text AS "entityId",
+    SELECT "entityKind", "entityId"::text AS "entityId",
       "semanticText" AS "embeddingText"
     FROM "SearchDocument"
-    WHERE "entityType" = ${entityType}
+    WHERE "entityKind" = ${entityKind}
       AND "entityId" = ${entityId}::uuid
       AND "deletedAt" IS NULL
     LIMIT 1
@@ -789,34 +789,34 @@ export async function getSearchDocumentEmbeddingText(
  * The embedding bodies for a whole wave of refs in one round trip.
  *
  * Shaped like `hydrateSearchHitRefs`: a VALUES-joined ref table rather than an
- * `IN` list, so the pair `(entityType, entityId)` is matched as a pair and the
+ * `IN` list, so the pair `(entityKind, entityId)` is matched as a pair and the
  * result comes back in the caller's own order. Refs with no live document are
  * simply absent — the batch embedding path treats that as nothing to embed,
  * exactly as the single-ref loader's `null` does.
  */
 export async function getSearchDocumentEmbeddingTexts(
   db: Database | DrizzleTransaction,
-  refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
+  refs: ReadonlyArray<{ entityKind: SearchableEntity; entityId: string }>,
 ): Promise<SearchableEntityText[]> {
   if (refs.length === 0) return [];
   const values = sql.join(
     refs.map(
       (ref, index) =>
-        sql`(${ref.entityType}::text, ${ref.entityId}::uuid, ${index}::integer)`,
+        sql`(${ref.entityKind}::text, ${ref.entityId}::uuid, ${index}::integer)`,
     ),
     sql`, `,
   );
   const result = await unwrapDb(db).execute<{
-    entityType: SearchableEntity;
+    entityKind: SearchableEntity;
     entityId: string;
     embeddingText: string;
   }>(sql`
-    WITH refs("entityType", "entityId", ordinal) AS (VALUES ${values})
-    SELECT sd."entityType", sd."entityId"::text AS "entityId",
+    WITH refs("entityKind", "entityId", ordinal) AS (VALUES ${values})
+    SELECT sd."entityKind", sd."entityId"::text AS "entityId",
       sd."semanticText" AS "embeddingText"
     FROM refs
     JOIN "SearchDocument" sd
-      ON sd."entityType" = refs."entityType"
+      ON sd."entityKind" = refs."entityKind"
       AND sd."entityId" = refs."entityId"
       AND sd."deletedAt" IS NULL
     ORDER BY refs.ordinal
@@ -838,8 +838,8 @@ const normalizedTextSql = (column: SQL): SQL =>
 // array interpolated directly into `IN (...)`, which drizzle would render as
 // a row constructor rather than a list (the `no-unsafe-sql-array-interpolation`
 // Oxlint rule guards this).
-const embeddableEntityTypesSql = sql.join(
-  embeddableEntities.map((entityType) => sql`${entityType}`),
+const embeddableEntityKindsSql = sql.join(
+  embeddableEntities.map((entityKind) => sql`${entityKind}`),
   sql`, `,
 );
 
@@ -854,14 +854,14 @@ const embeddableEntityTypesSql = sql.join(
 const unembeddedDocumentsSql = (config: SemanticEmbeddingConfig): SQL => sql`
   FROM "SearchDocument" sd
   LEFT JOIN "EntityEmbedding" ee
-    ON ee."entityType" = sd."entityType"
+    ON ee."entityKind" = sd."entityKind"
     AND ee."entityId" = sd."entityId"
     AND ee.provider = ${config.provider}
     AND ee.model = ${config.model}
     AND ee.dimensions = ${config.dimensions}
     AND ee."deletedAt" IS NULL
   WHERE sd."deletedAt" IS NULL
-    AND sd."entityType" IN (${embeddableEntityTypesSql})
+    AND sd."entityKind" IN (${embeddableEntityKindsSql})
     AND (ee.id IS NULL
       OR ${normalizedTextSql(sql`ee."embeddingText"`)} <> ${normalizedTextSql(sql`sd."semanticText"`)})
 `;
@@ -882,7 +882,7 @@ export async function selectUnembeddedSearchDocumentRefs(
   config: SemanticEmbeddingConfig,
   options: { cursor?: SearchDocumentCursor; pageSize?: number } = {},
 ): Promise<{
-  refs: Array<{ entityType: SearchableEntity; entityId: string }>;
+  refs: Array<{ entityKind: SearchableEntity; entityId: string }>;
   nextCursor: SearchDocumentCursor | null;
 }> {
   const pageSize = Math.min(
@@ -890,16 +890,16 @@ export async function selectUnembeddedSearchDocumentRefs(
     SEARCH_DOCUMENT_WORKFLOW_PAGE_SIZE,
   );
   const cursor = options.cursor
-    ? sql`AND (sd."entityType", sd."entityId") > (${options.cursor.entityType}, ${options.cursor.entityId}::uuid)`
+    ? sql`AND (sd."entityKind", sd."entityId") > (${options.cursor.entityKind}, ${options.cursor.entityId}::uuid)`
     : sql``;
   const result = await unwrapDb(db).execute<{
-    entityType: SearchableEntity;
+    entityKind: SearchableEntity;
     entityId: string;
   }>(sql`
-    SELECT sd."entityType", sd."entityId"::text AS "entityId"
+    SELECT sd."entityKind", sd."entityId"::text AS "entityId"
     ${unembeddedDocumentsSql(config)}
     ${cursor}
-    ORDER BY sd."entityType", sd."entityId"
+    ORDER BY sd."entityKind", sd."entityId"
     LIMIT ${pageSize}
   `);
   const last = result.rows.at(-1);
@@ -907,12 +907,12 @@ export async function selectUnembeddedSearchDocumentRefs(
     refs: result.rows,
     nextCursor:
       last && result.rows.length === pageSize
-        ? { entityType: last.entityType, entityId: last.entityId }
+        ? { entityKind: last.entityKind, entityId: last.entityId }
         : null,
   };
 }
 
 export type SearchDocumentCursor = {
-  entityType: SearchableEntity;
+  entityKind: SearchableEntity;
   entityId: string;
 };

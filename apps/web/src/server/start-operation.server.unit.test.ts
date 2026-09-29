@@ -19,14 +19,10 @@ import {
 const database = new Database(() => {
   throw new Error("The Start operation unit test must not resolve a database");
 });
-const cachedDatabase = new Database(() => {
-  throw new Error("The cached Start database must not resolve during tests");
-});
 const context = {
   ...requireActor(
     createTestRequestContext(database, {
       auth: { userId: testUserId("start-operation-user") },
-      readDb: cachedDatabase,
     }),
   ),
   readConsistency: {
@@ -90,7 +86,7 @@ describe("runStartOperation", () => {
       readPolicy: "context",
       run: async (actor) => {
         expect(actor.auth.userId).toBe(context.auth.userId);
-        expect(actor.readDb).toBe(database);
+        expect(actor.db).toBe(database);
         return true as const;
       },
     });
@@ -114,7 +110,7 @@ describe("runStartOperation", () => {
     });
 
     expect(run).toHaveBeenCalledWith(
-      expect.objectContaining({ db: database, readDb: database }),
+      expect.objectContaining({ db: database }),
       {},
     );
   });
@@ -151,7 +147,7 @@ describe("runStartOperation", () => {
 
     expect(authenticate).toHaveBeenCalledOnce();
     expect(run).toHaveBeenCalledWith(
-      expect.objectContaining({ db: database, readDb: database }),
+      expect.objectContaining({ db: database }),
       { count: 3 },
     );
     expect(observedOperations).toEqual(["entity.detail"]);
@@ -173,7 +169,7 @@ describe("runStartOperation", () => {
     });
 
     expect(run).toHaveBeenCalledWith(
-      expect.objectContaining({ db: database, readDb: database }),
+      expect.objectContaining({ db: database }),
       {},
     );
   });
@@ -192,7 +188,7 @@ describe("runStartOperation", () => {
     });
 
     expect(run).toHaveBeenCalledWith(
-      expect.objectContaining({ db: database, readDb: database }),
+      expect.objectContaining({ db: database }),
       {},
     );
     expect(markCalendarDirty).toHaveBeenCalledWith(
@@ -276,7 +272,6 @@ describe("runStartOperation", () => {
   it("keeps a default query strong when request context carries the fresh marker decision", async () => {
     authenticate.mockResolvedValue({
       ...context,
-      readDb: database,
       readConsistency: {
         consistency: "strong",
         reason: "fresh-after-write",
@@ -295,7 +290,7 @@ describe("runStartOperation", () => {
     });
 
     expect(run).toHaveBeenCalledWith(
-      expect.objectContaining({ db: database, readDb: database }),
+      expect.objectContaining({ db: database }),
       {},
     );
   });

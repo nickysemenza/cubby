@@ -8,8 +8,9 @@ import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail
 import { Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
 import type { RunSummary } from "~/contracts/run.contract";
-import { entityListFor } from "~/entities/entity-list.functions";
-import { run as runOperations } from "~/entities/run.functions";
+import { entityListFor } from "~/entities/entity-list";
+import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatInstant } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
 
 import { runHref } from "../purchases/purchase-import-links";
@@ -179,7 +180,7 @@ function ProductRunSummary({ run }: { run: RunSummary }) {
         </span>
       </div>
       <span className="text-muted-foreground">
-        {new Date(run.startedAt).toLocaleString()} · {run.trigger}
+        {formatInstant(run.startedAt, "dateTime")} · {run.trigger}
       </span>
       {run.failureCode ? (
         <span className="text-destructive">{run.failureCode}</span>

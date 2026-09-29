@@ -4,7 +4,6 @@ import {
   financialAccountSourceAliases,
 } from "@cubby/schemas/financial-account";
 import {
-  financialTransactionSourceRefs,
   purchaseSettlementKindAllowedExpression,
   purchaseSettlementSignSatisfiedExpression,
 } from "@cubby/schemas/financial-transaction";
@@ -26,27 +25,14 @@ export async function findInvalidFinancialJson(
     identity?: unknown;
     sourceAliases?: unknown;
     cardNumbers?: unknown;
-    sourceRefs?: unknown;
   }>(sql`
-    SELECT 'financialAccount' AS entity, fa.shortcode AS id, fa.identity, fa."sourceAliases", fa."cardNumbers", NULL AS "sourceRefs"
+    SELECT 'financialAccount' AS entity, fa.shortcode AS id, fa.identity, fa."sourceAliases", fa."cardNumbers"
     FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL
-    UNION ALL
-    SELECT 'financialTransaction' AS entity, ft.shortcode AS id, NULL AS identity, NULL AS "sourceAliases", NULL AS "cardNumbers", ft."sourceRefs"
-    FROM "FinancialTransaction" ft WHERE ft."deletedAt" IS NULL
   `);
+  // Settlement references are EntityExternalId rows now; only the account's
+  // JSON columns can hold malformed JSON.
   const problems: ProblemItem<"invalidFinancialJson">[] = [];
   for (const row of result.rows) {
-    if (row.entity === "financialTransaction") {
-      const parsed = financialTransactionSourceRefs.safeParse(row.sourceRefs);
-      if (!parsed.success)
-        problems.push({
-          entity: "financialTransaction",
-          id: parseShortcodeFor("financialTransaction", row.id),
-          field: "sourceRefs",
-          message: parsed.error.issues[0]?.message ?? "Invalid JSON",
-        });
-      continue;
-    }
     const checks = [
       ["identity", financialAccountIdentity.safeParse(row.identity)],
       [
@@ -75,10 +61,11 @@ export async function findDuplicateFinancialTransactionSourceRefs(
     externalId: string;
     transactionIds: string[];
   }>(sql`
-    SELECT r->>'source' AS source, r->>'externalId' AS "externalId", array_agg(ft.shortcode) AS "transactionIds"
-    FROM "FinancialTransaction" ft CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(ft."sourceRefs") = 'array' THEN ft."sourceRefs" ELSE '[]'::jsonb END) r
-    WHERE ft."deletedAt" IS NULL
-    GROUP BY r->>'source', r->>'externalId'
+    SELECT fx."source" AS source, fx."externalId" AS "externalId", array_agg(ft.shortcode) AS "transactionIds"
+    FROM "EntityExternalId" fx
+    JOIN "FinancialTransaction" ft ON ft."id" = fx."entityId" AND ft."deletedAt" IS NULL
+    WHERE fx."kind" = 'settlement_ref' AND fx."deletedAt" IS NULL
+    GROUP BY fx."source", fx."externalId"
     HAVING count(*) > 1
   `);
   return result.rows.map((row) => ({

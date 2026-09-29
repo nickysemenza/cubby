@@ -62,7 +62,8 @@ Account ID: `9f10f078d35d86c78dedece2300a6b88`.
 - Workers AI binding `AI` and AI Gateway `cubby`.
 - Vectorize binding `VECTORIZE` ->
   `cubby-openai-text-embedding-3-small-1536`, dimensions `1536`, cosine metric,
-  with string metadata index `entityType`.
+  with string metadata index `entityType` (the property name predates the
+  `entityKind` rename and stays: the index is provider-side state).
 - Version metadata and the two Hyperdrive bindings below.
 
 One-time creation commands that cannot be inferred or safely rerun by deploy:

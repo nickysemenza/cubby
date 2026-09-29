@@ -205,7 +205,7 @@ async function assertNativePhotoImport(
       `SELECT i.shortcode AS id, i.key, i.size
        FROM "RunTarget" t
        JOIN "Run" r ON r.id = t."runId"
-       JOIN "Image" i ON i.id = t."imageId"
+       JOIN "Image" i ON i.id = t."entityId"
        WHERE r.shortcode = $1 AND r.purpose = 'photo_inventory'
          AND t.state = 'pending'
        ORDER BY t.position`,
@@ -231,7 +231,7 @@ async function assertNativePhotoImport(
       `SELECT i.shortcode AS "imageId", j.kind
        FROM "ImageProcessingJob" j
        JOIN "Image" i ON i.id = j."imageId"
-       JOIN "RunTarget" t ON t."imageId" = i.id
+       JOIN "RunTarget" t ON t."entityId" = i.id
        JOIN "Run" r ON r.id = t."runId"
        WHERE r.shortcode = $1`,
       [runID],
@@ -797,15 +797,13 @@ async function runHeadlessPhotoScenario(
     const proposalPool = new Pool({ connectionString: databaseURL });
     try {
       const [
-        { callMcpTool },
-        { McpServer },
-        { registerPhotoImportTools },
+        { callMcpTool, kernelRequestContext },
+        { createMcpServer },
         scenario,
         testing,
       ] = await Promise.all([
         import("~/server/mcp/mcp-test-utils"),
-        import("@modelcontextprotocol/sdk/server/mcp.js"),
-        import("~/server/mcp/tools/photo-import.tools"),
+        import("~/server/mcp/server"),
         import("./scenarios/context"),
         import("@cubby/schemas/testing"),
       ]);
@@ -814,16 +812,11 @@ async function runHeadlessPhotoScenario(
         db,
         testing.testUserId(userId),
       );
-      const server = new McpServer({
-        name: "photo-import-sim",
-        version: "1.0",
-      });
-      registerPhotoImportTools(server);
       const proposed = await callMcpTool(
-        server,
-        "propose_photo_groups",
-        { runId: runID, groups },
-        {},
+        createMcpServer(),
+        "photo_run",
+        { action: "propose_groups", runId: runID, groups },
+        kernelRequestContext(kernel),
         { entityKernel: kernel },
       );
       if (proposed.isError)
@@ -1267,19 +1260,8 @@ async function main(): Promise<void> {
     if (watch) startDatabaseWatchdog();
     const pool = new Pool({ connectionString: databaseURL });
     try {
-      const { ensureDbExtensions } = await import("./db-extensions");
-      const { installEntityIdentityTriggers } =
-        await import("../src/server/db/entity-identity-schema");
-      const { toPushSchemaDatabase } = await import("./drizzle-kit-interop");
-      const schema = await import("../src/server/db/schema");
-      const { pushSchema } = await import("drizzle-kit/api");
-      const db = drizzle(pool);
-      await ensureDbExtensions(db);
-      const { apply } = await pushSchema(schema, toPushSchemaDatabase(db), [
-        "public",
-      ]);
-      await apply();
-      await installEntityIdentityTriggers(db);
+      const { migrateDatabase } = await import("./db-migrate");
+      await migrateDatabase(drizzle(pool));
     } finally {
       await pool.end();
     }

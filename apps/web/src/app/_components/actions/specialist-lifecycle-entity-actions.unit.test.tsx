@@ -2,8 +2,10 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { recipe } from "~/app/recipes/recipe.functions";
-import { image } from "~/entities/image.functions";
+import {
+  recipe,
+  image,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import type { EntityActionRow } from "./entity-actions";
@@ -53,7 +55,7 @@ function lifecycleOperations(
       onImageDelete(input.ids);
       return {
         deleted: input.ids.length,
-        sideEffects: { backgroundBatches: [] },
+        sideEffects: {},
       };
     }),
   };

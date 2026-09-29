@@ -39,17 +39,18 @@ import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
+  amountJsonSql,
+  amountToColumns,
   buildPartialUpdateValues,
   notDeleted,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { applyInventoryOwnershipInTransaction } from "~/server/repo/inventory/ownership-mutations";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge/core";
-import { relatedWhereConditions } from "~/server/repo/related-view";
 import { policyDelete } from "~/server/repo/removal";
+import { createEntityReader } from "~/server/repo/repository";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -308,9 +309,7 @@ export const getLedgerPartyByShortcode = reader.getByShortcode;
 
 /** The complete WHERE for this entity's list; `search` and `kind` are declared. */
 export const buildLedgerPartyWhere = (filters: LedgerPartyFilters) =>
-  scaffold.where(filters, [
-    ...relatedWhereConditions("ledgerParty", filters, ledgerParty.id),
-  ]);
+  scaffold.where(filters, []);
 
 export const listLedgerParties = (
   db: Database,
@@ -351,7 +350,7 @@ export async function createLedgerParty(
     }
     const created = await insertWithShortcode(tx, "ledgerParty", data);
     await logAuditEntry(tx, actor, {
-      entityType: "ledgerParty",
+      entityKind: "ledgerParty",
       entityId: created.id,
       action: "create",
     });
@@ -416,7 +415,7 @@ export async function updateLedgerParty(
     ]);
     if (changes)
       await logAuditEntry(tx, actor, {
-        entityType: "ledgerParty",
+        entityKind: "ledgerParty",
         entityId: id,
         action: "update",
         changes,
@@ -501,7 +500,10 @@ const foldMealRecipePortions = async (
       mealRecipeId: mealRecipePortion.mealRecipeId,
       mealId: mealRecipePortion.mealId,
       ledgerPartyId: mealRecipePortion.ledgerPartyId,
-      amount: mealRecipePortion.amount,
+      amount: amountJsonSql(
+        mealRecipePortion.amountValue,
+        mealRecipePortion.amountUnit,
+      ),
       confirmedAt: mealRecipePortion.confirmedAt,
     })
     .from(mealRecipePortion)
@@ -557,7 +559,7 @@ const foldMealRecipePortions = async (
       mealRecipeId: first.mealRecipeId,
       mealId: first.mealId,
       ledgerPartyId: keepId,
-      amount: foldedAmounts.get(key)!,
+      ...amountToColumns(foldedAmounts.get(key)!),
       confirmedAt: allConfirmed
         ? new Date(
             Math.max(...group.map((portion) => portion.confirmedAt!.getTime())),

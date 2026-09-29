@@ -9,10 +9,10 @@ import { RecipeUsagesTable } from "~/app/_components/recipe/recipe-usages-table"
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { ingredient } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { EnrichmentEditor } from "./enrichment-editor";
 import type { EquivalenceDraft } from "./equivalence-workbench-link";
-import { ingredient } from "./ingredient.functions";
 
 /** An AI USDA suggestion for one row, kept at the workbench level for bulk review. */
 export type Suggestion = {

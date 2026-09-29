@@ -13,7 +13,7 @@ import { softDeleteTableCatalog } from "../shared/schema-storage.ts";
  * exact text engine and runs it once per file over `context.sourceCode.text`,
  * reporting each match at its source offset. The soft-deletable table catalog is
  * parsed once, at plugin load, straight from `schema.ts` + the generated entity
- * columns file — the same parser the deleted `schema-storage.ts` used — so this never
+ * tables file — the same parser the deleted `schema-storage.ts` used — so this never
  * trusts the `application-schema.json` snapshot's `lowerFirst(sqlName)` convention,
  * which does not hold for the `oauth_*` auth tables (correction 9).
  */
@@ -23,15 +23,15 @@ const repoRoot = resolve(
   "../../../..",
 );
 const schemaPath = resolve(repoRoot, "apps/web/src/server/db/schema.ts");
-const columnsPath = resolve(
+const entityTablesPath = resolve(
   repoRoot,
-  "apps/web/src/server/db/generated/entity-columns.gen.ts",
+  "apps/web/src/server/db/generated/entity-tables.gen.ts",
 );
 const OPT_OUT = "includes-deleted";
 
 const { varNames, sqlNameToVar, varToSqlName } = softDeleteTableCatalog(
   readFileSync(schemaPath, "utf8"),
-  [readFileSync(columnsPath, "utf8")],
+  [readFileSync(entityTablesPath, "utf8")],
 );
 
 const tablePattern = new RegExp(
@@ -256,7 +256,13 @@ function scanDrizzleExistsCalls(text: string): SoftDeleteViolation[] {
     const queried = body.match(tablePattern);
     if (!queried?.[1]) continue;
     if (hasOptOut(call.index)) continue;
-    if (body.includes("notDeleted") || body.includes("deletedAt")) continue;
+    // `liveLinks(kind)` is the EntityLink live-row filter (kind + deletedAt).
+    if (
+      body.includes("notDeleted") ||
+      body.includes("deletedAt") ||
+      body.includes("liveLinks(")
+    )
+      continue;
 
     violations.push({
       start: call.index,

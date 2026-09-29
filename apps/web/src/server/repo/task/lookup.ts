@@ -36,13 +36,12 @@ import {
   uuidArrayParam,
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import { matchingEmbeddedProjectIds } from "~/server/repo/project/dashboard-shared";
 import {
   collectDescendantIds,
   loadProjectTree,
 } from "~/server/repo/project/subtree";
-import { relatedWhereConditions } from "~/server/repo/related-view";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 
 import {
@@ -263,7 +262,6 @@ export const buildTaskWhere = async (
   // `status` is declared stored; trade is resolved below instead of reading the
   // applies them via `declaredFilterPredicates` before the conditions below.
   return taskScaffold.where(filters, [
-    ...relatedWhereConditions("task", filters, task.id),
     searchCondition(),
     // Carries `projectPresenceFilter` too — it ORs with the id selection, so
     // it can't be a sibling condition here (that AND is what made

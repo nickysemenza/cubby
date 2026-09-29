@@ -10,10 +10,10 @@ import { useState } from "react";
 import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
 import type { DetailRecordOf } from "~/app/_components/entity-detail/detail-record";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { inventory } from "~/app/inventory/inventory.functions";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { inventory } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { OverrideControl } from "../editing/override-control";
 import { referenceScopeFor } from "../editing/reference-scope";

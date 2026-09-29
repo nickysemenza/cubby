@@ -66,20 +66,20 @@ export async function handleBackgroundTask(
       return recomputed > 0 ? "succeeded" : "skipped";
     }
     case "entity-embedding.refresh": {
-      const ref = { entityType: task.entityType, entityId: task.entityId };
+      const ref = { entityKind: task.entityKind, entityId: task.entityId };
       const result = (
         await refreshEntityEmbeddings(db, [ref], ports.embedding)
-      ).get(entityRefKey(ref.entityType, ref.entityId));
+      ).get(entityRefKey(ref.entityKind, ref.entityId));
       if (!result) {
         throw new Error(
-          `[background-tasks] missing embedding refresh result for ${task.entityType}:${task.entityId}`,
+          `[background-tasks] missing embedding refresh result for ${task.entityKind}:${task.entityId}`,
         );
       }
       if ("error" in result) throw result.error;
       const { outcome } = result;
       if (outcome === "obsolete" || outcome === "unconfigured") {
         console.warn(
-          `[background-tasks] embedding ${outcome} ${task.entityType}:${task.entityId}`,
+          `[background-tasks] embedding ${outcome} ${task.entityKind}:${task.entityId}`,
         );
       }
       return outcome === "written" ? "succeeded" : "skipped";

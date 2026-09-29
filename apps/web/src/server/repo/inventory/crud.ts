@@ -18,25 +18,9 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  not,
-  sql,
-  sum,
-} from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, not, sql, sum } from "drizzle-orm";
 
-import {
-  computeInventoryValuation,
-  computeInventoryValuations,
-} from "~/lib/price-mapping-utils";
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -47,8 +31,9 @@ import {
   loadDataQualities,
 } from "~/server/repo/data-quality";
 import {
+  amountFromColumns,
+  amountToColumns,
   auditDateWhereConditions,
-  batchUpdateWithCaseWhen,
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
@@ -56,13 +41,10 @@ import {
   getDb,
   type ListReadIntent,
   notDeleted,
-  parseInventoryAmount,
   relations,
-  unwrapDb,
   updateLiveAndReturn,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
-import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { declaredFilterPredicates } from "~/server/repo/list";
 import { isGlobalUnknownLocation } from "~/server/repo/location";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
 import {
@@ -71,6 +53,7 @@ import {
 } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { deleteByPolicy } from "~/server/repo/removal";
+import { createEntityReader } from "~/server/repo/repository";
 import {
   lexicalEligibility,
   lexicalRelevance,
@@ -85,7 +68,7 @@ export const INVENTORY_DELETE_EDGE_POLICY =
 
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { assertLiveTargets } from "./helpers";
+import { assertLiveTargets, inventoryAuditRow } from "./helpers";
 import {
   dbInventoryEntryToAPI,
   dbInventoryEntryToListAPI,
@@ -110,7 +93,12 @@ import type {
   InventoryEntryDeepDB,
   UpdateInventoryEntryData,
 } from "./types";
-import { loadValuationGraph, loadValuationGraphs } from "./valuation";
+import {
+  type InventoryValuations,
+  inventoryValuationSql,
+  loadInventoryValuations,
+  loadLiveInventoryValuations,
+} from "./valuation";
 
 const loadInventoryEntryPricing = async (
   db: Database,
@@ -125,87 +113,6 @@ const loadInventoryEntryPricing = async (
       price: entry.product.price,
     })),
   );
-
-/**
- * Value one entry's amount against its Product's conversion graph. Takes the
- * whole `Amount`, not a scalar: the unit is what decides whether "4" means four
- * packs or four rolls out of one.
- */
-export const computeValuationForEntry = async (
-  db: Database | DrizzleTransaction,
-  productId: ProductId,
-  amount: Amount,
-): Promise<number | null> =>
-  computeInventoryValuation(amount, await loadValuationGraph(db, productId));
-
-/**
- * Re-value every live entry of a Product after its effective price moved. One
- * graph load and ONE batched WASM call for the whole fan-out.
- *
- * Rows whose valuation is unchanged are skipped, so the returned count is rows
- * *changed*, not rows examined (no current caller reads it). That matters
- * because `batchUpdateWithCaseWhen` sets `updatedAt` unconditionally: without
- * the skip, every price change touches every live entry of the product, which
- * is noise in the data-quality fingerprints and can trip the `INVENTORY_STALE`
- * guard in `bulk.ts` for a recount session that changed nothing.
- */
-export const syncInventoryValuationsForProducts = async (
-  db: Database | DrizzleTransaction,
-  productIds: readonly ProductId[],
-): Promise<number> => {
-  const client = unwrapDb(db);
-  const ids = [...new Set(productIds)];
-  if (ids.length === 0) return 0;
-
-  const entries = await client.query.inventoryEntry.findMany({
-    where: and(
-      inArray(inventoryEntry.productId, ids),
-      notDeleted(inventoryEntry),
-    ),
-    columns: { id: true, productId: true, amount: true, valuation: true },
-  });
-
-  if (entries.length === 0) return 0;
-
-  const graphs = await loadValuationGraphs(db, ids);
-
-  // Compared with `===` against a value read back from a `real` (float4)
-  // column, which looks fragile and isn't: Postgres emits floats as the
-  // SHORTEST text that round-trips to the same float4, so a stored 37.98 comes
-  // back as "37.98" and parses to the identical float64. Verified against this
-  // database, and it holds even at `extra_float_digits = -1` and at eight
-  // significant figures — well past the ~$12k ceiling of any real valuation.
-  //
-  // Where it would stop skipping: a magnitude large enough that float4 can no
-  // longer round-trip the cent (~8+ significant figures), where Postgres
-  // switches to scientific notation. The failure is benign — the row is
-  // rewritten with the number it already had — so this stays a plain compare
-  // rather than a cents-scaled one that would imply the equality is unsound.
-  const entriesByProduct = new Map<ProductId, typeof entries>();
-  for (const entry of entries) {
-    const group = entriesByProduct.get(entry.productId) ?? [];
-    group.push(entry);
-    entriesByProduct.set(entry.productId, group);
-  }
-  const updates = [...entriesByProduct].flatMap(([productId, rows]) => {
-    const valuations = computeInventoryValuations(
-      rows.map((entry) => parseInventoryAmount(entry.amount, entry.id)),
-      graphs.get(productId) ?? [],
-    );
-    return rows.flatMap((entry, index) => {
-      const valuation = valuations[index] ?? null;
-      return entry.valuation === valuation ? [] : [{ id: entry.id, valuation }];
-    });
-  });
-  if (updates.length === 0) return 0;
-
-  return batchUpdateWithCaseWhen(client, inventoryEntry, updates);
-};
-
-export const syncInventoryValuationsForProduct = async (
-  db: Database | DrizzleTransaction,
-  productId: ProductId,
-): Promise<number> => syncInventoryValuationsForProducts(db, [productId]);
 
 export const checkUniqueProductDuplicate = async (
   db: Database,
@@ -258,20 +165,22 @@ const fetchInventoryById = async (
 };
 
 // Read path through the shared reader. The write path stays hand-rolled: create/
-// update recompute valuation from the product price and guard live targets.
+// update guard live targets and slot collisions.
 const inventoryReader = createEntityReader({
   entity: "inventory",
   fetchById: fetchInventoryById,
   fromDB: async (db, row: InventoryEntryDeepDB) => {
-    const [pricing, ownership, dataQualities, locationQualities] =
+    const [pricing, ownership, dataQualities, locationQualities, valuations] =
       await Promise.all([
         loadInventoryEntryPricing(db, [row]),
         loadEffectiveInventoryOwnership(db, [row]),
         loadDataQualities(db, "inventory", [row.id]),
         loadDataQualities(db, "location", [row.location.id]),
+        loadInventoryValuations(db, [row]),
       ]);
     return dbInventoryEntryToAPI(
       row,
+      valuations.get(row.id) ?? null,
       requireLoadedProductPricing(pricing, row.product.id),
       // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
       dataQualities.get(row.id)!,
@@ -312,22 +221,36 @@ interface InventoryFilters {
 // Joined-column sorts the generic table-column path can't produce. Clauses
 // only DEFINE the field's order — the createdAt tie-break moved to the single
 // trailing tieBreaker so it can't swallow a stacked secondary sort.
-const resolveInventorySort = (sort: SortParams) => {
-  const direction = sort.direction === "asc" ? asc : desc;
-  if (sort.orderBy === "name" || sort.orderBy === "product") {
-    return [direction(product.name)];
-  }
-  if (sort.orderBy === "location") {
-    return [direction(location.name)];
-  }
-  return null;
-};
+const resolveInventorySort =
+  (valuations: InventoryValuations | undefined) => (sort: SortParams) => {
+    const direction = sort.direction === "asc" ? asc : desc;
+    if (sort.orderBy === "name" || sort.orderBy === "product") {
+      return [direction(product.name)];
+    }
+    if (sort.orderBy === "location") {
+      return [direction(location.name)];
+    }
+    // Amount is stored as a unit + value pair: group by unit, then by size.
+    if (sort.orderBy === "amount") {
+      return [
+        direction(inventoryEntry.amountUnit),
+        direction(inventoryEntry.amountValue),
+      ];
+    }
+    if (sort.orderBy === "valuation" && valuations) {
+      return [
+        sql`${inventoryValuationSql(valuations, inventoryEntry.id)} ${sql.raw(sort.direction === "asc" ? "asc" : "desc")} nulls last`,
+      ];
+    }
+    return null;
+  };
 
 const inventoryScoreSort = dataQualitySortResolver("inventory", inventoryEntry);
 
 const inventoryListOrderBy = (
   sorts: SortParams[],
   filters: InventoryFilters,
+  valuations: InventoryValuations | undefined,
 ) => {
   if (filters.searchQuery?.trim() && sorts.length === 0) {
     return [
@@ -343,7 +266,8 @@ const inventoryListOrderBy = (
     sorts,
     [...generatedEntitySort.inventory.fields],
     {
-      resolve: (sort) => inventoryScoreSort(sort) ?? resolveInventorySort(sort),
+      resolve: (sort) =>
+        inventoryScoreSort(sort) ?? resolveInventorySort(valuations)(sort),
       tieBreaker: desc(inventoryEntry.createdAt),
     },
   );
@@ -364,7 +288,15 @@ const inventoryListOrderBy = (
 export const buildInventoryWhere = async (
   db: Database,
   filters: InventoryFilters,
+  // Valuation is computed on read (WASM, not SQL), so a `valuationStatus`
+  // filter needs the computed map. `inventoryentryList` passes the one it
+  // already loaded; other callers get one loaded on demand.
+  loadedValuations?: InventoryValuations,
 ) => {
+  const valuations =
+    filters.valuationStatus === undefined
+      ? undefined
+      : (loadedValuations ?? (await loadLiveInventoryValuations(db)));
   const [locationIds, productIds, categoryIds] = await Promise.all([
     resolveFilterIds(db, "location", filters.locationIdFilter),
     resolveFilterIds(db, "product", filters.productIdFilter),
@@ -398,16 +330,16 @@ export const buildInventoryWhere = async (
         : filters.verifiedPresenceFilter === "none"
           ? sql`${inventoryEntry.verifiedAt} IS NULL`
           : undefined,
-      filters.valuationStatus === "valued"
-        ? isNotNull(inventoryEntry.valuation)
-        : filters.valuationStatus === "missing"
-          ? isNull(inventoryEntry.valuation)
-          : filters.valuationStatus === "missing_with_priced_product"
-            ? and(
-                isNull(inventoryEntry.valuation),
+      valuations === undefined
+        ? undefined
+        : filters.valuationStatus === "valued"
+          ? sql`${inventoryValuationSql(valuations, inventoryEntry.id)} IS NOT NULL`
+          : filters.valuationStatus === "missing"
+            ? sql`${inventoryValuationSql(valuations, inventoryEntry.id)} IS NULL`
+            : and(
+                sql`${inventoryValuationSql(valuations, inventoryEntry.id)} IS NULL`,
                 sql`${sql.raw(effectiveProductPriceSql('"Product"'))} IS NOT NULL`,
-              )
-            : undefined,
+              ),
       filters.verifiedFrom
         ? sql`${inventoryEntry.verifiedAt} >= ${filters.verifiedFrom}::date`
         : undefined,
@@ -433,7 +365,11 @@ export const inventoryentryList = async (
   readIntent: ListReadIntent = "page",
 ) => {
   const { take, skip } = buildTakeSkip(pagination);
-  const whereCondition = await buildInventoryWhere(db, filters);
+  // The rows, their sort/filter and the footer total all read ONE computed map;
+  // a count-only read shows none of them.
+  const valuations =
+    readIntent === "count" ? undefined : await loadLiveInventoryValuations(db);
+  const whereCondition = await buildInventoryWhere(db, filters, valuations);
 
   if (readIntent === "count") {
     const [result] = await getDb(db)
@@ -471,7 +407,7 @@ export const inventoryentryList = async (
 
   const [results, [countResult]] = await Promise.all([
     baseQuery
-      .orderBy(...inventoryListOrderBy(sorts, filters))
+      .orderBy(...inventoryListOrderBy(sorts, filters, valuations))
       .limit(take)
       .offset(skip),
     // Count + valuation aggregate share the joins/filters, so the footer's
@@ -480,9 +416,9 @@ export const inventoryentryList = async (
       .select({
         count: count(),
         valuationSum:
-          readIntent === "sample"
+          valuations === undefined || readIntent === "sample"
             ? sql<number>`0`
-            : sum(inventoryEntry.valuation),
+            : sum(inventoryValuationSql(valuations, inventoryEntry.id)),
       })
       .from(inventoryEntry)
       .innerJoin(
@@ -527,6 +463,7 @@ export const inventoryentryList = async (
     (entry) =>
       dbInventoryEntryToListAPI(
         entry,
+        valuations?.get(entry.id) ?? null,
         requireLoadedProductPricing(pricing, entry.product.id),
         // SAFETY: `entry` came from `orderedResults`, which `dataQualities` was
         // loaded for.
@@ -578,20 +515,6 @@ const validateUpdatedOwnership = async (
       "Inventory can only be assigned to a live member or guest.",
     );
   }
-};
-
-const updatedInventoryValuation = async (
-  db: Database,
-  before: InventoryRow,
-  data: UpdateInventoryEntryData,
-) => {
-  if (data.amount === undefined && data.productId === undefined)
-    return undefined;
-  return await computeValuationForEntry(
-    db,
-    data.productId ?? before.productId,
-    data.amount ?? before.amount,
-  );
 };
 
 const changesInventorySlot = (data: UpdateInventoryEntryData) =>
@@ -653,7 +576,6 @@ export const updateInventoryEntry = async (
   }
   const rawOwnership = resolveUpdatedOwnership(before, data);
   await validateUpdatedOwnership(db, rawOwnership);
-  const valuation = await updatedInventoryValuation(db, before, data);
 
   // Pre-check the slot rather than letting the partial unique index raise a
   // raw 23505 — nothing maps that to an AppError, so it would surface as an
@@ -668,8 +590,11 @@ export const updateInventoryEntry = async (
   // reachable by design rather than a corrupt state.
   await assertUpdatedSlotAvailable(db, id, before, data, rawOwnership);
 
+  const amountColumns =
+    data.amount === undefined ? undefined : amountToColumns(data.amount);
   const updateValues = buildPartialUpdateValues({
-    amount: data.amount,
+    amountValue: amountColumns?.amountValue,
+    amountUnit: amountColumns?.amountUnit,
     productId: data.productId,
     locationId: data.locationId,
     // Flipping placement is how something becomes (or stops being) a fixture.
@@ -681,7 +606,6 @@ export const updateInventoryEntry = async (
       data.ownershipMode !== undefined || data.ownerLedgerPartyId !== undefined
         ? rawOwnership.ownerLedgerPartyId
         : undefined,
-    valuation,
   });
 
   const updated = await updateLiveAndReturn(
@@ -692,12 +616,14 @@ export const updateInventoryEntry = async (
   );
 
   if (before) {
-    const changes = computeChanges(before, updated, [
-      ...entityFieldModels.inventory.audit,
-    ]);
+    const changes = computeChanges(
+      inventoryAuditRow(before),
+      inventoryAuditRow(updated),
+      [...entityFieldModels.inventory.audit],
+    );
     if (changes) {
       await logAuditEntry(db, actor, {
-        entityType: "inventory",
+        entityKind: "inventory",
         entityId: id,
         action: "update",
         changes,
@@ -717,16 +643,18 @@ export const updateInventoryEntry = async (
     );
   }
 
-  const [pricing, ownership, dataQualities, locationQualities] =
+  const [pricing, ownership, dataQualities, locationQualities, valuations] =
     await Promise.all([
       loadInventoryEntryPricing(db, [result]),
       loadEffectiveInventoryOwnership(db, [result]),
       loadDataQualities(db, "inventory", [result.id]),
       loadDataQualities(db, "location", [result.location.id]),
+      loadInventoryValuations(db, [result]),
     ]);
   // SAFETY: `result` was just fetched live by id, so its quality was evaluated.
   return dbInventoryEntryToAPI(
     result,
+    valuations.get(result.id) ?? null,
     requireLoadedProductPricing(pricing, result.product.id),
     dataQualities.get(result.id)!,
     locationQualities.get(result.location.id)!,
@@ -745,11 +673,6 @@ export const createInventoryEntry = async (
     locationId: data.locationId,
   });
 
-  const valuation = await computeValuationForEntry(
-    db,
-    data.productId,
-    data.amount,
-  );
   const ownershipMode = data.ownershipMode ?? "inherit";
   const ownerLedgerPartyId = data.ownerLedgerPartyId ?? null;
   try {
@@ -795,8 +718,7 @@ export const createInventoryEntry = async (
   const values: Omit<typeof inventoryEntry.$inferInsert, "shortcode"> = {
     productId: data.productId,
     locationId: data.locationId,
-    amount: data.amount,
-    valuation,
+    ...amountToColumns(data.amount),
     ownershipMode,
     ownerLedgerPartyId,
   };
@@ -805,7 +727,7 @@ export const createInventoryEntry = async (
   const created = await insertWithShortcode(db, "inventory", values);
 
   await logAuditEntry(db, actor, {
-    entityType: "inventory",
+    entityKind: "inventory",
     entityId: created.id,
     action: "create",
   });
@@ -822,16 +744,18 @@ export const createInventoryEntry = async (
     );
   }
 
-  const [pricing, ownership, dataQualities, locationQualities] =
+  const [pricing, ownership, dataQualities, locationQualities, valuations] =
     await Promise.all([
       loadInventoryEntryPricing(db, [result]),
       loadEffectiveInventoryOwnership(db, [result]),
       loadDataQualities(db, "inventory", [result.id]),
       loadDataQualities(db, "location", [result.location.id]),
+      loadInventoryValuations(db, [result]),
     ]);
   // SAFETY: `result` was just fetched live by id, so its quality was evaluated.
   return dbInventoryEntryToAPI(
     result,
+    valuations.get(result.id) ?? null,
     requireLoadedProductPricing(pricing, result.product.id),
     dataQualities.get(result.id)!,
     locationQualities.get(result.location.id)!,
@@ -870,7 +794,7 @@ export const getInventoryByLocationIds = async (
     ...relations.inventory.full,
   });
 
-  const [pricing, ownership, dataQualities, locationQualities] =
+  const [pricing, ownership, dataQualities, locationQualities, valuations] =
     await Promise.all([
       loadInventoryEntryPricing(db, results),
       loadEffectiveInventoryOwnership(db, results),
@@ -884,10 +808,12 @@ export const getInventoryByLocationIds = async (
         "location",
         results.map((entry) => entry.location.id),
       ),
+      loadInventoryValuations(db, results),
     ]);
   return results.map((entry) =>
     dbInventoryEntryToAPI(
       entry,
+      valuations.get(entry.id) ?? null,
       requireLoadedProductPricing(pricing, entry.product.id),
       // SAFETY: `entry` came from `results`, which `dataQualities`/
       // `locationQualities` were loaded for.
@@ -914,12 +840,12 @@ export const getInventoryForProducts = async (
       inArray(inventoryEntry.productId, productIds),
       notDeleted(inventoryEntry),
     ),
-    columns: { productId: true, amount: true },
+    columns: { productId: true, amountValue: true, amountUnit: true },
   });
 
   return rows.map((row) => ({
     productId: row.productId,
-    amount: row.amount,
+    amount: amountFromColumns(row),
   }));
 };
 

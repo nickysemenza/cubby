@@ -1,6 +1,7 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
-import type { ActorContext } from "@cubby/schemas/context";
+import { type ActorContext, actorInRun } from "@cubby/schemas/context";
 import { runEntityId } from "@cubby/schemas/identifiers";
+import type { CubbyMcpMutationAction } from "@cubby/schemas/mcp-tools";
 import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import { parseShortcode } from "@cubby/shared";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -11,26 +12,31 @@ import {
   auditLog,
   run as runTable,
   runApproval,
-  runMutation,
   runOperation,
 } from "~/server/db/schema";
 import type { McpOperationContext } from "~/server/mcp/operation-context";
+import { recordRunWrites } from "~/server/purchase-import/run-audit";
 import { getDb } from "~/server/repo/database-helpers";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 import type { ToolExtra } from "./tools/tool-registration";
 
-const purchaseAgentRunExecutionEnvelope = z.object({
-  _runExecution: purchaseImportRunExecution.optional(),
-});
+/**
+ * Writers that enforce the purchase agent's run protocol themselves (stable
+ * operation ids, replay, target checks) and so run without the generic
+ * per-call human approval. Batch actions govern each item the same way.
+ */
+const SELF_GOVERNED_ACTIONS = new Set<string>([
+  "purchase_import.prepare",
+  "purchase_import.validate",
+  "purchase_import.commit",
+  "product_enrichment.commit",
+  "photo_run.propose_groups",
+  "photo_run.commit_group",
+] satisfies CubbyMcpMutationAction[]);
 
-export function decoratePurchaseAgentInputSchema<T extends z.ZodObject>(
-  schema: T,
-) {
-  return "_runExecution" in schema.shape
-    ? schema
-    : schema.extend(purchaseAgentRunExecutionEnvelope.shape);
-}
+export const purchaseAgentSelfGoverned = (action: string) =>
+  SELF_GOVERNED_ACTIONS.has(action);
 
 const sha256 = async (value: string): Promise<string> => {
   const digest = await crypto.subtle.digest(
@@ -81,7 +87,7 @@ async function targetSnapshot(db: Database, args: PurchaseAgentArguments) {
             .from(auditLog)
             .where(
               and(
-                eq(auditLog.entityType, auditable.data),
+                eq(auditLog.entityKind, auditable.data),
                 eq(auditLog.entityId, id),
               ),
             )
@@ -299,25 +305,27 @@ export async function executePurchaseAgentMutation<T>(input: {
         : undefined,
     };
     const result = await input.run(transactionalExtra);
-    const postFingerprint = await sha256(JSON.stringify(result));
     const resultArguments = purchaseAgentArguments.parse(result);
+    // The tool may write rows without auditing them itself; the Run's audit
+    // trail names every entity the approved call touched.
     const refs = await targetSnapshot(transactionDb, [args, resultArguments]);
-    const provenance = refs.flatMap((ref) =>
-      ref.id && auditEntitySchema.safeParse(ref.type).success
-        ? [
-            {
-              runId: run.id,
-              targetKind: ref.type,
-              targetId: ref.id,
-              mutationKind: "update",
-              fields: [input.toolName],
-              postFingerprint,
-            },
-          ]
-        : [],
+    await recordRunWrites(
+      transactionDb,
+      actorInRun(input.actor, run.id),
+      refs.flatMap((ref) => {
+        const kind = auditEntitySchema.safeParse(ref.type);
+        return ref.id && kind.success
+          ? [
+              {
+                entityKind: kind.data,
+                entityId: ref.id,
+                action: "update" as const,
+                fields: [input.toolName],
+              },
+            ]
+          : [];
+      }),
     );
-    if (provenance.length > 0)
-      await database.insert(runMutation).values(provenance);
     await database
       .update(runApproval)
       .set({ state: "consumed", consumedAt: new Date() })

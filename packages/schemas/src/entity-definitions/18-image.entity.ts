@@ -3,6 +3,7 @@ import {
   imageCaptureLocation,
   imageProvenanceEvidence,
 } from "../image-capture-fields.js";
+import { imageSightingOut } from "../image-sighting-fields.js";
 import { optionalImageRepresentations } from "../image-summary.js";
 import { defineEntity } from "./definition.js";
 import { imageShortcode, ledgerPartyShortcode } from "../identifier-fields.js";
@@ -39,7 +40,7 @@ export default defineEntity({
     listOverride: null,
     detailOverride: {
       query: {
-        module: "~/entities/image.functions",
+        module: "~/entities/image-queries",
         export: "imageDetailQuery",
       },
     },
@@ -176,6 +177,12 @@ export default defineEntity({
           detail: true,
           width: "sm",
           mobile: { slot: "meta", priority: 20 },
+          // Read-only, so no select control declares the roster.
+          valueOptions: [
+            { value: "PENDING", label: "Pending", color: "var(--slate)" },
+            { value: "UPLOADED", label: "Uploaded", color: "var(--positive)" },
+            { value: "FAILED", label: "Failed", color: "var(--destructive)" },
+          ],
         },
         validation: {
           read: z.enum(generatedImageStatusValues),
@@ -452,6 +459,25 @@ export default defineEntity({
         },
       },
       {
+        // Detail-only: the live rows of the `ImageSighting` child table
+        // (not an entity), each naming its owner and reporting device.
+        key: "sightings",
+        kind: "json",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Photo library sightings" }],
+        },
+        display: {
+          detail: true,
+          renderer: { detail: "image-sightings" },
+        },
+        validation: {
+          read: z.array(imageSightingOut).optional(),
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "metadataRevision",
         kind: "number",
         nullable: true,
@@ -588,6 +614,7 @@ export default defineEntity({
       "capturedByName",
       "captureAttribution",
       "provenanceEvidence",
+      "sightings",
       "createdAt",
       "updatedAt",
     ],
@@ -604,6 +631,23 @@ export default defineEntity({
       module: "@cubby/schemas/image",
       export: "imageWithEntitySchema",
     },
+  },
+  storage: {
+    indexes: [
+      { on: ["key"], unique: true, where: "{deletedAt} IS NULL" },
+      { on: ["createdAt"] },
+      { on: ["status"] },
+    ],
+    checks: [
+      { column: "status" },
+      { column: "renderStatus" },
+      { column: "storageStatus" },
+      {
+        name: "Image_perceptualHash_format_check",
+        sql: "{perceptualHash} IS NULL OR {perceptualHash} ~ '^[0-9a-f]{16}$'",
+      },
+    ],
+    relations: { attachments: { many: "entityAttachment" } },
   },
   filters: {
     schema: { module: "@cubby/schemas/image", export: "imageFilterFields" },
@@ -788,19 +832,6 @@ export default defineEntity({
         steps: [{ edge: "Image.capturedByPartyId", direction: "incoming" }],
       },
     },
-    {
-      key: "sightings",
-      label: "Sightings",
-      target: "imageSighting",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "ImageSighting.imageId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "ImageSighting.imageId", direction: "outgoing" }],
-      },
-    },
   ],
   // Image filenames and the current preferred description/correction are
   // searchable. The shared search document loader adds only direct owners.
@@ -861,8 +892,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/image.entity-adapter",
-        export: "imageEntityAdapter",
+        module: "~/server/repo/image.repository",
+        export: "imageRepository",
       },
     },
   },

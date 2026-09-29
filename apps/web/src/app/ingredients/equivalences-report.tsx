@@ -9,7 +9,7 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { recipe } from "~/app/recipes/recipe.functions";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -28,9 +28,9 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { useHydrated } from "~/hooks/useHydrated";
+import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn } from "~/lib/utils";
 
-import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { equivalenceWorkbenchSearch } from "./equivalence-workbench-link";
 
 // Format a ratio compactly: a few significant figures, no trailing noise.
@@ -91,12 +91,12 @@ export function EquivalencesReport() {
     () =>
       groups.flatMap((group) => [
         ...group.map((candidate) => ({
-          entityType: "ingredient" as const,
+          entityKind: "ingredient" as const,
           entityId: candidate.ingredientId,
         })),
         ...group.flatMap((candidate) =>
           candidate.examples.map((example) => ({
-            entityType: "recipe" as const,
+            entityKind: "recipe" as const,
             entityId: example.recipeId,
           })),
         ),
@@ -176,11 +176,11 @@ export function EquivalencesReport() {
                       rowSpan={group.length}
                       className="border-b align-top"
                     >
-                      <EntityInlineLink
+                      <EntityRefLink
                         displayImage={
                           displayImages[
                             entityDisplayImageKey({
-                              entityType: "ingredient",
+                              entityKind: "ingredient",
                               entityId: c.ingredientId,
                             })
                           ] ?? null
@@ -227,11 +227,11 @@ export function EquivalencesReport() {
                           key={`${ex.recipeId}-${ex.rawLine ?? ex.recipeName}`}
                           className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground"
                         >
-                          <EntityInlineLink
+                          <EntityRefLink
                             displayImage={
                               displayImages[
                                 entityDisplayImageKey({
-                                  entityType: "recipe",
+                                  entityKind: "recipe",
                                   entityId: ex.recipeId,
                                 })
                               ] ?? null

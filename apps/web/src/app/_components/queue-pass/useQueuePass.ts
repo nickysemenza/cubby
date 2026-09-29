@@ -44,15 +44,6 @@ export interface QueuePassPersistence<TExtra> {
   version: number;
   /** Parses the flow-owned payload before persisted state reaches the caller. */
   extraSchema: z.ZodType<TExtra>;
-  /**
-   * Read a stored blob this flow wrote under an older shape.
-   *
-   * Tried only when the canonical parse fails, so a flow that changed its
-   * persisted layout keeps honoring passes already sitting on someone's phone.
-   * Bumping a version without one silently discards every in-flight pass on the
-   * device.
-   */
-  readLegacy?: (parsed: JsonValue) => StoredQueuePass<TExtra> | null;
 }
 
 type JsonValue =
@@ -145,7 +136,7 @@ export function parseStoredQueuePass<TExtra>(
     };
   }
 
-  return persistence.readLegacy?.(parsed) ?? null;
+  return null;
 }
 
 /**

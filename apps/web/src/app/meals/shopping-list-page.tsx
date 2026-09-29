@@ -1,7 +1,6 @@
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { Link } from "@tanstack/react-router";
-import { format, parseISO } from "date-fns";
 import { useId } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -15,6 +14,7 @@ import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { copyText } from "~/lib/clipboard";
+import { formatCalendarDay } from "~/lib/date-format";
 import { cn, formatCurrency } from "~/lib/utils";
 
 import type { ShoppingListView } from "./meal-search";
@@ -183,13 +183,15 @@ export function ShoppingListPage({
                   render={
                     <button
                       type="button"
-                      aria-label={`Toggle ${m.name || format(parseISO(m.date), "EEE M/d")}`}
+                      aria-label={`Toggle ${m.name || formatCalendarDay(m.date, "weekdayNumeric")}`}
                       onClick={() => toggleExcluded(m.id)}
                     />
                   }
                 >
-                  {m.name || format(parseISO(m.date), "EEE M/d")}
-                  {m.name ? ` · ${format(parseISO(m.date), "EEE M/d")}` : ""}
+                  {m.name || formatCalendarDay(m.date, "weekdayNumeric")}
+                  {m.name
+                    ? ` · ${formatCalendarDay(m.date, "weekdayNumeric")}`
+                    : ""}
                 </Badge>
               );
             })}

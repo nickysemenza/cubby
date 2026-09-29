@@ -58,7 +58,7 @@ async function productionSemanticLeg(
   const candidates = await findSemanticEntityCandidates(
     productionVectorStore,
     embedding,
-    { entityTypes: ["ingredient"], limit },
+    { entityKinds: ["ingredient"], limit },
   );
   const ids = candidates
     .map((candidate) => parseEntityId("ingredient", candidate.entityId))

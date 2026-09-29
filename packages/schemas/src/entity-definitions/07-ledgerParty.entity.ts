@@ -150,6 +150,58 @@ export default defineEntity({
     },
     output: { module: "@cubby/schemas/ledger-party", export: "ledgerPartyOut" },
   },
+  // A durable economic participant in the household ledger.
+  storage: {
+    columns: [
+      // Auth ownership is intentionally storage-only: a member claims it from
+      // Settings, never through generic ledger-party create/update forms.
+      {
+        key: "userId",
+        kind: "text",
+        type: { module: "@cubby/schemas/identifiers", export: "UserId" },
+        reference: "user",
+      },
+    ],
+    indexes: [
+      { on: ["kind"] },
+      {
+        name: "LedgerParty_household_singleton_key",
+        on: ["kind"],
+        unique: true,
+        where: "{deletedAt} IS NULL AND {kind} = 'household'",
+      },
+      {
+        name: "LedgerParty_member_user_key",
+        on: ["userId"],
+        unique: true,
+        where: "{deletedAt} IS NULL AND {userId} IS NOT NULL",
+      },
+    ],
+    checks: [
+      { column: "kind" },
+      {
+        name: "LedgerParty_user_member_check",
+        sql: "{userId} IS NULL OR {kind} = 'member'",
+      },
+    ],
+    unindexedReferences: {
+      userId:
+        "a member's claim is found through the live partial unique LedgerParty_member_user_key",
+    },
+    relations: {
+      accounts: { many: "financialAccount" },
+      attributions: { many: "expenseAttribution" },
+      mealRecipePortions: { many: "mealRecipePortion" },
+      outgoingTransfers: {
+        many: "ledgerTransfer",
+        relationName: "LedgerTransferFromParty",
+      },
+      incomingTransfers: {
+        many: "ledgerTransfer",
+        relationName: "LedgerTransferToParty",
+      },
+    },
+  },
   filters: {
     audit: true,
     schema: {
@@ -381,8 +433,8 @@ export default defineEntity({
     mcpNames: { plural: "ledger_parties" },
     ports: {
       repository: {
-        module: "~/server/repo/ledger-party.entity-adapter",
-        export: "ledgerPartyEntityAdapter",
+        module: "~/server/repo/ledger-party.repository",
+        export: "ledgerPartyRepository",
       },
     },
   },

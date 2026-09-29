@@ -1,5 +1,8 @@
 import { testServiceConfig } from "../../tooling/test-service-config";
-import { schemaTemplateInputs } from "../../tooling/schema-template-inputs";
+import {
+  hashSchemaTemplateInputs,
+  schemaTemplateInputs,
+} from "../../tooling/schema-template-inputs";
 import { taxonomyRootFixtures } from "../../tooling/product-category-fixtures";
 import {
   IntegreSQLClient,
@@ -8,10 +11,8 @@ import {
 import { type SQL, sql } from "drizzle-orm";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import * as schema from "../../src/server/db/schema";
-import { ensureDbExtensions } from "../../tooling/db-extensions";
-import { installEntityIdentityTriggers } from "../../src/server/db/entity-identity-schema";
-import { toPushSchemaDatabase } from "../../tooling/drizzle-kit-interop";
+import { productCategory } from "../../src/server/db/schema";
+import { migrateDatabase } from "../../tooling/db-migrate";
 
 export interface E2EDatabase {
   databaseUrl: string;
@@ -20,22 +21,7 @@ export interface E2EDatabase {
 }
 
 interface SchemaDatabase {
-  readonly _: unknown;
   execute(query: SQL): Promise<object>;
-}
-
-async function pushE2ESchema(db: SchemaDatabase): Promise<void> {
-  // drizzle-kit is deliberately loaded only in global setup. It is large and
-  // none of the Playwright workers need it after the schema has been prepared.
-  const { pushSchema } = await import("drizzle-kit/api");
-
-  await ensureDbExtensions(db);
-  const { apply } = await pushSchema(schema, toPushSchemaDatabase(db), [
-    "public",
-  ]);
-  await apply();
-  // drizzle-kit push does not manage triggers (ADR 0006).
-  await installEntityIdentityTriggers(db);
 }
 
 async function seedHome(db: SchemaDatabase): Promise<void> {
@@ -59,7 +45,7 @@ async function templateContext() {
   const integreSQL = new IntegreSQLClient({
     url: testServiceConfig().url,
   });
-  const hash = await integreSQL.hashFiles([
+  const hash = hashSchemaTemplateInputs([
     ...schemaTemplateInputs,
     // Browser acceptance and Vitest run concurrently in `test:all`. A distinct
     // template prevents either process's template initialization/reset cycle
@@ -80,9 +66,9 @@ export async function prepareE2EDatabaseTemplate(): Promise<void> {
     );
     const pool = new Pool({ connectionString: connectionUrl });
     try {
-      console.log("[E2E Setup] Pushing schema to PostgreSQL template...");
-      await pushE2ESchema(drizzleNodePostgres(pool));
-      console.log("[E2E Setup] PostgreSQL template schema pushed");
+      console.log("[E2E Setup] Migrating PostgreSQL template...");
+      await migrateDatabase(drizzleNodePostgres(pool));
+      console.log("[E2E Setup] PostgreSQL template migrated");
     } finally {
       await pool.end();
     }
@@ -102,7 +88,7 @@ export async function createE2EDatabase(): Promise<E2EDatabase> {
   try {
     const seedDb = drizzleNodePostgres(seedPool);
     await seedHome(seedDb);
-    await seedDb.insert(schema.productCategory).values(taxonomyRootFixtures);
+    await seedDb.insert(productCategory).values(taxonomyRootFixtures);
     // Every worker must start without corpus products, regardless of shard.
     const { rows } = await seedPool.query<{ count: string }>(
       'SELECT count(*)::text AS count FROM "Product"',

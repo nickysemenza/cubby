@@ -56,7 +56,6 @@ describe("shared database freshness operation routing", () => {
 
     const warm = await selectOperationContext(ui, "context", routing);
     expect(warm.db).toBe(boundedStaleDb);
-    expect(warm.readDb).toBe(boundedStaleDb);
 
     freshness = databaseFreshness(Date.now());
     const secondUser = await selectOperationContext(api, "context", routing);

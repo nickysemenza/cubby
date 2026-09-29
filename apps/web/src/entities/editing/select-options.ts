@@ -62,12 +62,6 @@ const ENTITY_SELECT_OPTIONS = {
   "project.defaultTrade": tradeOptions,
   "expense.trade": tradeOptions,
   "purchase.defaultTrade": tradeOptions,
-  // `Image.status` is read-only, so it declares no `control.options`.
-  "image.status": [
-    { value: "PENDING", label: "Pending", color: "var(--slate)" },
-    { value: "UPLOADED", label: "Uploaded", color: "var(--positive)" },
-    { value: "FAILED", label: "Failed", color: "var(--destructive)" },
-  ],
   // The capture form's `"auto"` sentinel: `lineKind` is left undecided on
   // create and derived server-side from the name — `buildData` strips it
   // before validation (`entities/editing/definitions.ts`).

@@ -13,7 +13,7 @@ import {
   type EntityMutationTransport,
   type EntityMutationVariables,
 } from "~/entities/entity-contracts";
-import type { imageUpload } from "~/lib/image.functions";
+import type { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import EntityImageList from "../EntityImageList";
 import { useActionMutation } from "../hooks/useActionMutation";

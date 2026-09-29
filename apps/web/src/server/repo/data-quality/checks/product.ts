@@ -48,7 +48,7 @@ const inScope = (t: Product) => sql`(${hasExpenses(t)} OR ${hasInventory(t)})`;
 const hasDisplayableImage = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "EntityAttachment" dq_pimg
   JOIN "Image" dq_img ON dq_img."id" = dq_pimg."imageId" AND dq_img."deletedAt" IS NULL
-  WHERE dq_pimg."subjectEntityId" = ${t.id}
+  WHERE dq_pimg."entityId" = ${t.id}
     AND dq_pimg."deletedAt" IS NULL AND dq_pimg."purpose" IS DISTINCT FROM 'label'
     AND ${sql.raw(displayableImageRawSql("dq_img"))}
 )`;
@@ -64,40 +64,40 @@ const hasAmazonPurchase = (t: Product) => sql`EXISTS (
 )`;
 
 const hasAmazonId = (t: Product) => sql`EXISTS (
-  SELECT 1 FROM "ProductExternalId" dq_asin
-  WHERE dq_asin."productId" = ${t.id}
+  SELECT 1 FROM "EntityExternalId" dq_asin
+  WHERE dq_asin."entityId" = ${t.id}
     AND dq_asin."deletedAt" IS NULL
     AND dq_asin."source" = ${AMAZON_SOURCE}
     AND dq_asin."kind" = 'asin'
 )`;
 
 // A photo-inventory-created Product is stocked (has inventory) but was never
-// claimed by a purchase: no acquiring Expense, and no explicit PurchaseProduct
+// claimed by a purchase: no acquiring Expense, and no explicit `purchaseProduct`
 // link (the enrichment path a purchase import takes when it later matches
 // this same Product — see `product-identity.md`).
 const hasPurchaseProductLink = (t: Product) => sql`EXISTS (
-  SELECT 1 FROM "PurchaseProduct" dq_pp
-  WHERE dq_pp."productId" = ${t.id} AND dq_pp."deletedAt" IS NULL
+  SELECT 1 FROM "EntityLink" dq_pp
+  WHERE dq_pp."toEntityId" = ${t.id} AND dq_pp."deletedAt" IS NULL AND dq_pp."kind" = 'purchaseProduct'
 )`;
 
 const hasExternalId = (t: Product) => sql`EXISTS (
-  SELECT 1 FROM "ProductExternalId" dq_xid
-  WHERE dq_xid."productId" = ${t.id} AND dq_xid."deletedAt" IS NULL
+  SELECT 1 FROM "EntityExternalId" dq_xid
+  WHERE dq_xid."entityId" = ${t.id} AND dq_xid."deletedAt" IS NULL
 )`;
 
 const hasExternalIdCollision = (t: Product) => sql`EXISTS (
   SELECT 1
-  FROM "ProductExternalId" dq_mine
-  JOIN "ProductExternalId" dq_other
+  FROM "EntityExternalId" dq_mine
+  JOIN "EntityExternalId" dq_other
     ON dq_other."source" = dq_mine."source"
    AND dq_other."kind" = dq_mine."kind"
    AND dq_other."externalId" = dq_mine."externalId"
-   AND dq_other."productId" <> dq_mine."productId"
+   AND dq_other."entityId" <> dq_mine."entityId"
    AND dq_other."deletedAt" IS NULL
   JOIN "Product" dq_other_product
-    ON dq_other_product."id" = dq_other."productId"
+    ON dq_other_product."id" = dq_other."entityId"
    AND dq_other_product."deletedAt" IS NULL
-  WHERE dq_mine."productId" = ${t.id}
+  WHERE dq_mine."entityId" = ${t.id}
     AND dq_mine."deletedAt" IS NULL
 )`;
 

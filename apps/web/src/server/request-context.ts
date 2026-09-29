@@ -109,11 +109,6 @@ export type { CurrentParty } from "~/server/repo/member-login";
 export const currentParty = (database: Database, authenticatedUserId: UserId) =>
   currentMemberLedgerParty(database, { userId: authenticatedUserId });
 
-interface ReadDatabaseSelection {
-  readDb: Database;
-  readConsistency: ReadConsistencyDecision;
-}
-
 export const createRequestContext = async (opts: {
   headers: Headers;
   actor?: RequestActor;
@@ -125,12 +120,9 @@ export const createRequestContext = async (opts: {
 
   return await extractTraceContext(headersObj, async () => {
     const crudServices = buildCrudServices(db);
-    const readSelection: ReadDatabaseSelection = {
-      readDb: db,
-      readConsistency: {
-        consistency: "strong",
-        reason: "authoritative-operation",
-      } satisfies ReadConsistencyDecision,
+    const readConsistency: ReadConsistencyDecision = {
+      consistency: "strong",
+      reason: "authoritative-operation",
     };
 
     const deviceId = await resolveRequestDevice(crudServices.db, opts.headers);
@@ -139,7 +131,7 @@ export const createRequestContext = async (opts: {
       const requestOrigin: RequestOrigin = channel === "mcp" ? "mcp" : "api";
       return {
         ...crudServices,
-        ...readSelection,
+        readConsistency,
         auth: { userId, sessionId },
         currentParty: async () => await currentParty(crudServices.db, userId),
         actorContext: buildActorContext(userId, channel, {
@@ -162,7 +154,7 @@ export const createRequestContext = async (opts: {
     const requestOrigin: RequestOrigin = "ui";
     return {
       ...crudServices,
-      ...readSelection,
+      readConsistency,
       auth: {
         userId: authenticatedUserId,
         sessionId: betterSession?.session?.id ?? null,
@@ -226,7 +218,6 @@ export async function selectOperationContext<
   return {
     ...context,
     db: selected,
-    readDb: selected,
     readConsistency,
     services: {
       ...context.services,

@@ -15,7 +15,7 @@ import {
 function locationSearchHit(overrides: Partial<SearchHit> = {}): SearchHit {
   const base: SearchHit = {
     id: "LOC-3ABC",
-    entityType: "location",
+    entityKind: "location",
     title: "Workshop drawer",
     subtitle: "Garage › Main area",
     typeHint: "drawer",

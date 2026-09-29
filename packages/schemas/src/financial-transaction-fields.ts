@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { uniqueBy } from "./base-entity";
+import { externalIdSource } from "./external-id";
 import { purchaseShortcode, vendorShortcode } from "./identifier-fields";
 import { wholeCentAmount } from "./money";
 import { plainDate } from "./base-entity";
@@ -10,7 +11,9 @@ export const financialTransactionNonZeroAmount = wholeCentAmount.refine(
 );
 
 export const financialTransactionSourceRef = z.strictObject({
-  source: z.string().min(1),
+  // Same slug rule as every other source column: `ExternalSource.slug` is a
+  // kebab-case CHECK, so a hand-typed "Monarch " must normalize, not fail it.
+  source: externalIdSource,
   externalId: z.string().min(1),
 });
 export type FinancialTransactionSourceRef = z.infer<

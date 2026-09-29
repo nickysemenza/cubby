@@ -60,9 +60,9 @@ describe("entity graph meal/food-entry relationships", () => {
     );
 
     const follow = async (
-      source: { entityType: Entity; entityId: string },
+      source: { entityKind: Entity; entityId: string },
       relationshipKey: string,
-      target: { entityType: Entity; entityId: string },
+      target: { entityKind: Entity; entityId: string },
     ) => {
       const graph = await getEntityGraph(ctx.db, {
         roots: [source],
@@ -72,35 +72,35 @@ describe("entity graph meal/food-entry relationships", () => {
         expect.objectContaining({
           root: source,
           relationshipKey,
-          target: target.entityType,
+          target: target.entityKind,
           items: expect.arrayContaining([target]),
         }),
       );
     };
 
     // The PRD-KMK2 case: a product-kind food entry links product <-> meal.
-    await follow({ entityType: "product", entityId: product.id }, "meals", {
-      entityType: "meal",
+    await follow({ entityKind: "product", entityId: product.id }, "meals", {
+      entityKind: "meal",
       entityId: meal.output.id,
     });
     await follow(
-      { entityType: "meal", entityId: meal.output.id },
+      { entityKind: "meal", entityId: meal.output.id },
       "food-products",
-      { entityType: "product", entityId: product.id },
+      { entityKind: "product", entityId: product.id },
     );
 
     // The same food entry also links product/meal <-> ledgerParty (eater).
-    await follow({ entityType: "product", entityId: product.id }, "eaters", {
-      entityType: "ledgerParty",
+    await follow({ entityKind: "product", entityId: product.id }, "eaters", {
+      entityKind: "ledgerParty",
       entityId: party.output.id,
     });
     await follow(
-      { entityType: "ledgerParty", entityId: party.output.id },
+      { entityKind: "ledgerParty", entityId: party.output.id },
       "meals",
-      { entityType: "meal", entityId: meal.output.id },
+      { entityKind: "meal", entityId: meal.output.id },
     );
-    await follow({ entityType: "meal", entityId: meal.output.id }, "eaters", {
-      entityType: "ledgerParty",
+    await follow({ entityKind: "meal", entityId: meal.output.id }, "eaters", {
+      entityKind: "ledgerParty",
       entityId: party.output.id,
     });
 
@@ -152,21 +152,21 @@ describe("entity graph meal/food-entry relationships", () => {
     );
 
     await follow(
-      { entityType: "ledgerParty", entityId: party.output.id },
+      { entityKind: "ledgerParty", entityId: party.output.id },
       "recipes-eaten",
-      { entityType: "recipe", entityId: recipe.shortcode },
+      { entityKind: "recipe", entityId: recipe.shortcode },
     );
     // The graph unions both sources, so the portion-only meal is reachable.
     await follow(
-      { entityType: "ledgerParty", entityId: party.output.id },
+      { entityKind: "ledgerParty", entityId: party.output.id },
       "meals",
-      { entityType: "meal", entityId: leftoversMeal.output.id },
+      { entityKind: "meal", entityId: leftoversMeal.output.id },
     );
 
     // Full expansion from meal: exactly one `eaters` branch, and no leaked
     // `inverse:ledgerParty.meals` branch carrying only the "portions" source.
     const mealGraph = await getEntityGraph(ctx.db, {
-      roots: [{ entityType: "meal", entityId: meal.output.id }],
+      roots: [{ entityKind: "meal", entityId: meal.output.id }],
     });
     const eaterKeyedBranches = mealGraph.branches.filter(
       (branch) =>

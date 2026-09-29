@@ -2,6 +2,7 @@ import type { CalendarDaySummary } from "@cubby/schemas/calendar";
 import { format } from "date-fns";
 import type { ReactNode } from "react";
 
+import { formatCalendarDay } from "~/lib/date-format";
 import { aggregateTotals } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { cn, formatCurrency } from "~/lib/utils";
@@ -44,7 +45,7 @@ function WeekSummaryGrid({
             type="button"
             data-day={day}
             data-today={isToday || undefined}
-            aria-label={`Open ${format(date, "EEEE, MMMM d")}`}
+            aria-label={`Open ${formatCalendarDay(date, "weekdayLongMonthDay")}`}
             className={cn(
               "min-w-0 p-2 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
               index < days.length - 1 && "border-e",

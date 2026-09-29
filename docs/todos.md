@@ -9,8 +9,9 @@ based on the work that fits the moment.
 changes. **Requires database changes** is reserved for work that needs schema,
 migration, or compatibility planning. **Requires thought or evidence** holds
 unresolved decisions, investigations, external triggers, and long-term
-directions. **Next pass** holds the follow-ups deferred from the last
-large refactor. **Deferred: deploy surface** holds work that changes what gets
+directions. **Dormant schema** lists tables and columns that exist but hold
+little or no data, kept on purpose for a later decision. **Next pass** holds the
+follow-ups deferred from the last large refactor. **Deferred: deploy surface** holds work that changes what gets
 deployed. **Operational passes** are household data work, not software
 projects.
 
@@ -80,8 +81,27 @@ history is the archive. Permanent product constraints live in the
 
 ## Ready projects
 
-- **Maintenance mode.** A single switch for cutovers and incident holds: a
-  status held in a Durable Object that the web Worker checks per request
+- **Transaction ownership on the purchase-agent MCP path.** Found in review of
+  the 2026-09 consolidation; all were already true on main.
+  - Deadlock: `McpOperationContext.inTransaction`
+    (`apps/web/src/server/mcp/operation-context.ts`) keeps the pool-bound
+    `recipeCosting` service, so an agent ingredient merge locks Recipe rows in
+    the transaction and then waits on `markRecipesStale` over the pool. Rebind
+    it with `bindTo(transactionDb, deferred.publish)` (or wrap merge like
+    `writeWithProjections`), with an integration test that merges ingredients
+    through the agent path.
+  - The kernel's own transaction is a savepoint there, so deferred publications
+    and storage deletes run before the real commit; collect them and flush
+    after `inTransaction` commits. Nested deletes also lose repeatable read.
+  - Deletes publish inside their transaction (planting delete refreshes garden
+    entry embeddings early); give the delete workflow a post-commit step.
+  - Plant `bulkUpdate` loops without a transaction or side effects; location
+    update writes its AI description after the main update commits.
+
+- **Maintenance mode.** A minimal switch exists: the `MAINTENANCE_MODE` Worker
+  secret makes the web Worker answer 503 and skips the cron
+  (`apps/web/src/server/maintenance.ts`); queues are paused by hand with
+  `wrangler queues pause-delivery`. Still wanted: a status held in a Durable Object that the web Worker checks per request
   (503 with a short page except health and the switch itself), every queue
   consumer checks before consuming (leave messages unacked so they redeliver
   afterwards), and Flue run workflows check before each step (pause cleanly,
@@ -115,7 +135,7 @@ history is the archive. Permanent product constraints live in the
 - **Backfill image descriptions as a paced, visible sweep.** Product
   classification evidence is built from `image-description` analyses, but
   automatic scheduling is off (image-processing settings `enabled: false`) and
-  `schedule_image_processing` queues one image at a time, so nearly every
+  `image.schedule_processing` queues one image at a time, so nearly every
   product photo is undescribed and category suggestions see only text. Add a
   "describe every undescribed image" command that enqueues `describe_image`
   jobs in pages on the existing `ImageProcessingJob` queue, with a cap, the
@@ -144,17 +164,17 @@ onHandUnits`; `product-hero-presence.ts` computes the presentation and is
   (not only the `unlocated` view) and reuse the existing location picker and
   immediate-write inventory flows.
 
-- **`resolve_ingredients` suggests product links.** A newly resolved ingredient
+- **`entity.resolve` suggests product links.** A newly resolved ingredient
   can remain unlinked to an existing matching product. Products with
   `ingredientId: null` do not contribute costing until hand-linked. Return
   `candidateProducts` by name similarity and accept
   `linkProductId` in the same call. Pairs with the coverage-visibility entry
   below.
 
-- **`resolve_products` should share `global_search`'s lexical engine.** Name
+- **`entity_read.resolve` should share `search.global`'s lexical engine.** Name
   variants such as
   `Organic Example Fruit` and `Example Fruit` should resolve through the same
-  lexical matching that powers `global_search`. For grocery the ASIN collision
+  lexical matching that powers `search.global`. For grocery the ASIN collision
   check
   misses the Fresh / Whole Foods / in-store ASIN split constantly, so the name
   fallback is load-bearing. Ideal shape: one call taking `{name,
@@ -178,7 +198,7 @@ externalIds[]}` per line and returning exact-id hits, alias hits, and lexical
 
 - **Coverage diagnostics on recipe and product writes.** Recipe create returned
   `totals: pending`, so finding the uncosted lines took a separate
-  `explain_recipe_costing` per recipe per fix. Return
+  `recipe_insights.costing` per recipe per fix. Return
   the per-line `missing: [price|weight|nutrients]` list inline on recipe
   create/update, and on product updates report which recipe lines the change
   closed: one corrected package-weight mapping can repair many recipes.
@@ -259,7 +279,7 @@ text: none` plus candidate names and passes through as "Deterministic local
   extract the Nutrition Facts panel into `labelNutrition` with the image as
   provenance.
 
-- **USDA search ranking and product-driven suggestion.** `search_usda_foods`
+- **USDA search ranking and product-driven suggestion.** `usda_food.search`
   is phrase/AND matching: `"chicken breast ground raw"` (sr_legacy) → 0,
   `"chicken, ground"` → 344. Tokenize and rank, and add
   `suggest_usda_for_product(productId)` that searches on name + brand + GTIN
@@ -324,7 +344,7 @@ example vegetable` must not resolve to the weight of an entire linked bag
 - **Portion shares alongside grams.** Once a household stops weighing and
   serves by eye ("one diner ~40% of the pot"), grams are a proxy that goes stale
   when `estimatedYieldGrams` changes. Accept `{share}` per portion in
-  `save_meal_recipe_preparation` and derive grams at read time from the
+  `meal_recipe.save_preparation` and derive grams at read time from the
   current yield.
 
 - **Project materials and shortfalls.** Add a project-material edge with quantity,
@@ -383,7 +403,7 @@ example vegetable` must not resolve to the weight of an entire linked bag
   Decide between semantic candidates (`services/semantic-search.service.ts`),
   the whole ingredient list if it stays small, or lexical fan-out plus aliases.
   Basis `name, manufacturer, categoryId, notes` — the category lets Jev return
-  none for non-food. Pairs with the `resolve_ingredients` product-link entry.
+  none for non-food. Pairs with the `entity.resolve` product-link entry.
   Other fields without `suggest` (`location.parentId`,
   `productCategory.parentId`, `recipe.cookbookId`, `ledgerParty.kind`,
   `product.growsIngredientId`) stay manual: rare, deliberate edits.
@@ -396,7 +416,7 @@ example vegetable` must not resolve to the weight of an entire linked bag
   the current scoring contract.
   What remains: durable "not available" exceptions still only exist for
   Product and Purchase (the `dataExceptions` jsonb column and
-  `set_data_exception`/`clear_data_exception` are hardcoded to those two —
+  `data_exception.set`/`data_exception.clear` are hardcoded to those two —
   generic durable exceptions are not yet designed); the per-check weights shipped
   are a first cut and may need tuning once worklists are used in anger;
   `projectsMissingBudget` remains a Problems tracker rule, not a `dataQuality`
@@ -508,6 +528,19 @@ example vegetable` must not resolve to the weight of an entire linked bag
 
 ### Needs a decision or investigation
 
+- **Diagnose the image-processing retry storm.** Production averages about 190
+  `ImageProcessingAttempt` rows and 380 `ImageProcessingEvent` rows per job (the
+  worst job has 756 attempts). Find why jobs re-lease that often before adding
+  any retention to those tables.
+
+- **GardenEntry as a dated journal.** Almost every `GardenEntry` is a note, with
+  a handful of harvests. Decide whether it becomes a generic dated journal on
+  Location and Planting or stays garden-specific.
+
+- **Project locations as Locations.** `Project.locations` is free text with three
+  distinct values (street addresses) that match no Location. Decide whether
+  properties become Locations with a project-site link, or stay free-form.
+
 - **Make narrow web layouts device agnostic.** `useIsMobile` already follows
   viewport width, but the compact shell still uses phone-style tabs and
   overlays. Design a simpler compact navigation and overlay pattern that works
@@ -561,23 +594,25 @@ example vegetable` must not resolve to the weight of an entire linked bag
   requires the workerd-backed harness), only an optional local shortcut.
 
 - **Declarative "many, clamped to one" cardinality.** The image-provenance
-  work chose a many-row `ImageSighting` entity plus derived declared-`one`
+  work chose a many-row `ImageSighting` child table plus derived declared-`one`
   Image fields over turning scalar relations into arrays with a runtime
   clamp. Cardinality is a compile-time `one|many` literal
   (`packages/schemas/src/entity-definitions/definition.ts`, relation
   metadata) consumed by the editor branches, `image-policy.gen.ts`'s
   `source-id` vs `source-id-list` bindings, Swift `FieldReference.multiple`,
-  every scalar FK column, and ADR 0001's no-generic-edge rule. Revisit only
+  every scalar FK column, and ADR 0007's rule that only payload-free pairings
+  of two entities are `EntityLink` kinds. Revisit only
   when a second entity needs multi-evidence provenance; the existing
   relation `provenance.sources[]` is the declarative construct to extend
   first.
 
-- **Generic HTTP `resources.<entity>.batch` route.** MCP `entity_batch` runs
+- **Generic HTTP `resources.<entity>.batch` route.** MCP `entity.commands` runs
   up to 50 create/update commands per call, but the HTTP surface is one row
   per request, so a native bulk write (library sighting backfill, PR 5 of
-  the provenance plan) issues one generated `create` per row. Promote if a
+  the provenance plan) issued one generated `create` per row; sightings now
+  have the native `image.recordSightings` page instead. Promote if a
   5k-asset library makes that measurably slow; the route should mirror
-  `entity_batch`'s independent-item semantics and benefit every entity.
+  `entity.commands`'s independent-item semantics and benefit every entity.
 
 - **One FROM context per entity list.** Every list repo pairs a Drizzle
   relational `findMany` rows query (root table aliased to its lowercase name;
@@ -783,7 +818,7 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   `Broccoli Crowns (Conventional)`, and three ground-beef 80/20s with nothing
   tying them together — each a defensible SKU, none reachable from the
   others. Suggest or require an Ingredient on grocery Product creation and
-  make `resolve_products` search ingredient aliases, so "banana" resolves
+  make `entity_read.resolve` search ingredient aliases, so "banana" resolves
   regardless of which storefront's ASIN the receipt carries.
 
 - **Meal nutrition goals.** Let meal planning compare planned nutrition with
@@ -801,10 +836,10 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   then re-check production.
 
 - **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
-  `get_shopping_list` is a plain structured/text tool. The remaining USDA
+  `nutrition.shopping_list` is a plain structured/text tool. The remaining USDA
   Picker template is 352,004 bytes raw / 83,655 gzip and builds in 132 ms on
   the local M3 development machine. Keep it only while refinement and explicit
-  selection materially outperform a plain `search_usda_foods` result.
+  selection materially outperform a plain `usda_food.search` result.
 
 - **Recurring meals.** Add a focused recurrence model for meals as its own slice,
   separate from templates and nutrition goals.
@@ -890,7 +925,7 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   web-side AI feature needs per-call latency or cost debugging that the AI
   Gateway dashboard cannot answer.
 
-- **`get_vendor_coverage` per account** — Promote when two members hold
+- **`imports_read.vendor_coverage` per account** — Promote when two members hold
   accounts at the same vendor. Coverage and `needs_data` are per Vendor
   today, which would conflate their histories.
 
@@ -920,7 +955,7 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
 - **Decode bytes in image verification** — Promote when a corrupt or fully transparent
   cover is next found by eye. `inspectImageFile`
   (`apps/web/src/server/services/image-integrity.ts`) checks magic bytes, header
-  dimensions, byte length and sha256 but never rasterizes, so `verify_products_images`
+  dimensions, byte length and sha256 but never rasterizes, so `product_enrichment.verify_images`
   reports `verified` for files that will not render. A subagent citing the verify tool
   is therefore not proof of a good image.
 
@@ -933,7 +968,7 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   analytics inform a real decision; disclose the allocation-basis portion without
   excluding it from total spend.
 
-- **Exact entity attribution for `attach_files`** — Promote if mixed-entity batches
+- **Exact entity attribution for `image.attach_files`** — Promote if mixed-entity batches
   distort the MCP usage dashboard. The batch attributes telemetry to its first item's
   entity because one row has nowhere to put a set; a batch spanning entities
   under-reports the rest.
@@ -955,13 +990,13 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   computation; never infer selected sources from matching values or linked-product
   lists. The Cubby-only nutrition overhaul does not depend on this work.
 
-- **Explicit idempotency key for `add_recipe_to_meal`** — Promote if a re-sent agent
+- **Explicit idempotency key for `meal_recipe.add`** — Promote if a re-sent agent
   call actually duplicates a meal line in practice. A natural-key unique index is NOT
   the answer: a meal repeating a recipe at different scales is intended behavior, and
   each occurrence must stay a distinguishable shopping-list contribution. Retry-safety
   needs a caller-supplied key. The guard test that named this as intentional was
   deleted with the tRPC-era `meal.integration.test.ts` (#914) and never replaced, so
-  the first slice of this — or of any meal-line work — is a `workflows/meal.server.ts`
+  the first slice of this — or of any meal-line work — is a `operations/meal.server.ts`
   integration test asserting one meal holds one recipe twice at different scales with
   two independent shopping-list contributions.
 
@@ -1238,14 +1273,14 @@ productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
   operations, approvals, progress) stay internal rows with no life outside a
   run. A finding is the one child with its own lifecycle (open → applied /
   dismissed) and a Purchase relation, so it is the natural next promotion —
-  it costs a prefix, a backfill, an `AuditEntityType`, and the delete/resolve
+  it costs a prefix, a backfill, an `AuditEntityKind`, and the delete/resolve
   disposition decision the StatementRow item below also waits on.
 
 - **StatementRow and StatementImport as manifest entities** — Promote once the
   `supersededByRowId` disposition is decided (block, detach, or cascade for a live
   predecessor pointing at a deleted row); "add an edge policy" is not the decision.
   Unblocks the audit gap `deleteStatementRows` currently only documents: StatementRow
-  has no `AuditEntityType`, so no truthful `logAuditEntry` call exists and all three
+  has no `AuditEntityKind`, so no truthful `logAuditEntry` call exists and all three
   statement-row mutation paths write no audit trail. Also routes that delete through
   `removeEntity` for cascade and locking. Costs shortcode prefixes, a batched backfill
   of the whole `StatementRow` table, a detail route, and entries in roughly ten
@@ -1257,11 +1292,12 @@ productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
   TanStack Start supplies equivalent named request/result/error events and trace
   hooks: <https://tanstack.com/start/latest/docs/framework/react/guide/observability>.
   Checked 2026-09-16: the guide still says OpenTelemetry support is coming, and
-  Sentry's global function middleware cannot name spans per operation because
-  every operation multiplexes through one Start function
-  (`start-operation-dispatch.server.ts`); `observed-request.ts` also carries
-  DB metrics and expected-error filtering. Revisit when Start exposes the
-  dispatched operation id to a request hook.
+  Sentry's global function middleware never sees a named operation because every
+  browser operation posts to one route, `/api/browser/dispatch`
+  (`browser-operation-dispatch.ts`, then `start-operation-dispatch.server.ts`),
+  not a Start function; `observed-request.ts` also carries DB metrics and
+  expected-error filtering. Revisit when Start exposes the dispatched operation
+  id to a request hook.
 
 - **USDA duplicate collapsing** — Promote if repeated UPC versions return to useful
   search pages; reuse `dedupeUsdaFoodsByUpc` in the MCP handler rather than changing
@@ -1327,9 +1363,66 @@ productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
 
 ---
 
+## Dormant schema — revisit
+
+Built but barely used. Each stays until someone decides to use or remove it;
+counts are production rows at the 2026-09 consolidation.
+
+- **Contribution ledger.** `LedgerTransfer` (0), `ExpenseAttribution` (0),
+  `LedgerSourceClaim` (2), `InventoryEntry.ownerLedgerPartyId` (always null) and
+  `InventoryEntry.ownershipMode` (one value). `LedgerParty` itself is in use.
+  Decide whether per-person attribution is still wanted under tenet 4.
+- **Run and import machinery.** `RunApproval`, `RunControlEvent`, `RunEvidence`,
+  `RunOrderCandidate`, `ImportHunt` (all 0); `ImportPreparedOrder` /
+  `ImportPreparedLine` (1 / 5).
+- **Review queues.** `SuggestionDismissal`, `ProductMatchCandidate`,
+  `ImageDescriptionCorrection`, `OrderMailCandidateDecision`,
+  `MerchantVendorRule`, `MailboxCursor` (all 0).
+- **Always-null columns.** `Plant.daysFrom*` and `Plant.breeding`,
+  `Planting.outcome`, `Vendor.returnWindowDays` and `Vendor.orderEvidence`,
+  `Image` capture and source columns (`captureDeviceLabel`, `capturePlaceName`,
+  `capturedAtOffsetMinutes`, `sourcePageUrl`, `sourceAssetUrl`, `sourceName`),
+  `Run.historyCursorUrl` / `dispatchError` / `deviceId`, `Task.sortOrder`,
+  `Meal.sortOrder`, `Wish.acquiredAt`, `Device.productId`, `Cookbook.report`.
+
+---
+
 ## Next pass
 
-Deferred from the 2026-09 manifest-rendering and deletion/parity PRs; unordered.
+Deferred from the 2026-09 manifest-rendering, deletion/parity, and consolidation
+PRs; unordered.
+
+- **Web `src/` layout.** UI code lives in `components/`, `app/_components/`,
+  `hooks/`, `app/_components/hooks/`, `lib/`, `misc/` and `server-functions/`.
+  Move to `ui/` (primitives), `features/<domain>/`, `entity/` (generic shells)
+  and `lib/` (pure utilities) with one codemod commit and nothing else in flight.
+- **Merge `@cubby/usda-contract` and `@cubby/usda-schemas` into `@cubby/usda`.**
+  Always consumed together by web and usda-api; move the `upc` schema out first.
+- **One Cargo workspace for `recipebridge` and `cubby-ffi`.** They keep separate
+  `Cargo.lock` files and only recipebridge runs clippy/tests in CI.
+- **Drop mermaid.** Only `docs/_components/MermaidDiagram.tsx` uses it and it
+  forces the `lodash-es` override; pre-render the docs diagrams.
+- **purchase-agent schemas.** Declare the context-breakdown shape once in
+  `@cubby/schemas/purchase-import` (today also in `purchase-agent/src/context-breakdown.ts`)
+  and replace valibot with zod if Flue accepts Standard Schema.
+- **Script and CI leftovers.** Delete `scripts/neon` and
+  `.github/workflows/docs.yaml` (its link check duplicates `ci.yaml`); collapse the
+  `test:e2e:*` / `dev:sim:watch` aliases into one script with arguments.
+- **One owning doc per topic.** Validation guidance is split across
+  `docs/ci.md`, `local-check-performance.md`, `docs/agents/validation*.md` and the
+  README; fold `docs/visualization-audit.md` decisions into `apps/web/DESIGN.md`;
+  refresh `apps/usda-api/README.md`, `apps/web/PRODUCT.md`.
+- **One data-quality framework.** `repo/problems/detectors-*` and the declared
+  checks in `repo/data-quality/` are two systems for "this record is wrong";
+  make detectors declared checks and have Problems read their results.
+- **Retire the hand-written merges onto link dispositions.** Product, purchase,
+  vendor, ledger-party, plant and ingredient merges each repoint their own
+  relationships; move the remaining per-entity parts onto the generic
+  `EntityLink` merge path.
+- **Declare non-entity child tables in the manifest (`children:`)** so their
+  DDL is generated like entity tables.
+- **Gate or remove Apple photo diagnostics** (`PhotoDiagnosticsView`,
+  `PhotoMatchDiagnostics`, `PhotoMatchInspection*`, about 1.5k lines).
 
 - **Profile test cost before another pruning pass.** [PR #1273](https://github.com/nickysemenza/cubby/pull/1273) reduced literal
   test declarations but did not show an overall CI speed gain: web node and
@@ -1340,7 +1433,7 @@ Deferred from the 2026-09 manifest-rendering and deletion/parity PRs; unordered.
 
 - **Put `deleteStatementRows` on policy-driven removal.** It is the last
   hand-written cascade (`apps/web/src/server/repo/statement-row.ts`); it takes a
-  filter rather than ids and StatementRow has no `AuditEntityType`, so it waits
+  filter rather than ids and StatementRow has no `AuditEntityKind`, so it waits
   on "StatementRow and StatementImport as manifest entities". The image hard
   delete stays on its own `IMAGE_HARD_DELETE` path on purpose: images are not
   auditable, and `removeEntity` must not run for them
@@ -1363,11 +1456,13 @@ Deferred from the 2026-09 manifest-rendering and deletion/parity PRs; unordered.
   R2 simulation](https://developers.cloudflare.com/workers/local-development/bindings-per-env/),
   but a binding alone does not implement the current presigned-URL contract.
 
-- **Fold `apps/upc-lookup` and `apps/usda-api` into the main worker.** Two
-  separate Workers with three contract packages (`packages/upc-contract`,
-  `packages/usda-contract`, `packages/usda-schemas`) exist for what are two
-  route groups; folding them removes two deploys and the cross-worker contract
-  layer. Touches `wrangler` config and the USDA data source binding.
+- **Fold `apps/upc-lookup` into the main worker.** Web already caches UPC
+  lookups in Postgres (`UpcLookupCache`), so the Worker's D1 store, admin UI and
+  MCP server duplicate it. Export D1's hand-entered (`manual`) products and miss
+  rows into `UpcLookupCache` first, move the upcitemdb adapter into
+  `server/services/upc/`, then delete the Worker and `packages/upc-contract`.
+  `apps/usda-api` stays separate: it owns the FoodData Central dataset (D1 search
+  index plus R2 bundles) behind the `USDA_API` service binding.
 
 ## Operational passes
 
@@ -1391,7 +1486,7 @@ Deferred from the 2026-09 manifest-rendering and deletion/parity PRs; unordered.
 
 - **Settle bare card charges.** Work from `/finance` with the purchase-presence
   filter set to none, matching existing Purchases before booking new ones
-  (`match_expenses`, `suggest_financial_transfer_pairs`). Itemize lump-line
+  (`finance_read.expense_match`, `finance_read.transfer_pairs`). Itemize lump-line
   orders only where a receipt is on hand.
 
 - **Ingest a seasonal garden plan with `garden-plan-import`.** Turn a
@@ -1400,7 +1495,7 @@ Deferred from the 2026-09 manifest-rendering and deletion/parity PRs; unordered.
 
 - **Import the household wardrobe.** One member's clothes per capture session,
   uploaded from the Apple app into a `photo_inventory` run with that member as
-  owner; an agent proposes groups with `propose_photo_groups` and a human
+  owner; an agent proposes groups with `photo_run.propose_groups` and a human
   approves them on the run page. Then import the matching vendor orders and
   work the product match queue (`/recommendations/workbench?kind=product-match`)
   so photo- and purchase-created Products converge. Playbook:

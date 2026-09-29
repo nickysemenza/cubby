@@ -1,5 +1,5 @@
 /**
- * `split_expense`'s MCP result: `originalCost`/`partsSum`/`delta`.
+ * `expenses.split`'s MCP result: `originalCost`/`partsSum`/`delta`.
  *
  * The delta arithmetic itself is pure and covered in
  * `packages/schemas/src/purchase.unit.test.ts` (`splitExpenseDelta`). What
@@ -22,6 +22,7 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { splitExpenseWithDeltaOut } from "~/contracts/purchase.contract";
 import type { EntityKernelContext } from "~/server/entity-kernel";
 import { createExpense, getExpenseByShortcode } from "~/server/repo/expense";
 import { makeExpenseInput } from "~/server/repo/repo.fixtures";
@@ -29,7 +30,6 @@ import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { createMcpServer } from "./server";
-import { splitExpenseMcpOut } from "./tools/purchase.tools";
 import type {
   McpRequestContext,
   ToolArguments,
@@ -73,7 +73,7 @@ async function callTool(
 }
 
 function structured(result: CallToolResult) {
-  return splitExpenseMcpOut.parse(result.structuredContent);
+  return splitExpenseWithDeltaOut.parse(result.structuredContent);
 }
 
 function errorText(result: CallToolResult): string {
@@ -87,7 +87,7 @@ function workflowContext(
   return requireActor(createTestRequestContext(db, { auth: { userId } }));
 }
 
-describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
+describe("expenses.split MCP action — originalCost/partsSum/delta", () => {
   const ctx = withTestDb();
   const caller = () => workflowContext(ctx.db, ctx.actor.userId);
 
@@ -106,8 +106,9 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
     );
 
     const result = await callTool(
-      "split_expense",
+      "expenses",
       {
+        action: "split",
         expenseId: original.id,
         parts: [
           { name: "part a", cost: 70, costType: "materials", trade: "other" },
@@ -141,8 +142,9 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
     );
 
     const result = await callTool(
-      "split_expense",
+      "expenses",
       {
+        action: "split",
         expenseId: original.id,
         parts: [
           { name: "part a", cost: 70, costType: "materials", trade: "other" },
@@ -181,8 +183,9 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
     );
 
     const result = await callTool(
-      "split_expense",
+      "expenses",
       {
+        action: "split",
         expenseId: original.id,
         parts: [
           { name: "part a", cost: 5, costType: "materials", trade: "other" },

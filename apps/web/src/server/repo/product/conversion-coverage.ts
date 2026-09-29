@@ -1,16 +1,17 @@
 /** Persistence seam for the catalog-wide conversion projection. */
-import type { ProductId } from "@cubby/schemas/identifiers";
+import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import type { ProductConversionCoverageFreshness } from "@cubby/schemas/problems";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  entityLink,
   product,
-  productComponent,
   productConversionCoverage,
 } from "~/server/db/schema";
 import { getDb, notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 
 const PRODUCT_CONVERSION_COVERAGE_ENGINE_VERSION = "conversion-coverage-v1";
 const productConversionCoverageStatusSchema = z.enum(["ready", "unavailable"]);
@@ -183,16 +184,16 @@ export const markProductConversionCoverageInputStale = async (
   const dbc = unwrapDb(db);
   while (frontier.length > 0) {
     const parents = await dbc
-      .select({ productId: productComponent.parentProductId })
-      .from(productComponent)
+      .select({ productId: entityLink.fromEntityId })
+      .from(entityLink)
       .where(
         and(
-          inArray(productComponent.componentProductId, frontier),
-          notDeleted(productComponent),
+          inArray(entityLink.toEntityId, frontier),
+          liveLinks("productComponent"),
         ),
       );
     frontier = parents
-      .map((row) => row.productId)
+      .map((row) => parseEntityId("product", row.productId))
       .filter((id) => {
         if (affected.has(id)) return false;
         affected.add(id);

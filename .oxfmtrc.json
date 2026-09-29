@@ -41,7 +41,6 @@
     "**/dist/**",
     "**/drizzle/**",
     "pnpm-lock.yaml",
-    "apps/web/src/server/db/__snapshots__/application-schema.json",
     "**/node_modules/**",
     "apps/upc-lookup/public/**",
     "apps/usda-api/data/**",

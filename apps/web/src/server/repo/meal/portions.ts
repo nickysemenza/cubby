@@ -42,6 +42,8 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
+  amountJsonSql,
+  amountToColumns,
   getDb,
   notDeleted,
   withTransaction,
@@ -323,7 +325,10 @@ export const saveMealRecipePreparation = async (
         id: mealRecipePortion.id,
         mealId: mealRecipePortion.mealId,
         ledgerPartyId: mealRecipePortion.ledgerPartyId,
-        amount: mealRecipePortion.amount,
+        amount: amountJsonSql(
+          mealRecipePortion.amountValue,
+          mealRecipePortion.amountUnit,
+        ),
         confirmedAt: mealRecipePortion.confirmedAt,
       })
       .from(mealRecipePortion)
@@ -382,7 +387,7 @@ export const saveMealRecipePreparation = async (
         await tx
           .update(mealRecipePortion)
           .set({
-            amount: change.amount,
+            ...amountToColumns(change.amount),
             confirmedAt,
             deletedAt: null,
           })
@@ -392,7 +397,7 @@ export const saveMealRecipePreparation = async (
           mealRecipeId: occurrence.id,
           mealId: targetId,
           ledgerPartyId: party.id,
-          amount: change.amount,
+          ...amountToColumns(change.amount),
           confirmedAt,
         });
     }
@@ -405,7 +410,7 @@ export const saveMealRecipePreparation = async (
     ]);
     for (const mealId of affectedIds)
       await logAuditEntry(tx, actor, {
-        entityType: "meal",
+        entityKind: "meal",
         entityId: mealId,
         action: "update",
       });
@@ -470,7 +475,10 @@ const getMealPreparationsRaw = async (
       ledgerPartyShortcode: ledgerParty.shortcode,
       ledgerPartyName: ledgerParty.name,
       ledgerPartyKind: ledgerParty.kind,
-      amount: mealRecipePortion.amount,
+      amount: amountJsonSql(
+        mealRecipePortion.amountValue,
+        mealRecipePortion.amountUnit,
+      ),
       confirmedAt: mealRecipePortion.confirmedAt,
     })
     .from(mealRecipe)

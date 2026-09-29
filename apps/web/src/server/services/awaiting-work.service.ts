@@ -101,7 +101,7 @@ export async function settleAwaitingWork(
         page.refs.map((ref) => ({
           kind: "entity-embedding.refresh" as const,
           requestedAt,
-          entityType: ref.entityType,
+          entityKind: ref.entityKind,
           entityId: ref.entityId,
         })),
         { source: "maintenance.settle-awaiting-work" },

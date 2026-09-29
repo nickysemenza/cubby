@@ -27,14 +27,16 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
-import { financialTransaction } from "~/app/finance/finance.functions";
-import { accountIdentityKindOptions } from "~/app/finance/financial-account-options";
 import { PossibleVendor } from "~/app/finance/possible-vendor";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
-import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
+import { fieldEnumOptions } from "~/entities/enum-field-display";
 import { relationshipFieldProvenance } from "~/entities/field-provenance";
+import {
+  financialTransaction,
+  entityFilterOptions,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { presenceCellOptions } from "~/lib/select-options";
 
 import { defineListOverride, interleaveDeclared } from "./types";
@@ -62,7 +64,10 @@ export const financialAccountListOverride = defineListOverride<
               header: "Identity",
               meta: { className: "w-40" },
               cell: (i) =>
-                renderOptionCell(i.getValue().kind, accountIdentityKindOptions),
+                renderOptionCell(
+                  i.getValue().kind,
+                  fieldEnumOptions("financialAccount", "identity"),
+                ),
             }),
           );
           add(

@@ -3,7 +3,7 @@ import type { EdgeRole } from "@cubby/schemas/entity-integrity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { parseEntityId, userId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
-import { eq, getTableColumns, sql } from "drizzle-orm";
+import { eq, getTableColumns, getTableName, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -12,25 +12,18 @@ import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
   entityAttachment,
+  entityExternalId,
+  entityIdentity,
+  entityLink,
   expenseAttribution,
+  externalSource,
   financialTransactionAllocation,
-  gardenEntryPlanting,
   imageDerivative,
   imageDescriptionCorrection,
   imageProcessingJob,
   imageSighting,
-  runFinding,
   importHunt,
   importPreparedOrder,
-  run as runTable,
-  runApproval,
-  runControlEvent,
-  runEvidence,
-  runMutation,
-  runOperation,
-  runOrderCandidate,
-  runProgress,
-  runTarget,
   importSourceClaim,
   ledgerParty,
   ledgerSourceClaim,
@@ -42,24 +35,28 @@ import {
   orderMail,
   orderMailAttachment,
   photoGroupProposal,
-  productComponent,
   productConversionCoverage,
-  productExternalId,
   productMatchCandidate,
   productUnitMappings,
-  projectDependency,
-  projectToolUsage,
   purchasePaymentEvidence,
-  purchaseProduct,
   recipeSection,
   recipeSectionIngredient,
+  run as runTable,
+  runApproval,
+  runControlEvent,
+  runEvidence,
+  runFinding,
+  runOperation,
+  runOrderCandidate,
+  runProgress,
+  runTarget,
   statementImport,
   statementRow,
-  taskDependency,
   user,
-  wishCandidate,
 } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
+import { ensureExternalSources } from "~/server/repo/entity-external-ids";
+import { linkValues } from "~/server/repo/entity-links";
 import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -278,7 +275,7 @@ const mkImageSighting = async (
     >
   >,
 ) =>
-  insertWithShortcode(db, "imageSighting", {
+  insertAndReturn(db, imageSighting, {
     imageId: values.imageId ?? (await mkImage(db)).id,
     ledgerPartyId: values.ledgerPartyId ?? (await mkLedgerParty(db)).id,
     deviceId: values.deviceId ?? (await mkDevice(db)).id,
@@ -355,21 +352,32 @@ const mkImportPreparedOrder = async (
   });
 };
 
+const entityKindOf = async (db: Database, id: string) => {
+  const [row] = await getDb(db)
+    .select({ kind: entityIdentity.kind })
+    .from(entityIdentity)
+    .where(eq(entityIdentity.id, id));
+  if (!row) throw new Error(`No Entity row for ${id}`);
+  return row.kind;
+};
+
+const runTargetKindOf = async (db: Database, id: string) => {
+  const kind = await entityKindOf(db, id);
+  if (kind !== "purchase" && kind !== "product" && kind !== "image")
+    throw new Error(`A run target cannot name a ${kind}`);
+  return kind;
+};
+
 const mkRunTarget = async (
   db: Database,
-  values: Partial<
-    Pick<
-      typeof runTarget.$inferInsert,
-      "purchaseId" | "productId" | "imageId" | "vendorAccountId" | "runId"
-    >
-  >,
+  values: Pick<typeof runTarget.$inferInsert, "entityId" | "entityKind"> &
+    Partial<Pick<typeof runTarget.$inferInsert, "vendorAccountId" | "runId">>,
 ) => {
   const run = values.runId ? { id: values.runId } : await mkRun(db);
   return insertAndReturn(db, runTarget, {
     runId: run.id,
-    purchaseId: values.purchaseId,
-    productId: values.productId,
-    imageId: values.imageId,
+    entityId: values.entityId,
+    entityKind: values.entityKind,
     vendorAccountId: values.vendorAccountId,
     targetFingerprint: uniq("target-fingerprint"),
   });
@@ -491,7 +499,31 @@ const TARGET_FACTORIES = {
 /** One factory per must-target-live edge: insert a live SOURCE row whose FK
  * (named by the edge key) points at `targetId`. Every other required column on
  * the source row is filled with an unrelated, always-live fixture. */
+/** A claim's source names a registered ExternalSource (FK). */
+const insertLedgerClaim = async (
+  db: Database,
+  values: typeof ledgerSourceClaim.$inferInsert,
+) => {
+  await ensureExternalSources(db, [values.source]);
+  return insertAndReturn(db, ledgerSourceClaim, values);
+};
+
 const SOURCE_FACTORIES = {
+  "ExternalSource.vendorId": async (db, targetId) => {
+    const slug = uniq("synthetic-source")
+      .toLowerCase()
+      .replaceAll(/[^a-z0-9]+/gu, "-");
+    const [row] = await getDb(db)
+      .insert(externalSource)
+      .values({
+        slug,
+        label: slug,
+        vendorId: parseEntityId("vendor", targetId),
+      })
+      .returning({ id: externalSource.slug });
+    return row!;
+  },
+
   "ProductCategory.parentId": (db, targetId) =>
     insertWithShortcode(db, "productCategory", {
       name: uniq("Child category"),
@@ -536,8 +568,13 @@ const SOURCE_FACTORIES = {
   "ImportPreparedOrder.screenshotImageId": (db, targetId) =>
     mkImportPreparedOrder(db, { screenshotImageId: targetId }),
 
-  "RunTarget.imageId": (db, targetId) =>
-    mkRunTarget(db, { imageId: parseEntityId("image", targetId) }),
+  // One factory serves the image, product and purchase targets: the target's
+  // own stored kind is what the row must carry.
+  "RunTarget.entityId": async (db, targetId) =>
+    mkRunTarget(db, {
+      entityId: targetId,
+      entityKind: await runTargetKindOf(db, targetId),
+    }),
 
   "ImportHunt.receiptImageId": (db, targetId) =>
     mkImportHunt(db, { receiptImageId: targetId }),
@@ -576,8 +613,8 @@ const SOURCE_FACTORIES = {
     const run = await mkRun(db);
     return insertAndReturn(db, runFinding, {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
-      targetKind: "run",
-      targetId: run.id,
+      entityKind: "run",
+      entityId: run.id,
       kind: "liveness-fixture",
       summary: "Liveness fixture",
       evidenceFingerprint: uniq("finding"),
@@ -688,13 +725,11 @@ const SOURCE_FACTORIES = {
     });
   },
 
-  "RunTarget.productId": (db, targetId) =>
-    mkRunTarget(db, { productId: parseEntityId("product", targetId) }),
-
   "RunTarget.vendorAccountId": (db, targetId) =>
     mkProduct(db).then((product) =>
       mkRunTarget(db, {
-        productId: product.id,
+        entityId: product.id,
+        entityKind: "product",
         vendorAccountId: parseEntityId("vendorAccount", targetId),
       }),
     ),
@@ -727,7 +762,7 @@ const SOURCE_FACTORIES = {
   },
 
   "LedgerSourceClaim.expenseId": async (db, targetId) =>
-    insertAndReturn(db, ledgerSourceClaim, {
+    insertLedgerClaim(db, {
       expenseId: parseEntityId("expense", targetId),
       source: "synthetic-integrity",
       sourceKey: uniq("claim"),
@@ -744,7 +779,7 @@ const SOURCE_FACTORIES = {
     }),
 
   "LedgerSourceClaim.ledgerTransferId": async (db, targetId) =>
-    insertAndReturn(db, ledgerSourceClaim, {
+    insertLedgerClaim(db, {
       ledgerTransferId: parseEntityId("ledgerTransfer", targetId),
       source: "synthetic-integrity",
       sourceKey: uniq("claim"),
@@ -790,7 +825,8 @@ const SOURCE_FACTORIES = {
     return insertWithShortcode(db, "inventory", {
       productId: product.id,
       locationId: location.id,
-      amount: { value: 1, unit: "each" },
+      amountValue: 1,
+      amountUnit: "each",
       ownershipMode: "person",
       ownerLedgerPartyId: parseEntityId("ledgerParty", targetId),
     });
@@ -816,20 +852,22 @@ const SOURCE_FACTORIES = {
     });
   },
 
-  "WishCandidate.wishId": async (db, targetId) => {
+  "EntityLink[wishCandidate].from": async (db, targetId) => {
     const p = await mkProduct(db);
-    return insertAndReturn(db, wishCandidate, {
-      wishId: parseEntityId("wish", targetId),
-      productId: p.id,
-    });
+    return insertAndReturn(
+      db,
+      entityLink,
+      linkValues("wishCandidate", parseEntityId("wish", targetId), p.id),
+    );
   },
 
-  "WishCandidate.productId": async (db, targetId) => {
+  "EntityLink[wishCandidate].to": async (db, targetId) => {
     const w = await mkWish(db);
-    return insertAndReturn(db, wishCandidate, {
-      wishId: w.id,
-      productId: parseEntityId("product", targetId),
-    });
+    return insertAndReturn(
+      db,
+      entityLink,
+      linkValues("wishCandidate", w.id, parseEntityId("product", targetId)),
+    );
   },
 
   "Recipe.cookbookId": (db, targetId) =>
@@ -874,7 +912,8 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: party.id,
       sourceKind: "ingredient",
       ingredientId: parseEntityId("ingredient", targetId),
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -941,7 +980,8 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: party.id,
       sourceKind: "product",
       productId: product.id,
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -959,7 +999,8 @@ const SOURCE_FACTORIES = {
       mealRecipeId: preparation.id,
       mealId: parseEntityId("meal", targetId),
       ledgerPartyId: party.id,
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -973,7 +1014,8 @@ const SOURCE_FACTORIES = {
       mealRecipeId: preparation.id,
       mealId: meal.id,
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -984,22 +1026,41 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
       sourceKind: "product",
       productId: product.id,
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
-  "ProductExternalId.productId": (db, targetId) =>
-    insertAndReturn(db, productExternalId, {
-      productId: parseEntityId("product", targetId),
-      source: "amazon",
-      externalId: uniq("B"),
-    }),
+  // One identifier column names every entity an identifier kind attaches to;
+  // the row's kind must be one its target's entity kind accepts.
+  "EntityExternalId.entityId": async (db, targetId) => {
+    const entityKind = await entityKindOf(db, targetId);
+    const identifier =
+      entityKind === "product"
+        ? { source: "amazon", kind: "asin" as const, isPrimary: true }
+        : entityKind === "financialTransaction"
+          ? {
+              source: "monarch",
+              kind: "settlement_ref" as const,
+              isPrimary: null,
+            }
+          : { source: "notion", kind: "page" as const, isPrimary: true };
+    await ensureExternalSources(db, [identifier.source]);
+    return insertAndReturn(db, entityExternalId, {
+      entityId: targetId,
+      entityKind,
+      externalId: uniq("X"),
+      ...identifier,
+    });
+  },
 
-  "ProductUnitMappings.productId": (db, targetId) =>
+  "ProductUnitMapping.productId": (db, targetId) =>
     insertAndReturn(db, productUnitMappings, {
       productId: parseEntityId("product", targetId),
-      a: { value: 1, unit: "cup" },
-      b: { value: 120, unit: "g" },
+      aValue: 1,
+      aUnit: "cup",
+      bValue: 120,
+      bUnit: "g",
     }),
 
   "InventoryEntry.productId": async (db, targetId) => {
@@ -1007,7 +1068,8 @@ const SOURCE_FACTORIES = {
     return insertWithShortcode(db, "inventory", {
       productId: parseEntityId("product", targetId),
       locationId: l.id,
-      amount: { value: 1, unit: "each" },
+      amountValue: 1,
+      amountUnit: "each",
     });
   },
 
@@ -1027,20 +1089,22 @@ const SOURCE_FACTORIES = {
       subjectProductId: parseEntityId("product", targetId),
     }),
 
-  "ProjectToolUsage.productId": async (db, targetId) => {
+  "EntityLink[projectTool].to": async (db, targetId) => {
     const p = await mkProject(db);
-    return insertAndReturn(db, projectToolUsage, {
-      projectId: p.id,
-      productId: parseEntityId("product", targetId),
-    });
+    return insertAndReturn(
+      db,
+      entityLink,
+      linkValues("projectTool", p.id, parseEntityId("product", targetId)),
+    );
   },
 
-  "PurchaseProduct.productId": async (db, targetId) => {
+  "EntityLink[purchaseProduct].to": async (db, targetId) => {
     const p = await mkPurchase(db);
-    return insertAndReturn(db, purchaseProduct, {
-      purchaseId: p.id,
-      productId: parseEntityId("product", targetId),
-    });
+    return insertAndReturn(
+      db,
+      entityLink,
+      linkValues("purchaseProduct", p.id, parseEntityId("product", targetId)),
+    );
   },
 
   "MealFoodEntry.productId": async (db, targetId) => {
@@ -1050,7 +1114,8 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: party.id,
       sourceKind: "product",
       productId: parseEntityId("product", targetId),
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     });
   },
 
@@ -1093,7 +1158,8 @@ const SOURCE_FACTORIES = {
     return insertWithShortcode(db, "inventory", {
       productId: p.id,
       locationId: parseEntityId("location", targetId),
-      amount: { value: 1, unit: "each" },
+      amountValue: 1,
+      amountUnit: "each",
     });
   },
 
@@ -1121,7 +1187,7 @@ const SOURCE_FACTORIES = {
   "Location.productId": (db, targetId) =>
     insertWithShortcode(db, "location", {
       name: uniq("Location"),
-      type: null,
+      type: "furniture",
       productId: parseEntityId("product", targetId),
     }),
 
@@ -1141,20 +1207,30 @@ const SOURCE_FACTORIES = {
       parentProjectId: parseEntityId("project", targetId),
     }),
 
-  "ProjectDependency.projectId": async (db, targetId) => {
+  "EntityLink[projectDependency].from": async (db, targetId) => {
     const other = await mkProject(db);
-    return insertAndReturn(db, projectDependency, {
-      projectId: parseEntityId("project", targetId),
-      blockedByProjectId: other.id,
-    });
+    return insertAndReturn(
+      db,
+      entityLink,
+      linkValues(
+        "projectDependency",
+        parseEntityId("project", targetId),
+        other.id,
+      ),
+    );
   },
 
-  "ProjectDependency.blockedByProjectId": async (db, targetId) => {
+  "EntityLink[projectDependency].to": async (db, targetId) => {
     const other = await mkProject(db);
-    return insertAndReturn(db, projectDependency, {
-      projectId: other.id,
-      blockedByProjectId: parseEntityId("project", targetId),
-    });
+    return insertAndReturn(
+      db,
+      entityLink,
+      linkValues(
+        "projectDependency",
+        other.id,
+        parseEntityId("project", targetId),
+      ),
+    );
   },
 
   "Task.projectId": (db, targetId) =>
@@ -1173,12 +1249,13 @@ const SOURCE_FACTORIES = {
       projectId: parseEntityId("project", targetId),
     }),
 
-  "ProjectToolUsage.projectId": async (db, targetId) => {
+  "EntityLink[projectTool].from": async (db, targetId) => {
     const p = await mkProduct(db);
-    return insertAndReturn(db, projectToolUsage, {
-      projectId: parseEntityId("project", targetId),
-      productId: p.id,
-    });
+    return insertAndReturn(
+      db,
+      entityLink,
+      linkValues("projectTool", parseEntityId("project", targetId), p.id),
+    );
   },
 
   "Task.parentTaskId": (db, targetId) =>
@@ -1188,36 +1265,48 @@ const SOURCE_FACTORIES = {
       parentTaskId: parseEntityId("task", targetId),
     }),
 
-  "GardenEntryPlanting.plantingId": async (db, targetId) => {
+  "EntityLink[gardenEntryPlanting].to": async (db, targetId) => {
     const entry = await mkGardenEntry(db);
-    return insertAndReturn(db, gardenEntryPlanting, {
-      gardenEntryId: parseEntityId("gardenEntry", entry.id),
-      plantingId: parseEntityId("planting", targetId),
-    });
+    return insertAndReturn(
+      db,
+      entityLink,
+      linkValues(
+        "gardenEntryPlanting",
+        parseEntityId("gardenEntry", entry.id),
+        parseEntityId("planting", targetId),
+      ),
+    );
   },
 
-  "GardenEntryPlanting.gardenEntryId": async (db, targetId) => {
+  "EntityLink[gardenEntryPlanting].from": async (db, targetId) => {
     const planted = await mkPlanting(db);
-    return insertAndReturn(db, gardenEntryPlanting, {
-      gardenEntryId: parseEntityId("gardenEntry", targetId),
-      plantingId: parseEntityId("planting", planted.id),
-    });
+    return insertAndReturn(
+      db,
+      entityLink,
+      linkValues(
+        "gardenEntryPlanting",
+        parseEntityId("gardenEntry", targetId),
+        parseEntityId("planting", planted.id),
+      ),
+    );
   },
 
-  "TaskDependency.taskId": async (db, targetId) => {
+  "EntityLink[taskDependency].from": async (db, targetId) => {
     const other = await mkTask(db);
-    return insertAndReturn(db, taskDependency, {
-      taskId: parseEntityId("task", targetId),
-      blockedByTaskId: other.id,
-    });
+    return insertAndReturn(
+      db,
+      entityLink,
+      linkValues("taskDependency", parseEntityId("task", targetId), other.id),
+    );
   },
 
-  "TaskDependency.blockedByTaskId": async (db, targetId) => {
+  "EntityLink[taskDependency].to": async (db, targetId) => {
     const other = await mkTask(db);
-    return insertAndReturn(db, taskDependency, {
-      taskId: other.id,
-      blockedByTaskId: parseEntityId("task", targetId),
-    });
+    return insertAndReturn(
+      db,
+      entityLink,
+      linkValues("taskDependency", other.id, parseEntityId("task", targetId)),
+    );
   },
 
   "Purchase.vendorId": (db, targetId) =>
@@ -1244,12 +1333,17 @@ const SOURCE_FACTORIES = {
       purchaseId: parseEntityId("purchase", targetId),
     }),
 
-  "PurchaseProduct.purchaseId": async (db, targetId) => {
+  "EntityLink[purchaseProduct].from": async (db, targetId) => {
     const prod = await mkProduct(db);
-    return insertAndReturn(db, purchaseProduct, {
-      purchaseId: parseEntityId("purchase", targetId),
-      productId: prod.id,
-    });
+    return insertAndReturn(
+      db,
+      entityLink,
+      linkValues(
+        "purchaseProduct",
+        parseEntityId("purchase", targetId),
+        prod.id,
+      ),
+    );
   },
 
   "FinancialTransaction.accountId": (db, targetId) =>
@@ -1261,6 +1355,7 @@ const SOURCE_FACTORIES = {
     }),
 
   "StatementRow.accountId": async (db, targetId) => {
+    await ensureExternalSources(db, ["monarch"]);
     const batch = await insertAndReturn(db, statementImport, {
       source: "monarch",
       label: "liveness-fixture.csv",
@@ -1303,20 +1398,30 @@ const SOURCE_FACTORIES = {
     });
   },
 
-  "ProductComponent.parentProductId": async (db, targetId) => {
+  "EntityLink[productComponent].from": async (db, targetId) => {
     const component = await mkProduct(db);
-    return insertAndReturn(db, productComponent, {
-      parentProductId: parseEntityId("product", targetId),
-      componentProductId: component.id,
-    });
+    return insertAndReturn(
+      db,
+      entityLink,
+      linkValues(
+        "productComponent",
+        parseEntityId("product", targetId),
+        component.id,
+      ),
+    );
   },
 
-  "ProductComponent.componentProductId": async (db, targetId) => {
+  "EntityLink[productComponent].to": async (db, targetId) => {
     const kit = await mkProduct(db);
-    return insertAndReturn(db, productComponent, {
-      parentProductId: kit.id,
-      componentProductId: parseEntityId("product", targetId),
-    });
+    return insertAndReturn(
+      db,
+      entityLink,
+      linkValues(
+        "productComponent",
+        kit.id,
+        parseEntityId("product", targetId),
+      ),
+    );
   },
 
   "ProductConversionCoverage.productId": async (db, targetId) => {
@@ -1380,7 +1485,8 @@ const SOURCE_FACTORIES = {
     const product = await mkProduct(db);
     return mkRunTarget(db, {
       runId: parseEntityId("run", targetId),
-      productId: product.id,
+      entityId: product.id,
+      entityKind: "product",
     });
   },
 
@@ -1393,7 +1499,8 @@ const SOURCE_FACTORIES = {
   "RunEvidence.runId": async (db, targetId) => {
     const product = await mkProduct(db);
     const evidenceTarget = await mkRunTarget(db, {
-      productId: product.id,
+      entityId: product.id,
+      entityKind: "product",
     });
     return insertAndReturn(db, runEvidence, {
       runId: parseEntityId("run", targetId),
@@ -1404,15 +1511,6 @@ const SOURCE_FACTORIES = {
       mediaType: "application/pdf",
     });
   },
-
-  "RunMutation.runId": (db, targetId) =>
-    insertAndReturn(db, runMutation, {
-      runId: parseEntityId("run", targetId),
-      targetKind: "run",
-      targetId,
-      mutationKind: "liveness-fixture",
-      postFingerprint: uniq("post-fingerprint"),
-    }),
 
   "RunOperation.runId": (db, targetId) =>
     insertAndReturn(db, runOperation, {
@@ -1476,8 +1574,8 @@ const SOURCE_FACTORIES = {
     return insertAndReturn(db, runFinding, {
       runId: parseEntityId("run", targetId),
       ledgerPartyId: party.id,
-      targetKind: "run",
-      targetId,
+      entityKind: "run",
+      entityId: targetId,
       kind: "liveness-fixture",
       summary: "Liveness fixture",
       evidenceFingerprint: uniq("finding"),
@@ -1530,15 +1628,17 @@ const SOURCE_FACTORIES = {
   "EntityAttachment.imageId": async (db, targetId) => {
     const p = await mkProduct(db);
     return insertAndReturn(db, entityAttachment, {
-      subjectEntityId: p.id,
+      entityId: p.id,
+      entityKind: "product",
       imageId: targetId,
     });
   },
 
-  "EntityAttachment.subjectEntityId": async (db, targetId) => {
+  "EntityAttachment.entityId": async (db, targetId) => {
     const img = await mkImage(db);
     return insertAndReturn(db, entityAttachment, {
-      subjectEntityId: targetId,
+      entityId: targetId,
+      entityKind: await entityKindOf(db, targetId),
       imageId: img.id,
     });
   },
@@ -1613,10 +1713,9 @@ function deriveMustTargetLiveEdges(): DerivedEdgeSpec[] {
         );
       }
       if (semantics.liveness.kind !== "must-target-live") continue; // Ingredient.recipeId
-      const [sourceTableName] = edgeKey.split(".");
-      if (!sourceTableName) {
-        throw new Error(`Incoming edge is missing a source table: ${edgeKey}`);
-      }
+      // From the column, not the key: an `EntityLink[kind].end` key names
+      // its link kind, not its table.
+      const sourceTableName = getTableName(edge.column.table);
       specs.push({
         edgeKey,
         targetEntity,
@@ -1706,30 +1805,35 @@ describe("findDependencyCycles", () => {
   it("reports out-of-band Project and Task cycles by public shortcode", async () => {
     const projectA = await mkProject(ctx.db);
     const projectB = await mkProject(ctx.db);
-    await insertAndReturn(ctx.db, projectDependency, {
-      projectId: projectA.id,
-      blockedByProjectId: projectB.id,
-    });
-    await insertAndReturn(ctx.db, projectDependency, {
-      projectId: projectB.id,
-      blockedByProjectId: projectA.id,
-    });
+    await insertAndReturn(
+      ctx.db,
+      entityLink,
+      linkValues("projectDependency", projectA.id, projectB.id),
+    );
+    await insertAndReturn(
+      ctx.db,
+      entityLink,
+      linkValues("projectDependency", projectB.id, projectA.id),
+    );
 
     const taskA = await mkTask(ctx.db);
     const taskB = await mkTask(ctx.db);
     const taskC = await mkTask(ctx.db);
-    await insertAndReturn(ctx.db, taskDependency, {
-      taskId: taskA.id,
-      blockedByTaskId: taskB.id,
-    });
-    await insertAndReturn(ctx.db, taskDependency, {
-      taskId: taskB.id,
-      blockedByTaskId: taskC.id,
-    });
-    await insertAndReturn(ctx.db, taskDependency, {
-      taskId: taskC.id,
-      blockedByTaskId: taskA.id,
-    });
+    await insertAndReturn(
+      ctx.db,
+      entityLink,
+      linkValues("taskDependency", taskA.id, taskB.id),
+    );
+    await insertAndReturn(
+      ctx.db,
+      entityLink,
+      linkValues("taskDependency", taskB.id, taskC.id),
+    );
+    await insertAndReturn(
+      ctx.db,
+      entityLink,
+      linkValues("taskDependency", taskC.id, taskA.id),
+    );
 
     const cycles = await findDependencyCycles(ctx.db);
     expect(cycles).toHaveLength(2);

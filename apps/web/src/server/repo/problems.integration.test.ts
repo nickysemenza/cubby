@@ -16,26 +16,27 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  entityLink,
   financialTransaction,
   ingredient,
   product,
-  productComponent,
   recipe,
 } from "~/server/db/schema";
+import { linkValues } from "~/server/repo/entity-links";
 
 import {
   taxonomyId,
   taxonomyShortcode,
 } from "../../../tooling/product-category-fixtures";
+import {
+  pruneAllUnusedAliasesWorkflow,
+  reparseStaleWorkflow,
+} from "../operations/problem-workflows.server";
 import { requireActor } from "../request-context";
 import { runDiagnostic } from "../services/problem-diagnostics.service";
 import { findViewProblems } from "../services/problem-views.service";
 import { findFastProblems } from "../services/problems.service";
 import { createTestRequestContext } from "../testing/request-context";
-import {
-  pruneAllUnusedAliasesWorkflow,
-  reparseStaleWorkflow,
-} from "../workflows/problems.server";
 import { setDataException } from "./data-quality";
 import { getDb } from "./database-helpers";
 import { createExpense, updateExpense } from "./expense";
@@ -217,11 +218,11 @@ describe("problems — orphaned products", () => {
         ctx.actor,
       ),
     ]);
-    await getDb(ctx.db).insert(productComponent).values({
-      parentProductId: kit.entityId,
-      componentProductId: component.entityId,
-      quantity: 1,
-    });
+    await getDb(ctx.db)
+      .insert(entityLink)
+      .values(
+        linkValues("productComponent", kit.entityId, component.entityId, 1),
+      );
 
     const ids = (await findFastProblems(ctx.db)).orphanedProducts.map(
       (row) => row.id,
@@ -261,7 +262,7 @@ describe("problems — missing embeddings", () => {
       { limit: 1_000 },
     );
     const ingredientIds = missing
-      .filter((row) => row.entityType === "ingredient")
+      .filter((row) => row.entityKind === "ingredient")
       .map((row) => row.entityId);
 
     expect(ingredientIds).toContain(realIngredient.id);
@@ -297,7 +298,7 @@ describe("problems — missing embeddings", () => {
       { limit: 1_000 },
     );
 
-    expect(missing.some((row) => row.entityType === "expense")).toBe(false);
+    expect(missing.some((row) => row.entityKind === "expense")).toBe(false);
     expect(missing.some((row) => row.entityId === expense.id)).toBe(false);
   });
 });
@@ -598,7 +599,6 @@ describe("problems — charges not reconciling", () => {
       merchant: "Posted Refund Mart",
       rawDescription: null,
       sourceCategory: null,
-      sourceRefs: [],
       notes: null,
     });
 
@@ -739,7 +739,6 @@ describe("problems — purchase financial settlement mismatches", () => {
       merchant: "Settlement Merchant",
       rawDescription: null,
       sourceCategory: null,
-      sourceRefs: [],
       notes: null,
     });
   };

@@ -1,4 +1,8 @@
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import {
+  ENTITY_LINK_KINDS,
+  entityLinkKinds,
+} from "@cubby/schemas/entity-links";
 /**
  * Every declared delete disposition, checked at the database boundary.
  *
@@ -25,7 +29,12 @@ import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   entityManifest,
   type ShortcodeEntity,
+  shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
+import {
+  EXTERNAL_ID_KINDS,
+  entityExternalIdKind,
+} from "@cubby/schemas/external-id";
 import type {
   DeviceId,
   ExpenseId,
@@ -64,6 +73,8 @@ import {
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
 import {
+  entityExternalId,
+  entityLink,
   run as runTable,
   expenseAttribution,
   importHunt,
@@ -101,11 +112,14 @@ import {
   setAtPath,
 } from "~/server/entity-kernel/reference-universe.fixtures";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
+import { generatedEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
 import {
   databaseForTransaction,
   getDb,
   insertAndReturn,
 } from "~/server/repo/database-helpers";
+import { ensureExternalSources } from "~/server/repo/entity-external-ids";
+import { linkValues } from "~/server/repo/entity-links";
 import { attachExistingImageToEntity } from "~/server/repo/image";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
@@ -140,8 +154,14 @@ type EdgeCase = {
   disposition: OperationDisposition;
 };
 
+// A read-only kernel entity (cookbook) deletes through its own workflow, not
+// the kernel, so it is outside this kernel-delete sweep.
 const deletableEntities = ENTITY_KERNEL_ENTITIES.filter(
-  (entity) => entityManifest[entity].lifecycle.delete !== null,
+  (entity) =>
+    entityManifest[entity].lifecycle.delete !== null &&
+    generatedEntityKernelContractCases[entity].actions.some(
+      (action) => action === "delete",
+    ),
 );
 
 const edgeOf = (entity: EntityKernelEntity, edge: string): IncomingEdge =>
@@ -163,11 +183,99 @@ const physical = (edge: IncomingEdge) => {
     columnName: column.name,
     primary,
     softDeletable: "deletedAt" in getTableColumns(table),
+    // An `EntityLink` edge is one link kind's rows of a shared column.
+    scopeSql: edge.scope
+      ? sql`AND s.${sql.identifier(edge.scope.column.name)} = ${edge.scope.value}`
+      : sql``,
+    scopeBare: edge.scope
+      ? sql`AND ${sql.identifier(edge.scope.column.name)} = ${edge.scope.value}`
+      : sql``,
   };
 };
 
 const liveRow = (softDeletable: boolean) =>
   softDeletable ? sql`AND s."deletedAt" IS NULL` : sql``;
+
+/**
+ * Insert one live identifier on `targetId` of a kind its entity kind accepts
+ * (`EXTERNAL_ID_KINDS`): the generic filler cannot satisfy the pair CHECK or
+ * the registered-source FK.
+ */
+const insertExternalIdAt = async (
+  db: Database,
+  targetId: string,
+): Promise<boolean> => {
+  const [identity] = z
+    .array(z.object({ kind: z.string() }))
+    .parse(
+      (
+        await getDb(db).execute(
+          sql`SELECT "kind" FROM "Entity" WHERE "id"::text = ${targetId}`,
+        )
+      ).rows,
+    );
+  const kind = Object.entries(EXTERNAL_ID_KINDS).find(([, declaration]) =>
+    declaration.entities.some((entity: string) => entity === identity?.kind),
+  )?.[0];
+  const parsedKind = entityExternalIdKind.safeParse(kind);
+  if (!identity || !parsedKind.success) return false;
+  const entityKind = z.enum(shortcodeEntities).safeParse(identity.kind);
+  if (!entityKind.success) return false;
+  return getDb(db)
+    .transaction(async (tx) => {
+      await ensureExternalSources(tx, ["delete-policy"]);
+      await tx.insert(entityExternalId).values({
+        entityId: targetId,
+        entityKind: entityKind.data,
+        source: "delete-policy",
+        kind: parsedKind.data,
+        externalId: crypto.randomUUID(),
+        isPrimary: EXTERNAL_ID_KINDS[parsedKind.data].primarySlot ? true : null,
+      });
+      return true;
+    })
+    .catch(() => false);
+};
+
+/**
+ * Insert one live link of the edge's kind naming `targetId` at the edge's end
+ * and some other live entity of the declared kind at the other end.
+ */
+const insertLinkAt = async (
+  db: Database,
+  edge: IncomingEdge,
+  targetId: string,
+): Promise<boolean> => {
+  const kind = entityLinkKinds.find((value) => value === edge.scope?.value);
+  if (!kind) return false;
+  const declaration = ENTITY_LINK_KINDS[kind];
+  const atFrom = edge.column.name === "fromEntityId";
+  const otherTable =
+    entityManifest[atFrom ? declaration.to : declaration.from].dbTable;
+  if (!otherTable) return false;
+  const [other] = z.array(z.object({ id: z.string() })).parse(
+    (
+      await getDb(db).execute(sql`
+        SELECT o."id"::text AS id FROM ${sql.identifier(otherTable)} o
+        WHERE o."deletedAt" IS NULL AND o."id"::text <> ${targetId}
+        LIMIT 1
+      `)
+    ).rows,
+  );
+  if (!other) return false;
+  return getDb(db)
+    .transaction(async (tx) => {
+      await tx
+        .insert(entityLink)
+        .values(
+          atFrom
+            ? linkValues(kind, targetId, other.id, 1)
+            : linkValues(kind, other.id, targetId, 1),
+        );
+      return true;
+    })
+    .catch(() => false);
+};
 
 /** Live targets of `entity` that `edge` references, excluding `avoid`. */
 const referencedTargets = async (
@@ -175,7 +283,7 @@ const referencedTargets = async (
   entity: EntityKernelEntity,
   edge: IncomingEdge,
 ): Promise<{ id: string; shortcode: string }[]> => {
-  const { tableName, columnName, softDeletable } = physical(edge);
+  const { tableName, columnName, softDeletable, scopeSql } = physical(edge);
   const target = getTableConfig(SHORTCODE_TABLE[entity]).name;
   return idRowsSchema.parse(
     (
@@ -183,7 +291,7 @@ const referencedTargets = async (
         SELECT DISTINCT t."id"::text AS id, t."shortcode" AS shortcode
         FROM ${sql.identifier(tableName)} s
         JOIN ${sql.identifier(target)} t ON t."id"::text = s.${sql.identifier(columnName)}::text
-        WHERE t."deletedAt" IS NULL ${liveRow(softDeletable)}
+        WHERE t."deletedAt" IS NULL ${liveRow(softDeletable)} ${scopeSql}
         ORDER BY 2
       `)
     ).rows,
@@ -195,13 +303,13 @@ const referencingRows = async (
   edge: IncomingEdge,
   targetId: string,
 ) => {
-  const { tableName, columnName } = physical(edge);
+  const { tableName, columnName, scopeSql } = physical(edge);
   return rowsSchema
     .parse(
       (
         await getDb(db).execute(sql`
           SELECT to_jsonb(s.*) AS row FROM ${sql.identifier(tableName)} s
-          WHERE s.${sql.identifier(columnName)}::text = ${targetId}
+          WHERE s.${sql.identifier(columnName)}::text = ${targetId} ${scopeSql}
         `)
       ).rows,
     )
@@ -338,7 +446,8 @@ const pointEdgeAt = async (
   edge: IncomingEdge,
   targetId: string,
 ): Promise<boolean> => {
-  const { tableName, columnName, softDeletable, primary } = physical(edge);
+  const { tableName, columnName, softDeletable, primary, scopeSql } =
+    physical(edge);
   const table = sql.identifier(tableName);
   const column = sql.identifier(columnName);
   const attempt = (statement: SQL) =>
@@ -353,11 +462,13 @@ const pointEdgeAt = async (
       SELECT s.ctid FROM ${table} s
       WHERE s.${column} IS DISTINCT FROM ${targetId}
         ${primary.includes("id") ? sql`AND s."id"::text <> ${targetId}` : sql``}
-        ${liveRow(softDeletable)}
+        ${liveRow(softDeletable)} ${scopeSql}
       LIMIT 1
     )
   `);
   if (repointed) return true;
+  if (edge.scope) return insertLinkAt(db, edge, targetId);
+  if (tableName === "EntityExternalId") return insertExternalIdAt(db, targetId);
 
   // SAFETY: INCOMING_EDGES is built only from Postgres schema columns.
   const config = getTableConfig((edge.column as PgColumn).table as PgTable);
@@ -381,6 +492,21 @@ const pointEdgeAt = async (
     values.set(local.name, sql`${row.id}`);
   }
   values.set(columnName, sql`${targetId}`);
+  // An `entityRef` row carries the target's own stored kind, or the composite
+  // FK to `Entity(id, kind)` refuses it.
+  if (config.columns.some((col) => col.name === "entityKind")) {
+    const [identity] = z
+      .array(z.object({ kind: z.string() }))
+      .parse(
+        (
+          await getDb(db).execute(
+            sql`SELECT "kind" FROM "Entity" WHERE "id"::text = ${targetId}`,
+          )
+        ).rows,
+      );
+    if (!identity) return false;
+    values.set("entityKind", sql`${identity.kind}`);
+  }
   for (const col of config.columns) {
     if (values.has(col.name) || !col.notNull || col.hasDefault) continue;
     const value = filler(col);
@@ -469,7 +595,7 @@ const clearBlockers = async (
 ): Promise<boolean> => {
   const own = physical(measured);
   for (const edge of blockEdges) {
-    const { tableName, columnName, softDeletable } = physical(edge);
+    const { tableName, columnName, softDeletable, scopeBare } = physical(edge);
     // A row that also names the target over the measured edge stays.
     const keep =
       tableName === own.tableName
@@ -479,13 +605,13 @@ const clearBlockers = async (
       (
         await getDb(db).execute(sql`
           SELECT to_jsonb(s.*) AS row FROM ${sql.identifier(tableName)} s
-          WHERE ${sql.identifier(columnName)}::text = ${targetId} ${keep}
+          WHERE ${sql.identifier(columnName)}::text = ${targetId} ${keep} ${scopeBare}
           LIMIT 1
         `)
       ).rows,
     );
     if (!row) continue;
-    const where = sql`WHERE ${sql.identifier(columnName)}::text = ${targetId} ${keep}`;
+    const where = sql`WHERE ${sql.identifier(columnName)}::text = ${targetId} ${keep} ${scopeBare}`;
     if (softDeletable) {
       await getDb(db).execute(sql`
         UPDATE ${sql.identifier(tableName)} SET "deletedAt" = now() ${where}
@@ -624,7 +750,8 @@ async function seedMealChildRows(db: Database, ids: StagingIds) {
       ledgerPartyId,
       productId,
       sourceKind: "product",
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     }).catch(() => undefined);
   if (ingredientId)
     await insertAndReturn(db, mealFoodEntry, {
@@ -632,7 +759,8 @@ async function seedMealChildRows(db: Database, ids: StagingIds) {
       ledgerPartyId,
       ingredientId,
       sourceKind: "ingredient",
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     }).catch(() => undefined);
   if (!recipeId) return;
   const recipe = await insertAndReturn(db, mealRecipe, {
@@ -644,7 +772,8 @@ async function seedMealChildRows(db: Database, ids: StagingIds) {
       mealRecipeId: recipe.id,
       mealId,
       ledgerPartyId,
-      amount: { value: 1, unit: "g" },
+      amountValue: 1,
+      amountUnit: "g",
     }).catch(() => undefined);
 }
 
@@ -670,6 +799,8 @@ async function seedProductMatchCandidate(db: Database, ids: StagingIds) {
 
 /** LedgerSourceClaim: exactly one of expenseId/ledgerTransferId, never both. */
 async function seedLedgerSourceClaims(db: Database, ids: StagingIds) {
+  // Every claim source names a registered ExternalSource (FK).
+  await ensureExternalSources(db, ["delete-policy"]);
   const claimEvidence = {
     normalizedEvidence: {
       amount: 10,
@@ -701,6 +832,7 @@ async function seedLedgerSourceClaims(db: Database, ids: StagingIds) {
 /** StatementRow.accountId. */
 async function seedStatementRow(db: Database, ids: StagingIds) {
   if (!ids.financialAccountId) return;
+  await ensureExternalSources(db, ["delete-policy"]);
   const batch = await insertAndReturn(db, statementImport, {
     source: "delete-policy",
     label: "Delete policy fixture",
@@ -764,7 +896,8 @@ async function seedCookbookExpenseAttributionInventory(
   if (productId && locationId && ledgerPartyId)
     await insertWithShortcode(db, "inventory", {
       productId,
-      amount: { value: 1, unit: "each" },
+      amountValue: 1,
+      amountUnit: "each",
       locationId,
       ownershipMode: "person",
       ownerLedgerPartyId: ledgerPartyId,
@@ -779,6 +912,7 @@ async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
     vendorId,
     vendorAccountId,
     imageId,
+    productId,
     purchaseId,
     deviceId,
   } = ids;
@@ -796,18 +930,33 @@ async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
   if (purchaseId)
     await insertAndReturn(db, runTarget, {
       runId,
-      purchaseId,
+      entityKind: "purchase",
+      entityId: purchaseId,
       vendorAccountId: vendorAccountId ?? undefined,
       deviceWorkDeviceId: deviceId ?? undefined,
       targetFingerprint: "delete-policy-runtarget",
     }).catch(() => undefined);
 
+  // A target names a purchase, product or image; each kind is its own edge
+  // into the entity it points at.
+  for (const [entityKind, entityId] of [
+    ["product", productId],
+    ["image", imageId],
+  ] as const)
+    if (entityId)
+      await insertAndReturn(db, runTarget, {
+        runId,
+        entityKind,
+        entityId,
+        targetFingerprint: `delete-policy-runtarget-${entityKind}`,
+      }).catch(() => undefined);
+
   if (ledgerPartyId && purchaseId)
     await insertAndReturn(db, runFinding, {
       runId,
       ledgerPartyId,
-      targetKind: "purchase",
-      targetId: purchaseId,
+      entityKind: "purchase",
+      entityId: purchaseId,
       kind: "delete-policy-finding",
       summary: "Delete policy fixture finding",
       evidenceFingerprint: "delete-policy-finding-fp",

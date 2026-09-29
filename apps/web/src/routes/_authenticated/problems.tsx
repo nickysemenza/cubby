@@ -14,8 +14,8 @@ import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { RoutePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
+import { problems } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
-import { problems } from "~/lib/problems.functions";
 import { urlStringParam } from "~/lib/search-params";
 
 // The overview pulls in all five independently loaded Problems lanes plus the

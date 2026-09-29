@@ -8,7 +8,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { entityMedia } from "~/entities/entity-media.functions";
+import { entityMedia } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import {
   EntityDisplayImagesProvider,
@@ -47,7 +47,7 @@ describe("useEntityDisplayImages", () => {
     transport.mockImplementation(async (refs: EntityRef[]) =>
       Object.fromEntries(
         refs.map((ref) => [
-          `${ref.entityType}:${ref.entityId}`,
+          `${ref.entityKind}:${ref.entityId}`,
           { url: `https://images.example/${ref.entityId}.jpg` },
         ]),
       ),
@@ -55,13 +55,13 @@ describe("useEntityDisplayImages", () => {
     const refs = Array.from(
       { length: ID_CHUNK_SIZE + 3 },
       (_, index): EntityRef => ({
-        entityType: index % 2 === 0 ? "product" : "location",
+        entityKind: index % 2 === 0 ? "product" : "location",
         entityId: `REF-${String(index).padStart(3, "0")}`,
       }),
     ).reverse();
     refs.push(refs[0]!);
     const seededRef = refs[10]!;
-    const seededKey = `${seededRef.entityType}:${seededRef.entityId}`;
+    const seededKey = `${seededRef.entityKind}:${seededRef.entityId}`;
 
     const { result } = renderHook(
       () => useEntityDisplayImages(refs, { [seededKey]: null }, queryOptions),
@@ -74,7 +74,7 @@ describe("useEntityDisplayImages", () => {
       expect.any(Array),
     ]);
     const requested = transport.mock.calls.flatMap(([chunk]) =>
-      chunk.map((ref) => `${ref.entityType}:${ref.entityId}`),
+      chunk.map((ref) => `${ref.entityKind}:${ref.entityId}`),
     );
     expect(transport.mock.calls[0]?.[0]).toHaveLength(ID_CHUNK_SIZE);
     expect(transport.mock.calls[1]?.[0]).toHaveLength(2);
@@ -94,7 +94,7 @@ describe("useEntityDisplayImages", () => {
     const refs = Array.from(
       { length: ID_CHUNK_SIZE + 1 },
       (_, index): EntityRef => ({
-        entityType: "product",
+        entityKind: "product",
         entityId:
           index === ID_CHUNK_SIZE
             ? "PRD-LAST"
@@ -119,17 +119,17 @@ describe("useEntityDisplayImages", () => {
     transport.mockImplementation(async (refs) =>
       Object.fromEntries(
         refs.map((ref) => [
-          `${ref.entityType}:${ref.entityId}`,
+          `${ref.entityKind}:${ref.entityId}`,
           { url: `https://images.example/${ref.entityId}.jpg` },
         ]),
       ),
     );
     const outerRef: EntityRef = {
-      entityType: "product",
+      entityKind: "product",
       entityId: "PRD-OUTER",
     };
     const innerRef: EntityRef = {
-      entityType: "location",
+      entityKind: "location",
       entityId: "LOC-INNER",
     };
     const QueryWrapper = createWrapper();

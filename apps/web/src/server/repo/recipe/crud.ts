@@ -2,6 +2,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import { NOTION_SOURCE } from "@cubby/schemas/external-id";
 import {
   type CookbookId,
   parseEntityId,
@@ -39,6 +40,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   entityAttachment,
+  entityExternalId,
   image,
   ingredient,
   meal,
@@ -68,10 +70,13 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
+import {
+  ensureExternalSources,
+  liveExternalIds,
+} from "~/server/repo/entity-external-ids";
 import { recipeHasImages } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
-import { listScaffold } from "~/server/repo/list-scaffold";
-import { relatedWhereConditions } from "~/server/repo/related-view";
+import { listScaffold } from "~/server/repo/list";
 import { deleteByPolicy } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
@@ -103,7 +108,7 @@ export const RECIPE_DELETE_EDGE_POLICY = {
     description:
       "Meal-plan associations are soft-deleted with the recipe; the meals themselves are not.",
   },
-  "EntityAttachment.subjectEntityId": {
+  "EntityAttachment.entityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -114,6 +119,12 @@ export const RECIPE_DELETE_EDGE_POLICY = {
     effect: "detach",
     description:
       "A deleted recipe's forks have their forkedFromRecipeId pointer nulled out — a fork is a full independent recipe, so it survives its parent's deletion, just without the lineage pointer.",
+  },
+  "EntityExternalId.entityId": {
+    code: "soft-delete-metadata",
+    effect: "soft-delete",
+    description:
+      "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
   },
 } as const satisfies IncomingEdgePolicy<"recipe", OperationDisposition>;
 
@@ -165,10 +176,7 @@ export const getRecipeCoverImageUrlsByShortcodes = async (
   const rows = await getDb(db)
     .select({ shortcode: recipe.shortcode, key: image.key })
     .from(recipe)
-    .innerJoin(
-      entityAttachment,
-      eq(entityAttachment.subjectEntityId, recipe.id),
-    )
+    .innerJoin(entityAttachment, eq(entityAttachment.entityId, recipe.id))
     .innerJoin(image, eq(image.id, entityAttachment.imageId))
     .where(
       and(
@@ -208,7 +216,7 @@ export const getRecipesByIDs = async (
     span.setAttribute("db.result_count", rows.length);
     const displayImages = await resolveEntityDisplayImages(
       db,
-      rows.map((row) => ({ entityType: "recipe", entityId: row.id })),
+      rows.map((row) => ({ entityKind: "recipe", entityId: row.id })),
     );
     return rows.map((row) => ({
       ...dbRecipeToAPIGraph(row),
@@ -327,23 +335,36 @@ export const getRecipeByShortcode = async (
   return id ? getRecipeByID(db, parseEntityId("recipe", id)) : null;
 };
 
-export const getNotionRecipePageIds = async (
-  db: Database,
-): Promise<string[]> => {
-  const rows = await getDb(db).query.recipe.findMany({
-    where: and(eq(recipe.SourceType, "Notion"), notDeleted(recipe)),
-    columns: { SourceData: true },
-  });
-  return rows.map((r) => r.SourceData).filter((s): s is string => s !== null);
+const NOTION_PAGE = { source: NOTION_SOURCE, kind: "page" } as const;
+
+/** Live Notion recipes with their page ids. */
+const notionRecipeRows = async (db: Database) => {
+  const rows = await getDb(db)
+    .select({
+      id: recipe.id,
+      shortcode: recipe.shortcode,
+      pageId: entityExternalId.externalId,
+    })
+    .from(recipe)
+    .innerJoin(
+      entityExternalId,
+      and(
+        eq(entityExternalId.entityId, recipe.id),
+        eq(entityExternalId.source, NOTION_SOURCE),
+        liveExternalIds("page"),
+      ),
+    )
+    .where(and(eq(recipe.sourceType, "Notion"), notDeleted(recipe)));
+  return rows;
 };
+
+export const getNotionRecipePageIds = async (db: Database): Promise<string[]> =>
+  (await notionRecipeRows(db)).map((row) => row.pageId);
 
 export const getNotionRecipesForDiff = async (
   db: Database,
 ): Promise<Array<{ id: string; pageId: string; recipe: RecipeGraphOut }>> => {
-  const rows = await getDb(db).query.recipe.findMany({
-    where: and(eq(recipe.SourceType, "Notion"), notDeleted(recipe)),
-    columns: { id: true, shortcode: true, SourceData: true },
-  });
+  const rows = await notionRecipeRows(db);
   const recipes = await getRecipesByIDs(
     db,
     rows.map((r) => r.id),
@@ -351,9 +372,28 @@ export const getNotionRecipesForDiff = async (
   const byId = new Map(recipes.map((r) => [r.id, r]));
   return rows.flatMap((r) => {
     const full = byId.get(parseShortcodeFor("recipe", r.shortcode));
-    return r.SourceData && full
-      ? [{ id: r.id, pageId: r.SourceData, recipe: full }]
-      : [];
+    return full ? [{ id: r.id, pageId: r.pageId, recipe: full }] : [];
+  });
+};
+
+/**
+ * Record the Notion page a recipe was imported from — its re-import identity.
+ * No availability pre-check: a concurrent first import of the same page must
+ * fail on the identifier's live unique, which `upsertNotionRecipe` recovers.
+ */
+const recordNotionRecipePage = async (
+  tx: DrizzleTransaction,
+  recipeId: RecipeId,
+  pageId: string,
+) => {
+  await ensureExternalSources(tx, [NOTION_PAGE.source]);
+  await tx.insert(entityExternalId).values({
+    entityId: recipeId,
+    entityKind: "recipe",
+    source: NOTION_PAGE.source,
+    kind: NOTION_PAGE.kind,
+    externalId: pageId,
+    isPrimary: true,
   });
 };
 
@@ -416,7 +456,7 @@ export const buildRecipeWhere = async (
 
   // PDFs are documents, not displayable recipe images.
   const recipeIdsWithImages = dbClient
-    .select({ recipeId: entityAttachment.subjectEntityId })
+    .select({ recipeId: entityAttachment.entityId })
     .from(entityAttachment)
     .innerJoin(
       image,
@@ -449,7 +489,6 @@ export const buildRecipeWhere = async (
   // declared stored filters — applied by `recipeScaffold.where` before the
   // conditions below.
   return recipeScaffold.where(filters, [
-    ...relatedWhereConditions("recipe", filters, recipe.id),
     // `eqAnyRequested` + `presenceCondition` rather than `eqAnyOrPresence`:
     // the id half must distinguish "no cookbook filter" (unrestricted) from
     // "a cookbook code that resolves to nothing" (match nothing), which the
@@ -469,8 +508,8 @@ export const buildRecipeWhere = async (
     ),
     // Presence widens this filter; null is a valid legacy manual source.
     or(
-      eqAnyRequested(recipe.SourceType, sourceTypes),
-      presenceCondition(recipe.SourceType, filters.sourceTypePresenceFilter),
+      eqAnyRequested(recipe.sourceType, sourceTypes),
+      presenceCondition(recipe.sourceType, filters.sourceTypePresenceFilter),
     ),
     ...rangeConditions(
       sql`CASE WHEN ${recipe.totalsComputedAt} IS NOT NULL THEN (${recipe.totals} #>> '{cost,lower}')::numeric END`,
@@ -511,7 +550,11 @@ export const recipeList = async (
         ),
       ];
     if (s.orderBy === "source")
-      return [dir(recipe.SourceType), dir(recipe.SourceData)];
+      return [
+        dir(recipe.sourceType),
+        dir(recipe.sourceUrl),
+        dir(recipe.sourceLabel),
+      ];
     if (s.orderBy === "servings") return [dir(recipe.servings)];
     if (s.orderBy === "tags")
       return [
@@ -591,19 +634,21 @@ const createRecipeReturningId = async (
       ...sourceColumns,
       yield: recipeInput.yield ?? null,
       servings: recipeInput.servings ?? null,
-      tags: recipeInput.tags ?? null,
+      tags: recipeInput.tags ?? [],
       notes: recipeInput.notes ?? null,
       forkedFromRecipeId,
       ...recipeMetaToColumns(recipeInput.meta),
     });
     const createdRecipeId = createdRecipe.id;
+    if (provenance?.sourceType === "Notion" && provenance.sourceData)
+      await recordNotionRecipePage(tx, createdRecipeId, provenance.sourceData);
 
     for (const [i, section] of recipeInput.sections.entries()) {
       await createSectionWithIngredients(tx, createdRecipeId, section, i);
     }
 
     // Associate images if provided. `pendingImageIds` arrives as public
-    // `IMG-` shortcodes (what `create_file_uploads`/`image.uploadImage` hand
+    // `IMG-` shortcodes (what `image.create_uploads`/`image.uploadImage` hand
     // back), resolved to uuids here since `associatePendingImages` writes
     // straight into `RecipeImage.imageId`, an unbranded uuid FK. A code that
     // doesn't resolve is dropped rather than thrown on.
@@ -626,7 +671,7 @@ const createRecipeReturningId = async (
     }
 
     await logAuditEntry(tx, actor, {
-      entityType: "recipe",
+      entityKind: "recipe",
       entityId: createdRecipe.id,
       action: "create",
     });
@@ -666,13 +711,13 @@ export const createRecipe = async (
  * recipes on production.
  *
  * Book and Website provenance carry straight through: a duplicate's name always
- * gets " (copy)" appended, so it can't collide with `Recipe_book_title_key`
- * (unique on `name, SourceData` where SourceType='Book') or `Recipe_name_key`
+ * gets " (copy)" appended, so it can't collide with `Recipe_cookbookId_name_key`
+ * (unique on `cookbookId, name`) or `Recipe_name_key`
  * (unique on `name` alone, for Website/Other).
  *
- * Notion is the one case that can't carry through. `Recipe_notion_page_key` is
- * unique on `SourceData` ALONE (no name component) wherever SourceType='Notion'
- * — a Notion page id identifies exactly one live recipe, the row
+ * Notion is the one case that can't carry through. A Notion page id is an
+ * `EntityExternalId`, unique among live rows with no name component — it
+ * identifies exactly one live recipe, the row
  * `upsertNotionRecipe` re-imports into on every sync. Reusing the source's page
  * id on the duplicate would violate that index outright; the alternative isn't
  * better, since it would hand two rows the same "this IS page X" identity, and
@@ -782,7 +827,8 @@ export const duplicateRecipe = async (
         );
         await tx.insert(entityAttachment).values(
           imageIds.map((imageId, i) => ({
-            subjectEntityId: createdRecipeId,
+            entityId: createdRecipeId,
+            entityKind: "recipe" as const,
             role: "attachment" as const,
             imageId,
             sortOrder: i,
@@ -828,7 +874,7 @@ const upsertRecipeMatching = async (
         ...recipeMetaToColumns(input.meta),
         updatedAt: new Date(),
       };
-      if (input.tags !== undefined) recipeUpdates.tags = input.tags;
+      if (input.tags !== undefined) recipeUpdates.tags = input.tags ?? [];
       const updatedRecipe = await updateLiveAndReturn(
         tx,
         recipe,
@@ -880,7 +926,7 @@ export const upsertRecipe = (
     and(
       eq(recipe.name, input.name),
       notDeleted(recipe),
-      sql`${recipe.SourceType} IS DISTINCT FROM 'Book'`,
+      sql`${recipe.sourceType} IS DISTINCT FROM 'Book'`,
     ),
     webProvenance(input.meta?.url ?? null),
     "Recipe_name_key",
@@ -906,7 +952,7 @@ export const upsertCookbookRecipe = (
       sourceData: cookbookRef.name,
       cookbookId: cookbookRef.id,
     },
-    "Recipe_book_title_key",
+    "Recipe_cookbookId_name_key",
   );
 
 /** Notion identity is page ID, so title changes update the same row. */
@@ -921,15 +967,22 @@ export const upsertNotionRecipe = (
     db,
     actor,
     and(
-      eq(recipe.SourceType, "Notion"),
-      eq(recipe.SourceData, pageId),
+      eq(recipe.sourceType, "Notion"),
       notDeleted(recipe),
+      sql`EXISTS (
+        SELECT 1 FROM "EntityExternalId" np
+        WHERE np."entityId" = ${recipe.id} AND np."source" = ${NOTION_SOURCE}
+          AND np."kind" = 'page' AND np."externalId" = ${pageId}
+          AND np."deletedAt" IS NULL
+      )`,
     ),
     {
       sourceType: "Notion",
       sourceData: pageId,
     },
-    "Recipe_notion_page_key",
+    // A concurrent first import of the same page loses on the identifier's
+    // live unique, then re-selects the winner.
+    "EntityExternalId_source_kind_externalId_key",
   );
 
 export const updateRecipe = async (
@@ -994,7 +1047,7 @@ export const updateRecipe = async (
     ]);
     if (changes) {
       await logAuditEntry(tx, actor, {
-        entityType: "recipe",
+        entityKind: "recipe",
         entityId: id,
         action: "update",
         changes,

@@ -1,12 +1,14 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { entityAttachment, productExternalId } from "~/server/db/schema";
+import { entityExternalId } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { createUploadedImageRecord } from "~/server/repo/image";
 import {
   createProductFixture,
   makeProductInput,
+  insertEntityAttachments,
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -39,8 +41,8 @@ describe("photo product candidates", () => {
       size: 100,
       source: "own",
     });
-    await getDb(ctx.db).insert(entityAttachment).values({
-      subjectEntityId: photographed.entityId,
+    await insertEntityAttachments(ctx.db, {
+      entityId: photographed.entityId,
       imageId: photo.id,
     });
 
@@ -81,12 +83,17 @@ describe("photo product candidates", () => {
       }),
       ctx.actor,
     );
-    await getDb(ctx.db).insert(productExternalId).values({
-      productId: item.entityId,
-      source: "synthetic",
-      kind: "sku",
-      externalId: "FW-7744",
-    });
+    await ensureExternalSources(ctx.db, ["synthetic"]);
+    await getDb(ctx.db)
+      .insert(entityExternalId)
+      .values({
+        entityId: item.entityId,
+        entityKind: "product" as const,
+        source: "synthetic",
+        kind: "retailer_sku",
+        externalId: "FW-7744",
+        isPrimary: true,
+      });
     const alias = await findPhotoProductCandidates(ctx.db, {
       name: "ForgeWear work boots",
       manufacturer: "ForgeWear",

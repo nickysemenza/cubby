@@ -27,7 +27,7 @@ const MAX_GROUP_CANDIDATES = 200;
 const ACTIVITY_TYPES = new Set(["expense", "purchase", "task"]);
 
 const candidateRelationSchema = z.object({
-  entityType: searchableEntitySchema,
+  entityKind: searchableEntitySchema,
   entityId: z.uuid(),
   ordinal: z.number().int(),
   productId: z.uuid().nullable(),
@@ -43,12 +43,12 @@ const componentEdgeSchema = z.object({
   componentQuantity: z.number().int().positive(),
 });
 
-const candidateKey = (candidate: { entityType: string; entityId: string }) =>
-  `${candidate.entityType}:${candidate.entityId}`;
+const candidateKey = (candidate: { entityKind: string; entityId: string }) =>
+  `${candidate.entityKind}:${candidate.entityId}`;
 
 const destinationFromHit = (hit: SearchHit): SearchDestination => ({
   id: hit.id,
-  entityType: hit.entityType,
+  entityKind: hit.entityKind,
   title: hit.title,
   subtitle: hit.subtitle,
   typeHint: hit.typeHint,
@@ -67,7 +67,7 @@ async function loadCandidateRelations(
   const values = sql.join(
     candidates.map(
       (candidate, ordinal) =>
-        sql`(${candidate.entityType}::text, ${candidate.entityId}::uuid, ${ordinal}::integer)`,
+        sql`(${candidate.entityKind}::text, ${candidate.entityId}::uuid, ${ordinal}::integer)`,
     ),
     sql`, `,
   );
@@ -75,9 +75,9 @@ async function loadCandidateRelations(
     db,
     candidateRelationSchema,
     sql`
-      WITH refs("entityType", "entityId", ordinal) AS (VALUES ${values})
-      SELECT refs."entityType", refs."entityId"::text AS "entityId", refs.ordinal,
-        CASE refs."entityType"
+      WITH refs("entityKind", "entityId", ordinal) AS (VALUES ${values})
+      SELECT refs."entityKind", refs."entityId"::text AS "entityId", refs.ordinal,
+        CASE refs."entityKind"
           WHEN 'product' THEN (
             SELECT p.id FROM "Product" p
             WHERE p.id = refs."entityId" AND p."deletedAt" IS NULL
@@ -103,13 +103,13 @@ async function loadCandidateRelations(
           WHEN 'purchase' THEN (
             SELECT CASE
               WHEN count(pp.id) = 1 AND count(p.id) = 1
-                THEN (array_agg(pp."productId"))[1]
+                THEN (array_agg(pp."toEntityId"))[1]
             END
             FROM "Purchase" purchase
-            LEFT JOIN "PurchaseProduct" pp
-              ON pp."purchaseId" = purchase.id AND pp."deletedAt" IS NULL
+            LEFT JOIN "EntityLink" pp
+              ON pp."fromEntityId" = purchase.id AND pp."deletedAt" IS NULL AND pp."kind" = 'purchaseProduct'
             LEFT JOIN "Product" p
-              ON p.id = pp."productId" AND p."deletedAt" IS NULL
+              ON p.id = pp."toEntityId" AND p."deletedAt" IS NULL
             WHERE purchase.id = refs."entityId" AND purchase."deletedAt" IS NULL
           )
           ELSE NULL
@@ -133,7 +133,9 @@ async function loadProductPlacements(db: Database, productIds: string[]) {
     sql`
       WITH RECURSIVE requested("productId") AS (VALUES ${values}),
       live_placements AS (
-        SELECT ie.id, ie.shortcode, ie."productId", ie."locationId", ie.amount, ie.placement
+        SELECT ie.id, ie.shortcode, ie."productId", ie."locationId",
+          jsonb_build_object('value', ie."amountValue", 'unit', ie."amountUnit") AS amount,
+          ie.placement
         FROM "InventoryEntry" ie
         JOIN requested r ON r."productId" = ie."productId"
         JOIN "Product" p ON p.id = ie."productId" AND p."deletedAt" IS NULL
@@ -186,17 +188,17 @@ async function loadComponentPlacements(
     componentEdgeSchema,
     sql`
       WITH requested("productId") AS (VALUES ${values})
-      SELECT pc."parentProductId"::text AS "parentProductId",
-        pc."componentProductId"::text AS "componentProductId",
+      SELECT pc."fromEntityId"::text AS "parentProductId",
+        pc."toEntityId"::text AS "componentProductId",
         pc.quantity AS "componentQuantity"
-      FROM "ProductComponent" pc
-      JOIN requested r ON r."productId" = pc."parentProductId"
+      FROM "EntityLink" pc
+      JOIN requested r ON r."productId" = pc."fromEntityId"
       JOIN "Product" parent
-        ON parent.id = pc."parentProductId" AND parent."deletedAt" IS NULL
+        ON parent.id = pc."fromEntityId" AND parent."deletedAt" IS NULL
       JOIN "Product" component
-        ON component.id = pc."componentProductId" AND component."deletedAt" IS NULL
-      WHERE pc."deletedAt" IS NULL
-      ORDER BY pc."parentProductId", component.name, pc."componentProductId"
+        ON component.id = pc."toEntityId" AND component."deletedAt" IS NULL
+      WHERE pc."deletedAt" IS NULL AND pc."kind" = 'productComponent'
+      ORDER BY pc."fromEntityId", component.name, pc."toEntityId"
     `,
   );
   const componentProductIds = [
@@ -206,7 +208,7 @@ async function loadComponentPlacements(
     hydrateSearchHitRefs(
       db,
       componentProductIds.map((entityId) => ({
-        entityType: "product" as const,
+        entityKind: "product" as const,
         entityId,
       })),
     ),
@@ -246,7 +248,7 @@ async function addCandidateImages(
         {
           ...hit,
           imageUrl:
-            images.get(entityRefKey(candidate.entityType, entityId))?.url ??
+            images.get(entityRefKey(candidate.entityKind, entityId))?.url ??
             null,
         } satisfies SearchHit,
       ];
@@ -277,7 +279,7 @@ interface MutableEntityGroup {
 type MutableGroup = MutableProductGroup | MutableEntityGroup;
 
 const isProductCandidate = (candidate: InternalSearchCandidate) =>
-  candidate.entityType === "product" || candidate.entityType === "inventory";
+  candidate.entityKind === "product" || candidate.entityKind === "inventory";
 
 function mergeProductCandidate(
   group: MutableProductGroup,
@@ -342,7 +344,7 @@ function collectMutableGroups(
     if (
       groupingEnabled &&
       productGroup &&
-      ACTIVITY_TYPES.has(candidate.entityType)
+      ACTIVITY_TYPES.has(candidate.entityKind)
     ) {
       mergeActivityCandidate(productGroup, candidate, ordinal);
       continue;
@@ -353,7 +355,7 @@ function collectMutableGroups(
       candidate,
       ordinal,
       linkedProductId:
-        ACTIVITY_TYPES.has(candidate.entityType) && productId
+        ACTIVITY_TYPES.has(candidate.entityKind) && productId
           ? productId
           : null,
     });
@@ -368,11 +370,11 @@ function groupPriority(group: MutableGroup, placeIntent: boolean) {
   if (
     placeIntent &&
     group.kind === "entity" &&
-    group.candidate.entityType === "location"
+    group.candidate.entityKind === "location"
   )
     return 0;
   if (group.kind === "product") return placeIntent ? 1 : 0;
-  if (group.kind === "entity" && group.candidate.entityType === "location")
+  if (group.kind === "entity" && group.candidate.entityKind === "location")
     return 1;
   return 2;
 }
@@ -383,7 +385,7 @@ function sortMutableGroups(
 ) {
   const placeIntent = candidates.some(
     (candidate) =>
-      candidate.entityType === "location" &&
+      candidate.entityKind === "location" &&
       (candidate.matchKind === "exact" || candidate.matchKind === "prefix") &&
       (candidate.matchField === "title" || candidate.matchField === "alias"),
   );
@@ -430,7 +432,7 @@ async function composeSearchGroups(
   const mutableGroups = groupSearchCandidates(
     sourceCandidates,
     relationByCandidate,
-    !input.entityTypes?.length && !exactShortcode,
+    !input.entityKinds?.length && !exactShortcode,
   );
 
   const selectedGroups = mutableGroups.slice(0, input.limit);
@@ -451,7 +453,7 @@ async function composeSearchGroups(
     await Promise.all([
       hydrateSearchHitRefs(
         db,
-        productRefs.map((entityId) => ({ entityType: "product", entityId })),
+        productRefs.map((entityId) => ({ entityKind: "product", entityId })),
       ),
       loadProductPlacements(db, selectedProductIds),
       loadComponentPlacements(db, selectedProductIds),
@@ -514,7 +516,7 @@ export async function findGroupedSearchHits(
   db: Database,
   input: SearchQueryInput,
 ): Promise<SearchResultGroup[]> {
-  let rawLimit = input.entityTypes?.length
+  let rawLimit = input.entityKinds?.length
     ? input.limit
     : Math.min(Math.max(input.limit * 4, 32), MAX_GROUP_CANDIDATES);
   while (true) {

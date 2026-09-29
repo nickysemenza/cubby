@@ -72,7 +72,7 @@ export const renderSearchArtifacts = (
     ),
     "searchRef",
   );
-  const tableKeys = ["sort", "page", "pageSize", "worklist"];
+  const tableKeys = ["sort", "page", "pageSize", "worklist", "filters"];
   const timelineKeys = [
     "timelineFrom",
     "timelineTo",

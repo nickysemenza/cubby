@@ -113,7 +113,7 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
     expect(detail.status()).toBe(200);
     const audit = await client.auditLog.list({
       query: {
-        entityType: "vendor",
+        entityKind: "vendor",
         entityId: result.item.id,
         channel: "api",
       },

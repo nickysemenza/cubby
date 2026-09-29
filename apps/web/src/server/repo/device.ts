@@ -22,7 +22,6 @@ import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { device, imageSighting } from "~/server/db/schema";
-import { entityRepository } from "~/server/entity-kernel/adapter";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
@@ -31,9 +30,15 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityCrud } from "~/server/repo/entity-crud-factory";
-import { listScaffold } from "~/server/repo/list-scaffold";
+import { listScaffold } from "~/server/repo/list";
 import { currentMemberLedgerParty } from "~/server/repo/member-login";
+import {
+  asActor,
+  defineRepository,
+  listOn,
+  onDb,
+} from "~/server/repo/repository";
+import { createEntityCrud } from "~/server/repo/repository";
 import {
   lookupEntityReferences,
   resolveOrThrow,
@@ -44,7 +49,7 @@ import { deriveAndStoreImageCapture } from "~/server/services/image-capture-deri
 /** `ImageSighting.deviceId` cascades: a sighting reported by a device is
  * meaningless once that device is gone. `AuditLog.deviceId` and
  * `RunTarget.deviceWorkDeviceId` are cleared. */
-export const DEVICE_DELETE_EDGE_POLICY = {
+const DEVICE_DELETE_EDGE_POLICY = {
   "AuditLog.deviceId": {
     code: "clearFk",
     effect: "detach",
@@ -108,7 +113,7 @@ const hydrate = async (
 export const buildDeviceWhere = (filters: DeviceFilters) =>
   scaffold.where(filters);
 
-export const listDevices = (
+const listDevices = (
   db: Database,
   filters: DeviceFilters,
   sorts: SortParams[],
@@ -151,7 +156,7 @@ const deviceCrud = createEntityCrud({
 });
 
 export const getDeviceByID = deviceCrud.getByID;
-export const getDeviceByShortcode = deviceCrud.getByShortcode;
+const getDeviceByShortcode = deviceCrud.getByShortcode;
 
 export async function createDevice(
   db: Database,
@@ -184,7 +189,7 @@ export async function createDevice(
       productId,
     });
     await logAuditEntry(tx, actor, {
-      entityType: "device",
+      entityKind: "device",
       entityId: row.id,
       action: "create",
     });
@@ -249,12 +254,12 @@ const deleteDeviceSightings = async (
     await deriveAndStoreImageCapture(tx, parseEntityId("image", imageId));
 };
 
-export const deviceRepository = entityRepository("device", {
+export const deviceRepository = defineRepository("device", {
   lifecycle: { delete: DEVICE_DELETE_EDGE_POLICY },
-  get: getDeviceByShortcode,
-  list: listDevices,
-  create: createDevice,
-  update: updateDevice,
+  get: onDb(getDeviceByShortcode),
+  list: listOn(listDevices),
+  create: asActor(createDevice),
+  update: asActor(updateDevice),
   deleteHooks: {
     overrides: { "ImageSighting.deviceId": deleteDeviceSightings },
   },

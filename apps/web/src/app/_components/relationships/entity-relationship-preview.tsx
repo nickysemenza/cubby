@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { entityGraph } from "~/entities/entity-graph.functions";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 /** The overview and Relations tab share one cached manifest-backed read. */
 export function EntityRelationshipPreview({
@@ -22,7 +22,7 @@ export function EntityRelationshipPreview({
 }) {
   const query = useQuery(
     operations.graph.queryOptions({
-      roots: [{ entityType: entity, entityId: sourceId }],
+      roots: [{ entityKind: entity, entityId: sourceId }],
       limit: 12,
     }),
   );

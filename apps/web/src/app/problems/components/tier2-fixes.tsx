@@ -3,14 +3,14 @@ import { ProblemItem } from "@cubby/schemas/problems";
 import { kernelMerge } from "~/app/_components/actions/merge-entity-actions";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
-import { vendor } from "~/app/vendors/vendor.functions";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import {
   type EntityMergeResult,
   entityMergeMutationOptions,
-} from "~/entities/entity-mutation.functions";
+} from "~/entities/entity-mutation";
+import { vendor } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 const deleteProduct = entityMutationOptionsFactory("product", "delete");
 

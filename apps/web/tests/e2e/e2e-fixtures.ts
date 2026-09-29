@@ -883,9 +883,9 @@ export async function seedLiveVendorMailSearchRun(page: Page, name: string) {
     async ageQueue() {
       const old = new Date(Date.now() - 4 * 60_000);
       await getDb(db)
-        .update(schema.vendorMailSearchJob)
+        .update(schema.run)
         .set({ updatedAt: old })
-        .where(eq(schema.vendorMailSearchJob.runId, saved.id));
+        .where(eq(schema.run.id, saved.id));
       await getDb(db)
         .update(schema.runProgress)
         .set({ createdAt: old })
@@ -894,9 +894,19 @@ export async function seedLiveVendorMailSearchRun(page: Page, name: string) {
     async advance() {
       await getDb(db).transaction(async (tx) => {
         await tx
-          .update(schema.vendorMailSearchJob)
-          .set({ status: "running", searched: 6, skipped: 2 })
-          .where(eq(schema.vendorMailSearchJob.runId, saved.id));
+          .update(schema.run)
+          .set({
+            progress: {
+              phase: "running",
+              pageToken: null,
+              nextPageToken: null,
+              pagesScanned: 0,
+              searched: 6,
+              reviewable: 0,
+            },
+            skipped: 2,
+          })
+          .where(eq(schema.run.id, saved.id));
         await tx.insert(schema.runProgress).values({
           runId: saved.id,
           eventId: crypto.randomUUID(),
@@ -908,18 +918,19 @@ export async function seedLiveVendorMailSearchRun(page: Page, name: string) {
     async complete() {
       await getDb(db).transaction(async (tx) => {
         await tx
-          .update(schema.vendorMailSearchJob)
+          .update(schema.run)
           .set({
             status: "completed",
-            searched: 6,
+            progress: {
+              phase: "completed",
+              pageToken: null,
+              nextPageToken: null,
+              pagesScanned: 1,
+              searched: 6,
+              reviewable: 1,
+            },
             skipped: 2,
-            reviewable: 1,
-            pagesScanned: 1,
           })
-          .where(eq(schema.vendorMailSearchJob.runId, saved.id));
-        await tx
-          .update(schema.run)
-          .set({ status: "completed" })
           .where(eq(schema.run.id, saved.id));
         await tx.insert(schema.runProgress).values({
           runId: saved.id,
@@ -1106,7 +1117,8 @@ export async function seedPurchaseHeicAttachment(page: Page, name: string) {
     size: 100,
   });
   await db.insert(schema.entityAttachment).values({
-    subjectEntityId: owner.id,
+    entityId: owner.id,
+    entityKind: "purchase",
     role: "attachment",
     imageId: attached.id,
     documentKind: "other",
@@ -1244,6 +1256,43 @@ export async function seedWardrobePrerequisites(page: Page, name: string) {
     }),
   );
   return { owner, other, location, otherLocation, product, entry };
+}
+
+/**
+ * One member-started Run and one ephemeral AI-grouping Run, each naming its own
+ * vendor so the history table can tell them apart.
+ */
+export async function seedRunHistoryDefaults(page: Page, name: string) {
+  const db = getFixtureDb();
+  const actorUserId = await fixtureUserId(page);
+  const database = getDb(db);
+  const insertRun = async (
+    label: string,
+    purpose: "file_import" | "ai_suggest",
+    trigger: "manual" | "ephemeral",
+  ) => {
+    const vendor = await insertWithShortcode(db, "vendor", {
+      name: label,
+      website: "https://example.test",
+    });
+    await database.insert(schema.run).values({
+      shortcode: generateShortcode("run"),
+      actorUserId,
+      actorName: "Synthetic member",
+      actorEmail: "synthetic@example.test",
+      purpose,
+      trigger,
+      vendorId: vendor.id,
+      status: "completed",
+      startedAt: new Date(),
+      endedAt: new Date(),
+    });
+    return label;
+  };
+  return {
+    visibleName: await insertRun(`${name} manual`, "file_import", "manual"),
+    hiddenName: await insertRun(`${name} ephemeral`, "ai_suggest", "ephemeral"),
+  };
 }
 
 /** Durable failed history only; this fixture never dispatches or calls AI. */
@@ -1444,7 +1493,8 @@ export async function seedPhotoGroupReviewRun(
     .values(
       [itemImage, labelImage, soloImage].map((image, index) => ({
         runId: run.id,
-        imageId: image.uuid,
+        entityKind: "image" as const,
+        entityId: image.uuid,
         position: index,
         state: "pending" as const,
         targetFingerprint: `e2e-${name}-${index}`,

@@ -11,10 +11,10 @@ interface InteractiveLabelCellProps {
 }
 
 function getLabelColor(item: LabelItem): string {
-  if (item.entityType === "location" && item.locationType) {
+  if (item.entityKind === "location" && item.locationType) {
     return getLocationTypeColor(item.locationType);
   }
-  if (item.entityType === "product") {
+  if (item.entityKind === "product") {
     return getCategoryColor(item.productCategory ?? null);
   }
   return "hsl(0, 0%, 65%)";

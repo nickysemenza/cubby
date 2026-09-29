@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { cookbook } from "~/server/db/schema";
+import { cookbookSourceRecipeCountSql } from "~/server/repo/cookbook-source-count";
 import { displayableImageRawSql } from "~/server/repo/image-displayability";
 
 import { defineEntityChecks } from "../registry";
@@ -9,11 +10,12 @@ type Cookbook = typeof cookbook;
 
 // `findPartiallyImportedCookbooks` (repo/problems/detectors-cookbook.ts) uses
 // this check's `gapCondition` as its own HAVING predicate rather than
-// re-deriving it: sourceRecipeCount is the source EPUB's own recipe count, so
+// re-deriving it: the source recipe count is the source EPUB's own recipe
+// count (counted from the stored extraction), so
 // more source recipes than live imported ones is a stalled or partial import.
 const hasFewerLiveRecipesThanSource = (
   t: Cookbook,
-) => sql`(${t.sourceRecipeCount} > (
+) => sql`(${cookbookSourceRecipeCountSql(t.rawJson)} > (
   SELECT count(*)::int FROM "Recipe" dq_ckb_recipe
   WHERE dq_ckb_recipe."cookbookId" = ${t.id} AND dq_ckb_recipe."deletedAt" IS NULL
 ))`;
@@ -23,7 +25,7 @@ const hasFewerLiveRecipesThanSource = (
 const hasDisplayableCover = (t: Cookbook) => sql`EXISTS (
   SELECT 1 FROM "EntityAttachment" dq_ckb_att
   JOIN "Image" dq_ckb_img ON dq_ckb_img."id" = dq_ckb_att."imageId"
-  WHERE dq_ckb_att."subjectEntityId" = ${t.id} AND dq_ckb_att."role" = 'cover'
+  WHERE dq_ckb_att."entityId" = ${t.id} AND dq_ckb_att."role" = 'cover'
     AND dq_ckb_att."deletedAt" IS NULL AND dq_ckb_img."deletedAt" IS NULL
     AND ${sql.raw(displayableImageRawSql("dq_ckb_img"))}
 )`;

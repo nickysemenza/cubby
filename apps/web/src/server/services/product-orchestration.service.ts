@@ -6,11 +6,6 @@
  * - Batch UPC image backfill
  */
 
-import {
-  EMPTY_MUTATION_SIDE_EFFECTS,
-  type MutationSideEffects,
-  mutationSideEffectsWithWarnings,
-} from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import { displayGtin } from "@cubby/schemas/external-id";
 import {
@@ -21,6 +16,11 @@ import {
   parseEntityId,
 } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
+import {
+  EMPTY_MUTATION_SIDE_EFFECTS,
+  type MutationSideEffects,
+  mutationSideEffectsWithWarnings,
+} from "@cubby/schemas/mutation-side-effects";
 import type {
   ProductCreateInput,
   ProductTopLevelOut,
@@ -135,7 +135,7 @@ export async function createProductWithSideEffects(
       await resolveIngredientEntityId(services.db, ingredientId),
       {
         source: "product.create",
-        entity: { entityType: "product", entityId },
+        entity: { entityKind: "product", entityId },
       },
     );
   }
@@ -181,7 +181,7 @@ export async function updateProductWithSideEffects(
       ),
       {
         source: "product.update",
-        entity: { entityType: "product", entityId: id },
+        entity: { entityKind: "product", entityId: id },
       },
     );
   }
@@ -252,7 +252,7 @@ export async function applyUpcDataWithSideEffects(
       await resolveIngredientEntityId(services.db, ingredientId),
       {
         source: "product.applyUpcData",
-        entity: { entityType: "product", entityId: input.id },
+        entity: { entityKind: "product", entityId: input.id },
       },
     );
   }

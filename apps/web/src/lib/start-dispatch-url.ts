@@ -1,17 +1,5 @@
 import { readStartOperationTraceContext } from "./start-operation-observability";
 
-const START_DISPATCH_ID = "dispatch";
-export const LEGACY_START_DISPATCH_ID =
-  "server-functions-start-operation-dispatch-dispatch-start-operation-server-function";
-
-/** Exact legacy alias keeps already-open clients working without replaying POSTs. */
-export function rewriteLegacyStartRequest(request: Request): Request {
-  const url = new URL(request.url);
-  if (url.pathname !== `/_serverFn/${LEGACY_START_DISPATCH_ID}`) return request;
-  url.pathname = `/_serverFn/${START_DISPATCH_ID}`;
-  return new Request(url, request);
-}
-
 export function labelStartRequest(
   input: RequestInfo | URL,
   init?: RequestInit,

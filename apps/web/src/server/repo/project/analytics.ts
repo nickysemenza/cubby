@@ -12,7 +12,7 @@ import type { ExpenseId, ProjectId } from "@cubby/schemas/identifiers";
 import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { projectDependency, task } from "~/server/db/schema";
+import { task } from "~/server/db/schema";
 import {
   dependencyIdsFor,
   getDb,
@@ -37,7 +37,7 @@ type ProjectExpenseStatsRow = {
   spent: number;
   actualSpent: number;
   committedSpent: number;
-  contributions: number;
+  credits: number;
   expenseCount: number;
   contentStart: string | null;
   contentEnd: string | null;
@@ -52,7 +52,7 @@ const projectExpenseStats = async (
         (coalesce(sum(allocation."attributedCents"::bigint), 0) / 100.0)::double precision AS "spent",
         (coalesce(sum(allocation."attributedCents"::bigint) filter (where e."future" = false and e."cost" >= 0), 0) / 100.0)::double precision AS "actualSpent",
         (coalesce(sum(allocation."attributedCents"::bigint) filter (where e."future" = true), 0) / 100.0)::double precision AS "committedSpent",
-        (coalesce(sum(-allocation."attributedCents"::bigint) filter (where e."future" = false and e."cost" < 0), 0) / 100.0)::double precision AS "contributions",
+        (coalesce(sum(-allocation."attributedCents"::bigint) filter (where e."future" = false and e."cost" < 0), 0) / 100.0)::double precision AS "credits",
         count(distinct allocation."expenseId")::int AS "expenseCount",
         min(e."date") AS "contentStart", max(e."date") AS "contentEnd"
       FROM (${expenseProjectAllocationSql()}) allocation
@@ -93,7 +93,7 @@ const mergeProjectOwnRollups = (
       spent: row.spent,
       actualSpent: row.actualSpent,
       committedSpent: row.committedSpent,
-      contributions: row.contributions,
+      credits: row.credits,
       expenseCount: row.expenseCount,
     });
   }
@@ -238,13 +238,5 @@ export async function projectDependencyIds(
   blockedBy: Map<ProjectId, ProjectId[]>;
   blocking: Map<ProjectId, ProjectId[]>;
 }> {
-  return dependencyIdsFor(
-    db,
-    {
-      ownColumn: projectDependency.projectId,
-      blockedByColumn: projectDependency.blockedByProjectId,
-      entity: "project",
-    },
-    projectIds,
-  );
+  return dependencyIdsFor(db, "project", projectIds);
 }

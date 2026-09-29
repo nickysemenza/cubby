@@ -111,7 +111,7 @@ export default defineEntity({
       ],
       viewAliases: { gallery: "shelf" },
       actionOverrides: ["setStatus", "delete"],
-      links: [{ label: "Tools", path: "/projects/tools" }],
+      links: [{ label: "Tools", path: "/tools" }],
     },
   },
   model: {
@@ -371,6 +371,11 @@ export default defineEntity({
         key: "googleDriveFolderUrl",
         kind: "text",
         nullable: true,
+        // Stored as a `(google-drive, folder)` EntityExternalId.
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Google Drive folder identifier" }],
+        },
         control: { kind: "text", renderer: "url", sectionOverride: "details" },
         display: {
           list: true,
@@ -386,6 +391,11 @@ export default defineEntity({
         key: "notionPageUrl",
         kind: "text",
         nullable: true,
+        // Stored as the url of the project's `(notion, page)` EntityExternalId.
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Notion page identifier" }],
+        },
         control: { kind: "text", renderer: "url", sectionOverride: "details" },
         display: {
           list: true,
@@ -530,11 +540,6 @@ export default defineEntity({
       },
       { key: "shortcode", kind: "text" },
       {
-        key: "notionPageId",
-        kind: "text",
-        nullable: true,
-      },
-      {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
@@ -570,9 +575,6 @@ export default defineEntity({
       "endDate",
       "icon",
       "notes",
-      "googleDriveFolderUrl",
-      "notionPageUrl",
-      "notionPageId",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
@@ -710,6 +712,29 @@ export default defineEntity({
     output: { module: "@cubby/schemas/project", export: "projectOut" },
     list: { module: "@cubby/schemas/project", export: "projectListItemOut" },
   },
+  storage: {
+    indexes: [
+      { on: ["status"] },
+      { on: ["kind"] },
+      { on: ["startDate"] },
+      { trigram: "name" },
+      {
+        name: "Project_name_active_idx",
+        on: ["name"],
+        where: "{deletedAt} IS NULL",
+      },
+    ],
+    relations: {
+      tasks: { many: "task" },
+      expenses: { many: "expense" },
+      images: { many: "entityAttachment" },
+      parentProject: {
+        field: "parentProjectId",
+        relationName: "ProjectToProject",
+      },
+      childProjects: { many: "project", relationName: "ProjectToProject" },
+    },
+  },
   filters: {
     audit: true,
     schema: { module: "@cubby/schemas/project", export: "projectFilterFields" },
@@ -814,7 +839,7 @@ export default defineEntity({
           { value: "1y", label: "Last 12 months" },
         ],
         expandRef: {
-          module: "~/app/expenses/expense-options",
+          module: "~/entities/filter-behavior",
           export: "resolveDateRange",
         },
         urlOnly: true,
@@ -1035,9 +1060,9 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "ProjectDependency.projectId", direction: "incoming" },
+          { edge: "EntityLink[projectDependency].from", direction: "incoming" },
           {
-            edge: "ProjectDependency.blockedByProjectId",
+            edge: "EntityLink[projectDependency].to",
             direction: "outgoing",
           },
         ],
@@ -1045,10 +1070,10 @@ export default defineEntity({
       inverse: {
         steps: [
           {
-            edge: "ProjectDependency.blockedByProjectId",
+            edge: "EntityLink[projectDependency].to",
             direction: "incoming",
           },
-          { edge: "ProjectDependency.projectId", direction: "outgoing" },
+          { edge: "EntityLink[projectDependency].from", direction: "outgoing" },
         ],
       },
     },
@@ -1061,14 +1086,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "ProjectToolUsage.projectId", direction: "incoming" },
-          { edge: "ProjectToolUsage.productId", direction: "outgoing" },
+          { edge: "EntityLink[projectTool].from", direction: "incoming" },
+          { edge: "EntityLink[projectTool].to", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "ProjectToolUsage.productId", direction: "incoming" },
-          { edge: "ProjectToolUsage.projectId", direction: "outgoing" },
+          { edge: "EntityLink[projectTool].to", direction: "incoming" },
+          { edge: "EntityLink[projectTool].from", direction: "outgoing" },
         ],
       },
       mutation: {
@@ -1192,14 +1217,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "EntityAttachment.subjectEntityId", direction: "incoming" },
+          { edge: "EntityAttachment.entityId", direction: "incoming" },
           { edge: "EntityAttachment.imageId", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
           { edge: "EntityAttachment.imageId", direction: "incoming" },
-          { edge: "EntityAttachment.subjectEntityId", direction: "outgoing" },
+          { edge: "EntityAttachment.entityId", direction: "outgoing" },
         ],
       },
     },
@@ -1291,8 +1316,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/project/entity-adapter",
-        export: "projectEntityAdapter",
+        module: "~/server/repo/project/repository",
+        export: "projectRepository",
       },
       search: "document",
     },

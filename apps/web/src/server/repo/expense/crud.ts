@@ -45,7 +45,6 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { bulkPatchEntities, patchEntityRows } from "~/server/repo/entity-patch";
 import { replaceExpenseAttributionRole } from "~/server/repo/expense-attribution";
 import {
@@ -63,6 +62,7 @@ import {
   renameChargeOrderId,
 } from "~/server/repo/purchase";
 import { deleteByPolicy } from "~/server/repo/removal";
+import { createEntityCrud } from "~/server/repo/repository";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -94,6 +94,12 @@ export const EXPENSE_DELETE_EDGE_POLICY = {
     effect: "soft-delete",
     description:
       "Deleting an Expense retires the normalized import references that identify that ledger row.",
+  },
+  "EntityExternalId.entityId": {
+    code: "soft-delete-metadata",
+    effect: "soft-delete",
+    description:
+      "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
   },
 } as const satisfies IncomingEdgePolicy<"expense", OperationDisposition>;
 
@@ -672,7 +678,7 @@ export const updateExpense = async (
     ]);
     if (changes) {
       await logAuditEntry(tx, actor, {
-        entityType: "expense",
+        entityKind: "expense",
         entityId: state.id,
         action: "update",
         changes,
@@ -955,7 +961,7 @@ export const createExpense = async (
       data.sourceClaims ?? [],
     );
     await logAuditEntry(tx, actor, {
-      entityType: "expense",
+      entityKind: "expense",
       entityId: created.id,
       action: "create",
     });

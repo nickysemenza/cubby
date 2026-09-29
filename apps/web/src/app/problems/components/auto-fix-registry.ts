@@ -2,15 +2,17 @@ import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
 import type { AllProblems, MaintenanceCounts } from "@cubby/schemas/problems";
 import { sumBy } from "es-toolkit";
 
-import { openRecipeRecomputeStaleStream } from "~/app/recipes/recipe.functions";
+import { openRecipeRecomputeStaleStream } from "~/app/recipes/recipe-streams";
 import {
   ripple,
   type InvalidationTagSet,
 } from "~/integrations/tanstack-query/cache-tags";
-import { backfillLocationDescriptionsStream } from "~/lib/ai.functions";
+import {
+  imageUpload,
+  maintenance,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { backfillLocationDescriptionsStream } from "~/lib/ai-streams";
 import { collectBulkStream } from "~/lib/bulk-progress";
-import { imageUpload } from "~/lib/image.functions";
-import { maintenance } from "~/lib/maintenance.functions";
 import { countLabel } from "~/lib/pluralize";
 
 /** What one task did, for the run's summary toast. */

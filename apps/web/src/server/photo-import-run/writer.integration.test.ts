@@ -78,7 +78,8 @@ describe("commitPhotoGroup", () => {
       .values(
         images.map((image, index) => ({
           runId,
-          imageId: parseEntityId("image", image.id),
+          entityKind: "image" as const,
+          entityId: parseEntityId("image", image.id),
           position: index,
           state: "pending" as const,
           targetFingerprint: `fixture-fingerprint-${crypto.randomUUID()}`,
@@ -89,7 +90,7 @@ describe("commitPhotoGroup", () => {
   const readTargetStates = async (runId: string) =>
     getDb(ctx.db)
       .select({
-        imageId: runTarget.imageId,
+        imageId: runTarget.entityId,
         state: runTarget.state,
         outcome: runTarget.outcome,
       })
@@ -474,7 +475,8 @@ describe("commitPhotoGroup", () => {
         productId: product.entityId,
         locationId: location.entityId,
         shortcode: generateShortcode("inventory"),
-        amount: { value: 2, unit: "each" },
+        amountValue: 2,
+        amountUnit: "each",
         ownershipMode: "person",
         ownerLedgerPartyId: party.id,
       })
@@ -496,9 +498,12 @@ describe("commitPhotoGroup", () => {
     expect(first.inventoryId).toBe(entry!.shortcode);
     expect(replay.inventoryId).toBe(first.inventoryId);
     const [after] = await getDb(ctx.db)
-      .select({ amount: inventoryEntry.amount })
+      .select({
+        amountValue: inventoryEntry.amountValue,
+        amountUnit: inventoryEntry.amountUnit,
+      })
       .from(inventoryEntry)
       .where(eq(inventoryEntry.id, entry!.id));
-    expect(after?.amount).toEqual({ value: 3, unit: "each" });
+    expect(after).toEqual({ amountValue: 3, amountUnit: "each" });
   });
 });

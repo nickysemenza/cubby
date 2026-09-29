@@ -73,7 +73,7 @@ const relatedViewPresentationRegistry = [
     source: "product",
     relationship: "purchases",
     // "via spend", not just "Purchases": the product detail page now also has a
-    // Purchases section fed by the direct `PurchaseProduct` provenance link, and
+    // Purchases section fed by the direct `purchaseProduct` provenance link, and
     // the two answer different questions. This path reaches a purchase only
     // through a money row, so it is empty for an installment order whose
     // Expenses are `lineBasis: "allocation"` — exactly the case the direct link
@@ -539,8 +539,6 @@ const ENTITIES_WITHOUT_RELATED_VIEWS = {
   "usda-food": "remote USDA records have no local relationships",
   device:
     "owner and hardware are rendered as detail fields; nothing yet declares a relation onto a device",
-  imageSighting:
-    "image/owner/reporter links are rendered as detail fields; a sighting's only relationships are outgoing",
 } as const satisfies Record<Exclude<Entity, RelatedViewSource>, string>;
 
 type RegisteredRelatedView = (typeof relatedViewRegistry)[number];

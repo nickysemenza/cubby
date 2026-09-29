@@ -73,10 +73,10 @@ export const AppErrors = {
   // the cookbook page first; the cookbook and its recipes outlive the copy.
   PRODUCT_HAS_COOKBOOKS: "PRECONDITION_FAILED",
   // A product still listed inside a live kit's component list — same shape as
-  // PRODUCT_HAS_PURCHASE_LINKS, one hop over into ProductComponent.
+  // PRODUCT_HAS_PURCHASE_LINKS, one hop over into `productComponent`.
   PRODUCT_HAS_KIT_LINKS: "PRECONDITION_FAILED",
   // A Product that exists and is live, but whose `category` the relation it is
-  // being attached to does not accept — today only `ProjectToolUsage`, which
+  // being attached to does not accept — today only `projectTool`, which
   // takes a category that grants the project-resource capability (see
   // `productCategoryFeatureCapabilities`) and nothing else.
   //
@@ -103,7 +103,7 @@ export const AppErrors = {
   // Attach-side counterpart of PRODUCT_MERGE_COMPONENT_CYCLE: the DB CHECK only
   // catches the one-hop self-reference, so a multi-hop cycle (A lists B, B
   // lists A several hops down) is only visible by walking the WHOLE live
-  // ProductComponent edge set with the proposed new edges projected on top —
+  // `productComponent` link set with the proposed new edges projected on top —
   // see findMergeComponentCycle in repo/product/merge.ts, reused (not
   // reimplemented) by attachProductComponents.
   PRODUCT_COMPONENT_CYCLE: "BAD_REQUEST",
@@ -133,6 +133,9 @@ export const AppErrors = {
   LOCATION_IS_ROOT: "PRECONDITION_FAILED",
   PURCHASE_NOT_EMPTY: "PRECONDITION_FAILED",
   FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT: "CONFLICT",
+  // An identifier (ASIN, barcode, Notion page, ...) already belongs to another
+  // live record; the live `(source, kind, externalId)` unique allows one.
+  EXTERNAL_ID_CONFLICT: "CONFLICT",
   // A declared `block` edge of a policy-driven delete still has live rows.
   ENTITY_DELETE_BLOCKED: "PRECONDITION_FAILED",
   LEDGER_SOURCE_CLAIM_CONFLICT: "CONFLICT",
@@ -155,7 +158,7 @@ export const AppErrors = {
   // units of a real part, so the merge refuses. Equal quantities dedupe
   // silently — there is nothing to lose.
   PRODUCT_MERGE_COMPONENT_QUANTITY_MISMATCH: "BAD_REQUEST",
-  // ProductComponent is a Product->Product DAG, so identifying two nodes can
+  // `productComponent` is a Product->Product DAG, so identifying two nodes can
   // make a kit contain itself several hops down (merging a kit into one of its
   // own descendants, or a descendant into its kit). A single-row CHECK only
   // catches the one-hop case; this is the multi-hop one.
@@ -166,7 +169,7 @@ export const AppErrors = {
   // project.parentProjectId: arbitrary-depth sub-projects (WBS) — a project
   // can't become its own descendant.
   PROJECT_CYCLE: "BAD_REQUEST",
-  // ProjectDependency and TaskDependency are DAGs. The repository checks the
+  // `projectDependency` and `taskDependency` are DAGs. The repository checks the
   // whole projected graph under a per-family transaction lock before replace.
   DEPENDENCY_CYCLE: "BAD_REQUEST",
   // Generic (non-entity-specific): a blockedByIds replacement set contains

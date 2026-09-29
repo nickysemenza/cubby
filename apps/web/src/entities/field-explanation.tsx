@@ -12,9 +12,8 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { CELL_RAIL_BUTTON_CLASS } from "~/app/_components/data-table/cell-frame";
-import { EntityInlineLinkById } from "~/app/_components/EntityInlineLinkById";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { inventory } from "~/app/inventory/inventory.functions";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -25,9 +24,12 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import {
+  inventory,
+  fieldExplanation,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 
-import { fieldExplanation } from "./field-explanation.functions";
 import { ResolutionExplanation } from "./field-resolution-explanation";
 
 type ExplanationSource = z.infer<typeof fieldExplanationSource>;
@@ -123,7 +125,7 @@ export function ReadableExplanationValue({
 const explanationSourceKey = (source: ExplanationSource): string =>
   [
     source.label,
-    source.entity?.entityType ?? "value",
+    source.entity?.entityKind ?? "value",
     source.entity?.entityId ?? JSON.stringify(source.value),
   ].join(":");
 
@@ -135,7 +137,7 @@ function visibleSources(data: FieldExplanationOutput) {
   return data.sources.filter(
     (source) =>
       source.value !== null ||
-      source.entity?.entityType !== named.entityType ||
+      source.entity?.entityKind !== named.entityKind ||
       source.entity.entityId !== named.entityId,
   );
 }
@@ -149,7 +151,7 @@ export function ExplanationEntityLink({
 }) {
   const auditable = auditEntitySchema.safeParse(entity);
   return auditable.success ? (
-    <EntityInlineLinkById entityType={auditable.data} entityId={id} />
+    <EntityRefLink variant="byId" entityKind={auditable.data} entityId={id} />
   ) : (
     <span className="font-mono text-xs">{id}</span>
   );
@@ -179,7 +181,7 @@ export function FieldExplanation({
   });
   const result = useQuery({
     ...fieldExplanation.explain.queryOptions({
-      entityType: entity,
+      entityKind: entity,
       entityId: id,
       field,
       surface,
@@ -254,7 +256,7 @@ export function FieldExplanation({
                   <span className="text-muted-foreground">{source.label}</span>
                   {source.entity ? (
                     <ExplanationEntityLink
-                      entity={source.entity.entityType}
+                      entity={source.entity.entityKind}
                       id={source.entity.entityId}
                     />
                   ) : null}
@@ -272,7 +274,7 @@ export function FieldExplanation({
               ) : null}
               {result.data.actions.map((action) => {
                 const inventoryAction =
-                  action.target.entityType === "inventory";
+                  action.target.entityKind === "inventory";
                 if (action.kind === "inheritOwner" && inventoryAction) {
                   return (
                     <Button
@@ -325,7 +327,7 @@ export function FieldExplanation({
                   >
                     <span>{action.label}</span>
                     <ExplanationEntityLink
-                      entity={action.target.entityType}
+                      entity={action.target.entityKind}
                       id={action.target.entityId}
                     />
                   </div>

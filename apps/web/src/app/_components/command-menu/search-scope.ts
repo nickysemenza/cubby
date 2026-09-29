@@ -41,7 +41,7 @@ const isSearchScopeAlias = (
 ): value is keyof typeof SEARCH_SCOPE_ALIASES => value in SEARCH_SCOPE_ALIASES;
 
 interface CommandSearchScope {
-  entityType: SearchableEntity | null;
+  entityKind: SearchableEntity | null;
   query: string;
 }
 
@@ -52,17 +52,17 @@ interface CommandSearchScope {
  */
 export function parseCommandSearchScope(value: string): CommandSearchScope {
   const separatorIndex = value.indexOf(":");
-  if (separatorIndex < 0) return { entityType: null, query: value };
+  if (separatorIndex < 0) return { entityKind: null, query: value };
 
   const alias = value.slice(0, separatorIndex).trim().toLocaleLowerCase();
-  const entityType = isSearchScopeAlias(alias)
+  const entityKind = isSearchScopeAlias(alias)
     ? SEARCH_SCOPE_ALIASES[alias]
     : undefined;
 
-  return entityType
+  return entityKind
     ? {
-        entityType,
+        entityKind,
         query: value.slice(separatorIndex + 1).trimStart(),
       }
-    : { entityType: null, query: value };
+    : { entityKind: null, query: value };
 }

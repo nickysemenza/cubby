@@ -5,7 +5,11 @@ import { z } from "zod";
 import { productReuseFixture } from "./fixtures/product-reuse";
 
 type EvalResult = {
-  toolCalls: Array<{ name: string; runOperationId?: string }>;
+  toolCalls: Array<{
+    name: string;
+    action?: string;
+    runOperationId?: string;
+  }>;
   products: Array<{ id: string; name: string }>;
   purchases: Array<{
     id: string;
@@ -22,7 +26,11 @@ type EvalResult = {
 
 const evalResultSchema: z.ZodType<EvalResult> = z.object({
   toolCalls: z.array(
-    z.object({ name: z.string(), runOperationId: z.string().optional() }),
+    z.object({
+      name: z.string(),
+      action: z.string().optional(),
+      runOperationId: z.string().optional(),
+    }),
   ),
   products: z.array(z.object({ id: z.string(), name: z.string() })),
   purchases: z.array(
@@ -46,8 +54,9 @@ const PROHIBITED_CALLS = new Set([
   "sql",
   "shell",
   "browser_eval",
-  "mcp__cubby__entity_mutate",
-  "mcp__cubby__entity_delete",
+  "mcp__cubby__entity.create",
+  "mcp__cubby__entity.update",
+  "mcp__cubby__entity.delete",
 ]);
 
 async function evalResult(): Promise<EvalResult> {
@@ -91,7 +100,11 @@ describe("purchase-import Product reuse fixture", () => {
     const expected = productReuseFixture.expected;
 
     expect(
-      result.toolCalls.filter((call) => PROHIBITED_CALLS.has(call.name)),
+      result.toolCalls.filter((call) =>
+        PROHIBITED_CALLS.has(
+          call.action ? `${call.name}.${call.action}` : call.name,
+        ),
+      ),
     ).toEqual([]);
     expect(result.products).toHaveLength(1);
     expect(result.products[0]?.id).toBe(expected.reusedProductId);

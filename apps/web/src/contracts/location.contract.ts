@@ -30,8 +30,11 @@ export const locationContract = defineContract("location", {
     native: "Audit scope picker",
     input: z.undefined(),
     output: infLocationListOut,
+    cache: { profile: "browse" },
   }),
+  // Bounded Home summary; see expense.monthlySummary.
   valuationSummary: query({
+    readPolicy: "strong",
     input: z.undefined(),
     output: locationValuationSummaryOut,
   }),
@@ -39,11 +42,13 @@ export const locationContract = defineContract("location", {
     native: "Audit relocate target",
     input: z.undefined(),
     output: infLocation,
+    invalidates: ["location"],
   }),
   bulkUpdateParent: mutation({
     native: "Audit adopt",
     input: locationBulkUpdateParentInput,
     output: locationBulkUpdateParentOut,
+    invalidates: ["locationReparent"],
   }),
   getByShortcodes: query({
     input: locationShortcodesInput,
@@ -60,5 +65,6 @@ export const locationContract = defineContract("location", {
   inventoryBreakdown: query({
     input: shortcodeInput,
     output: locationInventoryBreakdownOut.nullable(),
+    cache: { tags: [["location", "inventoryBreakdown"], ["inventory"]] },
   }),
 });

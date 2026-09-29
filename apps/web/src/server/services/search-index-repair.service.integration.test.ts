@@ -132,7 +132,7 @@ describe("search index repair stream", () => {
     );
     const page = await selectSearchIndexRepairOrphanPage(ctx.db);
     expect(page.refs).toContainEqual({
-      entityType: "product",
+      entityKind: "product",
       entityId: restored.entityId,
     });
 

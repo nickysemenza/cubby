@@ -11,11 +11,11 @@ import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
 } from "~/app/_components/entity-media/entity-display-images";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { formatDateRange } from "~/app/projects/project-formatting";
-import { task } from "~/app/tasks/task.functions";
+import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
+import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 
 export const TODAY_ENTITY_LINK_CLASS = "min-h-11 items-center sm:min-h-0";
@@ -79,16 +79,16 @@ export function TaskBriefingEvidenceLine({
 
 function TodayTaskRow({ task: item }: { task: TaskTodayBriefingItemOut }) {
   const taskImage = useEntityDisplayImage({
-    entityType: "task",
+    entityKind: "task",
     entityId: item.id,
   });
   const projectImage = useEntityDisplayImage({
-    entityType: "project",
+    entityKind: "project",
     entityId: item.projectId ?? "",
   });
   return (
     <div className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 border-b border-border py-2 last:border-b-0 sm:min-h-0 sm:py-1.5">
-      <EntityInlineLink
+      <EntityRefLink
         entity="task"
         data={{ id: item.id, name: item.name, status: item.status }}
         displayImage={taskImage}
@@ -99,7 +99,7 @@ function TodayTaskRow({ task: item }: { task: TaskTodayBriefingItemOut }) {
         {formatDateRange(item.dueDate, item.dueEndDate)}
       </span>
       {item.projectId && item.projectName ? (
-        <EntityInlineLink
+        <EntityRefLink
           entity="project"
           data={{
             id: item.projectId,
@@ -131,9 +131,9 @@ export function TodayAttention() {
   const imageRefs = useMemo(
     () =>
       (briefing.data?.next ?? []).flatMap((item) => [
-        { entityType: "task" as const, entityId: item.id },
+        { entityKind: "task" as const, entityId: item.id },
         ...(item.projectId
-          ? [{ entityType: "project" as const, entityId: item.projectId }]
+          ? [{ entityKind: "project" as const, entityId: item.projectId }]
           : []),
       ]),
     [briefing.data?.next],

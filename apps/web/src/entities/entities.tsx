@@ -15,7 +15,6 @@ import { CarrotIcon } from "@phosphor-icons/react/dist/csr/Carrot";
 import { ChefHatIcon } from "@phosphor-icons/react/dist/csr/ChefHat";
 import { CreditCardIcon } from "@phosphor-icons/react/dist/csr/CreditCard";
 import { DeviceMobileIcon } from "@phosphor-icons/react/dist/csr/DeviceMobile";
-import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
 import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
 import { HeartIcon } from "@phosphor-icons/react/dist/csr/Heart";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
@@ -36,10 +35,10 @@ import {
   domainForEntity,
   domainWayfinding,
 } from "~/app/_components/navigation/domain-wayfinding";
+import { entityListFor } from "~/entities/entity-list";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { cn, formatCurrency } from "~/lib/utils";
 
-import { entityListFor } from "./entity-list.functions";
 import { generatedBrowserRoutes } from "./generated/entity-routes.gen";
 import {
   defineMergeableConfig,
@@ -195,7 +194,6 @@ const PHOSPHOR_ICONS = {
   Carrot: CarrotIcon,
   ChefHat: ChefHatIcon,
   CreditCard: CreditCardIcon,
-  Eye: EyeIcon,
   Hammer: HammerIcon,
   Heart: HeartIcon,
   Image: ImageIcon,
@@ -310,7 +308,7 @@ const entityDefinitions = withEntityNames({
     ...generatedBrowserRoutes.recipe,
     color: INK.primary,
     // Cost/calorie column IDs sort the canonical estimates' known lower amount
-    // via jsonb expressions. `source` (SourceType+SourceData)
+    // via jsonb expressions. `source` (sourceType + its stored provenance)
     // and `yield` (→ servings) are also special-cased there. See recipe/crud.recipeList.
   },
   cookbook: {
@@ -400,10 +398,6 @@ const entityDefinitions = withEntityNames({
   },
   device: {
     ...generatedBrowserRoutes.device,
-    color: INK.slate,
-  },
-  imageSighting: {
-    ...generatedBrowserRoutes.imageSighting,
     color: INK.slate,
   },
   purchase: {

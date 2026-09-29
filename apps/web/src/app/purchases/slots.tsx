@@ -10,7 +10,11 @@ import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatusText } from "~/components/ui/status-text";
 import type { RunSummary } from "~/contracts/run.contract";
-import { run as runOperations } from "~/entities/run.functions";
+import {
+  run as runOperations,
+  purchase as purchaseOperations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatInstant } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
 
@@ -23,7 +27,6 @@ import {
   ReconciliationStatus,
   ReconciliationNote,
 } from "./purchase-reconciliation";
-import { purchase as purchaseOperations } from "./purchase.functions";
 import { TargetedImportLaunchButton } from "./targeted-import-launch";
 
 const EMPTY_PURCHASE_PRODUCTS: PurchaseProductOut[] = [];
@@ -51,7 +54,7 @@ export const PurchaseOrderMail: DetailSlotComponent<"purchase"> = ({
           <Row align="center" justify="between" gap="sm" className="flex-wrap">
             <span className="font-medium">{mail.subject}</span>
             <span className="text-xs text-muted-foreground">
-              {new Date(mail.receivedAt).toLocaleString()}
+              {formatInstant(mail.receivedAt, "dateTime")}
             </span>
           </Row>
           <div className="text-xs text-muted-foreground">{mail.sender}</div>
@@ -82,7 +85,7 @@ export const PurchaseOrderMail: DetailSlotComponent<"purchase"> = ({
   );
 };
 
-/** Runs are linked through RunMutation, so replay-only source claims do not appear here. */
+/** Runs are linked through their AuditLog rows, so replay-only source claims do not appear here. */
 export const Runs: DetailSlotComponent<"purchase"> = ({ record: purchase }) => {
   const runsQuery = useQuery(
     runOperations.history.queryOptions({ purchaseId: purchase.id }),
@@ -145,7 +148,7 @@ function RunSummary({ run }: { run: RunSummary }) {
         </span>
       </div>
       <div className="text-muted-foreground">
-        {new Date(run.startedAt).toLocaleString()} · {run.trigger} ·{" "}
+        {formatInstant(run.startedAt, "dateTime")} · {run.trigger} ·{" "}
         {run.ordersSeen} seen · {run.imported} imported · {run.updated} updated
         · {run.skipped} skipped
       </div>

@@ -63,7 +63,7 @@ export interface BaseListRow {
 }
 
 interface EntityListPreviewOptions extends UseEntityPreviewOptions {
-  /** Override the list entity, or use each row's entityType when null. */
+  /** Override the list entity, or use each row's entityKind when null. */
   entity?: Entity | null;
 }
 

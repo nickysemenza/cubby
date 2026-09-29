@@ -25,24 +25,15 @@ import {
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { fieldEnumOptions } from "~/entities/enum-field-display";
 import { relationshipFieldProvenance } from "~/entities/field-provenance";
+import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrencyRange, rangeMidpoint } from "~/lib/format-range";
-import { relatedData } from "~/lib/related-data.functions";
 import { formatCurrency } from "~/lib/utils";
 
 import { defineListOverride, interleaveDeclared } from "./types";
 
 const columnHelper = createCubbyColumnHelper<WishRow>();
-
-const WISH_STATUS_OPTIONS = [
-  { value: "acquired", label: "Acquired", color: "var(--positive)" },
-  { value: "wanted", label: "Wanted", color: "var(--slate)" },
-];
-
-const CANDIDATE_STOCK_OPTIONS = [
-  { value: "yes", label: "In inventory", color: "var(--positive)" },
-  { value: "no", label: "Not stocked", color: "var(--slate)" },
-];
 
 /** Stable empty default — `useFilterOptions` needs a referentially fixed miss. */
 const NO_FILTER_OPTIONS: FilterableComboboxItem[] = [];
@@ -72,7 +63,7 @@ const WISH_TREE_CONFIG = {
 } as const;
 
 const wishMobileDetailsHref = (row: WishRow) =>
-  `/${entities[row.entityType].basePath}/${row.previewId}`;
+  `/${entities[row.entityKind].basePath}/${row.previewId}`;
 
 const WISH_PREVIEW = {
   entity: null,
@@ -152,12 +143,12 @@ export const wishListOverride = defineListOverride<
                   if (row.kind === "candidate") {
                     return renderOptionCell(
                       row.candidate.inventoried ? "yes" : "no",
-                      CANDIDATE_STOCK_OPTIONS,
+                      fieldEnumOptions("wish", "candidates"),
                     );
                   }
                   return renderOptionCell(
                     row.wish.acquiredAt ? "acquired" : "wanted",
-                    WISH_STATUS_OPTIONS,
+                    fieldEnumOptions("wish", "acquiredAt"),
                   );
                 },
               },

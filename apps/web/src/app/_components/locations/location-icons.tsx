@@ -6,9 +6,8 @@ import { Row } from "~/components/layout";
 import { getLocationGlyph, getLocationTypeColor } from "./location-type-theme";
 
 /**
- * Enough of a location to draw it. `type` is null for a location that IS a
- * Product, in which case the SKU's category supplies the glyph — see
- * `getLocationGlyph`.
+ * Enough of a location to draw it. `furniture` (a location that IS a Product)
+ * takes its glyph from the SKU's category — see `getLocationGlyph`.
  */
 interface LocationGlyphSource {
   type: LocationType | null;

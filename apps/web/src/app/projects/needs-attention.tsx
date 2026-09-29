@@ -13,10 +13,10 @@ import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
 
 import { Row, Stack } from "~/components/layout";
+import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
 
 import { attentionEvidence } from "./attention-presentation";
-import { formatDate } from "./project-formatting";
 
 /**
  * Server-side rule metadata per {@link ProjectAttentionType} — icon, group
@@ -151,7 +151,7 @@ export function NeedsAttention({ items }: { items: ProjectAttentionItem[] }) {
                 </Link>
                 {item.date && (
                   <span className="shrink-0 text-muted-foreground">
-                    {formatDate(item.date)}
+                    {formatCalendarDay(item.date, "monthDay")}
                   </span>
                 )}
                 {item.amount != null && (

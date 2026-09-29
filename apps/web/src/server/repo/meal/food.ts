@@ -22,8 +22,10 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
+  amountJsonSql,
   getDb,
   notDeleted,
+  optionalAmountToColumns,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { lockLedgerPartiesForReference } from "~/server/repo/ledger-party-reference";
@@ -87,7 +89,7 @@ export const saveMealFood = (
       productId,
       ingredientId,
       sourceKind: input.sourceKind,
-      amount: input.amount ?? null,
+      ...optionalAmountToColumns(input.amount ?? null),
       name: input.sourceKind === "manual" ? input.name : null,
       nutrients: input.sourceKind === "manual" ? input.nutrients : null,
     };
@@ -114,7 +116,7 @@ export const saveMealFood = (
         "This food entry is no longer available. Refresh the meal.",
       );
     await logAuditEntry(tx, actor, {
-      entityType: "meal",
+      entityKind: "meal",
       entityId: mealId,
       action: "update",
     });
@@ -145,7 +147,7 @@ export const removeMealFood = (
         "This food entry is no longer available. Refresh the meal.",
       );
     await logAuditEntry(tx, actor, {
-      entityType: "meal",
+      entityKind: "meal",
       entityId: mealId,
       action: "update",
     });
@@ -184,7 +186,10 @@ export async function getMealNutritionRows(
             mealId: mealRecipePortion.mealId,
             eaterId: ledgerParty.shortcode,
             eaterName: ledgerParty.name,
-            amount: mealRecipePortion.amount,
+            amount: amountJsonSql(
+              mealRecipePortion.amountValue,
+              mealRecipePortion.amountUnit,
+            ),
             mealRecipeId: mealRecipe.id,
             sourceMealId: sourceMeal.shortcode,
             recipeId: recipe.shortcode,

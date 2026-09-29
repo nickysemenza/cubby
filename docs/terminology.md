@@ -82,8 +82,8 @@ USDAFood  ←(loose link, fdc_id/barcode)──  Product  ──(optional FK, in
     barcode scan).
   - **Misc collection** — an opaque placeholder, name only, prefixed `misc:`.
 
-  A Product carries the unit mappings (`ProductUnitMappings`: an `a = b` amount
-  pair) that drive cross-unit/price conversions. A Product may point to **one**
+  A Product carries the unit mappings (`ProductUnitMapping`: an `a = b` amount
+  pair, stored as `aValue/aUnit/bValue/bUnit`) that drive cross-unit/price conversions. A Product may point to **one**
   Ingredient (`product.ingredientId`) and may be loosely linked to **one** USDA
   food (`product.fdc_id`, else barcode resolution — `fdc_id` wins).
 
@@ -95,8 +95,10 @@ USDAFood  ←(loose link, fdc_id/barcode)──  Product  ──(optional FK, in
   off it.
 
 - **InventoryEntry** (`InventoryEntry`) — a physical fact: `amount` of one
-  Product at one Location. Unique per `(productId, locationId)`. Carries a
-  precomputed `valuation` (`amount.value × product.price`). **Not** the same as
+  Product at one Location. Unique per `(productId, locationId)`. Its
+  `amount` is stored as `amountValue/amountUnit`; its `valuation` is computed on
+  every read (the amount routed through the Product's unit mappings to its
+  current price). **Not** the same as
   a Product: the Product is the _what_, the InventoryEntry is the _how much,
   where_.
 
@@ -191,11 +193,11 @@ House  →  Room  →  Shelf  →  Bin
 
 The household project tracker (migrated from Notion) is a self-contained module:
 
-- **Project** — groups Tasks and Expenses. `projectDependency` rows are
+- **Project** — groups Tasks and Expenses. `projectDependency` links are
   blocked-by edges between projects ("blocking" is the reverse read).
   `project.locations` is deliberately a free-form `text[]` of house/site names —
   **not** an FK to the `Location` entity (that tree is physical storage).
-  Images attach via the `ProjectImage` join table to the shared `Image` entity.
+  Images attach through `EntityAttachment` rows to the shared `Image` entity.
   Spend/progress rollups (`spent`, task counts) are SQL aggregates, never
   denormalized.
 - **Task** — `task.projectId` is nullable by design; project-less top-level
@@ -394,8 +396,8 @@ Three verbs that all _bring data in_ but mean different things:
   "quick add".)
 - **Import** — pulling a _recipe_ in from an external source and converting it
   into Cubby's shape (`ImportRecipe → RecipeCreateInput`, then upsert). Sources
-  are tagged via `Recipe.SourceType` (the `RecipeSource` enum) — see below.
-  Code: `import-recipe-convert.ts`, `upsertImportRecipe`, the `import_recipe`
+  are tagged via `Recipe.sourceType` — see below.
+  Code: `import-recipe-convert.ts`, `upsertImportRecipe`, the `recipe_import.import`
   MCP tool.
 - **Enrich** — the optional **service layer** augmenting an entity with derived
   / external data _after_ it exists (the architecture's
@@ -413,20 +415,20 @@ Three verbs that all _bring data in_ but mean different things:
 
 ## Recipe source (provenance)
 
-`Recipe.SourceType` (the `RecipeSource` enum) tags where a recipe came from; the
-`source.ts` codec turns the DB column triple
-(`SourceType` / `SourceData` / `cookbookId`) into a tagged provenance union for
-the API. Values:
+`Recipe.sourceType` (a text column with a generated CHECK, not a database enum)
+tags where a recipe came from; the `source.ts` codec turns the recipe columns
+(`sourceType`, `sourceUrl`, `sourceLabel`, `cookbookId`) and an external id into
+a tagged provenance union for the API. Values:
 
-| `SourceType` | Meaning                        | `SourceData` holds | `cookbookId`          |
-| ------------ | ------------------------------ | ------------------ | --------------------- |
-| `Website`    | Scraped/imported from a URL    | the source URL     | null                  |
-| `Book`       | Extracted from a cookbook EPUB | the cookbook name  | set (FK → `Cookbook`) |
-| `Notion`     | Synced from a Notion page      | the Notion page id | null                  |
-| `Other`      | No identifiable source         | null               | null                  |
+| `sourceType` | Meaning                        | Where the source lives                                |
+| ------------ | ------------------------------ | ----------------------------------------------------- |
+| `Website`    | Scraped/imported from a URL    | `sourceUrl`                                           |
+| `Book`       | Extracted from a cookbook EPUB | `cookbookId` (FK → `Cookbook`); `sourceLabel` if none |
+| `Notion`     | Synced from a Notion page      | an `EntityExternalId` (`source` notion, `kind` page)  |
+| `Other`      | No identifiable source         | nothing                                               |
 
-`SourceData` is kept synced to the cookbook name for `Book` recipes so the codec
-stays a pure recipe-row read.
+A `Book` recipe's title is its Cookbook's name, so the recipe stores no copy of
+it; `sourceLabel` holds the title only for a book with no Cookbook row.
 
 ---
 

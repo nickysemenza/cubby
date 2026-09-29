@@ -23,14 +23,14 @@ class InMemoryMutationSideEffectPorts {
     tasks: readonly BackgroundTaskInput[];
     options: PublishOptions;
   }> = [];
-  readonly refreshed: Array<{ entityType: string; entityId: string }> = [];
-  readonly inventoryRefs: Array<{ entityType: "inventory"; entityId: string }> =
+  readonly refreshed: Array<{ entityKind: string; entityId: string }> = [];
+  readonly inventoryRefs: Array<{ entityKind: "inventory"; entityId: string }> =
     [];
-  readonly productRefs: Array<{ entityType: "product"; entityId: string }> = [];
-  readonly plantingRefs: Array<{ entityType: "planting"; entityId: string }> =
+  readonly productRefs: Array<{ entityKind: "product"; entityId: string }> = [];
+  readonly plantingRefs: Array<{ entityKind: "planting"; entityId: string }> =
     [];
   readonly gardenEntryRefs: Array<{
-    entityType: "gardenEntry";
+    entityKind: "gardenEntry";
     entityId: string;
   }> = [];
   readonly ports = {
@@ -92,7 +92,7 @@ describe("runMutationSideEffects", () => {
     expect(memory.embeddingRefreshTasks).toEqual([
       expect.objectContaining({
         kind: "entity-embedding.refresh",
-        entityType: "product",
+        entityKind: "product",
         entityId: productId,
       }),
     ]);
@@ -108,7 +108,7 @@ describe("runMutationSideEffects", () => {
       "00000000-0000-4000-8000-000000000003",
     );
     memory.inventoryRefs.push({
-      entityType: "inventory",
+      entityKind: "inventory",
       entityId: inventoryId,
     });
 
@@ -124,13 +124,13 @@ describe("runMutationSideEffects", () => {
 
     const refreshedRefs = memory.embeddingRefreshTasks.map((task) =>
       task.kind === "entity-embedding.refresh"
-        ? { entityType: task.entityType, entityId: task.entityId }
+        ? { entityKind: task.entityKind, entityId: task.entityId }
         : null,
     );
     expect(refreshedRefs).toEqual(
       expect.arrayContaining([
-        { entityType: "product", entityId: productId },
-        { entityType: "inventory", entityId: inventoryId },
+        { entityKind: "product", entityId: productId },
+        { entityKind: "inventory", entityId: inventoryId },
       ]),
     );
   });
@@ -148,9 +148,9 @@ describe("runMutationSideEffects", () => {
       "inventory",
       "00000000-0000-4000-8000-000000000023",
     );
-    memory.productRefs.push({ entityType: "product", entityId: productId });
+    memory.productRefs.push({ entityKind: "product", entityId: productId });
     memory.inventoryRefs.push({
-      entityType: "inventory",
+      entityKind: "inventory",
       entityId: inventoryId,
     });
 
@@ -166,15 +166,15 @@ describe("runMutationSideEffects", () => {
 
     expect(memory.refreshed).toEqual(
       expect.arrayContaining([
-        { entityType: "product", entityId: productId },
-        { entityType: "inventory", entityId: inventoryId },
+        { entityKind: "product", entityId: productId },
+        { entityKind: "inventory", entityId: inventoryId },
       ]),
     );
     expect(memory.embeddingRefreshTasks).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ entityType: "product", entityId: productId }),
+        expect.objectContaining({ entityKind: "product", entityId: productId }),
         expect.objectContaining({
-          entityType: "inventory",
+          entityKind: "inventory",
           entityId: inventoryId,
         }),
       ]),
@@ -190,7 +190,7 @@ describe("runMutationSideEffects", () => {
       "planting",
       "00000000-0000-4000-8000-000000000021",
     );
-    memory.plantingRefs.push({ entityType: "planting", entityId: plantingId });
+    memory.plantingRefs.push({ entityKind: "planting", entityId: plantingId });
 
     await runMutationSideEffects(
       db,
@@ -204,13 +204,13 @@ describe("runMutationSideEffects", () => {
 
     const refreshedRefs = memory.embeddingRefreshTasks.map((task) =>
       task.kind === "entity-embedding.refresh"
-        ? { entityType: task.entityType, entityId: task.entityId }
+        ? { entityKind: task.entityKind, entityId: task.entityId }
         : null,
     );
     expect(refreshedRefs).toEqual(
       expect.arrayContaining([
-        { entityType: "plant", entityId: plantId },
-        { entityType: "planting", entityId: plantingId },
+        { entityKind: "plant", entityId: plantId },
+        { entityKind: "planting", entityId: plantingId },
       ]),
     );
   });
@@ -228,9 +228,9 @@ describe("runMutationSideEffects", () => {
       "gardenEntry",
       "00000000-0000-4000-8000-000000000024",
     );
-    memory.plantingRefs.push({ entityType: "planting", entityId: plantingId });
+    memory.plantingRefs.push({ entityKind: "planting", entityId: plantingId });
     memory.gardenEntryRefs.push({
-      entityType: "gardenEntry",
+      entityKind: "gardenEntry",
       entityId: gardenEntryId,
     });
 
@@ -246,14 +246,14 @@ describe("runMutationSideEffects", () => {
 
     const refreshedRefs = memory.embeddingRefreshTasks.map((task) =>
       task.kind === "entity-embedding.refresh"
-        ? { entityType: task.entityType, entityId: task.entityId }
+        ? { entityKind: task.entityKind, entityId: task.entityId }
         : null,
     );
     expect(refreshedRefs).toEqual(
       expect.arrayContaining([
-        { entityType: "location", entityId: locationId },
-        { entityType: "planting", entityId: plantingId },
-        { entityType: "gardenEntry", entityId: gardenEntryId },
+        { entityKind: "location", entityId: locationId },
+        { entityKind: "planting", entityId: plantingId },
+        { entityKind: "gardenEntry", entityId: gardenEntryId },
       ]),
     );
   });
@@ -327,7 +327,7 @@ describe("runMutationSideEffects", () => {
     );
 
     expect(memory.refreshed).toEqual(
-      expect.arrayContaining([{ entityType: "product", entityId: productId }]),
+      expect.arrayContaining([{ entityKind: "product", entityId: productId }]),
     );
   });
 
@@ -377,12 +377,12 @@ describe("runMutationSideEffectsForEntities batching", () => {
     );
 
     expect(memory.refreshed).toEqual(
-      inventoryIds.map((entityId) => ({ entityType: "inventory", entityId })),
+      inventoryIds.map((entityId) => ({ entityKind: "inventory", entityId })),
     );
     expect(memory.published).toHaveLength(1);
     const refreshedRefs = memory.published[0]?.tasks.map((task) =>
       task.kind === "entity-embedding.refresh"
-        ? `${task.entityType}:${task.entityId}`
+        ? `${task.entityKind}:${task.entityId}`
         : task.kind,
     );
     expect(refreshedRefs?.sort()).toEqual(
@@ -400,7 +400,7 @@ describe("runMutationSideEffectsForEntities batching", () => {
       "00000000-0000-4000-8000-000000000014",
     );
     memory.inventoryRefs.push({
-      entityType: "inventory",
+      entityKind: "inventory",
       entityId: inventoryId,
     });
 
@@ -424,7 +424,7 @@ describe("runMutationSideEffectsForEntities batching", () => {
     expect(memory.published).toHaveLength(1);
     const refreshedRefs = memory.published[0]?.tasks.map((task) =>
       task.kind === "entity-embedding.refresh"
-        ? `${task.entityType}:${task.entityId}`
+        ? `${task.entityKind}:${task.entityId}`
         : task.kind,
     );
     expect(refreshedRefs?.sort()).toEqual(

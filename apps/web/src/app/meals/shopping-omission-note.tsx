@@ -3,10 +3,10 @@ import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
-import { format, parseISO } from "date-fns";
 
 import { Row, Stack } from "~/components/layout";
 import { entityDetailLink } from "~/entities/entities";
+import { formatCalendarDay } from "~/lib/date-format";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
 
 /**
@@ -97,7 +97,7 @@ export function ShoppingOmissionNote({
                 {...entityDetailLink("meal", m.id)}
                 className="underline decoration-dotted underline-offset-2 hover:text-foreground"
               >
-                {m.name || format(parseISO(m.date), "EEE, MMM d")}
+                {m.name || formatCalendarDay(m.date, "weekdayMonthDay")}
               </Link>
               <span>{MEAL_KIND_LABELS[m.mealKind]}</span>
             </Row>

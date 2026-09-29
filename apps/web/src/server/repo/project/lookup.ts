@@ -30,8 +30,7 @@ import {
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
-import { listScaffold } from "~/server/repo/list-scaffold";
-import { relatedWhereConditions } from "~/server/repo/related-view";
+import { listScaffold } from "~/server/repo/list";
 import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
 import {
   effectiveProjectLocationsSql,
@@ -44,6 +43,7 @@ import {
   projectAttentionFilterTypes,
 } from "./attention";
 import { dashboardProjectDateCondition } from "./dashboard-shared";
+import { withProjectExternalUrls } from "./external-links";
 import { EMPTY_PROJECT_DATE_WINDOW, hydrateProjectRow } from "./helpers";
 import {
   aggregateSubtreeDates,
@@ -219,7 +219,7 @@ export const buildProjectListQuery = async (
   // `displayableImageWhere` gate, and Image is separately soft-deletable from
   // ProjectImage.
   const projectIdsWithImages = getDb(db)
-    .select({ projectId: entityAttachment.subjectEntityId })
+    .select({ projectId: entityAttachment.entityId })
     .from(entityAttachment)
     .innerJoin(
       image,
@@ -239,7 +239,6 @@ export const buildProjectListQuery = async (
         filters.search,
       ),
     ),
-    ...relatedWhereConditions("project", filters, project.id),
     dashboardProjectDateCondition(filters),
     attentionCodes
       ? attentionCodes.length
@@ -386,9 +385,13 @@ export const projectList = async (
     loadDataQualities(db, "project", ids),
   ]);
 
-  const data = await withDisplayImages(db, "project", rows, (row) =>
-    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-    hydrateProjectRow(row, projectContext, deps, dataQualities.get(row.id)!),
+  const data = await withDisplayImages(
+    db,
+    "project",
+    await withProjectExternalUrls(db, rows),
+    (row) =>
+      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+      hydrateProjectRow(row, projectContext, deps, dataQualities.get(row.id)!),
   );
 
   return { data, count, sums };

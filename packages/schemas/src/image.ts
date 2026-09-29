@@ -7,7 +7,7 @@ import { z } from "zod";
 import { generatedEntitySort } from "./generated/entity-sort.gen";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { nonEmptyTuple } from "./identifiers";
-import { mutationSideEffectsSchema } from "./background-jobs";
+import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import {
   createPaginatedResponseSchemaWithContext,
   createSortPaginationFields,
@@ -191,7 +191,7 @@ export const createInputImages = z.object({
 
 export const updateInputImages = z.object({
   // All three are public `IMG-` codes now that `Image` mints a shortcode at
-  // insert time: `pendingImageIds` comes back from `create_file_uploads`/
+  // insert time: `pendingImageIds` comes back from `image.create_uploads`/
   // `image.uploadImage`/`importImageFromUrl`, `removeImageIds`/`imageOrder`
   // from `ImageOut`. Every one has to be resolved to a uuid (via
   // `resolveAllPresent`) before it reaches a join-table write.
@@ -219,7 +219,7 @@ export const MAX_IMAGE_UPLOAD_BYTES = 50 * 1024 * 1024;
 const initiateUploadFields = {
   filename: z.string(),
   size: z.int().positive().max(MAX_IMAGE_UPLOAD_BYTES),
-  entityType: entityImage.optional(),
+  entityKind: entityImage.optional(),
   source: generatedImageFieldSchemas.update.source,
   sourcePageUrl: generatedImageFieldSchemas.update.sourcePageUrl,
   sourceAssetUrl: generatedImageFieldSchemas.update.sourceAssetUrl,
@@ -302,7 +302,7 @@ export type ImageListFilters = z.infer<typeof imageListFiltersSchema>;
 
 export const importImageFromUrlSchema = z.object({
   url: z.url(),
-  entityType: entityImage.optional(),
+  entityKind: entityImage.optional(),
 });
 
 // The image-bearing entities exposed as attach targets — every entity the
@@ -364,7 +364,7 @@ export type ImageAttachExistingOutput = z.infer<
 // cross-field "exactly one of url/data/uploadId" rule — which JSON Schema can't
 // express — lives in `mcpAttachFileInput`'s refine at the workflow boundary.
 export const attachFileFields = {
-  entityType: attachableImageEntity.describe(
+  entityKind: attachableImageEntity.describe(
     "Target entity type to attach the file to",
   ),
   entityId: attachableImageEntityId.describe("Shortcode of the target entity"),
@@ -378,12 +378,12 @@ export const attachFileFields = {
     .string()
     .optional()
     .describe(
-      "Base64-encoded file bytes, optionally a `data:<type>;base64,...` URI. Provide exactly one of `url`, `data`, or `uploadId`. Unusable at photo sizes — stage the file with create_file_uploads instead.",
+      "Base64-encoded file bytes, optionally a `data:<type>;base64,...` URI. Provide exactly one of `url`, `data`, or `uploadId`. Unusable at photo sizes — stage the file with image.create_uploads instead.",
     ),
   uploadId: imageShortcode
     .optional()
     .describe(
-      "`IMG-` code from create_file_uploads, after the presigned PUT succeeded. This is the route for a file on local disk: neither `url` nor `data` can carry one. Provide exactly one of `url`, `data`, or `uploadId`.",
+      "`IMG-` code from image.create_uploads, after the presigned PUT succeeded. This is the route for a file on local disk: neither `url` nor `data` can carry one. Provide exactly one of `url`, `data`, or `uploadId`.",
     ),
   contentType: z
     .string()
@@ -437,14 +437,14 @@ export const mcpAttachFileInput = z
         message: "Provide exactly one of `url`, `data`, or `uploadId`",
       });
     }
-    if (value.entityType === "purchase" && value.documentKind === undefined) {
+    if (value.entityKind === "purchase" && value.documentKind === undefined) {
       ctx.addIssue({
         code: "custom",
         path: ["documentKind"],
         message: "documentKind is required for Purchase attachments",
       });
     }
-    if (value.purpose !== undefined && value.entityType !== "product") {
+    if (value.purpose !== undefined && value.entityKind !== "product") {
       ctx.addIssue({
         code: "custom",
         path: ["purpose"],
@@ -462,7 +462,7 @@ export const attachFileResponse = z.object({
   filename: z.string(),
   contentType: z.string(),
   kind: z.enum(["image", "document"]),
-  entityType: attachableImageEntity,
+  entityKind: attachableImageEntity,
   entityId: attachableImageEntityId,
   idempotencyKey: z.string().nullable().optional(),
   /**
@@ -487,11 +487,11 @@ export type AttachFileResponse = z.infer<typeof attachFileResponse>;
  * blocks `file://`, localhost, and private IPs as an SSRF guard), while `data`
  * costs ~82k tokens for a single photo. The browser has always had a two-phase
  * presigned flow for exactly this; this exposes it, so the client PUTs the bytes
- * straight to R2 and hands `attach_files` the id.
+ * straight to R2 and hands `image.attach_files` the id.
  */
 export const createFileUploadInput = z.object({
   entityId: attachableImageEntityId.describe(
-    "Shortcode of the entity the file will be attached to. Only used to file the object readably; the attachment itself happens in attach_files.",
+    "Shortcode of the entity the file will be attached to. Only used to file the object readably; the attachment itself happens in image.attach_files.",
   ),
   filename: z.string().min(1).describe("Filename, including its extension."),
   contentType: z
@@ -503,7 +503,7 @@ export const createFileUploadInput = z.object({
     .int()
     .positive()
     .describe(
-      "Byte size of the file. Recorded on the staged row; the real size is measured again when attach_files reads the object back.",
+      "Byte size of the file. Recorded on the staged row; the real size is measured again when image.attach_files reads the object back.",
     ),
 });
 export type CreateFileUploadInput = z.infer<typeof createFileUploadInput>;
@@ -513,7 +513,7 @@ export const createFileUploadResponse = z.object({
   // shortcode at insert time like every other entity, and a raw uuid never
   // crosses this API.
   uploadId: imageShortcode.describe(
-    "`IMG-` code of the staged row. Pass to attach_files as `uploadId` once the PUT succeeds.",
+    "`IMG-` code of the staged row. Pass to image.attach_files as `uploadId` once the PUT succeeds.",
   ),
   uploadUrl: z
     .url()
@@ -593,7 +593,7 @@ export const imageAssociationEntity = z.enum(
 );
 export const imageAssociationRole = z.enum(["attachment", "cover", "logo"]);
 export const imageAssociationSchema = z.object({
-  entityType: imageAssociationEntity,
+  entityKind: imageAssociationEntity,
   entityId: z.string().min(1),
   entityName: z.string().min(1),
   role: imageAssociationRole,
@@ -627,9 +627,6 @@ export const imageWithEntitySchema = z
     // (`imageList`, `getImageById`, `getImagesByShortcodes`) merges in the
     // batch-loaded score.
     dataQuality: generatedImageFieldSchemas.read.dataQuality.optional(),
-    entityType: entityImage.nullable(),
-    entityId: attachableImageEntityId.nullable(),
-    entityName: z.string().nullable(),
     associations: z.array(imageAssociationSchema),
     processingIssue: imageProcessingIssue.nullable().optional(),
     importTarget: importTargetSummarySchema.nullable().optional(),

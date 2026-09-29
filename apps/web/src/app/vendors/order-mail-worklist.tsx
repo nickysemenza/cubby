@@ -18,9 +18,9 @@ import { Button } from "~/components/ui/button";
 import { NativeSelect } from "~/components/ui/native-select";
 import { StatusText } from "~/components/ui/status-text";
 import { TechnicalError } from "~/components/ui/technical-error";
+import { vendor } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
-
-import { vendor } from "./vendor.functions";
 
 type MailEvent = VendorOrderMailOut["items"][number]["events"][number];
 type MailCandidate = MailEvent["candidates"][number];
@@ -346,7 +346,7 @@ function OrderMailWorklist({
               <div>
                 <div className="font-medium">{mail.subject}</div>
                 <div className="text-xs text-muted-foreground">
-                  {mail.sender} · {new Date(mail.receivedAt).toLocaleString()}
+                  {mail.sender} · {formatInstant(mail.receivedAt, "dateTime")}
                 </div>
               </div>
               {mail.threadId ? (

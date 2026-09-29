@@ -1,29 +1,13 @@
-# Vendor Gmail scan checkpoint expansion
+# Vendor Gmail continuous scan
 
-Apply this additive migration before deploying the continuous scan code. The
-previous deployed worker ignores both new columns, and their defaults preserve
-existing jobs. Confirm no other production schema migration is in flight.
+The continuous scan walks a vendor's mailbox one page at a time, so a
+search resumes from its checkpoint instead of restarting. The checkpoint is
+part of the search's `mail_search` Run: `Run.input.searchTerms` holds the exact
+sender and domain terms saved at launch, and `Run.progress.pagesScanned`,
+`pageToken`, and `nextPageToken` record where the walk stands. Field meanings
+and an inspection query are in [vendor Gmail search runs](vendor-mail-search-jobs.md).
 
-```sql
-BEGIN;
-
-ALTER TABLE "VendorMailSearchJob"
-  ADD COLUMN IF NOT EXISTS "searchTerms" text[] NOT NULL DEFAULT '{}'::text[],
-  ADD COLUMN IF NOT EXISTS "pagesScanned" integer NOT NULL DEFAULT 0;
-
-COMMIT;
-```
-
-Read back the columns and defaults before merging:
-
-```sql
-SELECT column_name, data_type, is_nullable, column_default
-FROM information_schema.columns
-WHERE table_schema = 'public'
-  AND table_name = 'VendorMailSearchJob'
-  AND column_name IN ('searchTerms', 'pagesScanned')
-ORDER BY column_name;
-```
-
-Older jobs keep empty `searchTerms`, so their historical query criteria cannot
-be reconstructed. New jobs save the exact sender/domain terms at launch.
+These values used to be columns on a `VendorMailSearchJob` table; the
+2026-09 consolidation migration moved them onto the Run. A run created before
+the terms were recorded has an empty `searchTerms`, so its historical query
+criteria cannot be reconstructed.

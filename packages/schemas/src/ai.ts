@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { fieldResolutionsSchema } from "./field-resolution";
-import { mutationSideEffectsSchema } from "./background-jobs";
+import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { shortcodeEntities } from "./entity-manifest";
 import { moneyNullable } from "./money";
 import {
@@ -43,14 +43,14 @@ export const locationDescriptionSchema = z.object({
 });
 export type LocationDescription = z.infer<typeof locationDescriptionSchema>;
 
-export const aiAnalysisEntityType = z.enum([
+export const aiAnalysisEntityKind = z.enum([
   "image",
   "location",
   "product",
   "recipe",
   "global",
 ]);
-export type AiAnalysisEntityType = z.infer<typeof aiAnalysisEntityType>;
+export type AiAnalysisEntityKind = z.infer<typeof aiAnalysisEntityKind>;
 
 export const aiCacheStatus = z.enum(["hit", "miss"]);
 export type AiCacheStatus = z.infer<typeof aiCacheStatus>;
@@ -371,8 +371,8 @@ export const fieldSuggestionsInput = z.object({
   /**
    * One id per page mount, minted client-side and reused across every
    * `suggestFields` call that page makes — groups them into one `ai_suggest`
-   * run instead of a run per field. Omitted falls back to a per-call
-   * `ai_action` run.
+   * run instead of a run per field. Omitted shares the actor's run for the
+   * UTC hour.
    */
   runKey: z.string().uuid().optional(),
 });

@@ -11,7 +11,7 @@ import { proposeProductMatchOut } from "@cubby/schemas/recommendations";
 import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { testUserId } from "@cubby/schemas/testing";
 import { chromium, expect, request } from "@playwright/test";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CubbyMcpToolAction } from "@cubby/schemas/mcp-tools";
 import { and, eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -26,10 +26,9 @@ import { runContract } from "~/contracts/run.contract";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { superJsonResultSchema } from "~/lib/superjson-wire";
 import { unparsedStartOperationResultSchema } from "~/server/start-operation.contract";
-import { callMcpTool } from "~/server/mcp/mcp-test-utils";
+import { callMcpTool, kernelRequestContext } from "~/server/mcp/mcp-test-utils";
+import { createMcpServer } from "~/server/mcp/server";
 import { financialAccount } from "~/server/db/schema";
-import { registerContractTools } from "~/server/mcp/tools/contract-tools";
-import { registerPurchaseTools } from "~/server/mcp/tools/purchase.tools";
 import {
   startOrResumeRun,
   startTargetedRun,
@@ -38,10 +37,10 @@ import { classifyOrderCapture } from "~/server/purchase-import/order-list";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { productEnrichmentTarget } from "~/server/purchase-import/product-enrichment-target";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { replaceSettlementRefs } from "~/server/repo/entity-external-ids";
 import { recordStatementRows } from "~/server/repo/statement-row";
 import { statementRowExternalId } from "~/server/repo/statement-row-identity";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { recommendationsHandlers } from "~/server/recommendations-browser.server";
 
 import {
   buildKernelContext,
@@ -174,7 +173,7 @@ async function readConvergenceFacts(
         productId: string;
         amount: { value: number; unit: string };
       }>(
-        `SELECT "productId", amount FROM "InventoryEntry"
+        `SELECT "productId", jsonb_build_object('value', "amountValue", 'unit', "amountUnit") AS amount FROM "InventoryEntry"
        WHERE "productId" IN (SELECT id FROM "Product" WHERE shortcode = ANY($1::text[]))
          AND "deletedAt" IS NULL`,
         [[photoProductId, purchaseProductId]],
@@ -187,12 +186,12 @@ async function readConvergenceFacts(
       ),
       pool.query<{
         imageId: string;
-        subjectEntityId: string;
+        entityId: string;
         purpose: string | null;
       }>(
-        `SELECT i.shortcode AS "imageId", a."subjectEntityId", a.purpose
+        `SELECT i.shortcode AS "imageId", a."entityId", a.purpose
        FROM "EntityAttachment" a JOIN "Image" i ON i.id = a."imageId"
-       WHERE a."subjectEntityId" IN (SELECT id FROM "Product" WHERE shortcode = ANY($1::text[]))
+       WHERE a."entityId" IN (SELECT id FROM "Product" WHERE shortcode = ANY($1::text[]))
          AND a."deletedAt" IS NULL`,
         [[photoProductId, purchaseProductId]],
       ),
@@ -212,7 +211,13 @@ async function readConvergenceFacts(
       }>(
         `SELECT t.shortcode, a."purchaseId", t.amount::text AS amount,
               a.amount::text AS "allocatedAmount", t."postedDate",
-              t."transactionDate", t."sourceRefs"
+              t."transactionDate",
+              COALESCE((
+                SELECT jsonb_agg(jsonb_build_object('source', x.source, 'externalId', x."externalId")
+                  ORDER BY x.source, x."externalId")
+                FROM "EntityExternalId" x
+                WHERE x."entityId" = t.id AND x.kind = 'settlement_ref' AND x."deletedAt" IS NULL
+              ), '[]'::jsonb) AS "sourceRefs"
        FROM "FinancialTransaction" t
        JOIN "FinancialTransactionAllocation" a ON a."transactionId" = t.id
        JOIN "Purchase" p ON p.id = a."purchaseId"
@@ -273,7 +278,7 @@ function assertAfterMerge(
 ): void {
   const live = facts.products.filter((item) => item.deletedAt === null);
   const ownPhotos = facts.attachments.filter(
-    (item) => item.subjectEntityId === purchaseProduct.id,
+    (item) => item.entityId === purchaseProduct.id,
   );
   if (
     live.length !== 1 ||
@@ -654,8 +659,10 @@ async function importSyntheticMonarchCsv(
     await api.dispose();
   }
   const recorded = await pool.query<{ shortcode: string }>(
-    `SELECT shortcode FROM "FinancialTransaction"
-     WHERE "sourceRefs" @> '[{"source":"monarch"}]'::jsonb AND "deletedAt" IS NULL`,
+    `SELECT DISTINCT t.shortcode FROM "FinancialTransaction" t
+     JOIN "EntityExternalId" x ON x."entityId" = t.id AND x.kind = 'settlement_ref'
+       AND x.source = 'monarch' AND x."deletedAt" IS NULL
+     WHERE t."deletedAt" IS NULL`,
   );
   const statementRows = await pool.query<{ count: string }>(
     `SELECT count(*)::text AS count FROM "StatementRow" WHERE source = 'monarch'`,
@@ -701,19 +708,15 @@ async function importSyntheticPurchase(
     trigger: "manual",
   });
   const callPurchase = async (
-    name: string,
+    name: CubbyMcpToolAction,
     args: Parameters<typeof callMcpTool>[2],
   ) => {
-    const server = new McpServer({
-      name: "wardrobe-purchase-sim",
-      version: "1.0",
-    });
-    registerPurchaseTools(server);
+    const [tool, action] = name.split(".");
     const result = await callMcpTool(
-      server,
-      name,
-      args,
-      {},
+      createMcpServer(),
+      tool!,
+      { action, ...args },
+      kernelRequestContext(kernel),
       { entityKernel: kernel },
     );
     if (result.isError)
@@ -722,7 +725,7 @@ async function importSyntheticPurchase(
   };
   const prepareOperationId = "prepare:synthetic-wardrobe-order";
   const prepared = preparePurchaseImportOut.parse(
-    await callPurchase("prepare_purchase_import", {
+    await callPurchase("purchase_import.prepare", {
       _runExecution: {
         runId: run.id,
         operationId: prepareOperationId,
@@ -782,7 +785,7 @@ async function importSyntheticPurchase(
   if (beforeCommit.rows[0]?.count !== "0")
     throw new Error("Purchase preparation wrote an order before commit");
   const committed = commitPurchaseImportOut.parse(
-    await callPurchase("commit_purchase_import", {
+    await callPurchase("purchase_import.commit", {
       _runExecution: {
         runId: run.id,
         operationId: "commit:synthetic-wardrobe-order",
@@ -878,19 +881,15 @@ async function reimportInNewRunAndAssertNoOp(
     trigger: "manual",
   });
   const callPurchase = async (
-    name: string,
+    name: CubbyMcpToolAction,
     args: Parameters<typeof callMcpTool>[2],
   ) => {
-    const server = new McpServer({
-      name: "wardrobe-reimport-sim",
-      version: "1.0",
-    });
-    registerPurchaseTools(server);
+    const [tool, action] = name.split(".");
     const result = await callMcpTool(
-      server,
-      name,
-      args,
-      {},
+      createMcpServer(),
+      tool!,
+      { action, ...args },
+      kernelRequestContext(kernel),
       { entityKernel: kernel },
     );
     if (result.isError)
@@ -899,7 +898,7 @@ async function reimportInNewRunAndAssertNoOp(
   };
   const prepareOperationId = "prepare:synthetic-wardrobe-order-reimport";
   const prepared = preparePurchaseImportOut.parse(
-    await callPurchase("prepare_purchase_import", {
+    await callPurchase("purchase_import.prepare", {
       _runExecution: {
         runId: run.id,
         operationId: prepareOperationId,
@@ -953,7 +952,7 @@ async function reimportInNewRunAndAssertNoOp(
   if (prepared.orders.length !== 1)
     throw new Error("Re-import preparation did not return the synthetic order");
   const committed = commitPurchaseImportOut.parse(
-    await callPurchase("commit_purchase_import", {
+    await callPurchase("purchase_import.commit", {
       _runExecution: {
         runId: run.id,
         operationId: "commit:synthetic-wardrobe-order-reimport",
@@ -1077,7 +1076,7 @@ async function recordOverlappingStatementCsvAndDecoy(
     amount: -29.99,
     originalStatement: "SYNTHETIC DECEPTIVE RETAIL CHARGE 1",
   });
-  return insertWithShortcode(db, "financialTransaction", {
+  const created = await insertWithShortcode(db, "financialTransaction", {
     accountId: parseEntityId("financialAccount", fixtureVisaId),
     kind: "purchase",
     status: "posted",
@@ -1087,8 +1086,13 @@ async function recordOverlappingStatementCsvAndDecoy(
     merchant: "Synthetic Deceptive Retail",
     rawDescription: "SYNTHETIC DECEPTIVE RETAIL CHARGE 1",
     sourceCategory: "Clothing",
-    sourceRefs: [{ source: "monarch", externalId: decoyExternalId }],
   });
+  await getDb(db).transaction((tx) =>
+    replaceSettlementRefs(tx, created.id, [
+      { source: "monarch", externalId: decoyExternalId },
+    ]),
+  );
+  return created;
 }
 
 /**
@@ -1111,16 +1115,15 @@ async function commitDuplicateOrderHistoryCapture(
     trigger: "manual",
   });
   const callPurchase = async (
-    name: string,
+    name: CubbyMcpToolAction,
     args: Parameters<typeof callMcpTool>[2],
   ) => {
-    const server = new McpServer({ name: "wardrobe-trap-sim", version: "1.0" });
-    registerPurchaseTools(server);
+    const [tool, action] = name.split(".");
     const result = await callMcpTool(
-      server,
-      name,
-      args,
-      {},
+      createMcpServer(),
+      tool!,
+      { action, ...args },
+      kernelRequestContext(kernel),
       { entityKernel: kernel },
     );
     if (result.isError)
@@ -1133,7 +1136,7 @@ async function commitDuplicateOrderHistoryCapture(
     .digest("hex");
   const prepareOperationId = "prepare:synthetic-wardrobe-order-duplicate";
   const prepared = preparePurchaseImportOut.parse(
-    await callPurchase("prepare_purchase_import", {
+    await callPurchase("purchase_import.prepare", {
       _runExecution: {
         runId: run.id,
         operationId: prepareOperationId,
@@ -1189,7 +1192,7 @@ async function commitDuplicateOrderHistoryCapture(
       "Duplicate order-history preparation did not return the synthetic order",
     );
   const committed = commitPurchaseImportOut.parse(
-    await callPurchase("commit_purchase_import", {
+    await callPurchase("purchase_import.commit", {
       _runExecution: {
         runId: run.id,
         operationId: "commit:synthetic-wardrobe-order-duplicate",
@@ -1254,7 +1257,7 @@ async function runForgeWearTraps(
   );
   const duplicateFinding = await pool.query<{ count: string }>(
     `SELECT count(*)::text AS count FROM "RunFinding"
-     WHERE "targetKind" = 'purchase' AND "targetId" = $1 AND kind = 'duplicate_lines'`,
+     WHERE "entityKind" = 'purchase' AND "entityId" = $1 AND kind = 'duplicate_lines'`,
     [facts.purchases[0]?.id ?? null],
   );
   const decoyAllocations = await pool.query<{ count: string }>(
@@ -1307,19 +1310,15 @@ async function runProductEnrichmentCommitAndOverwrite(
     userId,
   );
   const callPurchase = async (
-    name: string,
+    name: CubbyMcpToolAction,
     args: Parameters<typeof callMcpTool>[2],
   ) => {
-    const server = new McpServer({
-      name: "wardrobe-enrichment-sim",
-      version: "1.0",
-    });
-    registerPurchaseTools(server);
+    const [tool, action] = name.split(".");
     const result = await callMcpTool(
-      server,
-      name,
-      args,
-      {},
+      createMcpServer(),
+      tool!,
+      { action, ...args },
+      kernelRequestContext(kernel),
       { entityKernel: kernel },
     );
     if (result.isError)
@@ -1361,7 +1360,7 @@ async function runProductEnrichmentCommitAndOverwrite(
       `Enrichment setup expects an empty model: ${JSON.stringify(before.rows)}`,
     );
   const committed = commitProductEnrichmentOut.parse(
-    await callPurchase("commit_product_enrichment", {
+    await callPurchase("product_enrichment.commit", {
       _runExecution: {
         runId: commitRun.run.id,
         operationId: "commit:synthetic-wardrobe-enrichment",
@@ -1411,7 +1410,7 @@ async function runProductEnrichmentCommitAndOverwrite(
   if (!overwriteRun.created)
     throw new Error("Product enrichment overwrite run was blocked");
   const overwritten = overwriteProductEnrichmentOut.parse(
-    await callPurchase("overwrite_product_enrichment", {
+    await callPurchase("product_enrichment.overwrite", {
       _runExecution: {
         runId: overwriteRun.run.id,
         operationId: "overwrite:synthetic-wardrobe-enrichment",
@@ -1534,20 +1533,16 @@ export async function runWardrobeConvergenceScenario({
       ),
     );
 
-    const proposalServer = new McpServer({
-      name: "wardrobe-match-sim",
-      version: "1.0",
-    });
-    registerContractTools(proposalServer, recommendationsHandlers);
     const proposed = await callMcpTool(
-      proposalServer,
-      "propose_product_match",
+      createMcpServer(),
+      "product_enrichment",
       {
+        action: "propose_match",
         productIds: [photoProduct.shortcode, purchaseProduct.shortcode],
         evidence: matchEvidence,
         sourceUrls: ["https://shop.example.test/products/crew-tee"],
       },
-      { db, readDb: db },
+      { db },
       { entityKernel: kernel },
     );
     if (

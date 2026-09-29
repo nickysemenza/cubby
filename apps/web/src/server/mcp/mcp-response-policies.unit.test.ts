@@ -7,7 +7,7 @@ import { createMcpServer, listMcpToolCatalog } from "./server";
 describe("MCP response policies", () => {
   it("publishes the same page and recipe defaults that handlers apply", async () => {
     const { tools } = await listMcpToolCatalog();
-    for (const name of ["list_problems", "search_usda_foods"]) {
+    for (const name of ["activity", "usda_food"]) {
       expect(
         tools.find((tool) => tool.name === name)?.inputSchema,
       ).toMatchObject({
@@ -18,7 +18,7 @@ describe("MCP response policies", () => {
       });
     }
     expect(
-      tools.find((tool) => tool.name === "explain_recipe_costing")?.inputSchema,
+      tools.find((tool) => tool.name === "recipe_insights")?.inputSchema,
     ).toMatchObject({ properties: { detail: { default: "lines" } } });
   });
 
@@ -34,20 +34,9 @@ describe("MCP response policies", () => {
       const listFoods = vi.fn(async () => ({ data: [], count: 123 }));
       const result = await callMcpTool(
         createMcpServer(),
-        "search_usda_foods",
-        { query: "synthetic food", ...input },
-        {},
-        {
-          entityKernel: {
-            db: null,
-            readDb: null,
-            actorContext: null,
-            usdaClient: null,
-            upcLookupClient: null,
-            services: null,
-            usdaService: fromPartial({ listFoods }),
-          },
-        },
+        "usda_food",
+        { action: "search", query: "synthetic food", ...input },
+        { usdaService: fromPartial({ listFoods }) },
       );
       expect(result.isError).not.toBe(true);
       expect(listFoods).toHaveBeenCalledWith(
@@ -64,9 +53,12 @@ describe("MCP response policies", () => {
     },
   );
 
-  it.each(["list_problems", "search_usda_foods"])(
-    "rejects invalid pagination before executing %s",
-    async (tool) => {
+  it.each([
+    ["activity", "problems"],
+    ["usda_food", "search"],
+  ])(
+    "rejects invalid pagination before executing %s.%s",
+    async (tool, action) => {
       for (const input of [
         { pageIndex: -1 },
         { pageSize: 0 },
@@ -75,7 +67,12 @@ describe("MCP response policies", () => {
         const result = await callMcpTool(
           createMcpServer(),
           tool,
-          { query: "synthetic food", type: "orphanedProducts", ...input },
+          {
+            action,
+            query: "synthetic food",
+            type: "orphanedProducts",
+            ...input,
+          },
           {},
         );
         expect(result.isError).toBe(true);

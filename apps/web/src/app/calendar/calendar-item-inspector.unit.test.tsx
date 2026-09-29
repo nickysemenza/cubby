@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createEntityMutationPort } from "~/entities/editing/use-entity-commands";
 import type { EntityMutationTransport } from "~/entities/entity-contracts";
-import { entityMutation } from "~/entities/entity-mutation.functions";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import {
   entityBrowserMutationCommandSchema,
@@ -89,7 +89,7 @@ function createCalendarOperations() {
         action: "update" as const,
         entity: "expense" as const,
         item: savedExpense,
-        sideEffects: { backgroundBatches: [] },
+        sideEffects: {},
       };
     }
     throw new Error("Calendar inspector only issues expense updates.");

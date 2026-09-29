@@ -3,6 +3,7 @@ import {
   type ActivityRun,
   type ActivityListInput,
 } from "@cubby/schemas/activity";
+import { runTrigger } from "@cubby/schemas/run-fields";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -30,12 +31,17 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
-import { activity } from "~/lib/activity.functions";
+import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
 
 export interface RunHistoryFilters extends Partial<ActivityListInput> {
   selected?: string;
   group?: "run";
+  /** `none`: the declared default filter was cleared. */
+  filters?: "none";
+  /** The Run declaration carries a default filter (its Clear writes `none`). */
+  hasDefaultFilter?: boolean;
 }
 type HistoryRow = ActivityRun & {
   depth?: number;
@@ -45,7 +51,6 @@ type HistoryRow = ActivityRun & {
 };
 const kinds = activityKind.options;
 const label = (value: string) => value.replaceAll("_", " ");
-const moment = (value: string) => new Date(value).toLocaleString();
 const duration = (value: number | null) =>
   value == null ? "—" : `${(value / 1_000).toFixed(1)} s`;
 const localDateTime = (value?: string) =>
@@ -120,6 +125,7 @@ export function RunHistory({
       kind: filters.kind,
       state: filters.state,
       trigger: filters.trigger,
+      excludeTriggers: filters.excludeTriggers,
       vendorAccountId: filters.vendorAccountId,
       vendorId: filters.vendorId,
       ledgerPartyId: filters.ledgerPartyId,
@@ -136,6 +142,7 @@ export function RunHistory({
       filters.kind,
       filters.state,
       filters.trigger,
+      filters.excludeTriggers,
       filters.vendorAccountId,
       filters.vendorId,
       filters.ledgerPartyId,
@@ -363,7 +370,7 @@ export function RunHistory({
           helper.accessor("createdAt", {
             header: "Submitted",
             size: 180,
-            cell: ({ getValue }) => moment(getValue()),
+            cell: ({ getValue }) => formatInstant(getValue(), "dateTime"),
             meta: { mono: true, mobile: { slot: "meta", priority: 40 } },
           }),
         );
@@ -417,6 +424,9 @@ export function RunHistory({
       from: undefined,
       to: undefined,
       sort: undefined,
+      // Clearing means everything, declared default included; the URL keeps
+      // that choice, since an empty filter alone would reopen the default.
+      filters: filters.hasDefaultFilter ? "none" : undefined,
     });
   const selectFilter = (key: keyof RunHistoryFilters, value: string) =>
     onFilterChange({ [key]: value || undefined });
@@ -566,10 +576,24 @@ export function RunHistory({
           />
           <NativeSelect
             aria-label="Trigger"
-            value={filters.trigger ?? ""}
-            onChange={(event) => selectFilter("trigger", event.target.value)}
+            value={
+              filters.trigger ??
+              (filters.hasDefaultFilter && filters.filters !== "none"
+                ? ""
+                : "all")
+            }
+            onChange={(event) =>
+              onFilterChange({
+                trigger:
+                  event.target.value === "" || event.target.value === "all"
+                    ? undefined
+                    : runTrigger.parse(event.target.value),
+                filters: event.target.value === "all" ? "none" : undefined,
+              })
+            }
           >
-            <option value="">All triggers</option>
+            <option value="">Hide ephemeral runs</option>
+            <option value="all">All triggers</option>
             <option value="foreground">Foreground</option>
             <option value="discovery">Discovery</option>
             <option value="manual">Manual</option>

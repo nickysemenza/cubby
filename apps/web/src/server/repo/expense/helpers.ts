@@ -240,14 +240,14 @@ const expenseProjectFieldResolution = (
     ExpenseOut["fieldResolutions"]
   >[string]["sourceEntity"] = effectiveProjectShortcode
     ? {
-        entityType: "project" as const,
+        entityKind: "project" as const,
         entityId: effectiveProjectShortcode,
         name: row.effectiveProjectName ?? null,
       }
     : null;
   if ((source === "purchase default" || mode === "allocated") && purchaseRow) {
     sourceEntity = {
-      entityType: "purchase" as const,
+      entityKind: "purchase" as const,
       entityId: purchaseRow.shortcode,
       name: purchaseRow.displayLabel ?? purchaseRow.orderId ?? null,
     };
@@ -281,13 +281,13 @@ const expenseTradeFieldResolution = (
   let sourceEntity = null;
   if (source === "purchase default" && purchaseRow) {
     sourceEntity = {
-      entityType: "purchase" as const,
+      entityKind: "purchase" as const,
       entityId: purchaseRow.shortcode,
       name: purchaseRow.displayLabel ?? purchaseRow.orderId ?? null,
     };
   } else if (source === "project default" && effectiveProjectShortcode) {
     sourceEntity = {
-      entityType: "project" as const,
+      entityKind: "project" as const,
       entityId: effectiveProjectShortcode,
       name: row.effectiveProjectName ?? null,
     };
