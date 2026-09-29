@@ -25,6 +25,10 @@ import { testServiceConfig } from "./test-service-config";
  *     applied one).
  * (b) A database built by the migrations has the same catalog as one built by
  *     pushing `schema.ts` plus the derived DDL.
+ *
+ * `pnpm db:check --against-production` instead diffs a migrations-built
+ * database against `PRODUCTION_DIRECT_DATABASE_URL` (read through a read-only
+ * session) — the post-cutover proof that production equals a fresh build.
  */
 
 interface Journal {
@@ -126,6 +130,20 @@ async function checkCatalogEquality(adminUrl: string): Promise<string[]> {
   );
 }
 
+async function checkAgainstProduction(adminUrl: string): Promise<string[]> {
+  const productionUrl = process.env.PRODUCTION_DIRECT_DATABASE_URL;
+  if (!productionUrl)
+    return ["--against-production needs PRODUCTION_DIRECT_DATABASE_URL"];
+  return withScratchDatabase(adminUrl, "migrations", async (migrationsUrl) => {
+    await withDb(migrationsUrl, migrateDatabase);
+    return diffSchemaCatalogs(
+      await readSchemaCatalog(migrationsUrl),
+      await readSchemaCatalog(productionUrl),
+      { expected: "migrations", actual: "production" },
+    );
+  });
+}
+
 async function main(): Promise<number> {
   const { host, port } = testServiceConfig();
   const adminUrl =
@@ -133,10 +151,10 @@ async function main(): Promise<number> {
     `postgresql://postgres:password@${host}:${port}/postgres`;
   const started = Date.now();
   const problems: string[] = [];
-  for (const check of [
-    checkGeneratedState,
-    () => checkCatalogEquality(adminUrl),
-  ]) {
+  const checks = process.argv.includes("--against-production")
+    ? [() => checkAgainstProduction(adminUrl)]
+    : [checkGeneratedState, () => checkCatalogEquality(adminUrl)];
+  for (const check of checks) {
     const found = await check();
     for (const problem of found) console.error(`[db:check] ${problem}`);
     problems.push(...found);

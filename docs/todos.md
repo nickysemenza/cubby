@@ -81,8 +81,10 @@ history is the archive. Permanent product constraints live in the
 
 ## Ready projects
 
-- **Maintenance mode.** A single switch for cutovers and incident holds: a
-  status held in a Durable Object that the web Worker checks per request
+- **Maintenance mode.** A minimal switch exists: the `MAINTENANCE_MODE` Worker
+  secret makes the web Worker answer 503 and skips the cron
+  (`apps/web/src/server/maintenance.ts`); queues are paused by hand with
+  `wrangler queues pause-delivery`. Still wanted: a status held in a Durable Object that the web Worker checks per request
   (503 with a short page except health and the switch itself), every queue
   consumer checks before consuming (leave messages unacked so they redeliver
   afterwards), and Flue run workflows check before each step (pause cleanly,

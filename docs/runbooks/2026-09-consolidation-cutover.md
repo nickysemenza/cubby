@@ -66,15 +66,17 @@ on read (the column is dropped, so this is informational).
 
 ### 1. Start maintenance
 
-<!-- TODO(main agent): maintenance mechanism. `docs/todos.md` ("Maintenance
-mode") still lists the Worker 503 switch as a ready project and nothing in
-`apps/web/wrangler.jsonc` or `src/` implements it at the time of writing. Fill
-in the actual switch here (and how to confirm it is on), or the manual
-fallback below. -->
+Turn on the web Worker's maintenance switch (`apps/web/src/server/maintenance.ts`):
+every request then gets a 503 (JSON for `/api`, `/_serverFn`, `/mcp`; a short
+page otherwise) and the daily cron skips. A secret change deploys a new
+version of the current code, so it takes effect within seconds:
 
-Until a switch exists, the manual fallback is: announce the window to the
-household, then stop writers in steps 2 and 3 and accept request errors between
-step 7 and step 9, as the 2026-09 run-rename cutover did.
+```bash
+echo true | pnpm --dir apps/web exec wrangler secret put MAINTENANCE_MODE
+curl -sI https://<app origin>/ | head -1   # expect 503
+```
+
+Queue consumers are not gated by the switch; step 2 pauses their delivery.
 
 - [ ] Production requests return the maintenance response (or the household has
       been told not to use the app); record the time.
@@ -213,10 +215,13 @@ pnpm --dir apps/web exec tsx scripts/verify-consolidation-cutover.ts verify \
       `apps/web/tooling/db-catalog.ts`): diff production against a database
       built by the committed migrations.
 
-<!-- TODO(main agent): the production catalog diff has no CLI today; `db-check`
-only builds two scratch databases. Put the exact invocation here once a script
-exists (expected: reads PRODUCTION_DIRECT_DATABASE_URL, builds or takes the
-migrations-built reference, prints the diff, exits non-zero on any difference). -->
+```bash
+PRODUCTION_DIRECT_DATABASE_URL=... pnpm --dir apps/web db:check --against-production
+```
+
+It builds a scratch database from the committed migrations in the local test
+Postgres, reads production through a read-only session, prints every catalog
+difference, and exits non-zero on any.
 
 - [ ] The catalog diff is empty. A non-empty diff or a verifier failure blocks
       step 9; go to Rollback.
@@ -263,10 +268,21 @@ pnpm --dir apps/web exec wrangler queues resume-delivery cubby-telemetry
 pnpm --dir apps/web exec wrangler queues resume-delivery cubby-purchase-agent
 ```
 
-### 11. Smoke
+### 11. Lift maintenance
 
-Signed in on the production web app and through the MCP server, with
-maintenance still on for everyone else:
+The switch blocks every request, owner included, so lift it before smoking and
+keep the household off the app until step 12 passes.
+
+```bash
+pnpm --dir apps/web exec wrangler secret delete MAINTENANCE_MODE
+```
+
+- [ ] Requests no longer return 503. Record the time; the window is from step 1
+      to here.
+
+### 12. Smoke
+
+Signed in on the production web app and through the MCP server:
 
 - [ ] A product's components list opens and a component quantity edits.
 - [ ] Statement matching: open a statement-import review and confirm matched
@@ -280,10 +296,7 @@ maintenance still on for everyone else:
 - [ ] MCP `entity` read of one product returns, with its external identifiers.
 - [ ] No new errors in Sentry for the release.
 
-### 12. Lift maintenance
-
-- [ ] Reverse step 1 and tell the household. Record the time; the window is
-      from step 1 to here.
+- [ ] Tell the household the app is back.
 
 ### 13. Analyze
 

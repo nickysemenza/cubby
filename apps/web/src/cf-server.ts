@@ -41,6 +41,7 @@ import {
   withErrorReporting,
 } from "./server/errors/report-error";
 import { withUnhandledErrorBody } from "./server/errors/unhandled-error-body";
+import { isMaintenanceMode, maintenanceResponse } from "./server/maintenance";
 import {
   resolvePurchaseAgentBrowserOperation,
   type PurchaseAgentCommand,
@@ -118,6 +119,7 @@ const handler = {
     // Expose service bindings to server code (clients pick binding fetch
     // over public URLs when present).
     setCfEnv(env);
+    if (isMaintenanceMode(env)) return maintenanceResponse(request);
 
     // Entry span at the very top of our handler body. The CF platform's auto
     // root span covers the whole invocation incl. queue/dispatch BEFORE our code
@@ -457,6 +459,10 @@ const handler = {
     env: Env,
   ) {
     setCfEnv(env);
+    if (isMaintenanceMode(env)) {
+      console.warn("[cron] skipped: maintenance mode");
+      return;
+    }
     if (controller.cron !== "0 12 * * *")
       throw new Error(`Unexpected cron trigger: ${controller.cron}`);
     await Sentry.withMonitor(
