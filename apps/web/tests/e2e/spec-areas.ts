@@ -134,6 +134,22 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
+    file: "cookbook-edit.spec.ts",
+    globs: [
+      `${WEB}/src/routes/_authenticated/cookbooks.$shortcode.tsx`,
+      `${WEB}/src/routes/_authenticated/recipes.$shortcode.tsx`,
+      `${WEB}/src/app/cookbooks/**`,
+      `${WEB}/src/app/_components/recipe/recipe-form/**`,
+      `${WEB}/src/app/_components/entity-detail/detail-edit-overrides.tsx`,
+      `${WEB}/src/entities/list-columns/cookbook.tsx`,
+      `${WEB}/src/server/repo/cookbook.ts`,
+      `${WEB}/src/server/repo/cookbook.repository.ts`,
+      `${WEB}/src/server/repo/recipe/update-helpers.ts`,
+      `${WEB}/src/server/operations/cookbook.server.ts`,
+      `${WEB}/src/contracts/cookbook.contract.ts`,
+    ],
+  },
+  {
     file: "cookbook-photos.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/cookbooks.$shortcode.tsx`,
@@ -315,6 +331,17 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     globs: [
       `${WEB}/src/routes/_authenticated/mcp.tsx`,
       `${WEB}/src/app/_components/dev/mcp-usage-dashboard.tsx`,
+    ],
+  },
+  {
+    file: "meal-copy.spec.ts",
+    globs: [
+      `${WEB}/src/routes/_authenticated/meals.index.tsx`,
+      `${WEB}/src/app/meals/**`,
+      `${WEB}/src/app/calendar/**`,
+      `${WEB}/src/server/repo/meal/**`,
+      `${WEB}/src/server/operations/meal.server.ts`,
+      `${WEB}/src/contracts/meal.contract.ts`,
     ],
   },
   {
